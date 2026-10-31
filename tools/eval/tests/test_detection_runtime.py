@@ -55,10 +55,20 @@ async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path, mon
         assert (tmp_path / "attempt/events.sqlite").exists()
         if arm.behavior:
             assert result.facts[-1].behavior_diff is not None
-            assert any(
-                n.not_probed == "unsupported node kind" for n in result.facts[-1].behavior_diff
+            method = next(
+                n for n in result.facts[-1].behavior_diff if n.node_id == "shop.cart:Cart.remove"
             )
-            assert result.question and not result.let_through
+            assert method.not_probed is None and method.differing_count > 0
+            # d04 is a requested change: new call sites on variable receivers
+            # (cart = Cart(); cart.remove(...)) make Cart.remove probe-able, so its
+            # None -> False return is a stable difference, and the fake asked_for
+            # classification lets it through.
+            assert result.detected and not result.unprobed and not result.unavailable
+            assert len(result.decisions) == 1
+            difference = result.decisions[0].difference
+            assert difference is not None
+            assert difference.rows and all(not row.unstable for row in difference.rows)
+            assert result.let_through and not result.question
         elif arm.profile == "none":
             assert result.let_through and not result.decisions and budget.sends == 0
         else:

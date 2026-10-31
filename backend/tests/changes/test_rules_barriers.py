@@ -130,7 +130,7 @@ async def test_authority_loss_at_every_await(
         assert rec(h).state == "ready"
         if guard != "revision":
             assert terminal_code(h) == (
-                "isolation_unavailable" if guard in {"C", "startup"} else "policy_invalid"
+                "isolation_unavailable" if guard == "C" else "policy_invalid"
             )
         else:
             assert not terminals(h)
@@ -176,9 +176,7 @@ async def test_authority_loss_at_every_await(
     assert not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
     assert rec(h).state == "ready"
     if guard != "revision":
-        assert terminal_code(h) == (
-            "isolation_unavailable" if guard in {"C", "startup"} else "policy_invalid"
-        )
+        assert terminal_code(h) == ("isolation_unavailable" if guard == "C" else "policy_invalid")
     else:
         assert not terminals(h)
     await assert_main_clean(h)
@@ -193,12 +191,13 @@ async def test_disable_serializes_with_final_authorization(
     ctx = h.manager._ctx
     if when == "during":
         ctx.mode._timeout_s = 0.02
-    original = _transaction.Transaction.persist
+    original = _transaction.Transaction.barriers
 
-    async def persist(tx, *args):
-        entered.set()
-        await release.wait()
-        await original(tx, *args)
+    async def final_barrier(tx):
+        await original(tx)
+        if len(transaction[2]) == 2:
+            entered.set()
+            await release.wait()
 
     if when == "before":
         original_suite = h.workspace.run_tests
@@ -210,7 +209,8 @@ async def test_disable_serializes_with_final_authorization(
 
         monkeypatch.setattr(h.workspace, "run_tests", suite)
     else:
-        monkeypatch.setattr(_transaction.Transaction, "persist", persist)
+        monkeypatch.setattr(_transaction.Transaction, "barriers", final_barrier)
+    calls = len(h.workspace.calls)
     task = await start(h, reserved)
     if when == "during":
         await entered.wait()
@@ -221,12 +221,12 @@ async def test_disable_serializes_with_final_authorization(
         finally:
             release.set()
     await task
+    await asyncio.gather(*ctx.state.tasks, return_exceptions=True)
+    assert not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
+    assert not any(c.tree == "main" and c.args[0] == "commit" for c in h.workspace.calls[calls:])
     if when == "during":
-        ctx.mode._timeout_s = 5
-        await select(h, "ask_me", 1)
-        assert len(h.payloads(ChangeResolved)) == 1 and not terminals(h)
-    else:
-        assert not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
+        assert terminal_code(h) == "policy_invalid"
+    assert ctx.mode.snapshot().mode == "ask_me" and not ctx.mode._disables
     await ctx.assessment.expire(wait(h))
     assert len(terminals(h)) <= 1
 
@@ -397,3 +397,38 @@ async def test_combined_receipt_loss_prevents_definitive_persistence(
     assert len(h.payloads(ChangeAssessment)) == 1
     assert not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
     assert terminal_code(h) == "suite_failed"
+
+
+@bounded
+async def test_disable_after_final_barrier_keeps_rules_commit_then_changes_mode(
+    h, reserved, transaction, monkeypatch
+):
+    ctx = h.manager._ctx
+    ctx.mode._timeout_s = 0.02
+    original = ctx.git
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def commit(tree, *args, **kwargs):
+        if tree is h.workspace.main and args[0] == "commit":
+            assert ctx.mode._lock.locked()
+            assert "Merged-by: rules" in args[-1]
+            entered.set()
+            await release.wait()
+        return await original(tree, *args, **kwargs)
+
+    monkeypatch.setattr(ctx, "git", commit)
+    task = await start(h, reserved)
+    await entered.wait()
+    try:
+        with pytest.raises(WrongState, match="timed out"):
+            await select(h, "ask_me", 1)
+        assert len(ctx.mode._disables) == 1 and ctx.mode.authority_suspended()
+    finally:
+        release.set()
+    await task
+    await asyncio.gather(*ctx.state.tasks, return_exceptions=True)
+    assert rec(h).merged and rec(h).resolution.decided_by == "rules"
+    assert "Merged-by: rules" in (await h.main_git("log", "-1", "--format=%B")).stdout
+    assert ctx.mode.snapshot().mode == "ask_me"
+    assert not ctx.mode._disables and not ctx.mode.authority_suspended()
+    assert not terminals(h)

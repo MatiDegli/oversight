@@ -1,5 +1,6 @@
+import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
-import { chromium, expect as check } from "@playwright/test";
+import { expect as check } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -28,7 +29,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 }, 60_000);
 afterAll(async () => {
   await browser?.close();
@@ -311,7 +312,9 @@ it("limits fixed blur to graph controls and fills other overlays (M8)", async ()
     const filled = async (selector: string) => {
       const look = await page.locator(selector).evaluate((element) => {
         const reference = document.createElement("span");
-        reference.style.background = "var(--overlay-fill)";
+        reference.style.background = element.classList.contains("graph-text-shield")
+          ? "var(--panel)"
+          : "var(--overlay-fill)";
         reference.style.boxShadow = "var(--top-highlight)";
         document.body.append(reference);
         const style = getComputedStyle(element);

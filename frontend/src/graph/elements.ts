@@ -6,6 +6,7 @@ import { getActiveTheme } from "../theme";
 
 import { nodeGeometry, rowWidthAt } from "./geometry";
 import type { NodeMarks, Word } from "./layers";
+import { BUILTIN_NAMES } from "./builtinNames";
 
 export interface GraphElement {
   group: "nodes" | "edges";
@@ -14,6 +15,9 @@ export interface GraphElement {
     kind: GraphNode["kind"] | GraphEdge["kind"];
     label?: string;
     callCount?: number;
+    exactCount?: number;
+    possibleCount?: number;
+    restPossible?: boolean;
     /** A frame's header: its title (a module's file name) and its count, drawn in place of a label. */
     title?: string;
     count?: string;
@@ -122,6 +126,7 @@ export function graphElements(
   }
   const visible = new Map([...nodes].filter(([, node]) => showTests || !node.is_test));
   const distances = new Map(cone?.entries.map((entry) => [entry.node_id, entry.distance]));
+  const coneIds = new Set([...(cone?.seeds ?? []), ...(cone?.entries.map((e) => e.node_id) ?? [])]);
   const dims = (id: string) => lit !== null && !lit.has(id);
   // What each frame holds, for its count: the visible functions and methods below it, its classes
   // and the nodes a change adds.
@@ -224,7 +229,13 @@ export function graphElements(
     if (!visible.has(edge.src) || !visible.has(edge.dst)) continue;
     elements.push({
       group: "edges",
-      data: { id: edge.id, kind: edge.kind, source: edge.src, target: edge.dst },
+      data: {
+        id: edge.id,
+        kind: edge.kind,
+        source: edge.src,
+        target: edge.dst,
+        restPossible: !BUILTIN_NAMES.has(nodes.get(edge.dst)?.name ?? ""),
+      },
       classes: [
         edge.kind,
         edge.confidence,
@@ -240,9 +251,11 @@ export function graphElements(
         ...(lit === null
           ? []
           : lit.has(edge.src) && lit.has(edge.dst)
-            ? ({ exact: ["lit"], possible: [] } satisfies Record<typeof edge.confidence, string[]>)[
-                edge.confidence
-              ]
+            ? edge.confidence === "exact"
+              ? ["lit"]
+              : coneIds.has(edge.src) && coneIds.has(edge.dst)
+                ? ["cone-call"]
+                : []
             : ["dimmed"]),
       ].join(" "),
     });

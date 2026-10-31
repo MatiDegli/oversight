@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI
 
-from oversight import runtime_answering, runtime_review
+from oversight import _run_controls, runtime_answering, runtime_review
 from oversight.agents import (
     BASETEN_BASE_URL,
     META_BASE_URL,
@@ -70,6 +70,8 @@ from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.runtime_accounting import write_tick
 from oversight.runtime_decisions import RuntimeDecisions
+from oversight.runtime_plans import PlanService
+from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings
@@ -78,7 +80,6 @@ from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
 from oversight.workspace import (
     OPEN_NOTICE,
-    Tree,
     Workspace,
     WorkspaceError,
     configure_suite,
@@ -90,14 +91,23 @@ from oversight.workspace import (
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
     AgentCreated,
+    AgentMessage,
     ApproveChange,
+    CreatePlan,
+    EnqueueTask,
     FileContent,
     FileSaved,
+    PlanCreated,
+    PlanRevision,
+    QueueRevision,
     RejectChange,
+    RejectPlan,
     RequestChanges,
     SaveFile,
+    SetMergeMode,
     StartAgent,
     TreeResponse,
+    UpdatePlan,
 )
 from oversight_contracts.common import Slot
 from oversight_contracts.events import (
@@ -114,6 +124,9 @@ from oversight_contracts.events import (
     UsageTick,
 )
 from oversight_contracts.graph import GraphSnapshot
+from oversight_contracts.plans import PlanZone
+from oversight_contracts.policy import MergeModeState
+from oversight_contracts.queue import QueuedTask
 
 _log = logging.getLogger(__name__)
 
@@ -183,6 +196,9 @@ class _Agent:
 
     task: AgentTask
     profile: ModelProfile
+    queued_task_id: str | None = None
+    plan_id: str | None = None
+    zone: PlanZone | None = None
 
     @property
     def slot(self) -> Slot:
@@ -267,6 +283,8 @@ class LiveRun:
         self._kept: dict[str, AgentRun] = {}
         """The `AgentRun` of each agent, and so its client, kept until its change is rejected or
         merged: Request changes resumes it."""
+        self._controls: dict[str, AgentRun] = {}
+        """Active drives only; resolves the fresh control installed by each revision."""
         self._decisions: dict[str, asyncio.Task[Revision | None]] = {}
         """Each Request changes decision in flight, until its `_revise` has awaited it: a shutdown
         settles those the run's own cancel cannot reach (R8)."""
@@ -280,6 +298,8 @@ class LiveRun:
         """Who holds each slot: "starting" during a start, then the agent's id until its change is
         rejected or merged."""
         self._count = 0
+        self.dispatcher = Dispatcher(self)
+        self.plans = PlanService(self)
 
     def _offer(self, slot: Slot, default: SlotDefault) -> None:
         """Load only this slot's own fake script; defaults come from the shared resolver."""
@@ -316,8 +336,9 @@ class LiveRun:
             braked=any(_metered(profile) for profile in profiles),
         )
         await self.store.start()
-        await self.store.publish(
+        started = await self.store.publish(
             RunStarted(
+                merge_mode=MergeModeState(),
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
                 prompt_version=prompt_version(settings.harness_pack),
@@ -350,6 +371,7 @@ class LiveRun:
             self._publish,
             main_graph=graph,
             main_snapshot=snapshot,
+            settings=settings,
             git_timeout_s=GIT_TIMEOUT_S,
             review=self,
             behavior_diff=self._settings.behavior_diff,
@@ -361,14 +383,19 @@ class LiveRun:
                 self._settings.review_card_total_s,
             ),
             run_id=self.run_id,
+            spend_ledger=self.ledger,
+            spend_receipt=started if self.ledger.state is not None else None,
         )
         self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
+        self.dispatcher.start()
 
     async def shutdown(self) -> None:
         """Every step runs, even after one failed or was cancelled; the first such is re-raised."""
         self._closing = True
         failure: BaseException | None = None
         steps = (
+            self.dispatcher.close,
+            self.plans.close,
             self._close_review_cards,
             self.difference_decisions.close,
             self._drain_reviews,
@@ -414,6 +441,8 @@ class LiveRun:
         as its decision ends pops it from `_decisions` meanwhile. A decision settles by itself
         before its resolution is sent, or finishes the resolution and `working` together, and the
         change is then ended here: `run_ended` does nothing unless it is still `working`."""
+        for agent_id in list(self._controls):
+            _run_controls.close(self, agent_id)
         decisions = list(self._decisions.items())
         runs = dict(self._runs)
         for task in runs.values():
@@ -486,17 +515,38 @@ class LiveRun:
         out."""
         if isinstance(payload, UsageTick):
             validate_usage_tick(payload)
-        if isinstance(payload, UsageTick) and self._is_metered(payload.agent_id):
-            await self._persist(payload)
+        spend_state = None
+        if isinstance(payload, UsageTick):
+            spend_state = (
+                await self._persist(payload)
+                if self._is_metered(payload.agent_id)
+                else self.ledger.state
+            )
+            if spend_state is not None:
+                payload = payload.model_copy(update={"spent_usd": spend_state.spent_usd})
         if isinstance(payload, AgentStatus):
             base = self._manager.agent_base(payload.agent_id) if self._manager else None
             payload = payload.model_copy(update={"base_commit": base})
             # Answering is historical provenance from the retained server task.
             agent = self._agents.get(payload.agent_id)
+            payload = payload.model_copy(
+                update={
+                    "queued_task_id": agent.queued_task_id if agent else None,
+                    "plan_id": agent.plan_id if agent else None,
+                    "zone": agent.zone.model_copy(deep=True) if agent and agent.zone else None,
+                }
+            )
             validate_agent_status(
-                payload, base_commit=base, answering=agent.task.answering if agent else None
+                payload,
+                base_commit=base,
+                plan_id=agent.plan_id if agent else None,
+                zone=agent.zone if agent else None,
+                queued_task_id=agent.queued_task_id if agent else None,
+                answering=agent.task.answering if agent else None,
             )
         stored = await self.store.publish(payload)
+        if spend_state is not None and self._manager is not None:
+            self._manager.spend_received(stored)
         if (
             self._settings.cross_review
             and isinstance(payload, UsageTick)
@@ -509,6 +559,9 @@ class LiveRun:
             if kept := self._kept.get(payload.agent_id):
                 await kept.aclose()
             self._release(payload.agent_id)
+            self.dispatcher.resolved(
+                payload.agent_id, "merged" if payload.merge == "merged" else "rejected"
+            )
         return stored
 
     def _is_metered(self, agent_id: str) -> bool:
@@ -522,7 +575,7 @@ class LiveRun:
         if agent is not None and self._slots.get(agent.slot) == agent_id:
             self._slots[agent.slot] = None
 
-    async def _persist(self, tick: UsageTick) -> None:
+    async def _persist(self, tick: UsageTick) -> LedgerState:
         """Fails closed. A tick the ledger could not take is not published as recorded: a fatal
         `error` goes out instead, every Meta start is refused until a restart, and the agent's run
         stops as a shutdown stops it (cancelled, so `_run` ends it halted and its change is
@@ -535,7 +588,7 @@ class LiveRun:
         which never cancels it: a cancel while another agent's write holds the lock would
         otherwise raise before anything was written, with the brake still open."""
         try:
-            await write_tick(self, tick, wait=asyncio.wait)
+            return await write_tick(self, tick, wait=asyncio.wait)
         except (asyncio.CancelledError, LedgerError, OSError) as error:
             failure = error.__cause__ if isinstance(error, asyncio.CancelledError) else error
             if isinstance(failure, LedgerError | OSError):
@@ -550,6 +603,7 @@ class LiveRun:
         """The brake closes before the first await. The report is finished however often this
         task is cancelled again: the fatal `error` is what tells me to settle."""
         self._ledger_lost = True
+        self.ledger.notify_loss()
         self._ledger_lost_agents.add(tick.agent_id)
         agent = self._agents.get(tick.agent_id)
         await self._finish(
@@ -692,28 +746,59 @@ class LiveRun:
             raise ApiError("slot_busy", self._taken())
         raise errors[0]
 
+    async def enqueue(self, request: EnqueueTask) -> QueuedTask:
+        return await self.dispatcher.enqueue(request)
+
+    async def cancel_queued(self, queued_task_id: str, request: QueueRevision) -> None:
+        await self.dispatcher.cancel(queued_task_id, request)
+
+    async def create_plan(self, request: CreatePlan) -> PlanCreated:
+        return await self.plans.create(request)
+
+    async def update_plan(self, plan_id: str, request: UpdatePlan) -> None:
+        await self.plans.update(plan_id, request)
+
+    async def start_plan(self, plan_id: str, request: PlanRevision) -> None:
+        self.plans.get(plan_id)
+        await self.dispatcher.enqueue(EnqueueTask(plan_id=plan_id, plan_revision=request.revision))
+
+    async def reject_plan(self, plan_id: str, request: RejectPlan) -> None:
+        await self.plans.reject(plan_id, request)
+
     async def start(self, request: StartAgent) -> AgentCreated:
+        return await self._launch(self._admit(request))
+
+    def _admit(
+        self, request: StartAgent, *, queued_task_id: str | None = None, plan_id: str | None = None
+    ) -> Admission:
         manager = self._manager
-        if manager is None:
-            raise ApiError("wrong_state", "the run has not started")
-        # Answering admission has no effects; snapshot the request before the first wait.
+        if manager is None or self._closing:
+            raise ApiError("wrong_state", "the run is not accepting starts")
         request = request.model_copy(deep=True)
         runtime_answering.admit(request.answering, self.store)
         slot, profile = self._check(request, manager)
-        self._slots[slot] = "starting"  # no await since the check: two starts cannot both pass it
+        self._slots[slot] = "starting"  # check, reservation and allocation never yield
+        self._count += 1
+        task = AgentTask(
+            agent_id=f"agent-{self._count}",
+            change_id=f"change-{self._count}",
+            slot=slot,
+            task=request.task,
+            limits=LIMITS,
+            answering=request.answering,
+        )
+        return Admission(task, profile, queued_task_id, plan_id, request.zone if plan_id else None)
+
+    async def _launch(self, admission: Admission) -> AgentCreated:
+        manager = self._manager
+        assert manager is not None
+        task, profile = admission.task, admission.profile
+        slot = task.slot
+        opened = False
         try:
             if self._venv is not None:
                 # Shielded: cancelling this start must not cancel the build later starts need.
                 await asyncio.shield(self._venv)
-            self._count += 1
-            task = AgentTask(
-                agent_id=f"agent-{self._count}",
-                change_id=f"change-{self._count}",
-                slot=slot,
-                task=request.task,
-                limits=LIMITS,
-                answering=request.answering,
-            )
             client: ModelClient | None = None
 
             def before_create() -> None:
@@ -722,29 +807,36 @@ class LiveRun:
                 client = self._client_factory(profile, slot)
 
             tree = await manager.open(task, profile.id, before_create=before_create)
+            opened = True
             assert client is not None
-        except ApiError:
+            run = _run_controls.prepare(self, task, client, tree, profile)
+        except BaseException as error:
             self._slots[slot] = None
-            raise
-        except WrongState as error:
-            self._slots[slot] = None  # main turned suspect after the check: nothing was started
-            raise ApiError("wrong_state", str(error)) from None
-        except Exception as error:
-            self._slots[slot] = None
-            await self._report("server", f"Starting an agent failed: {_describe(error)}")
-            raise ApiError(
-                "internal",
-                f"starting the agent failed ({type(error).__name__}); see the error event",
-            ) from error
-        except BaseException:
-            self._slots[slot] = None  # cancelled: the shutdown, or the request's task
+            self.dispatcher.wake.set()
+            if opened:
+                try:
+                    if isinstance(error, Exception):
+                        await self._run_failed(task, error)
+                finally:
+                    manager.run_ended(task.agent_id, None, steps=0)
+            if isinstance(error, ApiError):
+                raise
+            if isinstance(error, WrongState):
+                raise ApiError("wrong_state", str(error)) from None
+            if isinstance(error, Exception):
+                if not opened:
+                    await self._report("server", f"Starting an agent failed: {_describe(error)}")
+                raise ApiError(
+                    "internal",
+                    f"starting the agent failed ({type(error).__name__}); see the error event",
+                ) from error
             raise
         # No await from `open` to here: the run task exists as soon as the change does.
-        agent = _Agent(task, profile)
+        agent = _Agent(task, profile, admission.queued_task_id, admission.plan_id, admission.zone)
         self._slots[slot] = task.agent_id
         self._agents[task.agent_id] = agent
         self._runs[task.agent_id] = asyncio.create_task(
-            self._run(manager, task, client, tree, agent), name=f"run-{task.agent_id}"
+            self._run(manager, task, run, agent), name=f"run-{task.agent_id}"
         )
         return AgentCreated(agent_id=task.agent_id, change_id=task.change_id, slot=slot)
 
@@ -758,25 +850,11 @@ class LiveRun:
         self,
         manager: ChangeManager,
         task: AgentTask,
-        client: ModelClient,
-        tree: Tree,
+        run: AgentRun,
         agent: _Agent,
     ) -> None:
         end: RunEnd | None = None
-        run: AgentRun | None = None
         try:
-            run = AgentRun(
-                task,
-                model=client,
-                workspace=self.workspace,
-                tree=tree,
-                sink=manager,
-                publish=self._publish,
-                ledger=self._usage,
-                pricing=self._price_for(agent.profile),
-                harness_pack=self._settings.harness_pack,
-            )
-            self._kept[task.agent_id] = run
             end = await run.run()
         except asyncio.CancelledError:
             await self._halt_if_ledger_lost(task, agent, run)
@@ -784,8 +862,9 @@ class LiveRun:
         except Exception as error:
             await self._run_failed(task, error)
         finally:
+            _run_controls.close(self, task.agent_id, finished=True)
             self._runs.pop(task.agent_id, None)
-            manager.run_ended(task.agent_id, end, steps=run.steps if run else None)
+            manager.run_ended(task.agent_id, end, steps=run.steps)
             runtime_review.run_ended(self, task.agent_id, end)
 
     async def _revise(
@@ -807,6 +886,7 @@ class LiveRun:
             finally:
                 self._forget(self._decisions, task.agent_id, decision)
             if revision is not None:
+                self._controls[task.agent_id] = run
                 end = await run.revise(revision.comment, revision.note)
         except asyncio.CancelledError:
             await self._halt_if_ledger_lost(task, agent, run)
@@ -814,6 +894,7 @@ class LiveRun:
         except Exception as error:
             await self._run_failed(task, error)
         finally:
+            _run_controls.close(self, task.agent_id, finished=True)
             self._forget(self._runs, task.agent_id, asyncio.current_task())
             manager.run_ended(task.agent_id, end, steps=run.steps)
             runtime_review.run_ended(self, task.agent_id, end)
@@ -885,6 +966,16 @@ class LiveRun:
             raise ApiError("wrong_state", "the run has not started")
         await self._manager.revoke_grant(grant_id)
 
+    def merge_mode(self) -> MergeModeState:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        return self._manager.merge_mode()
+
+    async def set_merge_mode(self, request: SetMergeMode) -> MergeModeState:
+        if self._manager is None:
+            raise ApiError("wrong_state", "the run has not started")
+        return await self._manager.set_merge_mode(request)
+
     def reject(self, change_id: str, request: RejectChange) -> None:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
@@ -904,6 +995,16 @@ class LiveRun:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         self._manager.stop(agent_id, self._runs.get(agent_id))
+        _run_controls.close(self, agent_id)
+
+    def message(self, agent_id: str, request: AgentMessage) -> None:
+        _run_controls.message(self, agent_id, request.text)
+
+    def pause(self, agent_id: str) -> None:
+        _run_controls.pause(self, agent_id)
+
+    def resume(self, agent_id: str) -> None:
+        _run_controls.resume(self, agent_id)
 
     async def get_file(self, path: str, agent_id: str | None) -> FileContent:
         if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving

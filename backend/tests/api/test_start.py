@@ -8,10 +8,45 @@ from typing import Any
 import pytest
 from live_helpers import DEADLINE_S, FakeUv, live_server, live_settings
 
-from oversight.changes import ChangeManager
+from oversight.api import ApiError
+from oversight.changes import ChangeManager, WrongState
 from oversight_contracts.commands import AgentCreated, ErrorResponse, StartAgent
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize(
+    ("failure", "status", "code"),
+    [
+        (RuntimeError("prepare failed"), 500, "internal"),
+        (ApiError("invalid_request", "prepare refused"), 422, "invalid_request"),
+        (WrongState("prepare refused"), 409, "wrong_state"),
+    ],
+)
+async def test_failed_prepare_ends_the_open_change_and_frees_the_slot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception, status: int, code: str
+) -> None:
+    def failed_prepare(*args: Any, **kwargs: Any) -> Any:
+        raise failure
+
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        with monkeypatch.context() as patch:
+            patch.setattr("oversight.app._run_controls.prepare", failed_prepare)
+            response = await s.client.post("/agents", json={"task": "t"})
+        assert response.status_code == status
+        assert ErrorResponse.model_validate(response.json()).error.code == code
+        assert s.live._slots == {"A": None}  # pyright: ignore[reportPrivateUsage]
+        assert s.live._runs == {}  # pyright: ignore[reportPrivateUsage]
+        manager = s.live._manager  # pyright: ignore[reportPrivateUsage]
+        assert manager is not None
+        rec = manager._agents["agent-1"]  # pyright: ignore[reportPrivateUsage]
+        assert rec.state == "unproposed" and not rec.review_ready
+        [error] = [e for e in s.events() if e.type == "error"]
+        assert error.payload.source == "agent" and error.payload.fatal
+        assert error.payload.agent_id == "agent-1" and error.payload.change_id == "change-1"
+        retried = await s.client.post("/agents", json={"task": "t"})
+        assert retried.status_code == 201
+        assert AgentCreated.model_validate(retried.json()).agent_id == "agent-2"
 
 
 async def test_a_failed_open_answers_internal_and_the_next_start_succeeds(tmp_path: Path) -> None:

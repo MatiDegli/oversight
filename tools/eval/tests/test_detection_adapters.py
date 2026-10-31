@@ -10,7 +10,6 @@ from decision_client_helpers import (  # pyright: ignore[reportMissingImports]
     INPUT,
     FakeApi,
     body,
-    client,
     ok,
     status,
 )
@@ -18,11 +17,13 @@ from tools.eval.behavior.catalog import load_patches
 from tools.eval.detection.accounting import Budget, task_for
 from tools.eval.detection.adapters import Adapter, messages
 from tools.eval.detection.config import ARMS, NO_BEHAVIOR, system_prompt
+from tools.eval.detection.transport import TransportClient
 from tools.eval.grade import Tariff
 from tools.eval.ledger import Ledger
 from tools.eval.tasks import BenchError
+from tools.eval.tests.test_detection_send_accounting import client
 
-from oversight.agents import MUSE_SPARK, DecisionClient, RetryPolicy, classify_difference
+from oversight.agents import MUSE_SPARK, RetryPolicy, classify_difference
 
 
 @pytest.fixture
@@ -47,7 +48,7 @@ def test_diff_prompt_has_no_empty_behavior_or_label_fields():
 @pytest.mark.anyio
 async def test_shared_prompt_matches_actual_product_request(budget):
     api = FakeApi(ok(body()))
-    sdk = client(api)
+    sdk = client(api, budget=budget)
     try:
         await classify_difference(
             sdk,
@@ -78,7 +79,7 @@ async def test_shared_prompt_matches_actual_product_request(budget):
 )
 async def test_open_actual_schema_parsing_and_charges(budget, text, identity, expected):
     api = FakeApi(ok(body(text, **({"model": identity} if identity else {}))))
-    sdk = client(api)
+    sdk = client(api, budget=budget)
     adapter = Adapter(ARMS[3], budget, client=sdk)
     try:
         result = await adapter.classify_difference(
@@ -95,7 +96,7 @@ async def test_open_actual_schema_parsing_and_charges(budget, text, identity, ex
 @pytest.mark.anyio
 async def test_unknown_http_cost_stops_retry_admission(budget):
     api = FakeApi(status(429), ok(body()))
-    sdk = client(api, retry=RetryPolicy(base_s=0))
+    sdk = client(api, budget=budget, retry=RetryPolicy(base_s=0))
     try:
         result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
             INPUT, deadline=asyncio.get_running_loop().time() + 10
@@ -116,8 +117,9 @@ async def test_cancellation_drains_unknown_accounting(budget):
         await asyncio.Event().wait()
         raise AssertionError("cancelled transport resumed")
 
-    sdk = DecisionClient(
+    sdk = TransportClient(
         client_profile(),
+        budget=budget,
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=512,
@@ -148,8 +150,9 @@ def client_profile():
 @pytest.mark.anyio
 async def test_spark_uses_strict_inherited_schema_and_actual_identity(budget):
     api = FakeApi(ok(body(model=MUSE_SPARK.model)))
-    sdk = DecisionClient(
+    sdk = TransportClient(
         MUSE_SPARK,
+        budget=budget,
         base_url="https://meta.test/v1",
         api_key="test",
         max_output_tokens=512,
@@ -176,7 +179,7 @@ def test_missing_spark_adapter_refuses_explicitly(budget):
 @pytest.mark.anyio
 async def test_deadline_sends_nothing(budget):
     api = FakeApi()
-    sdk = client(api)
+    sdk = client(api, budget=budget)
     try:
         result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
             INPUT, deadline=asyncio.get_running_loop().time() - 1
@@ -191,6 +194,7 @@ async def test_deadline_sends_nothing(budget):
 @pytest.mark.parametrize("arm", ARMS[1:], ids=lambda a: a.id)
 @pytest.mark.parametrize("choice", ["asked_for", "not_asked_for", "cannot_tell", "unavailable"])
 async def test_all_model_adapters_accept_explicit_fake_outcomes(budget, arm, choice):
+    budget.fake = True
     adapter = Adapter(arm, budget, fake_choice=choice)
     if arm.role == "task/diff":
         await adapter.task_diff(INPUT.task, "frozen diff", INPUT.target)
@@ -203,10 +207,16 @@ async def test_all_model_adapters_accept_explicit_fake_outcomes(budget, arm, cho
 
 
 @pytest.mark.anyio
-async def test_retry_rechecks_admission_and_has_one_receipt_per_send(budget):
-    budget.fake = True  # Explicit simulated zero cost, including the HTTP error receipt.
+async def test_retry_rechecks_admission_and_has_one_receipt_per_send(budget, monkeypatch):
+    add_usage = budget.usage.add
+
+    def free_receipt(tick):
+        add_usage(tick)
+        return 0  # Simulated HTTP is free, but uses the nonfake transport path.
+
+    monkeypatch.setattr(budget.usage, "add", free_receipt)
     api = FakeApi(status(500), ok(body()))
-    sdk = client(api, retry=RetryPolicy(base_s=0))
+    sdk = client(api, budget=budget, retry=RetryPolicy(base_s=0))
     try:
         result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
             INPUT, deadline=asyncio.get_running_loop().time() + 10
@@ -220,23 +230,35 @@ async def test_retry_rechecks_admission_and_has_one_receipt_per_send(budget):
 
 
 @pytest.mark.anyio
-async def test_inflight_timeout_retains_unknown_receipt(budget):
+async def test_inflight_timeout_retains_unknown_receipt(budget, monkeypatch):
+    entered = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    start = loop.time()
+    deadline = start + 3600
+
     async def handle(request: httpx.Request) -> httpx.Response:
+        entered.set()
+        monkeypatch.setattr(loop, "time", lambda: deadline + 1)
         await asyncio.Event().wait()
         raise AssertionError("timed out transport resumed")
 
-    sdk = DecisionClient(
+    sdk = TransportClient(
         client_profile(),
+        budget=budget,
         base_url="https://decision.test/v1",
         api_key="test",
         max_output_tokens=512,
         http_client=openai.DefaultAsyncHttpxClient(transport=httpx.MockTransport(handle)),
     )
     try:
+        # Admission cannot exhaust the deadline; only the in-flight handler advances time.
+        monkeypatch.setattr(loop, "time", lambda: start)
         result = await Adapter(ARMS[3], budget, client=sdk).classify_difference(
-            INPUT, deadline=asyncio.get_running_loop().time() + 0.1
+            INPUT, deadline=deadline
         )
+        assert entered.is_set(), "request was never sent: transport handler was not entered"
         assert result.unavailable == "deadline"
-        assert budget.receipts == 1 and budget.record.unknown
+        assert budget.sends == budget.receipts == 1 and budget.record.unknown
     finally:
+        monkeypatch.undo()
         await sdk.aclose()

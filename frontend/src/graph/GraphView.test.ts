@@ -15,7 +15,9 @@ vi.mock("react", () => ({
       current:
         initial.length > 0 && initial[0] !== null
           ? initial[0]
-          : { getBoundingClientRect: () => ({ left: 0, top: 0 }) },
+          : Object.assign(new EventTarget(), {
+              getBoundingClientRect: () => ({ left: 0, top: 0 }),
+            }),
     });
   },
   useEffect: (effect: () => undefined | (() => void)) => mocks.effects.push(effect),

@@ -2,8 +2,8 @@
 
 Events per tool call follow docs/proposal.md, 4.5: an edit sends `change.updated` (through the
 `ChangeSink`), then `agent.focus`, then `agent.step`; a read sends `agent.focus`, then
-`agent.step`. `agent.status` follows the tool calls only, never the model's text. v1 sends no model
-text at all, so nothing goes out per token.
+`agent.step`. `agent.status` follows the tool calls and the run controls, never the model's
+text. v1 sends no model text at all, so nothing goes out per token.
 """
 
 import asyncio
@@ -12,8 +12,10 @@ import time
 from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import Literal, cast
+from typing import Literal
 
+from oversight.agents._attempts import attempt_observer
+from oversight.agents._control import RunControl, answer_unanswered
 from oversight.agents._lifecycle import close_model
 from oversight.agents._prompts import PROMPT_VERSION as PROMPT_VERSION
 from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
@@ -130,6 +132,7 @@ class AgentRun:
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         require_verified(model.profile)
+        self.control = RunControl()
         self._task = task
         self._observer = CURRENT.get()
         self._workspace = workspace
@@ -203,6 +206,8 @@ class AgentRun:
     async def run(self) -> RunEnd:
         if self._running:
             raise RuntimeError("a run is already in progress on this agent run")
+        if self._messages is not None:
+            raise RuntimeError("cannot run twice; use revise to continue this agent run")
         self._running = True
         try:
             self._messages = [
@@ -211,6 +216,7 @@ class AgentRun:
             ]
             return await self._drive("starting")
         finally:
+            self.control.close()
             self._running = False
 
     async def revise(self, comment: str, note: str | None) -> RunEnd:
@@ -224,7 +230,8 @@ class AgentRun:
             raise RuntimeError("cannot revise before the first run")
         self._running = True
         try:
-            self._answer_unanswered()
+            self.control = self.control.for_revision()
+            answer_unanswered(self._messages)
             note_block = f"\n{note}\n" if note else ""
             self._messages.append(
                 {
@@ -240,28 +247,8 @@ class AgentRun:
             self._seen.clear()
             return await self._drive("revising")
         finally:
+            self.control.close()
             self._running = False
-
-    def _answer_unanswered(self) -> None:
-        """Give every tool call left without a result a `Not run.` result, so the kept
-        history is a valid conversation again: a call cut short mid-call by the time limit
-        or a stop, and the calls after `finish` in its reply, never got one."""
-        assert self._messages is not None
-        answered = {
-            str(message["tool_call_id"]) for message in self._messages if message["role"] == "tool"
-        }
-        missing: list[Message] = []
-        for message in self._messages:
-            if message["role"] != "assistant":
-                continue
-            calls = message.get("tool_calls")
-            if not isinstance(calls, list):
-                continue
-            for call in cast(list[dict[str, object]], calls):
-                call_id = str(call.get("id"))
-                if call_id not in answered:
-                    missing.append({"role": "tool", "tool_call_id": call_id, "content": "Not run."})
-        self._messages.extend(missing)
 
     @traced_drive
     async def _drive(self, first_status: AgentState) -> RunEnd:
@@ -282,9 +269,14 @@ class AgentRun:
                     raise _RootLost(f"The worktree cannot be used: {reason}.") from error
                 if first_status == "starting":
                     await self._status("working")
-                token = CALL_SCOPE.set(CallScope(deadline.when(), self._usage))
+                observer = attempt_observer(
+                    self._publish, agent_id=self._task.agent_id, change_id=self._task.change_id
+                )
+                token = CALL_SCOPE.set(
+                    CallScope(deadline.when(), self._usage, attempt_failed=observer)
+                )
                 try:
-                    summary = await self._loop(messages)
+                    summary = await self._loop(messages, deadline, first_status)
                 finally:
                     CALL_SCOPE.reset(token)
         except _Halt as halt:
@@ -293,6 +285,7 @@ class AgentRun:
         except TimeoutError:
             detail = f"Ran past the time limit of {self._task.limits.max_wall_clock_s} s."
         except ModelAPIError as error:
+            self.control.close()
             detail = f"The model API failed: {error}."
             await self._publish(
                 ErrorReport(
@@ -304,6 +297,7 @@ class AgentRun:
                 )
             )
         except Exception as error:  # not BaseException: cancellation (Stop) must propagate
+            self.control.close()
             detail = f"Stopped by an unexpected error: {self._describe(error)}"
             await self._publish(
                 ErrorReport(
@@ -314,6 +308,7 @@ class AgentRun:
                     fatal=True,
                 )
             )
+        self.control.close()
         # The sink reads the worktree, and a lost root is not the agent's any more.
         if not root_lost and not await self._propose(summary):
             detail = detail or PROPOSAL_FAILED  # a halt's own reason is the better one
@@ -349,12 +344,17 @@ class AgentRun:
             )
             return False
 
-    async def _loop(self, messages: list[Message]) -> str:
+    async def _loop(
+        self, messages: list[Message], deadline: asyncio.Timeout, first_status: AgentState
+    ) -> str:
+        active: AgentState = "revising" if first_status == "revising" else "working"
         # Every reply with a tool call adds a step, so the step limit bounds those; the failure
         # allowance covers replies without one. The bound holds even if a stop rule is broken.
         while True:
             if self._turns >= self._max_turns:
                 raise _Halt(f"Reached the limit of {self._max_turns} model calls.")
+            await self.control.gate(deadline, self._status, active)
+            self.control.deliver(messages)
             self._turns += 1
             reply = await model_turn(self, messages, TOOL_SCHEMAS)
             await self._usage(reply)
@@ -371,6 +371,7 @@ class AgentRun:
                 messages.append({"role": "user", "content": NO_TOOL_REMINDER})
                 continue
             for index, call in enumerate(reply.tool_calls):
+                await self.control.gate(deadline, self._status, active)
                 annotate(tool_call=call.id)
                 started = self._monotonic()
                 try:
@@ -393,8 +394,14 @@ class AgentRun:
                 )
                 await self._report(call.name, outcome, duration_ms)
                 if outcome.finish_summary is not None:
-                    self._declaration = outcome.declaration
-                    return outcome.finish_summary
+                    if not self.control.pending_messages:
+                        await self.control.gate(deadline, self._status, active)
+                    if self.control.claim_finish():
+                        self._declaration = outcome.declaration
+                        return outcome.finish_summary
+                    answer_unanswered(messages)
+                    self._check(call.name, call.arguments, outcome)
+                    break
                 try:
                     self._check(call.name, call.arguments, outcome)
                 except _Halt:
@@ -478,6 +485,7 @@ class AgentRun:
                 summary=outcome.summary + note,
                 result="ok" if outcome.ok else "error",
                 error=error,
+                error_kind=outcome.error_kind,
                 duration_ms=duration_ms,
                 tests=outcome.tests,
             )

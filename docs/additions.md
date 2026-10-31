@@ -53,9 +53,13 @@ the old idea numbers. Package numbers identify the Oct 27 work packages. Keep th
 work through 1–11, then the lead agent, saved flows, 12, 13, 17 and 18; take 14–16 only if time
 remains. The two additions after item 11 are unnumbered.
 
-States were checked against main at `535e6f6`, including its code and merge history. In-progress
-branches are the coordinator's assigned fronts, not merged work. Queued rows describe what remains,
-including where part is already on main. The descriptions give code evidence and boundaries.
+States were checked against main at `06c34a5`, including its code and merge history. Queued rows
+describe what remains, including where part is already on main. A backend or pure core on main
+does not mean its routes or UI are wired. The descriptions give code evidence and boundaries.
+
+Contracts 1.8.0 landed in `bb9dc43`: E6's failed model attempts and item 11's dependency plans
+(P1–P5). E6's producer landed in `06c34a5`; the waiting/retry card remains unwired
+(`frontend/src/state/applyEvent.ts:28`).
 
 **In contracts proposal:** **Yes** means included in the requested Oct 28 proposal, not approved
 or already reserved; **No** means no addition is needed; **Pending** means a contract question
@@ -64,36 +68,38 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 
 | # | Item | State and commit or branch | In contracts proposal |
 | --- | --- | --- | --- |
-| 1 | Facts and a summary from events (package 3) | Queued — summary remains; facts on main `366d0e5`, facts row/steps `ae9822d` | Yes — summary; report check needs no field |
-| 2 | Behavior diff | In progress — `changes/behavior-diff`, core behind a setting; absent on main `535e6f6` | Yes |
-| 3 | Agent harness pack | In progress — `agents/harness-pack`; current tools on main `535e6f6` | No |
-| 4 | Measured impact cone | Queued — caller recording absent at `535e6f6`; isolation on main `19443e8` | Yes |
-| 5 | Live overlap between agents | Queued — card facts/read history remain; shared pending-node marks on main `535e6f6` | No |
-| 6 | Fails before, passes after (package 4) | Queued — assertion versus import/setup error only; probes on main `b7122ef`, isolated in `19443e8` | No — conservative classification uses existing fields; exception type declined |
-| 7 | Cross-review and automatic Request changes (package 2) | On main — `95e4723`, `9b81d0b`, `13f955c`, `7da6fa9`; no new front | No |
-| 8 | Merge by rules, follow main and Revert (package 1) | In progress — `changes/rules-reservation` (P2b-2); scheduler on main `9f70622`, isolation `19443e8`; merge/Revert remain | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
-| 9 | A change card with three states | Queued — full card absent at `535e6f6`; cross-review Needs you note on main `7da6fa9` | Yes |
-| 10 | Cost and rounds per accepted change | Queued — aggregates remain; writer/reviewer attribution on main `13f955c` and `535e6f6` | Yes — stored aggregates; event-derived totals need none |
-| 11 | One plan, server-computed zones and task queue (package 6) | Queued — main `535e6f6` has validator/reservations, no partitioner or dispatcher | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
-| — | [Lead agent](#lead-agent) | Queued — after items 8 and 11 reach main; thin layer on item 11 | No — lead routes and `started_by` reserved |
-| — | [Saved agent flows](#saved-agent-flows) | Queued — after the lead agent; extends package 12, on main `c1c19c6` | No while filling task text; a distinct role or tool limits need maintainer review |
-| 12 | Examples before code | Queued — no examples phase on main `535e6f6` | Yes |
-| 13 | Pinned examples and graph lenses | Queued — no pins or lens control on main `535e6f6` | Yes |
-| 17 | Run rule (package 5) | Queued — wiring remains; pure core on main `aaa9af8`, facts producer absent at `535e6f6` | Yes — run-rule finding kind for removed, skipped, deleted checks |
-| 18 | Remaining packages 11–14 | Queued — 13–14 remain; 11 on main `ee92691`, 12 on main `c1c19c6`; do not rebuild them | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
-| — | [Standing grants](#standing-grants) | Plan approved 2026-10-29 in [standing-grants.md](plans/standing-grants.md); backend front next, ahead of item 9's decision-veto wiring | Contracts 1.7.0, approved 2026-10-29; the creation bundle moved to 1.8.0 — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route |
+| 1 | Facts and a summary from events (package 3) | On main — summary producer `027ec36`, review rendering `9cdd02a`; facts row/steps `ae9822d` | Yes — summary; report check needs no field |
+| 2 | Behavior diff | Backend on main — opt-in publication `e72fcc7`, shared-input comparison `647d545`; node rows remain | Yes |
+| 3 | Agent harness pack | On main — opt-in pack `42976ee`, runner wiring `b4446cc` | No |
+| 4 | Measured impact cone | Backend on main — caller evidence `1c50382`, bounded GET /impact `920e930`; measured graph display remains | Yes |
+| 5 | Live overlap between agents | Queued — card facts/change-lifetime reads remain; latest focus and last-read node only at `06c34a5` | No |
+| 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
+| 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; manual review route still 501 | No |
+| 8 | Merge by rules, follow main and Revert (package 1) | Partial — reservation `5dac67c`, transaction `73b4f65`, barriers `7aec7d5` wired; mode closed, merge-mode routes 501 at `c820fbf`; isolated start and routes first | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
+| 9 | A change card with three states | Partial — decision producer `3786310`, answer guards `2efd586`, inbox projection `f4ab346`; full UI/rules state remain | Yes |
+| 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived change totals `bf36052`; agent-hours, dated prices and aggregate UI remain | Yes — stored aggregates; event-derived totals need none |
+| 11 | One plan, server-computed zones and task queue (package 6) | Partial — unwired partition core `deb7148`, dependency contracts `bb9dc43`; standalone queue routes/dispatcher live `c820fbf`; plan routes/dependency scheduling remain | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
+| — | [Lead agent](#lead-agent) | Queued — after items 8 and 11; lead routes still 501 at `06c34a5` | No — lead routes and `started_by` reserved |
+| — | [Saved agent flows](#saved-agent-flows) | Queued — picker absent at `06c34a5`; after the lead, extends package 12 `c1c19c6` | No while filling task text; a distinct role or tool limits need maintainer review |
+| 12 | Examples before code | Queued — contracts reserved `649ff0d`; no examples phase on main `06c34a5` | Yes |
+| 13 | Pinned examples and graph lenses | Queued — pin contract reserved `649ff0d`; no pins or lens control on main `06c34a5` | Yes |
+| 17 | Run rule (package 5) | Backend on main — assertion findings `aa4e658`, removed/skipped checks `071844e`; review rendering remains | Yes — run-rule finding kind for removed, skipped, deleted checks |
+| 18 | Remaining packages 11–14 | Queued — 13–14 remain, dictation/message/pause/resume still 501 at `06c34a5`; 11 `ee92691` and 12 `c1c19c6` complete | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
+| — | [Standing grants](#standing-grants) | Backend on main `93a3664` — run-local possible_callers grants, module/run scope and revoke wired; rules activation/UI remain | Contracts 1.7.0, approved 2026-10-29; the creation bundle moved to 1.8.0 — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route; moved again to 1.9.0 on 2026-10-30 when failed model attempts and dependency plans took 1.8.0 `bb9dc43` |
 
 ### Only if time remains
 
 | # | Item | State and commit or branch | In contracts proposal |
 | --- | --- | --- | --- |
-| 14 | Node card explained by examples | Queued — observed call inputs/results absent at `535e6f6`; navigation is on main | Yes |
-| 15 | Shape guard | Queued — no structural comparison producer on main `535e6f6` | Yes |
-| 16 | Bounded one-hop context for initial tasks | Queued — broader slice waits for bench; revision callers/siblings on main `ee92691` | No |
+| 14 | Node card explained by examples | Queued — caller evidence `1c50382`; node example view absent at `06c34a5` | Yes |
+| 15 | Shape guard | Queued — contract reserved `649ff0d`; no structural comparison producer on main `06c34a5` | Yes |
+| 16 | Bounded one-hop context for initial tasks | Queued — initial slice absent at `06c34a5`, waits for bench; revision callers/siblings `ee92691` | No |
 
-**Not ranked, goes in regardless:** delivery (package 9; static replay on main `a0a4624`, challenge
-queued after item 2), graph polish (8; graph and palette on main `535e6f6`, polish continues), and
-the task bench (10; eight-task base on main `9a1772f`, arms in progress on `tools/bench-arms`).
+**Not ranked, goes in regardless:** delivery (package 9; static replay `a0a4624`, challenge
+`99a57de`, phone practice `0c884f6`, recorded evidence `e621acb` on main), graph polish (8;
+scale layout `04f0a41`, life layer `8fad4c2` on main, polish continues), and the task bench (10;
+arms `9ad1ecf`, frozen patches `724b5c9`, detection arms `75b30f8`, sensitivity gate `cc52a78`
+on main; the gate does not establish a completed paid run).
 
 ## Undecided candidates
 
@@ -228,8 +234,9 @@ Package 3 already publishes source facts and execution references. The shared fa
 steps landed in `ae9822d` (`frontend/src/review/ChangeFactsRow.tsx:76`). Recognized report claims
 such as “tests pass” already produce contradictions against the last agent run
 (`frontend/src/review/ReviewFacts.tsx:66`, `backend/src/oversight/changes/_reviewfacts.py:209`).
-Reuse these checks: they do not understand arbitrary prose and need no new field. A stored
-generated summary belongs in the requested optional additions. Do not put report contradictions
+Reuse these checks: they do not understand arbitrary prose and need no new field. The optional
+summary contract landed in `649ff0d`; the event-derived producer (`027ec36`) and review rendering
+(`9cdd02a`, `frontend/src/review/FactsSummary.tsx:4`) are on main. Do not put report contradictions
 into `ChangeFacts.integrity`, whose kinds describe test-source observations.
 
 ### 2. Behavior diff
@@ -241,9 +248,11 @@ for integer arguments. Bind by parameter name; compare typed values and supporte
 Execute each differing input twice in total on each side. Results varying between runs are
 unstable, not an established change.
 
-Build the core first behind a setting on `changes/behavior-diff`; publish only after its optional
-per-node contract field, including unstable/not-probed outcomes, is approved. Reuse the demo
-interpreter, asynchronous bounded runner, guarded base checkout and C3 session isolation
+The core landed in `174c0ce`; contracts 1.5.0 (`649ff0d`) reserved its optional per-node evidence,
+including unstable/not-probed outcomes. Publication is wired behind `OVERSIGHT_BEHAVIOR_DIFF`
+(`e72fcc7`, `backend/src/oversight/changes/_proposal.py:328`). Shared-input comparison landed in
+`647d545`; per-node rows in the live UI remain. Reuse the demo interpreter, asynchronous bounded
+runner, guarded base checkout and C3 session isolation
 (`19443e8`; `backend/src/oversight/workspace/capability.py:116`). Never fall back to an open network.
 Apply time/output/input caps across the whole probe, not a full suite allowance per input. Write
 fresh implementation; exploratory prototypes supply no product code.
@@ -260,8 +269,9 @@ searches with per-file match counts and a narrowing hint; retain a bounded whole
 with test/assertion/relevant frame; remind `finish` once to run tests if edits followed the last
 run; prompt for one evidence-led path and a stopping point.
 
-`agents/harness-pack` builds on current hash/uniqueness checks and bounded observations
-(`backend/src/oversight/agents/tools.py:388`, `backend/src/oversight/agents/_observations.py:13`).
+The opt-in pack is on main (`42976ee`), including hash/uniqueness checks and bounded observations
+(`backend/src/oversight/agents/tools.py:425`, `backend/src/oversight/agents/_observations.py:14`).
+Runner failure retention is wired too (`b4446cc`, `backend/src/oversight/workspace/suite_guard.py:68`).
 Preserve failures before the runner discards text. No contract addition or tool is needed. One
 setting lets the bench compare both arms with the same model, reasoning and limits. This does
 not replace independent server proposal tests.
@@ -273,9 +283,10 @@ through the external pytest reporting plugin: run the same tests on both impleme
 inputs/results at caller boundaries, match by test/caller/order, and compare only equal inputs.
 Tests construct the objects; do not serialize/rebuild arbitrary objects to invoke callers.
 
-Main's plugin records phases/outcomes only
-(`backend/src/oversight/workspace/report_plugin/oversight_report.py:26`). Add bounded recording
-and proposed optional measured-cone evidence, including unmatched calls/incompleteness. Both runs
+Bounded caller recording and optional measured-cone evidence, including unmatched calls and
+incompleteness, are on main (`1c50382`), behind `OVERSIGHT_MEASURED_CONE`
+(`backend/src/oversight/changes/_proposal.py:342`). GET /impact serves bounded graph cones
+(`920e930`); measured caller highlighting/list rendering remains. Both runs
 require session network isolation, never open-network execution. Unsupported or unmatched calls
 are not compared; other nodes stay “possible, no change measured”. This is neither per-test
 coverage nor proof that all callers behave identically.
@@ -288,8 +299,9 @@ become a fact at review. Never interrupt the person or move focus for overlap. O
 name the shared nodes and never block on their own: they warn, and the person decides.
 
 Reuse `pending-both` (`frontend/src/graph/styles.ts:302`), pending-node sets and live/proposal cones.
-Add pure selectors and change-lifetime read sets to the reducer; main retains only latest focus
-(`frontend/src/state/applyEvent.ts:89`). No contract addition; replay must agree with live runs.
+Add pure selectors and change-lifetime read sets to the reducer; main retains latest focus and
+one last-read node per agent (`frontend/src/state/applyAgentEvent.ts:42`), not change-lifetime reads.
+No contract addition; replay must agree with live runs.
 Search focus is capped, so observed reads are not a complete audit. Once item 18 supplies messages,
 notify the later agent as a separate turn; notification in its next tool result remains Next.
 
@@ -297,13 +309,14 @@ notify the later agent as a separate turn; notification in its next tool result 
 
 Tell the person whether a new test demonstrates the change or merely failed to import or set up
 on base. Keep package 4's case discovery, selected base/head probes and review output (`b7122ef`);
-C3 already requires isolated probes (`backend/src/oversight/changes/_probes.py:229`). Only evidence
-classification remains.
+C3 already requires isolated probes (`backend/src/oversight/changes/_probes.py:229`). Evidence
+classification landed in `b786f6c`.
 
-Today a base `error` counts as failure (`backend/src/oversight/changes/_beforeafter.py:95`). Classify
-import/setup errors as unknown with their diagnostic, using existing probe results/problems;
-the merge-alone evaluator must never use them as evidence of failure on base. Build this before
-merge-alone can activate, with no contract change. An exception-type field was declined for the
+Base import/setup errors now count as unknown with their diagnostic, using existing probe
+results/problems (`backend/src/oversight/changes/_beforeafter.py:58`); they no longer establish
+failure on base. The merge-alone evaluator must never use them as evidence of failure on base.
+Build this before merge-alone can activate, with no contract change. That prerequisite is met
+by `b786f6c`. An exception-type field was declined for the
 Oct 28 proposal. Do not rebuild the functioning probes or claim assertion evidence from an error.
 
 ### 7. Cross-review and automatic Request changes
@@ -328,13 +341,19 @@ Ask me still waits on every change. Optional rules mode merges only with complet
 evidence, recorded reasons and clean one-click Revert. The server retests a moved base; failures
 or conflicts become Needs you. Models can add reasons to wait, never waive a deterministic rule.
 
-Before enabling rules mode, `PRODUCT.md` needs a maintainer-approved success sentence covering the person's decision or a rule they set as the authority for every merge.
+`PRODUCT.md`'s success sentence, set by the maintainer on 2026-10-30, names the person's approval or a rule
+they set as the authority for every merge; rules mode stays closed by default until its remaining pieces land.
 
-Main has policy profiles, the closed mode controller and P2b-1 scheduler (`9f70622`). Admission
-explicitly waits for reservation (`backend/src/oversight/changes/_assessment.py:39`); P2b-2 is in
-progress on `changes/rules-reservation`. Finish reservation, merge transaction/final race barriers,
-Revert recovery/history, routes and UI before enabling the mode. C3 landed in `19443e8`; rules
-and probes require it. Human approval already retests moved bases
+Main has policy profiles, the P2b-1 scheduler (`9f70622`), reservation (`5dac67c`), merge transaction
+(`73b4f65`) and final race barriers (`7aec7d5`). Reservation and the transaction are wired through
+`backend/src/oversight/changes/_manager.py:119`; the mode remains closed because isolated start
+capability is not connected (`backend/src/oversight/changes/_mode.py:23`). GET and PUT /merge-mode
+still answer 501 (`backend/src/oversight/api/commands.py:53`). Remaining work follows the
+maintainer's order: isolated start capability and merge-mode routes first, then the remaining
+Revert recovery/history, routes and UI before enabling the mode. Revert preflight (`88a54f4`) is
+an unwired read-only check, not an executable Revert; bounded history reads are wired (`0e5305a`). Protected
+paths have an evaluator (`f8d720c`). C3 landed in `19443e8`; rules and probes require it.
+Human approval already retests moved bases
 (`backend/src/oversight/changes/_merge.py:45`), and revision can merge main into the retained branch.
 Reuse those paths; rules must test the combined result even when base has not moved.
 Enable cross-review with the other model before merge-alone can activate; the merge-alone evaluator
@@ -344,7 +363,8 @@ Manifest/lockfile, CI, test-configuration and security-path edits always wait fo
 receive cross-review. The maintainer included a named `protected_paths` rule in the Oct 28 contract
 proposal, with a new policy profile version: `RuleId` is closed and profiles validate against it
 (`contracts/src/oversight_contracts/common.py:44`). A server-only veto would hide the policy reason.
-This approves its inclusion in the proposal, not a change to the current contracts. Revert and
+This approves its inclusion in the proposal, not a change to the current contracts. The separate
+contracts 1.5.0 delivery reserved the rule (`649ff0d`). Revert and
 resolution provenance are already reserved. Revert covers only rules merges that apply cleanly;
 conflicts wait for the person. This is not general undo; unknown required evidence never passes.
 
@@ -370,9 +390,9 @@ never from the agent.
 
 Derive the inbox as a pure function over existing events in the frontend reducer, like the
 overlap in item 5, so it survives restarts and appears in replay, with no field beyond item 9's.
-One contract question remains open: an answer routed to another agent may need an optional link
-to come back as answered after a restart or in replay. Today a start has no reference back to a
-card, and answers persist only in the change's resolution. The maintainer has not answered this.
+The answer-to-another-agent link is now reserved in contracts 1.6.0 (`a13ef3f`) and wired in
+`7c989e2`. Inbox projection landed in `f4ab346`, including delegation recovery (`8c13033`) and
+one pending decision per change (`eef7daa`); the full inbox view remains.
 
 Build the inbox together with item 9, keeping item numbers, anchors and the decided queue's order.
 It changes the look, so the maintainer sees a shot before merge.
@@ -392,12 +412,46 @@ to wait, and report the findings to the maintainer. Set the threshold from devel
 never from the 20 frozen bench patches. Hosted Muse Spark writes code for both A and B and runs
 the lead; Spark Open supplies cross-review and this decision. Cross-review stays as it is.
 
-Reuse target-aware notes (`frontend/src/review/CrossReviewNote.tsx:11`); full projection is absent
-and the reducer ignores assessments/Revert (`frontend/src/state/applyEvent.ts:227`).
-Optional questions and persisted Yes/No/Unsure answers belong in the proposal. Yes never converts
-an unavailable check to passing evidence.
+Reuse target-aware notes (`frontend/src/review/CrossReviewNote.tsx:11`). The constrained decision
+client (`15dcff4`), review-card producer (`3786310`), asked-for summary (`abc281d`) and persisted
+answer guards (`2efd586`) are on main; grouped witnesses followed in `3068b81`. The live review
+UI still lacks the full card/inbox controls, and assessments/Revert are not folded into displayed
+state (`frontend/src/state/applyEvidenceEvent.ts:36`). Optional questions and persisted answers
+were reserved in `649ff0d`. Yes never converts an unavailable check to passing evidence.
 
 ### 10. Cost and rounds per accepted change
+
+**Agent-hours come first:** proof 2's closing line ("this many agents for this many hours") uses them. The
+intervals of one agent are unioned, distinct agents add up, and a lead that only waits for its agents adds
+nothing. Use observed intervals, never fixed time buckets: each agent's own working intervals come from its
+agent.status events, where starting, working and revising count and ready_for_review, halted, done, stopped and
+paused do not. A review is one bounded call that starts when the author's run ends after proposing, so its
+interval runs from that agent's ready_for_review status to change.reviewed and it counts as its own actor. Also report project active hours (the union
+of all intervals) and parallelism (agent-hours divided by project active hours). The lead has no producer yet
+and lead.status cannot tell waiting from working; until its contract can, lead hours are unavailable and its
+waits are never counted.
+
+**Costs are list-price equivalents, not a bill:** every cost names its dated price source. The source is
+Meta's official pricing page. The repository stores the price table extracted from it, with the page's URL and
+retrieval date, never a copy of the page; on 2026-10-30 it listed
+muse-spark-1.3-contributor at US$0.10 input, US$0.002 cached input and US$0.20 output per million tokens, and no
+price for Muse Spark Open, so Baseten work is unpriced. The view applies the stored price to each call's token
+counts. The budget brake keeps its own conservative ledger, which prices cached input as fresh, and the view
+never presents its figures as that ledger. A call whose cached count was not reported has a cost range; only
+its lower end enters the known subtotal.
+
+**Coverage:** missing usage, activity or price shows the known part as a lower bound and the total as
+unavailable, never a smaller total presented as complete. There are three levels: complete; missing metrics
+(unpriced work, or an actor with work but no interval); incomplete (an integrity failure). Null is unknown and
+zero is zero; zero usage costs zero even when unpriced. Unpriced rows sort last, and "—" means unknown only.
+A sum of period figures adds their known subtotals and is labeled a lower bound.
+
+**Grouping:** by team, agent, model and role, split by hour or day. A team is a lead and the agents it started
+(`started_by`); agents the person started form their own group. Periods follow local wall time, so a
+daylight-saving change gives a 23- or 25-hour day. Intervals are clipped at period edges; a cost falls in the
+period of its usage.tick and is never prorated. Group rows add up only when every group's activity is complete
+and their sum matches the global figure; the total always comes from the global figure. A comparison between
+periods uses exact values, never rounded display text, and shows a number only when both sides are complete.
 
 Count failed, stopped, rejected and review work too, divide all spend by accepted changes, and show
 role/model breakdowns, revision rounds and budget pace. Keep unsuccessful buckets visible. With
@@ -405,9 +459,14 @@ no accepted changes the ratio is unavailable.
 
 Writer/reviewer ticks already carry attribution (`contracts/src/oversight_contracts/events.py:358`,
 `backend/src/oversight/runtime_accounting.py:68`). Fold individual costs and resolution events;
-never sum cumulative `spent_usd`. Main keeps agent totals, not these aggregates
-(`frontend/src/state/applyEvent.ts:175`). Live/replay derivation needs no addition; optional archived
-change/role totals and rounds belong in the proposal. Unknown usage/unpriced Baseten work stays
+never sum cumulative `spent_usd`. Main has the committed usage/rounds fold (`43f3bb8`) and exposes
+change/role totals and rounds in archived GET /changes/{id} (`bf36052`,
+`backend/src/oversight/changes/_view.py:143`); GET /agents/{id} and bounded GET /history are wired
+too (`bf36052`, `0e5305a`). The frontend still keeps agent totals, not the aggregate usage view
+(`frontend/src/state/applyAgentEvent.ts:52`). Agent-hours, dated list-price accounting and the
+aggregate UI remain. E6 now emits failed model attempts (`06c34a5`), but those events alone do not
+supply activity intervals or retry-card rendering. Live/replay derivation needs no addition;
+optional archived totals/rounds were reserved in `649ff0d`. Unknown usage/unpriced Baseten work stays
 unknown, never free. The cumulative product Meta ledger is separate from the bench ledger.
 
 ### 11. One plan, server-computed zones and task queue
@@ -417,13 +476,15 @@ computes zones, keeping import/call cycles together and cross-zone edges few, an
 their impact cones do not overlap. The model writes subtask text only. Dependent work starts after
 its prerequisite merges. Use one agent when no independent split exists. Queue dispatch waits until a slot is actually released.
 
-Main validates/expands supplied zones, not partitions (`backend/src/oversight/changes/_zones.py:40`).
+Main validates/expands supplied zones (`backend/src/oversight/changes/_zones.py:40`).
 Reuse that after deterministic cycle contraction; uncertain calls and same-file zones still need
-conservative handling. Plan/queue routes remain 501 (`backend/src/oversight/api/commands.py:30`);
-finishing alone does not free a retained worktree's slot. Plans reserve exactly two subtasks and
-require both assigned agents while running (`contracts/src/oversight_contracts/plans.py:60`).
-The Oct 28 proposal includes subtask dependencies and a relaxed plan validator for sequential
-starts and one-agent fallback; implement them only after that contract extension is approved.
+conservative handling. A pure partition-feasibility core landed in `deb7148`, but has no production
+completeness producer or caller (`backend/src/oversight/changes/_partition.py:1`). Plan routes remain
+501 (`backend/src/oversight/api/commands.py:55`). Queue routes are live, with the standalone FIFO
+dispatcher wired (`c820fbf`); plan queueing and dependency scheduling remain. Finishing alone does
+not free a retained worktree's slot. Contracts 1.8.0 (`bb9dc43`, P1–P5) now allow one
+to six subtasks, validated dependencies and sequential/single-agent starts. Those schema changes
+do not start or dispatch a plan (`contracts/src/oversight_contracts/plans.py:1`).
 A partition heuristic does not prove independence; speed claims wait for the split bench.
 
 ### Lead agent
@@ -456,8 +517,9 @@ most three alternative meanings; beyond that, ask for clearer task text.
 
 Today's form starts coding directly (`frontend/src/agents/TaskBox.tsx:134`). Enforce a no-edit,
 one-call examples phase in the server, then carry confirmations into the task. Optional task/example
-fields belong in the proposal. Unconfirmed prose is not acceptance evidence. This is selective,
-not an extra call for every task; a confirmed example's result needs no model judgment.
+fields were reserved in `649ff0d`; the phase is not wired at `06c34a5`. Unconfirmed prose is not
+acceptance evidence. This is selective, not an extra call for every task; a confirmed example's
+result needs no model judgment.
 
 ### 13. Pinned examples and graph lenses
 
@@ -468,7 +530,8 @@ Use neutral work light and show the maintainer a shot before merging. Text rules
 
 Reuse test nodes/caller counts/files/task entry; main has no pins or lens registry
 (`frontend/src/graph/elements.ts:94`, `frontend/src/graph/camera.ts:197`). Optional pin provenance
-belongs in the proposal. The Cost per node lens was dropped: cost is measured per call and per agent,
+was reserved in `649ff0d`; pin production and lenses remain absent at `06c34a5`.
+The Cost per node lens was dropped: cost is measured per call and per agent,
 so a node lens would present an allocation estimate as a measurement. The cost-per-node field in
 usage events was declined too. Do not treat a file-naming convention alone as confirmed-pin enforcement.
 
@@ -484,8 +547,9 @@ labeled as source. Real argument values wait for item 4's recorder; then disting
 inputs/results from proposed or confirmed examples using item 13's pins. Propose optional node
 examples with origin so the person can tell source text from recorded execution.
 
-Main opens node source/diffs (`frontend/src/app/view.ts:99`); the palette (`535e6f6`) adds navigation,
-not runtime observations. Static edges carry no argument/result values
+Main opens node source/diffs (`frontend/src/app/view.ts:99`); the palette (`535e6f6`) adds navigation.
+Caller inputs/results are now recorded by item 4 (`1c50382`); this node example view remains absent
+at `06c34a5`. Static edges carry no argument/result values
 (`contracts/src/oversight_contracts/graph.py:45`). Source excerpts are the first delivery, not
 observed executions. Capture excerpts and later recorded example data for replay: recordings need
 not contain unchanged source. This is not a general runtime tracer.
@@ -497,8 +561,9 @@ growing past a size threshold. Build a deterministic before/after analyzer over 
 and graph data. Spans/import edges exist (`backend/src/oversight/graph/_workspace.py:77`,
 `backend/src/oversight/graph/_link.py:129`), but no shape producer is wired on main.
 
-Propose optional findings, evidence and completeness, then render card questions. State dynamic
-or unsupported cases. Size remains a review signal under AGENTS.md, not an automatic rejection
+Optional findings, evidence and completeness are reserved in `649ff0d`; the producer and card
+rendering remain absent at `06c34a5`. State dynamic or unsupported cases. Size remains a review
+signal under AGENTS.md, not an automatic rejection
 gate or learned risk score.
 
 ### 16. Bounded one-hop context for initial tasks
@@ -522,14 +587,11 @@ alarm. Include this in the video only if a real run supplies the evidence.
 
 The [historical precision measurement](../tools/shortcut_corpus_report.md#labeled-oversight-evaluation) on this repository's history reduced 101 findings to 24, with signal in 11/20 labeled identities and four unlabeled identities, so it does not establish precision for all 24.
 
-The core/event adapter exist (`aaa9af8`, `backend/src/oversight/changes/_runrule.py:1`), but facts
-publish no temporal findings (`backend/src/oversight/changes/_facts.py:375`). Wire the reserved
-assertion-loosening case first, with matching facts and ordered references
-(`contracts/src/oversight_contracts/review.py:253`). The core also handles skipped/deleted tests:
-absence of failure does not prove passing. Never infer recovery from truncated failure lists or
-force broader kinds into the current wire shape. First wiring needs no addition; the Oct 28
-proposal adds the run-rule finding kind for removed, skipped and deleted checks. That extension
-must be approved before publishing the broader cases.
+The core/event adapter (`aaa9af8`) and facts producer are on main: assertion-loosening findings
+landed in `aa4e658`, removed/skipped/deleted cases in `071844e`, using the kinds reserved in
+`649ff0d` (`backend/src/oversight/changes/_facts.py:432`). Live review rendering remains absent
+at `06c34a5`. Absence of failure does not prove passing. Never infer recovery from truncated
+failure lists or force broader kinds into the current wire shape.
 
 <a id="18-remaining-small-packages-if-time-remains"></a>
 
@@ -539,11 +601,11 @@ Package 11's revision callers/siblings (`ee92691`) and package 12's Start an age
 `frontend/src/agents/StartAgentHere.tsx:10`) are complete. Keep them for traceability, not new work.
 
 Package 13 is Muse Voice Transcribe task dictation, last day only, never merge approval. Its
-separate audio-upload command/response is included in the Oct 28 proposal as an endpoint answering
-501 until built; message/pause/resume reservations do not cover it. Contract implementation still
-requires approval of that proposal.
+separate audio-upload command/response was reserved in `649ff0d` as an endpoint answering 501
+until built; message/pause/resume reservations do not cover it. The dictation route still answers
+501 (`backend/src/oversight/api/commands.py:47`).
 Package 14 is person-to-agent messages, pause/resume and replay timeline. Message/pause/resume routes are
-reserved and still 501 (`backend/src/oversight/api/commands.py:51`); playback already consumes ordered
+reserved and still 501 (`backend/src/oversight/api/commands.py:61`); playback already consumes ordered
 events. Reuse those interfaces/local controls without claiming messaging or seeking already works.
 Earlier-today history belongs to item 8; usage views belong to item 10.
 
@@ -559,6 +621,13 @@ change they merge, and counted apart from questions in proof 2. Plan, contract p
 [standing-grants.md](plans/standing-grants.md). Proposed pitch line, for PRODUCT.md and the video
 once approved: "Rules check. The open model can only stop. Only you can let go, and Oversight
 remembers what you let go."
+
+Contracts 1.7.0 and the first backend landed in `93a3664`: possible_callers only, module/run scope,
+run expiry, Approve creation and POST /grants/{id}/revoke. Grant checks are wired into reservation
+and every transaction barrier. Creation requires a current rules-mode wait
+(`backend/src/oversight/changes/_grants.py:147`), so closed rules activation still prevents live
+creation/use; the frontend ignores grant events (`frontend/src/state/applyEvent.ts:30`). The full
+grants UI, broader scopes/expiry and protected-path grants remain.
 
 ### Repository memory
 

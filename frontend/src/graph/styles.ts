@@ -30,8 +30,7 @@ type GraphTheme = Widen<ReturnType<typeof getActiveTheme>>;
 
 /**
  * Draw order, low to high: frames, then edges, then leaf nodes. Edges run over a frame's fill but
- * under every node's name and marks, so a line never crosses a label. (A frame's header is part of
- * the frame, so a line can still cross it.)
+ * under every node's name and marks. Straight possible links sit below opaque cards and headers.
  */
 const LAYER = { frame: 1, edge: 2, leaf: 3 } as const;
 const encodedBadgeFonts = new Map<string, string>();
@@ -209,6 +208,11 @@ export function graphStyles(
       },
     },
     {
+      // A folded card masks links behind its text; an open body's fill lets the field through.
+      selector: "node.module:childless",
+      style: { "background-opacity": 1 },
+    },
+    {
       selector: "node.module:parent, node.class:parent",
       style: {
         "text-valign": "top",
@@ -384,15 +388,36 @@ export function graphStyles(
     {
       selector: "edge.possible",
       style: {
+        display: "none",
+        "curve-style": "straight",
+        "source-endpoint": "outside-to-node",
+        "target-endpoint": "outside-to-node",
+        "target-arrow-shape": "none",
+        "z-compound-depth": "bottom",
+        "z-index": 0,
         width: theme["possible-edge-width"],
         "line-style": "solid",
         "line-color": theme["edge-possible"],
         "target-arrow-color": theme["edge-possible"],
       },
     },
+    {
+      selector: "edge.possible.faint",
+      style: { display: "element", width: 1, "line-color": theme["edge-faint"], opacity: 1 },
+    },
     // Watch mode: an edge no agent touches steps back; one at a node the person selected comes back.
     { selector: "edge.quiet", style: { opacity: theme["quiet-edge"] } },
-    { selector: "edge.touching", style: { opacity: 1 } },
+    { selector: "edge.touching, edge.node-hover", style: { opacity: 1 } },
+    {
+      selector: "edge.possible.touching, edge.possible.node-hover, edge.possible.cone-call",
+      style: {
+        display: "element",
+        width: theme["possible-edge-width"],
+        "line-color": theme["edge-possible"],
+        "target-arrow-shape": "triangle",
+        opacity: 1,
+      },
+    },
     {
       selector: "edge.aggregate",
       style: {
@@ -408,7 +433,17 @@ export function graphStyles(
     },
     {
       selector: "edge.aggregate.count-hover, edge.aggregate.touching",
-      style: { label: (edge: EdgeSingular) => `×${String(edge.data("callCount"))}` },
+      style: {
+        label: (edge: EdgeSingular) => {
+          const exact = edge.data("exactCount") as number | undefined;
+          const possible = edge.data("possibleCount") as number | undefined;
+          return exact === undefined
+            ? `×${String(edge.data("callCount"))}`
+            : exact
+              ? `×${String(exact)}${possible ? ` · ${String(possible)} possible` : ""}`
+              : `×${String(possible)} possible`;
+        },
+      },
     },
     { selector: "node.dimmed, edge.dimmed", style: { opacity: theme["dim-node"] } },
     { selector: "node.module.dimmed", style: { opacity: theme["dim-module"] } },
@@ -430,6 +465,25 @@ export function graphStyles(
         "background-image-opacity": theme["dim-module"],
         "border-opacity": theme["dim-module"],
         "text-opacity": theme["dim-module"],
+      },
+    },
+    {
+      // Only childless cards shield lifted lines; open frames must stay below their rows.
+      selector: "node.module.folded, node.module:childless.edge-shield",
+      style: { "background-opacity": 1, "z-index": 5, "z-compound-depth": "top" },
+    },
+    {
+      selector: "edge.possible.count-hover",
+      style: { "target-arrow-shape": "triangle" },
+    },
+    {
+      selector: "edge.count-hover",
+      style: {
+        "line-color": theme["edge-hover"],
+        "target-arrow-color": theme["edge-hover"],
+        "z-index": LAYER.leaf + 1,
+        "z-compound-depth": "top",
+        opacity: 1,
       },
     },
   ];

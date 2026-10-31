@@ -77,6 +77,7 @@ export const dockTest = {
       summary: `Read ${String(before.length + i + 1)}`,
       result: "ok" as const,
       error: null,
+      error_kind: null,
       duration_ms: 12,
       tests: null,
     }));

@@ -1,0 +1,28 @@
+--- a/boltons/strutils.py
++++ b/boltons/strutils.py
+@@ -1345,7 +1345,7 @@
+ 
+ 
+ 
+-def ellipsize(text, max_len=160, *, ellipsis='…'):
++def ellipsize(text, max_len=160, *, ellipsis='…', by='word'):
+     """Truncate *text* to at most *max_len* characters, cutting at the
+     last space before the limit and appending *ellipsis*. The returned
+     string, ellipsis included, is never longer than *max_len*.
+@@ -1379,12 +1379,16 @@
+         ellipsis (str): The suffix appended to truncated text.
+             Defaults to ``'…'`` (U+2026, HORIZONTAL ELLIPSIS).
+     """
++    if by not in ('word', 'char'):
++        raise ValueError('by must be word or char')
+     if max_len <= len(ellipsis):
+         raise ValueError('expected max_len greater than length of'
+                          ' ellipsis %r, not %r' % (ellipsis, max_len))
+     if len(text) <= max_len:
+         return text
+     limit = max_len - len(ellipsis)
++    if by == 'char':
++        return text[:limit] + ellipsis
+     cut_at = text.rfind(' ', 0, limit + 1)
+     if cut_at <= 0:
+         # no space boundary available, hard-cut mid-token

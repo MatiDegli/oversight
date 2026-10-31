@@ -1,0 +1,50 @@
+--- a/boltons/iterutils.py
++++ b/boltons/iterutils.py
+@@ -501,15 +501,15 @@
+     return windowed_iter(src, 2, fill=end)
+ 
+ 
+-def windowed(src, size, fill=_UNSET):
++def windowed(src, size, fill=_UNSET, *, step=1):
+     """Returns tuples with exactly length *size*. If *fill* is unset 
+     and the iterable is too short to make a window of length *size*, 
+     no tuples are returned. See :func:`windowed_iter` for more.
+     """
+-    return list(windowed_iter(src, size, fill=fill))
+-
+-
+-def windowed_iter(src, size, fill=_UNSET):
++    return list(windowed_iter(src, size, fill=fill, step=step))
++
++
++def windowed_iter(src, size, fill=_UNSET, *, step=1):
+     """Returns tuples with length *size* which represent a sliding
+     window over iterable *src*.
+ 
+@@ -531,6 +531,8 @@
+     This way, *fill* values can be useful to signal the end of the iterable.
+     For infinite iterators, setting *fill* has no effect.
+     """
++    if not isinstance(step, int) or step < 1:
++        raise ValueError('step must be an int >= 1')
+     tees = itertools.tee(src, size)
+     if fill is _UNSET:
+         try:
+@@ -539,7 +541,7 @@
+                     next(t)
+         except StopIteration:
+             return zip([])
+-        return zip(*tees)
++        return (window for i, window in enumerate(zip(*tees)) if i % step == 0)
+ 
+     for i, t in enumerate(tees):
+         for _ in range(i):
+@@ -547,7 +549,7 @@
+                 next(t)
+             except StopIteration:
+                 continue
+-    return zip_longest(*tees, fillvalue=fill)
++    return (window for i, window in enumerate(zip_longest(*tees, fillvalue=fill)) if i % step == 0)
+ 
+ 
+ def xfrange(stop, start=None, step=1.0):

@@ -21,7 +21,7 @@ export function AgentLine({ practice, entry }: { practice: Practice; entry: Prac
     <div className="pp-agent" data-slot={slot}>
       <AgentLetter slot={slot} />
       <strong>Agent {slot}</strong>
-      <span>· {modelLabel}</span>
+      <span>{modelLabel}</span>
     </div>
   );
 }
@@ -109,15 +109,17 @@ function Piece({
           <div className="pp-callee">{helper.name}</div>
         </>
       ) : (
-        [1, 2].map((distance) => (
-          <div className={`pp-fold pp-distance-${String(distance)}`} key={distance}>
-            <span>
-              {countAt(entry, distance)}{" "}
-              {distance === 1 ? "direct callers" : `at distance ${String(distance)}`}
-            </span>
-            <span className="pp-distance">{distance}</span>
-          </div>
-        ))
+        [1, 2]
+          .filter((distance) => countAt(entry, distance) > 0)
+          .map((distance) => (
+            <div className={`pp-fold pp-distance-${String(distance)}`} key={distance}>
+              <span>
+                {countAt(entry, distance)}{" "}
+                {distance === 1 ? "direct callers" : `at distance ${String(distance)}`}
+              </span>
+              <span className="pp-distance">{distance}</span>
+            </div>
+          ))
       )}
     </div>
   );
@@ -143,7 +145,9 @@ export function PhoneGraph({
         </span>
         <span>
           {entry
-            ? `${String(entry.proposal.impact.entries.length)} possibly affected`
+            ? entry.proposal.impact.entries.length
+              ? `${String(entry.proposal.impact.entries.length)} possibly affected`
+              : "No possibly affected entries"
             : merged
               ? "Both merged"
               : `${String(practice.cases.length)} pending changes`}
@@ -165,9 +169,9 @@ export function PhoneGraph({
           {pieces
             .map(
               (item) =>
-                `${caseSlot(practice, item)} · ${String(item.proposal.impact.entries.length)} possibly affected`,
+                `${caseSlot(practice, item)}: ${item.proposal.impact.entries.length ? `${String(item.proposal.impact.entries.length)} possibly affected` : "none"}`,
             )
-            .join(" · ")}
+            .join(", ")}
         </p>
       ) : (
         !entry.proposal.impact.entries.length && (

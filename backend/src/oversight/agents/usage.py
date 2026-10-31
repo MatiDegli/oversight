@@ -8,6 +8,7 @@ import logging
 import math
 import os
 import tempfile
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Literal, cast
@@ -142,6 +143,50 @@ class LedgerFile:
         self._lock = asyncio.Lock()
         self.state: LedgerState | None = None
         """What `load` read and `record` wrote; `None` until loaded, or once a write failed."""
+        self.loaded = False
+        """Whether a load succeeded; `writing` distinguishes an in-flight write from loss."""
+        self.writing = False
+        self.change_revision = 0
+        self._watchers: dict[object, Callable[[], None]] = {}
+
+    def watch(self, callback: Callable[[], None]) -> Callable[[], None]:
+        """Loop-owned notifications; unsubscribe is idempotent."""
+        key = object()
+        self._watchers[key] = callback
+
+        def unsubscribe() -> None:
+            self._watchers.pop(key, None)
+
+        return unsubscribe
+
+    def notify_loss(self) -> None:
+        """Announce uncertainty, including a caller's sticky loss after durable I/O."""
+        self._changed()
+
+    def _changed(self) -> None:
+        self.change_revision += 1
+        for callback in tuple(self._watchers.values()):
+            try:
+                callback()
+            except Exception:
+                _log.exception("Ledger change observer failed")
+
+    def _install(self, state: LedgerState) -> None:
+        self.state = state
+        self.writing = False
+        self._changed()
+
+    async def wait_changed(self, after: int, *, deadline: float) -> None:
+        """Wait for a newer revision at an absolute loop deadline; never cancel a writer."""
+        changed = asyncio.Event()
+        unsubscribe = self.watch(changed.set)
+        try:
+            async with asyncio.timeout_at(deadline):
+                while self.change_revision <= after:
+                    changed.clear()
+                    await changed.wait()
+        finally:
+            unsubscribe()
 
     def read(self) -> LedgerState:
         """Synchronous. A missing file is nothing spent; an unreadable or malformed one raises
@@ -189,8 +234,15 @@ class LedgerFile:
     async def load(self) -> LedgerState:
         """`read` in a thread, kept as `state`; `LedgerError` leaves `state` as `None`."""
         self.state = None
-        self.state = await asyncio.to_thread(self.read)
-        return self.state
+        try:
+            state = await asyncio.to_thread(self.read)
+        except BaseException:
+            self.writing = False
+            self.notify_loss()
+            raise
+        self.loaded = True
+        self._install(state)
+        return state
 
     async def record(self, cost_usd: float | None, unknown: UnknownUsage) -> LedgerState:
         """One call, written before it returns: a known cost adds to `spent_usd`, an unknown one
@@ -210,6 +262,7 @@ class LedgerFile:
                 new = LedgerState(state.spent_usd, (*state.unknown, unknown))
             else:
                 new = LedgerState(state.spent_usd + cost_usd, state.unknown)
+            self.writing = True
             self.state = None
 
             async def persist() -> None:
@@ -224,7 +277,11 @@ class LedgerFile:
                 if error is not None:
                     raise cancelled from error
                 raise
-            self.state = new
+            except BaseException:
+                self.writing = False
+                self.notify_loss()
+                raise
+            self._install(new)
             return new
         finally:
             self._lock.release()
@@ -237,11 +294,15 @@ class LedgerFile:
             with contextlib.suppress(asyncio.CancelledError):
                 await asyncio.wait({write})
         if write.cancelled():
+            self.writing = False
+            self.notify_loss()
             return None
         error = write.exception()
         if error is None:
-            self.state = new
+            self._install(new)
         else:
+            self.writing = False
+            self.notify_loss()
             _log.error("a cancelled ledger write failed: %s", error.__class__.__name__)
         return error
 

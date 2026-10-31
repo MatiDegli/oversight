@@ -12,6 +12,8 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 from oversight.changes._behavior_inputs import BehaviorInputs, behavior_inputs, module_name
+from oversight.changes._behavior_methods import method_inputs
+from oversight.changes._behavior_scopes import InertScopes
 from oversight.changes._review_samples import OutcomeKind, sample_key
 from oversight.workspace import (
     BehaviorObservation,
@@ -53,6 +55,8 @@ def result_display(result: TypedResult) -> dict[str, Any]:
         display["value"] = result["value"]
     elif result["kind"] == "raised":
         display["class"], display["message"] = result["class"], result["message"]
+    if "state" in result:
+        display["state"] = result["state"]
     return display
 
 
@@ -68,9 +72,20 @@ class DifferenceGroup:
 
 
 def _retain_group(groups: dict[OutcomeKind, DifferenceGroup], row: BehaviorRow) -> None:
-    kind = OutcomeKind(
-        row.before["class"] if row.before["kind"] == "raised" else None,
-        row.after["class"] if row.after["kind"] == "raised" else None,
+    state_only = (
+        "state" in row.before
+        and "state" in row.after
+        and row.before["kind"] == row.after["kind"]
+        and isinstance(row.before.get("result_fingerprint"), str)
+        and row.before.get("result_fingerprint") == row.after.get("result_fingerprint")
+    )
+    kind = (
+        OutcomeKind(state_only=True)
+        if state_only
+        else OutcomeKind(
+            row.before["class"] if row.before["kind"] == "raised" else None,
+            row.after["class"] if row.after["kind"] == "raised" else None,
+        )
     )
     previous = groups.get(kind)
     groups[kind] = DifferenceGroup(
@@ -123,6 +138,8 @@ class BehaviorDiff:
 
 def targets(rec: "ChangeRecord") -> tuple[FunctionBehavior, ...]:
     nodes = {node.id: node for graph in (rec.base.graph, rec.head.graph) for node in graph.nodes}
+    base_nodes = {node.id: node for node in rec.base.graph.nodes}
+    scopes = InertScopes(rec.base_files, rec.head_files)
     added = {node.id for node in rec.graph.nodes_added}
     removed = set(rec.graph.nodes_removed)
     found: list[FunctionBehavior] = []
@@ -133,12 +150,14 @@ def targets(rec: "ChangeRecord") -> tuple[FunctionBehavior, ...]:
             reason = "added (no base version)"
         elif node_id in removed:
             reason = "removed (no proposed version)"
-        elif node.kind in ("method", "class"):
-            reason = "method or class (not probed yet)"
+        elif node.kind in ("module", "class") and scopes.unchanged(base_nodes[node_id], node):
+            continue
         elif (
-            node.kind != "function" or not node.parent_id or nodes[node.parent_id].kind != "module"
+            node.kind not in ("function", "method")
+            or not node.parent_id
+            or (node.kind == "function" and nodes[node.parent_id].kind != "module")
         ):
-            reason = "unsupported signature"
+            reason = "unsupported node kind"
         found.append(FunctionBehavior(node_id, reason=reason))
     return tuple(found)
 
@@ -152,8 +171,10 @@ def _prepare(
         if result.reason is not None:
             continue
         node = nodes[result.node_id]
-        generated = behavior_inputs(
-            module_name(node.path), node.name, rec.base_files, rec.head_files, deadline=deadline
+        generate = method_inputs if node.kind == "method" else behavior_inputs
+        name = node.id.split(":", 1)[1] if node.kind == "method" else node.name
+        generated = generate(
+            module_name(node.path), name, rec.base_files, rec.head_files, deadline=deadline
         )
         found[index] = replace(
             result, reason=generated.reason, skipped_binding=generated.skipped_binding
@@ -180,6 +201,9 @@ def _requests(
                 for index, item in enumerate(generated.inputs)
                 if selected is None or selected == (node_id, index)
             ),
+            receiver_class=generated.receiver_class,
+            method_kind=generated.method_kind,
+            properties=generated.properties,
         )
         for node_id, generated in inputs.items()
         if selected is None or selected[0] == node_id
@@ -187,6 +211,26 @@ def _requests(
 
 
 async def _compare(
+    workspace: Workspace,
+    rec: "ChangeRecord",
+    trees: list[Tree],
+    inputs: dict[str, BehaviorInputs],
+    found: list[FunctionBehavior],
+    deadline: float,
+    completed: set[str],
+) -> None:
+    # Finish functions, including their repeats, before methods spend the shared budget.
+    for method in (False, True):
+        batch = {
+            node_id: generated
+            for node_id, generated in inputs.items()
+            if (generated.receiver_class is not None) == method
+        }
+        if batch:
+            await _compare_batch(workspace, rec, trees, batch, found, deadline, completed)
+
+
+async def _compare_batch(
     workspace: Workspace,
     rec: "ChangeRecord",
     trees: list[Tree],
@@ -212,7 +256,7 @@ async def _compare(
             problem = (
                 f"import failed on {'base' if before.problem else 'proposed'} side"
                 if "import failed" in (before.problem, after.problem)
-                else (before.problem or after.problem)
+                else "worker failed"
             )
             found[position] = replace(result, reason=problem)
             completed.add(node_id)
@@ -231,6 +275,51 @@ def _identity(result: TypedResult) -> str | None:
     return f"{result['kind']}:{fingerprint}" if isinstance(fingerprint, str) else None
 
 
+async def _repeat(
+    workspace: Workspace,
+    rec: "ChangeRecord",
+    trees: list[Tree],
+    inputs: dict[str, BehaviorInputs],
+    node_id: str,
+    index: int,
+    pair: tuple[TypedResult, TypedResult],
+    deadline: float,
+) -> tuple[bool, bool, bool]:
+    unstable, incomplete, reproduced = False, False, True
+    for side, tree in enumerate(trees):
+        rerun = await workspace.run_behavior(
+            tree, _requests(rec, inputs, side, (node_id, index)), timeout_s=_remaining(deadline)
+        )
+        observation = rerun.get(node_id, BehaviorObservation(problem="unavailable"))
+        result = observation.results[0] if len(observation.results) == 1 else {}
+        identity = _identity(result) if result else None
+        incomplete |= observation.problem is not None or identity is None
+        unstable |= identity is not None and identity != _identity(pair[side])
+        if inputs[node_id].receiver_class is not None:
+            reproduced &= result.get("pre_fingerprint") == pair[side].get("pre_fingerprint")
+    return unstable, incomplete, reproduced
+
+
+def _measured_inputs(
+    generated: BehaviorInputs, before: BehaviorObservation, after: BehaviorObservation
+) -> list[tuple[int, TypedResult, TypedResult]]:
+    measured = [
+        (index, old, new)
+        for index, (old, new) in enumerate(zip(before.results, after.results, strict=True))
+        if generated.inputs[index].input_identity is not None
+        and _identity(old) is not None
+        and _identity(new) is not None
+        and (
+            generated.receiver_class is None
+            or (
+                old.get("pre_fingerprint") is not None
+                and old.get("pre_fingerprint") == new.get("pre_fingerprint")
+            )
+        )
+    ]
+    return measured
+
+
 async def _measure_function(
     workspace: Workspace,
     rec: "ChangeRecord",
@@ -243,21 +332,19 @@ async def _measure_function(
     deadline: float,
 ) -> None:
     result = found[position]
-    samples = inputs[result.node_id].inputs
+    generated = inputs[result.node_id]
+    samples = generated.inputs
+    method = generated.receiver_class is not None
     admitted = [index for index, sample in enumerate(samples) if sample.input_identity is not None]
-    measured = [
-        (index, old, new)
-        for index, (old, new) in enumerate(zip(before.results, after.results, strict=True))
-        if samples[index].input_identity is not None
-        and _identity(old) is not None
-        and _identity(new) is not None
-    ]
+    measured = _measured_inputs(generated, before, after)
     result = replace(
         result,
-        compared=len(measured),
+        compared=0 if method else len(measured),
         reason=(
             "no equal typed inputs"
             if not admitted
+            else "unrepresentable input or unequal receiver state"
+            if method and len(measured) != len(admitted)
             else "unrepresentable input"
             if len(measured) != len(admitted)
             else None
@@ -267,40 +354,33 @@ async def _measure_function(
     groups: dict[OutcomeKind, DifferenceGroup] = {}
     try:
         for index, old, new in measured:
-            if _identity(old) == _identity(new):
+            different = _identity(old) != _identity(new)
+            if not different and not method:
                 continue
-            # Until BOTH fresh repeats finish, this comparison certifies no stable difference.
-            unstable, incomplete = False, False
-            for side, tree in enumerate(trees):
-                rerun = await workspace.run_behavior(
-                    tree,
-                    _requests(rec, inputs, side, (result.node_id, index)),
-                    timeout_s=_remaining(deadline),
-                )
-                observation = rerun.get(result.node_id, BehaviorObservation(problem="unavailable"))
-                identity = (
-                    _identity(observation.results[0]) if len(observation.results) == 1 else None
-                )
-                incomplete |= observation.problem is not None or identity is None
-                unstable |= identity is not None and identity != _identity((old, new)[side])
+            # The first pass shares a worker across inputs. A class-level state leak must
+            # disagree with fresh single-input repeats and can never certify a difference.
+            unstable, incomplete, reproduced = await _repeat(
+                workspace, rec, trees, inputs, result.node_id, index, (old, new), deadline
+            )
+            unstable |= not reproduced
             reason = result.reason
             if incomplete and (reason is None or "incomplete repeat" not in reason):
                 reason = f"{reason}; incomplete repeat" if reason else "incomplete repeat"
             result = replace(
                 result,
-                differing=result.differing + int(not unstable and not incomplete),
+                compared=result.compared + int(method and reproduced and not incomplete),
+                differing=result.differing + int(different and not unstable and not incomplete),
                 reason=reason,
             )
-            # Public rows exclude incomplete repeats; F2 also retains an explicit witness.
-            if not incomplete:
-                sample = inputs[result.node_id].inputs[index]
+            if different and not incomplete:
+                sample = samples[index]
                 row = BehaviorRow(
                     sample.call,
                     old,
                     new,
                     unstable,
                     repeat_complete=True,
-                    inputs_equal=True,
+                    inputs_equal=reproduced,
                     input_identity=sample.input_identity,
                 )
                 if not unstable:
@@ -308,7 +388,6 @@ async def _measure_function(
                 if len(rows) < MAX_ROWS:
                     rows.append(row)
     finally:
-        # Preserve completed measurements even when a later rerun exhausts the shared deadline.
         found[position] = replace(
             result,
             rows=_retained_rows(groups, rows),
@@ -333,8 +412,8 @@ async def probe_behavior(
     The caller owns main/agent locks. Cleanup runs outside the computation deadline,
     in that same task, retaining the existing bounded Git and namespace cleanup.
     """
-    found = list(targets(rec))
     deadline = time.monotonic() + 2 * rec.task.limits.test_timeout_s
+    found = list(await asyncio.to_thread(targets, rec))
     stack = AsyncExitStack()
     completed: set[str] = set()
     try:
@@ -365,7 +444,7 @@ async def probe_behavior(
             if isinstance(error, TimeoutError)
             else "isolation unavailable"
             if isinstance(error, IsolationUnavailable)
-            else f"probe unavailable ({type(error).__name__})"
+            else "worker failed"
         )
         found = [
             replace(result, reason=result.reason or reason)

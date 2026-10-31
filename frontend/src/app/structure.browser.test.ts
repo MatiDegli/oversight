@@ -1,5 +1,6 @@
+import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
-import { chromium, expect as browserExpect } from "@playwright/test";
+import { expect as browserExpect } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -24,7 +25,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 }, 60_000);
 afterAll(async () => {
   await browser.close();
@@ -106,7 +107,7 @@ async function toggle(page: Page, id: string) {
 function clearRoutes(r: Awaited<ReturnType<typeof read>>) {
   const gutters = new Map<number, Set<number>>();
   for (const edge of r.routes) {
-    if (edge.source.split(":")[0] === edge.target.split(":")[0]) expect(edge.visible).toBe(false);
+    if (edge.possible) continue; // Straight context lines pass underneath opaque cards.
     const frame = r.modules.find((n) => n.id === edge.target.split(":")[0]);
     const tap = edge.points.at(-2);
     if (frame && tap && edge.points.length > 2 && tap.x < frame.x1) {
@@ -197,6 +198,47 @@ it(
               b.y2 * r.zoom + r.pan.y + r.host.y > o.y,
           ).toBe(false);
       await browserExpect(page.getByLabel("Zoom percentage")).toHaveText("100%");
+    }),
+  30_000,
+);
+it.each(["Fit the graph to the view", "Modules"])(
+  "%s keeps every watch module below both top plates at 1920x1080",
+  async (action) =>
+    withPage(async (page) => {
+      // Start expanded so each action independently reframes the graph.
+      await page.getByRole("button", { name: "Details", exact: true }).click();
+      await frame(page);
+      await page.getByRole("button", { name: action, exact: true }).click();
+      await frame(page);
+      const r = await read(page);
+      const plates = await page.locator('h2, [aria-label="Graph detail"]').evaluateAll((nodes) =>
+        nodes.map((node) => {
+          // The opaque plate also includes the heading summary / zoom percentage.
+          const rect = node.parentElement?.getBoundingClientRect();
+          if (!rect) throw new Error("Missing watch plate");
+          return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+        }),
+      );
+      expect(plates).toHaveLength(2);
+      expect(r.modules).toHaveLength(6);
+      for (const b of r.modules) {
+        const box = {
+          left: b.x1 * r.zoom + r.pan.x + r.host.x,
+          top: b.y1 * r.zoom + r.pan.y + r.host.y,
+          right: b.x2 * r.zoom + r.pan.x + r.host.x,
+          bottom: b.y2 * r.zoom + r.pan.y + r.host.y,
+        };
+        for (const plate of plates) {
+          expect(box.top, `${action}: ${b.id} below plate`).toBeGreaterThanOrEqual(plate.bottom);
+          expect(
+            box.left < plate.right &&
+              box.right > plate.left &&
+              box.top < plate.bottom &&
+              box.bottom > plate.top,
+            `${action}: ${b.id} overlaps plate`,
+          ).toBe(false);
+        }
+      }
     }),
   30_000,
 );

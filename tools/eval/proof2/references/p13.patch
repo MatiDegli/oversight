@@ -1,0 +1,26 @@
+--- a/boltons/iterutils.py
++++ b/boltons/iterutils.py
+@@ -499,6 +499,23 @@
+     of the iterable. For infinite iterators, setting *end* has no effect.
+     """
+     return windowed_iter(src, 2, fill=end)
++
++
++def lookahead(src):
++    """Yield (item, is_last) with one item of lookahead, in a single pass."""
++    iterator = iter(src)
++    try:
++        previous = next(iterator)
++    except StopIteration:
++        return
++    while True:
++        try:
++            current = next(iterator)
++        except StopIteration:
++            yield previous, True
++            return
++        yield previous, False
++        previous = current
+ 
+ 
+ def windowed(src, size, fill=_UNSET):

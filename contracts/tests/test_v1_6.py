@@ -158,14 +158,14 @@ def test_cards_sharing_a_node_keep_their_question_evidence_and_candidate(update:
     assert other.model_dump(mode="json")["answering"] == {**CARD, **update}
 
 
-def test_save_file_and_plan_cardinality_are_unchanged() -> None:
+def test_save_file_unchanged_and_plan_cardinality_is_one_to_six() -> None:
     from oversight_contracts.commands import SaveFile, UpdatePlan
     from oversight_contracts.plans import SubtaskDraft
 
     with pytest.raises(ValidationError):
         SaveFile.model_validate(dict(path="a.py", content="new", base_hash=None))
     subtask = dict(task="work", zone=dict(node_ids=[], paths=[]))
-    for count in (1, 3, 6):
+    for count in (0, 7):
         with pytest.raises(ValidationError):
             UpdatePlan.model_validate(
                 dict(revision=1, graph_version="v1", subtasks=[subtask] * count)
@@ -179,7 +179,7 @@ def test_save_file_and_plan_cardinality_are_unchanged() -> None:
         == 2
     )
     with pytest.raises(ValidationError):
-        SubtaskDraft.model_validate({**subtask, "depends_on": [2]})
+        SubtaskDraft.model_validate({**subtask, "depends_on": [6]})
 
 
 @pytest.mark.anyio
@@ -233,9 +233,37 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         "GrantUse",
         "GrantCreatedEvent",
         "GrantRevokedEvent",
+        "ModelAttemptFailed",
+        "ModelAttemptFailedEvent",
     }
     assert not set(baseline) - set(current)
     for name, definition in baseline.items():
+        plan_fields = {
+            "Plan": {"subtasks"},
+            "PlanSubtask": {"depends_on", "state"},
+            "SubtaskDraft": {"depends_on"},
+            "UpdatePlan": {"subtasks"},
+            "QueueSpec": {"plan_id"},
+            "EnqueueTask": {"plan_id"},
+            "QueuedTask": {"plan_id", "agent_ids"},
+        }
+        if name in plan_fields:
+            updated = deepcopy(current[name])
+            updated["description"] = definition["description"]
+            for field_name in plan_fields[name]:
+                if field_name == "state":
+                    assert updated["properties"].pop(field_name)["default"] is None
+                    updated["required"].remove(field_name)
+                else:
+                    updated["properties"][field_name] = definition["properties"][field_name]
+            assert updated == definition, name
+            continue
+        if name == "AgentStep":
+            updated = deepcopy(current[name])
+            assert updated["properties"].pop("error_kind")["default"] is None
+            updated["required"].remove("error_kind")
+            assert updated == definition
+            continue
         if name in {"NodeBehaviorDiff", "MeasuredCaller"}:
             approved = (
                 "Inputs compared on both sides with equal typed inputs over shared parameters "

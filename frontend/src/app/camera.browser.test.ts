@@ -1,6 +1,7 @@
+import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 
-import { chromium, expect as browserExpect } from "@playwright/test";
+import { expect as browserExpect } from "@playwright/test";
 import type { Browser, Locator, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -36,7 +37,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser();
   sharedPage = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   const page = sharedPage;
   page.setDefaultTimeout(5_000);
@@ -256,9 +257,8 @@ function panelFrame(page: Page) {
 
 function emptyCanvasPoint(page: Page) {
   return page.evaluate(() => {
-    const probe = document.querySelector<GraphProbeHost>(
-      '[aria-label="Repository graph"]',
-    )?.oversightGraph;
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const probe = host?.oversightGraph;
     if (!probe) throw new Error("Missing graph");
     const { width, height } = probe.metrics().viewport;
     const zoom = probe.zoom();
@@ -273,6 +273,12 @@ function emptyCanvasPoint(page: Page) {
               x <= b.x2 * zoom + pan.x + 5 &&
               y >= b.y1 * zoom + pan.y - 5 &&
               y <= b.y2 * zoom + pan.y + 5,
+          ) &&
+          host.contains(
+            document.elementFromPoint(
+              host.getBoundingClientRect().left + x,
+              host.getBoundingClientRect().top + y,
+            ),
           )
         )
           return { x, y };

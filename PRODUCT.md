@@ -24,8 +24,10 @@ web
 Oversight is a small, focused web IDE for agentic development on Python projects. The repository is
 shown as a live graph of modules, classes, functions and methods parsed from source. Coding agents
 built on Meta's Muse Spark edit the code, each in its own git worktree. Success is a person who can
-let two agents work in parallel and still know, at any moment, what each one is touching, what a
-change may affect, and that nothing reaches main without their decision.
+let two agents work in parallel and still know, at any moment, what each one is touching and what a
+change may affect. A change reaches main only with your approval or by meeting rules you set; its
+review then shows the rules and grants that let it in, and Revert undoes it in one step when it
+applies cleanly.
 
 ## Positioning
 
@@ -79,7 +81,7 @@ the agents' lights, the diff) is where this happens, not the pitch.
 
 ## Product Principles
 
-- The person decides: nothing reaches main without an explicit approval.
+- The person decides: a change reaches main only with their approval or by meeting rules they set.
 - Never steal focus: the screen changes only when the person acts.
 - Show what may be affected, honestly bounded, rather than claim completeness.
 - What judges see is real and labeled for what it is: a replay of a real recorded run says so;

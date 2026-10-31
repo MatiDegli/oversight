@@ -1,7 +1,8 @@
+import { launchBrowser } from "../browserLaunch.support";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import { chromium, expect as browserExpect } from "@playwright/test";
+import { expect as browserExpect } from "@playwright/test";
 import type { Browser } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -29,7 +30,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser();
 }, 60_000);
 
 afterAll(async () => {

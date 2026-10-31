@@ -1,6 +1,7 @@
+import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 
-import { chromium, expect as browserExpect } from "@playwright/test";
+import { expect as browserExpect } from "@playwright/test";
 import { createServer } from "vite";
 import { it } from "vitest";
 
@@ -18,7 +19,7 @@ it("remounts the live cone card with the last omission count without a new event
     cacheDir: fileURLToPath(new URL("../../../.shots/omissions-vite-cache", import.meta.url)),
     server: { host: "127.0.0.1", port: 0, strictPort: false },
   });
-  const browser = await chromium.launch();
+  const browser = await launchBrowser();
   try {
     const html = await server.transformIndexHtml(
       "/",

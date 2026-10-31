@@ -31,6 +31,7 @@ from oversight_contracts.events import (
     ChangeUpdated,
     ErrorReport,
     LeadStatus,
+    ModelAttemptFailed,
     RevertResult,
     RunStarted,
     ServerEvent,
@@ -58,6 +59,7 @@ type EventPayload = (
     | ChangeProposed
     | ChangeResolved
     | UsageTick
+    | ModelAttemptFailed
     | ErrorReport
     | ChangeAssessment
     | MergeModeState
@@ -83,6 +85,7 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     ChangeProposed: "change.proposed",
     ChangeResolved: "change.resolved",
     UsageTick: "usage.tick",
+    ModelAttemptFailed: "model.attempt_failed",
     ErrorReport: "error",
     ChangeAssessment: "change.assessed",
     MergeModeState: "merge_mode.changed",

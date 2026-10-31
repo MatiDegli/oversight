@@ -50,7 +50,10 @@ it("blocks decisions during editor loading without claiming there are review edi
         panel(page).getByRole("button", { name: "Reject", exact: true }),
       ).toBeEnabled();
       release();
-      await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "loading");
+      // Wait for the cold editor chunk (implementation.ts and Monaco) after release().
+      await browserExpect(reviewFile(page)).toHaveAttribute("data-state", "loading", {
+        timeout: 15_000,
+      });
       await browserExpect(approve).toBeDisabled();
       await browserExpect(request).toBeDisabled();
       await browserExpect(editsNotice).toHaveCount(0);

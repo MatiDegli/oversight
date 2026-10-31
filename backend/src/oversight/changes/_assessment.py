@@ -2,11 +2,12 @@
 
 import asyncio
 import logging
+import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Literal
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, ValidationError
 
 from oversight.agents import FAKE_MODEL, FAKE_MODEL_B, MUSE_SPARK, MUSE_SPARK_OPEN
 from oversight.changes._facts import AddedTestsInventory, FactsEvidence, added_tests_inventory
@@ -81,8 +82,43 @@ class RulesScheduler:
         self.ctx, self.monotonic, self.sleep_until = ctx, monotonic, sleep_until
         self.waits: dict[str, AssessmentWait] = {}
         self.events: dict[int, ServerEvent] = {}
+        self.spend_receipt: StoredEvent | None = None
         self._evicted_through = 0
         self.generation = 0
+
+    def spend_received(self, stored: StoredEvent) -> None:
+        """Retain an eligible historical lower bound, outside the evidence cache.
+
+        Usage envelopes have no run id: provenance is the owning LiveRun's explicit source
+        sites, never a role/model heuristic. The seed additionally identifies that run.
+        This receipt alone supplies no rules evidence or current spend observation.
+        """
+        if stored.type not in {"run.started", "usage.tick"} or (
+            self.spend_receipt is not None and stored.seq <= self.spend_receipt.seq
+        ):
+            return
+        try:
+            event = _EVENT.validate_json(stored.envelope)
+        except ValidationError:
+            return
+        if (event.type, event.seq, event.ts) != (stored.type, stored.seq, stored.ts):
+            return
+        if event.type == "run.started":
+            if event.payload.run_id != self.ctx.grants.run_id:
+                return
+            total, budget = event.payload.budget.spent_usd, event.payload.budget.budget_usd
+        elif event.type == "usage.tick":
+            total, budget = event.payload.spent_usd, event.payload.budget_usd
+        else:
+            return
+        if not math.isfinite(total) or total < 0 or not math.isfinite(budget) or budget <= 0:
+            return
+        self.spend_receipt = stored
+        self.spend_changed()
+
+    def spend_changed(self) -> None:
+        for wait in self.waits.values():
+            self.wake(wait.rec)
 
     def proposed(
         self, rec: ChangeRecord, proposal: ChangeProposed, mode: MergeModeState, *, armed: bool
@@ -254,6 +290,9 @@ class RulesScheduler:
     async def report_terminal(
         self, wait: AssessmentWait, code: str, reason: str, current: Callable[[], bool]
     ) -> None:
+        from oversight.changes._rules import availability
+
+        availability(self.ctx)
         # No await between this final validation and entering the publisher's target claim.
         if not current():
             return

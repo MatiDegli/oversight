@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { chromium, expect as browserExpect } from "@playwright/test";
+import { expect as browserExpect } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
@@ -21,6 +21,7 @@ let browser: Browser | undefined;
 let url: string;
 let html: string;
 beforeAll(async () => {
+  const { launchBrowser } = await import("../browserLaunch.support");
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
     cacheDir: fileURLToPath(new URL("../../../.shots/dot-field-vite-cache", import.meta.url)),
@@ -37,7 +38,7 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await chromium.launch();
+  browser = await launchBrowser({ webGL: true });
 }, 60_000);
 afterAll(async () => {
   await browser?.close();
@@ -283,6 +284,9 @@ async function warmPixelsFromField(
 
 it("lights lamps near a lit node in its color and leaves the far cells dark", async () => {
   await withPage({ reducedMotion: "reduce" }, async (page) => {
+    expect(
+      await page.evaluate(() => document.createElement("canvas").getContext("webgl2") !== null),
+    ).toBe(true);
     const seen = await look(page);
     expect(seen.state).toBe("webgl");
     expect(seen.draws).toBeGreaterThan(0);
@@ -1205,6 +1209,14 @@ function wholeFrames(page: Page, runs: number) {
 it("measures the frame with contours at rest and during a merge travel, at 1920 by 1080", async () => {
   const viewport = { width: 1920, height: 1080 };
   const report: Record<string, unknown> = { viewport };
+  const samples = {
+    restWholeFrame: [] as number[],
+    travelWholeFrame: [] as number[],
+    afterlightWholeFrame: [] as number[],
+    travelFrameCallback: [] as number[],
+  };
+  // Leave a minute for the last page and cleanup before the test's 180 s timeout.
+  const deadline = Date.now() + 120_000;
   // The whole frame is a bound: it waits for the GPU. The callback is what the page's own frames cost.
   await withPage({ scene: "rest", viewport }, async (page) => {
     report.renderer = await page.evaluate(() => {
@@ -1214,10 +1226,10 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
     });
     expect((await lifeOf(page))?.contours).toBe(true);
     await wholeFrames(page, 10);
-    report.restWholeFrame = summary(await wholeFrames(page, 100));
+    samples.restWholeFrame.push(...(await wholeFrames(page, 100)));
   });
   // Frames drawn in real time while the pulse travels and then while the light fades.
-  await withPage({ scene: "waiting", viewport }, async (page) => {
+  const measureTravel = async (page: Page) => {
     await page.evaluate(() => {
       window.fieldTest.advance(21);
     });
@@ -1237,11 +1249,11 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
       }
       return { travel, afterlight };
     });
-    report.travelWholeFrame = summary(travel);
-    report.afterlightWholeFrame = summary(afterlight);
-  });
+    samples.travelWholeFrame.push(...travel);
+    samples.afterlightWholeFrame.push(...afterlight);
+  };
   // The page's own frames while a pulse travels, in real time: the time inside each frame callback.
-  await withPage({ scene: "waiting", viewport }, async (page) => {
+  const measureCallbacks = async (page: Page) => {
     await page.evaluate(() => {
       const times: number[] = [];
       Object.assign(window, { frameTimes: times });
@@ -1265,8 +1277,30 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
     const times = await page.evaluate(
       () => (window as unknown as { frameTimes: number[] }).frameTimes,
     );
-    report.travelFrameCallback = summary(times);
-  });
+    samples.travelFrameCallback.push(...times);
+  };
+  const collection: Record<string, number>[] = [];
+  let passes = 0;
+  while (
+    Object.values(samples).some((values) => values.length <= 10) &&
+    passes < 8 &&
+    Date.now() < deadline
+  ) {
+    passes += 1;
+    if (samples.travelWholeFrame.length <= 10 || samples.afterlightWholeFrame.length <= 10)
+      await withPage({ scene: "waiting", viewport }, measureTravel);
+    if (samples.travelFrameCallback.length <= 10 && Date.now() < deadline)
+      await withPage({ scene: "waiting", viewport }, measureCallbacks);
+    const counts = {
+      pass: passes,
+      ...Object.fromEntries(Object.entries(samples).map(([key, values]) => [key, values.length])),
+    };
+    collection.push(counts);
+    console.info("frame-cost", counts);
+  }
+  report.passes = passes;
+  report.collection = collection;
+  for (const [key, values] of Object.entries(samples)) report[key] = summary(values);
   if (captureShots) {
     const dir = fileURLToPath(new URL("../../../.shots/life-look/r4/", import.meta.url));
     mkdirSync(dir, { recursive: true });
@@ -1278,7 +1312,10 @@ it("measures the frame with contours at rest and during a merge travel, at 1920 
     "afterlightWholeFrame",
     "travelFrameCallback",
   ])
-    expect((report[key] as { samples: number }).samples).toBeGreaterThan(10);
+    expect(
+      (report[key] as { samples: number }).samples,
+      `${key}: ${String((report[key] as { samples: number }).samples)} samples after ${String(passes)} passes (limit: 8 passes / 120 s)`,
+    ).toBeGreaterThan(10);
 }, 180_000);
 
 /**

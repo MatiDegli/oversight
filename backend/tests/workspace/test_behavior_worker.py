@@ -4,10 +4,13 @@ import ast
 import json
 import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 from oversight.workspace import run_process
+from oversight.workspace.behavior_run import WORKER as METHOD_WORKER
+from oversight.workspace.behavior_worker import _receiver_class
 
 WORKER = Path(__file__).parents[2] / "src/oversight/workspace/behavior_worker.py"
 
@@ -183,3 +186,217 @@ async def test_object_state_outside_dictionary_is_not_a_complete_identity(tmp_pa
     )
     result = await invoke(tmp_path, body, ["((0,), {})", "((1,), {})"])
     assert all(row["kind"] == "unrepresentable" for row in result["results"])
+
+
+async def invoke_method(
+    tmp_path, source, *, module="sample", properties=(), calls=None, name="change", kind="method"
+):
+    (tmp_path / (module + ".py")).write_text(source)
+    request, report = tmp_path / "method-request.json", tmp_path / "method-report.json"
+    literal = repr(("((), {})", "((), {})"))
+    request.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "method",
+                    "module": module,
+                    "name": name,
+                    "receiver_class": "Box",
+                    "method_kind": kind,
+                    "properties": properties,
+                    "calls": calls or [literal],
+                }
+            ]
+        )
+    )
+    process = await run_process(
+        [sys.executable, "-B", str(METHOD_WORKER), str(tmp_path), str(request), str(report), "0.2"],
+        cwd=tmp_path,
+        timeout_s=10,
+        env={"HOME": str(tmp_path)},
+    )
+    assert process.returncode == 0, process.stderr
+    row = json.loads(report.read_text())["method"]
+    assert row["problem"] is None
+    return row["results"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "source,module",
+    [
+        ("from collections import Counter as Box\n", "sample"),
+        ("class Box:\n    def change(self): return 1\n", "test_sample"),
+        ("class Box:\n    def change(self): return 1\n", "conftest"),
+        ("from random import Random as Box\n", "sample"),
+    ],
+)
+async def test_worker_rechecks_project_class_allowlist(tmp_path, source, module):
+    [row] = await invoke_method(tmp_path, source, module=module)
+    assert row["kind"] == "unrepresentable"
+
+
+def receiver_fixture(tmp_path, monkeypatch, source):
+    module = ModuleType("sample")
+    module.__file__ = str(tmp_path / "sample.py")
+    exec(source, module.__dict__)
+    monkeypatch.setitem(sys.modules, "sample", module)
+    target = {
+        "module": "sample",
+        "receiver_class": "Box",
+        "name": "change",
+        "method_kind": "method",
+    }
+    return module, target
+
+
+@pytest.mark.parametrize(
+    "source,overrides,reason",
+    [
+        (
+            "class Box:\n    def change(self): return 1\nBox.__module__ = 'other'\n",
+            {},
+            "receiver is not a project class",
+        ),
+        (
+            "class Other:\n    def change(self): return 1\nBox = Other\n",
+            {},
+            "receiver is not a simple class",
+        ),
+        (
+            "class Base: pass\nclass Box(Base):\n    def change(self): return 1\n",
+            {},
+            "receiver is not a simple class",
+        ),
+        (
+            "def f(self, name): return 0\nclass Box:\n    __getattr__ = f\n"
+            "    def change(self): return 1\n",
+            {},
+            "custom receiver hooks",
+        ),
+        (
+            "class Box:\n    def change(self): return 1\n",
+            {"method_kind": "setter"},
+            "method descriptor mismatch",
+        ),
+        (
+            "class Box:\n    value = 0\n    def __init__(self): self.value = 1\n"
+            "    def change(self): return 1\n",
+            {"properties": ["value"]},
+            "property allowlist mismatch",
+        ),
+    ],
+    ids=["module", "qualname", "bases", "body-hook", "descriptor", "property-allowlist"],
+)
+def test_receiver_refusals_are_independent(tmp_path, monkeypatch, source, overrides, reason):
+    _, target = receiver_fixture(tmp_path, monkeypatch, source)
+    with pytest.raises(ValueError, match=reason):
+        _receiver_class({**target, **overrides}, tmp_path)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("hook", ["__setattr__", "__delattr__"])
+@pytest.mark.parametrize("dataclass", [False, True], ids=["plain", "dataclass"])
+async def test_worker_refuses_custom_attribute_mutation_hooks(
+    tmp_path, monkeypatch, hook, dataclass
+):
+    prefix = "from dataclasses import dataclass\n@dataclass\n" if dataclass else ""
+    arguments = "self, name, value" if hook == "__setattr__" else "self, name"
+    source = (
+        prefix + f"class Box:\n    def {hook}({arguments}): pass\n    def change(self): return 1\n"
+    )
+    _, target = receiver_fixture(tmp_path, monkeypatch, source)
+    with pytest.raises(ValueError, match="custom receiver hooks"):
+        _receiver_class(target, tmp_path)
+    [row] = await invoke_method(tmp_path, source)
+    assert row["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
+async def test_metaclass_is_refused_before_reading_class_attributes(tmp_path, monkeypatch):
+    source = """reads = []
+class Meta(type):
+    def __getattribute__(cls, name):
+        reads.append(name)
+        return super().__getattribute__(name)
+class Box(metaclass=Meta):
+    def change(self): return 1
+"""
+    module, target = receiver_fixture(tmp_path, monkeypatch, source)
+    with pytest.raises(ValueError, match="receiver metaclass"):
+        _receiver_class(target, tmp_path)
+    assert module.reads == []
+    [row] = await invoke_method(tmp_path, source)
+    assert row["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
+async def test_setter_defaulted_extra_is_setup_failure_not_project_raise(tmp_path):
+    source = """class Box:
+    @property
+    def value(self): return 0
+    @value.setter
+    def value(self, value: int): pass
+"""
+    calls = [repr(("((), {})", "((1,), {})"))]
+    [base] = await invoke_method(tmp_path, source, name="value", kind="setter", calls=calls)
+    [head] = await invoke_method(
+        tmp_path,
+        source.replace("value: int)", "value: int, extra=1)"),
+        name="value",
+        kind="setter",
+        calls=calls,
+    )
+    assert base["kind"] == "value"
+    assert head["kind"] == "unrepresentable"  # Never an artificial "Now raises" difference.
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("kind", ["method", "property", "setter"])
+async def test_method_argument_errors_are_not_project_exceptions(tmp_path, kind):
+    source = "class Box:\n    def change(self, value): return value\n"
+    if kind == "property":
+        source = "class Box:\n    @property\n    def change(self, extra=1): return extra\n"
+    elif kind == "setter":
+        source = (
+            "class Box:\n    @property\n    def change(self): return 0\n"
+            "    @change.setter\n    def change(self, value): pass\n"
+        )
+    [row] = await invoke_method(tmp_path, source, kind=kind)
+    assert row["kind"] == "unrepresentable"
+
+
+@pytest.mark.anyio
+async def test_method_construction_and_capture_share_the_call_alarm(tmp_path):
+    source = (
+        "class Box:\n    def __init__(self):\n        while True: pass\n"
+        "    def change(self): return 1\n"
+    )
+    [row] = await invoke_method(tmp_path, source)
+    assert row == {"kind": "timed_out"}
+
+
+@pytest.mark.anyio
+async def test_method_creates_fresh_receiver_per_input_and_tags_state_surfaces(tmp_path):
+    source = """class Box:
+    def __init__(self): self.value = 0
+    def change(self): self.value += 1
+    @property
+    def doubled(self): return self.value * 2
+"""
+    literal = repr(("((), {})", "((), {})"))
+    rows = await invoke_method(tmp_path, source, properties=["doubled"], calls=[literal, literal])
+    assert rows[0] == rows[1]
+    assert rows[0]["state"] == {
+        "stored": [["value", ["int", "0x1"]]],
+        "properties": [["doubled", ["int", "0x2"]]],
+    }
+    assert rows[0]["result_fingerprint"] != rows[0]["fingerprint"]
+
+
+@pytest.mark.anyio
+async def test_method_state_display_is_inside_the_result_size_cap(tmp_path):
+    assignments = "; ".join(f"self.a{i} = 'x' * 512" for i in range(40))
+    source = f"class Box:\n    def change(self): {assignments}\n"
+    [row] = await invoke_method(tmp_path, source)
+    assert row["kind"] == "unrepresentable" and len(json.dumps(row)) <= 8192

@@ -1413,6 +1413,40 @@ chevron inset before ellipsizing; preserve fonts, frame sizes, header layers and
 Graph creation waits for these faces; a recovered font load rebuilds early fallback layers once.
 Without font/canvas measurement, tests retain the estimate. Row state-word clearance uses the
 same measurer because it needs only the existing word face and size.
+
+
+## 2026-10-29 — Exact calls at rest, possible links as quiet context
+
+The maintainer approved the resting module rule at 09:05 ART, its open-module extension at
+09:20 ART, and the straight-line treatment at 09:42 ART on October 29 (12:05, 12:20 and 12:42 UTC).
+Keep directed exact links with their taxi routes and arrows. Count exact calls separately; possible
+calls never make an exact bundle thinner. Possible-only pairs without an exact reverse may keep
+one very faint straight line, with no arrow, when any callee name survives the Python 3.12 built-in
+attribute-name filter. The sorted names and generation command are committed. This is a drawing
+heuristic, not a new assertion about call resolution, and it never changes impact or underlying counts.
+
+Boltons has 34 non-test modules, 227 directed pairs and 1,530 cross-file calls: only 13 pairs
+(13 calls) are exact. Of 214 possible-only directed pairs, 10 survive the name filter, representing
+9 unordered pairs. Rest shows 13 exact links and 9 faint lines; 16 modules have no line. The recorded
+demo has 7 directed pairs, 4 exact; its 3 possible-only pairs all survive (orders to cart, inventory
+and models). Open views keep only exact calls at rest, even on agent-lit nodes. Hover, selection
+and displayed cones reveal possible calls without filtering; cones still follow exact calls only.
+
+This replaces bundling every call into routed module links and drawing all cross-file calls in
+open modules, the source of parallel gutter lines. Folded cards and graph text plates occlude straight
+lines; open frames retain their translucent body fill, so lines can show through it beneath the rows.
+This deliberately departs from the Modules sketch's lines across text. Labels disclose exact
+and possible counts on demand. Pointer hover lifts the existing path and arrow in a neutral token,
+with no motion, width change, camera move or focus transfer. A hidden line supplies no marker route.
+Fixture checks read the optional offline export at `.runtime/graphs/boltons-d31d821.snapshot.json`
+and skip Boltons cases only when it is absent; provenance and regeneration are in
+`fixtures/layouts/README.md`. No Boltons snapshot is committed. Same-module exact calls remain
+hidden during hover, selection and lighting, preserving the prior behavior. The graph heading,
+legend, zoom controls and Modules/Functions/Details control (including zoom percentage) use fully
+opaque `panel` plates to mask lines behind their text. Other graph overlays retain frost.
+Screenshot logs use .events rather than .jsonl so generated cuts do not enter the repository-wide
+recording validation. This required tooling deviation touches `frontend/shots/run.sh` and
+`frontend/shots/capture.ts` outside the original `frontend/src` and design-document scope.
 ## 2026-10-29 — Count final decisions per change and keep their entry point visible
 
 The maintainer approved one inbox entry for the latest pending revision of each change, containing
@@ -1906,6 +1940,11 @@ belongs to `changes/methods-1`.
 Reason: showing the difference only in rows, without a card, leaves it unclassified and counted
 as unavailable; that alternative was rejected.
 
+## 2026-10-30 — Only the level 2 replay test gets Playwright's slow allowance
+
+Reason: real-time replay takes about 50-59 s on fast runners and 80-95 s on slow ones, leaving no margin against the 90 s timeout; only this test is marked slow.
+The timeout in `playwright.config.ts` and `make e2e`'s 600 s cap are unchanged.
+
 ## 2026-10-30 — Bench method scope supersedes D9's level 3 deferral
 
 The maintainer includes methods in the bench evidence fix scope. This supersedes
@@ -2050,3 +2089,332 @@ Not built now. Once level 3 is solid, a candidate life pass may add the answer f
 a rolling answered count, and hover on a differing caller that lights its node. It goes through
 the same sketch approval as this rework. These are later candidates; merge travel on Approve is
 already required by the approved baseline.
+## 2026-10-30 — Item 10 measures agent-hours from observed intervals, with dated list prices
+
+The maintainer amended item 10 of docs/additions.md. Agent-hours, project active hours and parallelism come
+first, because proof 2's closing line uses them. They come from each agent's own working intervals in its
+status events, not from fixed time buckets. Costs are list-price equivalents from Meta's official pricing
+page: the repository stores the extracted price table with the page's URL and retrieval date, not a copy of
+the page. Muse Spark Open via Baseten has no listed price, so its work is reported as a lower bound. Missing
+usage, activity or price shows the known part as a lower bound and the total as unavailable.
+
+Reason: Oversight records when each agent works, so measured intervals replace an approximation, and a waiting
+lead must not inflate the hours. A stored price table needs no contract change; recording a price in
+run.started was the rejected alternative. The coverage, grouping and comparison rules come from prior
+work in the maintainer's projects, rewritten for Oversight; no code was copied.
+## Contracts 1.8.0 — approved by the maintainer, 2026-10-30
+
+E6 adds server-owned model.attempt_failed, once per failed attempt before its wait, including the
+final failure. It records agent_id (the author for review calls), optional change_id and role,
+model profile, provider, 1-based attempt and policy max_attempts, cause, HTTP status, provider
+Retry-After, wait_s and final reason. Attempt cannot exceed the limit; attempts_used requires the
+limit. Final is set exactly when wait_s is null. Rate limits require 429, server errors 500–599,
+and refused a different status; connection and timeout require null status. AgentStep.error_kind
+is optional, default null, and names only unknown_tool, invalid_json or invalid_arguments with
+result error; other tool errors remain null. The card derives "Waiting for model (retry n/5)"
+until that agent's next step, usage tick or failed attempt. There is no producer in this front;
+E6's client and loop front owns emission. History envelopes remain unchanged.
+
+P1–P2 replace fixed pairs with lists of one to six subtasks in Plan and UpdatePlan. A single
+subtask is the one-agent fallback. Dependency indices are stable within each revision (no
+reordering), range from 0 to 5, must be below the actual count, unique and exclude self. Both
+models share a complete acyclicity check, including disconnected cycles.
+
+P3 adds optional subtask state, null for historical payloads only. A plan cannot mix null and
+non-null states; all-null states are allowed only for exactly two subtasks, retaining their
+historical assignment rules. Plans with one or three to six subtasks require states. Waiting
+has no agent; running and merged require one, with distinct per-start agent ids across subtasks
+even when a slot is reused. A running plan requires an assigned agent, following from P4's rule
+that a running queue item has at least one agent. Prerequisites must be merged for a running,
+merged or rejected subtask: Reject, discard and stop reject a subtask that started. Dependents
+of rejected or cancelled prerequisites are cancelled. Rejecting a plan cancels every subtask;
+completion requires merged, rejected or cancelled subtasks. Request changes keeps a subtask
+running.
+
+P4–P5 make plan queue agent_ids the growing list assigned so far (one to six at dispatch and
+completion); standalone dispatch still requires exactly one. A plan reserves only immediately
+ready subtasks' slots. Newly ready dependents take the next released slot before later queue
+items, preserving the plan's place. Only the person queues and dispatches an exact revision;
+Plan.started_by records a requesting lead without dispatch authority, and plan agents keep
+started_by null. PlanZone is unchanged. This reverses Contracts 1.6.0's "widening slots does not
+enlarge a plan" and changes FIFO decision 6's "a plan reserves both slots together".
+
+Safe creation, nullable SaveFile.base_hash, zones and inventory move again to 1.9.0 because E6
+and item 11's plans take 1.8.0. SaveFile remains unchanged. Earlier entries remain approval
+history. Generation and drift checks retain the pinned tools and 1.5.0 tuple baseline; bounded
+lists generate ordinary arrays. Consumer changes are mechanical; E6 producers, item 11a's
+scheduler and the card front follow separately.
+
+## 2026-10-30 — Proof 2's tasks and reporting rules are fixed before the run
+
+Tasks were approved at 09:32 ART and reporting rules at 10:10 ART on 2026-10-30.
+P1-P6 were approved by 11:57 ART; the [plan](docs/plans/proof-2.md) fixes the rules before the run.
+D1: 16 Boltons tasks, 12 issue-backed and four tests-only; parallel pairs 1-2 through 13-14, task 15 after 5,
+task 16 alone. D2: seven feature APIs and examples are frozen in tasks.json. D3: tests-only changes pass on
+base, kill at least two of three frozen mutants and change no production code. D4: open upstream PR tasks
+stay, pinned at d31d821; checks follow issues, not PRs; replace a task only if its issue is resolved before
+the run; agents have no network. E1: reviewer verdicts against hidden checks, all four cells, unknowns apart,
+and review cost per change. E2: hidden checks on every reviewed revision; cited fixes use P2. New regressions
+have two counts: passing at task base then failing now, and passing at the previous reviewed revision then
+failing now. E3: unasked behavior changes split by difference kind; Boltons method tasks await methods-1.
+E4 causes: checks_unavailable = missing evidence; review_card = model judgment; risky_area,
+examples_before_code, lead_plan and follow_main = the person's policy, never the other two causes. Policy
+questions are by design; for follow_main, a conflict or a failed combined test always comes to the person.
+follow_main also has its own parallel-agent cost subcount; assign new decision kinds a cause before the run.
+E5: paired-arm cost and wall time per correct change, by role, including failed/rejected work; hours and
+parallelism. Meta's official pricing page is the source; the repo stores the extracted table with the page URL
+and retrieval date, not a page copy; one leak-guard exception applies. Baseten is a lower bound. E6: per
+model/host, 429/capacity errors per agent-hour, retries, retry halts and malformed calls, from contracts
+1.8.0. E7: compare finish files/tests_run/tests with server diff/tests; omitted claims count apart; never
+model-parse prose. Under 10 cases, counts only, never a percentage. Proof 2's US$25 cap includes the uncounted
+pilots. H1: same-model harness-pack pair runs within the bench's US$20 only after both free passes have at
+most 4/20 question-not-available cases each, equal counts, and every case labelled unasked_difference whose
+tests pass in both passes flips between them. Bring the numbers before paying. L1: rework/re-splits/conflicts,
+zone overlaps, round-0 acceptance against tasks the person started; L2: planning spend. L3 is future work.
+With the lead on main, measure L1-L2; otherwise, if hidden checks, item 8, E6 and item 10 are on main, the
+person queues the 16 tasks at once; starts count as their decisions and L1-L2 are not measured.
+P1: correct change; P2: fixed what was cited; P3: questions that were not needed; P4: review cost per change.
+P5: pilots 16 and 4 first, results excluded; the run then queues all 16, those two included; pilot costs
+remain within US$25. P6: queuing keeps the execution constraints; per-check results and revision ids kept;
+questions keyed by decision identity; agent-hours from elapsed run intervals; parallelism as the
+concurrent-agent count over time, wall time apart. Reason: freeze tasks, definitions and reporting before
+seeing results; later rules are marked added after run start.
+## 2026-10-30 — Merge authority: the person's approval or rules they set
+
+The maintainer set PRODUCT.md's success sentence, which item 8 of docs/additions.md required before rules mode
+can be enabled: "A change reaches main only with your approval or by meeting rules you set; its review then
+shows the rules and grants that let it in, and Revert undoes it in one step when it applies cleanly." It
+replaces "nothing reaches main without their decision" in Product Purpose, and the first product principle
+now names the same two authorities. README.md keeps "Nothing reaches main without the person's approval"
+while rules mode stays closed by default, and changes when the mode can be enabled.
+
+Reason: rules mode merges a change without a separate approval, so a product statement that requires the
+person's decision for every merge would contradict it. Naming both authorities, with a review that shows what
+let the change in and a Revert that undoes it, keeps the person in control.
+
+## 2026-10-30 — Order after contracts 1.8.0, and when plans split
+
+The maintainer set the order of the next fronts:
+
+- Contracts 1.8.0 first, with two plan passes in parallel: item 11 (queue, dispatcher and one-subtask plans
+  first; completeness, partition and targets second) and the lead.
+- Then 11a (queue, dispatcher and plan service with one-subtask plans) and the producer of
+  `model.attempt_failed`.
+- Then the lead, which depends on 11a and item 8, not on 11b or the plan view.
+- 11b (completeness evidence and the partition) runs only if a free measurement on Boltons and the demo
+  repository, under the completeness rule below, shows that splits actually happen; otherwise it waits until
+  after proof 2. The plan view follows 11a and does not block proof 2.
+- While the partitioner has two zones, plans use one or two subtasks; six is for the lead.
+- Item 8 continues with the merge mode's isolated start capability, closed by default today, and the
+  merge-mode routes.
+- No other contract change before proof 2 unless a front cannot work without it.
+
+Completeness is conservative. The graph counts as complete only if every Python file the graph scan finds
+was parsed, with none skipped for size, syntax or encoding. The scan's own exclusions (hidden directories,
+`__pycache__`, symbolic links, a module shadowed by its package) are not gaps. An unresolved possible call
+between two zones counts as a conflict, and any doubt falls back to one agent. The partitioner may stay at two
+zones first.
+
+Reason: one-subtask plans and the queue give the lead a path to proof 2 that does not wait on splitting, and
+splitting is built only if it happens on the repositories proof 2 uses. A wrong split costs a conflict the
+person has to resolve, so doubt falls back to one agent.
+
+## 2026-10-30 — Browser tests use plain ground unless they test the field
+
+All 24 Chromium launch sites under frontend/src use browserLaunch.support.ts. WebGL is disabled
+by default through Chromium itself: a new canvas returns null for getContext("webgl2"). This selects
+the product's existing no-WebGL path: the field canvas is hidden, its state is plain, and draws is
+zero. No product timer, motion setting, renderer or theme changes. Review's browser test asserts
+all four observations without a context shim; the lamp test explicitly asserts WebGL2 availability.
+
+Only app/dotField.browser.test.ts (lamps, contours, travel, context loss and look),
+graph/field/mask.browser.test.ts (rendered masks and markers), and
+graph/field/cost.browser.test.ts (field buffer captures and frame cost) request webGL: true.
+Other captures concern UI controls or graph geometry, not the field's appearance. No current e2e
+spec tests the field, so e2e uses the same default options helper. A field spec can explicitly use
+browserLaunchOptions({ webGL: true }); OVERSIGHT_E2E_SOFTWARE_RENDERING=1 still selects SwiftShader.
+A direct browser probe with that variable checked both the disabled and enabled modes: exit 0.
+
+Reason: on the reported ubuntu-26.04 runner (4 vCPU, software WebGL), the life layer's 500 ms
+repaints compute the full height field and draw the lamp grid throughout unrelated graph tests.
+Reported CI comparison, run 40988845881 at af1a874 versus 40989304590 at 8fad4c2, seconds:
+
+| File | Before life layer | After life layer |
+| --- | ---: | ---: |
+| review | 53.4 | 87.0 |
+| reviewControls | 51.6 | 93.3 |
+| palette | 59.3 | 92.6 |
+| shell | 59.2 | 87.5 |
+| fileView | 33.6 | 52.0 |
+| filesTree | 29.3 | 47.7 |
+| functionTask | 62.6 | 105.6 |
+| camera (already refuses WebGL2) | 8.5 | 8.5 |
+| diffViewport | 34.5 | 34.5 |
+| LiveDiff | 19.3 | 19.9 |
+| folds | 6.9 | 7.0 |
+
+The reported suite total was 393 s before the merge and reached its 600 s cap afterward;
+level2 also reached its 90 s test timeout. Neither cap was raised; workers and retries are unchanged.
+
+Local wall seconds on ad5de55 before any edit, then on this change, each invocation alone under
+taskset -c 0-3, in order review, reviewControls, camera, repeated twice, then level2 once:
+
+| File | Base run 1 / run 2 | Changed run 1 / run 2 | Exit codes, all invocations |
+| --- | ---: | ---: | ---: |
+| src/app/review.browser.test.ts | 40.88 / 36.14 | 23.12 / 28.71 | 0 |
+| src/app/reviewControls.browser.test.ts | 36.58 / 33.88 | 21.98 / 35.46 | 0 |
+| src/app/camera.browser.test.ts | 6.53 / 5.68 | 7.03 / 9.15 | 0 |
+| e2e/level2.spec.ts | 76.78 | 69.45 | 0 |
+
+Commands, unpiped; each browser file above was substituted for FILE and invoked twice per revision:
+
+```sh
+/usr/bin/time -f 'wall=%e exit=%x' taskset -c 0-3 pnpm -C frontend exec vitest run --config vite.config.ts --project browser FILE
+/usr/bin/time -f 'wall=%e exit=%x' taskset -c 0-3 env UV_OFFLINE=1 OVERSIGHT_E2E_SOFTWARE_RENDERING=1 bash frontend/e2e/run.sh level2.spec.ts
+```
+
+The e2e wall time includes the launcher's two static builds and server startup on both revisions;
+Playwright reported the changed scenario itself at 58.6 s. These local runs did not reproduce the
+CI timeouts. The second reviewControls run did not improve, and camera varied despite already
+avoiding WebGL: these are paired local observations, not a claim about the runner's final suite time.
+
+Validation: the unpiped two-file command below exited 0 (33 passed; the two existing opt-in visual
+captures remain conditional, unchanged). tsc --noEmit and eslint --max-warnings 0 on every changed
+frontend file exited 0. No Python files changed, so ruff, pyright and pytest have no touched target.
+The unpiped vitest related --run --maxWorkers 2 command over all 27 changed frontend paths
+exited 0: 33 affected files, 202 passed and three existing conditional captures unexecuted.
+
+```sh
+pnpm -C frontend exec vitest run --config vite.config.ts --project browser src/app/review.browser.test.ts src/app/dotField.browser.test.ts
+```
+
+The existing long camera and dotField files and the native-shortcut test callback retain their
+structure; this front changes only launch wiring and the two proof assertions. This decision log
+remains append-only.
+
+### 2026-10-30 — Browser launcher review corrections
+
+The full-page captures in app/shell/agentLook.browser.test.ts intentionally show the product's
+no-WebGL ground while checking agent cards, rail avatars, review pills and pending borders. They
+do not claim to capture the field's appearance. The three field files listed above retain WebGL.
+
+The dotField fixture loads the shared launcher inside beforeAll, so fixture collection needs no
+new dependency stub. app/dotFieldChecks.test.ts is restored to its pre-front contents; its original
+collection assertions reject an eager launcher import. The no-WebGL proof is a separate review
+test that asserts the field canvas exists before reading its state. SwiftShader flags are now
+added only when WebGL is enabled, with launcher tests covering the environment variable, explicit
+overrides and preservation of other launch options. The cost test's header precedes its imports.
+
+## 2026-10-30 — Item 11a: planner usage, start refusals, restarts and queue order
+
+The maintainer accepted five answers for item 11's plan:
+
+- The usage of a plan call the person requested, made before any agent exists, goes into `usage.tick` under a
+  planner id local to the run, taken from the agent counter. That id never gets an `agent.status`, so the reducer
+  records its cost without a card. No contract change.
+- Before a plan's first start, its queue item follows the table for standalone tasks: a busy slot leaves it
+  `queued` with a detail; the spending brake, a suspect main or missing configuration leave it `blocked`; any other
+  refusal or a failed start marks it `failed`, the plan fails, and its `waiting` subtasks become `cancelled`. After
+  a start, which only 11b or the lead allows, a refusal that may clear leaves the subtask `waiting` and the item
+  `starting` or `running` with a detail. This follows the queue contract, where a `starting` item holds at least
+  one agent and a `blocked` item holds none.
+- Unimportable `.py` files, which the graph scan drops today, count as completeness gaps, and the split
+  measurement reports them separately. They are not among the scan's own exclusions.
+- The queue lasts for one run. After a restart the new run starts with an empty queue, and the shutdown `error`
+  lists what never ran. There is no resumption across runs before proof 2.
+- The queue is strict FIFO, skipping only blocked items. Queueing proof 2's 16 tasks from the UI is a separate
+  frontend front.
+
+Reason: each answer keeps 11a within contracts 1.8.0 and the rules standalone tasks already follow, which is what
+proof 2 needs. Resuming across runs and queueing from the UI are not on proof 2's path.
+
+## 2026-10-30 — The lead requests plans only, ends when done, and claims no independence
+
+The maintainer accepted five answers for the lead's plan:
+
+- A lead plan's independent subtasks are not zone-checked against each other, as the 16 standalone queued tasks
+  are not. The person's one approval of the exact plan revision lets them run in parallel; conflicts and failed
+  combined tests reach the person through follow-main, and nothing claims the subtasks are independent. This
+  stays after 11b, whose zone checks cover only the splits the server proposes from POST /plans. The rejected
+  options were one subtask per plan until 11b, and several subtasks only as a dependency chain.
+- The lead does not queue standalone tasks before proof 2, only plans. Decision 9 of the 2026-10-27 batch (lead
+  standalone queueing) waits until after proof 2.
+- The lead never waits or replans: it ends at `done`. Waiting would need a new status, after proof 2.
+- The lead's prompt is part of the prompt set, so `run.started`'s `prompt_version` covers it. Its limits are fixed
+  in code, stated in its starting detail, and recorded in DECISIONS.md when the lead lands. No contract change.
+- A rejected lead plan is final. The person may start a new lead with the rejection comment.
+
+Reason: not zone-checking a lead plan's subtasks takes the same risk proof 2 already accepts with 16 standalone
+tasks and claims nothing; it is the only option where the lead saves approvals while agents run in parallel.
+
+## 2026-10-30 — 11b runs only if splits are common enough
+
+The free split measurement decides whether 11b (completeness evidence and the partition) is built before proof 2.
+11b runs if at least 1 in 5 Boltons task pairs splits with calls plus imports, and at least 1 demo repository pair
+splits. Otherwise it waits until after proof 2, as the order entry above says. No measurement had been reported
+when the rule was set.
+
+The method is fixed with the rule. Each task's targets are the innermost functions and methods whose base-side
+range contains a line the reference patch changes. New definitions map to nothing; a task with only additions
+falls back to its containing node, and the report shows the denominators with and without that fallback. Pairs:
+120 from proof 2's tasks on Boltons, 28 from the demo repository and 1,000 random pairs with a fixed seed, each
+under two variants, calls only and calls plus imports. A pair splits only if each zone holds the targets of exactly
+one task. An incomplete repository gives "no split possible" for all its pairs.
+
+Result, on 2026-10-30 at 22:17 UTC (main e8a52e1, Boltons d31d821, seed 20261030): both graphs were complete. On
+Boltons, calls plus imports split 15 of 21 eligible task pairs without the fallback and 26 of 66 with it; the other
+pairs include a task with no targets. A random sample of 1,000 Boltons pairs split 779 times. On the demo
+repository none of the 28 pairs split, under either variant or mapping; the partitioner's refusals were 17 for
+coupled targets and 11 for too few groups. The demo condition fails, so 11b waits until after proof 2.
+
+Reason: a rule set before the numbers keeps 11b from being justified by the results it is meant to test, and a
+split that rarely happens does not pay for the conflicts a wrong split costs.
+
+## 2026-10-30 — Item 8: a closed activation latch, and rules mode refuses without cross-review
+
+The maintainer accepted six answers for item 8's plan:
+
+1. The activation latch is a constant in code that only the activation front opens, not an environment setting,
+   so configuration cannot open it in an unapproved build.
+2. Losing isolation does not switch the mode to Ask me. Only the person switches; Oversight suspends rules
+   authority and says why in one `error` event.
+3. PUT `merge_when_safe` does not require a browser Origin header: proof runs use the command line. The lead is
+   fenced by its route allowlist instead.
+4. A disable keeps the revision check (compare-and-set). Every disable suspends authority and ends every wait at
+   once; a stale disable answers 409, and the UI re-reads the mode.
+5. The `run.started` seq identifies the protected-path table version in force, and the table's version is recorded
+   in DECISIONS.md when protected paths land. No contract change.
+6. Rules mode refuses while cross-review is off; cross-review stays optional under Ask me.
+
+Reason: until activation, PUT `merge_when_safe` always answers 409 with the latch's reason, so the person's
+authority and PRODUCT.md's merge-authority sentence stay true while the pieces land. Each answer fails closed
+without a contract change.
+
+## 2026-10-30 — Messages, pause and resume: 202 answers, three limits and memory-only text
+
+The maintainer accepted seven answers for level 3's messages, pause and resume:
+
+1. POST /agents/{id}/message, /pause and /resume answer an empty 202 once built, instead of 501.
+2. Only time actually spent paused is excluded from the agent's wall-clock limit; time with a pause pending still
+   counts.
+3. Resume cancels a pending pause.
+4. A message holds at most 4,096 characters.
+5. At most 32 messages wait in an agent's queue.
+6. An agent accepts at most 8,192 UTF-8 bytes of message text over its lifetime, never replenished.
+7. Message text lives only in memory: no event carries it, so a replay shows a message's effects but not its text.
+
+Reason: the limits bound the context messages add, since every step resends the full history, and memory-only text
+needs no contract change.
+
+## 2026-10-30 — No paid H1 pair: the free passes miss its third condition
+
+H1, in proof 2's entry, allows the paid harness-pack pair only after both free passes meet three conditions. On
+main ad5de55, with the fake model and no cost, the two asking arms met the first two: 4 of 20 cases with no
+question available in each, and equal counts. They missed the third: b04 and b19, labelled `unasked_difference`
+with tests passing in both passes, do not flip. b04's unasked difference appends a line to a file, and b19's falls
+back to `uuid4()` when `sku` is empty; a probe that compares return values and receiver state sees neither. The
+paid-run gate refused, and the maintainer chose not to run the paid pair. The bench's counting rules are
+unchanged.
+
+Reason: H1 was fixed before the run as the condition for paying. Meeting it would need probes that record file
+effects, a new product capability, or a rule changed after seeing results.

@@ -30,6 +30,9 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
   page,
   baseURL,
 }) => {
+  // Real-time replay takes about 50-59 s on fast runners and 80-95 s on slow ones,
+  // leaving no margin against playwright.config.ts's 90 s timeout.
+  test.slow();
   const errors: string[] = [];
   const urls: string[] = [];
   const colors: Partial<Record<"A" | "B", string>> = {};

@@ -1,8 +1,10 @@
+import { impactText } from "./evidenceCopy";
 import { ArrowRight, Check, Info, LockKeyhole, Play, X, ArrowLeftRight } from "lucide-react";
 import "./phoneGraph.css";
 import { AgentLetter, AgentLine, PhoneGraph } from "./PhoneGraph";
 import { caseSlot, nodeName } from "./phoneEvidence";
 import { PhoneDecision } from "./PhoneDecision";
+import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import { score } from "./PracticePanel";
 import type { PanelProps } from "./PracticePanel";
 
@@ -67,8 +69,8 @@ function RecordedDecisions({ practice, attempt, onFinish }: PanelProps & { onFin
                 <div>
                   <p>Recorded decision</p>
                   <strong>
-                    {entry.reference}{" "}
-                    <span>· {entry.resolution.merge === "merged" ? "Merged" : "Not merged"}</span>
+                    {entry.reference}
+                    <span>, {entry.resolution.merge === "merged" ? "merged" : "not merged"}.</span>
                   </strong>
                 </div>
               </div>
@@ -77,18 +79,23 @@ function RecordedDecisions({ practice, attempt, onFinish }: PanelProps & { onFin
                 {same ? "Same decision" : "Different decision"}
               </p>
               <p className="pp-result-facts">
-                <span className="pp-positive">
-                  <Check size={13} />
-                  {entry.proposal.tests.passed} passed
-                </span>
-                <span>{entry.proposal.impact.entries.length} possibly affected</span>
+                {entry.proposal.tests.passed ? (
+                  <span className="pp-positive">
+                    <Check size={13} />
+                    {entry.proposal.tests.passed} passed.
+                  </span>
+                ) : (
+                  <span>No passing tests were recorded.</span>
+                )}
+                <span>{impactText(entry.proposal.impact.entries.length)}.</span>
               </p>
+              <RecordedEvidence practice={practice} entry={entry} />
             </section>
           );
         })}
         <p className="pp-reveal-note">
           <Info size={18} />
-          No review rationale was recorded.
+          {absenceNote}
         </p>
       </main>
       <footer className="pp-dock">
@@ -101,6 +108,7 @@ function RecordedDecisions({ practice, attempt, onFinish }: PanelProps & { onFin
   );
 }
 function Finish({ practice, attempt, onRestart, onExit }: PanelProps) {
+  const matches = score(practice, attempt);
   const approved = practice.cases.filter((entry) => entry.reference === "Approve").length;
   const rejected = practice.cases.length - approved;
   const all = practice.cases.length === 2 ? "Both" : "All";
@@ -116,10 +124,16 @@ function Finish({ practice, attempt, onRestart, onExit }: PanelProps) {
         <h1>You’ve reviewed both changes.</h1>
         <p className="pp-purpose">See how your decisions compare.</p>
         <p className="pp-score">
-          <span>
-            {score(practice, attempt)} of {practice.cases.length}
-          </span>{" "}
-          decisions matched
+          {matches ? (
+            <>
+              <span>
+                {matches} of {practice.cases.length}
+              </span>{" "}
+              decisions matched
+            </>
+          ) : (
+            "None of your decisions matched the recording."
+          )}
         </p>
         <p className="pp-score-description">{recordedDecisions}</p>
         <div className="pp-recap">

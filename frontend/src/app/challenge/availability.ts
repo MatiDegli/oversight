@@ -10,7 +10,10 @@ export function availablePractice(
 ) {
   if (!replay || source.kind !== "real recorded run") return null;
   try {
-    return validateManifest(candidate, recording);
+    return {
+      ...validateManifest(candidate, recording),
+      revealThroughSeq: candidate.revealThroughSeq,
+    };
   } catch {
     return null;
   }

@@ -102,10 +102,14 @@ interpreters are permitted only for fake execution. Fake output must be outside 
 The pilot assigns d01, d02, d01 and d01 to the current arms 1–4 respectively, one repetition
 each. Both behavior pilots use d01's top-level `shipping_cost`, whose stable measured difference
 reaches classification. In d02, `price_breaks` adds an opt-in parameter defaulting to zero;
-default calls have no behavior difference, so a behavior pilot sends no model call. Methods
-are unsupported by D9 and would also prove no model call. Frozen patches, ordering, manifest and
-labels remain unchanged. Bench b09 (`Inventory.reserve`), b14 (`Customer.email` setter),
-b17 (`Cart.add`) and b19 (`Product.label`) stay unprobed questions in the denominators. Then `run`
+default calls have no behavior difference, so a behavior pilot sends no model call. Supported
+methods are probed: b09 (`Inventory.reserve`) compares 24 inputs, b14 (`Customer.email` setter)
+2, and b19 (`Product.label`) 2. The observation documented on main `cc023c8` was that b17
+(`Cart.add`), lacking a supported literal `Product` argument, and b19's changed module node,
+not a callable probe target, both published "probe unavailable". After class-args (`8a4a2ec`)
+and probe-reasons (`f44dd62`), the `Product` argument may be constructible and reports use
+recorded unprobed facts with allowlisted phrases; no new outcome is claimed without a run. Frozen patches,
+ordering, manifest and labels remain unchanged; unprobed nodes stay in the denominators. Then `run`
 uses the same flags plus the external label path and pin. Tests-only runs once per bench patch;
 `--repetitions` applies to the other arms. A seed and the full randomized order persist before
 execution. Resuming skips completed identities and never retries an interrupted reservation.
@@ -162,11 +166,15 @@ Detect-1, detect-2-v2 and detect-3-v2 keep their exact configurations and finger
 main 70d5d50, so their completed pilots are reused. Tests-only retains its v1 identity;
 v2-only fields never enter it. The accounting gate still refuses configuration drift before spend.
 
-Each send/retry checks admission against the reservation and remaining shared cap. Receipts are
-durable before another send; missing usage remains unknown and stops further work. Cancellation,
-unfinished processes or cleanup failure retain the reservation. External estimates cannot stop a
-provider from charging more than estimated. Inspect and reconcile unknown billing outside this
-runner; it has no reset, force-retry or reconciliation switch.
+Each send/retry checks admission against the reservation and remaining shared cap. A pre-send
+expiry or cancellation charges nothing and does not block later admissions with unknown billing.
+Sends are durable before entering transport; receipts are durable before another send. A request
+that may have left without a receipt, or missing usage, stays unknown and stops further work.
+Cancellation, unfinished processes or cleanup failure retain the reservation. External estimates
+cannot stop a provider from charging more than estimated. Inspect and reconcile unknown billing
+outside this runner; it has no reset, force-retry or reconciliation switch.
+Transport counting lives in transport.py, outside the arm fingerprint like accounting.py,
+so it changes no arm's configuration.
 
 Every attempt uses a fresh disposable public `Workspace`/graph/`EventStore`/`ChangeManager`
 composition, bounded `git apply --check`/apply of one verified patch, and `grade.suite` on original

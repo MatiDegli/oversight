@@ -1,20 +1,23 @@
 """AST-only finite inputs. No imports, evaluation of expressions, or model requests."""
 
+from __future__ import annotations
+
 import ast
 import inspect
 import time
 from dataclasses import dataclass
-from itertools import zip_longest
 from pathlib import PurePosixPath
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from oversight.changes._behavior_aliases import (
     _AliasBindings,  # pyright: ignore[reportPrivateUsage]
     module_aliases,
     shadowed,
 )
-from oversight.changes._review_identity import bound_inputs
 from oversight.changes._shortcuts_common import Source, walk_local
+
+if TYPE_CHECKING:
+    from oversight.changes._behavior_sources import Sources
 
 MAX_INPUTS = 48
 MAX_LITERAL = 4096
@@ -24,6 +27,10 @@ _OPAQUE_DEFAULT = object()
 
 class _LiteralLimit(ValueError):
     pass
+
+
+class BindingFailure(TypeError):
+    """A fixed input rejection reason, separate from inspect's diagnostic text."""
 
 
 @dataclass(frozen=True)
@@ -39,6 +46,9 @@ class BehaviorInputs:
     inputs: tuple[BehaviorInput, ...] = ()
     skipped_binding: int = 0
     reason: str | None = None
+    receiver_class: str | None = None
+    method_kind: str | None = None
+    properties: tuple[str, ...] = ()
 
 
 def module_name(path: str) -> str:
@@ -150,23 +160,23 @@ def _annotation(arg: ast.arg) -> str | None:
     return None
 
 
-def _arguments(
+def binding_arguments(
     sig: inspect.Signature, named: dict[str, Any]
 ) -> tuple[tuple[Any, ...], dict[str, Any]]:
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
     if named.keys() - sig.parameters.keys():
-        raise TypeError("unknown parameter")
+        raise BindingFailure("unknown parameter")
     for name, param in sig.parameters.items():
         if param.default is _OPAQUE_DEFAULT and name not in named:
-            raise TypeError("opaque default requires an explicit argument")
+            raise BindingFailure("opaque default requires an explicit argument")
+        if param.default is inspect.Parameter.empty and name not in named:
+            raise BindingFailure("required argument has no literal value")
         if param.kind == inspect.Parameter.POSITIONAL_ONLY:
             if name in named:
                 args.append(named[name])
             elif param.default is not inspect.Parameter.empty:
                 args.append(param.default)
-            else:
-                raise TypeError("missing positional-only parameter")
         elif name in named:
             kwargs[name] = named[name]
     sig.bind(*args, **kwargs)
@@ -195,14 +205,26 @@ def _resolved(
     return not shadowed(source, call, name)
 
 
-def _calls(files: dict[str, str], module: str, name: str, deadline: float):
-    for path, text in sorted(files.items()):
+def calls(
+    files: dict[str, str],
+    module: str,
+    name: str,
+    deadline: float,
+    *,
+    objects: bool = False,
+    cache: Sources | None = None,
+):
+    from oversight.changes._behavior_objects import arguments, literal_arguments
+    from oversight.changes._behavior_sources import Sources
+
+    cache = cache if cache is not None else Sources(files, deadline)
+    for path in sorted(files):
         if time.monotonic() >= deadline:
             raise TimeoutError
         if not path.endswith(".py"):
             continue
         try:
-            source = Source(text, deadline)
+            source = cache.get(path)
             aliases = module_aliases(source)
         except (SyntaxError, ValueError, RecursionError):
             continue
@@ -214,22 +236,16 @@ def _calls(files: dict[str, str], module: str, name: str, deadline: float):
             if not _resolved(source, call, path, module, name, aliases):
                 continue
             try:
-                if any(kw.arg is None for kw in call.keywords):
-                    continue
-                args = tuple(_literal(arg) for arg in call.args)
-                kwargs = {kw.arg: _literal(kw.value) for kw in call.keywords if kw.arg is not None}
-                if len(kwargs) != len(call.keywords):
-                    continue
-                yield args, kwargs
+                yield arguments(source, path, call, cache) if objects else literal_arguments(call)
             except (ValueError, TypeError, SyntaxError, RecursionError):
                 continue
 
 
-def _definition(files: dict[str, str], module: str, name: str):
+def _definition(cache: Sources, module: str, name: str):
     found: list[tuple[Source, ast.FunctionDef | ast.AsyncFunctionDef]] = []
-    for path, text in files.items():
+    for path in cache.files:
         if path.endswith(".py") and module_name(path) == module:
-            source = Source(text)
+            source = cache.get(path)
             found.extend(
                 (source, n)
                 for n in source.tree.body
@@ -322,8 +338,11 @@ def behavior_inputs(
     *,
     deadline: float = float("inf"),
 ) -> BehaviorInputs:
+    from oversight.changes._behavior_sources import Sources
+
+    caches = [Sources(files, deadline) for files in (base, head)]
     try:
-        definitions = [_definition(files, module, name) for files in (base, head)]
+        definitions = [_definition(cache, module, name) for cache in caches]
         nodes = [node for _, node in definitions]
         if any(
             isinstance(n, ast.AsyncFunctionDef)
@@ -343,121 +362,9 @@ def behavior_inputs(
         ]
     except (ValueError, TypeError, SyntaxError, RecursionError):
         return BehaviorInputs(reason="unsupported signature")
-    return _generate(module, name, base, head, nodes, signatures, integers, deadline)
+    from oversight.changes._behavior_generation import generate
 
-
-def _generate(
-    module: str,
-    name: str,
-    base: dict[str, str],
-    head: dict[str, str],
-    nodes: list[ast.FunctionDef | ast.AsyncFunctionDef],
-    signatures: list[inspect.Signature],
-    integers: list[int],
-    deadline: float,
-) -> BehaviorInputs:
-    inputs: list[BehaviorInput] = []
-    seen: set[str] = set()
-    skipped = 0
-    pools: dict[str, list[Any]] = {key: [] for sig in signatures for key in sig.parameters}
-    seeds: list[dict[str, Any]] = []
-    base_params = signatures[0].parameters
-
-    def add(named: dict[str, Any]) -> None:
-        nonlocal skipped
-        if time.monotonic() >= deadline:
-            raise TimeoutError
-        try:
-            before, after = (_arguments(sig, named) for sig in signatures)
-        except TypeError:
-            skipped += 1
-            return
-        key = literal_text((before, after))
-        if key in seen or len(key) > MAX_LITERAL or len(inputs) >= MAX_INPUTS:
-            return
-        if any(
-            type(value) is bool
-            and any(
-                sig.parameters.get(param) and sig.parameters[param].annotation == "int"
-                for sig in signatures
-            )
-            for param, value in named.items()
-        ):
-            return
-        seen.add(key)
-        rendered = ", ".join(f"{key}={literal_text(value)}" for key, value in named.items())
-        identities: list[str | None] = []
-        for sig, (args, kwargs) in zip(signatures, (before, after), strict=True):
-            effective = sig.bind(*args, **kwargs)
-            effective.apply_defaults()
-            # Binding already rejects explicit head-only arguments and opaque omissions.
-            # Keep every base parameter: removal and changed shared defaults stay unequal.
-            arguments = {
-                key: value for key, value in effective.arguments.items() if key in base_params
-            }
-            identities.append(bound_inputs(arguments))
-        inputs.append(
-            BehaviorInput(
-                f"{name}({rendered})",
-                literal_text(before),
-                literal_text(after),
-                identities[0] if identities[0] == identities[1] else None,
-            )
-        )
-        seeds.append(named)
-
-    for files, sig in zip((base, head), signatures, strict=True):
-        for args, kwargs in _calls(files, module, name, deadline):
-            try:
-                bound = sig.bind(*args, **kwargs)
-            except TypeError:
-                skipped += 1
-                continue
-            for param, value in bound.arguments.items():
-                pools[param].append(value)
-            add(dict(bound.arguments))
-    pools = _pools(pools, nodes, signatures, integers)
-    seed = {param: values[0] for param, values in pools.items() if values and param in base_params}
-    if seeds:
-        seed = dict(seeds[0])
-    add(seed)
-    # Share the cap across parameters so the first parameter cannot starve later ones.
-    for row in zip_longest(*pools.values(), fillvalue=inspect.Parameter.empty):
-        for param, value in zip(pools, row, strict=True):
-            if value is inspect.Parameter.empty:
-                continue
-            add({**seed, param: value})
-    return BehaviorInputs(tuple(inputs), skipped, None if inputs else "unsupported signature")
-
-
-def _pools(
-    pools: dict[str, list[Any]],
-    nodes: list[ast.FunctionDef | ast.AsyncFunctionDef],
-    signatures: list[inspect.Signature],
-    integers: list[int],
-) -> dict[str, list[Any]]:
-    for param in pools:
-        parameters = [sig.parameters[param] for sig in signatures if param in sig.parameters]
-        defaults = [
-            p.default
-            for p in parameters
-            if p.default is not inspect.Parameter.empty and p.default is not _OPAQUE_DEFAULT
-        ]
-        observed = pools[param] + defaults
-        kinds = {p.annotation for p in parameters}
-        is_int = "int" in kinds or (not kinds - {None} and any(type(v) is int for v in observed))
-        is_str = "str" in kinds or (not kinds - {None} and any(type(v) is str for v in observed))
-        if is_int:
-            pools[param].extend((0, -1))
-            for value in integers:
-                pools[param].extend((value - 1, value, value + 1))
-        if is_str:
-            for node in nodes:
-                pools[param].extend(value for value in _literals(node) if type(value) is str)
-        pools[param].extend(defaults)
-        unique = {literal_text(v): v for v in pools[param] if not (is_int and type(v) is bool)}
-        pools[param] = list(unique.values())[:MAX_INPUTS]
-    return pools
+    return generate(module, name, base, head, nodes, signatures, integers, deadline, caches=caches)
 
 
 def _literals(node: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef) -> list[Any]:

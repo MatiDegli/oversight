@@ -9,14 +9,22 @@ def validate_agent_status(
     status: AgentStatus,
     *,
     base_commit: str | None,
+    plan_id: str | None = None,
     zone: PlanZone | None = None,
     started_by: str | None = None,
     queued_task_id: str | None = None,
     answering: DecisionRef | None = None,
 ) -> None:
     """Compare with the server registration, never provenance from request data."""
-    if (status.base_commit, status.zone, status.started_by, status.queued_task_id) != (
+    if (
+        status.base_commit,
+        status.plan_id,
+        status.zone,
+        status.started_by,
+        status.queued_task_id,
+    ) != (
         base_commit,
+        plan_id,
         zone,
         started_by,
         queued_task_id,

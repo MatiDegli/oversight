@@ -51,12 +51,19 @@ export const structureTest = {
       return node?.parent_id ? moduleOf(node.parent_id) : id;
     };
     const counts: Record<string, number> = {};
+    const exact = new Set<string>();
     for (const e of graph.edges)
       if (e.kind === "calls") {
         const a = moduleOf(e.src),
           b = moduleOf(e.dst);
-        if (a !== b && !graph.nodes.find((n) => n.id === e.src)?.is_test)
-          counts[`${a}>${b}`] = (counts[`${a}>${b}`] ?? 0) + 1;
+        if (a !== b && !graph.nodes.find((n) => n.id === e.src)?.is_test) {
+          const key = `${a}>${b}`;
+          if (e.confidence === "exact" && !exact.has(key)) {
+            counts[key] = 0;
+            exact.add(key);
+          }
+          if (e.confidence === "exact" || !exact.has(key)) counts[key] = (counts[key] ?? 0) + 1;
+        }
       }
     return counts;
   },

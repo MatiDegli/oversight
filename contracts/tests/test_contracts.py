@@ -235,6 +235,7 @@ def test_the_event_types_include_the_approved_level3_reservations() -> None:
         "lead.status",
         "grant.created",
         "grant.revoked",
+        "model.attempt_failed",
     }
 
 
@@ -264,6 +265,7 @@ def test_every_event_round_trips_with_every_key_present_in_order(event_type: str
             "assessment": None,
             "answers": None,
         },
+        "agent.step": {"error_kind": None},
         "usage.tick": {"role": None, "change_id": None, "plan_id": None},
     }
     original["payload"].update(defaults.get(event_type, {}))

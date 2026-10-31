@@ -71,7 +71,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(page.locator("#root")).toHaveAttribute("data-seq", "63");
   await start.click();
   const panel = practice(page);
-  await expect(panel).toContainText("Inventory.reserve · Agent B");
+  await expect(panel).toContainText("Inventory.reserve, Agent B");
   await expect(panel).toContainText("29 passing tests");
   await expect(panel.getByRole("button", { name: "Show findings" })).toBeDisabled();
   const approve = panel.getByRole("button", { name: "Approve", exact: true });
@@ -93,7 +93,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(panel).toContainText("Practice answer saved: Reject");
   await expect(panel.getByRole("button", { name: "Show findings" })).toBeDisabled();
   await panel.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(panel).toContainText("compute_price · Agent A");
+  await expect(panel).toContainText("compute_price, Agent A");
   await expect(panel).toContainText("32 passing tests");
   await expect(panel).toContainText("9 possibly affected entries");
   await expect(panel.getByText(/Recorded decision:/)).toHaveCount(0);
@@ -104,13 +104,13 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   await expect(panel).toContainText("Matches with recorded decisions: 1/2.");
   const inventory = panel.getByRole("region", { name: "Findings for change-2" });
   await expect(inventory).toContainText("Your practice answer: Reject");
-  await expect(inventory).toContainText("Recorded decision: Approve · merged into main");
-  await expect(inventory).toContainText("29 passing tests · 0 possibly affected entries");
+  await expect(inventory).toContainText("Recorded decision: Approve, merged into main");
+  await expect(inventory).toContainText("29 passing tests. No possibly affected entries");
   await expect(panel.getByRole("region", { name: "Findings for change-1" })).toContainText(
-    "32 passing tests · 9 possibly affected entries",
+    "32 passing tests. 9 possibly affected entries",
   );
   await expect(panel).toContainText(
-    "Detailed review facts, cross-review and behavior evidence were not recorded.",
+    "Missing evidence does not establish a clean review, behavior or safety.",
   );
   await expect(
     panel.getByText(/Behavioral example|Measured result|Clean review|Safe to merge/),
@@ -334,7 +334,7 @@ async function firstPhoneDecision(page: Page, width: number) {
     "New exact call",
   );
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
-    "0 possibly affected",
+    "No possibly affected entries",
   );
   await phoneCapture(page, width, "decision-1");
   await checkDiff(page, width, "decision-1");

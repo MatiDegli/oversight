@@ -21,54 +21,65 @@ from oversight.changes import (
     WrongState,
     read_agent_status,
     read_change_view,
+    read_plan,
+    read_queue,
 )
 from oversight.events import EventStore
 from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
 from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
 from oversight_contracts.commands import (
     AgentCreated,
+    AgentMessage,
     ApproveChange,
     ChangeView,
+    CreatePlan,
+    EnqueueTask,
     FileContent,
     FileSaved,
+    PlanCreated,
+    PlanRevision,
+    QueueRevision,
     RejectChange,
+    RejectPlan,
     RequestChanges,
     SaveFile,
+    SetMergeMode,
     StartAgent,
     TreeResponse,
+    UpdatePlan,
 )
 from oversight_contracts.events import AgentStatus
+from oversight_contracts.plans import Plan
+from oversight_contracts.policy import MergeModeState
+from oversight_contracts.queue import QueuedTask, QueueSnapshot
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/dictation", "Reserved /dictation"),
-    ("POST", "/queue", "Reserved /queue"),
-    ("GET", "/queue", "Reserved /queue"),
-    ("GET", "/queue/{queued_task_id}", "Reserved /queue/{queued_task_id}"),
-    ("POST", "/queue/{queued_task_id}/cancel", "Reserved /queue/{queued_task_id}/cancel"),
     ("POST", "/leads", "Reserved /leads"),
     ("GET", "/leads/{agent_id}", "Reserved /leads/{agent_id}"),
     ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
     ("POST", "/changes/{change_id}/review", "Reserved /changes/{change_id}/review"),
     ("POST", "/changes/{change_id}/revert", "Reserved /changes/{change_id}/revert"),
-    ("GET", "/merge-mode", "Reading the merge mode"),
-    ("PUT", "/merge-mode", "Setting the merge mode"),
-    ("POST", "/plans", "Creating a plan"),
-    ("GET", "/plans/{plan_id}", "Reading a plan"),
-    ("PUT", "/plans/{plan_id}", "Updating a plan"),
-    ("POST", "/plans/{plan_id}/start", "Starting a plan"),
-    ("POST", "/plans/{plan_id}/reject", "Rejecting a plan"),
-    ("POST", "/agents/{agent_id}/message", "Messages to an agent"),
-    ("POST", "/agents/{agent_id}/pause", "Pause"),
-    ("POST", "/agents/{agent_id}/resume", "Resume"),
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
 LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
+    ("POST", "/plans", "Creating a plan"),
+    ("PUT", "/plans/{plan_id}", "Updating a plan"),
+    ("POST", "/plans/{plan_id}/start", "Starting a plan"),
+    ("POST", "/plans/{plan_id}/reject", "Rejecting a plan"),
+    ("POST", "/queue", "Queueing work"),
+    ("POST", "/queue/{queued_task_id}/cancel", "Cancelling queued work"),
     ("GET", "/tree", "Listing files"),
     ("POST", "/agents", "Starting an agent"),
     ("POST", "/agents/{agent_id}/stop", "Stop"),
+    ("POST", "/agents/{agent_id}/message", "Messages to an agent"),
+    ("POST", "/agents/{agent_id}/pause", "Pause"),
+    ("POST", "/agents/{agent_id}/resume", "Resume"),
     ("POST", "/changes/{change_id}/approve", "Approve"),
     ("POST", "/changes/{change_id}/reject", "Reject"),
     ("POST", "/changes/{change_id}/request-changes", "Request changes"),
+    ("GET", "/merge-mode", "Reading the merge mode"),
+    ("PUT", "/merge-mode", "Setting the merge mode"),
     ("POST", "/grants/{grant_id}/revoke", "Revoke grant"),
     ("GET", "/files", "Reading files"),
     ("PUT", "/files", "Saving files"),
@@ -79,10 +90,23 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
 class Commands(Protocol):
     """What the live app does for the command routes. `start` raises `ApiError` for a refused
     start; `approve`, `reject`, `request_changes` and `stop` take the decision with no `await`, so a
-    second one raises `WrongState` at once, and its result arrives as events. All four raise
-    `ChangeNotFound` for an id they do not know, and the app's own refusals as `ApiError`."""
+    second one raises `WrongState` at once, and its result arrives as events. Those four, along
+    with `message`, `pause` and `resume`, raise `ChangeNotFound` for an id they do not know,
+    and the app's own refusals as `ApiError`."""
 
     async def start(self, request: StartAgent) -> AgentCreated: ...
+
+    async def enqueue(self, request: EnqueueTask) -> QueuedTask: ...
+
+    async def create_plan(self, request: CreatePlan) -> PlanCreated: ...
+
+    async def update_plan(self, plan_id: str, request: UpdatePlan) -> None: ...
+
+    async def start_plan(self, plan_id: str, request: PlanRevision) -> None: ...
+
+    async def reject_plan(self, plan_id: str, request: RejectPlan) -> None: ...
+
+    async def cancel_queued(self, queued_task_id: str, request: QueueRevision) -> None: ...
 
     def approve(self, change_id: str, request: ApproveChange) -> None: ...
 
@@ -93,6 +117,12 @@ class Commands(Protocol):
     def request_changes(self, change_id: str, request: RequestChanges) -> None: ...
 
     def stop(self, agent_id: str) -> None: ...
+
+    def message(self, agent_id: str, request: AgentMessage) -> None: ...
+
+    def pause(self, agent_id: str) -> None: ...
+
+    def resume(self, agent_id: str) -> None: ...
 
     async def get_file(self, path: str, agent_id: str | None) -> FileContent:
         """Raises `ChangeNotFound` (no worktree for that agent), `FileNotFoundError` and
@@ -106,6 +136,10 @@ class Commands(Protocol):
 
     async def rescan(self) -> None: ...
 
+    def merge_mode(self) -> MergeModeState: ...
+
+    async def set_merge_mode(self, request: SetMergeMode) -> MergeModeState: ...
+
     async def get_tree(self, agent_id: str | None) -> TreeResponse: ...
 
 
@@ -116,11 +150,13 @@ def _not_built(what: str, why: str) -> Callable[[], Coroutine[Any, Any, None]]:
     return answer
 
 
-def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -> None:
+def _decide[A](
+    decision: Callable[[str, A], None], change_id: str, comment: A, *, kind: str = "change"
+) -> None:
     try:
         decision(change_id, comment)
     except ChangeNotFound:
-        raise ApiError("not_found", f"there is no change {change_id!r}") from None
+        raise ApiError("not_found", f"there is no {kind} {change_id!r}") from None
     except WrongState as error:
         raise ApiError("wrong_state", str(error)) from None
     except (InvalidAnswers, InvalidGrant) as error:
@@ -128,6 +164,25 @@ def _decide[A](decision: Callable[[str, A], None], change_id: str, comment: A) -
 
 
 def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: str) -> None:
+    @router.get("/plans/{plan_id}")
+    async def plan_view(plan_id: str, http: Request) -> Plan:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return read_plan(cast(EventStore, http.app.state.store), plan_id)
+        except ChangeNotFound:
+            raise ApiError("not_found", f"there is no plan {plan_id!r}") from None
+
+    @router.get("/queue")
+    async def queue(http: Request) -> QueueSnapshot:  # pyright: ignore[reportUnusedFunction]
+        return read_queue(cast(EventStore, http.app.state.store))
+
+    @router.get("/queue/{queued_task_id}")
+    async def queue_item(queued_task_id: str, http: Request) -> QueuedTask:  # pyright: ignore[reportUnusedFunction]
+        snapshot = read_queue(cast(EventStore, http.app.state.store))
+        for item in snapshot.tasks:
+            if item.queued_task_id == queued_task_id:
+                return item
+        raise ApiError("not_found", f"there is no queue item {queued_task_id!r}")
+
     @router.get("/changes/{change_id}")
     async def change_view(change_id: str, http: Request) -> ChangeView:  # pyright: ignore[reportUnusedFunction]
         try:
@@ -153,9 +208,50 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
             )
         return
 
+    @router.get("/merge-mode")
+    async def merge_mode() -> MergeModeState:  # pyright: ignore[reportUnusedFunction]
+        return commands.merge_mode()
+
+    @router.put("/merge-mode")
+    async def set_merge_mode(request: SetMergeMode) -> MergeModeState:  # pyright: ignore[reportUnusedFunction]
+        try:
+            return await commands.set_merge_mode(request)
+        except WrongState as error:
+            raise ApiError("wrong_state", str(error)) from None
+
+    @router.post("/plans", status_code=201)
+    async def create_plan(request: CreatePlan) -> PlanCreated:  # pyright: ignore[reportUnusedFunction]
+        return await commands.create_plan(request)
+
+    @router.put("/plans/{plan_id}", status_code=202, response_class=Response)
+    async def update_plan(plan_id: str, request: UpdatePlan) -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.update_plan(plan_id, request)
+        return Response(status_code=202)
+
+    @router.post("/plans/{plan_id}/start", status_code=202, response_class=Response)
+    async def start_plan(plan_id: str, request: PlanRevision) -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.start_plan(plan_id, request)
+        return Response(status_code=202)
+
+    @router.post("/plans/{plan_id}/reject", status_code=202, response_class=Response)
+    async def reject_plan(plan_id: str, request: RejectPlan) -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.reject_plan(plan_id, request)
+        return Response(status_code=202)
+
+    @router.post("/queue", status_code=201)
+    async def enqueue(request: EnqueueTask) -> QueuedTask:  # pyright: ignore[reportUnusedFunction]
+        return await commands.enqueue(request)
+
+    @router.post("/queue/{queued_task_id}/cancel", status_code=202, response_class=Response)
+    async def cancel_queued(  # pyright: ignore[reportUnusedFunction]
+        queued_task_id: str, request: QueueRevision
+    ) -> Response:
+        await commands.cancel_queued(queued_task_id, request)
+        return Response(status_code=202)
+
     @router.post("/agents", status_code=201)
     async def start_agent(request: StartAgent, http: Request) -> AgentCreated:  # pyright: ignore[reportUnusedFunction]
-        # request.zone is reserved and ignored until zones are delivered in 1.8.0.
+        # request.zone is reserved and ignored until zones are delivered in 1.9.0.
         attempt_id = http.headers.get(TRACE_HEADER)
         if attempt_id is not None and not re.fullmatch(r"[a-f0-9]{32}", attempt_id):
             raise ApiError(
@@ -196,6 +292,21 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
     @router.post("/changes/{change_id}/request-changes", status_code=202, response_class=Response)
     async def request_changes(change_id: str, body: RequestChanges) -> Response:  # pyright: ignore[reportUnusedFunction]
         _decide(commands.request_changes, change_id, body)
+        return Response(status_code=202)
+
+    @router.post("/agents/{agent_id}/message", status_code=202, response_class=Response)
+    async def message(agent_id: str, body: AgentMessage) -> Response:  # pyright: ignore[reportUnusedFunction]
+        _decide(commands.message, agent_id, body, kind="agent")
+        return Response(status_code=202)
+
+    @router.post("/agents/{agent_id}/pause", status_code=202, response_class=Response)
+    async def pause(agent_id: str) -> Response:  # pyright: ignore[reportUnusedFunction]
+        _decide(lambda target, _: commands.pause(target), agent_id, None, kind="agent")
+        return Response(status_code=202)
+
+    @router.post("/agents/{agent_id}/resume", status_code=202, response_class=Response)
+    async def resume(agent_id: str) -> Response:  # pyright: ignore[reportUnusedFunction]
+        _decide(lambda target, _: commands.resume(target), agent_id, None, kind="agent")
         return Response(status_code=202)
 
     @router.post("/agents/{agent_id}/stop", status_code=202, response_class=Response)

@@ -116,6 +116,11 @@ class ToolOutcome:
     suite_run: SuiteRun | None = None
     finish_summary: str | None = None
     declaration: FinishDeclaration | None = None
+    error_kind: Literal["unknown_tool", "invalid_json", "invalid_arguments"] | None = None
+
+
+class _InvalidArguments(ToolError):
+    """The call's arguments are malformed, independently of workspace state."""
 
 
 def _name(path: str) -> str:
@@ -127,7 +132,7 @@ def _string(arguments: dict[str, object], key: str, *, required: bool = True) ->
     if value is None and not required:
         return None
     if not isinstance(value, str):
-        raise ToolError(f"argument {key!r} must be a string")
+        raise _InvalidArguments(f"argument {key!r} must be a string")
     return value
 
 
@@ -136,7 +141,7 @@ def _line(arguments: dict[str, object], key: str) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-        raise ToolError(f"argument {key!r} must be a line number from 1")
+        raise _InvalidArguments(f"argument {key!r} must be a line number from 1")
     return value
 
 
@@ -152,7 +157,7 @@ def _validate(name: str, arguments: dict[str, object]) -> None:
         unknown = arguments.keys() - properties.keys()
         missing = set(required) - arguments.keys()
         if unknown or missing:
-            raise ToolError(
+            raise _InvalidArguments(
                 f"invalid arguments (unknown: {', '.join(sorted(unknown)) or 'none'}; "
                 f"missing: {', '.join(sorted(missing)) or 'none'}); expected {signature}"
             )
@@ -161,7 +166,7 @@ def _validate(name: str, arguments: dict[str, object]) -> None:
             kinds = [kind] if isinstance(kind, str) else kind
             valid = any(type(value) is _JSON_TYPES.get(item) for item in kinds)
             if not valid:
-                raise ToolError(f"argument {key!r} must be {kind}; expected {signature}")
+                raise _InvalidArguments(f"argument {key!r} must be {kind}; expected {signature}")
         return
 
 
@@ -226,10 +231,11 @@ class Toolbox:
             raise ToolError(f"{path} is a directory") from None
 
     async def call(self, name: str, raw_arguments: str) -> ToolOutcome:
+        error_kind: Literal["unknown_tool", "invalid_json", "invalid_arguments"] | None = None
         try:
             parsed = json.loads(raw_arguments or "{}")
             if not isinstance(parsed, dict):
-                raise ToolError("arguments must be a JSON object")
+                raise _InvalidArguments("arguments must be a JSON object")
             arguments = cast(dict[str, object], parsed)
             _validate(name, arguments)
             match name:
@@ -246,9 +252,14 @@ class Toolbox:
                 case "finish":
                     return self._finish(arguments)
                 case _:
+                    error_kind = "unknown_tool"
                     raise ToolError(f"unknown tool {name!r}; the tools are {', '.join(TOOL_NAMES)}")
         except json.JSONDecodeError:
             message = "arguments are not valid JSON"
+            error_kind = "invalid_json"
+        except _InvalidArguments as error:
+            message = self._workspace.redact(str(error))
+            error_kind = "invalid_arguments"
         except (ToolError, WorkspaceError) as error:
             message = self._workspace.redact(str(error))
         except SuiteUnavailable as error:
@@ -262,7 +273,10 @@ class Toolbox:
         except OSError as error:
             message = f"cannot access the file: {error.strerror or type(error).__name__}"
         return ToolOutcome(
-            content=f"Error: {message}", ok=False, summary=_failed(name, raw_arguments)
+            content=f"Error: {message}",
+            ok=False,
+            summary=_failed(name, raw_arguments),
+            error_kind=error_kind,
         )
 
     async def _list_files(self) -> ToolOutcome:
@@ -296,7 +310,7 @@ class Toolbox:
             raise ToolError(f"{path} has {total} lines")
         last = min(end or total, total, first + MAX_READ_LINES - 1)
         if last < first and total:
-            raise ToolError("end_line is before start_line")
+            raise _InvalidArguments("end_line is before start_line")
         shown: list[str] = []
         size = 0
         for number in range(first, last + 1):
@@ -339,7 +353,7 @@ class Toolbox:
         query = cast(str, _string(arguments, "query"))
         under = _string(arguments, "path", required=False)
         if not query.strip() or "\n" in query:
-            raise ToolError("query must be one non-empty line")
+            raise _InvalidArguments("query must be one non-empty line")
         if under is not None:
             await asyncio.to_thread(self._tree.resolve, under)
         files = [
@@ -386,9 +400,9 @@ class Toolbox:
         old = cast(str, _string(arguments, "old_text"))
         new = cast(str, _string(arguments, "new_text"))
         if not old:
-            raise ToolError("old_text must not be empty")
+            raise _InvalidArguments("old_text must not be empty")
         if old == new:
-            raise ToolError("old_text and new_text are the same")
+            raise _InvalidArguments("old_text and new_text are the same")
         seen = self._read_hashes.get(path)
         if seen is None:
             raise ToolError(f"read {path} before editing it")
@@ -448,13 +462,15 @@ class Toolbox:
     def _finish(self, arguments: dict[str, object]) -> ToolOutcome:
         note = cast(str, _string(arguments, "summary"))
         if not note.strip():
-            raise ToolError("summary must not be blank; expected finish(summary: nonblank string)")
+            raise _InvalidArguments(
+                "summary must not be blank; expected finish(summary: nonblank string)"
+            )
         try:
             declaration = FinishDeclaration.model_validate(
                 {key: value for key, value in arguments.items() if key != "summary"}
             )
         except ValidationError as error:
-            raise ToolError("invalid finish declaration") from error
+            raise _InvalidArguments("invalid finish declaration") from error
         self._harness.finish()
         return ToolOutcome(
             declaration=declaration,

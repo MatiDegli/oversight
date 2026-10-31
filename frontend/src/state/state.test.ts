@@ -229,6 +229,7 @@ describe("applyEvent", () => {
       summary: "Read price",
       result: "ok" as const,
       error: null,
+      error_kind: null,
       duration_ms: 1,
       tests: null,
     };
@@ -383,6 +384,7 @@ describe("applyEvent", () => {
         summary: "Done",
         result: "ok",
         error: null,
+        error_kind: null,
         duration_ms: 1,
         tests: null,
       }),
@@ -430,6 +432,7 @@ describe("applyEvent", () => {
         summary: "Read",
         result: "ok",
         error: null,
+        error_kind: null,
         duration_ms: 1,
         tests: null,
       }),
@@ -537,6 +540,35 @@ describe("applyEvent", () => {
     }
   });
 
+  it("replays a paused status and restores working without changing the graph or focus", () => {
+    const before = applyEvent(
+      withAgent(),
+      event(4, "agent.focus", {
+        agent_id: agent.agent_id,
+        mode: "read",
+        node_ids: [node.id],
+        ranges: [],
+      }),
+    );
+    const paused = applyEvent(before, event(5, "agent.status", { ...agent, state: "paused" }));
+    expect(paused.agents[agent.agent_id]?.state).toBe("paused");
+    expect(selectHasReadyForReview(paused)).toBe(false);
+    const resumed = applyEvent(paused, event(6, "agent.status", agent));
+    expect(resumed.agents[agent.agent_id]).toEqual(agent);
+    expect(resumed.graph).toBe(before.graph);
+    expect(resumed.focus).toEqual(before.focus);
+    expect(resumed.steps).toEqual(before.steps);
+    expect(resumed.gap).toBe(false);
+    const store = createStateStore(before);
+    store
+      .getState()
+      .applyEvents([
+        event(5, "agent.status", { ...agent, state: "paused" }),
+        event(6, "agent.status", agent),
+      ]);
+    expect(store.getState().state).toEqual(resumed);
+  });
+
   it("keeps agent statuses, card steps and read/edit focus independent", () => {
     const second = { ...agent, agent_id: "agent-2", change_id: "change-2", slot: "B" as const };
     const focus = {
@@ -552,6 +584,7 @@ describe("applyEvent", () => {
       summary: "Read price",
       result: "ok" as const,
       error: null,
+      error_kind: null,
       duration_ms: 2,
       tests: null,
     };
@@ -567,6 +600,7 @@ describe("applyEvent", () => {
         tool: "run_tests",
         result: "error",
         error: "Tests failed",
+        error_kind: null,
         tests: { ...proposal.tests, outcome: "failed", failed: 1, failed_tests: ["test_price"] },
       }),
       event(10, "agent.status", { ...agent, state: "halted", step: 2, detail: "Step limit" }),
@@ -732,6 +766,7 @@ describe("applyEvent", () => {
       summary: "Read price",
       result: "ok" as const,
       error: null,
+      error_kind: null,
       duration_ms: 1,
       tests: null,
     };

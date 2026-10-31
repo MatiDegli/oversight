@@ -67,6 +67,7 @@ class RuntimeDecisions:
                             deadline=deadline,
                             admission=self.accounting.admit,
                             accounting=record,
+                            publish=self.live._publish,
                         )
                     finally:
                         await durable(client.aclose())
