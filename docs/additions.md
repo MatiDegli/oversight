@@ -206,6 +206,14 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
 - Mask older tool results on long runs; measure dollars and correctness before adoption.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
+- Filesystem isolation for tests and probes (bubblewrap on Linux); today's isolation covers the
+  network and the process tree only. No filesystem sandbox during the hackathon.
+- After the hackathon: native backend ports for Windows and macOS, each as its own fronts. First a
+  per-OS layer in `backend/src/oversight/workspace/` (network isolation, process-tree cleanup, file
+  locks, no-follow file opens), then a test-isolation design for each OS. Until a port has its own
+  isolation, it runs in the existing mode without isolation (network open; rules, Revert and
+  added-test probes disabled). Any new dependency follows the license list; filelock (Unlicense)
+  needs the maintainer's OK.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
