@@ -336,10 +336,7 @@ async def test_verify_run_codes(h: Harness, monkeypatch) -> None:
         assert normalized.problems == (*observed.problems, f"example_criteria: {code}")
         assert normalized.cases is observed.cases and normalized.tested_tree == observed.tested_tree
         assert normalized.result.failed_tests == observed.result.failed_tests
-        assert (
-            h.payloads(ErrorReport)[-1].message
-            == f'example_criteria: {code}; example_ids=["basic"]'
-        )
+        assert h.payloads(ErrorReport)[-1].message == f"example_criteria: {code}; required_cases=1"
     spy.return_value = ProcessResult(0, rendered.source, "", False, False, 0)
     full = replace(
         passed,
@@ -361,7 +358,7 @@ async def test_verify_read_failure(h: Harness, monkeypatch, failure) -> None:
     normalized = await verify_run(h.manager._ctx, rec, run(), phase="combined")
     assert normalized.problems == ("example_criteria: tree_unreadable",)
     assert h.payloads(ErrorReport)[0].message == (
-        'example_criteria: tree_unreadable; example_ids=["a","z"]'
+        "example_criteria: tree_unreadable; required_cases=1"
     )
 
 
@@ -419,7 +416,7 @@ async def test_proposal_suite_normalized_and_consistent(h: Harness, fault: str, 
         phase="proposal",
     )
     [error] = h.payloads(ErrorReport)
-    assert error.message == f'example_criteria: {code}; example_ids=["basic"]'
+    assert error.message == f"example_criteria: {code}; required_cases=1"
     [facts] = h.payloads(ChangeFacts)
     assert {
         f"suite {seq}: example_criteria: {code}",

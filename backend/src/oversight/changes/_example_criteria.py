@@ -178,7 +178,21 @@ async def verify_run(
         result=run.result.model_copy(update={"outcome": "error"}),
         problems=(*run.problems, f"example_criteria: {code}"),
     )
-    # Only server-controlled code and recorded ids: never inputs, expected values or source.
-    ids = canonical_json(sorted(required.example_ids))
-    await ctx.error("tests", f"example_criteria: {code}; example_ids={ids}", rec, fatal=False)
+    # Counts avoid exposing model-authored ids, slugs or inputs.
+    await ctx.error(
+        "tests",
+        f"example_criteria: {code}; required_cases={len(required.test_ids)}",
+        rec,
+        fatal=False,
+    )
     return normalized
+
+
+def refusal_code(run: SuiteRun) -> str:
+    if (
+        run.problems
+        and run.problems[-1].startswith("example_criteria: ")
+        and any("code=integrity_invalid" in problem for problem in run.problems)
+    ):
+        return "integrity_invalid"
+    return "suite_failed"
