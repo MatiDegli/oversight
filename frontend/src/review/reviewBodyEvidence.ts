@@ -1,6 +1,7 @@
 import type { BehaviorDiffRow } from "@contracts";
 import type { State } from "../state";
 import { selectBehaviorEvidence } from "./behaviorEvidence";
+import { hasCompared } from "./coneWords";
 import { factsForRevision } from "./factsForRevision";
 import {
   selectChangeCard,
@@ -103,9 +104,7 @@ export function selectReviewBody(state: State, changeId: string) {
   const card = selectChangeCard(state, changeId);
   const callers = selectCallerComparison(state, changeId);
   const behavior = selectBehaviorEvidence(state, changeId);
-  const compared = [...(facts?.behavior_diff ?? []), ...(facts?.measured_cone ?? [])].some(
-    (e) => e.compared_count > 0,
-  );
+  const compared = hasCompared(facts);
   const kind =
     card?.kind === "merged"
       ? "g"
