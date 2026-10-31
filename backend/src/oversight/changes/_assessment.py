@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import TypeAdapter, ValidationError
 
 from oversight.agents import FAKE_MODEL, FAKE_MODEL_B, MUSE_SPARK, MUSE_SPARK_OPEN
-from oversight.changes import _spend
+from oversight.changes import _follow, _spend
 from oversight.changes._facts import AddedTestsInventory, FactsEvidence, added_tests_inventory
 from oversight.changes._grants import Measurement, measure
 from oversight.changes._policy import PolicyInputs, assess
@@ -79,6 +79,7 @@ class AssessmentWait:
     terminal_seq: int | None = None
     spend_pin: StoredEvent | None = None
     paths: tuple[ProtectedPathSnapshot, ChangedFileInventory] | None = None
+    parked: bool = False
 
 
 class RulesScheduler:
@@ -97,6 +98,7 @@ class RulesScheduler:
         self.table_receipt: StoredEvent | None = None
         self._evicted_through = 0
         self.generation = 0
+        self.committed_main: str | None = None
 
     def spend_received(self, stored: StoredEvent) -> None:
         """Pin the run's table receipt and eligible spend provenance outside the event cache.
@@ -186,6 +188,7 @@ class RulesScheduler:
             proposal.model_copy(deep=True),
             seq,
             self.ctx.state.snapshot.commit,
+            parked=self.committed_main not in (None, self.ctx.state.snapshot.commit),
             paths=capture_proposal_paths(
                 proposal, proposal_seq=seq, run_started_seq=self.run_started_seq
             ),
@@ -316,14 +319,22 @@ class RulesScheduler:
             wait.unresolved_removed = 0 if not wait.proposal.graph.nodes_removed else None
             self.wake(rec)
 
-    def valid(self, wait: AssessmentWait, *, check_main: bool = True) -> bool:
+    def valid(
+        self,
+        wait: AssessmentWait,
+        *,
+        check_main: bool = True,
+        parked_ok: bool = False,
+        working_ok: bool = False,
+    ) -> bool:
         rec = wait.rec
         return (
             wait.active
             and self.waits.get(rec.change_id) is wait
             and not self.ctx.state.closing
             and rec.person_intent is None
-            and rec.state == "ready"
+            and (parked_ok or not wait.parked)
+            and (rec.state in {"ready", "working"} if working_ok else rec.state == "ready")
             and (not check_main or wait.main_commit == self.ctx.state.snapshot.commit)
             and rec.resolution is None
             and rec.revision not in rec.rules_consumed
@@ -335,16 +346,27 @@ class RulesScheduler:
 
     def wake(self, rec: ChangeRecord) -> None:
         wait = self.waits.get(rec.change_id)
-        if wait is None or not self.valid(wait):
+        if wait is None or not self.valid(wait, check_main=not wait.parked, parked_ok=True):
             return
         if wait.deadline is None:
             wait.deadline = self.monotonic() + EVIDENCE_TIMEOUT_S
-            wait.timer = self.ctx.spawn(self.expire(wait))
-            wait.timer.add_done_callback(self._observe_task)
+            self.start_timer(wait)
+        if wait.parked:
+            return
         wait.dirty = True
         if wait.task is None or wait.task.done():
             wait.task = self.ctx.spawn(self.evaluate(wait))
             wait.task.add_done_callback(self._observe_task)
+
+    def start_timer(self, wait: AssessmentWait) -> None:
+        wait.timer = self.ctx.spawn(self.expire(wait))
+        wait.timer.add_done_callback(self._observe_task)
+
+    def main_changed(self, post: str) -> None:
+        _follow.changed(self, post)
+
+    def main_delivered(self, post: str) -> None:
+        _follow.delivered(self, post)
 
     @staticmethod
     def _observe_task(task: asyncio.Task[None]) -> None:
@@ -367,10 +389,16 @@ class RulesScheduler:
 
     async def expire(self, wait: AssessmentWait) -> None:
         assert wait.deadline is not None
-        while self.valid(wait) and self.monotonic() < wait.deadline:
+
+        def live() -> bool:
+            return self.valid(wait, check_main=not wait.parked, parked_ok=True)
+
+        while live() and self.monotonic() < wait.deadline:
             await self.sleep_until(wait.deadline)
-        if self.valid(wait):
-            await self.terminal(wait, EXPIRED.format(seconds=EVIDENCE_TIMEOUT_S))
+        if live():
+            await self.report_terminal(
+                wait, "policy_invalid", EXPIRED.format(seconds=EVIDENCE_TIMEOUT_S), live
+            )
 
     async def terminal(self, wait: AssessmentWait, reason: str) -> None:
         await self.report_terminal(wait, "policy_invalid", reason, lambda: self.valid(wait))

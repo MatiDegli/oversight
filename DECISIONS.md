@@ -2718,3 +2718,23 @@ separators=(",", ":"), ensure_ascii=True, allow_nan=False)`. E3 preview and E4 c
 share it; integer `1` and float `1.0` remain distinct. The examples prompt stays in
 `agents/examples.py`, outside `_prompts.py` and `prompt_version()` until E2 decides how a run
 reports it. E2 runtime admission, E3 human confirmation and E4 execution remain separate fronts.
+
+## 2026-10-31 — Idle rules waits follow verified main through graph delivery
+
+Confirmed main commits park eligible, unconsumed rules waits in ready or working state;
+only delivery of the latest announced commit into the graph snapshot renews their generation.
+Merge projection, person saves/rescans (including unchanged recovery), and Revert notify the
+same synchronous commit/delivery ports. The first absolute evidence deadline survives every
+renewal; a parked ready wait starts its deadline when first awakened and expires with the
+existing policy_invalid notice if delivery never arrives.
+
+Reason: parking replaces the plan's invalidation so graph scan or delivery failure cannot
+silently cancel the deadline. Only immutable proposal-source captures with identical
+revision/base/head survive: facts, their inventory and measurements, and protected-path
+captures whose committed receipts are revalidated at use. Main-dependent combined suites
+are reselected against the new snapshot; latest assessment, spend pin, terminal receipt,
+and evaluation/timer tasks are discarded. No model run or agent merge/rebase is needed.
+Renewal only schedules assessment; the activation latch stays closed and no wire contract
+changes. Revert uses its own verified-commit and snapshot-receipt hooks. Consumed attempts,
+attempt keys, and queued/in-flight renewal belong to F5b. Unannounced snapshot moves retain
+the existing terminal main_moved behavior.
