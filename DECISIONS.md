@@ -2633,6 +2633,34 @@ Review time is refused because proposal-to-resolution elapsed time mixes waiting
 Rankings and scores are refused because agents receive different tasks. Percentages and ratios
 such as lines per dollar or cost per merge are refused because these receipts provide no fair
 normalization for task scope; every printed rate retains its explicit denominator.
+
+## 2026-10-31 — The lead runs inside one run with fixed limits
+
+The coordination lead reads main through the person's read handlers and only proposes plans.
+Its closed tool table is `graph`, `list_files`, `read_file`, `queue`, `request_plan` and `finish`.
+The person queues every accepted proposal. No lead tool edits, starts agents, reviews or decides.
+A lead requests at most 3 plans of 1 to 6 subtasks each. Subtasks without dependencies are bounded
+by the run's offered slots. Lead plan zones cover the whole graph captured at request time;
+they are intentionally unchecked against one another and may precede the plan's graph version.
+
+The fixed limits are 12 tool calls, 18 model calls, 300 seconds, 3 plans, 6 subtasks per plan and
+2,000 characters for the plan task and each subtask task. The starting detail is:
+"Limits: 12 tool calls, 18 model calls, 300 s, 3 plans of up to 6 subtasks, 2,000 characters per task."
+The client retains the existing output-token cap. The lead prompt and closed tool schemas join
+the prompt set; `prompt_version` moves from `agent-v1-c7ca1d7c6ffe` to `agent-v1-6972184812a7`.
+No paid comparison crosses this prompt change.
+
+Muse Spark is the hosted default; the maintainer's model ruling also offers Muse Spark Open on
+Baseten when explicitly selected. The fake profile uses slot A's existing script and profile;
+there is no separate lead script setting. Setup checks only the selected provider and ignores
+reviewer settings. Meta lead usage has role `lead`, names neither a plan nor a change, and goes
+through the shared ledger accounting. The Meta spending brake is checked before every model call.
+
+Only one lead may be starting or working per run. Its committed `lead.status` revisions carry the
+requested plan id only on the working step that produced that plan. Every other revision has a
+null attachment. It ends after requesting plans, without waiting or replanning. Stop preserves
+all proposals. Shutdown halts the lead, closes its client, and a new run contains no lead and
+makes no model call until the person starts one. Lead-plan answering remains unavailable as on main.
 ## 2026-10-31 — A person's decision preempts rules before authorization starts
 
 Reason: a long rules suite must not keep the person waiting through repeated 409s.

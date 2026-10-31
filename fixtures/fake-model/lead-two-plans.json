@@ -1,0 +1,40 @@
+{
+  "task": "Coordinate documentation.",
+  "turns": [
+    {
+      "tool_calls": [
+        {"name": "graph", "arguments": {}},
+        {"name": "list_files", "arguments": {}},
+        {"name": "read_file", "arguments": {"path": "shop/pricing.py"}}
+      ],
+      "usage": {"input_tokens": 120, "output_tokens": 40, "cached_tokens": 0}
+    },
+    {
+      "tool_calls": [
+        {"name": "queue", "arguments": {}},
+        {
+          "name": "request_plan",
+          "arguments": {
+            "task": "Document pricing and cart.",
+            "subtasks": [
+              {"task": "Document apply_coupon in shop/pricing.py."},
+              {"task": "Document Cart.total in shop/cart.py."}
+            ]
+          }
+        },
+        {
+          "name": "request_plan",
+          "arguments": {
+            "task": "Document inventory.",
+            "subtasks": [{"task": "Document Inventory.restock in shop/inventory.py."}]
+          }
+        }
+      ],
+      "usage": {"input_tokens": 120, "output_tokens": 40, "cached_tokens": 0}
+    },
+    {
+      "tool_calls": [{"name": "finish", "arguments": {}}],
+      "usage": {"input_tokens": 120, "output_tokens": 40, "cached_tokens": 0}
+    }
+  ]
+}

@@ -175,6 +175,8 @@ def test_a_replay_takes_no_commands(tmp_path: Path) -> None:
     app = create_app(live_settings(tmp_path), ReplayConfig(log=log))
     client = TestClient(app, base_url="http://127.0.0.1:8710")
     for url in (
+        "/leads",
+        "/leads/agent-1/stop",
         "/agents",
         "/agents/agent-1/stop",
         "/agents/agent-1/message",

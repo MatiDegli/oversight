@@ -3,7 +3,8 @@ a change, Revert a rules merge, read and save a file on main, rescan the graph; 
 
 A replay takes no commands: every command route answers 501 there, its body not parsed. Live, the
 app passes an object that implements `Commands`; this module maps its errors to the contract's.
-Archived change and coding-agent reads use the app's committed store in both modes.
+Lead starts and stops are live commands. Lead, archived change and coding-agent reads use the
+app's committed store in both modes.
 """
 
 import re
@@ -36,6 +37,7 @@ from oversight_contracts.commands import (
     EnqueueTask,
     FileContent,
     FileSaved,
+    LeadCreated,
     PlanCreated,
     PlanRevision,
     QueueRevision,
@@ -46,19 +48,18 @@ from oversight_contracts.commands import (
     SaveFile,
     SetMergeMode,
     StartAgent,
+    StartLead,
+    StopLead,
     TreeResponse,
     UpdatePlan,
 )
-from oversight_contracts.events import AgentStatus
+from oversight_contracts.events import AgentStatus, LeadStatus
 from oversight_contracts.plans import Plan
 from oversight_contracts.policy import MergeModeState
 from oversight_contracts.queue import QueuedTask, QueueSnapshot
 
 NOT_BUILT: tuple[tuple[str, str, str], ...] = (
     ("POST", "/dictation", "Reserved /dictation"),
-    ("POST", "/leads", "Reserved /leads"),
-    ("GET", "/leads/{agent_id}", "Reserved /leads/{agent_id}"),
-    ("POST", "/leads/{agent_id}/stop", "Reserved /leads/{agent_id}/stop"),
     ("POST", "/changes/{change_id}/review", "Reserved /changes/{change_id}/review"),
 )
 """Routes in the contract that this level does not build: 501, whatever the body."""
@@ -85,6 +86,8 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("GET", "/files", "Reading files"),
     ("PUT", "/files", "Saving files"),
     ("POST", "/graph/rescan", "Rescanning the graph"),
+    ("POST", "/leads", "Starting a lead"),
+    ("POST", "/leads/{agent_id}/stop", "Stopping a lead"),
 )
 
 
@@ -94,6 +97,10 @@ class Commands(Protocol):
     second one raises `WrongState` at once, and its result arrives as events. Those four, along
     with `message`, `pause` and `resume`, raise `ChangeNotFound` for an id they do not know,
     and the app's own refusals as `ApiError`."""
+
+    async def start_lead(self, request: StartLead) -> LeadCreated: ...
+
+    def stop_lead(self, agent_id: str, request: StopLead) -> None: ...
 
     async def start(self, request: StartAgent) -> AgentCreated: ...
 
@@ -171,6 +178,16 @@ def _decide[A](
         raise ApiError("invalid_request", str(error)) from None
 
 
+def _lead_status(store: EventStore, agent_id: str) -> LeadStatus:
+    status = None
+    for event in store.committed_events():
+        if event.type == "lead.status" and event.payload.agent_id == agent_id:
+            status = event.payload
+    if status is None:
+        raise ApiError("not_found", f"there is no lead {agent_id!r}")
+    return status
+
+
 def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: str) -> None:
     @router.get("/plans/{plan_id}")
     async def plan_view(plan_id: str, http: Request) -> Plan:  # pyright: ignore[reportUnusedFunction]
@@ -205,6 +222,10 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
         except ChangeNotFound:
             raise ApiError("not_found", f"there is no agent {agent_id!r}") from None
 
+    @router.get("/leads/{agent_id}")
+    async def lead_status(agent_id: str, http: Request) -> LeadStatus:  # pyright: ignore[reportUnusedFunction]
+        return _lead_status(cast(EventStore, http.app.state.store), agent_id)
+
     for method, path, what in NOT_BUILT:
         router.add_api_route(
             path, _not_built(what, "is not built yet"), methods=[method], status_code=501
@@ -215,6 +236,15 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
                 path, _not_built(what, "is not available in a replay"), methods=[method]
             )
         return
+
+    @router.post("/leads", status_code=201)
+    async def start_lead(request: StartLead) -> LeadCreated:  # pyright: ignore[reportUnusedFunction]
+        return await commands.start_lead(request)
+
+    @router.post("/leads/{agent_id}/stop", status_code=202, response_class=Response)
+    async def stop_lead(agent_id: str, request: StopLead) -> Response:  # pyright: ignore[reportUnusedFunction]
+        commands.stop_lead(agent_id, request)
+        return Response(status_code=202)
 
     @router.get("/merge-mode")
     async def merge_mode() -> MergeModeState:  # pyright: ignore[reportUnusedFunction]

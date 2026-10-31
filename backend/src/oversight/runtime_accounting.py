@@ -11,7 +11,7 @@ import json
 import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from oversight.agents import (
     DecisionInput,
@@ -70,10 +70,20 @@ class ReviewLedgerFailure(Exception):
 
 
 class PlanAccounting:
-    """A planner receipt belongs to its plan, never to an author or a slot's provider."""
+    """Plan and lead receipts retain their call purpose and provider ownership."""
 
-    def __init__(self, live: LiveRun, plan_id: str, profile: ModelProfile, agent_id: str) -> None:
+    def __init__(
+        self,
+        live: LiveRun,
+        plan_id: str | None,
+        profile: ModelProfile,
+        agent_id: str,
+        *,
+        role: Literal["plan", "lead"] = "plan",
+    ) -> None:
         self.live, self.plan_id, self.profile, self.agent_id = live, plan_id, profile, agent_id
+        self.role: Literal["plan", "lead"] = role
+        self.label = f"Plan {plan_id}" if role == "plan" else f"Lead {agent_id}"
         self.failure: str | None = None
 
     async def record(self, reply: ModelReply) -> None:
@@ -89,7 +99,7 @@ class PlanAccounting:
             agent_id=self.agent_id,
             plan_id=self.plan_id,
             change_id=None,
-            role="plan",
+            role=self.role,
             model=reply.model,
             input_tokens=reply.usage.input_tokens,
             output_tokens=reply.usage.output_tokens,
@@ -110,7 +120,7 @@ class PlanAccounting:
                     raise
                 live._ledger_lost = True
                 live.ledger.notify_loss()
-                self.failure = f"Plan {self.plan_id} ledger write failed ({type(cause).__name__})."
+                self.failure = f"{self.label} ledger write failed ({type(cause).__name__})."
                 raise LedgerError(self.failure) from cause
         if state is not None:
             tick = tick.model_copy(update={"spent_usd": state.spent_usd})
@@ -124,7 +134,7 @@ class PlanAccounting:
     async def report_failure(self) -> None:
         assert self.failure is not None
         reason = (
-            f"Plan {self.plan_id}; model={self.profile.model}; provider={self.profile.provider}. "
+            f"{self.label}; model={self.profile.model}; provider={self.profile.provider}. "
             f"{self.failure} "
             "Stop the server and settle with Meta's console total before the next run: "
             "uv run python -m oversight ledger settle --spent-usd X."

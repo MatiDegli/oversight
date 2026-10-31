@@ -2036,6 +2036,10 @@ export interface LeadStatus {
    * The lifecycle explanation.
    */
   detail: string | null;
+  /**
+   * The plan this revision's step requested, or null.
+   */
+  requested_plan_id: PlanId | null;
 }
 /**
  * The created coordination lead.
@@ -2295,4 +2299,4 @@ export interface UpdatePlan {
   subtasks: SubtaskDraft[];
 }
 
-export const CONTRACT_VERSION = "1.9.0";
+export const CONTRACT_VERSION = "1.10.0";
