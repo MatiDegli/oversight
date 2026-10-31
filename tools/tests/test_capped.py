@@ -161,6 +161,24 @@ def test_make_runs_pytest_through_the_helper_under_the_outer_bound() -> None:
     ), lines[0]
 
 
+def test_check_python_exports_discovery_and_the_non_failing_dump(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A prerequisite inherits the target's exported options. Pin the whole value, including
+    # caller options, while retaining the exact bounded command assertion above.
+    monkeypatch.setenv("PYTEST_ADDOPTS", "--strict-config")
+    lines = make_dry_run(
+        "--eval=check-python: dump-python-options",
+        "--eval=dump-python-options: ; @echo pytest-options=$(PYTEST_ADDOPTS)",
+    )
+    options = [line for line in lines if line.startswith("echo pytest-options=")]
+    assert options == [
+        "echo pytest-options=--strict-config "
+        "-o 'testpaths=contracts/tests backend/tests tools/tests tools/eval/tests' "
+        "-o faulthandler_timeout=400"
+    ]
+
+
 def test_the_dry_run_ignores_the_callers_workers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Running the suite through `make check WORKERS=0` (or 4) exports that value to pytest;
     the dry run must still pin the default 8 unless a test passes WORKERS itself."""
