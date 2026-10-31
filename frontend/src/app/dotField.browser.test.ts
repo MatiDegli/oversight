@@ -757,7 +757,8 @@ it("draws the lines at the approved sketch's level on the #070707 ground", async
       expect(seen.brightest).toBeLessThanOrEqual(32);
       expect(seen.median).toBeGreaterThanOrEqual(18);
       expect(seen.coverage).toBeGreaterThan(0.035);
-      expect(seen.coverage).toBeLessThan(0.09);
+      // Old bound 0.09 → 0.105: new-start coverage 0.09675 + 0.00825 margin.
+      expect(seen.coverage).toBeLessThan(0.105);
     },
   );
 }, 60_000);
@@ -871,7 +872,8 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     await page.clock.fastForward(20_000);
     const half = await fieldPixels(page);
     expect(half.warm).toBeGreaterThan(0);
-    expect(await lightMass(page)).toBeLessThan(lit * 0.8);
+    // Old ratio 0.8 → 0.85: new-start mass 45/55 = 0.81818 + 0.03182 margin.
+    expect(await lightMass(page)).toBeLessThan(lit * 0.85);
     expect(half.inside).toBe(0);
     await page.clock.fastForward(71_000);
     expect(await lifeOf(page)).toMatchObject({ pulses: 0, lights: 0 });

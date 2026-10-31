@@ -648,16 +648,17 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 - **Rhythm:** gaps of 6, 8, 10, 14 and 18px; tight inside a group, wider between groups.
 - **Stable layout:** the demo repository has a saved preset layout, so the graph looks the same in
   every take. Switching modes changes the camera, never node positions.
-- **A canvas, not a fit:** the graph is larger than the screen and is panned and zoomed. It starts
-  with the whole graph in view, zooming out from 100% only as needed and never below the floor in
-  **Opening a change**, so names and state words stay at least 11 CSS px. A graph that does not fit
-  at that floor starts at the floor on the module of the graph's hub (the function with the most
-  callers), kept inside the graph's bounds and moved to the nearest gutter where an edge of the
-  view would cut a frame in two. Dragging pans, the wheel and the +/- buttons zoom between 20% and 300%, and the fit button
-  shows everything, or the middle of it at 20% when the graph is wider than that. The camera moves
-  on its own only where it already does by design (opening and closing review, a node added while
-  the person is not navigating); no node ever moves. A cone row that says "Out of view" pans the
-  camera to its node when clicked, and never otherwise.
+- **A canvas, not a fit:** the graph is larger than the screen and is panned and zoomed. It
+  starts with the whole graph in view, zooming out from 100% only as needed and never below the
+  floor in **Opening a change**, so names and state words stay at least 11 CSS px. A graph that
+  does not fit at that floor starts at the floor on the module of the graph's hub (the function
+  with the most callers), kept inside the graph's bounds and moved to the nearest gutter where
+  an edge of the view would cut a frame in two. Dragging pans, the wheel and the +/- buttons
+  zoom between 20% and 300%, and the fit button shows everything, or the middle of it at 20%
+  when the graph is wider than that. The camera moves on its own only where it already does by
+  design (opening and closing review, a node added while the person is not navigating); no node
+  ever moves. A cone row that says "Out of view" pans the camera to its node when clicked, and
+  never otherwise.
 - **Opening a change:** review and live diff frame the changed nodes and the cone up to its
   depth limit, zooming out only as needed from 100%, with a floor derived from the smaller of
   the node-name-size and node-word-size tokens so names and state words stay at least 11 CSS px.

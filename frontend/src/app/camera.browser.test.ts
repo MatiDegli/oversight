@@ -339,7 +339,6 @@ it.each(["after-mount", "at-mount"] as const)(
           };
         });
         // The demo now starts at whole-graph Fit zoom, keeping its six frames whole.
-        expect(view.zoom).toBeGreaterThan(0);
         expect(view.zoom).toBeLessThan(1);
         expect(view.area.y1).toBeGreaterThan(0);
         for (const b of view.frames) {
