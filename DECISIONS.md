@@ -2289,3 +2289,14 @@ unchanged.
 
 Reason: H1 was fixed before the run as the condition for paying. Meeting it would need probes that record file
 effects, a new product capability, or a rule changed after seeing results.
+
+## 2026-10-31 — Item 8 F4a: protected-path built-in table version 1
+
+`safe-merge-paths-v1` uses built-in table version 1: `BUILTIN_CATEGORIES` in
+`backend/src/oversight/changes/_protected_paths.py` as of this commit, identified in code by
+`BUILTIN_TABLE_VERSION = 1`. Any change to the table needs a new version. The `run.started` seq
+identifies the table version in force; the `change.proposed` seq separately witnesses the complete
+proposal inventory. Neither receipt is reconstructed when unavailable.
+
+Reason: F4a captures the sources without changing authority. Live enforcement lands atomically in
+F4b; these helpers have no production callers, and F1's activation latch stays closed.

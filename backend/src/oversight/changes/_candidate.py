@@ -5,12 +5,60 @@ from dataclasses import dataclass
 from oversight.changes._grants import Measurement
 from oversight.changes._grants import measure as measure_grants
 from oversight.changes._policy import PolicyInputs, assess
+from oversight.changes._protected_paths import (
+    ChangedFileInventory,
+    _valid_path,  # pyright: ignore[reportPrivateUsage]
+)
 from oversight.changes._support import ChangeContext, RulesFailure
 from oversight.changes._versions import parse
 from oversight.graph import change_cone, change_graph
-from oversight.workspace import MergeGuard
-from oversight_contracts.events import Limits
-from oversight_contracts.policy import ChangeAssessment, RuleAssessment
+from oversight.workspace import IntegrityError, LockOrderError, MergeGuard, WorkspaceError
+from oversight_contracts.common import FileStatus
+from oversight_contracts.events import FileStat, Limits
+from oversight_contracts.policy import ChangeAssessment, EvidenceRef, RuleAssessment
+
+
+async def changed_inventory(
+    ctx: ChangeContext, guard: MergeGuard, proposal_seq: int
+) -> ChangedFileInventory:
+    """Capture every candidate path and status from immutable objects, never proposal statuses.
+
+    Name-status does not measure line counts: those FileStat fields are zero here. A malformed
+    or unavailable query discards all entries and retains its receipts as an incomplete source.
+    """
+    evidence = (
+        EvidenceRef(event_seq=proposal_seq),
+        EvidenceRef(git_object=guard.pre),
+        EvidenceRef(git_object=guard.candidate_tree),
+    )
+    unavailable = ChangedFileInventory(files=(), complete=False, evidence=evidence)
+    try:
+        output = await ctx.git(
+            ctx.workspace.main,
+            "diff",
+            "--name-status",
+            "--no-renames",
+            "-z",
+            "--ignore-submodules=none",
+            guard.pre,
+            guard.candidate_tree,
+        )
+    except (IntegrityError, LockOrderError):
+        raise
+    except WorkspaceError:
+        return unavailable
+    if output and not output.endswith("\0"):
+        return unavailable
+    fields = output[:-1].split("\0") if output else []
+    if len(fields) % 2:
+        return unavailable
+    statuses: dict[str, FileStatus] = {"A": "added", "M": "modified", "D": "deleted"}
+    files: list[FileStat] = []
+    for status, path in zip(fields[::2], fields[1::2], strict=True):
+        if status not in statuses or not _valid_path(path) or "\ufffd" in path:
+            return unavailable
+        files.append(FileStat(path=path, status=statuses[status], lines_added=0, lines_removed=0))
+    return ChangedFileInventory(files=tuple(files), complete=True, evidence=evidence)
 
 
 async def python_files(ctx: ChangeContext, tree: str) -> dict[str, str]:
