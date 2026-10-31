@@ -56,6 +56,10 @@ const primary = `${button} bg-text text-page hover:bg-text-hover disabled:bg-pag
 const destructive = `${button} text-failed-text hover:bg-raised disabled:hover:bg-transparent`;
 const bar = "review-decision-bar shrink-0 border-t border-divider bg-page";
 
+export const approvalLockedCaption = "Approve opens when every answer is Yes.";
+export const approvalLocked = (cards: ReviewCard[], answers: Answers) =>
+  cards.some((card) => cardAnswer(card, answers) !== "yes");
+
 export function ReviewDecisionBar({
   changeId,
   view,
@@ -86,7 +90,7 @@ export function ReviewDecisionBar({
   const commentKey = candidate + (no ? cardKey(no) : "general");
   const [comments, setComments] = useState<Record<string, string>>({});
   const comment = comments[commentKey] ?? prefill ?? "";
-  const locked = values.some((value) => value !== "yes");
+  const locked = approvalLocked(cards, answers);
   if (view.kind === "decided") {
     return (
       <section aria-label="Decision" className={bar}>
@@ -191,7 +195,7 @@ export function ReviewDecisionBar({
           className="review-decision-caption mt-2 text-[13px] leading-[18px] text-muted"
         >
           {locked
-            ? "Approve opens when every answer is Yes."
+            ? approvalLockedCaption
             : unavailable
               ? "The check is still unavailable. You decide whether to continue without it."
               : "If main moved since the agent started, the tests run again on the combined result before the merge."}

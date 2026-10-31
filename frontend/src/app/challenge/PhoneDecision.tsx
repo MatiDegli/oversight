@@ -1,89 +1,16 @@
-import { omittedText } from "./evidenceCopy";
-import { Check, X, ArrowRight, ChevronDown, Files } from "lucide-react";
-import { useState } from "react";
-import { AgentLine } from "./PhoneGraph";
-import { caseSlot, countAt } from "./phoneEvidence";
-import "./phoneRows.css";
-import { Disclosure, PhoneDiff } from "./PhoneDiff";
+import { Check, X, ArrowRight, LockKeyhole } from "lucide-react";
+import { useAnswers } from "../../review";
+import { candidateKey, currentCards } from "../../review/answers";
+import { approvalLocked, approvalLockedCaption } from "../../review/ReviewDecisionBar";
+import { caseSlot } from "./phoneEvidence";
+import { PhoneDiff } from "./PhoneDiff";
+import { PhoneReview } from "./PhoneReview";
 import type { PanelProps } from "./PracticePanel";
-import type { PracticeCase } from "./phoneEvidence";
+import "./phoneRows.css";
 
-function Impact({ entry }: { entry: PracticeCase }) {
-  const impact = entry.proposal.impact;
-  const preview = [1, 2]
-    .map((distance) => ({ distance, count: countAt(entry, distance) }))
-    .filter(({ count }) => count > 0)
-    .map(({ distance, count }) =>
-      distance === 1
-        ? `${String(count)} direct callers`
-        : `${String(count)} at distance ${String(distance)}`,
-    )
-    .join(", ");
-  return (
-    <Disclosure label="Possibly affected" variant="decision" preview={preview}>
-      <div className="pp-impact">
-        <p>
-          Exact calls only, depth limit {impact.max_depth} and node limit {impact.max_nodes}.
-        </p>
-        {impact.entries.map((node) => (
-          <p key={node.node_id}>
-            {node.distance} {node.node_id.split(":")[1]}
-          </p>
-        ))}
-        {omittedText(impact) && <p>{omittedText(impact)}</p>}
-      </div>
-    </Disclosure>
-  );
-}
-function Facts({
-  entry,
-  open,
-  onToggle,
-}: {
-  entry: PracticeCase;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const proposal = entry.proposal;
-  return (
-    <div className="pp-facts">
-      {proposal.files.length > 0 && (
-        <span className="pp-chip">
-          <Files size={14} />
-          {proposal.files.length} files
-        </span>
-      )}
-      <button
-        className="pp-chip pp-diff-toggle"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-controls="phone-recorded-diff"
-      >
-        <span>
-          {proposal.lines_added > 0 && <span className="pp-positive">+{proposal.lines_added}</span>}{" "}
-          {proposal.lines_removed > 0 && (
-            <span className="pp-negative">−{proposal.lines_removed}</span>
-          )}{" "}
-          lines
-        </span>
-        <span>
-          {open ? "Hide diff" : "Show diff"} <ChevronDown size={14} />
-        </span>
-      </button>
-      {proposal.tests.passed > 0 && (
-        <span className="pp-chip pp-positive">
-          <Check size={14} />
-          {proposal.tests.passed} passed
-        </span>
-      )}
-    </div>
-  );
-}
 export function PhoneDecision({ practice, attempt, ...actions }: PanelProps) {
-  const [open, setOpen] = useState(false);
   const entry = practice.cases[attempt.index];
   if (!entry) return null;
-  const answer = attempt.answers[entry.changeId];
   return (
     <>
       <main className="pp-main">
@@ -97,42 +24,28 @@ export function PhoneDecision({ practice, attempt, ...actions }: PanelProps) {
             ))}
           </span>
         </div>
-        <AgentLine {...{ practice, entry }} />
-        <h1>{entry.title}</h1>
-        <p className="pp-purpose">
-          {answer
-            ? "Your choice is saved. Continue when ready."
-            : "Inspect the change, then make your call."}
-        </p>
-        <Facts
-          entry={entry}
-          open={open}
-          onToggle={() => {
-            setOpen(!open);
-          }}
+        <PhoneReview
+          state={practice.cut}
+          changeId={entry.changeId}
+          title={entry.title}
+          slot={caseSlot(practice, entry)}
+          diff={<PhoneDiff practice={practice} entry={entry} />}
         />
-        <section className="pp-summary" aria-label={`Agent ${caseSlot(practice, entry)}'s summary`}>
-          <h2>Agent {caseSlot(practice, entry)}’s summary</h2>
-          <p>{entry.proposal.summary}</p>
-        </section>
-        {open ? <PhoneDiff {...{ practice, entry }} /> : <div id="phone-recorded-diff" hidden />}
-        <div className="pp-decision-rows">
-          <Disclosure label="Recorded task" variant="decision" preview={entry.proposal.task}>
-            <p className="pp-task">{entry.proposal.task}</p>
-          </Disclosure>
-          {!!entry.proposal.impact.entries.length && <Impact entry={entry} />}
-        </div>
       </main>
       <DecisionDock practice={practice} attempt={attempt} {...actions} />
     </>
   );
 }
 
-function DecisionDock({ practice, attempt, ...actions }: PanelProps) {
+export function DecisionDock({ practice, attempt, ...actions }: PanelProps) {
   const entry = practice.cases[attempt.index];
   const answer = entry && attempt.answers[entry.changeId];
+  const changeId = entry?.changeId ?? "";
+  const answers = useAnswers((s) => s.drafts[candidateKey(practice.cut, changeId)]) ?? {};
+  const locked = approvalLocked(currentCards(practice.cut, changeId), answers);
   return (
     <footer className={`pp-dock ${answer ? "is-answered" : ""}`}>
+      {!answer && locked && <p className="pp-lock-caption">{approvalLockedCaption}</p>}
       {answer ? (
         <>
           <div className="pp-saved" role="status">
@@ -154,6 +67,7 @@ function DecisionDock({ practice, attempt, ...actions }: PanelProps) {
         <>
           <button
             className="pp-button pp-choice"
+            disabled={locked}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") event.preventDefault();
             }}
@@ -161,7 +75,7 @@ function DecisionDock({ practice, attempt, ...actions }: PanelProps) {
               if (event.detail !== 0) actions.onAnswer("Approve");
             }}
           >
-            <Check size={18} />
+            {locked ? <LockKeyhole size={18} /> : <Check size={18} />}
             Approve
           </button>
           <button

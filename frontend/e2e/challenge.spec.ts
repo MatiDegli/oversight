@@ -242,7 +242,10 @@ async function phoneStage(page: Page) {
 async function phoneDecision(page: Page, index: number, summary: string) {
   await phoneStage(page);
   await expect(practice(page)).toContainText(`Decision ${String(index)} of 2`);
-  await expect(practice(page).getByRole("region", { name: summary })).toBeVisible();
+  await expect(practice(page).getByRole("region", { name: "Agent note" })).toBeVisible();
+  await expect(practice(page).getByRole("region", { name: "Agent note" })).toContainText(
+    summary.replace("'s summary", " says"),
+  );
   await expect(practice(page).getByRole("button", { name: /Show diff/ })).toHaveAttribute(
     "aria-expanded",
     "false",

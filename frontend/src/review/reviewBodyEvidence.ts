@@ -155,3 +155,29 @@ export function selectReviewBody(state: State, changeId: string) {
   }
   return { kind, card, facts, callers, summary: summary.slice(0, 4) };
 }
+
+/** Phone preview uses the same eligible evidence as the comparison summary. */
+export function comparisonPreview(state: State, changeId: string) {
+  const { kind, callers, facts } = selectReviewBody(state, changeId);
+  const change = state.changes[changeId];
+  if (!change || !["a", "b", "c", "g", "other"].includes(kind)) return "";
+  const first =
+    kind === "c"
+      ? undefined
+      : selectBehaviorEvidence(state, changeId)?.find(
+          (b) => b.compared_count && !b.not_probed && !b.rows.some((r) => r.unstable),
+        );
+  const parts: string[] = [];
+  if (first)
+    parts.push(`${String(first.compared_count)} inputs, ${String(first.differing_count)} differ`);
+  const unmeasured = callers.total - callers.measured;
+  if (kind === "c" && callers.total)
+    parts.push(`${String(callers.measured)} of ${String(callers.total)} callers measured`);
+  else if (unmeasured) parts.push(`${String(unmeasured)} callers not measured`);
+  const functions = selectFunctionComparisons(state, change, facts);
+  if (functions.comparedFunctions)
+    parts.push(
+      `${String(functions.comparedFunctions)} of ${String(functions.modules.reduce((n, m) => n + m.functions.length, 0))} functions`,
+    );
+  return parts.slice(0, 2).join(" · ");
+}

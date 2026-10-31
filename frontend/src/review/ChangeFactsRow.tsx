@@ -87,10 +87,12 @@ export function ChangeFactsRow({
   state,
   changeId,
   live = false,
+  shortReach = false,
 }: {
   state: State;
   changeId: string;
   live?: boolean;
+  shortReach?: boolean;
 }) {
   const change = state.changes[changeId];
   if (!change) return null;
@@ -119,7 +121,7 @@ export function ChangeFactsRow({
             ? "Possibly affected: unknown"
             : cone.entries.length === 0
               ? "No exact callers"
-              : `${String(cone.entries.length)} possibly affected · up to distance ${String(Math.max(...cone.entries.map((entry) => entry.distance)))}`}
+              : `${String(cone.entries.length)} possibly affected${shortReach ? "" : ` · up to distance ${String(Math.max(...cone.entries.map((entry) => entry.distance)))}`}`}
         </Fact>
       </ul>
     );

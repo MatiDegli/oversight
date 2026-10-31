@@ -328,3 +328,51 @@
     gap: 4px;
   }
 }
+
+.phone-practice .review-body {
+  flex: none;
+  padding: 0;
+  overflow: visible;
+}
+.phone-practice .review-lead-heading {
+  display: block;
+}
+.phone-practice .review-lead-heading > p {
+  margin-top: 4px;
+}
+.phone-practice .review-body .decision-actions button,
+.phone-practice .review-body .answer-reset {
+  min-height: 44px;
+}
+.phone-practice .review-body .example-pair {
+  grid-template-columns: minmax(0, 1fr);
+}
+.phone-practice .review-body .example-pair > div {
+  display: block;
+  padding: 12px;
+}
+.phone-practice .review-body .example-pair > svg {
+  transform: rotate(90deg);
+}
+.phone-practice .review-body .choice-example code {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.phone-practice .review-body .decision-heading {
+  flex-wrap: wrap;
+}
+.phone-practice .review-body .panel-choice-actions {
+  display: block;
+}
+.phone-practice .review-body .decision-actions {
+  flex-direction: column;
+  align-items: stretch;
+}
+.phone-practice .review-body .panel-choice-actions .decision-actions {
+  margin-top: 8px;
+}
+.phone-practice .review-body + .pp-decision-rows {
+  margin-top: 0;
+  border-top: 0;
+}

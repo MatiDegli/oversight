@@ -1,4 +1,4 @@
-import { CircleAlert } from "lucide-react";
+import { ChevronDown, CircleAlert } from "lucide-react";
 import { Fragment } from "react";
 import type { ReactNode } from "react";
 import type { State } from "../state";
@@ -10,6 +10,7 @@ import { CrossReviewNote } from "./CrossReviewNote";
 import { mergedRuleWords } from "./evidenceWords";
 import { ReviewFacts } from "./ReviewFacts";
 import {
+  comparisonPreview,
   nothingComparedLine,
   partialLines,
   selectReviewBody,
@@ -23,11 +24,13 @@ export function ReviewBody({
   changeId,
   diff,
   showCrossReview,
+  phone = false,
 }: {
   state: State;
   changeId: string;
   diff: ReactNode;
   showCrossReview: boolean;
+  phone?: boolean;
 }) {
   const { kind, card, facts, callers, summary } = selectReviewBody(state, changeId);
   const change = state.changes[changeId];
@@ -70,9 +73,8 @@ export function ReviewBody({
                 : kind === "unavailable"
                   ? `Asked: ${change?.proposal?.task ?? ""} · Done: ${change?.proposal?.summary ?? ""}`
                   : null;
-  const comparison = ["a", "b", "c", "g", "other"].includes(kind) && (
-    <section aria-label="What was compared" className="review-compared">
-      <h3>What was compared</h3>
+  const comparisonContent = (
+    <>
       <div className="comparison-lines">
         {summary.map((line) => (
           <p key={line}>
@@ -87,6 +89,25 @@ export function ReviewBody({
       </p>
       {change?.proposal && (
         <ReviewFacts state={state} proposal={change.proposal} scrollable={false} panel />
+      )}
+    </>
+  );
+  const comparison = ["a", "b", "c", "g", "other"].includes(kind) && (
+    <section aria-label="What was compared" className="review-compared">
+      {phone ? (
+        <details>
+          <summary className="pp-evidence-row">
+            <span>What was compared</span>
+            <span className="pp-row-preview">{comparisonPreview(state, changeId)}</span>
+            <ChevronDown aria-hidden="true" size={14} />
+          </summary>
+          {comparisonContent}
+        </details>
+      ) : (
+        <>
+          <h3>What was compared</h3>
+          {comparisonContent}
+        </>
       )}
     </section>
   );

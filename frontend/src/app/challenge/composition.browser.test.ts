@@ -188,7 +188,7 @@ async function checkDecisionRows(page: Page) {
   const rows = page.locator(".pp-decision-row");
   const list = page.locator(".pp-decision-rows");
   const divider = await tokenColor(page, "divider");
-  await check(list).toHaveCSS("border-top", `1px solid ${divider}`);
+  await check(list).toHaveCSS("border-top-width", "0px");
   await check(list).toHaveCSS("border-bottom", `1px solid ${divider}`);
   for (const row of await rows.all()) {
     for (const side of ["top", "right", "bottom", "left"])
@@ -264,7 +264,7 @@ it.each([
   [430, 932, "dark"],
   [430, 932, "day"],
 ] as const)(
-  "shows list rows above the dock on first view at %ix%i in %s",
+  "keeps the recorded task reachable above the dock at %ix%i in %s",
   async (width, height, theme) => {
     await visit(0, "/", async (page) => {
       await page.setViewportSize({ width, height });
@@ -276,12 +276,18 @@ it.each([
       }, theme);
       await check(page.locator(".pp-decision-row")).toHaveCount(1);
       await checkDecisionRows(page);
+      await page.locator(".pp-main").evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
       await checkDockClearance(page);
       await page.getByRole("button", { name: "Reject", exact: true }).click();
       await page.getByRole("button", { name: "Next", exact: true }).click();
-      await check(page.locator(".pp-decision-row")).toHaveCount(2);
+      await check(page.locator(".pp-decision-row")).toHaveCount(1);
       expect(await page.locator(".pp-main").evaluate((element) => element.scrollTop)).toBe(0);
       await checkDecisionRows(page);
+      await page.locator(".pp-main").evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+      });
       await checkDockClearance(page);
       await checkRowExpansion(page);
     });

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { PhonePractice } from "./PhonePractice";
+import { diffPreview } from "./PhoneReview";
 import { PhoneDiff } from "./PhoneDiff";
 import { AgentLine, PhoneGraph } from "./PhoneGraph";
 import { freshAttempt } from "./PracticePanel";
@@ -87,7 +88,9 @@ it.each([0, 1])(
     );
     expect(html).toContain(entry.title);
     expect(html).toContain(entry.proposal.summary);
-    expect(html).toContain("summary");
+    expect(html).toContain("Nothing was compared for this change.");
+    expect(html).toContain('aria-label="Agent note"');
+    expect(html.indexOf("Review lead")).toBeLessThan(html.indexOf("Agent note"));
     expect(html).toContain('aria-expanded="false"');
     expect(html).toContain("Show diff");
     expect(html).not.toMatch(
@@ -128,7 +131,7 @@ it.each([1, 2])("derives decision previews and graph counts with only distance %
     />,
   );
   expect(html).toContain(`Recorded task</span> <span>${entry.proposal.task}`);
-  expect(html).toContain(`Possibly affected</span> <span>${preview}`);
+  expect(html).not.toContain("Possibly affected</span>");
   const graph = renderToStaticMarkup(
     <PhoneGraph practice={changed} entry={entry} merged={false} />,
   );
@@ -235,4 +238,12 @@ it("uses words for a finish with no matching decisions", () => {
     />,
   );
   expect(html).toContain('<p class="pp-score">None of your decisions matched the recording.</p>');
+});
+
+it.each([1, 2])("previews a diff with %i files", (count) => {
+  const proposal = practice.cases[0]?.proposal;
+  if (!proposal) throw new Error("Missing proposal");
+  expect(diffPreview({ ...proposal, files: proposal.files.slice(0, count) })).toBe(
+    `shop/inventory.py${count === 2 ? " and 1 more file" : ""} · +9 −0`,
+  );
 });
