@@ -580,6 +580,10 @@ export interface ChangeFacts {
    */
   measured_cone: MeasuredCaller[] | null;
   /**
+   * Calls that use proposed-only parameters; null means none were recorded.
+   */
+  parameter_extensions: ParameterExtensionDiff[] | null;
+  /**
    * The current candidate's questions and supporting evidence, one per unrequested choice.
    */
   review_cards: ReviewCard1[] | null;
@@ -780,6 +784,33 @@ export interface MeasuredCaller {
    * Recording, matching, instability and retention-limit diagnostics.
    */
   problems: NonEmptyText[];
+}
+/**
+ * Supplied calls that pass a parameter only the proposed version accepts, run unchanged on
+ * both sides; never counted in behavior_diff.
+ */
+export interface ParameterExtensionDiff {
+  node_id: NodeId;
+  /**
+   * The proposed-only parameters these calls pass.
+   */
+  parameters: NonEmptyText[];
+  /**
+   * Calls from the proposed version's tests, executed on both sides with identical arguments.
+   */
+  run_count: number;
+  /**
+   * Calls the base version rejected when binding arguments; that rejection is its observed result.
+   */
+  rejected_before: number;
+  /**
+   * At most eight samples: before is the base rejection or value, after the proposed value.
+   */
+  rows: BehaviorDiffRow1[];
+  /**
+   * Why all or part of these calls could not run.
+   */
+  not_probed: NonEmptyText | null;
 }
 /**
  * One server-authored question about an exact change target.
@@ -2270,4 +2301,4 @@ export interface UpdatePlan {
   subtasks: SubtaskDraft[];
 }
 
-export const CONTRACT_VERSION = "1.8.0";
+export const CONTRACT_VERSION = "1.10.0";

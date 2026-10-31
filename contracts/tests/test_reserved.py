@@ -51,6 +51,7 @@ def with_defaults(raw: Any) -> Any:
             "summary": None,
             "behavior_diff": None,
             "measured_cone": None,
+            "parameter_extensions": None,
             "review_cards": None,
             "shape": None,
             "shape_complete": None,
@@ -135,7 +136,7 @@ def test_all_older_recordings_validate_and_get_serialized_defaults(log: Path) ->
 
 
 def test_defaults_and_request_response_shapes() -> None:
-    assert CONTRACT_VERSION == "1.8.0"
+    assert CONTRACT_VERSION == "1.10.0"
     assert MergeModeState().model_dump() == {"mode": "ask_me", "revision": 0}
     assert SetMergeMode(mode="ask_me", revision=0).model_dump() == {"mode": "ask_me", "revision": 0}
     assert CreatePlan(task="Split this").task == "Split this"

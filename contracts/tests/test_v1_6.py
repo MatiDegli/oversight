@@ -235,9 +235,13 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         "GrantRevokedEvent",
         "ModelAttemptFailed",
         "ModelAttemptFailedEvent",
+        "ParameterExtensionDiff",
     }
     assert not set(baseline) - set(current)
     for name, definition in baseline.items():
+        if name == "ChangeFacts":
+            _check_parameter_extension_attachment(current[name], definition)
+            continue
         plan_fields = {
             "Plan": {"subtasks"},
             "PlanSubtask": {"depends_on", "state"},
@@ -309,3 +313,19 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
         assert {key: value for key, value in fields.items() if key != "answering"} == baseline[
             name
         ]["properties"]
+
+
+def _check_parameter_extension_attachment(
+    current: dict[str, Any], baseline: dict[str, Any]
+) -> None:
+    updated = deepcopy(current)
+    assert updated["properties"].pop("parameter_extensions") == {
+        "anyOf": [
+            {"items": {"$ref": "#/$defs/ParameterExtensionDiff"}, "type": "array"},
+            {"type": "null"},
+        ],
+        "default": None,
+        "description": "Calls that use proposed-only parameters; null means none were recorded.",
+    }
+    updated["required"].remove("parameter_extensions")
+    assert updated == baseline

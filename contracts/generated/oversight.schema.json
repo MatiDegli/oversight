@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.8.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.10.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -919,6 +919,21 @@
           "default": null,
           "description": "Per-caller measurements; inherited counts count invocations, not cone nodes."
         },
+        "parameter_extensions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ParameterExtensionDiff"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Calls that use proposed-only parameters; null means none were recorded."
+        },
         "review_cards": {
           "anyOf": [
             {
@@ -983,6 +998,7 @@
         "summary",
         "behavior_diff",
         "measured_cone",
+        "parameter_extensions",
         "review_cards",
         "shape",
         "shape_complete"
@@ -4008,6 +4024,65 @@
     "NonEmptyText": {
       "minLength": 1,
       "type": "string"
+    },
+    "ParameterExtensionDiff": {
+      "additionalProperties": false,
+      "description": "Supplied calls that pass a parameter only the proposed version accepts, run unchanged on\nboth sides; never counted in behavior_diff.",
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/NodeId"
+        },
+        "parameters": {
+          "description": "The proposed-only parameters these calls pass.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "run_count": {
+          "default": 0,
+          "description": "Calls from the proposed version's tests, executed on both sides with identical arguments.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rejected_before": {
+          "default": 0,
+          "description": "Calls the base version rejected when binding arguments; that rejection is its observed result.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows": {
+          "description": "At most eight samples: before is the base rejection or value, after the proposed value.",
+          "items": {
+            "$ref": "#/$defs/BehaviorDiffRow-Output"
+          },
+          "maxItems": 8,
+          "type": "array"
+        },
+        "not_probed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why all or part of these calls could not run."
+        }
+      },
+      "required": [
+        "node_id",
+        "parameters",
+        "run_count",
+        "rejected_before",
+        "rows",
+        "not_probed"
+      ],
+      "title": "ParameterExtensionDiff",
+      "type": "object"
     },
     "ParseError": {
       "additionalProperties": false,
