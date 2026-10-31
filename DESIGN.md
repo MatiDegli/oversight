@@ -313,7 +313,7 @@ with a dark Monaco theme. A day mode exists for the submission gallery only (see
 
 **Precedence.** AGENTS.md wins over this file. The maintainer approved the v4 shell sketches on
 2026-10-27: [watch](docs/sketches/v4/watch.png), [focus](docs/sketches/v4/focus.png),
-[conversation](docs/sketches/v4/conversation.png), [review](docs/sketches/v4/review.png),
+[conversation](docs/sketches/v4/conversation.png), [review](docs/sketches/review/b-dark.png),
 [changes](docs/sketches/v4/changes.png), [settings](docs/sketches/v4/settings.png) and
 [motion marker](docs/sketches/v4/motion-marker.png). These are the shell target, inside Signal
 and with the matte review header retained. This file records their design, not their implementation.
