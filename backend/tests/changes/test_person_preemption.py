@@ -1,6 +1,7 @@
 """Person admission at deterministic rules boundaries, using real Git and event receipts."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from unittest.mock import AsyncMock
 
@@ -237,17 +238,26 @@ async def test_preemption_while_rules_waits_for_main_or_mode(
     else:
         entered = asyncio.Event()
         suite = h.workspace.run_tests
+        held = h.manager._ctx.mode.held
+
+        @asynccontextmanager
+        async def waiting_mode():
+            entered.set()
+            async with held():
+                yield
 
         async def ended(*args, **kwargs):
             result = await suite(*args, **kwargs)
             await h.manager._ctx.mode._lock.acquire()
-            entered.set()
             return result
 
         monkeypatch.setattr(h.workspace, "run_tests", ended)
+        monkeypatch.setattr(h.manager._ctx.mode, "held", waiting_mode)
         rules_task = await start(h, reserved)
         await entered.wait()
         try:
+            await queued_callbacks_ran()
+            assert rec(h).rules_phase == "suite" and not rules_task.done()
             task = person(h)
             # Recovery takes no mode lock, so the person completes under this holder.
             await task
@@ -277,7 +287,14 @@ async def test_preemption_keeps_rules_evidence_until_abort(h, held_suite, monkey
 @bounded
 async def test_old_done_callback_cannot_restore_person_decision(h, reserved, monkeypatch):
     original = ChangeManager._decide.__get__(h.manager)
+    reject = h.manager._reject
     accepted = []
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def held_reject(record, comment):
+        entered.set()
+        await release.wait()
+        await reject(record, comment)
 
     def decide(record, work):
         task = original(record, work)
@@ -287,11 +304,18 @@ async def test_old_done_callback_cannot_restore_person_decision(h, reserved, mon
         return task
 
     monkeypatch.setattr(h.manager, "_decide", decide)
+    monkeypatch.setattr(h.manager, "_reject", held_reject)
+    h.hold = ChangeResolved
     h.manager.run_ended("agent-1", None)
     await settled(h)
-    await accepted[0]
-    assert rec(h).state == "closed" and rec(h).decision == 2
+    await entered.wait()
+    assert rec(h).state == "deciding" and rec(h).decision == 2
     h.manager._ctx.state.restore(rec(h), 1)
+    assert rec(h).state == "deciding" and rec(h).decision == 2
+    release.set()
+    await h.held.wait()
+    h.release.set()
+    await accepted[0]
     assert rec(h).state == "closed" and not h.payloads(ErrorReport)
 
 
@@ -383,9 +407,7 @@ async def test_preemption_beats_path_measurement(
     assert not h.payloads(ErrorReport)
 
 
-@pytest.mark.parametrize(
-    "case", ["disconnect", "abort_failure", "timeout", "shutdown", "revise_cancel"]
-)
+@pytest.mark.parametrize("case", ["disconnect", "abort_failure", "timeout", "shutdown"])
 @bounded
 async def test_preemption_disconnect_timeout_abort_failure_shutdown_restart(
     h, held_suite, monkeypatch, case
@@ -393,7 +415,7 @@ async def test_preemption_disconnect_timeout_abort_failure_shutdown_restart(
     entered, release, _ = verify_abort(h, monkeypatch, hold=True, fail=case == "abort_failure")
     task = person(h, "request_changes")
     await entered.wait()
-    if case in {"disconnect", "revise_cancel"}:
+    if case == "disconnect":
 
         async def revise():
             return await task
@@ -467,9 +489,8 @@ async def test_no_admission_between_rules_restore_and_person_take(h, held_suite,
         restore(state, record, decision)
         if record.person_intent is not None and record.state == "ready":
             checked.append(True)
-            with pytest.raises(WrongState):
-                person(h, "approve")
-            with pytest.raises(WrongState):
+            refused(h, "approve", T3)
+            with pytest.raises(WrongState, match=f"^{T3}$"):
                 h.manager.stop("agent-1", None)
             with pytest.raises(WrongState):
                 check_editable(h.manager._ctx, record)
@@ -480,6 +501,148 @@ async def test_no_admission_between_rules_restore_and_person_take(h, held_suite,
     monkeypatch.setattr(ChangeState, "restore", restored)
     await person(h)
     assert checked and rec(h).state == "closed" and rec(h).decision == 2
+
+
+@bounded
+async def test_stop_with_pending_intent_after_request_changes_uses_t3(h, held_suite, monkeypatch):
+    restore, checked = ChangeState.restore, []
+
+    def restored(state, record, decision):
+        restore(state, record, decision)
+        if record.person_intent is not None and record.state == "working":
+            checked.append(True)
+            with pytest.raises(WrongState) as error:
+                h.manager.stop("agent-1", None)
+            assert str(error.value) == T3
+
+    monkeypatch.setattr(ChangeState, "restore", restored)
+    await person(h, "request_changes")
+    assert checked and rec(h).state == "working" and rec(h).requests == 1
+    assert len(h.payloads(ChangeResolved)) == 1 and not h.payloads(ErrorReport)
+
+
+def coordinator(h):
+    return next(t for t in h.manager._ctx.state.tasks if t.get_coro().__name__ == "finish")
+
+
+@pytest.mark.parametrize("decision", ["reject", "request_changes"])
+@bounded
+async def test_coordinator_cancel_waits_for_ordinary_decision(h, held_suite, decision):
+    h.hold = ChangeResolved
+    task = person(h, decision)
+    finishing = coordinator(h)
+    await h.held.wait()
+    try:
+        for _ in range(2):
+            finishing.cancel()
+            await queued_callbacks_ran()
+            assert not finishing.done() and rec(h).person_intent is not None
+            assert not h.payloads(ErrorReport)
+    finally:
+        h.release.set()
+        await task
+    assert rec(h).person_intent is None and len(h.payloads(ChangeResolved)) == 1
+    assert not h.payloads(ErrorReport)
+
+
+@bounded
+async def test_coordinator_clears_intent_before_cancellable_error_publish(
+    h, held_suite, monkeypatch
+):
+    abort_entered, abort_release, _ = verify_abort(h, monkeypatch, hold=True)
+    entered, release = asyncio.Event(), asyncio.Event()
+    error = h.manager._ctx.error
+
+    async def held_error(source, message, record, *, fatal):
+        if "did not run:" in message:
+            entered.set()
+            await release.wait()
+        return await error(source, message, record, fatal=fatal)
+
+    monkeypatch.setattr(h.manager._ctx, "error", held_error)
+    task = person(h)
+    finishing = coordinator(h)
+    await abort_entered.wait()
+    finishing.cancel()
+    await entered.wait()
+    try:
+        assert rec(h).person_intent is None
+    finally:
+        finishing.cancel()
+        release.set()
+        abort_release.set()
+        await asyncio.gather(task, finishing, held_suite[0], return_exceptions=True)
+    assert rec(h).person_intent is None
+
+
+@pytest.mark.parametrize(
+    ("decision", "failure"),
+    [("reject", "target"), ("request_changes", "target"), ("request_changes", "suspect")],
+)
+@bounded
+async def test_ordinary_failure_reports_one_error(h, held_suite, monkeypatch, decision, failure):
+    original = getattr(h.manager, f"_{decision}")
+
+    async def failed(record, comment):
+        if failure == "suspect":
+            h.manager._ctx.state.suspect = True
+        else:
+            record.revision += 1
+        return await original(record, comment)
+
+    monkeypatch.setattr(h.manager, f"_{decision}", failed)
+    assert await person(h, decision) is None
+    [error] = h.payloads(ErrorReport)
+    assert error.source == "server" and error.change_id == "change-1" and not error.fatal
+    assert rec(h).person_intent is None and rec(h).requests == 0 and not rec(h).cleaned
+    assert not h.payloads(ChangeResolved)
+    for stored in h.log:
+        SERVER_EVENT.validate_json(stored.envelope)
+
+
+@pytest.mark.parametrize("phase", ["measurement", "suite", "authorization"])
+@bounded
+async def test_settling_refusal_only_names_authorization_if_entered(
+    h, reserved, transaction, monkeypatch, phase
+):
+    entered, release = asyncio.Event(), asyncio.Event()
+    abort = _recovery.abort_rules
+
+    async def held_abort(*args, **kwargs):
+        entered.set()
+        await release.wait()
+        await abort(*args, **kwargs)
+
+    monkeypatch.setattr(_recovery, "abort_rules", held_abort)
+    failure = AsyncMock(side_effect=RulesFailure("suite_failed", "Scripted early failure"))
+    if phase == "measurement":
+        monkeypatch.setattr(_candidate, "measure", failure)
+    elif phase == "suite":
+        monkeypatch.setattr(h.workspace, "run_tests", failure)
+    else:
+        ready = _transaction.Transaction.ready
+
+        async def failed(tx):
+            if rec(h).rules_phase == "authorizing":
+                await failure()
+            await ready(tx)
+
+        monkeypatch.setattr(_transaction.Transaction, "ready", failed)
+    rules_task = await start(h, reserved)
+    await entered.wait()
+    try:
+        assert rec(h).rules_phase == "settling"
+        for decision in ("reject", "request_changes"):
+            if phase == "authorization":
+                refused(h, decision, T1)
+            else:
+                with pytest.raises(WrongState, match=r"deciding.*refresh and review"):
+                    person(h, decision)
+        assert rec(h).person_intent is None and rules_task.cancelling() == 0
+    finally:
+        release.set()
+    await rules_task
+    assert rec(h).state == "ready" and not rec(h).merged
 
 
 @pytest.mark.parametrize("failure", [False, True])

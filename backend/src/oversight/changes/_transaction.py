@@ -159,6 +159,7 @@ class Transaction:
             if rec.person_intent is not None:
                 raise RulesFailure("cancelled", "A person claimed this decision.")
             rec.rules_phase = "authorizing"
+            rec.rules_authorization_started = True
             await self.ready()
             await self.barriers()
             await self.ready()

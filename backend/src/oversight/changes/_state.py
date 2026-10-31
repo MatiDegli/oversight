@@ -154,6 +154,7 @@ class ChangeRecord:
     taken: int = 0
     """The revision Approve was clicked on (R1): a later one is reviewed before any merge."""
     rules_task: asyncio.Task[None] | None = None
+    rules_authorization_started: bool = False
     rules_phase: (
         Literal["queued", "preflight", "suite", "authorizing", "effect", "settling", "finished"]
         | None

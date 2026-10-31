@@ -333,10 +333,11 @@ class ChangeManager:
         rec = self._ctx.state.changes.get(change_id)
         if rec is None:
             raise ChangeNotFound(change_id)
-        if rec.state not in allowed or rec.person_intent is not None:
+        if rec.state not in allowed:
             raise WrongState(
                 f"{change_id} is {rec.state}; {verb} needs {' or '.join(sorted(allowed))}"
             )
+        preemption.check_pending(rec)
         self._ctx.assessment.invalidate(rec)
         rec.invalidate_cards()
         if person:
@@ -522,7 +523,7 @@ class ChangeManager:
         rec.taken = rec.revision
         rec.rules_consumed.add(rec.revision)
         rec.evidence = reservation.evidence
-        rec.rules_phase = "queued"
+        rec.rules_phase, rec.rules_authorization_started = "queued", False
         rec.rules_task = self._decide(rec, approval.approve_rules(self._ctx, reservation))
         return None
 

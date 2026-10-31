@@ -33,13 +33,24 @@ class Owner:
     reject: Callable[[ChangeRecord, str | None], Coroutine[Any, Any, None]]
     request_changes: Callable[[ChangeRecord, str], Coroutine[Any, Any, Revision | None]]
 
+    async def apply(self, rec: ChangeRecord, intent: PersonIntent) -> Revision | None:
+        """Ordinary refusals already publish their error; do not add another outcome."""
+        if intent.evidence.decision == "rejected":
+            await self.reject(rec, intent.evidence.comment)
+            intent.reported = rec.resolution is None
+            return None
+        result = await self.request_changes(rec, intent.evidence.comment or "")
+        intent.reported = result is None
+        return result
 
-@dataclass(frozen=True)
+
+@dataclass
 class PersonIntent:
     evidence: WriteEvidence
     rules_task: asyncio.Task[None]
     decision: int
     allowed: frozenset[State]
+    reported: bool = False
 
     @property
     def label(self) -> str:
@@ -55,6 +66,13 @@ def merged_by_rules(rec: ChangeRecord | None) -> bool:
     )
 
 
+def check_pending(rec: ChangeRecord) -> None:
+    if rec.person_intent is not None:
+        raise WrongState(
+            f"{rec.change_id}: a decision is already being applied; wait for its result"
+        )
+
+
 def claim(
     owner: Owner,
     rec: ChangeRecord,
@@ -65,16 +83,15 @@ def claim(
     answers: list[ReviewCard] | None,
 ) -> asyncio.Task[Any] | None:
     """No await: validate, claim, disable following and cancel exactly the owned task."""
-    if rec.person_intent is not None:
-        raise WrongState(
-            f"{rec.change_id}: a decision is already being applied; wait for its result"
-        )
+    check_pending(rec)
     if rec.state == "deciding" and rec.rules_task is not None:
-        if rec.rules_phase not in {"queued", "preflight", "suite"}:
+        if rec.rules_authorization_started:
             raise WrongState(
                 f"{rec.change_id}: rules authorization has started; wait for its result; "
                 "if merged, use Revert"
             )
+        if rec.rules_phase not in {"queued", "preflight", "suite"}:
+            return None
     else:
         if merged_by_rules(rec):
             raise WrongState(f"{rec.change_id} was merged by rules; use Revert to undo it")
@@ -135,12 +152,7 @@ def take(owner: Owner, rec: ChangeRecord, intent: PersonIntent) -> asyncio.Task[
     finally:
         rec.person_intent = intent
     rec.evidence = evidence
-    work = (
-        owner.reject(rec, evidence.comment)
-        if evidence.decision == "rejected"
-        else owner.request_changes(rec, evidence.comment or "")
-    )
-    return owner.decide(rec, work)
+    return owner.decide(rec, owner.apply(rec, intent))
 
 
 async def finish(owner: Owner, rec: ChangeRecord, intent: PersonIntent) -> Revision | None:
@@ -154,7 +166,13 @@ async def finish(owner: Owner, rec: ChangeRecord, intent: PersonIntent) -> Revis
             intent.rules_task.result()
         restore(ctx, rec, intent.rules_task, intent.decision)
         task = take(owner, rec, intent)
-        result = await asyncio.shield(task)
+        # An accepted ordinary decision owns its outcome, even if this drain is cancelled.
+        while not task.done():
+            try:
+                await asyncio.wait([task])
+            except asyncio.CancelledError:
+                continue
+        result = task.result()
         applied = (
             (
                 rec.resolution is not None
@@ -170,13 +188,13 @@ async def finish(owner: Owner, rec: ChangeRecord, intent: PersonIntent) -> Revis
     except (Exception, asyncio.CancelledError) as error:
         reason = str(error) or "The accepted decision was interrupted"
     finally:
-        if reason is not None:
+        if rec.person_intent is intent:
+            rec.person_intent = None
+        if reason is not None and not intent.reported:
             await ctx.error(
                 "server",
                 f"{intent.label} of {rec.change_id} did not run: {reason}",
                 rec,
                 fatal=False,
             )
-        if rec.person_intent is intent:
-            rec.person_intent = None
     return None
