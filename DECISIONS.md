@@ -2897,3 +2897,37 @@ Reason: a docs audit found many docs behind main after several days of changed d
 5. AGENTS.md is aligned only with decisions already recorded.
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
+
+## 2026-10-31 — Map view and folder groups
+
+The maintainer approved the map sketch and dispatch of `frontend/map-rest`. This replaces the
+order in “Map view and folder groups follow the later line B work”: build after the review panel
+rework and the Conversation tab, before milestone pulses if ready before the cut line.
+
+- Enter below 11/17 (64.7%); leave above 11/16 (68.75%), the unchanged start camera's readability
+  floor. Hysteresis avoids flicker; explicit moves choose their target level, holding it through
+  animation. Fit compares against enter and frames panel cells and header strips on the map.
+- Folders precede named groups because their source is visible. Use the first splitting level;
+  tests form their own group, single-module folders and root files have no panel, flat repositories
+  have no groups. A flat folder over twelve modules accepts names through the optional grouping
+  seam. The service, caption and Edit are later work, not an invented API in this front.
+- Packing is fixed and deterministic, never model-placed: nine cells per column, 446×220px for
+  this snapshot, growing open cells, count/label order with tests last, 340px sideways and 460px
+  stacked ground. Panels share top edges within a row; no L-shaped frames. This deliberately
+  moves grouped cards while preserving the flat demo's positions.
+- Equal circles keep function counts in words rather than size. Quiet rectangular card panels
+  have a header strip with name and module count; header agent rings, decisions and tested-by
+  evidence are later work. There are no lines at rest; hover and cone lines come later.
+- Dashed module rings mean only pending changes, per agent. Reads never earn a ring; editing
+  and pending node counts are stated in the agent line. Difference chips hide on the map.
+- Tests remain hidden until drawn by an explicitly approved change. Their grouping rule has
+  unit evidence only. Start camera, review framing, folding and card edge styles remain unchanged.
+- Product measurements replace the sketch estimate in DESIGN's Scale and depth. The existing
+  1280px shell gives the demo a 45.62% card Fit, conflicting with the demo-cards premise and
+  the fixed enter threshold; the front records CONTESTED instead of changing either rule.
+- DESIGN and this approved sketch govern the refinement when Impeccable's general advice
+  would change identity, spacing, typography or motion. The dot field stays unchanged; captures
+  show lamps masked by invisible card boxes, reserved for a separate front.
+- CONTESTED: at the 20% floor, two stacked panels with wrapped headers have 26px between
+  panel edges (460 × 20% − 60 − 6), below 48px. The fixed packing values are preserved;
+  satisfying both rules needs a maintainer ruling, not an invented spacing exception.

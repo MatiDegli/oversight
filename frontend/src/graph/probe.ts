@@ -29,6 +29,7 @@ export interface GraphProbe {
   positions(): Record<string, { x: number; y: number }>;
   representative(id: string): string;
   /** Drawn node box in host pixels, excluding labels and overlays; folded nodes return null. */
+  level(): "cards" | "map";
   renderedBox(
     id: string,
   ): { x1: number; y1: number; x2: number; y2: number; w: number; h: number } | null;
@@ -83,6 +84,7 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
     positions: () =>
       Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),
     representative: (id) => visibleId(cy, id),
+    level: () => (host.dataset.mapLevel === "map" ? "map" : "cards"),
     renderedBox: (id) => {
       const node = cy.getElementById(id);
       if (node.empty() || !node.isNode() || visibleId(cy, id) !== id || !node.visible())

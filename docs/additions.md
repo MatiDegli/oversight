@@ -105,6 +105,8 @@ patches `724b5c9`, detection arms `75b30f8`, sensitivity gate `cc52a78` and harn
 split measurement `74b5791`, send accounting `cc023c8`, probe-cause reports `507ce31`/`25d6ea3` on
 main; the gate does not establish a completed paid run).
 
+- [Scale and depth](../DESIGN.md#scale-and-depth): Approved map and folder groups; built scope and remaining interactions are recorded in DESIGN.
+
 ## Undecided candidates
 
 These retain useful ideas from the old inventory without approving a front or changing the freeze.
@@ -185,7 +187,6 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
-- [Scale and depth](../DESIGN.md#scale-and-depth): The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
 - A local model in slot B and named editor cursors. The Tauri shell is decided: see Next.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
