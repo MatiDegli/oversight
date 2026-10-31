@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, Any, cast
 
 from oversight.changes._behavior_aliases import (
     _AliasBindings,  # pyright: ignore[reportPrivateUsage]
+    local_alias,
     module_aliases,
     shadowed,
 )
-from oversight.changes._shortcuts_common import Source, walk_local
+from oversight.changes._shortcuts_common import Source, is_test_file, walk_local
 
 if TYPE_CHECKING:
     from oversight.changes._behavior_sources import Sources
@@ -49,6 +50,7 @@ class BehaviorInputs:
     receiver_class: str | None = None
     method_kind: str | None = None
     properties: tuple[str, ...] = ()
+    consume_iterator: bool = False
 
 
 def module_name(path: str) -> str:
@@ -122,8 +124,10 @@ def _default(node: ast.expr, constants: dict[str, ast.expr]) -> Any:
         return _OPAQUE_DEFAULT
 
 
-def _signature(source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef) -> inspect.Signature:
-    if node.args.vararg or node.args.kwarg:
+def _signature(
+    source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef, *, allow_kwargs: bool = False
+) -> inspect.Signature:
+    if node.args.vararg or (node.args.kwarg and not allow_kwargs):
         raise ValueError("variadic signature")
     positional = [*node.args.posonlyargs, *node.args.args]
     constants = _constant_defaults(source)
@@ -149,6 +153,8 @@ def _signature(source: Source, node: ast.FunctionDef | ast.AsyncFunctionDef) -> 
                 annotation=_annotation(arg),
             )
         )
+    if node.args.kwarg:
+        params.append(inspect.Parameter(node.args.kwarg.arg, inspect.Parameter.VAR_KEYWORD))
     return inspect.Signature(params)
 
 
@@ -184,9 +190,21 @@ def binding_arguments(
 
 
 def _resolved(
-    source: Source, call: ast.Call, path: str, module: str, name: str, aliases: dict[str, str]
+    source: Source,
+    call: ast.Call,
+    path: str,
+    module: str,
+    name: str,
+    aliases: dict[str, str],
+    cache: Sources | None = None,
 ) -> bool:
     resolved = source.resolve(call.func)
+    if (
+        resolved is None
+        and is_test_file(path)
+        and (local := local_alias(source, call, cache)) is not None
+    ):
+        resolved = local
     if (
         isinstance(call.func, ast.Name)
         and call.func.id in aliases
@@ -213,7 +231,9 @@ def calls(
     *,
     objects: bool = False,
     cache: Sources | None = None,
+    consumed_only: bool = False,
 ):
+    from oversight.changes._behavior_builtins import consumed_call
     from oversight.changes._behavior_objects import arguments, literal_arguments
     from oversight.changes._behavior_sources import Sources
 
@@ -233,7 +253,9 @@ def calls(
             key=lambda n: (n.lineno, n.col_offset),
         )
         for call in calls:
-            if not _resolved(source, call, path, module, name, aliases):
+            if not _resolved(source, call, path, module, name, aliases, cache):
+                continue
+            if consumed_only and not consumed_call(source, path, call, cache.parents(source)):
                 continue
             try:
                 yield arguments(source, path, call, cache) if objects else literal_arguments(call)
@@ -341,18 +363,19 @@ def behavior_inputs(
     from oversight.changes._behavior_sources import Sources
 
     caches = [Sources(files, deadline) for files in (base, head)]
+    generator = False
     try:
         definitions = [_definition(cache, module, name) for cache in caches]
         nodes = [node for _, node in definitions]
-        if any(
-            isinstance(n, ast.AsyncFunctionDef)
-            or any(isinstance(c, (ast.Yield, ast.YieldFrom)) for c in walk_local(n))
-            for n in nodes
-        ):
+        if any(isinstance(n, ast.AsyncFunctionDef) for n in nodes):
             return BehaviorInputs(reason="async or generator")
-        for source, node in definitions:
-            if reason := _effect_reason(source, node):
-                return BehaviorInputs(reason=reason)
+        generator = any(
+            isinstance(c, (ast.Yield, ast.YieldFrom)) for n in nodes for c in walk_local(n)
+        )
+        if not generator:
+            for source, node in definitions:
+                if reason := _effect_reason(source, node):
+                    return BehaviorInputs(reason=reason)
         signatures = [_signature(source, node) for source, node in definitions]
         integers = [
             value
@@ -361,10 +384,21 @@ def behavior_inputs(
             if type(value) is int
         ]
     except (ValueError, TypeError, SyntaxError, RecursionError):
-        return BehaviorInputs(reason="unsupported signature")
+        return BehaviorInputs(reason="async or generator" if generator else "unsupported signature")
+    from oversight.changes._behavior_consumption import observe_inputs
     from oversight.changes._behavior_generation import generate
 
-    return generate(module, name, base, head, nodes, signatures, integers, deadline, caches=caches)
+    generated = generate(
+        module, name, base, head, nodes, signatures, integers, deadline, caches=caches
+    )
+    generated = observe_inputs(module, name, caches, signatures, generated)
+    if generator:
+        if not generated.consume_iterator:
+            return BehaviorInputs(reason="async or generator")
+        for source, node in definitions:
+            if reason := _effect_reason(source, node):
+                return BehaviorInputs(reason=reason)
+    return generated
 
 
 def _literals(node: ast.Module | ast.FunctionDef | ast.AsyncFunctionDef) -> list[Any]:

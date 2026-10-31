@@ -35,6 +35,7 @@ class BehaviorTarget:
     receiver_class: str | None = None
     method_kind: str | None = None
     properties: tuple[str, ...] = ()
+    observe_binding: bool = False
 
 
 @dataclass(frozen=True)

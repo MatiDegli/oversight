@@ -306,6 +306,30 @@ class MeasuredCaller(NodeBehaviorDiff):
         return self
 
 
+class ParameterExtensionDiff(ContractModel):
+    """Supplied calls that pass a parameter only the proposed version accepts, run unchanged on
+    both sides; never counted in behavior_diff."""
+
+    node_id: NodeId
+    """The changed function or method."""
+    parameters: list[NonEmptyText] = Field(min_length=1)
+    """The proposed-only parameters these calls pass."""
+    run_count: NonNegativeInt = 0
+    """Calls from the proposed version's tests, executed on both sides with identical arguments."""
+    rejected_before: NonNegativeInt = 0
+    """Calls the base version rejected when binding arguments; that rejection is its observed result."""  # noqa: E501
+    rows: list[BehaviorDiffRow] = Field(default_factory=list[BehaviorDiffRow], max_length=8)
+    """At most eight samples: before is the base rejection or value, after the proposed value."""
+    not_probed: NonEmptyText | None = None
+    """Why all or part of these calls could not run."""
+
+    @model_validator(mode="after")
+    def _counts_agree(self) -> Self:
+        if self.rejected_before > self.run_count:
+            raise ValueError("rejected calls cannot exceed run calls")
+        return self
+
+
 class ReviewCard(ContractModel):
     """One server-authored question about an exact change target."""
 
@@ -402,6 +426,8 @@ class ChangeFacts(ChangeTarget):
     """Per-node comparisons; null means no behavior-probe evidence was recorded."""
     measured_cone: list[MeasuredCaller] | None = None
     """Per-caller measurements; inherited counts count invocations, not cone nodes."""
+    parameter_extensions: list[ParameterExtensionDiff] | None = None
+    """Calls that use proposed-only parameters; null means none were recorded."""
     review_cards: list[ReviewCard] | None = Field(default=None, max_length=8)
     """The current candidate's questions and supporting evidence, one per unrequested choice."""
     shape: list[ShapeFact] | None = None

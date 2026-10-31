@@ -40,6 +40,7 @@ const facts: ChangeFacts = {
   summary: ["Recorded behavior summary"],
   behavior_diff: null,
   measured_cone: null,
+  parameter_extensions: null,
   review_cards: null,
   shape: null,
   shape_complete: null,
