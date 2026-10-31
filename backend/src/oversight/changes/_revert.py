@@ -1,12 +1,14 @@
 """Run-local personal correction of a validated rules merge."""
 
 import asyncio
+import logging
 import math
 import time
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Literal
 
 from oversight.changes._delivery import drain_pending as shared_drain
 from oversight.changes._delivery import supersede_pending as shared_supersede
@@ -34,11 +36,14 @@ from oversight.workspace import (
 from oversight_contracts.commands import RevertChange
 from oversight_contracts.events import (
     ChangeResolved,
+    ErrorReport,
     GraphDeltaEvent,
     RevertResolvedEvent,
     RevertResult,
 )
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
+
+_log = logging.getLogger(__name__)
 
 
 class _Principal(Enum):
@@ -189,11 +194,11 @@ class RevertService:
             if attempt.result is None and not attempt.blocked:
                 self._reports.add(
                     self.ctx.spawn(
-                        self.ctx.error(
+                        self._report(
+                            attempt,
                             "server",
                             f"Revert of {attempt.target.change_id} did not run: "
                             f"{str(error) or type(error).__name__}",
-                            None,
                             fatal=False,
                         )
                     )
@@ -456,12 +461,28 @@ class RevertService:
                 uncertain=True,
             )
 
+    async def _report(
+        self, a: _Attempt, source: Literal["server", "git"], message: str, *, fatal: bool
+    ) -> bool:
+        message = self.ctx.workspace.redact(message)
+        report = ErrorReport(
+            source=source,
+            message=message[:1000],
+            fatal=fatal,
+            change_id=a.target.change_id,
+            agent_id=a.original.agent_id,
+        )
+        try:
+            await self.ctx.publish(report)
+        except Exception:
+            _log.error("The store refused an error event: %s", message)
+            return False
+        return True
+
     async def _suspend(self, a: _Attempt) -> None:
         self._block(a)
         reporting = self.ctx.spawn(
-            self.ctx.error(
-                "git", "Revert settlement unverified; restart required", None, fatal=True
-            )
+            self._report(a, "git", "Revert settlement unverified; restart required", fatal=True)
         )
         self._reports.add(reporting)
         with suppress(Exception):
