@@ -196,7 +196,12 @@ async def test_consumed_call_site_preserves_ordinary_comparisons(
     measured = await compare(generated, AsyncMock(side_effect=run_behavior))
     assert measured.compared == measured.differing == 1
     assert measured.reason is None
-    public = project_behavior(capture_behavior(BehaviorDiff(1, (measured,))), revision=1)
+    evidence = capture_behavior(BehaviorDiff(1, (measured,)))
+    assert evidence is not None
+    [captured] = evidence.functions[0].rows
+    assert captured.observation is not None
+    assert captured.observation.excluded is None
+    public = project_behavior(evidence, revision=1)
     assert public is not None
     assert public[0].compared_count == public[0].differing_count == 1
     [row] = public[0].rows

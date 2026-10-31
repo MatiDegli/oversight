@@ -190,7 +190,8 @@ def _render(result: TypedResult, *, bounded: bool = True) -> str:
 def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
     before, after = _render(row.before, bounded=False), _render(row.after, bounded=False)
     identity = tuple(
-        f"{result['kind']}:{result.get('fingerprint', '')}" for result in (row.before, row.after)
+        f"{result['kind']}:{result.get('observation', '')}:{result.get('fingerprint', '')}"
+        for result in (row.before, row.after)
     )
     results = direct_result(row.before), direct_result(row.after)
     reason = None
