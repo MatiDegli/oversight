@@ -21,7 +21,7 @@ from pydantic import BaseModel, TypeAdapter
 from pydantic.json_schema import GenerateJsonSchema, JsonSchemaMode
 from pydantic_core import CoreSchema
 
-from oversight_contracts import CONTRACT_VERSION, commands, events, plans, policy, queue
+from oversight_contracts import CONTRACT_VERSION, commands, events, plans, policy, queue, usage
 
 HERE = Path(__file__).resolve().parent
 GENERATED = HERE / "generated"
@@ -63,6 +63,7 @@ RESPONSES: list[type[BaseModel]] = [
     commands.PlanCreated,
     policy.MergeModeState,
     plans.Plan,
+    usage.UsageView,
 ]
 
 ROOT = "OversightContracts"
