@@ -28,6 +28,9 @@ async def approve_rules(ctx: ChangeContext, reservation: rules.RulesReservation)
     """
     rec, evidence = reservation.wait.rec, reservation.evidence
     try:
+        if rec.person_intent is not None:
+            return
+        rec.rules_phase = "preflight"
         async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
             if not rules.current(ctx, reservation):
                 return

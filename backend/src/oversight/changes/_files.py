@@ -45,7 +45,7 @@ async def save_for_review(
 
 
 def check_editable(ctx: ChangeContext, rec: ChangeRecord) -> None:
-    if rec.state != "ready":
+    if rec.state != "ready" or rec.person_intent is not None:
         raise WrongState(f"{rec.change_id} is {rec.state}; a save in review needs ready")
 
 

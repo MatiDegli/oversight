@@ -238,8 +238,12 @@ class RulesScheduler:
         try:
             event = cached if cached is not None else _EVENT.validate_json(stored.envelope)
         except ValidationError:
+            _log.warning(
+                "Dropped rules receipt seq=%s type=%s: validation", stored.seq, stored.type
+            )
             return
         if (event.seq, event.ts, event.type) != (stored.seq, stored.ts, stored.type):
+            _log.warning("Dropped rules receipt seq=%s type=%s: mismatch", stored.seq, stored.type)
             return
         if not duplicate:
             self.events[event.seq] = event
@@ -318,6 +322,7 @@ class RulesScheduler:
             wait.active
             and self.waits.get(rec.change_id) is wait
             and not self.ctx.state.closing
+            and rec.person_intent is None
             and rec.state == "ready"
             and (not check_main or wait.main_commit == self.ctx.state.snapshot.commit)
             and rec.resolution is None

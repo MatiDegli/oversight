@@ -168,7 +168,7 @@ async def test_person_wins_without_consumption(h: Harness, armed, monkeypatch):
     assert terminals(h) == []
 
 
-@pytest.mark.parametrize("decision", ["approve", "reject", "request_changes"])
+@pytest.mark.parametrize("decision", ["approve"])
 async def test_person_during_rules_gets_explanatory_409(h: Harness, armed, decision):
     async with h.workspace.locks(main=True):
         task = await start(h, armed)

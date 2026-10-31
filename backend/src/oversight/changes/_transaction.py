@@ -156,6 +156,10 @@ class Transaction:
         # Suite released its lease; never wait for mode while retaining that lease.
         self.tested_tree = run.tested_tree
         async with ctx.mode.held(), ctx.workspace.git_lease():
+            if rec.person_intent is not None:
+                raise RulesFailure("cancelled", "A person claimed this decision.")
+            rec.rules_phase = "authorizing"
+            rec.rules_authorization_started = True
             await self.ready()
             await self.barriers()
             await self.ready()
@@ -179,6 +183,7 @@ class Transaction:
                 raise RulesFailure("policy_invalid", "Definitive evidence is no longer available.")
             validate_resolution_intent(self.definitive)
             rec.evidence = self.definitive
+            rec.rules_phase = "effect"
             yield
 
     async def persist(self, guard: MergeGuard, run: SuiteRun) -> None:
@@ -277,6 +282,9 @@ async def run(ctx: ChangeContext, rec: ChangeRecord, evidence: WriteEvidence) ->
     wait = ctx.assessment.waits[rec.change_id]
     reservation = _rules.RulesReservation(wait, evidence, rec.decision, wait.spend_pin)
     assert evidence.assessment is not None
+    if rec.person_intent is not None:
+        return
+    rec.rules_phase = "suite"
     tx = Transaction(ctx, reservation, evidence.assessment.main_commit)
     try:
         try:
@@ -309,6 +317,7 @@ async def run(ctx: ChangeContext, rec: ChangeRecord, evidence: WriteEvidence) ->
 
 async def settle(tx: Transaction, error: BaseException) -> None:
     ctx, rec = tx.ctx, tx.reservation.wait.rec
+    rec.rules_phase = "settling"
     try:
         async with ctx.workspace.git_lease():
             if tx.guard is not None and rec.evidence is not tx.definitive:
