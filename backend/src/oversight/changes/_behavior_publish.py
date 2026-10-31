@@ -13,6 +13,57 @@ from oversight_contracts.review import BehaviorDiffRow, NodeBehaviorDiff
 
 MAX_RENDERED = 1024
 
+# Exact private reasons only. Insertion order fixes the order of combined public phrases.
+# Never recognize prefixes or interpolate diagnostic text into a public reason.
+NOT_PROBED_REASONS = {
+    "unsupported node kind": "unsupported node kind",
+    "method or class (not probed yet)": "unsupported node kind",
+    "added (no base version)": "version unavailable",
+    "removed (no proposed version)": "version unavailable",
+    "opaque default requires an explicit argument": "default value not literal",
+    "required argument has no literal value": "no literal value for a required argument",
+    "no literal constructor receivers": "no literal receiver",
+    "unknown parameter": "signature not supported",
+    "argument binding failed": "signature not supported",
+    "unsupported signature": "signature not supported",
+    "classmethod": "signature not supported",
+    "staticmethod": "signature not supported",
+    "property deleter": "signature not supported",
+    "other decorator": "signature not supported",
+    "class bases or metaclass": "signature not supported",
+    "class decorator": "signature not supported",
+    "custom object hooks": "signature not supported",
+    "dunder method": "signature not supported",
+    "nested class": "signature not supported",
+    "test module": "signature not supported",
+    "method target mismatch": "signature not supported",
+    "unsupported constructor": "signature not supported",
+    "unsupported dataclass constructor": "signature not supported",
+    "unsupported getter signature": "signature not supported",
+    "unsupported setter signature": "signature not supported",
+    "async or generator": "async or generator",
+    "async method": "async or generator",
+    "generator method": "async or generator",
+    "global or nonlocal assignment": "side effect: global or nonlocal assignment",
+    "environment access": "side effect: environment access",
+    "randomness": "side effect: randomness",
+    "time access": "side effect: time access",
+    "network access": "side effect: network access",
+    "print or input": "side effect: print or input",
+    "file access": "side effect: file access",
+    "property getter effects": "side effect: property getter effects",
+    "unrepresentable input": "input not representable",
+    "unrepresentable input or unequal receiver state": "input not representable",
+    "no equal typed inputs": "input not representable",
+    "incomplete repeat": "repeat incomplete",
+    "worker failed": "probe failed",
+    "import failed on base side": "probe failed",
+    "import failed on proposed side": "probe failed",
+    "budget exhausted": "probe failed",
+    "isolation unavailable": "probe failed",
+    "interrupted": "probe failed",
+}
+
 
 @dataclass(frozen=True)
 class CapturedRow:
@@ -156,14 +207,16 @@ def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:
     )
 
 
-def _category(reason: str | None) -> str | None:
+def _public_reason(reason: str | None) -> str | None:
     if reason is None:
         return None
-    if reason == "method or class (not probed yet)":
-        return "unsupported node kind"
-    if reason in ("added (no base version)", "removed (no proposed version)"):
-        return "version unavailable"
-    return "probe unavailable"
+    parts = reason.split("; ")
+    if any(part not in NOT_PROBED_REASONS for part in parts):
+        return "probe unavailable"
+    phrases = {NOT_PROBED_REASONS[part] for part in parts}
+    return "; ".join(
+        phrase for phrase in dict.fromkeys(NOT_PROBED_REASONS.values()) if phrase in phrases
+    )
 
 
 def _capture_function(item: FunctionBehavior) -> CapturedFunction:
@@ -191,7 +244,7 @@ def _capture_function(item: FunctionBehavior) -> CapturedFunction:
         item.compared,
         item.differing,
         tuple(rows),
-        _category(item.reason),
+        _public_reason(item.reason),
         tuple(groups) if groups is not None else None,
         item.unconfirmed,
     )

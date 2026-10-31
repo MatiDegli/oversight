@@ -74,7 +74,7 @@ def test_ambiguous_alias_stays_unresolved(binding):
         "def f(text): return text\n", "from pkg import mod\n" + binding + "\ncall('seed')\n"
     )
     assert found.inputs == ()
-    assert found.reason == "unsupported signature"
+    assert found.reason == "required argument has no literal value"
 
 
 @pytest.mark.parametrize(
@@ -149,7 +149,7 @@ def test_typed_opaque_parameter_can_use_supported_integer_pool():
 def test_opaque_parameter_without_supported_value_produces_no_input(signature):
     found = prepare(f"def f({signature}): return value\n", "from pkg.mod import f\nf()\n")
     assert found.inputs == ()
-    assert found.reason == "unsupported signature"
+    assert found.reason == "opaque default requires an explicit argument"
 
 
 def test_literal_defaults_keep_omissions_and_effective_argument_identity():

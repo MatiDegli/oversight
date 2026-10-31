@@ -12,6 +12,7 @@ from oversight.changes._behavior_inputs import (
     MAX_LITERAL,
     BehaviorInput,
     BehaviorInputs,
+    BindingFailure,
     _literals,  # pyright: ignore[reportPrivateUsage]
     binding_arguments,
     calls,
@@ -37,6 +38,7 @@ def generate(
     inputs: list[BehaviorInput] = []
     seen: set[str] = set()
     skipped = 0
+    failures: set[str] = set()
     pools: dict[str, list[Any]] = {key: [] for sig in signatures for key in sig.parameters}
     seeds: list[dict[str, Any]] = []
     base_params = signatures[0].parameters
@@ -47,8 +49,11 @@ def generate(
             raise TimeoutError
         try:
             before, after = (binding_arguments(sig, named) for sig in signatures)
-        except TypeError:
+        except TypeError as error:
             skipped += 1
+            failures.add(
+                str(error) if isinstance(error, BindingFailure) else "argument binding failed"
+            )
             return
         key = literal_text((before, after))
         if key in seen or len(key) > MAX_LITERAL or len(inputs) >= MAX_INPUTS:
@@ -79,6 +84,7 @@ def generate(
                 bound = sig.bind(*args, **kwargs)
             except TypeError:
                 skipped += 1
+                failures.add("argument binding failed")
                 continue
             for param, value in bound.arguments.items():
                 pools[param].append(value)
@@ -94,7 +100,8 @@ def generate(
             if value is inspect.Parameter.empty:
                 continue
             add({**seed, param: value})
-    return BehaviorInputs(tuple(inputs), skipped, None if inputs else "unsupported signature")
+    reason = None if inputs else "; ".join(sorted(failures)) or "unsupported signature"
+    return BehaviorInputs(tuple(inputs), skipped, reason)
 
 
 def _sample(

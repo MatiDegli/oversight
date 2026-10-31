@@ -215,7 +215,7 @@ def assert_unavailable_candidate_facts(h: Harness, rec, pid_file):
     # The proposed side blocked before completing its first observation in this fixture.
     # Neither cancellation nor deadline exhaustion has a complete differing comparison.
     assert public.compared_count == public.differing_count == 0
-    assert public.rows == [] and public.not_probed == "probe unavailable"
+    assert public.rows == [] and public.not_probed == "probe failed"
     assert all(item.differing_count == 0 for item in facts.behavior_diff)
     serialized = facts.model_dump_json()
     for private in ("STALE_BEHAVIOR_SENTINEL", "interrupted", "budget exhausted", str(pid_file)):

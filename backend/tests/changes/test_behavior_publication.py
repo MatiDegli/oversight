@@ -18,7 +18,7 @@ from oversight.changes._behavior import (
     _compare,
     _identity,
 )
-from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs
+from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs, behavior_inputs
 from oversight.changes._behavior_publish import MAX_RENDERED, capture_behavior, project_behavior
 from oversight.changes._facts import build_change_facts, validate_change_facts
 from oversight.changes._measured import project_measured
@@ -51,6 +51,185 @@ def observation(values):
             )
         )
     }
+
+
+@pytest.mark.parametrize(
+    "reason,phrase",
+    [
+        (None, None),
+        ("", "probe unavailable"),
+        ("randomness: /private/worker.py", "probe unavailable"),
+        ("unrepresentable input; /private/worker.py", "probe unavailable"),
+        ("unsupported node kind", "unsupported node kind"),
+        ("method or class (not probed yet)", "unsupported node kind"),
+        ("added (no base version)", "version unavailable"),
+        ("removed (no proposed version)", "version unavailable"),
+        ("opaque default requires an explicit argument", "default value not literal"),
+        ("required argument has no literal value", "no literal value for a required argument"),
+        ("no literal constructor receivers", "no literal receiver"),
+        *[
+            (reason, "signature not supported")
+            for reason in (
+                "unknown parameter",
+                "argument binding failed",
+                "unsupported signature",
+                "classmethod",
+                "staticmethod",
+                "property deleter",
+                "other decorator",
+                "class bases or metaclass",
+                "class decorator",
+                "custom object hooks",
+                "dunder method",
+                "nested class",
+                "test module",
+                "method target mismatch",
+                "unsupported constructor",
+                "unsupported dataclass constructor",
+                "unsupported getter signature",
+                "unsupported setter signature",
+            )
+        ],
+        *[
+            (reason, "async or generator")
+            for reason in (
+                "async or generator",
+                "async method",
+                "generator method",
+            )
+        ],
+        *[
+            (reason, f"side effect: {reason}")
+            for reason in (
+                "global or nonlocal assignment",
+                "environment access",
+                "randomness",
+                "time access",
+                "network access",
+                "print or input",
+                "file access",
+                "property getter effects",
+            )
+        ],
+        *[
+            (reason, "input not representable")
+            for reason in (
+                "unrepresentable input",
+                "unrepresentable input or unequal receiver state",
+                "no equal typed inputs",
+            )
+        ],
+        ("incomplete repeat", "repeat incomplete"),
+        *[
+            (reason, "probe failed")
+            for reason in (
+                "worker failed",
+                "import failed on base side",
+                "import failed on proposed side",
+                "budget exhausted",
+                "isolation unavailable",
+                "interrupted",
+            )
+        ],
+        ("unknown private diagnostic", "probe unavailable"),
+        (
+            "incomplete repeat; unrepresentable input; incomplete repeat",
+            "input not representable; repeat incomplete",
+        ),
+        ("unrepresentable input; incomplete repeat", "input not representable; repeat incomplete"),
+        ("incomplete repeat; unknown private diagnostic", "probe unavailable"),
+    ],
+)
+def test_not_probed_reason_allowlist(reason, phrase):
+    evidence = capture_behavior(BehaviorDiff(1, (FunctionBehavior("sample:f", reason=reason),)))
+    [published] = project_behavior(evidence, revision=1) or []
+    assert published.not_probed == phrase
+
+
+@pytest.mark.parametrize(
+    "before,after,calls,phrase",
+    [
+        (
+            "DEFAULT = object()\ndef f(value): return value\n",
+            "DEFAULT = object()\ndef f(value, mode=DEFAULT): return value\n",
+            "f(1)\n",
+            "default value not literal",
+        ),
+        (
+            "def f(value): return value\n",
+            "def f(value): return value is None\n",
+            "f(object())\n",
+            "no literal value for a required argument",
+        ),
+    ],
+    ids=["b10-opaque-added-default", "required-untyped-object-call"],
+)
+def test_unadmitted_function_inputs_publish_specific_reason(before, after, calls, phrase):
+    tests = "from sample import f\n" + calls
+    generated = behavior_inputs(
+        "sample",
+        "f",
+        {"sample.py": before, "tests/test_sample.py": tests},
+        {"sample.py": after, "tests/test_sample.py": tests},
+    )
+    assert generated.inputs == ()
+    evidence = capture_behavior(
+        BehaviorDiff(1, (FunctionBehavior("sample:f", reason=generated.reason),))
+    )
+    [published] = project_behavior(evidence, revision=1) or []
+    assert published.not_probed == phrase
+
+
+def test_method_without_literal_constructor_call_publishes_receiver_reason():
+    from test_behavior_methods import PLAIN, prepared
+
+    _, generated, found = prepared(PLAIN, PLAIN.replace("return None", "return 1"), calls="")
+    assert not generated
+    [published] = (
+        project_behavior(capture_behavior(BehaviorDiff(1, tuple(found))), revision=1) or []
+    )
+    assert published.not_probed == "no literal receiver"
+
+
+def test_nested_function_publishes_node_kind_reason():
+    from oversight.changes._behavior import targets
+
+    module = SimpleNamespace(id="sample", kind="module")
+    outer = SimpleNamespace(id="sample:outer", kind="function", parent_id=module.id)
+    nested = SimpleNamespace(id="sample:outer.inner", kind="function", parent_id=outer.id)
+    version = SimpleNamespace(graph=SimpleNamespace(nodes=[module, outer, nested]))
+    rec = SimpleNamespace(
+        base=version,
+        head=version,
+        base_files={},
+        head_files={},
+        graph=SimpleNamespace(nodes_added=[], nodes_removed=[], nodes_modified=[nested.id]),
+    )
+    found = targets(cast(Any, rec))
+    [published] = project_behavior(capture_behavior(BehaviorDiff(1, found)), revision=1) or []
+    assert published.not_probed == "unsupported node kind"
+
+
+@pytest.mark.anyio
+async def test_worker_failure_publishes_fixed_reason_without_path_or_secret():
+    rec, inputs, found = comparison_fixture(1)
+    path, secret = "/private/worker/project.py", "sk-private-probe-sentinel-123456789"
+    worker = AsyncMock(return_value={"sample:f": BehaviorObservation(problem=f"{path}: {secret}")})
+    await _compare(
+        cast(Any, SimpleNamespace(run_behavior=worker)),
+        rec,
+        cast(Any, ["base", "head"]),
+        inputs,
+        found,
+        time.monotonic() + 30,
+        set(),
+    )
+    [published] = (
+        project_behavior(capture_behavior(BehaviorDiff(1, tuple(found))), revision=1) or []
+    )
+    assert published.not_probed == "probe failed"
+    assert path not in published.model_dump_json()
+    assert secret not in published.model_dump_json()
 
 
 @pytest.mark.anyio
@@ -205,7 +384,7 @@ async def test_incomplete_repeat_is_counted_but_not_published_as_a_stable_row(di
     assert published.compared_count == 1
     assert published.differing_count == 0
     assert published.rows == []
-    assert published.not_probed == "probe unavailable"
+    assert published.not_probed == "repeat incomplete"
     assert found[0].reason == "incomplete repeat"
 
 
@@ -338,7 +517,7 @@ async def test_incomplete_repeat_appends_to_existing_unrepresentable_reason():
     assert published.compared_count == 2
     assert published.differing_count == 0
     assert published.rows == []
-    assert published.not_probed == "probe unavailable"
+    assert published.not_probed == "input not representable; repeat incomplete"
 
 
 @pytest.mark.anyio

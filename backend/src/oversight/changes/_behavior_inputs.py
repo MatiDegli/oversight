@@ -29,6 +29,10 @@ class _LiteralLimit(ValueError):
     pass
 
 
+class BindingFailure(TypeError):
+    """A fixed input rejection reason, separate from inspect's diagnostic text."""
+
+
 @dataclass(frozen=True)
 class BehaviorInput:
     call: str
@@ -162,17 +166,17 @@ def binding_arguments(
     args: list[Any] = []
     kwargs: dict[str, Any] = {}
     if named.keys() - sig.parameters.keys():
-        raise TypeError("unknown parameter")
+        raise BindingFailure("unknown parameter")
     for name, param in sig.parameters.items():
         if param.default is _OPAQUE_DEFAULT and name not in named:
-            raise TypeError("opaque default requires an explicit argument")
+            raise BindingFailure("opaque default requires an explicit argument")
+        if param.default is inspect.Parameter.empty and name not in named:
+            raise BindingFailure("required argument has no literal value")
         if param.kind == inspect.Parameter.POSITIONAL_ONLY:
             if name in named:
                 args.append(named[name])
             elif param.default is not inspect.Parameter.empty:
                 args.append(param.default)
-            else:
-                raise TypeError("missing positional-only parameter")
         elif name in named:
             kwargs[name] = named[name]
     sig.bind(*args, **kwargs)

@@ -99,7 +99,7 @@ def test_unsupported_async_generators_and_nonliteral_defaults():
         ("async def f(x): return x", "async or generator"),
         ("def f(x): yield x", "async or generator"),
         ("def f(*args): return args", "unsupported signature"),
-        ("def f(x=object()): return x", "unsupported signature"),
+        ("def f(x=object()): return x", "opaque default requires an explicit argument"),
     ):
         assert generate(body).reason == reason
     assert generate("def f(x: int):\n    def nested(): yield 1\n    return x").reason is None
@@ -268,3 +268,38 @@ def test_constant_defaults_preserve_literal_limits(value):
     found = generate(f"VALUE = {value}\ndef f(x=VALUE): return x\n")
     assert found.inputs == ()
     assert found.reason == "unsupported signature"
+
+
+@pytest.mark.parametrize(
+    "signature,tests,reason",
+    [
+        ("value=object()", "f()", "opaque default requires an explicit argument"),
+        ("value=object(), /", "f()", "opaque default requires an explicit argument"),
+        ("*, value=object()", "f()", "opaque default requires an explicit argument"),
+        ("value", "f(object())", "required argument has no literal value"),
+        ("value, /", "f(object())", "required argument has no literal value"),
+        ("*, value", "f(value=object())", "required argument has no literal value"),
+    ],
+)
+def test_unadmitted_inputs_keep_binding_cause(signature, tests, reason):
+    found = generate(
+        f"def f({signature}): return value\n", tests="from pkg.mod import f\n" + tests + "\n"
+    )
+    assert not found.inputs
+    assert found.reason == reason
+
+
+def test_changed_parameter_name_keeps_unknown_parameter_cause():
+    found = generate(
+        "def f(value): return value\n",
+        "def f(other): return other\n",
+        "from pkg.mod import f\nf(7)\n",
+    )
+    assert not found.inputs
+    assert found.reason == "unknown parameter"
+
+
+def test_other_binding_failure_keeps_fixed_cause():
+    found = generate("def f(value): return value\n", tests="from pkg.mod import f\nf(1, 2)\n")
+    assert not found.inputs and found.skipped_binding == 3
+    assert found.reason == "argument binding failed; required argument has no literal value"
