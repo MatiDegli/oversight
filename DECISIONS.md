@@ -2315,3 +2315,20 @@ folded rails and focus tabs keep their existing geometry.
 Reason: the recorded demo at 1920×1080 fits at 83%, yet its 100% start left two of six modules
 off-canvas. At 1280–1440px the floating agents panel covered the detail and zoom controls and
 framed modules underneath itself; in the 1280×800 capture, models.py was cut at its x = 880 edge.
+
+
+## 2026-10-31 — Message text persists; privacy at export
+
+This entry replaces answer 7 of “2026-10-30 — Messages, pause and resume”. The maintainer's
+updated decision: “Message text must persist like the rest of the run, as a real product does;
+privacy is handled at export, not by dropping history.”
+
+- Accepted messages produce an `agent.message` event in the run's event log before delivery.
+- Credential-shaped text and configured provider key fragments are masked before writing;
+  the agent receives the original message.
+- Local event files, including WAL and SHM, are owner-only (0600); the runs directory is 0700.
+- Publication exports withhold message text by default; `--include-message-text` explicitly
+  includes the already masked text, and the provenance receipt records that choice.
+
+Not now: compression or blob storage. After proof 2's run, the event log's size and reopen time
+will decide whether to propose content-addressed blobs and zstd for closed segments.
