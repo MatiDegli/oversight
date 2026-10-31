@@ -71,7 +71,7 @@ it.each(["review", "plan", "lead"] as const)("does not wait for role %s", (role)
 });
 
 it.each(["starting", "paused", "halted", "stopped", "ready_for_review", "done"] as const)(
-  "clears waits on %s so resuming cannot restore stale retry text",
+  "preserves waits through %s and resuming an active state",
   (status) => {
     const before = waiting();
     const agent = before.agents["agent-1"];
@@ -82,17 +82,16 @@ it.each(["starting", "paused", "halted", "stopped", "ready_for_review", "done"] 
       type: "agent.status",
       payload: { ...agent, state: status },
     });
-    expect(after.modelWaits).toEqual({});
+    expect(after.modelWaits).toEqual(before.modelWaits);
     expect(before.modelWaits["agent-1"]).toBeDefined();
     for (const state of ["working", "revising"] as const) {
-      expect(
-        applyEvent(after, {
-          seq: 21,
-          ts: after.clock ?? "",
-          type: "agent.status",
-          payload: { ...agent, state },
-        }).modelWaits,
-      ).toEqual({});
+      const resumed = applyEvent(after, {
+        seq: 21,
+        ts: after.clock ?? "",
+        type: "agent.status",
+        payload: { ...agent, state },
+      });
+      expect(resumed.modelWaits).toEqual(before.modelWaits);
     }
   },
 );

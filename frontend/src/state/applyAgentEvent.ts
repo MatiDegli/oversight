@@ -19,13 +19,8 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
     }
     case "agent.status": {
       const status = event.payload;
-      const modelWaits = { ...state.modelWaits };
-      if (status.state !== "working" && status.state !== "revising") {
-        Reflect.deleteProperty(modelWaits, status.agent_id);
-      }
       return {
         ...next,
-        modelWaits,
         agents: { ...state.agents, [status.agent_id]: status },
         changes: {
           ...state.changes,
