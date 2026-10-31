@@ -193,6 +193,8 @@ export function App() {
           }}
           onStartAgent={commands?.startAgent}
           onStopAgent={commands?.stopAgent}
+          onPauseAgent={commands?.pauseAgent}
+          onResumeAgent={commands?.resumeAgent}
           canReview={(changeId) => openReview(state, view, changeId) !== null}
           onReview={onReview}
           onOpenQueue={onOpenQueue}

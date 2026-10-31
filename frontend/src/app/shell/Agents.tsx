@@ -10,6 +10,8 @@ export function AgentsPanel({
   onOpenChange,
   onStartAgent,
   onStopAgent,
+  onPauseAgent,
+  onResumeAgent,
   canReview,
   onReview,
   replayOf,
@@ -20,6 +22,8 @@ export function AgentsPanel({
   | "canOpenChange"
   | "onOpenChange"
   | "onStopAgent"
+  | "onPauseAgent"
+  | "onResumeAgent"
   | "onStartAgent"
   | "canReview"
   | "onReview"
@@ -52,6 +56,8 @@ export function AgentsPanel({
               key={data.agent.agent_id}
               data={data}
               onStop={onStopAgent}
+              onPause={onPauseAgent}
+              onResume={onResumeAgent}
               onOpenDiff={!review && canOpenChange(data.agent.change_id) ? onOpenChange : undefined}
               onReview={review ? onReview : undefined}
             />
