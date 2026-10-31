@@ -6,7 +6,7 @@ from oversight.changes._behavior_aliases import (
     _AliasBindings,  # pyright: ignore[reportPrivateUsage]
     shadowed,
 )
-from oversight.changes._shortcuts_common import Source, check_deadline
+from oversight.changes._shortcuts_common import Source, check_deadline, is_test_file
 
 MAX_RANGE_ITEMS = 10_000
 
@@ -49,3 +49,16 @@ def range_argument(source: Source, call: ast.Call) -> range:
     except OverflowError:
         pass
     raise ValueError("range length cap")
+
+
+def consumed_call(
+    source: Source, path: str, call: ast.Call, parents: dict[ast.AST, ast.AST]
+) -> bool:
+    wrapper = parents.get(call)
+    return (
+        is_test_file(path)
+        and isinstance(wrapper, ast.Call)
+        and wrapper.args == [call]
+        and not wrapper.keywords
+        and builtin_call(source, wrapper, "list")
+    )

@@ -63,6 +63,10 @@ def direct_result(result: dict[str, Any]) -> str | None:
     Exceptions have different observation surfaces (message versus typed args), so keep
     their full fingerprint identity rather than claiming an equality from display text.
     """
+    if result.get("observation") == "iterator_items":
+        ordinary = {key: value for key, value in result.items() if key != "observation"}
+        identity = direct_result(ordinary)
+        return canonical(["iterator_items", identity]) if identity is not None else None
     if "state" in result:
         try:
             state = [

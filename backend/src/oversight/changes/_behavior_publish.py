@@ -158,21 +158,22 @@ def _render(result: TypedResult, *, bounded: bool = True) -> str:
     # Enumerate the public value fields, never serialize the private result object.
     kind = result["kind"]
     display = result_display(result)
+    prefix = "items of iterator: " if result.get("observation") == "iterator_items" else ""
     rendered = json.dumps(display, ensure_ascii=True, separators=(",", ":"))
     if not bounded:
-        return rendered
+        return prefix + rendered
     limit = MAX_RENDERED
-    while len(rendered) > MAX_RENDERED:
+    while len(prefix) + len(rendered) > MAX_RENDERED:
         if limit == 0:
             # Unexpected scalar leaves may not shrink; retain only the validated result kind.
-            return json.dumps({"kind": kind}, ensure_ascii=True, separators=(",", ":"))
+            return prefix + json.dumps({"kind": kind}, ensure_ascii=True, separators=(",", ":"))
         limit //= 2
         clipped = {
             key: value if key == "kind" else _shorten(value, limit)
             for key, value in display.items()
         }
         rendered = json.dumps(clipped, ensure_ascii=True, separators=(",", ":"))
-    return rendered
+    return prefix + rendered
 
 
 def _capture_row(node_id: str, row: BehaviorRow) -> CapturedRow:

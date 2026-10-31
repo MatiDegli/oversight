@@ -157,3 +157,35 @@ def range_value(data: Any) -> range:
     except OverflowError:
         pass
     raise RangeArgumentError("range length cap")
+
+
+class IteratorObservationError(ValueError):
+    """A bounded observation cut, never a project exception or equality evidence."""
+
+
+def observation_literal(literal: str) -> tuple[str, bool]:
+    import ast
+
+    data = ast.literal_eval(literal)
+    if len(data) == 2 and data[0] == "oversight.iterator_items.v1":
+        if type(data[1]) is not str:
+            raise IteratorObservationError("invalid iterator observation")
+        return data[1], True
+    return literal, False
+
+
+def iterator_items(value: Any) -> list[Any]:
+    try:
+        iterator = iter(value)
+    except TypeError:
+        raise IteratorObservationError("returned value is not an iterator") from None
+    if iterator is not value:
+        raise IteratorObservationError("returned value is not an iterator")
+    items: list[Any] = []
+    for _ in range(1_000):
+        try:
+            items.append(next(iterator))
+        except StopIteration:
+            return items
+    # Do not pull an extra item: reaching the cap cannot certify exhaustion.
+    raise IteratorObservationError("iterator item cap")

@@ -11,6 +11,7 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from oversight.changes._behavior_consumption import observation_call
 from oversight.changes._behavior_inputs import BehaviorInputs, behavior_inputs, module_name
 from oversight.changes._behavior_methods import method_inputs
 from oversight.changes._behavior_scopes import InertScopes
@@ -197,7 +198,9 @@ def _requests(
             module_name(nodes[node_id].path),
             nodes[node_id].name,
             tuple(
-                item.before if side == 0 else item.after
+                observation_call(
+                    item.before if side == 0 else item.after, generated.consume_iterator
+                )
                 for index, item in enumerate(generated.inputs)
                 if selected is None or selected == (node_id, index)
             ),

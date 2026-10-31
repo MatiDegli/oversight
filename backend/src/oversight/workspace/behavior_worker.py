@@ -23,11 +23,14 @@ if TYPE_CHECKING or __package__:
     from ._behavior_values import (
         MAX_RESULT,
         MAX_TEXT,
+        IteratorObservationError,
         RangeArgumentError,
         canonical,
         class_name,
         encode,
         fingerprint,
+        iterator_items,
+        observation_literal,
         range_value,
         value_result,
     )
@@ -35,11 +38,14 @@ else:
     from _behavior_values import (
         MAX_RESULT,
         MAX_TEXT,
+        IteratorObservationError,
         RangeArgumentError,
         canonical,
         class_name,
         encode,
         fingerprint,
+        iterator_items,
+        observation_literal,
         range_value,
         value_result,
     )
@@ -66,14 +72,20 @@ def limited(action: Callable[[], Any], timeout_s: float) -> Any:
 def call(
     function: Callable[..., Any], literal: str, timeout_s: float, root: Path | None = None
 ) -> dict[str, Any]:
+    consume_iterator = False
+
     def execute() -> dict[str, Any]:
-        args, kwargs, memo = _arguments(literal, root or Path.cwd())
+        nonlocal consume_iterator
+        invocation, consume_iterator = observation_literal(literal)
+        args, kwargs, memo = _arguments(invocation, root or Path.cwd())
         bound = inspect.signature(function).bind(*args, **kwargs)
         bound.apply_defaults()
         arguments = copy.deepcopy((bound.args, bound.kwargs), memo)
         try:
             value = function(*arguments[0], **arguments[1])
-        except CallTimeout:
+            if consume_iterator:
+                value = iterator_items(value)
+        except (CallTimeout, IteratorObservationError):
             raise
         except BaseException as error:
             message = str(error)
@@ -89,13 +101,21 @@ def call(
     try:
         result = limited(execute, timeout_s)
     except CallTimeout:
-        return {"kind": "timed_out"}
+        return (
+            {"kind": "timed_out", "reason": "iterator observation timeout"}
+            if consume_iterator
+            else {"kind": "timed_out"}
+        )
+    except IteratorObservationError as error:
+        return {"kind": "unrepresentable", "reason": str(error)}
     except RangeArgumentError as error:
         return {"kind": "unrepresentable", "reason": str(error)}
     except ArgumentClassMismatch:
         return {"kind": "unrepresentable", "reason": "argument class mismatch"}
     except BaseException as error:
         result = {"kind": "unrepresentable", "class": class_name(error)}
+    if consume_iterator:
+        result = {**result, "observation": "iterator_items"}
     if len(canonical(result).encode()) > MAX_RESULT:
         return {**result, "value": ["cut", "encoded result size"]}
     return result
