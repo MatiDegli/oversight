@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from oversight.changes._behavior_aliases import _AliasBindings, module_aliases  # pyright: ignore[reportPrivateUsage]
+from oversight.changes._behavior_builtins import range_argument
 from oversight.changes._behavior_construction import construction_ast
 from oversight.changes._behavior_fixtures import fixture
 from oversight.changes._behavior_inputs import (
@@ -96,6 +97,8 @@ def arguments(source: Source, path: str, call: ast.Call, files: dict[str, str] |
             return _literal(node)
         except (ValueError, TypeError):
             if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id == "range":
+                    return range_argument(source, node)
                 return constructor(source, path, node, cache)
             if isinstance(node, ast.Name):
                 return fixture(source, path, node, cache)
@@ -122,12 +125,14 @@ def display(value: Any) -> str:
 
 def invocation(values: tuple[tuple[Any, ...], dict[str, Any]]) -> str:
     args, kwargs = values
-    if not any(isinstance(v, Constructor) for v in (*args, *kwargs.values())):
+    if not any(isinstance(v, (Constructor, range)) for v in (*args, *kwargs.values())):
         return literal_text(values)
 
     def data(value: Any):
         if isinstance(value, Constructor):
             return ("constructor", value.module, value.name, value.args, value.kwargs)
+        if type(value) is range:
+            return ("range", value.start, value.stop, value.step)
         return ("literal", value)
 
     return literal_text(
@@ -146,6 +151,8 @@ def invocation_values(text: str) -> tuple[tuple[Any, ...], dict[str, Any]]:
     def value(data: Any) -> Any:
         if data[0] == "constructor":
             return Constructor(*data[1:])
+        if data[0] == "range":
+            return range(*data[1:])
         return data[1]
 
     return tuple(value(arg) for arg in args), {key: value(arg) for key, arg in kwargs.items()}

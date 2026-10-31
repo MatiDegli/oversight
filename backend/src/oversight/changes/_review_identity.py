@@ -22,6 +22,8 @@ def _literal(value: Any) -> list[Any]:
         return ["str", value]
     if kind is bytes:
         return ["bytes", value.hex()]
+    if kind is range:
+        return ["range", hex(value.start), hex(value.stop), hex(value.step)]
     if kind in (tuple, list):
         return [kind.__name__, [_literal(item) for item in value]]
     if kind is dict:
