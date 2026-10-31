@@ -2334,4 +2334,5 @@ Not now: compression or blob storage. After proof 2's run, the event log's size 
 will decide whether to propose content-addressed blobs and zstd for closed segments.
 
 The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inventory) moves from
-1.9.0 to the next minor, 1.10.0, superseding its earlier reservations.
+1.9.0 to 1.11.0, superseding its earlier reservations; 1.10.0 is approved for
+probe-inputs parameter-extension evidence.
