@@ -15,6 +15,7 @@ import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
+import "./shell/life.css";
 import "./challenge/phone.css";
 import { usePhonePractice } from "./challenge/usePhonePractice";
 import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
