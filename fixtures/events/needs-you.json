@@ -24,7 +24,9 @@
     "review_empty",
     "review_api_failed",
     "round_exhausted",
-    "ledger"
+    "ledger",
+    "unchanged_failure",
+    "reach_unknown"
   ],
   "cases": [
     {

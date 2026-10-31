@@ -31,6 +31,8 @@ NEEDS_YOU_CODES = (
     "review_api_failed",
     "round_exhausted",
     "ledger",
+    "unchanged_failure",
+    "reach_unknown",
 )
 NEEDS_YOU_TEMPLATE = "Needs you — revision={revision}; head={head}; code={code}; reason={reason}"
 
