@@ -2315,3 +2315,11 @@ folded rails and focus tabs keep their existing geometry.
 Reason: the recorded demo at 1920×1080 fits at 83%, yet its 100% start left two of six modules
 off-canvas. At 1280–1440px the floating agents panel covered the detail and zoom controls and
 framed modules underneath itself; in the 1280×800 capture, models.py was cut at its x = 880 edge.
+
+## 2026-10-31 — Item 10 list prices: a stored dated table applied to each call's tokens
+
+Reason: the stored table records its source and retrieval date; only Muse Spark has a listed
+price. The fold applies those prices to each call's tokens and never reads the ledger's cost
+fields. An unreported count gives a range whose lower end enters the known subtotal. Unpriced
+work keeps the total unavailable, while zero usage costs zero even without a listed price.
+Team grouping and periods come later.
