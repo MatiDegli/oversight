@@ -15,10 +15,18 @@ export interface DotFieldProps extends FieldInput {
  * screen that light up around the nodes in `lights`. It never takes the pointer, the focus or a
  * place in the reading order, and without WebGL it draws nothing.
  */
-export function DotField({ source, mode, lights, merges, modules }: DotFieldProps) {
+export function DotField({
+  source,
+  mode,
+  lights,
+  merges,
+  modules,
+  milestones,
+  mergeStarts,
+}: DotFieldProps) {
   const canvas = useRef<FieldHost>(null);
   const controller = useRef<FieldController | null>(null);
-  const input = useRef<FieldInput>({ mode, lights, merges, modules });
+  const input = useRef<FieldInput>({ mode, lights, merges, modules, milestones, mergeStarts });
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
@@ -36,9 +44,9 @@ export function DotField({ source, mode, lights, merges, modules }: DotFieldProp
     };
   }, [source]);
   useEffect(() => {
-    input.current = { mode, lights, merges, modules };
+    input.current = { mode, lights, merges, modules, milestones, mergeStarts };
     controller.current?.update(input.current);
-  }, [mode, lights, merges, modules]);
+  }, [mode, lights, merges, modules, milestones, mergeStarts]);
   return (
     <canvas
       ref={canvas}

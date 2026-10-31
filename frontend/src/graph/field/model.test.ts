@@ -215,7 +215,7 @@ describe("the lamps", () => {
     expect(held).toBeLessThan(strong);
   });
 
-  it("mix the colors of overlapping lights by intensity", () => {
+  it("uses the strongest source hue while overlapping intensities add", () => {
     const grid = lamps(
       config,
       600,
@@ -223,12 +223,10 @@ describe("the lamps", () => {
       [light(BOX, { weight: 1 }), light(BOX, { weight: 0.5, color: BLUE })],
       null,
     );
-    // Inside the box the intensities are 0.92 and 0.46: together past full, so a whole lamp, in
-    // the mix of the two colors weighted by those intensities (two thirds orange, one third blue),
-    // with its hot core a fifth of the way to white.
+    // 0.92 + 0.46 still makes a whole lamp; hue is now orange, never their mixture.
     const [r, g, b] = color(grid, 24, 24);
     expect(level(grid, 24, 24)).toBe(3);
-    const mixed = [(255 * 2 + 79) / 3, (92 * 2 + 125) / 3, (31 * 2 + 255) / 3];
+    const mixed: number[] = [...ORANGE];
     const hot = (channel: number) => channel + (255 - channel) * 0.2;
     expect(r).toBeCloseTo(hot(mixed[0] ?? 0), 0);
     expect(g).toBeCloseTo(hot(mixed[1] ?? 0), 0);

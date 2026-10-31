@@ -16,6 +16,7 @@ import { useShell } from "./shell/useShell";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 import "./challenge/phone.css";
+import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
 import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
 export interface FrameProps {
@@ -57,6 +58,7 @@ export interface FrameProps {
 /** Fixed zones compose around one persistent graph instance. */
 export function Frame(props: FrameProps) {
   const { state, onClosePanel } = props;
+  const arrival = useMergeArrival(state);
   const phone = usePhonePractice(props.practice?.active ?? false);
   // Availability stays fixed throughout a replay session, so entry, exit and resizing
   // keep the same graph owner. Only the practice composition knows about stacked overlays.
@@ -122,6 +124,7 @@ export function Frame(props: FrameProps) {
               />
             )}
             <Stage
+              arrival={arrival}
               state={state}
               view={view}
               onNodeTap={phone ? () => undefined : props.onNodeTap}
@@ -134,7 +137,7 @@ export function Frame(props: FrameProps) {
         {open && !task.expanded ? (
           <AgentsRail state={state} />
         ) : (
-          <AgentsPanel {...props} inputRef={task.inputRef} />
+          <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
         )}
       </div>
       <StatusLine {...props} dock={shell.dock} onToggleDock={shell.toggleDock} />

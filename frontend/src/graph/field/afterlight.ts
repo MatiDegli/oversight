@@ -43,6 +43,11 @@ export interface Afterlight {
   easing: string;
 }
 
+/** Shared arrival rule for field, card and pending marks. */
+export const mergeArrivalDelay = (look: Afterlight, pulse = true) =>
+  pulse ? look.delay + look.travel : 0;
+export type Halo = { key: string; merge: FieldMerge; progress: number };
+
 const ms = Number.parseFloat;
 
 export function afterlightOf(theme: AfterlightTheme): Afterlight {
@@ -104,7 +109,7 @@ export class MergeLife {
 
   /** Milliseconds from the decision until the pulse has arrived and the light starts to fade. */
   private arrival(run: Running): number {
-    return run.pulse ? this.look.delay + this.look.travel : 0;
+    return mergeArrivalDelay(this.look, run.pulse);
   }
 
   /**
@@ -121,6 +126,7 @@ export class MergeLife {
     jump: boolean,
     history: boolean,
     before: readonly FieldLight[] = [],
+    starts?: ReadonlyMap<string, number>,
   ) {
     const keys = new Set(merges.map((merge) => merge.key));
     for (const key of [...this.seen])
@@ -129,7 +135,12 @@ export class MergeLife {
         this.running.delete(key);
       }
     for (const merge of merges) {
-      if (this.seen.has(merge.key)) continue;
+      if (this.seen.has(merge.key)) {
+        const run = this.running.get(merge.key);
+        const start = starts?.get(merge.key);
+        if (run && start !== undefined) run.start = start;
+        continue;
+      }
       this.seen.add(merge.key);
       if (history) continue;
       const had = Math.max(
@@ -142,7 +153,7 @@ export class MergeLife {
       if (had <= 0 && !merge.pulse) continue;
       const run: Running = {
         merge,
-        start: now - Math.max(0, merge.age),
+        start: starts?.get(merge.key) ?? now - Math.max(0, merge.age),
         level: had > 0 ? had : this.look.weight,
         onset: 0,
         jump,
@@ -152,6 +163,23 @@ export class MergeLife {
       if (now < run.start + this.arrival(run) + this.look.duration)
         this.running.set(merge.key, run);
     }
+  }
+
+  finishMotion() {
+    for (const run of this.running.values()) {
+      run.pulse = false;
+      run.jump = true;
+      run.onset = 0;
+    }
+  }
+
+  halos(now: number, duration: number): Halo[] {
+    return [...this.running.values()].flatMap((run) => {
+      const age = now - run.start - this.arrival(run);
+      return run.pulse && age >= 0 && age < duration
+        ? [{ key: run.merge.key, merge: run.merge, progress: age / duration }]
+        : [];
+    });
   }
 
   /** The pulses to draw at `now`. */

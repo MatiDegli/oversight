@@ -17,6 +17,7 @@ export function AgentsPanel({
   onReview,
   replayOf,
   inputRef,
+  mergeLabels,
 }: Pick<
   FrameProps,
   | "state"
@@ -31,7 +32,7 @@ export function AgentsPanel({
   | "onReview"
   | "replayOf"
 > &
-  Pick<TaskBoxProps, "inputRef">) {
+  Pick<TaskBoxProps, "inputRef"> & { mergeLabels?: ReadonlyMap<string, "Merging" | "Merged"> }) {
   const cards = selectAgents(state).flatMap((agent) => {
     const data = selectAgentCard(state, agent.agent_id);
     return data ? [data] : [];
@@ -57,6 +58,7 @@ export function AgentsPanel({
             <AgentCard
               key={data.agent.agent_id}
               data={data}
+              mergeLabel={mergeLabels?.get(data.agent.change_id)}
               onStop={onStopAgent}
               onConversation={onOpenConversation}
               onPause={onPauseAgent}

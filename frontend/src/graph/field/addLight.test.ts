@@ -1,4 +1,5 @@
-// Frozen reference from bb059a5. Only this test keeps the old addLight loop; the surrounding
+// Reference loop from bb059a5; the four two-team cases opt into the approved strongest hue.
+// Only this test keeps the old addLight loop; the surrounding
 // pipeline stays here too, so byte comparisons include accumulation and clipping; the shading is the product's own.
 import { describe, expect, it } from "vitest";
 
@@ -92,7 +93,7 @@ function addLight(
   time: number | null,
   work: Work,
 ) {
-  const { sum, red, green, blue, colX, ringX } = work;
+  const { sum, red, green, blue, colX, ringX, strongest } = work;
   const c0 = Math.max(0, Math.floor(box.x1 / config.cell));
   const c1 = Math.min(cols - 1, Math.floor(box.x2 / config.cell));
   const r0 = Math.max(0, Math.floor(box.y1 / config.cell));
@@ -124,9 +125,16 @@ function addLight(
       if (intensity <= 0) continue;
       const k = row * cols + col;
       sum[k] = (sum[k] ?? 0) + intensity;
-      red[k] = (red[k] ?? 0) + intensity * lr;
-      green[k] = (green[k] ?? 0) + intensity * lg;
-      blue[k] = (blue[k] ?? 0) + intensity * lb;
+      if (!strongest) {
+        red[k] = (red[k] ?? 0) + intensity * lr;
+        green[k] = (green[k] ?? 0) + intensity * lg;
+        blue[k] = (blue[k] ?? 0) + intensity * lb;
+      } else if (intensity > (strongest[k] ?? 0)) {
+        strongest[k] = intensity;
+        red[k] = intensity * lr;
+        green[k] = intensity * lg;
+        blue[k] = intensity * lb;
+      }
     }
   }
 }
@@ -135,7 +143,7 @@ function addLight(
  * Makes the function that lights the cells. It keeps its working arrays between calls, and the
  * grid it returns is one of them: it is valid until the next call.
  */
-function createLegacyLampField() {
+function createLegacyLampField(strongestHue = false) {
   const empty = () => new Float32Array(0);
   let cells = 0;
   const work: Work = {
@@ -164,12 +172,14 @@ function createLegacyLampField() {
     const rows = Math.max(1, Math.ceil(height / config.cell));
     if (cols * rows !== cells) {
       cells = cols * rows;
+      if (strongestHue) work.strongest = new Float32Array(cells);
       work.sum = new Float32Array(cells);
       work.red = new Float32Array(cells);
       work.green = new Float32Array(cells);
       work.blue = new Float32Array(cells);
       work.data = new Uint8ClampedArray(cells * 4);
     } else {
+      work.strongest?.fill(0);
       work.sum.fill(0);
       work.red.fill(0);
       work.green.fill(0);
@@ -196,6 +206,7 @@ function createLegacyLampField() {
 }
 
 interface Accumulated {
+  strongest?: Float32Array;
   sum: Float32Array;
   red: Float32Array;
   green: Float32Array;
@@ -230,8 +241,13 @@ const fixedLights: PlacedLight[] = [
   },
 ];
 
-function assertSame(config: FieldConfig, lights: PlacedLight[], time: number | null) {
-  const before = createLegacyLampField();
+function assertSame(
+  config: FieldConfig,
+  lights: PlacedLight[],
+  time: number | null,
+  strongestHue = false,
+) {
+  const before = createLegacyLampField(strongestHue);
   const after = createLampField();
   // Reuse the accumulators, resize them, and change column count without changing cell count.
   for (const [width, height] of [
@@ -257,6 +273,7 @@ describe.each(["watch", "live-diff", "file", "review"] as const)(
         config,
         fixedLights.map((light) => ({ ...light, pulses: false })),
         2,
+        true,
       );
     });
     it("ring only, including the center, fade and wrap", () => {
@@ -265,13 +282,14 @@ describe.each(["watch", "live-diff", "file", "review"] as const)(
           config,
           fixedLights.map((light) => ({ ...light, weight: 0, pulses: true })),
           time,
+          true,
         );
     });
     it("glow and ring overlap, with fractional pulse weights and offscreen boxes", () => {
-      for (const time of [0, 1.45, 2, 6.18, 8.125]) assertSame(config, fixedLights, time);
+      for (const time of [0, 1.45, 2, 6.18, 8.125]) assertSame(config, fixedLights, time, true);
     });
     it("still light has full breathing weight and no ring with time null", () => {
-      assertSame(config, fixedLights, null);
+      assertSame(config, fixedLights, null, true);
     });
     it("clips partly offscreen rings and skips lights beyond the screen", () => {
       assertSame(config, fixedLights.slice(2), 2);

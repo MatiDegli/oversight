@@ -5,7 +5,7 @@
 import { getActiveTheme } from "../../theme";
 import type { XY } from "../orthogonal";
 
-import type { Afterlight, Pulse } from "./afterlight";
+import type { Halo, Afterlight, Pulse } from "./afterlight";
 import { easeOut } from "./afterlight";
 import { along } from "./marker";
 import { unmaskedPath } from "./mask";
@@ -117,6 +117,7 @@ interface Drawn {
 export class TravelLayer {
   private readonly svg?: SVGSVGElement;
   private readonly clip?: SVGPathElement;
+  private readonly haloItems = new Map<string, SVGRectElement>();
   private readonly items = new Map<string, Drawn>();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -201,8 +202,49 @@ export class TravelLayer {
       }
   }
 
+  halos(
+    halos: readonly Halo[],
+    boxes: ReadonlyMap<string, Box>,
+    masks: readonly Box[],
+    width: number,
+    height: number,
+  ) {
+    if (!this.svg || !this.clip) return;
+    const theme = getActiveTheme();
+    attr(this.clip, "d", unmaskedPath(masks, width, height));
+    const shown = new Set<string>();
+    for (const halo of halos) {
+      const box = boxes.get(halo.merge.id);
+      if (!box) continue;
+      shown.add(halo.key);
+      let rect = this.haloItems.get(halo.key);
+      if (!rect) {
+        rect = document.createElementNS(ns, "rect");
+        rect.setAttribute("data-merge-halo", "");
+        this.svg.append(rect);
+        this.haloItems.set(halo.key, rect);
+      }
+      const band = theme["merge-halo-width"] * (1 - halo.progress);
+      attr(rect, "x", String(box.x1 - band / 2));
+      attr(rect, "y", String(box.y1 - band / 2));
+      attr(rect, "width", String(box.x2 - box.x1 + band));
+      attr(rect, "height", String(box.y2 - box.y1 + band));
+      attr(rect, "rx", String(Number.parseFloat(theme["radius-card"])));
+      attr(rect, "fill", "none");
+      attr(rect, "stroke", theme[halo.merge.source]);
+      attr(rect, "stroke-width", String(band));
+      attr(rect, "opacity", String(theme["merge-halo-opacity"]));
+    }
+    for (const [key, rect] of this.haloItems)
+      if (!shown.has(key)) {
+        rect.remove();
+        this.haloItems.delete(key);
+      }
+  }
+
   dispose() {
     this.svg?.remove();
     this.items.clear();
+    this.haloItems.clear();
   }
 }

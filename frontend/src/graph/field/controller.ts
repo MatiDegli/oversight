@@ -6,6 +6,7 @@
 import { getActiveTheme } from "../../theme";
 import type { XY } from "../orthogonal";
 
+import { MilestoneLife, type Milestone } from "./milestones";
 import { afterlightOf, MergeLife } from "./afterlight";
 import type { Afterlight } from "./afterlight";
 import type { BoxSource } from "./boxSource";
@@ -41,6 +42,8 @@ export interface FieldInput {
   mode: FieldMode;
   lights: readonly FieldLight[];
   merges?: readonly FieldMerge[];
+  milestones?: readonly Milestone[];
+  mergeStarts?: ReadonlyMap<string, number>;
   modules?: readonly FieldModule[];
 }
 
@@ -144,6 +147,7 @@ class FieldRuntime implements FieldController {
   private look = lampLook(this.theme);
   private afterlight: Afterlight = afterlightOf(this.theme);
   private readonly life = new MergeLife(this.afterlight);
+  private readonly milestones = new MilestoneLife(this.theme);
   private primed = false;
   private terrain: TerrainConfig = terrainConfig(this.theme);
   private readonly heightField = createHeightField();
@@ -219,6 +223,8 @@ class FieldRuntime implements FieldController {
       // A draw can cross the deadline: keep a frame until the final scene has been painted.
       (this.transition.active(this.paintedAt) ||
         this.life.travelling(performance.now()) ||
+        this.life.halos(performance.now(), this.theme["merge-halo-duration"]).length > 0 ||
+        this.milestones.active(performance.now()) ||
         shouldAnimate({
           reducedMotion: false,
           hidden: false,
@@ -260,7 +266,21 @@ class FieldRuntime implements FieldController {
       const lights = burning.length > 0 ? [...sampled.lights, ...burning] : sampled.lights;
       this.renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, 1));
       const boxes = this.markers.boxes(lights, this.source, now);
-      const placed = placeLights(this.theme, lights, boxes);
+      const placed = placeLights(
+        this.theme,
+        lights.map((light) => ({
+          ...light,
+          weight: light.weight * this.milestones.gain(light.source, now),
+          pulseWeight: (light.pulseWeight ?? 1) * this.milestones.gain(light.source, now),
+        })),
+        boxes,
+      );
+      const rings = this.reducedMotion
+        ? []
+        : this.milestones.rings(
+            now,
+            this.source.boxes((this.input.milestones ?? []).map((event) => event.id)),
+          );
       const maskSize = `${String(width)}:${String(height)}`;
       if (this.masksDirty || this.maskSize !== maskSize) {
         this.masks = overlayBoxes(this.canvas);
@@ -279,6 +299,7 @@ class FieldRuntime implements FieldController {
         placed,
         time,
         points,
+        rings,
       );
       const contours = this.contours(this.grid, width, height, time);
       this.renderer.draw(this.grid, this.look, masks, contours);
@@ -346,7 +367,11 @@ class FieldRuntime implements FieldController {
 
   /** Draws each pulse on its way from the agent's card to its node, never under reduced motion. */
   private drawPulses(now: number, width: number, height: number) {
-    const pulses = this.reducedMotion ? [] : this.life.pulses(now);
+    const pulses = this.reducedMotion
+      ? []
+      : this.life
+          .pulses(now)
+          .filter((pulse) => !this.input.milestones || this.milestones.visible(pulse.key, now));
     const paths = new Map<string, XY[]>();
     if (pulses.length > 0) {
       const origin = this.canvas.getBoundingClientRect();
@@ -378,6 +403,13 @@ class FieldRuntime implements FieldController {
       }
     }
     this.travelLayer.draw(pulses, paths, this.masks, width, height, this.afterlight);
+    this.travelLayer.halos(
+      this.reducedMotion ? [] : this.life.halos(now, this.theme["merge-halo-duration"]),
+      this.source.boxes((this.input.merges ?? []).map((merge) => merge.id)),
+      this.masks,
+      width,
+      height,
+    );
     return pulseLights(pulses, paths, this.theme);
   }
 
@@ -439,6 +471,8 @@ class FieldRuntime implements FieldController {
   private onMotion = () => {
     this.reducedMotion = this.query?.matches ?? false;
     if (this.reducedMotion) {
+      this.life.finishMotion();
+      this.milestones.finishMotion();
       this.transition.finish();
       this.markers.finish();
     }
@@ -459,6 +493,7 @@ class FieldRuntime implements FieldController {
     this.look = lampLook(this.theme);
     this.afterlight = afterlightOf(this.theme);
     this.life.setLook(this.afterlight);
+    this.milestones.setLook(this.theme);
     this.terrain = terrainConfig(this.theme);
     this.hillsKey = "";
     this.setTarget();
@@ -496,9 +531,15 @@ class FieldRuntime implements FieldController {
       next.mode === this.input.mode &&
       sameLights(next.lights, this.input.lights) &&
       sameMerges(next.merges, this.input.merges) &&
+      sameMerges(
+        next.milestones?.map((event) => ({ ...event, pulse: false })),
+        this.input.milestones?.map((event) => ({ ...event, pulse: false })),
+      ) &&
+      next.mergeStarts === this.input.mergeStarts &&
       sameModules(next.modules, this.input.modules)
     )
       return;
+    this.milestones.update(next.milestones ?? [], performance.now(), this.reducedMotion, history);
     if (next.merges)
       this.life.update(
         next.merges,
@@ -506,6 +547,7 @@ class FieldRuntime implements FieldController {
         this.reducedMotion,
         history,
         this.input.lights,
+        next.mergeStarts,
       );
     this.input = next;
     this.setTarget();
