@@ -3,6 +3,7 @@
 import hashlib
 import json
 
+from oversight.agents._lead_tools import LEAD_TOOL_SCHEMAS
 from oversight.agents.tools import TOOL_SCHEMAS
 
 _BASE_PROMPT = """You are a coding agent working on a small Python repository, in your own copy.
@@ -48,8 +49,21 @@ The task must be nonempty and at most 4,000 characters. No tools, markdown or ot
 The server computes all plan metadata, zones, dependencies and assignments."""
 
 
+LEAD_PROMPT = """You coordinate coding agents on a small Python repository.
+You never edit code and never decide on changes. Read main with the tools: graph for modules and \
+top-level names, list_files,
+read_file for numbered lines, and queue for work already queued. Split the person's task into at
+most 3 plans. Each plan has 1 to 6 subtasks. Each subtask is a complete instruction for one
+coding agent, at most 2,000 characters. Use depends_on (zero-based subtask indexes) when a
+subtask needs another one merged first. Subtasks without depends_on may run at the same time,
+and nothing checks that they are independent, so give each one its own files where you can.
+Submit each plan with one request_plan call. A person decides every plan: you cannot start,
+queue, approve or reject anything. Call finish once your plans are requested. Do not wait for
+agents."""
+
+
 def prompt_version(harness_pack: bool = False) -> str:
-    """A hash of the selected system prompt, revision and plan prompts, and tool schemas."""
+    """A hash of the selected system, revision, plan and lead prompts, and both tool tables."""
     return (
         "agent-v1-"
         + hashlib.sha256(
@@ -57,7 +71,9 @@ def prompt_version(harness_pack: bool = False) -> str:
                 system_prompt(harness_pack)
                 + REVISION_PROMPT
                 + PLAN_PROMPT
+                + LEAD_PROMPT
                 + json.dumps(TOOL_SCHEMAS, sort_keys=True)
+                + json.dumps(LEAD_TOOL_SCHEMAS, sort_keys=True)
             ).encode()
         ).hexdigest()[:12]
     )

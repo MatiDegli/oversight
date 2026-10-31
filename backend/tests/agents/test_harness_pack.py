@@ -153,7 +153,7 @@ async def test_pack_prompt_has_one_evidence_path_and_stop(small_tree: Opened) ->
     prompt = str(model.requests[0][0]["content"])
     assert "one hypothesis" in prompt and "evidence" in prompt
     assert "Stop" in prompt and "several approaches" not in prompt
-    assert _prompts.prompt_version(True) != "agent-v1-c7ca1d7c6ffe"
+    assert _prompts.prompt_version(True) != "agent-v1-6972184812a7"
 
 
 async def test_startup_exports_the_selected_prompt_version(tmp_path: Path) -> None:
@@ -169,7 +169,7 @@ async def test_startup_exports_the_selected_prompt_version(tmp_path: Path) -> No
             started = await anext(stream)
             version = json.loads(started.envelope)["payload"]["prompt_version"]
             assert version == _prompts.prompt_version(enabled)
-            assert (version == "agent-v1-c7ca1d7c6ffe") is (not enabled)
+            assert (version == "agent-v1-6972184812a7") is (not enabled)
         finally:
             await live.shutdown()
 
@@ -193,7 +193,7 @@ async def test_off_preserves_prompt_and_tool_results(
         + ["[1 more matches; narrow the search]"]
     )
     assert content[-1] == "Edited shop/mod.py."
-    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-c7ca1d7c6ffe"
+    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-6972184812a7"
     assert (
         hashlib.sha256(_prompts.SYSTEM_PROMPT.encode()).hexdigest()
         == "8b02c2c5d9e6ea51b5be9c201cc0de04ebc56b51e49f87ea8d83e79cfd98c454"

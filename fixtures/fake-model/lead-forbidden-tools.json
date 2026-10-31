@@ -1,0 +1,22 @@
+{
+  "task": "Coordinate documentation.",
+  "turns": [
+    {
+      "tool_calls": [
+        {"name": "approve", "arguments": {}},
+        {"name": "reject", "arguments": {}},
+        {"name": "request_changes", "arguments": {}},
+        {"name": "enqueue", "arguments": {}},
+        {"name": "queue_task", "arguments": {}},
+        {"name": "start_agent", "arguments": {}},
+        {"name": "start_plan", "arguments": {}},
+        {"name": "merge", "arguments": {}}
+      ],
+      "usage": {"input_tokens": 120, "output_tokens": 40, "cached_tokens": 0}
+    },
+    {
+      "tool_calls": [{"name": "finish", "arguments": {}}],
+      "usage": {"input_tokens": 120, "output_tokens": 40, "cached_tokens": 0}
+    }
+  ]
+}

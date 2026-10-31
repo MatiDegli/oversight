@@ -282,6 +282,14 @@ def test_schema_changes_only_slots_and_the_two_approved_attachments() -> None:
                     updated["properties"][field_name] = definition["properties"][field_name]
             assert updated == definition, name
             continue
+        if name == "LeadStatus":
+            updated = deepcopy(current[name])
+            field = updated["properties"].pop("requested_plan_id")
+            assert field["default"] is None
+            assert field["anyOf"] == [{"$ref": "#/$defs/PlanId"}, {"type": "null"}]
+            updated["required"].remove("requested_plan_id")
+            assert updated == definition
+            continue
         if name == "AgentStep":
             updated = deepcopy(current[name])
             assert updated["properties"].pop("error_kind")["default"] is None
