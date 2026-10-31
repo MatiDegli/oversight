@@ -100,6 +100,8 @@ def complete_inputs(collect, w):
         **identity,
         review=review,
         suite=None,
+        protected_paths=original.protected_paths,
+        changed_files=original.changed_files,
         evidence={
             r: (EvidenceRef(event_seq=w.proposal_seq),)
             for r in (
@@ -115,7 +117,7 @@ def complete_inputs(collect, w):
 
 
 @pytest.fixture
-async def spend(h, monkeypatch, tmp_path):
+async def spend(h, monkeypatch, tmp_path, request):
     clock = make_clock(h, monkeypatch)
     available(h)
     await select(h, "merge_when_safe", 0)
@@ -149,6 +151,8 @@ async def spend(h, monkeypatch, tmp_path):
 
     monkeypatch.setattr(ctx.assessment, "inputs", lambda w: complete_inputs(collect, w))
     seed = await seed_receipt(h)
+    if not getattr(request, "param", False):
+        seed = await receipt(h)  # Evict spend independently of the table's run receipt.
     # Start with a cached receipt so baseline tests can reach the later guard being tested.
     # Out-of-cache tests explicitly evict it; the production scheduler never caches usage.
     ctx.assessment.events[seed.seq] = TypeAdapter(ServerEvent).validate_json(seed.envelope)
@@ -438,6 +442,7 @@ async def test_producer_is_synchronous_io_free_and_reads_state_once(h, spend, mo
     assert result.inputs.spend.spent_usd == 0.1 and ledger.reads == 1
 
 
+@pytest.mark.parametrize("spend", [True], indirect=True)
 async def test_seed_only_positive_budget_can_pass(h, spend):
     seed = spend.seed
     spend.ctx.assessment.events.pop(seed.seq, None)
@@ -446,6 +451,8 @@ async def test_seed_only_positive_budget_can_pass(h, spend):
     await pending(h, spend)
     assert spend_rule(latest(h)).evidence == [EvidenceRef(event_seq=seed.seq)]
     assert seed.seq not in spend.ctx.assessment.events
+    assert next(r for r in latest(h).rules if r.rule == "protected_paths").result == "unknown"
+    assert not rec(h).rules_consumed
 
 
 @pytest.mark.parametrize(

@@ -260,7 +260,16 @@ async def test_partial_queries_never_authorize(h, reserved, transaction, monkeyp
         monkeypatch.setattr(test_tree, "run_process", capture)
     await tx_tests.execute(h, reserved)
     assert hit and not h.payloads(ChangeResolved) and await h.main_head() == h.base_commit
-    assert terminal_code(h) == "git_failed"
+    if query == "diff":
+        # The first diff now captures candidate paths; truncation persists an unknown veto.
+        pending, final = h.payloads(ChangeAssessment)
+        assert next(r for r in pending.rules if r.rule == "protected_paths").result == "pass"
+        protected = next(r for r in final.rules if r.rule == "protected_paths")
+        assert protected.result == "unknown" and protected.observed is None
+        assert final.policy_version == "safe-merge-paths-v1" and len(final.rules) == 9
+        assert not terminals(h) and rec(h).state == "ready"
+    else:
+        assert terminal_code(h) == "git_failed"
     await assert_main_clean(h)
 
 

@@ -2300,6 +2300,46 @@ proposal inventory. Neither receipt is reconstructed when unavailable.
 
 Reason: F4a captures the sources without changing authority. Live enforcement lands atomically in
 F4b; these helpers have no production callers, and F1's activation latch stays closed.
+
+## 2026-10-31 — Item 8 F4b: protected paths join rules authority atomically
+
+Pending reservations, definitive authorization and Revert preflight now require only
+`safe-merge-paths-v1`, with exactly nine unique rules. There is no probes-profile fallback,
+including for historical Revert evidence. The built-in patterns remain table version 1.
+A directory pattern ending in `/**` also protects its bare directory entry: `.github`
+matches the CI category, including when the entry is a symlink or Gitlink. This fixes the
+boundary interpretation without adding or changing the table's patterns.
+
+The confirmed proposal captures the original table and inventory using the owning
+`run.started` and `change.proposed` seqs. Capture is independent of spend eligibility: a run
+without a positive budget still identifies its table, but supplies no passing spend receipt.
+Every use checks the retained committed proposal, exact change/agent/revision/base/head,
+and both original source receipts. Missing, evicted, malformed or incomplete sources remain
+unknown until the original evidence deadline produces one normalized Needs-you error;
+they are never reconstructed as an empty inventory. A complete protected hit is an
+independent fail and leaves the change ready for the person.
+
+The existing runtime review remains independent of the rules wait. Rules eligibility already
+requires cross-review to be enabled with an independent configured reviewer; invalidating
+a path-vetoed wait does not cancel or prevent that review. A clean review cannot erase the
+hit. Unavailable, halted or cancelled review cannot grant permission. Ask me keeps its
+existing opt-in review behavior. Author summaries and reviewer text cannot change this
+table, waive a hit, or manufacture a grant. Protected-path grant requests remain refused,
+including on a personal Approve; people retain the existing direct decision commands.
+
+Prepared candidates remeasure name/status inventory from immutable Git objects against
+the captured table, including both rename sides, binary paths and Gitlinks. Proposal diffs
+ignore submodules, so their inventory alone is insufficient: workspace `integrity.veto_index`
+already refuses Gitlinks before proposal commits and suite capture, and candidate inventory
+explicitly includes them or reports incomplete. Candidate path results join all nine rules
+in the committed definitive assessment before any commit. Hits or unknowns stop the
+transaction and verified recovery restores main. Source receipts remain required at every
+barrier; the durable-spend reads and separately pinned spend evidence retain F3b's behavior.
+Revert additionally requires zero protected violations and a complete observation.
+
+F1's production activation latch remains closed. These checks add deterministic authority
+constraints; they do not enable rules merges, expand Revert to old probes-profile merges,
+or add filesystem monitoring or a sandbox.
 ## 2026-10-31 — Start with the whole graph when it fits legibly; keep graph controls clear of the floating agents panel
 
 The maintainer approved starting with the whole graph when its Fit zoom is between the shared

@@ -1,4 +1,4 @@
-"""Evidence-backed protected-path checks, isolated from live profiles and transports."""
+"""Evidence-backed protected-path checks and exact live profile authority."""
 
 from copy import deepcopy
 from dataclasses import FrozenInstanceError, replace
@@ -101,6 +101,7 @@ def test_manifest_and_test_config_patterns_at_any_depth(
 @pytest.mark.parametrize(
     "path",
     [
+        ".github",
         ".github/workflows/ci.yml",
         ".github/CODEOWNERS",
         ".github/actions/build/action.yml",
@@ -318,12 +319,12 @@ def test_inputs_are_immutable_and_assessments_roundtrip_without_mutation(
     assert ready == before and assess(ready, PROFILE) != first
 
 
-def test_paths_profile_is_additive_and_never_authorizes(ready: PolicyInputs) -> None:
+def test_paths_profile_exactly_nine_never_falls_back(ready: PolicyInputs) -> None:
     assessment = assess(ready, PROFILE)
-    assert ACTIVE_PROFILE == "safe-merge-probes-v1"
-    assert POLICY_RULES[PROFILE] == POLICY_RULES[ACTIVE_PROFILE] | {"protected_paths"}
+    assert ACTIVE_PROFILE == PROFILE
+    assert POLICY_RULES[PROFILE] == POLICY_RULES["safe-merge-probes-v1"] | {"protected_paths"}
     assert len(assessment.rules) == 9 and all(r.result == "pass" for r in assessment.rules)
-    assert not merges_alone(assessment) and not pending_policy(assessment)
+    assert merges_alone(assessment) and not pending_policy(assessment)
     pending = assessment.model_copy(
         update={
             "rules": [
@@ -334,9 +335,16 @@ def test_paths_profile_is_additive_and_never_authorizes(ready: PolicyInputs) -> 
             ]
         }
     )
-    assert not pending_policy(pending)
+    assert pending_policy(pending)
     assert merges_alone(assess(ready, ACTIVE_PROFILE))
+    for rules in (assessment.rules[:-1], [*assessment.rules[:-1], assessment.rules[0]]):
+        assert not merges_alone(assessment.model_copy(update={"rules": rules}))
+        assert not pending_policy(pending.model_copy(update={"rules": rules}))
+    assert not merges_alone(assessment.model_copy(update={"policy_version": "unsupported"}))
+    assert not pending_policy(pending.model_copy(update={"policy_version": "unsupported"}))
     for profile in POLICY_RULES.keys() - {PROFILE}:
+        assert not merges_alone(assess(ready, profile))
+        assert not pending_policy(assess(ready, profile))
         assert assess(ready, profile) == assess(
             replace(ready, protected_paths=None, changed_files=None), profile
         )

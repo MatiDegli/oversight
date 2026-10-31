@@ -121,6 +121,8 @@ async def test_order_actor_trailer_and_no_late_or_repeated_effect(h, reserved, t
     tx = barriers[0]
     assert tx.barriers_ran and tx.definitive is not None
     pending, final = h.payloads(ChangeAssessment)
+    assert pending.policy_version == final.policy_version == "safe-merge-paths-v1"
+    assert len(final.rules) == len({r.rule for r in final.rules}) == 9
     assert all(r.result == "pass" for r in final.rules)
     assert latest(h) == pending and rec(h).evidence.assessment == final
     [resolved] = h.payloads(ChangeResolved)

@@ -128,6 +128,7 @@ def _matches(path: str, snapshot: ProtectedPathSnapshot) -> tuple[ProtectedPathM
         for category, patterns, basename in BUILTIN_CATEGORIES
         for pattern in patterns
         if fnmatchcase(path.rsplit("/", 1)[-1] if basename else path, pattern)
+        or (pattern.endswith("/**") and path == pattern[:-3])
     )
 
 

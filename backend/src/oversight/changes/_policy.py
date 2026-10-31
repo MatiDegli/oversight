@@ -379,11 +379,11 @@ def assess(inputs: PolicyInputs, profile: str = "safe-merge-v1") -> ChangeAssess
 
 
 def merges_alone(assessment: ChangeAssessment, grants: Sequence[GrantUse] = ()) -> bool:
-    """Require the exact eight-rule probes profile, mode and unanimous passing evidence."""
+    """Require the exact nine-rule paths profile, mode and unanimous passing evidence."""
     return (
-        assessment.policy_version == "safe-merge-probes-v1"
+        assessment.policy_version == "safe-merge-paths-v1"
         and assessment.mode == "merge_when_safe"
-        and len(assessment.rules) == 8
-        and {rule.rule for rule in assessment.rules} == set(POLICY_RULES["safe-merge-probes-v1"])
+        and len(assessment.rules) == 9
+        and {rule.rule for rule in assessment.rules} == set(POLICY_RULES["safe-merge-paths-v1"])
         and rules_satisfied(assessment, grants)
     )

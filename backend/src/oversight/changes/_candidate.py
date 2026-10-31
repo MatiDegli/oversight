@@ -7,6 +7,7 @@ from oversight.changes._grants import measure as measure_grants
 from oversight.changes._policy import PolicyInputs, assess
 from oversight.changes._protected_paths import (
     ChangedFileInventory,
+    ProtectedPathSnapshot,
     _valid_path,  # pyright: ignore[reportPrivateUsage]
 )
 from oversight.changes._support import ChangeContext, RulesFailure
@@ -87,8 +88,15 @@ class Measured:
 
 
 async def measure(
-    ctx: ChangeContext, guard: MergeGuard, pending: ChangeAssessment, limits: Limits
+    ctx: ChangeContext,
+    guard: MergeGuard,
+    pending: ChangeAssessment,
+    limits: Limits,
+    *,
+    protected_paths: ProtectedPathSnapshot | None,
+    proposal_seq: int,
 ) -> Measured:
+    inventory = await changed_inventory(ctx, guard, proposal_seq)
     stats = await ctx.git(
         ctx.workspace.main,
         "diff",
@@ -136,10 +144,14 @@ async def measure(
             parse_errors=len(base.graph.parse_errors) + len(candidate.graph.parse_errors),
             unresolved_removed=len(delta.nodes_removed),
             evidence={r.rule: tuple(r.evidence) for r in pending.rules},
+            protected_paths=protected_paths,
+            changed_files=inventory,
         ),
         pending.policy_version,
     )
     return Measured(
-        tuple(r for r in measured.rules if r.rule in {"small_change", "small_cone"}),
+        tuple(
+            r for r in measured.rules if r.rule in {"small_change", "small_cone", "protected_paths"}
+        ),
         grant_measurement,
     )

@@ -51,8 +51,17 @@ class Transaction:
     async def measure(self, guard: MergeGuard) -> None:
         pending = self.reservation.evidence.assessment
         assert pending is not None
+        wait = self.reservation.wait
+        paths = self.ctx.assessment.path_sources(wait)
+        if paths is None or wait.proposal_seq is None:
+            raise RulesFailure("policy_invalid", "Protected-path capture is no longer confirmed.")
         measured = await _candidate.measure(
-            self.ctx, guard, pending, self.reservation.wait.rec.task.limits
+            self.ctx,
+            guard,
+            pending,
+            wait.rec.task.limits,
+            protected_paths=paths[0],
+            proposal_seq=wait.proposal_seq,
         )
         self.measured, self.grant_measurement = measured.rules, measured.grants
 
@@ -67,6 +76,23 @@ class Transaction:
         failure = _rules.revalidate(self.ctx, self.reservation)
         if not _rules.current(self.ctx, self.reservation) or failure:
             raise RulesFailure(*(failure or ("target_changed", "Rules reservation expired.")))
+        if any(
+            not _spend.admits(self.ctx, rule.rule, ref, self.spend_pin)
+            for rule in self.measured
+            for ref in rule.evidence
+        ):
+            raise RulesFailure("policy_invalid", "Candidate evidence is no longer confirmed.")
+        if self.definitive is not None:
+            final = self.definitive.assessment
+            if (
+                final is None
+                or not merges_alone(final, self.definitive.grants)
+                or any(rule not in final.rules for rule in self.measured)
+            ):
+                raise RulesFailure(
+                    "policy_invalid",
+                    "Definitive evidence or candidate rules are no longer confirmed.",
+                )
         if self.reservation.evidence.grants and self.measured:
             pending = self.reservation.evidence.assessment
             assert pending is not None
