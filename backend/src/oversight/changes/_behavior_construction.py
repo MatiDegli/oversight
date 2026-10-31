@@ -7,9 +7,8 @@ from oversight.changes._shortcuts_common import Source, check_deadline
 type Function = ast.FunctionDef | ast.AsyncFunctionDef
 
 
-def construction_ast(
-    cls: ast.ClassDef, deadline: float, source: Source | None = None
-) -> tuple[str, ...]:
+def construction_ast(cls: ast.ClassDef, deadline: float, source: Source | None) -> tuple[str, ...]:
+    """Build a construction identity; None selects the class-only identity."""
     members = _members(cls, deadline)
     helpers = _helpers(members, source, deadline) if source is not None else ()
     return tuple(ast.dump(node, include_attributes=False) for node in (*members, *helpers))

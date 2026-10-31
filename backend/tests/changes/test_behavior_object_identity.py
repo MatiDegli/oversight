@@ -235,7 +235,7 @@ def test_assigned_setattr_changes_construction_identity_and_stays_refused():
     classes = [ast.parse(code).body[0] for code in (before, after)]
     assert all(isinstance(cls, ast.ClassDef) for cls in classes)
     identities = [
-        construction_ast(cls, time.monotonic() + 10)
+        construction_ast(cls, time.monotonic() + 10, None)
         for cls in classes
         if isinstance(cls, ast.ClassDef)
     ]
