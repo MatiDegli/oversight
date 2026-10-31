@@ -2,7 +2,7 @@ import { launchBrowser } from "../../browserLaunch.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
-import type { Browser, Page } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -56,11 +56,16 @@ async function openCardPage(commands = true) {
   return page;
 }
 
+async function captureCard(card: Locator, name: string) {
+  if (process.env.CARD_PAUSE_SHOTS !== "1") return;
+  const shots = fileURLToPath(new URL("../../../../.shots/card-pause/", import.meta.url));
+  await mkdir(shots, { recursive: true });
+  await card.screenshot({ path: `${shots}${name}.png` });
+}
+
 it.each(["dark", "day"])("pauses and resumes without moving focus in %s", async (theme) => {
   const page = await openCardPage();
-  const shots = fileURLToPath(new URL("../../../../.shots/card-pause/", import.meta.url));
   try {
-    await mkdir(shots, { recursive: true });
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;
     }, theme);
@@ -72,14 +77,14 @@ it.each(["dark", "day"])("pauses and resumes without moving focus in %s", async 
         .getByRole("complementary", { name: "Agents", exact: true })
         .evaluate((panel) => panel.getBoundingClientRect().width),
     ).toBe(400);
-    await card.screenshot({ path: `${shots}working-${theme}.png` });
+    await captureCard(card, `working-${theme}`);
     await pause.click();
     const pausing = card.getByRole("button", { name: "Pausing after this step", exact: true });
     await check(pausing).toHaveAttribute("aria-disabled", "true");
     await check(pausing).toBeFocused();
     await pausing.press("Enter");
     expect(await page.evaluate(() => window.readyTest.pauseCalls)).toEqual(["agent-1"]);
-    await card.screenshot({ path: `${shots}pausing-${theme}.png` });
+    await captureCard(card, `pausing-${theme}`);
     await page.evaluate(() => {
       window.readyTest.status("paused");
     });
@@ -88,7 +93,7 @@ it.each(["dark", "day"])("pauses and resumes without moving focus in %s", async 
     await check(resume).toBeVisible();
     await check(resume).toBeFocused();
     await check(card.getByRole("button", { name: "Stop and discard", exact: true })).toBeVisible();
-    await card.screenshot({ path: `${shots}paused-${theme}.png` });
+    await captureCard(card, `paused-${theme}`);
     await resume.click();
     expect(await page.evaluate(() => window.readyTest.resumeCalls)).toEqual(["agent-1"]);
     await check(resume).toBeFocused();
@@ -104,9 +109,7 @@ it.each(["dark", "day"])("pauses and resumes without moving focus in %s", async 
 
 it.each(["dark", "day"])("keeps the working card's height when ready in %s", async (theme) => {
   const page = await openCardPage();
-  const shots = fileURLToPath(new URL("../../../../.shots/card-pause/", import.meta.url));
   try {
-    await mkdir(shots, { recursive: true });
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value;
     }, theme);
@@ -117,7 +120,7 @@ it.each(["dark", "day"])("keeps the working card's height when ready in %s", asy
     });
     await check(card.getByRole("status")).toHaveText("Ready for review");
     expect(await card.boundingBox()).toEqual(size);
-    await card.screenshot({ path: `${shots}ready-${theme}.png` });
+    await captureCard(card, `ready-${theme}`);
   } finally {
     await page.close();
   }
@@ -155,7 +158,7 @@ it("offers no Pause or Resume without command callbacks", async () => {
   }
 });
 
-it.each(["task", "steps", "diff", "stop"] as const)(
+it.each(["task", "steps", "diff", "stop", "pause"] as const)(
   "ready preserves external layout and %s focus",
   async (target) => {
     const page = await browser.newPage({
@@ -179,7 +182,12 @@ it.each(["task", "steps", "diff", "stop"] as const)(
           : target === "steps"
             ? card.getByRole("list")
             : card.getByRole("button", {
-                name: target === "diff" ? "Live diff" : "Stop and discard",
+                name:
+                  target === "diff"
+                    ? "Live diff"
+                    : target === "pause"
+                      ? "Pause"
+                      : "Stop and discard",
                 exact: true,
               });
       await focus.focus();
@@ -217,7 +225,7 @@ it.each(["task", "steps", "diff", "stop"] as const)(
         });
       });
       expect(typography).toEqual([]);
-      await check(target === "steps" || target === "diff" ? card : focus).toBeFocused();
+      await check(["steps", "diff", "pause"].includes(target) ? card : focus).toBeFocused();
       await check(bDiff).toBeInViewport();
       expect(await outside(page)).toEqual(before);
       expect(await card.boundingBox()).toEqual(size);

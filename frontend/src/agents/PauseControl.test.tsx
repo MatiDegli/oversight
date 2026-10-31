@@ -108,7 +108,7 @@ it.each(["working", "paused"] as const)(
   },
 );
 
-it("keeps Resume aria-disabled while pending", async () => {
+it("keeps Resume aria-disabled while pending and after success until the state changes", async () => {
   let finish!: () => void;
   onResume.mockReturnValue(
     new Promise<void>((resolve) => {
@@ -121,6 +121,11 @@ it("keeps Resume aria-disabled while pending", async () => {
   expect(onResume).toHaveBeenCalledExactlyOnceWith("agent-1");
   finish();
   await pending;
+  expect(render("paused").html).toContain('aria-disabled="true"');
+  expect(render("paused").html).toContain("Resume</button>");
+  await render("paused").click();
+  expect(onResume).toHaveBeenCalledExactlyOnceWith("agent-1");
+  expect(render("working").html).toContain('aria-disabled="false"');
   expect(render("paused").html).toContain('aria-disabled="false"');
 });
 

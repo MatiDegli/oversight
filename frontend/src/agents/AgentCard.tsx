@@ -10,7 +10,7 @@ import type { AgentCardDetail } from "./selectors";
 import "./agentCard.css";
 import { ageWords } from "./age";
 import { StopControl } from "./StopControl";
-import { PauseControl } from "./PauseControl";
+import { PauseControl, secondaryButtonClass } from "./PauseControl";
 
 const labels: Record<AgentStatus["state"], string> = {
   starting: "Starting",
@@ -296,14 +296,13 @@ function CardHeader({ data }: { data: AgentCardDetail }) {
 function CardActions({ data, onOpenDiff, onReview, onStop, onPause, onResume }: AgentCardProps) {
   const { agent, readyForReview } = data;
   const own = look[agent.slot];
-  const buttonClass = `inline-flex h-(--button-secondary-height) items-center gap-2 rounded-control border border-control-edge px-3 text-(length:--label-size) font-semibold text-text ${focusRing}`;
   const reviewClass = `inline-flex h-(--button-primary-height) items-center gap-2 rounded-control px-4 text-(length:--label-size) font-semibold text-on-agent hover:brightness-110 ${own.fill} ${focusRing}`;
   return (
     <footer className="mt-3 flex min-h-10 flex-wrap gap-2">
       {!readyForReview && onOpenDiff && (
         <button
           type="button"
-          className={buttonClass}
+          className={secondaryButtonClass}
           onClick={() => {
             onOpenDiff(agent.change_id);
           }}
