@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI
 
-from oversight import runtime_answering, runtime_review
+from oversight import _run_controls, runtime_answering, runtime_review
 from oversight.agents import (
     BASETEN_BASE_URL,
     META_BASE_URL,
@@ -80,7 +80,6 @@ from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
 from oversight.workspace import (
     OPEN_NOTICE,
-    Tree,
     Workspace,
     WorkspaceError,
     configure_suite,
@@ -92,6 +91,7 @@ from oversight.workspace import (
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import (
     AgentCreated,
+    AgentMessage,
     ApproveChange,
     CreatePlan,
     EnqueueTask,
@@ -281,6 +281,8 @@ class LiveRun:
         self._kept: dict[str, AgentRun] = {}
         """The `AgentRun` of each agent, and so its client, kept until its change is rejected or
         merged: Request changes resumes it."""
+        self._controls: dict[str, AgentRun] = {}
+        """Active drives only; resolves the fresh control installed by each revision."""
         self._decisions: dict[str, asyncio.Task[Revision | None]] = {}
         """Each Request changes decision in flight, until its `_revise` has awaited it: a shutdown
         settles those the run's own cancel cannot reach (R8)."""
@@ -434,6 +436,8 @@ class LiveRun:
         as its decision ends pops it from `_decisions` meanwhile. A decision settles by itself
         before its resolution is sent, or finishes the resolution and `working` together, and the
         change is then ended here: `run_ended` does nothing unless it is still `working`."""
+        for agent_id in list(self._controls):
+            _run_controls.close(self, agent_id)
         decisions = list(self._decisions.items())
         runs = dict(self._runs)
         for task in runs.values():
@@ -788,6 +792,7 @@ class LiveRun:
 
             tree = await manager.open(task, profile.id, before_create=before_create)
             assert client is not None
+            run = _run_controls.prepare(self, task, client, tree, profile)
         except ApiError:
             self._slots[slot] = None
             self.dispatcher.wake.set()
@@ -813,7 +818,7 @@ class LiveRun:
         self._slots[slot] = task.agent_id
         self._agents[task.agent_id] = agent
         self._runs[task.agent_id] = asyncio.create_task(
-            self._run(manager, task, client, tree, agent), name=f"run-{task.agent_id}"
+            self._run(manager, task, run, agent), name=f"run-{task.agent_id}"
         )
         return AgentCreated(agent_id=task.agent_id, change_id=task.change_id, slot=slot)
 
@@ -827,25 +832,11 @@ class LiveRun:
         self,
         manager: ChangeManager,
         task: AgentTask,
-        client: ModelClient,
-        tree: Tree,
+        run: AgentRun,
         agent: _Agent,
     ) -> None:
         end: RunEnd | None = None
-        run: AgentRun | None = None
         try:
-            run = AgentRun(
-                task,
-                model=client,
-                workspace=self.workspace,
-                tree=tree,
-                sink=manager,
-                publish=self._publish,
-                ledger=self._usage,
-                pricing=self._price_for(agent.profile),
-                harness_pack=self._settings.harness_pack,
-            )
-            self._kept[task.agent_id] = run
             end = await run.run()
         except asyncio.CancelledError:
             await self._halt_if_ledger_lost(task, agent, run)
@@ -853,8 +844,9 @@ class LiveRun:
         except Exception as error:
             await self._run_failed(task, error)
         finally:
+            _run_controls.close(self, task.agent_id, finished=True)
             self._runs.pop(task.agent_id, None)
-            manager.run_ended(task.agent_id, end, steps=run.steps if run else None)
+            manager.run_ended(task.agent_id, end, steps=run.steps)
             runtime_review.run_ended(self, task.agent_id, end)
 
     async def _revise(
@@ -876,6 +868,7 @@ class LiveRun:
             finally:
                 self._forget(self._decisions, task.agent_id, decision)
             if revision is not None:
+                self._controls[task.agent_id] = run
                 end = await run.revise(revision.comment, revision.note)
         except asyncio.CancelledError:
             await self._halt_if_ledger_lost(task, agent, run)
@@ -883,6 +876,7 @@ class LiveRun:
         except Exception as error:
             await self._run_failed(task, error)
         finally:
+            _run_controls.close(self, task.agent_id, finished=True)
             self._forget(self._runs, task.agent_id, asyncio.current_task())
             manager.run_ended(task.agent_id, end, steps=run.steps)
             runtime_review.run_ended(self, task.agent_id, end)
@@ -973,6 +967,16 @@ class LiveRun:
         if self._manager is None:
             raise ApiError("wrong_state", "the run has not started")
         self._manager.stop(agent_id, self._runs.get(agent_id))
+        _run_controls.close(self, agent_id)
+
+    def message(self, agent_id: str, request: AgentMessage) -> None:
+        _run_controls.message(self, agent_id, request.text)
+
+    def pause(self, agent_id: str) -> None:
+        _run_controls.pause(self, agent_id)
+
+    def resume(self, agent_id: str) -> None:
+        _run_controls.resume(self, agent_id)
 
     async def get_file(self, path: str, agent_id: str | None) -> FileContent:
         if self._manager is None:  # unreachable: the lifespan awaits `startup` before serving

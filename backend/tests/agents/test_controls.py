@@ -321,17 +321,18 @@ async def test_actual_paused_time_extends_both_deadlines_without_sleeping(
     task = start(run, tasks)
     await wait(model.entered)
     assert run.control.pause()
-    model.release.set()
-    await wait(recorder.paused)
     loop = asyncio.get_running_loop()
     original_time = loop.time
-    monkeypatch.setattr(loop, "time", lambda: original_time() + 1000)
+    monkeypatch.setattr(loop, "time", lambda: original_time() + 50)
+    model.release.set()
+    await wait(recorder.paused)
+    monkeypatch.setattr(loop, "time", lambda: original_time() + 1050)
     assert run.control.resume()
     end = await task
     assert end.state == "ready_for_review"
     before, after = model.deadlines
     assert before is not None and after is not None
-    assert after - before >= 1000
+    assert 1000 <= after - before < 1001
 
 
 async def test_pending_pause_time_still_exhausts_deadline(
@@ -491,3 +492,31 @@ async def test_stop_while_paused_closes_control_without_proposing(
         await task
     assert run.control.closed and not run.control.paused
     assert recorder.of("sink.proposed") == [] and recorder.of("AgentStep") == []
+
+
+async def test_closed_paused_gate_cancels_without_restoring_status_or_proposing(
+    small_tree: Opened, tasks: list[asyncio.Task[object]]
+) -> None:
+    model, recorder = HeldModel([READ]), Observed()
+    run = make_run(small_tree, model, recorder)
+    task = start(run, tasks)
+    await wait(model.entered)
+    assert run.control.pause()
+    model.release.set()
+    await wait(recorder.paused)
+    run.control.close()  # Outside the drive, as Stop now does.
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert recorder.states() == ["starting", "working", "paused"]
+    assert recorder.of("sink.proposed") == [] and recorder.of("AgentStep") == []
+    assert len(model.requests) == 1 and not run.control.paused
+
+
+async def test_second_run_is_refused_without_reusing_closed_control(small_tree: Opened) -> None:
+    model, recorder = script([FINISH]), Observed()
+    run = make_run(small_tree, model, recorder)
+    await run.run()
+    before = list(recorder.log)
+    with pytest.raises(RuntimeError, match="cannot run twice"):
+        await run.run()
+    assert len(model.requests) == 1 and recorder.log == before
