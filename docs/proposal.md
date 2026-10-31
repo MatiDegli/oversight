@@ -85,7 +85,7 @@ oversight/
 │   └── layouts/              # preset positions by workspace: demo-repo.json
 ├── demo-repo/                # the template: a small shop project with tests, no git of its own
 ├── tools/                    # development scripts: the API probe, the contract-scope check
-└── desktop/                  # level 3 only; created then
+└── desktop/                  # after the hackathon; created then
 ```
 
 Notes:
