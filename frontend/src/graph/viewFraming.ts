@@ -71,7 +71,7 @@ export function panelGeometry(
       ? {
           area: {
             x1: (occlusion?.x2 ?? 0) + FIT_PADDING,
-            y1: FIT_PADDING,
+            y1: occlusion ? FIT_PADDING : Math.max(FIT_PADDING, clear.top - graph.top),
             x2: graph.width - FIT_PADDING,
             y2: Math.min(graph.height - FIT_PADDING, clear.bottom - graph.top),
           },
