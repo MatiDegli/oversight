@@ -76,6 +76,7 @@ from oversight.limits import SizeLimitError, bounded_text
 from oversight.redaction import Redactor
 from oversight.runtime_accounting import write_tick
 from oversight.runtime_decisions import RuntimeDecisions
+from oversight.runtime_leads import LeadCreated, LeadService, StartLead, StopLead
 from oversight.runtime_plans import PlanService
 from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
@@ -308,6 +309,7 @@ class LiveRun:
         self._count = 0
         self.dispatcher = Dispatcher(self)
         self.plans = PlanService(self)
+        self.leads = LeadService(self)
 
     def _offer(self, slot: Slot, default: SlotDefault) -> None:
         """Load only this slot's own fake script; defaults come from the shared resolver."""
@@ -420,6 +422,7 @@ class LiveRun:
         self._closing = True
         failure: BaseException | None = None
         steps = (
+            self.leads.close,
             self.dispatcher.close,
             self.plans.close,
             self._close_review_cards,
@@ -790,6 +793,12 @@ class LiveRun:
 
     async def reject_plan(self, plan_id: str, request: RejectPlan) -> None:
         await self.plans.reject(plan_id, request)
+
+    async def start_lead(self, request: StartLead) -> LeadCreated:
+        return await self.leads.start(request)
+
+    def stop_lead(self, agent_id: str, request: StopLead) -> None:
+        self.leads.stop(agent_id, request)
 
     async def start(self, request: StartAgent) -> AgentCreated:
         return await self._launch(self._admit(request))
