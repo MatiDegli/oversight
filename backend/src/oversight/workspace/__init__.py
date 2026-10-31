@@ -21,6 +21,7 @@ from oversight.workspace.errors import (
     WorkspaceBusy,
     WorkspaceError,
 )
+from oversight.workspace.example_criteria import RenderedCriteria, parse_cases, render_examples
 from oversight.workspace.files import FileRead, check_content, content_hash, valid_agent_id
 from oversight.workspace.integrity import (
     IntegrityError,
@@ -96,6 +97,7 @@ __all__ = [
     "LockOrderError",
     "MergeGuard",
     "ProcessResult",
+    "RenderedCriteria",
     "RunProblem",
     "SourceProfile",
     "Spawn",
@@ -118,10 +120,12 @@ __all__ = [
     "inverse_suite_problem",
     "is_secret_path",
     "list_tree",
+    "parse_cases",
     "parse_junit",
     "prepare_inverse",
     "prepare_merge_guard",
     "print_isolation_probe",
+    "render_examples",
     "run_process",
     "select_source",
     "valid_agent_id",

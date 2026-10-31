@@ -2946,3 +2946,51 @@ Residual risks outside this front: run_tests output may expose secrets (up to 4,
 the reviewer's git diff may expose one if something outside a tool changes a secret file;
 the person's own PUT /files may write one into change evidence; and secrets with non-obvious
 names remain readable. This is a name policy, not content detection or output redaction.
+## 2026-10-31 — Item 12 E4: inert deterministic criteria and candidate checks
+
+Q3 remains as decided at 13:49:39 ART: v1 criteria call synchronous top-level functions with
+JSON node_id/args/kwargs and compare an exact JSON result. Behavior-only examples are refused;
+TaskExample and every other contract stay unchanged. The pure workspace renderer returns fixed
+ASCII pytest source, its SHA-256 and all ordered pytest ids. Strict parsing rejects duplicate
+keys and non-finite numbers, including overflowing exponents, before canonicalization.
+The canonical rule is json.dumps(value, sort_keys=True, separators=(",", ":"),
+ensure_ascii=True, allow_nan=False); test_render_parity_with_canonical_json pins parity with the
+public oversight.agents.canonical_json without a workspace-to-agents import.
+
+A frozen RequiredCriteria records the path, hash and required test/example ids. ChangeRecord
+adds only criteria: RequiredCriteria | None = None after suite_runs (an E3 overlap outside the
+original plan's file list). Installation is an inert library port for E3: it requires person
+pins and eligible base targets, creates a new file under main-then-agent locks, publishes its
+change.updated as the user, and only then retains the record. No production caller installs it.
+
+verify_run sits at the proposal suite and combined_tests_pass, the existing point shared by
+personal and rules merge paths. An otherwise passed suite becomes error plus an
+example_criteria problems entry when its captured tested tree has an unreadable, missing or
+edited file, or its full retained report cannot prove each required id passed exactly once.
+It emits one server-built tests diagnostic; counters, cases, failed_tests and tested tree stay
+observed. No fabricated case, failed id, extra suite, merge path, event or hidden rules veto is
+added. The normalized run is the run published, retained, returned and judged. No edits were
+needed in _suite_evidence.py, _candidate.py, _approval.py, _transaction.py or _assessment.py.
+The existing tests and combined_tests evidence carry the outcome; no rule, profile, policy
+version or ChangeAssessment changes. RULES_ACTIVATION stays False.
+
+When main has not moved, personal approval still runs no combined suite: its evidence remains
+the verified proposal suite, displayed exactly as an existing failing proposal is displayed.
+With criteria absent, the verifier returns the original run without Git I/O. The file hash
+binds the rendered criteria source in the tested candidate; it does not defend against a
+hostile conftest or module edit, which remain covered only by current test-integrity and
+isolation checks. E2's lifecycle and E3's human confirmation remain separate fronts.
+
+### Review round 1: accepted effects on retained-run readers
+
+An unmet criterion deliberately makes the retained proposal run unverifiable through its
+example_criteria problem, even though its observed cases are preserved. We accept the resulting
+loss of review evidence: _facts.py cannot resolve parametrized integrity identities and reports
+"integrity parameter ids unavailable"; it also adds "suite N: example_criteria: <code>" and
+"suite N: incomplete retained cases", because the published cases_complete is false. _probes.py
+reports "added tests: parameter ids unavailable" for added parametrized tests. _measured.py
+declines to select proposal tests and reports "proposal test selection unavailable", so the
+measured cone is unavailable. These readers keep their existing conservative completeness rules;
+E4 does not certify a report that its required criteria could not verify. The real-harness
+test_proposal_suite_normalized_and_consistent now asserts all four effects for every covered
+normalization code, including preserved observed parameter ids and no measured probe suites.
