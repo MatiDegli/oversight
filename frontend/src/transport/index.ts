@@ -24,7 +24,11 @@ export type { ChosenReplaySource, ReplayKind } from "./replay-source";
 // the build rather than silently publish the hand-written fixture. Test seams choose their
 // own fixtures with chooseReplaySource(null, fixture).
 export const replayBuild = import.meta.env.MODE === "replay";
-export const replaySource = chooseReplaySource(recorded.text, fixture, recorded.provenance);
+export const replaySource = chooseReplaySource(
+  recorded.text,
+  replayBuild ? "" : fixture,
+  recorded.provenance,
+);
 export function startAppTransport(
   store: TransportStore,
   onError?: (error: unknown) => void,
