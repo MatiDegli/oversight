@@ -492,3 +492,38 @@ def test_summary_plural_and_singular_forms() -> None:
         assert facts_line([fact]).startswith("1 test ")
         assert facts_line([fact, fact]).startswith("2 tests ")
         assert facts_line([fact, fact]).endswith("2 errors before; 2 errors after")
+
+
+def test_failure_messages_become_details():
+    xml = """<testsuite>
+    <testcase classname="tests.test_x" name="test_failed">
+      <failure message="  assert   1 == 2&#10; next "/></testcase>
+    <testcase classname="tests.test_x" name="test_error">
+      <failure message="call"/><error message="setup"/></testcase>
+    <testcase classname="tests.test_x" name="test_pair"><failure message="call"/></testcase>
+    <testcase classname="tests.test_x" name="test_pair"><error message="teardown"/></testcase>
+    <testcase classname="tests.test_x" name="test_reverse"><error message="teardown"/></testcase>
+    <testcase classname="tests.test_x" name="test_reverse"><failure message="call"/></testcase>
+    <testcase classname="tests.test_x" name="test_passed"/>
+    <testcase classname="tests.test_x" name="test_skipped"><skipped message="skip"/></testcase>
+    <testcase classname="tests.test_x" name="test_empty"><failure message="  "/></testcase>
+    </testsuite>"""
+    run = parse_junit(xml)
+    assert run.problems == ()
+    assert dict(run.details) == {
+        "tests/test_x.py::test_failed": "assert 1 == 2 next",
+        "tests/test_x.py::test_error": "setup",
+        "tests/test_x.py::test_pair": "teardown",
+        "tests/test_x.py::test_reverse": "teardown",
+    }
+    assert run.outcomes["tests/test_x.py::test_pair"] == "error"
+    with pytest.raises(TypeError):
+        run.details["x"] = "changed"  # type: ignore[index]
+
+
+def test_details_do_not_change_equality():
+    details = {"tests/test_x.py::test_x": "assert 1 == 2"}
+    run = Run({"tests/test_x.py::test_x": "failed"}, details=details)
+    assert run == Run(dict(run.outcomes))
+    details.clear()
+    assert run.details

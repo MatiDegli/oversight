@@ -2718,3 +2718,24 @@ separators=(",", ":"), ensure_ascii=True, allow_nan=False)`. E3 preview and E4 c
 share it; integer `1` and float `1.0` remain distinct. The examples prompt stays in
 `agents/examples.py`, outside `_prompts.py` and `prompt_version()` until E2 decides how a run
 reports it. E2 runtime admission, E3 human confirmation and E4 execution remain separate fronts.
+## 2026-10-31 — Ask instead of repeating an unchanged failure
+
+Before the cross-review automatic revision, a pure verdict reads the committed event log and
+change graph. A prior cross-review resolution clears the guard first, so `round_exhausted`
+keeps precedence. Next come the last run's limits, the current proposal test run and its last
+agent or proposal predecessor. No predecessor, a passing run, different outcomes, different
+failing test ids or different recorded assertions clear the guard. Repeated errors or timeouts
+and incomplete per-test results ask the person.
+
+Here, an assertion is the JUnit failure or error `message`, with whitespace collapsed, redacted
+and bounded to 240 characters in `CaseResult.detail`; any remaining absolute path drops the
+detail. It is diagnostic evidence, never added to the model's observations. Missing assertions,
+moved bases, non-Python edits, parse errors, removed files or nodes, missing edit evidence and
+unresolved test reach accumulate uncertainty. Equal tested trees have no changed nodes;
+otherwise successive recorded contents are parsed and node own-source hashes are compared.
+
+Only exact forward call edges from each failing test establish reach, within the run's depth
+and node limits. A proven reached edit clears even with other uncertainty. Executed nodes per
+test are not recorded on main, so call edges are the only source. With the same failure and an
+exhaustive miss, `unchanged_failure` asks the person; uncertainty uses `reach_unknown`. Both
+leave the automatic round unused. A clear verdict follows the existing revision path unchanged.
