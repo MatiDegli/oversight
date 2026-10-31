@@ -59,7 +59,7 @@ NOT_PROBED_REASONS = {
     "worker failed": "probe failed",
     "import failed on base side": "probe failed",
     "import failed on proposed side": "probe failed",
-    "budget exhausted": "probe failed",
+    "budget exhausted": "recording budget reached",
     "isolation unavailable": "probe failed",
     "interrupted": "probe failed",
 }

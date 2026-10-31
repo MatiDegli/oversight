@@ -120,13 +120,13 @@ def observation(values):
             )
         ],
         ("incomplete repeat", "repeat incomplete"),
+        ("budget exhausted", "recording budget reached"),
         *[
             (reason, "probe failed")
             for reason in (
                 "worker failed",
                 "import failed on base side",
                 "import failed on proposed side",
-                "budget exhausted",
                 "isolation unavailable",
                 "interrupted",
             )

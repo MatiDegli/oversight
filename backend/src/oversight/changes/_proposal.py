@@ -335,10 +335,8 @@ async def record_probe_facts(
         except asyncio.CancelledError:
             rec.behavior_diffs[revision] = unavailable_behavior(rec, revision, "interrupted")
             cancelled = True
-        except Exception as error:
-            rec.behavior_diffs[revision] = unavailable_behavior(
-                rec, revision, f"probe unavailable ({type(error).__name__})"
-            )
+        except Exception:
+            rec.behavior_diffs[revision] = unavailable_behavior(rec, revision, "worker failed")
     if ctx.measured_cone:
         try:
             if interrupted or cancelled:

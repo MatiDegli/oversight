@@ -39,12 +39,13 @@ def generate(
     seen: set[str] = set()
     skipped = 0
     failures: set[str] = set()
+    sample_rejected = False
     pools: dict[str, list[Any]] = {key: [] for sig in signatures for key in sig.parameters}
     seeds: list[dict[str, Any]] = []
     base_params = signatures[0].parameters
 
     def add(named: dict[str, Any]) -> None:
-        nonlocal skipped
+        nonlocal skipped, sample_rejected
         if time.monotonic() >= deadline:
             raise TimeoutError
         try:
@@ -72,6 +73,8 @@ def generate(
         if sample is not None:
             inputs.append(sample)
             seeds.append(named)
+        else:
+            sample_rejected = True
 
     for side, (cache, sig) in enumerate(zip(caches, signatures, strict=True)):
         observed_calls = (
@@ -100,7 +103,9 @@ def generate(
             if value is inspect.Parameter.empty:
                 continue
             add({**seed, param: value})
-    reason = None if inputs else "; ".join(sorted(failures)) or "unsupported signature"
+    # Keep binding causes first and retain the existing single-cause fallback.
+    reasons = [*sorted(failures), *(["unsupported signature"] if sample_rejected else [])]
+    reason = None if inputs else "; ".join(reasons) or "unsupported signature"
     return BehaviorInputs(tuple(inputs), skipped, reason)
 
 
