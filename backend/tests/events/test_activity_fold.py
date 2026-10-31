@@ -473,3 +473,19 @@ def test_repeated_ready_keeps_first_start_until_a_non_ready_status(
         ActivityInterval(start, end, BASE_MS + start * 1000, BASE_MS + end * 1000),
     )
     assert fold.actors[1].ms == (end - start) * 1000
+
+
+def test_unknown_profile_is_preserved_with_a_run_profile_map() -> None:
+    run = read_jsonl(DEMO)[0].model_copy(update={"ts": ts(0)})
+    fold = fold_activity([run, status(2, "paused", 1, model="unknown-profile")])
+    assert fold.actors[0].model == "unknown-profile"
+
+
+@pytest.mark.parametrize("working", [False, True])
+def test_first_and_repeated_non_counting_statuses_add_no_interval(working: bool) -> None:
+    states: list[AgentState] = (["working"] if working else []) + ["paused", "paused"]
+    fold = fold_activity([status(n, state, n) for n, state in enumerate(states, 1)])
+    expected = (ActivityInterval(1, 2, BASE_MS + 1000, BASE_MS + 2000),) if working else ()
+    assert fold.actors[0].intervals == expected and not fold.actors[0].open
+    assert fold.agent_ms == fold.active_ms == (1000 if working else 0)
+    assert fold.coverage == "complete" and fold.problems == ()
