@@ -178,13 +178,14 @@ class RevertService:
         assert owner is not None
         try:
             return await self._settle(attempt, owner)
-        except Exception as error:
-            if not attempt.blocked:
+        except BaseException as error:
+            if attempt.result is None and not attempt.blocked:
                 self._reports.add(
                     self.ctx.spawn(
                         self.ctx.error(
                             "server",
-                            f"Revert of {attempt.target.change_id} did not run: {error}",
+                            f"Revert of {attempt.target.change_id} did not run: "
+                            f"{str(error) or type(error).__name__}",
                             None,
                             fatal=False,
                         )

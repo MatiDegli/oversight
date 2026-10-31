@@ -117,10 +117,47 @@ async def test_port_shutdown_cancels_and_settles(system, monkeypatch, tmp_path):
     close_delivery.assert_awaited_once_with(manager._ctx)
     outcome = json.loads(s.events[-1].envelope)["payload"]
     assert s.events[-1].type == "revert.resolved" and outcome["result"] == "needs_you"
+    assert not any(event.type == "error" for event in s.events)
     assert await s.head() == s.command.main_commit
     assert not manager.main_suspect and not port.service._reserved
     with pytest.raises(ProcessLookupError):
         os.kill(int(pid_file.read_text()), 0)
+    await s.clean()
+
+
+async def test_port_shutdown_while_waiting_for_main_publishes_one_error(system, monkeypatch):
+    s, ctx = system, system.manager._ctx
+    manager = ChangeManager(
+        s.ws,
+        ctx.publish,
+        main_graph=ctx.main_graph,
+        main_snapshot=ctx.state.snapshot,
+        run_id=s.store.run_id,
+        revert_test_timeout_s=60,
+    )
+    await s.ws.check_isolation()
+    before = len(s.events)
+    close_delivery = AsyncMock(wraps=delivery.aclose)
+    monkeypatch.setattr(delivery, "aclose", close_delivery)
+    async with s.ws.locks(main=True):
+        manager.revert(s.target, s.command)
+        port = manager._revert
+        assert port is not None
+        task = next(iter(port._tasks))
+        await asyncio.sleep(0)  # Let the admitted body reach main's occupied lock.
+        assert port.service._attempts[-1].started and not task.done()
+        await asyncio.wait_for(manager.aclose(), 5)
+    assert task.cancelled()
+    close_delivery.assert_awaited_once_with(manager._ctx)
+    reports = [SERVER_EVENT.validate_json(e.envelope) for e in s.events[before:]]
+    assert len(reports) == 1 and reports[0].type == "error"
+    report = reports[0].payload
+    assert not report.fatal and report.source == "server"
+    assert report.agent_id is None and report.change_id is None
+    assert "change-1" in report.message and "CancelledError" in report.message
+    assert not port.service._reserved and not port.service._owners
+    assert not manager.main_suspect
+    assert await s.head() == s.command.main_commit
     await s.clean()
 
 

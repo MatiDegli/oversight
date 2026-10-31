@@ -110,6 +110,15 @@ def test_revert_route_is_live_only(tmp_path):
         assert response.json()["error"]["message"] == "Revert is not available in a replay"
 
 
+def test_proposal_documents_live_revert_command():
+    rows = (REPO_ROOT / "docs/proposal.md").read_text().splitlines()
+    assert [row for row in rows if row.startswith("| `POST /changes/{id}/revert` |")] == [
+        "| `POST /changes/{id}/revert` | "
+        "`RevertChange {resolution_seq, merge_commit, main_commit}` | "
+        "202 | `not_found`, `wrong_state` |"
+    ]
+
+
 def test_only_http_wiring_reverts_as_person():
     root = Path(__file__).resolve().parents[2] / "src"
     sources = [(p.relative_to(root).as_posix(), p.read_text()) for p in root.rglob("*.py")]
