@@ -13,3 +13,6 @@ export { BehaviorDiff } from "./BehaviorDiff";
 export { MeasuredCallers } from "./MeasuredCallers";
 
 export { selectConeWords } from "./coneWords";
+export { ReviewBody } from "./ReviewBody";
+export { candidateKey, currentCards } from "./answers";
+export { approvalLocked, approvalLockedCaption } from "./ReviewDecisionBar";
