@@ -113,7 +113,7 @@ def capture(base: str, runtime: Path) -> None:
         stream.close()
 
 
-def record() -> None:
+def record(*, include_message_text: bool = False) -> None:
     with tempfile.TemporaryDirectory(prefix="oversight-record-l2-") as scratch:
         runtime = Path(scratch) / ".runtime"
         port = demo.smoke.free_port()
@@ -135,13 +135,21 @@ def record() -> None:
             raise
         finally:
             demo.stop_server(child)
-        result = record_run(latest_store(runtime / "runs"), OUT, fake_fixture=True)
+        result = record_run(
+            latest_store(runtime / "runs"),
+            OUT,
+            fake_fixture=True,
+            include_message_text=include_message_text,
+        )
         print(f"Exported {result.count} backend events to {OUT.relative_to(demo.REPO_ROOT)}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serve", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--include-message-text", action="store_true", help="include stored, masked human messages"
+    )
     args = parser.parse_args()
     if args.serve:
         app.LIMITS = app.LIMITS.model_copy(update={"cone_max_depth": 1, "cone_max_nodes": 1})
@@ -155,7 +163,7 @@ def main() -> None:
                 timeout_graceful_shutdown=1,
             )
     else:
-        record()
+        record(include_message_text=args.include_message_text)
 
 
 if __name__ == "__main__":
