@@ -39,19 +39,74 @@ class Gate:
     def child_signal(self) -> str:
         return f"open({str(self.signal)!r}, 'w').write(str(os.getpid()))"
 
-    async def open_gate(self) -> None:
-        def write() -> None:
-            with open(self.go, "w") as handle:
-                handle.write("go")
+    async def _exchange(self, path: Path, *, writing: bool, timeout_s: float) -> str:
+        loop = asyncio.get_running_loop()
+        opened = asyncio.Event()
+        aborted = False
 
-        await asyncio.to_thread(write)
+        def exchange() -> str:
+            fd = os.open(path, os.O_WRONLY if writing else os.O_RDONLY)
+            loop.call_soon_threadsafe(opened.set)
+            try:
+                if writing:
+                    if not aborted:
+                        os.write(fd, b"go")
+                    return ""
+                chunks: list[bytes] = []
+                while not aborted:
+                    if not select.select([fd], [], [], 0.05)[0]:
+                        continue
+                    chunk = os.read(fd, 4096)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                return b"".join(chunks).decode()
+            finally:
+                os.close(fd)
 
-    async def wait_signal(self) -> str:
-        def read() -> str:
-            with open(self.signal) as handle:
-                return handle.read()
+        worker = asyncio.create_task(asyncio.to_thread(exchange))
+        try:
+            async with asyncio.timeout(timeout_s):
+                return await asyncio.shield(worker)
+        except (TimeoutError, asyncio.CancelledError):
+            aborted = True
 
-        return await asyncio.to_thread(read)
+            async def release() -> None:
+                while not worker.done():
+                    try:
+                        fd = os.open(
+                            path, (os.O_RDONLY if writing else os.O_WRONLY) | os.O_NONBLOCK
+                        )
+                    except OSError as error:
+                        if error.errno != errno.ENXIO:
+                            raise
+                        await asyncio.sleep(0.001)
+                        continue
+                    ready = asyncio.create_task(opened.wait())
+                    try:
+                        # Keep the peer open until the worker has actually opened its end.
+                        await asyncio.wait({ready, worker}, return_when=asyncio.FIRST_COMPLETED)
+                    finally:
+                        os.close(fd)
+                        ready.cancel()
+                        await asyncio.gather(ready, return_exceptions=True)
+                    break
+                await asyncio.gather(worker, return_exceptions=True)
+
+            cleanup = asyncio.create_task(release())
+            while not cleanup.done():
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    continue
+            cleanup.result()
+            raise
+
+    async def open_gate(self, timeout_s: float = 60) -> None:
+        await self._exchange(self.go, writing=True, timeout_s=timeout_s)
+
+    async def wait_signal(self, timeout_s: float = 60) -> str:
+        return await self._exchange(self.signal, writing=False, timeout_s=timeout_s)
 
 
 @pytest.fixture

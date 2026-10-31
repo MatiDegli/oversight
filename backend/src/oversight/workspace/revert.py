@@ -207,7 +207,7 @@ async def prepare_inverse(
     item = InverseCandidate(
         _InverseTree(workspace, root, agent_id, "", main_commit), main_commit, inverse_tree, commit
     )
-    completed = False
+    body_error: BaseException | None = None
     try:
         await offload(partial(ensure_plain_dir, workspace.runtime_root, root.parent))
         await workspace.git_ok(
@@ -221,10 +221,12 @@ async def prepare_inverse(
         )
         await offload(item.tree.git_identity.verify_registration)
         yield item
-        completed = True
+    except BaseException as error:
+        body_error = error
+        raise
     finally:
-        if await _cleanup(workspace, item) and completed:
-            raise asyncio.CancelledError
+        if await _cleanup(workspace, item) and not isinstance(body_error, asyncio.CancelledError):
+            raise asyncio.CancelledError from body_error
 
 
 def inverse_suite_problem(run: SuiteRun, *, tree: str, cleaned: bool) -> str | None:
@@ -255,13 +257,13 @@ async def _head(workspace: Workspace, deadline: float) -> str:
         or attached.truncated
         or attached.stdout.strip() != "refs/heads/main"
     ):
-        raise InverseError("main must be attached")
+        raise WorkspaceError("main must be attached and readable")
     ref = (await _git(workspace, deadline, "rev-parse", "refs/heads/main")).strip()
     if (
         not OID.fullmatch(ref)
         or (await _git(workspace, deadline, "rev-parse", "HEAD")).strip() != ref
     ):
-        raise InverseError("main ref and HEAD differ")
+        raise WorkspaceError("main ref and HEAD differ")
     return ref
 
 
@@ -391,6 +393,26 @@ async def _settled_outcome(
     )
 
 
+async def _preflight(workspace: Workspace, expected: _Expected, deadline: float) -> str:
+    head = await _head(workspace, deadline)
+    if head == expected.inverse_commit:
+        return head
+    try:
+        index = await _checkout_tree(workspace, deadline)
+        head_tree = (await _git(workspace, deadline, "rev-parse", f"{head}^{{tree}}")).strip()
+        if index != head_tree:
+            raise InverseError("inverse index is dirty")
+    except InverseError:
+        # A live update-ref may have landed since the first read. Refuse only
+        # after verifying that this is still a pre-publication checkout.
+        head = await _head(workspace, deadline)
+        if head != expected.inverse_commit:
+            raise
+    if head == expected.main_commit:
+        await _verify_commit(workspace, expected, deadline)
+    return head
+
+
 async def apply_inverse(
     workspace: Workspace,
     *,
@@ -407,16 +429,16 @@ async def apply_inverse(
     expected = _expected(workspace, main_commit, inverse_commit, inverse_tree)
     deadline = time.monotonic() + timeout_s
     async with lease_until(workspace.git_lease(), deadline):
-        head = await _head(workspace, deadline)
+        try:
+            head = await _preflight(workspace, expected, deadline)
+        except InverseError:
+            raise
+        except (OSError, WorkspaceError, TimeoutError):
+            return await _settled_outcome(workspace, expected, timeout_s)
         if head == inverse_commit:
             return await _settled_outcome(workspace, expected, timeout_s)
-        index = await _checkout_tree(workspace, deadline)
-        head_tree = (await _git(workspace, deadline, "rev-parse", f"{head}^{{tree}}")).strip()
-        if index != head_tree:
-            raise InverseError("inverse index is dirty")
         if head not in (main_commit, inverse_commit):
             return InverseOutcome("main_moved", head)
-        await _verify_commit(workspace, expected, deadline)
         try:
             result = await workspace.git(
                 workspace.main,

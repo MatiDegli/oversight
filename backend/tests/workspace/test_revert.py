@@ -2,6 +2,8 @@
 
 import asyncio
 import sys
+import textwrap
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -201,6 +203,91 @@ async def test_reentrant_required_suite(workspace, api, monkeypatch):
         assert api.inverse_suite_problem(run, tree=t, cleaned=item.cleaned) is None
 
 
+async def suite_signal(task, gate, timeout_s: float = 60):
+    signal = asyncio.create_task(gate.wait_signal())
+    try:
+        done, _ = await asyncio.wait(
+            {signal, task}, timeout=timeout_s, return_when=asyncio.FIRST_COMPLETED
+        )
+        if task in done:
+            await task  # Surface setup/isolation failures instead of waiting for an absent child.
+            pytest.fail("suite owner ended before signaling")
+        if signal not in done:
+            pytest.fail("suite child did not signal within its deadline")
+        return int(await signal)
+    finally:
+        signal.cancel()
+        # Gate releases and joins its FIFO worker before cancellation escapes.
+        await asyncio.gather(signal, return_exceptions=True)
+
+
+@pytest.mark.parametrize("owner_fails", [False, True])
+async def test_suite_signal_watches_owner_and_deadline(gate_factory, owner_fails):
+    gate = gate_factory("absent-suite")
+    error = OSError("suite setup failed")
+
+    async def owner():
+        if owner_fails:
+            raise error
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(owner())
+    try:
+        async with asyncio.timeout(5):
+            with pytest.raises(OSError if owner_fails else pytest.fail.Exception) as caught:
+                await suite_signal(task, gate, timeout_s=0.05)
+            if owner_fails:
+                assert caught.value is error
+    finally:
+        task.cancel()
+        with suppress(OSError, asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.parametrize("operation", ["wait_signal", "open_gate"])
+@pytest.mark.parametrize("cancel", [False, True])
+async def test_gate_absent_peer_releases_executor(tmp_path, operation, cancel):
+    # A separate interpreter makes a stuck executor join an ordinary, bounded failure.
+    helper_dir = str(Path(__file__).parent)
+    script = f"import sys; sys.path.insert(0, {helper_dir!r})\n" + textwrap.dedent(f"""
+        import asyncio
+        from pathlib import Path
+        from conftest import Gate
+
+        async def check():
+            gate = Gate(Path.cwd(), "absent")
+            started = asyncio.Event()
+            loop = asyncio.get_running_loop()
+            to_thread = asyncio.to_thread
+
+            async def observe(fn, *args, **kwargs):
+                def worker():
+                    loop.call_soon_threadsafe(started.set)
+                    return fn(*args, **kwargs)
+                return await to_thread(worker)
+
+            asyncio.to_thread = observe
+            wait = gate.{operation}() if {cancel!r} else gate.{operation}(timeout_s=0.05)
+            task = asyncio.create_task(wait)
+            if {cancel!r}:
+                await started.wait()
+                task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError if {cancel!r} else TimeoutError):
+                pass
+            else:
+                raise AssertionError("missing peer completed")
+
+        asyncio.run(check())
+        print("executor closed")
+    """)
+    result = await run_process([sys.executable, "-c", script], cwd=tmp_path, timeout_s=15)
+    assert not result.timed_out, result.stderr
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "executor closed"
+
+
 async def test_cancel_sleeping_child_and_repeated_cleanup_cancellation(
     workspace, api, monkeypatch, gate_factory, wait_gone
 ):
@@ -256,12 +343,20 @@ async def test_cancel_sleeping_child_and_repeated_cleanup_cancellation(
             await workspace.run_tests(item.tree, timeout_s=30, isolation="required")
 
     task = asyncio.create_task(owner())
-    pid = int(await gate.wait_signal())
-    task.cancel()
-    await cleaning.wait()
-    task.cancel()
-    with pytest.raises(SuiteInterrupted) as interrupted:
-        await task
+    try:
+        pid = await suite_signal(task, gate)
+        task.cancel()
+        async with asyncio.timeout(60):
+            await cleaning.wait()
+            task.cancel()
+            with pytest.raises(SuiteInterrupted) as interrupted:
+                await task
+    finally:
+        if not task.done():
+            task.cancel()
+            async with asyncio.timeout(60):
+                with suppress(asyncio.CancelledError):
+                    await task
     assert interrupted.value.run.output == partial.output
     assert interrupted.value.run.result == partial.result
     await asyncio.to_thread(wait_gone, pid)
@@ -376,8 +471,11 @@ async def test_dirty_or_detached_refused_before_cas(workspace, api, dirty, monke
             return await real(tree, *args, **kwargs)
 
         monkeypatch.setattr(workspace, "git", observe)
-        with pytest.raises(api.InverseError):
-            await api.apply_inverse(workspace, **effect_args(item))
+        if dirty == "detached":
+            assert (await api.apply_inverse(workspace, **effect_args(item))).kind == "unknown"
+        else:
+            with pytest.raises(api.InverseError):
+                await api.apply_inverse(workspace, **effect_args(item))
         assert "update-ref" not in calls
         assert await workspace.git_ok(workspace.main, "rev-parse", "refs/heads/main") == before
 
@@ -483,6 +581,74 @@ async def test_apply_already_published_with_old_checkout(workspace, api, monkeyp
         outcome = await api.apply_inverse(workspace, **effect_args(item))
         assert outcome.kind == ("unknown" if blocked else "landed")
         assert "update-ref" not in calls
+
+
+@pytest.mark.parametrize("persistent", [False, True])
+@pytest.mark.parametrize("failure", ["timeout", "unreaped", "truncated", "inconsistent", "io"])
+async def test_preflight_read_failure_settles_published_inverse(
+    workspace, api, monkeypatch, failure, persistent
+):
+    item = await prepared(workspace, api)
+    real = workspace.git
+    injected = False
+    effects = []
+
+    async def unreadable(tree, *args, **kwargs):
+        nonlocal injected
+        if args[0] == "update-ref":
+            effects.append(args)
+        target = ("rev-parse", "HEAD") if failure == "inconsistent" else ("symbolic-ref", "HEAD")
+        result = await real(tree, *args, **kwargs)
+        if args == target and (persistent or not injected):
+            injected = True
+            if failure == "io":
+                raise OSError("unreadable preflight")
+            return replace(
+                result,
+                returncode=None if failure == "unreaped" else result.returncode,
+                timed_out=failure == "timeout",
+                truncated=failure == "truncated",
+                stdout=item.main_commit + "\n" if failure == "inconsistent" else result.stdout,
+            )
+        return result
+
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        await workspace.git_ok(
+            workspace.main, "update-ref", "refs/heads/main", item.inverse_commit, item.main_commit
+        )
+        monkeypatch.setattr(workspace, "git", unreadable)
+        outcome = await api.apply_inverse(workspace, **effect_args(item))
+        assert outcome.kind == ("unknown" if persistent else "landed")
+        assert injected and not effects
+
+
+@pytest.mark.parametrize("dirty", ["index", "checkout"])
+async def test_preflight_dirty_refusal_rechecks_late_inverse(workspace, api, monkeypatch, dirty):
+    item = await prepared(workspace, api)
+    real = workspace.git
+    injected = False
+    effects = []
+
+    async def late_publication(tree, *args, **kwargs):
+        nonlocal injected
+        if args[0] == "update-ref":
+            effects.append(args)
+        if not injected and args[0] == ("write-tree" if dirty == "index" else "diff-files"):
+            injected = True
+            await real(tree, "update-ref", "refs/heads/main", item.inverse_commit, item.main_commit)
+            if dirty == "index":
+                await real(tree, "read-tree", "-m", "-u", item.main_commit, item.inverse_commit)
+            else:
+                (tree.root / "shop/mod.py").write_text("foreign edit\n")
+        return await real(tree, *args, **kwargs)
+
+    monkeypatch.setattr(workspace, "git", late_publication)
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        outcome = await api.apply_inverse(workspace, **effect_args(item))
+        assert outcome.kind == ("landed" if dirty == "index" else "unknown")
+        assert injected and not effects
+        if dirty == "checkout":
+            assert (workspace.main.root / "shop/mod.py").read_text() == "foreign edit\n"
 
 
 async def test_cas_mismatch_naming_inverse_settles_checkout(workspace, api, monkeypatch):
@@ -683,33 +849,46 @@ async def test_cleanup_fallback_and_unverified_cleanup(workspace, api, monkeypat
 async def test_cleanup_cancellation_preserves_body_exit(workspace, api, monkeypatch, body_fails):
     h, t = await candidate(workspace, api)
     real = workspace.git
+    cleaning = asyncio.Event()
     interrupted = False
 
     async def interrupt(tree, *args, **kwargs):
         nonlocal interrupted
         if args[:2] == ("worktree", "remove") and not interrupted:
             interrupted = True
-            raise asyncio.CancelledError
+            cleaning.set()
+            await asyncio.Event().wait()
         return await real(tree, *args, **kwargs)
 
     monkeypatch.setattr(workspace, "git", interrupt)
     error = ValueError("body failed")
-    item = None
-    async with workspace.locks(main=True, agent_id="agent-1"):
-        with pytest.raises(ValueError if body_fails else asyncio.CancelledError) as caught:
-            async with api.prepare_inverse(
+    seen = []
+
+    async def owner():
+        async with (
+            workspace.locks(main=True, agent_id="agent-1"),
+            api.prepare_inverse(
                 workspace,
                 agent_id="agent-1",
                 main_commit=h,
                 inverse_tree=t,
                 message=MESSAGE,
                 timeout_s=5,
-            ) as item:
-                if body_fails:
-                    raise error
-        if body_fails:
-            assert caught.value is error
-        assert interrupted and item is not None and item.cleaned
+            ) as item,
+        ):
+            seen.append(item)
+            if body_fails:
+                raise error
+
+    task = asyncio.create_task(owner())
+    async with asyncio.timeout(60):
+        await cleaning.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError) as caught:
+            await task
+    assert task.cancelled()
+    assert caught.value.__cause__ is (error if body_fails else None)
+    assert interrupted and seen[0].cleaned
 
 
 async def test_reapply_landed_candidate_does_not_publish_twice(workspace, api, monkeypatch):
