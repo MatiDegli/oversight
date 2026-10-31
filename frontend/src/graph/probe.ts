@@ -28,6 +28,10 @@ export interface GraphProbe {
   /** Layout positions of the nodes with no children, which no camera move may change. A box's own position follows its children. */
   positions(): Record<string, { x: number; y: number }>;
   representative(id: string): string;
+  /** Drawn node box in host pixels, excluding labels and overlays; folded nodes return null. */
+  renderedBox(
+    id: string,
+  ): { x1: number; y1: number; x2: number; y2: number; w: number; h: number } | null;
   /** Computed renderer styles, for checking pending borders and agent colors on the canvas. */
   appearance(selector: string): {
     id: string;
@@ -79,6 +83,18 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
     positions: () =>
       Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),
     representative: (id) => visibleId(cy, id),
+    renderedBox: (id) => {
+      const node = cy.getElementById(id);
+      if (node.empty() || !node.isNode() || visibleId(cy, id) !== id || !node.visible())
+        return null;
+      return {
+        ...node.renderedBoundingBox({
+          includeLabels: false,
+          includeOverlays: false,
+          includeUnderlays: false,
+        }),
+      };
+    },
     appearance: (selector) =>
       cy.elements(selector).map((element) => ({
         id: element.id(),
@@ -151,7 +167,14 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
       edgeShape: String(cy.edges().not(".imports").first().style("curve-style")),
     }),
   };
+  const notify = () => {
+    if (typeof host.dispatchEvent === "function")
+      host.dispatchEvent(new CustomEvent("graphrender"));
+  };
+  cy.on("render resize", notify);
+  notify();
   return () => {
+    cy.off("render resize", notify);
     delete host.oversightGraph;
   };
 }

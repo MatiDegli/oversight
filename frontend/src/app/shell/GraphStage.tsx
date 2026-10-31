@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { GraphView, possibleCallers } from "../../graph";
+import { GraphView, possibleCallers, NodeChips } from "../../graph";
 import type { Framing, GraphApi } from "../../graph";
 import { ImpactConeCard, selectConeWords } from "../../review";
 import type { State } from "../../state";
@@ -135,6 +135,7 @@ export function GraphStage({
           </div>
         </div>
       </div>
+      <NodeChips state={state} litIds={litIds} />
     </main>
   );
 }
