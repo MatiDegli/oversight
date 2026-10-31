@@ -208,7 +208,7 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
 - Run the bench on a real repository.
 - Filesystem isolation for tests and probes (bubblewrap on Linux); today's isolation covers the
   network and the process tree only. No filesystem sandbox during the hackathon.
-- After the hackathon: native backend ports for Windows and macOS, each as its own fronts. First a
+- After the hackathon: native backend ports for Windows and macOS, as their own fronts. First a
   per-OS layer in `backend/src/oversight/workspace/` (network isolation, process-tree cleanup, file
   locks, no-follow file opens), then a test-isolation design for each OS. Until a port has its own
   isolation, it runs in the existing mode without isolation (network open; rules, Revert and
