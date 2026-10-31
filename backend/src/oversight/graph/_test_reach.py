@@ -78,3 +78,46 @@ def _walk(
             seen.add(caller)
             pending.append((caller, depth + 1))
     return False
+
+
+def test_reaches(
+    graph: GraphSnapshot,
+    test_id: str,
+    targets: Iterable[str],
+    *,
+    max_depth: int,
+    max_nodes: int,
+) -> bool | None:
+    """Forward exact calls; uncertain calls or a cut cannot establish absence.
+
+    A reached target wins over uncertainty on other branches. Depth counts edges;
+    the node budget includes the root. No executed-node evidence is inferred.
+    """
+    if max_depth < 0 or max_nodes < 0:
+        raise ValueError("max_depth and max_nodes must not be negative")
+    if graph.parse_errors or max_nodes == 0 or test_id not in {n.id for n in graph.nodes}:
+        return None
+    calls: defaultdict[str, set[str]] = defaultdict(set)
+    possible: set[str] = set()
+    for edge in graph.edges:
+        if edge.kind == "calls":
+            if edge.confidence == "exact":
+                calls[edge.src].add(edge.dst)
+            else:
+                possible.add(edge.src)
+    targets = set(targets)
+    seen = {test_id}
+    pending = deque([(test_id, 0)])
+    unknown = False
+    while pending:
+        node_id, depth = pending.popleft()
+        if node_id in targets:
+            return True
+        unknown |= node_id in possible
+        for called in sorted(calls.get(node_id, set()) - seen):
+            if depth == max_depth or len(seen) == max_nodes:
+                unknown = True
+                continue
+            seen.add(called)
+            pending.append((called, depth + 1))
+    return None if unknown else False
