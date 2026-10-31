@@ -1,13 +1,14 @@
 import type { ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 import log from "../../../fixtures/events/handwritten-measured-cone.jsonl?raw";
+import additions from "../../../docs/additions.md?raw";
 import { selectConeWords } from "../review";
 import { applyEvent, createInitialState } from "../state";
 import { themes } from "../theme";
 import { elementSnapshot } from "./elementSnapshot";
 import { graphElements } from "./elements";
 import { foldElements } from "./foldElements";
-import { headerLayers, measuredLayer } from "./layers";
+import { HEADER, headerLayers, measuredLayer } from "./layers";
 
 const events = log
   .trim()
@@ -179,7 +180,8 @@ it.each(["class", "module"])("keeps agent marks over measured words on a folded 
       measured,
     );
   const layers = draw("differs");
-  expect(row.data.measured).toBe("differs");
+  expect(row.data.measured).toBeUndefined();
+  expect(row.classes.split(" ")).not.toContain("measured-differs");
   expect(layers).toHaveLength(2);
   expect(layers).toEqual(draw());
   const svg = layers.map((layer) => decodeURIComponent(layer.image)).join("");
@@ -187,4 +189,36 @@ it.each(["class", "module"])("keeps agent marks over measured words on a folded 
   expect(svg).toContain(">A</text>");
   expect(svg).not.toContain(">differs</text>");
   expect(svg).not.toContain(`>${row.data.count ?? ""}</text>`);
+});
+
+it.each(["dark", "day"] as const)(
+  "keeps folded header titles capped and count styling shared in %s",
+  (mode) => {
+    const theme = themes[mode];
+    const size = { width: 960, height: 46 };
+    const title = "A folded container with a title longer than the reserved title slot";
+    const plain = headerLayers(theme, title, "12 methods", size, "empty", undefined, true);
+    const measured = headerLayers(
+      theme,
+      title,
+      "12 methods",
+      size,
+      "empty",
+      undefined,
+      true,
+      "differs",
+    );
+    expect(measured[0]?.width).toBe(HEADER.titleWidth);
+    expect(measured[0]).toEqual(plain[0]);
+    expect(measured[1]).toEqual({ ...plain[1], offsetX: measured[1]?.offsetX });
+    expect(measured[1]?.offsetX).toBeLessThan(plain[1]?.offsetX ?? 0);
+    expect(decodeURIComponent(measured[1]?.image ?? "")).toContain(">12 methods</text>");
+  },
+);
+
+it("credits the review rework for the caller list independently of canvas words", () => {
+  const row = additions.split("\n").find((line) => line.startsWith("| 4 |"));
+  expect(row).toContain("measured caller list `cf1e536`");
+  expect(row).toContain("canvas words built;");
+  expect(row).not.toContain("b431391");
 });

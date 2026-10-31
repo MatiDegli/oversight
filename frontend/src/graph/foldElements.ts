@@ -61,7 +61,7 @@ export function foldElements(
     if (marks) classes.add("marked");
     if (distance !== Infinity) classes.add("cone");
     const measured = folded
-      ? group.some((e) => e.data.measured === "differs") && distance !== Infinity
+      ? !marks && group.some((e) => e.data.measured === "differs") && distance !== Infinity
         ? "differs"
         : undefined
       : ownMeasurement;

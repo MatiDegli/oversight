@@ -129,6 +129,30 @@ async function compare(sketch: string, capture: string) {
   }
 }
 
+it("observes all four measured words drawn to a canvas", async () => {
+  const page = await browser.newPage();
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => !!window.measuredConeTest);
+    const words = await page.evaluate(async () => {
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Missing canvas context");
+      for (const word of ["differs", "same", "not measured", "varied"]) {
+        const image = new Image();
+        image.src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="100" height="28"><text y="14">${word}</text></svg>`)}`;
+        await image.decode();
+        context.drawImage(image, 0, 0);
+      }
+      return window.measuredConeTest.drawnWords();
+    });
+    expect(words).toEqual(["differs", "not measured", "same", "varied"]);
+  } finally {
+    await page.close();
+  }
+});
+
 it("updates facts in place without camera, nodes, routes, borders or focus moving", async () => {
   const page = await open(1920, "dark");
   const errors: string[] = [];
@@ -144,7 +168,7 @@ it("updates facts in place without camera, nodes, routes, borders or focus movin
     await comment.fill("Keep this comment");
     await check
       .poll(() => page.evaluate(() => window.measuredConeTest.drawnWords()))
-      .toContain("differs");
+      .toEqual(["differs"]);
     const before = await geometry(page);
     const light = await fieldLight(page);
     for (const seq of [22, 23, 24]) {
@@ -163,11 +187,20 @@ it("updates facts in place without camera, nodes, routes, borders or focus movin
           ),
         )
         .toBe(seq === 22 ? 1 : 0);
-      if (seq === 22)
+      if (seq === 22) {
+        // The unchanged differs texture is cached; only varied is newly drawn.
         await check
           .poll(() => page.evaluate(() => window.measuredConeTest.drawnWords()))
-          .toContain("varied");
-      else {
+          .toEqual(["varied"]);
+        expect(
+          await page.evaluate(
+            () =>
+              document
+                .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+                ?.oversightGraph?.nodeBounds('node.measured-differs[label="quote_add"]').length,
+          ),
+        ).toBe(1);
+      } else {
         await page.evaluate(
           () =>
             new Promise<void>((resolve) =>

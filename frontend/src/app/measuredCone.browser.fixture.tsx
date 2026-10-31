@@ -19,7 +19,7 @@ for (const prototype of [
       const source = args[0];
       if (source instanceof HTMLImageElement) {
         const svg = decodeURIComponent(imageSource(source.src));
-        for (const word of ["differs", "varied"])
+        for (const word of ["differs", "same", "varied", "not measured"])
           if (svg.includes(`>${word}</text>`)) drawnWords.add(word);
       }
       Reflect.apply(target, context, args);

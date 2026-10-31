@@ -360,37 +360,24 @@ export function headerLayers(
       ),
     ];
   }
-  if (measured) {
-    const word = measuredLayer(theme, measured, { width: size.width, height: HEADER.height });
-    const gap = px(theme["node-word-gap"]);
-    const countWidth = textWidth(
-      count,
-      `${String(theme["caption-weight"])} ${theme["frame-count-size"]} ${theme["text-font"]}`,
-      px(theme["frame-count-size"]),
-    );
-    const room = Math.max(0, size.width - 2 * inset - word.width - countWidth - 2 * gap);
-    return [
-      titleLayer(theme, title, room, top, folded),
-      trailing(
-        HEADER.countWidth,
-        text(
-          theme,
-          `x="${String(HEADER.countWidth)}" ${rowBaseline} text-anchor="end"`,
-          theme["frame-count-size"],
-          theme["caption-weight"],
-          theme.faint,
-          escape(count),
-        ),
-        word.offsetX - word.width - gap,
-      ),
-      { ...word, offsetY: top },
-    ];
-  }
   const countWidth = textWidth(
     count,
     `${String(theme["caption-weight"])} ${theme["frame-count-size"]} ${theme["text-font"]}`,
     px(theme["frame-count-size"]),
   );
+  if (measured) {
+    const word = measuredLayer(theme, measured, { width: size.width, height: HEADER.height });
+    const gap = px(theme["node-word-gap"]);
+    const room = Math.max(
+      0,
+      Math.min(HEADER.titleWidth, size.width - 2 * inset - word.width - countWidth - 2 * gap),
+    );
+    return [
+      titleLayer(theme, title, room, top, folded),
+      countLayer(theme, count, top, word.offsetX - word.width - gap),
+      { ...word, offsetY: top },
+    ];
+  }
   const room = Math.max(
     0,
     Math.min(
@@ -398,9 +385,14 @@ export function headerLayers(
       size.width - 2 * inset - Math.min(HEADER.countWidth, countWidth) - px(theme["node-word-gap"]),
     ),
   );
-  return [
-    titleLayer(theme, title, room, top, folded),
-    trailing(
+  return [titleLayer(theme, title, room, top, folded), countLayer(theme, count, top, -inset)];
+}
+
+/** The same neutral count in plain and measured frame headers. */
+function countLayer(theme: LayerTheme, count: string, top: number, offsetX: number): Layer {
+  return {
+    image: rowImage(
+      theme,
       HEADER.countWidth,
       text(
         theme,
@@ -410,7 +402,13 @@ export function headerLayers(
         theme.faint,
         escape(count),
       ),
-      -inset,
     ),
-  ];
+    width: HEADER.countWidth,
+    height: HEADER.height,
+    x: "100%",
+    y: "0%",
+    offsetX,
+    offsetY: top,
+    clip: "node",
+  };
 }
