@@ -71,6 +71,14 @@ const kindsState = kinds
   .map(parseEvent)
   .reduce(applyEvent, createInitialState());
 
+it("uses singular labels for 1 agent and 1 step", () => {
+  const firstStep = leadEvents.slice(0, 4).reduce(applyEvent, createInitialState());
+  const html = renderToStaticMarkup(<DecisionInbox state={firstStep} />);
+  expect(html).toContain("1 agent took 1 step in 0 min.");
+  expect(html).not.toContain("1 agents");
+  expect(html).not.toContain("1 steps");
+});
+
 function rowContaining(html: string, text: string): string {
   const row = html
     .match(/<article class="inbox-row">.*?<\/article>/gs)

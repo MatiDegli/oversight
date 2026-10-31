@@ -77,7 +77,7 @@ it.each(["dark", "day"])("lists three lead plans without stealing focus in %s", 
     }
     await expect(inbox.locator(".decision-reasons")).toHaveCount(0);
     await expect(inbox.locator(".inbox-heading p")).toHaveText(
-      "0 agents took 0 steps in 0 min. These 3 need a person.",
+      "1 agent took 3 steps in 0 min. These 3 need a person.",
     );
     await expect(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
     if (process.env.LEAD_PLANS_SHOTS === "1") {

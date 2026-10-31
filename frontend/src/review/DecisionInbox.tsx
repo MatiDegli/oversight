@@ -187,7 +187,8 @@ export function DecisionInbox({
             <div>
               <h2>{entries.length ? "Decisions waiting for you" : "No decisions waiting"}</h2>
               <p className="decision-muted">
-                {agents} agents took {steps} steps
+                {agents} {agents === 1 ? "agent" : "agents"} took {steps}{" "}
+                {steps === 1 ? "step" : "steps"}
                 {minutes === null ? "" : ` in ${String(minutes)} min`}.{" "}
                 {entries.length
                   ? `These ${String(entries.length)} need a person.`

@@ -23,7 +23,7 @@ No extra agent events are fabricated. `runtime_leads.py` publishes `LeadStatus`
 after each coordination tool through `LeadRun.on_step`; `_lead.py` does not emit
 `agent.status` or `agent.step`. The recorded steps 1, 2, 3, 4 therefore remain only
 in the lead statuses. Seq 1–11 and their increasing timestamps are unchanged.
-At seq 8, three plans are proposed, 7 seconds have elapsed, and there are no coding
-agent statuses or steps. The current inbox header consequently reads:
-"0 agents took 0 steps in 0 min. These 3 need a person."
-That header does not count leads; correcting that scope belongs to another front.
+At seq 8, three plans are proposed, 7 seconds have elapsed, and lead revision 4
+reports step 3. The inbox counts the lead from retained `lead.status` evidence:
+"1 agent took 3 steps in 0 min. These 3 need a person."
+At seq 11, lead revision 5 reports step 4, with only plan-3 still proposed.
