@@ -7,7 +7,8 @@ from unittest.mock import Mock
 import pytest
 from changes_helpers import PATH, Harness, approve, bounded, commit_on_main, edit_main
 from test_assessment import clock as clock
-from test_assessment import propose, rec, settled, terminals, wait
+from test_assessment import full_evidence, propose, rec, settled, terminals, wait
+from test_assessment import ready as ready
 from test_mode import available, select
 
 from oversight.changes._policy import assess
@@ -163,33 +164,47 @@ async def test_follow_does_not_carry_main_dependent_state(h: Harness, clock, mat
     assert clock.calls.call_args.args[0].suite is None
 
 
+@pytest.mark.parametrize("move_main", [False, True])
 @bounded
-async def test_main_moves_during_assessment_receipt(h: Harness, clock):
-    old = await ready_wait(h, clock)
-    sched = h.manager._ctx.assessment
+async def test_main_moves_during_assessment_receipt(h: Harness, clock, ready, move_main):
+    full_evidence(h, ready)
     admission = Mock(return_value=None)
     h.manager._ctx.ports.rules_admission = admission
+    old = await ready_wait(h, clock)
+    admission.assert_called_once_with(rec(h), old.latest)
+    admission.reset_mock()
+    sched = h.manager._ctx.assessment
     h.gate = ChangeAssessment
     sched.wake(rec(h))
     await h.at_gate.wait()
-    post = await save(h)
+    post = await save(h) if move_main else old.main_commit
     h.open_gate.set()
     await settled(h)
-    assert old.task.cancelled() and not admission.called and not terminals(h)
-    assert wait(h) is not old and wait(h).main_commit == post and wait(h).deadline == 130
-    assessed_after_delta(h, post)
+    new = wait(h)
+    admission.assert_called_once_with(rec(h), new.latest)
+    assert new.latest is not None
+    assert new.latest.main_commit == post and new.deadline == 130 and not terminals(h)
+    if move_main:
+        assert old.task.cancelled() and new is not old
+        assert all(call.args[1].main_commit != old.main_commit for call in admission.call_args_list)
+        assessed_after_delta(h, post)
+    else:
+        assert new is old and not old.task.cancelled()
     await expired(h, clock, old)
 
 
 @pytest.mark.parametrize("failure", ["scan", "publish"])
 @pytest.mark.parametrize("recover", [True, False])
 async def test_follow_waits_for_snapshot_receipt_after_scan_or_delivery_failure(
-    h: Harness, clock, monkeypatch, failure, recover
+    h: Harness, clock, ready, monkeypatch, failure, recover
 ):
-    old = await ready_wait(h, clock)
-    sched = h.manager._ctx.assessment
+    full_evidence(h, ready)
     admission = Mock(return_value=None)
     h.manager._ctx.ports.rules_admission = admission
+    old = await ready_wait(h, clock)
+    admission.assert_called_once_with(rec(h), old.latest)
+    admission.reset_mock()
+    sched = h.manager._ctx.assessment
     calls = clock.calls.call_count
     scan = fail_scan(h, monkeypatch) if failure == "scan" else None
     if failure == "publish":
@@ -206,6 +221,7 @@ async def test_follow_waits_for_snapshot_receipt_after_scan_or_delivery_failure(
         await settled(h)
         assert wait(h) is not old and wait(h).main_commit == post
         assert wait(h).deadline == 130 and clock.calls.call_count == calls + 1
+        admission.assert_called_once_with(rec(h), wait(h).latest)
     else:
         await expired(h, clock, old)
         events = len(h.payloads(ChangeAssessment))
@@ -215,20 +231,33 @@ async def test_follow_waits_for_snapshot_receipt_after_scan_or_delivery_failure(
         assert len(h.payloads(ChangeAssessment)) == events and len(terminals(h)) == 1
 
 
-async def test_follow_coalesces_moves_without_extending_deadline(h: Harness, clock, monkeypatch):
+@pytest.mark.parametrize("first_delivered", [False, True])
+async def test_follow_coalesces_moves_without_extending_deadline(
+    h: Harness, clock, monkeypatch, first_delivered
+):
     old = await ready_wait(h, clock)
     sched = h.manager._ctx.assessment
-    scan = fail_scan(h, monkeypatch)
+    scan = h.main_graph.scan
+    if not first_delivered:
+        fail_scan(h, monkeypatch)
     first = await save(h)
+    await settled(h)
+    if first_delivered:
+        old = wait(h)
+        assert old.main_commit == h.manager.snapshot.commit == first
+        fail_scan(h, monkeypatch)
     post = await save(h, "return 4", "return 5")
     assert first != post and wait(h) is old and old.parked
-    sched.main_delivered(first)
-    assert wait(h) is old
+    calls = clock.calls.call_count
+    sched.main_delivered(h.manager.snapshot.commit if first_delivered else first)
+    await settled(h)
+    assert wait(h) is old and old.parked and clock.calls.call_count == calls
     monkeypatch.setattr(h.main_graph, "scan", scan)
     await h.manager.rescan()
     await settled(h)
     new = wait(h)
     assert new.target.generation == old.target.generation + 1 and new.main_commit == post
+    assert clock.calls.call_count == calls + 1
     calls = clock.calls.call_count
     sched.main_changed(post)
     sched.main_delivered(post)

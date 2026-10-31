@@ -2738,3 +2738,7 @@ Renewal only schedules assessment; the activation latch stays closed and no wire
 changes. Revert uses its own verified-commit and snapshot-receipt hooks. Consumed attempts,
 attempt keys, and queued/in-flight renewal belong to F5b. Unannounced snapshot moves retain
 the existing terminal main_moved behavior.
+`park` safely cancels an in-flight evaluation only because production publishes a terminal
+through `ReviewCards.publish` -> `ctx.whole` (`_review_cards.py:216-218`), which completes
+the publish and its `rules_received`; F5b must preserve that behavior or route the terminal
+publish through `ctx.whole` itself.
