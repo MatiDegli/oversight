@@ -1,5 +1,9 @@
-// eslint-disable-next-line no-restricted-imports -- B2n reuses line A's selector; review exports are outside this front.
-import { selectBehaviorEvidence, type BehaviorNodeView } from "../review/behaviorEvidence";
+// eslint-disable-next-line no-restricted-imports -- The graph reuses the evidence selector and sentences, which the review index does not export.
+import {
+  selectBehaviorEvidence,
+  unstableBehaviorSentence,
+  type BehaviorNodeView,
+} from "../review/behaviorEvidence";
 import type { State } from "../state";
 
 export interface GraphBehaviorEntry {
@@ -35,8 +39,7 @@ export function selectGraphBehavior(state: State): GraphBehaviorEntry[] {
     });
 }
 
-export const unstableBehaviorSentence =
-  "Results varied between runs; this is not an established difference.";
+export { unstableBehaviorSentence };
 
 export function selectGraphBehaviorNode(state: State, changeId: string, nodeId: string) {
   return selectBehaviorEvidence(state, changeId)?.find((node) => node.node_id === nodeId);

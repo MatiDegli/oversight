@@ -3,6 +3,7 @@ import type { MeasuredCaller } from "@contracts";
 import type { State } from "../state";
 import { smallestExample } from "./reviewBodyEvidence";
 import { selectMeasuredCallers } from "./measuredCallers";
+import { unstableBehaviorSentence } from "./behaviorEvidence";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
@@ -55,9 +56,7 @@ function CallerEvidence({ caller, detailsOnly }: { caller: MeasuredCaller; detai
               <li key={index}>
                 {sample.unstable && (
                   <p className="text-text">
-                    {detailsOnly
-                      ? "Results varied between runs; this is not an established difference."
-                      : "Unstable observation"}
+                    {detailsOnly ? unstableBehaviorSentence : "Unstable observation"}
                   </p>
                 )}
                 <dl
