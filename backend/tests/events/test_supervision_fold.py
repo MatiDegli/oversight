@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from changes.test_policy_profiles import PROFILE, policy_inputs
-from events.test_usage_fold import TS, proposal, resolution, tick
+from events.test_usage_fold import TS, Role, proposal, resolution, tick
 
 from oversight.changes._policy import assess
 from oversight.events import Decisions, Outcomes, Spend, fold_supervision, fold_usage, read_jsonl
@@ -254,7 +254,7 @@ def test_new_event_types_are_ignored() -> None:
         ts=TS,
         type="agent.focus",
         payload=AgentFocus(
-            agent_id="agent-9",
+            agent_id="agent-8",
             mode="read",
             ranges=[],
             node_ids=[],
@@ -262,9 +262,16 @@ def test_new_event_types_are_ignored() -> None:
     )
     expected = fold_supervision(numbered(*base))
     actual = fold_supervision(
-        numbered(base[0], focus, updated(), tick(1, 0, change=None), *base[1:])
+        numbered(base[0], focus, updated(), tick(1, 7, change=None, agent="agent-9"), *base[1:])
     )
-    assert dataclasses.replace(actual, through_seq=3) == expected
+    assert actual.changes == expected.changes
+    assert actual.decisions == expected.decisions
+    assert actual.not_merged == expected.not_merged
+    assert actual.run == dataclasses.replace(expected.run, cost_usd=7)
+    assert actual.agents[0] == expected.agents[0]
+    assert [a.agent_id for a in actual.agents] == ["agent-1", "agent-9"]
+    assert actual.agents[1].cost_usd == 7
+    assert actual.agents[1].changes == actual.agents[1].steps == 0
     assert actual.through_seq == 6
 
 
@@ -275,8 +282,52 @@ def test_refuses_incomplete_prefix() -> None:
 
 @pytest.mark.parametrize("first", [proposal(1), tick(1), resolution(1)])
 def test_two_owners_for_one_change_raise(first: ServerEvent) -> None:
+    other = first.model_copy(
+        update={"payload": first.payload.model_copy(update={"agent_id": "agent-2"})}
+    )
     with pytest.raises(ValueError, match="two owners for change change-1 at seq 2"):
-        fold_supervision(numbered(first, tick(1, agent="agent-2")))
+        fold_supervision(numbered(first, other))
+
+
+@pytest.mark.parametrize("receipt", [proposal(1), resolution(1)])
+@pytest.mark.parametrize("role", ["lead", "review"])
+@pytest.mark.parametrize("tick_first", [False, True])
+def test_receipt_owner_takes_priority_over_ticks(
+    receipt: ServerEvent, role: Role, tick_first: bool
+) -> None:
+    other = tick(1, 2, role=role, agent="agent-2")
+    events = [other, receipt] if tick_first else [receipt, other]
+    result = fold_supervision(numbered(*events, tick(1, 3)))
+    assert result.changes[0].agent_id == "agent-1"
+    assert result.changes[0].usage.cost_usd == 5
+    assert [a.agent_id for a in result.agents] == ["agent-1"]
+    assert result.agents[0].cost_usd == result.run.cost_usd == 5
+
+
+@pytest.mark.parametrize("receipt", [proposal(1), resolution(1)])
+def test_receipt_owner_takes_priority_over_conflicting_earlier_ticks(receipt: ServerEvent) -> None:
+    result = fold_supervision(
+        numbered(tick(1, 2, role="lead", agent="agent-3"), tick(1, 3), receipt)
+    )
+    assert result.changes[0].agent_id == "agent-1"
+    assert result.run.cost_usd == 5
+
+
+def test_receipts_still_reject_conflicting_owners_after_ticks() -> None:
+    other = proposal(1)
+    other = other.model_copy(
+        update={"payload": other.payload.model_copy(update={"agent_id": "agent-2"})}
+    )
+    with pytest.raises(ValueError, match="two owners for change change-1 at seq 4"):
+        fold_supervision(numbered(tick(1, agent="agent-3"), proposal(1), tick(1), other))
+
+
+def test_ticks_establish_owner_when_no_receipt_exists() -> None:
+    result = fold_supervision(numbered(tick(1, 2, agent="agent-2"), tick(1, 3, agent="agent-2")))
+    assert result.changes[0].agent_id == result.agents[0].agent_id == "agent-2"
+    assert result.changes[0].proposals == result.run.changes == 0
+    assert result.run.open_changes == 1
+    assert result.run.cost_usd == result.agents[0].cost_usd == 5
 
 
 def test_unowned_changes_are_omitted_but_keep_first_appearance_order() -> None:

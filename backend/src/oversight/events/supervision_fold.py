@@ -199,25 +199,25 @@ def _not_merged(changes: Sequence[ChangeSupervision], states: dict[str, _Change]
 def fold_supervision(events: Sequence[ServerEvent]) -> SupervisionFold:
     """Fold a complete ordered prefix from seq 1; refuse gaps, costs or conflicting owners.
 
-    Only proposals, resolutions and attributed ticks establish owners. Other change references
-    supply first-appearance order through fold_usage but cannot invent an owner or a call.
+    Proposals and resolutions establish owners; attributed ticks are a fallback only when
+    neither exists. Other change references supply first-appearance order through fold_usage
+    but cannot invent an owner or a call.
     Dollars come exclusively from that fold; resolution order determines review rounds.
     """
     usage = fold_usage(events)
     states: dict[str, _Change] = {}
+    tick_owners: dict[str, dict[str, int]] = defaultdict(dict)
     steps: dict[str, list[int]] = defaultdict(list)
     decisions: Counter[str] = Counter()
     for event in events:
         if event.type == "agent.step":
             steps[event.payload.agent_id].append(event.payload.duration_ms)
-        elif (
-            event.type == "change.proposed"
-            or event.type == "change.resolved"
-            or event.type == "usage.tick"
-        ):
+        elif event.type == "usage.tick":
+            tick = event.payload
+            if tick.change_id is not None:
+                tick_owners[tick.change_id].setdefault(tick.agent_id, event.seq)
+        elif event.type == "change.proposed" or event.type == "change.resolved":
             payload = event.payload
-            if payload.change_id is None:
-                continue
             state = states.setdefault(payload.change_id, _Change(payload.agent_id))
             if state.agent_id != payload.agent_id:
                 raise ValueError(f"two owners for change {payload.change_id} at seq {event.seq}")
@@ -227,6 +227,14 @@ def fold_supervision(events: Sequence[ServerEvent]) -> SupervisionFold:
             elif event.type == "change.resolved":
                 state.resolve(event.payload)
                 decisions[event.payload.decided_by or "unrecorded"] += 1
+    # A later receipt can supersede every tick's attribution, including earlier lead calls.
+    for change_id, owners in tick_owners.items():
+        if change_id in states:
+            continue
+        if len(owners) > 1:
+            seq = list(owners.values())[1]
+            raise ValueError(f"two owners for change {change_id} at seq {seq}")
+        states[change_id] = _Change(next(iter(owners)))
     changes = tuple(
         states[cid].finish(cid, accounting.usage)
         for cid, accounting in usage.by_change.items()

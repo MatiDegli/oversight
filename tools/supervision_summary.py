@@ -13,11 +13,14 @@ from oversight.events import (
     fold_supervision,
     read_jsonl,
 )
-from oversight_contracts.review import ChangeUsage
 
 
 def _dollars(cost: float | None, unknown: int) -> str:
-    return f"US${cost:.6f}" if cost is not None else f"unknown ({unknown} calls with unknown cost)"
+    if cost is not None:
+        return f"US${cost:.6f}"
+    if unknown:
+        return f"unknown ({unknown} calls with unknown cost)"
+    return "unknown (role or model attribution missing)"
 
 
 def _row(label: str, row: SupervisionTotals, merged: int) -> str:
@@ -65,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"supervision summary refused: {message}", file=sys.stderr)
         return 1
     print(
-        json.dumps(dataclasses.asdict(fold), sort_keys=True, default=ChangeUsage.model_dump)
+        json.dumps(dataclasses.asdict(fold), sort_keys=True, default=lambda o: o.model_dump())
         if args.json
         else _text(fold)
     )

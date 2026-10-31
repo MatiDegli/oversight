@@ -2404,18 +2404,23 @@ validates it and the costs first; supervision refuses an invalid prefix rather t
 plausible partial totals. No event producer or contract changes are needed.
 
 A change belongs to the agent in its first proposal or resolution, falling back to its first
-attributed usage tick if neither exists. Disagreement among those owner observations refuses
-the summary with the offending seq. A change referenced only by an update, status or error has
-no owner or calls and is omitted. Changes keep first-appearance order, including those earlier
-references. Agents appear in agent-id order if they own a change, have a step or have unassigned
-usage; status and focus alone do not introduce an agent.
+attributed usage tick if neither exists anywhere in the prefix. When a proposal or resolution
+exists, ticks do not establish or contradict ownership: lead and review calls may name a
+different agent. Disagreement among proposals and resolutions, or among ticks when neither
+receipt exists, refuses the summary with the offending seq. A change referenced only by an
+update, status or error has no owner or calls and is omitted. Changes keep first-appearance
+order, including those earlier references. Agents appear in agent-id order if they own a
+change, have a step or have unassigned usage; status and focus alone do not introduce an agent.
 
 Changes count distinct ids proposed at least once; proposals count every proposal event.
 Outcomes count every resolution separately: approved/merged, approved/conflict, request changes,
 rejected without a reason, or rejected/stopped. A change's end state uses its last resolution
 after its last proposal. No such resolution, a request for changes, or a new proposal after a
-resolution leaves it open. Conflict is terminal, not open. Review rounds count confirmed
-requests for changes, starting at zero.
+resolution leaves it open. Open counts include owned changes with ticks but no proposal, while
+the distinct proposed-change count excludes them; open counts can therefore exceed changes.
+This preserves the brief's end-state definition and keeps unproposed work visible.
+Conflict is terminal, not open. Review rounds count confirmed requests for changes, starting
+at zero.
 
 Lines proposed are two raw columns from each change's last proposal, summed by owner and run.
 They are null on a change never proposed, which contributes no proposed lines to the totals.

@@ -1,5 +1,6 @@
 """The supervision CLI quotes counts and unknowns without estimating missing spend."""
 
+import ast
 import json
 from pathlib import Path
 
@@ -10,6 +11,41 @@ import supervision_summary
 from oversight.events import SupervisionFold, fold_supervision, read_jsonl
 
 DEMO = Path(__file__).resolve().parents[2] / "fixtures/events/recorded-demo.jsonl"
+
+
+def test_project_imports_use_only_events_facade() -> None:
+    source = Path(supervision_summary.__file__).read_text()
+    imports = [
+        module
+        for node in ast.walk(ast.parse(source))
+        for module in (
+            [node.module or ""]
+            if isinstance(node, ast.ImportFrom)
+            else [alias.name for alias in node.names]
+            if isinstance(node, ast.Import)
+            else []
+        )
+        if module.startswith("oversight")
+    ]
+    assert imports == ["oversight.events"]
+
+
+@pytest.mark.parametrize("missing", ["role", "model"])
+def test_known_cost_with_missing_attribution_explains_unknown_total(
+    missing: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = next(e for e in read_jsonl(DEMO) if e.type == "usage.tick")
+    event = source.model_dump(mode="json")
+    event["seq"] = 1
+    event["payload"].update(change_id="change-1", role="agent", model="reported-model", cost_usd=2)
+    event["payload"][missing] = None
+    log = tmp_path / "missing-attribution.jsonl"
+    log.write_text(json.dumps(event) + "\n")
+    assert supervision_summary.main([str(log)]) == 0
+    captured = capsys.readouterr()
+    assert captured.out.count("cost unknown (role or model attribution missing)") == 2
+    assert "0 calls with unknown cost" not in captured.out
+    assert captured.err == ""
 
 
 def test_recorded_demo_text(capsys: pytest.CaptureFixture[str]) -> None:
