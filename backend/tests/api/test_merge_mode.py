@@ -124,12 +124,16 @@ def test_mode_routes_are_live_only_and_only_http_wiring_calls_the_setter():
         (p.relative_to(root).as_posix(), line.strip())
         for p in root.rglob("*.py")
         for line in p.read_text().splitlines()
-        if re.search(r"\.set_merge_mode\(", line)
+        if re.search(r"\.set_merge_mode\(|\.mode\.set\(", line)
     ]
     assert sorted(callers) == sorted(
         [
             ("oversight/app.py", "return await self._manager.set_merge_mode(request)"),
             ("oversight/api/commands.py", "return await commands.set_merge_mode(request)"),
+            (
+                "oversight/changes/_manager.py",
+                "return await self._ctx.mode.set(self._ctx, command)",
+            ),
         ]
     )
 

@@ -136,7 +136,12 @@ class ModeController:
                     return self.snapshot()
                 if command.mode == "merge_when_safe":
                     if self.authority_suspended():
-                        raise WrongState("Merge authority is suspended: event receipt unconfirmed")
+                        reason = (
+                            "a switch to Ask me is in progress"
+                            if self._disables
+                            else "event receipt unconfirmed"
+                        )
+                        raise WrongState(f"Merge authority is suspended: {reason}")
                     capability = self.capability()
                     if not capability.confirmed:
                         raise WrongState(capability.reason)
@@ -148,6 +153,7 @@ class ModeController:
         finally:
             if token is not None:
                 self._disables.remove(token)
+                ctx.assessment.mode_changed()
 
     async def _confirm(self, ctx: "ChangeContext", state: MergeModeState) -> None:
         try:

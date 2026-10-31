@@ -9,6 +9,7 @@ from test_assessment import make_clock, propose, settled, wait
 from test_mode import available, select
 
 from oversight.changes import WrongState
+from oversight_contracts.events import ChangeProposed
 from oversight_contracts.policy import MergeModeState
 
 pytestmark = pytest.mark.anyio
@@ -216,3 +217,55 @@ async def test_cancelled_disable_caller_leaves_its_attempt_and_hold_alive(h, wai
         await asyncio.gather(*h.manager._ctx.state.tasks)
     assert controller.snapshot() == MergeModeState(mode="ask_me", revision=2)
     assert not controller._disables and not controller.authority_suspended()
+
+
+async def test_proposal_published_during_stale_disable_stays_unarmed(h, monkeypatch):
+    clock = make_clock(h, monkeypatch)
+    controller = available(h, timeout_s=0.02)
+    await select(h, "merge_when_safe", 0)
+    await h.open(1)
+    assert await h.edit(1, *EDIT)
+    h.gate = ChangeProposed
+    proposing = asyncio.create_task(h.manager.proposed("agent-1", "Ready"))
+    try:
+        await h.at_gate.wait()
+        async with controller._lock:
+            with pytest.raises(WrongState, match="timed out"):
+                await select(h, "ask_me", 0)
+            assert len(controller._disables) == 1
+            h.open_gate.set()
+            assert await proposing
+            h.manager.run_ended("agent-1", None)
+            pending = wait(h)
+            assert pending.active and not h.manager._ctx.assessment.valid(pending)
+            assert pending.timer is None and pending.task is None
+        results = await asyncio.gather(*h.manager._ctx.state.tasks, return_exceptions=True)
+        assert any(isinstance(result, WrongState) for result in results)
+        assert controller.snapshot() == MergeModeState(mode="merge_when_safe", revision=1)
+        assert not controller._disables and not controller.authority_suspended()
+        assert not pending.active
+        h.manager._ctx.assessment.wake(pending.rec)
+        clock.advance(121)
+        await settled(h)
+        assert pending.timer is None and pending.task is None
+        assert clock.calls.call_count == 0 and not clock.registrations
+    finally:
+        h.open_every_gate()
+        await asyncio.gather(proposing, return_exceptions=True)
+
+
+async def test_enable_refusal_names_the_pending_disable(h: Harness) -> None:
+    controller = available(h)
+    async with controller._lock:
+        enabling = asyncio.create_task(select(h, "merge_when_safe", 0))
+        await queued_callbacks_ran()
+        disabling = asyncio.create_task(select(h, "ask_me", 1))
+        await queued_callbacks_ran()
+        assert len(controller._disables) == 1 and not controller._suspended
+    with pytest.raises(WrongState, match="a switch to Ask me is in progress"):
+        await enabling
+    with pytest.raises(WrongState, match="revision is stale"):
+        await disabling
+    assert controller.snapshot() == MergeModeState()
+    assert not controller._disables and not controller.authority_suspended()
+    assert h.payloads(MergeModeState) == []
