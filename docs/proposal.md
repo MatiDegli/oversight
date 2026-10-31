@@ -15,9 +15,10 @@ it does not settle and does not repeat it.
 - import-linter checks five contracts on the backend: layers, private internals, pure contracts,
   one gate to the model API, and the web framework kept to the HTTP layer. ESLint's built-in rules
   check the same kind of boundary in the frontend.
-- Contracts v1: the eleven events of AGENTS.md, unchanged in name, with exact payloads; its
-  thirteen commands, the three level-3 commands now answering 202, plus the event stream and a new
-  `GET /health`; one error format; stable ids for runs, agents, changes, nodes and edges.
+- Contracts: section 4.4 records the 1.0.0 event baseline, with later additions noted;
+  `contracts/` is the source of truth for current events and commands. Section 4.7 records the
+  implemented routes and the remaining reservations. One error format; stable ids for runs,
+  agents, changes, nodes and edges.
 - One protocol for live and replay: the UI applies the run's event log from `seq` 1 with one pure
   reducer, and resumes from the last `seq` it applied.
 - Eighteen fronts to level 1, with one acceptance command each. The critical path to Thursday goes
@@ -29,26 +30,34 @@ it does not settle and does not repeat it.
 
 ## 2. Directory tree
 
+Current structure, summarized as of 2026-10-31; internal files and tests are omitted.
+
 ```text
 oversight/
 ├── AGENTS.md  CLAUDE.md  README.md  ARCHITECTURE.md  DECISIONS.md  DEVLOG.md  LICENSE
+├── PRODUCT.md  DESIGN.md  THIRD_PARTY_NOTICES.md
 ├── Makefile                  # the only entry point: setup, dev, check, contracts, demo, replay, ...
 ├── pyproject.toml            # uv workspace (members: contracts, backend) and the tool settings:
 ├── uv.lock                   #   ruff, pyright, pytest, import-linter
 ├── .python-version           # 3.12
-├── .env.example              # variable names only, never values
+├── .env.example              # configuration examples, never credentials
 ├── .github/workflows/ci.yml
 ├── docs/
-│   └── proposal.md
+│   ├── proposal.md  additions.md  api-probe.md  isolation.md  workspace-source.md
+│   └── plans/  security/  sketches/
 ├── contracts/
 │   ├── pyproject.toml        # package oversight-contracts; depends on pydantic only
 │   ├── src/oversight_contracts/
 │   │   ├── __init__.py       # CONTRACT_VERSION and the public names
 │   │   ├── common.py         # ids, paths, timestamps, shared literals
 │   │   ├── graph.py          # GraphNode, GraphEdge, GraphSnapshot, GraphDelta, ChangeGraph, ImpactCone
-│   │   ├── events.py         # the envelope, the eleven payloads, the ServerEvent union
-│   │   └── commands.py       # request and response bodies, ErrorResponse
+│   │   ├── events.py         # the envelope, payloads and current ServerEvent union
+│   │   ├── commands.py       # request and response bodies, ErrorResponse
+│   │   ├── policy.py  plans.py  queue.py
+│   │   └── review.py  decisions.py  examples.py  grants.py
 │   ├── generate.py           # writes generated/: JSON Schema, then TypeScript through json2ts
+│   ├── baselines/            # frozen schemas for compatibility checks
+│   ├── check_tuples.cjs      # generated tuple-shape checks
 │   ├── generated/            # written only by `make contracts`; never edited by hand
 │   │   ├── oversight.schema.json
 │   │   └── contracts.ts
@@ -58,7 +67,11 @@ oversight/
 │   ├── src/oversight/
 │   │   ├── __main__.py       # CLI: serve, replay a log, export a run
 │   │   ├── app.py            # composition root: builds the app and wires the modules
-│   │   ├── settings.py       # configuration from the environment and .env; only app.py reads it
+│   │   ├── settings.py       # configuration from the environment and .env
+│   │   ├── slots.py  setup.py  limits.py  telemetry.py  redaction.py
+│   │   ├── runtime_*.py      # runtime coordination helpers
+│   │   ├── review_config.py  decision_config.py  examples_selector.py
+│   │   ├── _run_controls.py  test_output.py
 │   │   ├── api/              # HTTP: routes, SSE framing, error format, static files
 │   │   ├── events/           # event store, single writer, subscribers, replay player, JSONL import/export
 │   │   ├── graph/            # extract, resolve, diff, span index, change graph, impact cone
@@ -78,17 +91,19 @@ oversight/
 │   │   ├── agents/           # agent cards, steps, the new-task form
 │   │   ├── review/           # review header, files, cone list, decision bar
 │   │   └── theme/            # tokens, fonts, Tailwind theme
-│   └── e2e/                  # Playwright over replay
+│   ├── e2e/                  # Playwright over replay
+│   └── shots/  tools/  patches/
 ├── fixtures/
 │   ├── events/               # event logs, .jsonl: hand-written ones and recorded runs
 │   ├── fake-model/           # scripted tool calls for the fake model, one file per task
 │   └── layouts/              # preset positions by workspace: demo-repo.json
 ├── demo-repo/                # the template: a small shop project with tests, no git of its own
-├── tools/                    # development scripts: the API probe, the contract-scope check
-└── desktop/                  # after the hackathon; created then
+└── tools/                    # checks, recording, notices, summaries, eval/ and tests/
 ```
 
 Notes:
+
+- `desktop/` is planned after the hackathon; it is not present in the tree.
 
 - The uv workspace gives one lock and one virtual environment for contracts and backend. The demo
   repo is not a member: `run_tests` uses its own environment, `.runtime/demo-venv/`, created on
@@ -98,7 +113,7 @@ Notes:
 - `fixtures/` sits at the top because the backend tests, vitest, Playwright and the static site all
   read the same files.
 - At run time: `.runtime/workspace/` (main), `.runtime/worktrees/{agent_id}/`,
-  `.runtime/runs/{run_id}.sqlite` (one event store per run), `.runtime/ledger.sqlite` (spend across
+  `.runtime/runs/{run_id}.sqlite` (one event store per run), `.runtime/ledger.json` (spend across
   runs, kept on a clean start), `.runtime/demo-venv/`. All gitignored.
 
 ## 3. Module boundaries
@@ -179,7 +194,7 @@ ESLint's built-in `no-restricted-imports` and `no-restricted-globals`, per folde
 | Run | `run-` and the UTC start time | `run-20261027-140312` |
 | Agent | `agent-` and a counter per run | `agent-1` |
 | Change | `change-` and a counter per run; one change per agent | `change-1` |
-| Slot | `A` or `B`; the UI maps it to the color | `A` |
+| Slot | `A` through `F` (contracts 1.6.0); the UI maps it to the color | `A` |
 | Module node | dotted module path from the repository root; a package's `__init__.py` is the package | `shop.pricing` |
 | Other node | module, `:`, qualified name | `shop.models:Product.total` |
 | Duplicate node | `#n` from the second definition of a name on, in source order | `shop.models:Product.price#2` |
@@ -290,13 +305,19 @@ the plan's. Four points it leaves open, settled here:
 
 ### 4.4 Events
 
+The sketches below describe the 1.0.0 baseline, with selected later additions noted. They are
+not a complete current schema. `contracts/src/oversight_contracts/events.py` ServerEvent is
+the source of truth, including added events for assessments, merge mode, plans, reviews, facts,
+test execution, Revert, grants, queue state, lead status, messages and failed model attempts.
+Slot examples below reflect the A–F extension from contracts 1.6.0.
+
 Every event is an envelope:
 
 ```python
 class EventBase:
     seq: int    # from 1, +1 per event within a run, no gaps; assigned by the single writer
     ts: str     # UTC, as in 4.1
-    type: str   # one of the eleven below; each event class narrows it to a literal
+    type: str   # each event class narrows it to a literal; current types are in ServerEvent
     payload: ...
 
 ServerEvent = Annotated[RunStartedEvent | GraphSnapshotEvent | ... | ErrorReportEvent,
@@ -314,7 +335,7 @@ class ModelProfile:
     reasoning: str | None      # the reasoning setting sent on every call; None if the API has none
 
 class SlotInfo:
-    slot: Literal["A", "B"]
+    slot: Literal["A", "B", "C", "D", "E", "F"]
     default_model: str         # a ModelProfile id
 
 class Limits:
@@ -356,7 +377,7 @@ AgentState = Literal["starting", "working", "ready_for_review", "revising",
 
 class AgentStatus:
     agent_id: AgentId
-    slot: Literal["A", "B"]
+    slot: Literal["A", "B", "C", "D", "E", "F"]
     change_id: ChangeId
     task: str
     model: str                 # a ModelProfile id
@@ -555,34 +576,51 @@ the single error format.
 
 | Command | Body | Success | Errors |
 | --- | --- | --- | --- |
-| `POST /agents` | `StartAgent {task, slot?, model?, zone?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
+| `POST /agents` | `StartAgent {task, slot?, model?, zone?, examples?, examples_only?, answering?}` | 201 `AgentCreated {agent_id, change_id, slot}` | `slot_busy`, `not_configured`, `spend_brake` |
 | `POST /agents/{id}/stop` | none | 202 | `not_found`, `wrong_state` |
 | `POST /agents/{id}/message` | `{text}` | 202 | `not_found`, `wrong_state`, `invalid_request` |
 | `POST /agents/{id}/pause` | none | 202 | `not_found`, `wrong_state` |
 | `POST /agents/{id}/resume` | none | 202 | `not_found`, `wrong_state`, `not_configured`, `spend_brake` |
-| `POST /changes/{id}/approve` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
-| `POST /changes/{id}/request-changes` | `{revision, head_commit, comment}`, not empty | 202 | `not_found`, `wrong_state` |
-| `POST /changes/{id}/reject` | `{revision, head_commit, comment?}` | 202 | `not_found`, `wrong_state` |
-| `GET /agents/{id}` | none | Reserved: 501; then 200 `AgentStatus` for coding agents | `not_implemented` |
+| `POST /changes/{id}/approve` | `ApproveChange {revision, head_commit, comment?, grant?, answers?}` | 202 | `not_found`, `wrong_state` |
+| `POST /changes/{id}/request-changes` | `RequestChanges {revision, head_commit, comment, answers?}`, comment not empty | 202 | `not_found`, `wrong_state` |
+| `POST /changes/{id}/reject` | `RejectChange {revision, head_commit, comment?, answers?}` | 202 | `not_found`, `wrong_state` |
+| `GET /agents/{id}` | none | 200 `AgentStatus` for coding agents | `not_found` |
 | `POST /changes/{id}/review` | `ReviewChange {revision, head_commit, main_commit}` | Reserved: 501; then 202 | `not_implemented` |
 | `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
-| `GET /changes/{id}` | none | Reserved: 501; then 200 `ChangeView` | `not_implemented` |
-| `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | Reserved: 501; then 200 `HistoryPage` | `not_implemented` |
-| `POST /queue` | `EnqueueTask` | Reserved: 501; then 201 `QueuedTask` | `not_implemented` |
-| `GET /queue`, `GET /queue/{id}` | none | Reserved: 501; then 200 `QueueSnapshot` / `QueuedTask` | `not_implemented` |
-| `POST /queue/{id}/cancel` | `QueueRevision {revision}` | Reserved: 501; then 202 | `not_implemented` |
+| `GET /changes/{id}` | none | 200 `ChangeView` | `not_found` |
+| `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | 200 `HistoryPage` | `invalid_request`, `too_large` |
+| `POST /queue` | `EnqueueTask {agent?, plan_id?, plan_revision?}`; exactly one task or exact plan | 201 `QueuedTask` | `invalid_request`, `not_found`, `wrong_state` |
+| `GET /queue`, `GET /queue/{id}` | none | 200 `QueueSnapshot` / `QueuedTask` | `not_found` for an unknown item |
+| `POST /queue/{id}/cancel` | `QueueRevision {revision}` | 202 | `not_found`, `wrong_state` |
+| `POST /plans` | `CreatePlan {task}` | 201 `PlanCreated {plan_id}` | `wrong_state`, `invalid_request` |
+| `GET /plans/{id}` | none | 200 `Plan` | `not_found` |
+| `PUT /plans/{id}` | `UpdatePlan {revision, graph_version, subtasks}` | 202 | `not_found`, `wrong_state`, `invalid_request` |
+| `POST /plans/{id}/start` | `PlanRevision {revision}` | 202 | `not_found`, `wrong_state`, `invalid_request` |
+| `POST /plans/{id}/reject` | `RejectPlan {revision, comment?}` | 202 | `not_found`, `wrong_state` |
+| `GET /merge-mode` | none | 200 `MergeModeState` | |
+| `PUT /merge-mode` | `SetMergeMode {mode, revision}` | 200 `MergeModeState` | `wrong_state` |
+| `POST /grants/{id}/revoke` | none | 202 | `not_found`, `wrong_state` |
+| `POST /dictation` | reserved `DictateTask` | 501 | `not_implemented` |
 | `POST /leads` | `StartLead {task, model?}` | 201 `LeadCreated` | `invalid_request`, `not_configured`, `spend_brake`, `wrong_state` |
 | `GET /leads/{id}` | none | 200 `LeadStatus` | `not_found` |
 | `POST /leads/{id}/stop` | `StopLead {revision}` | 202 | `not_found`, `wrong_state` |
 | `GET /graph` | none | 200 `GraphResponse {run_id, seq, graph}` | |
 | `POST /graph/rescan` | none | 202 | |
 | `GET /impact?node=&depth=&change=` | none | 200 `ImpactCone`; on main, or on a change's version | `not_found` |
-| `GET /tree?agent=` | none | Reserved: 501 until built; then 200 `TreeResponse {run_id, agent_id, directories, files: TreeFile[], graph_version, truncated}`, jointly capped at 2,000 entries; `TreeFile {path, hash}` has required nullable SHA-256 | `not_implemented`; when built: `not_found`, `invalid_path` |
+| `GET /tree?agent=` | none | 200 `TreeResponse {run_id, agent_id, directories, files: TreeFile[], graph_version, truncated}`, jointly capped at 2,000 entries; `TreeFile {path, hash}` has required nullable SHA-256 | `not_found`, `invalid_path`, `internal` |
 | `GET /files?path=&agent=` | none | 200 `FileContent {path, content, hash, agent_id}` | `not_found`, `invalid_path` |
 | `PUT /files` | `SaveFile {path, content, base_hash, agent_id?}` | 200 `FileSaved {path, hash}` | `invalid_path`, `stale_file`, `wrong_state` |
 | `GET /events` | none | SSE, see 4.6 | |
 | `GET /health` | none | 200 `Health {ok, run_id, contract_version, mode, missing_settings}`; mode is `live` or `replay` | |
 
+- In live mode, only the routes in `api/commands.py` NOT_BUILT (`POST /dictation` and
+  `POST /changes/{id}/review`) are unbuilt and answer 501. Server replay also answers 501
+  for the LIVE_ONLY routes, including `GET /tree` and the mutation commands. Event-backed
+  reads such as agents, changes, plans, queue and history remain available in replay.
+- The StartAgent schema includes examples and examples_only, but the runtime examples phase
+  is not wired yet; these fields do not establish confirmation authority. Standalone starts
+  ignore zone; plan dispatch carries its server-owned zone. answering links an inbox decision.
+  Approve may carry a standing grant, and the three decision commands may carry review-card answers.
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
   `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
   `not_implemented`, `invalid_request`, `internal`, `forbidden` and `too_large`. They map to 404, 409, 409, 503, 403, 422,
@@ -598,7 +636,7 @@ the single error format.
   user started from: if the file changed since, for example through a merge, the save fails with
   `stale_file` instead of overwriting it. The rule is the same for main and for the new side of a
   review, in an agent's worktree.
-- Approve takes no hash: in review the agent is idle, so the only later edits are the user's own.
+- Approve requires the observed revision and head_commit; a stale candidate fails before acceptance.
 - The static replay site has no backend: its recorded-run label comes from its build mode, not
   from `/health`.
 
@@ -614,13 +652,15 @@ the single error format.
 - A backend test validates every line of every log in `fixtures/events/` with
   `TypeAdapter(ServerEvent)`, because the generated types validate nothing at run time. It also
   fails on any absolute path in a log.
-- `make check` fails when a branch whose name does not start with `contracts/` changes anything
-  under `contracts/` (`tools/check_contract_scope`).
+- Each contract change rides in its own front with the maintainer's recorded approval; no
+  branch-name scope check exists (2026-10-31, “Docs audit: the record follows main”).
+  `make check` uses the GATES in Makefile: check-python, check-contracts, check-frontend,
+  check-secrets and check-notices.
 
 ### 4.9 What freezes, and how a change is proposed
 
-- **Frozen on approval, as contract 1.0.0:** the envelope and the eleven events; the node, edge and
-  other id formats; the commands with their bodies, statuses and error codes; the SSE framing and
+- **Frozen on approval, as contract 1.0.0:** the envelope and the original eleven events (the
+  1.0.0 baseline); the node, edge and other id formats; the commands with their bodies, statuses and error codes; the SSE framing and
   the resume rules.
 - **A minor version (1.x)** adds without breaking: a new field with a default, so old fixtures
   still validate; a new endpoint; a new event type, which the reducer's exhaustive switch then
@@ -645,27 +685,32 @@ the single error format.
   guarded by the agent's recorded base rather than current main. Historical events still load
   without provenance; live resolutions explicitly name their principal and head. Requests and
   TypeScript consumers must migrate together. 1.4.0 keeps `SaveFile.base_hash` a required string.
-  The separately delivered 1.11.0 makes it required and nullable only together with safe creation,
-  zones and inventory. The maintainer moved that bundle from 1.7.0 to 1.8.0 on 2026-10-29, when
-  standing grants took 1.7.0, and moved it again on 2026-10-30, when E6 and item 11's plans took
-  1.8.0. On 2026-10-31, message text took 1.9.0 and approved probe-inputs parameter-extension
-  evidence took 1.10.0, moving safe creation to 1.11.0. No alternate schema may reuse any of these
-  version strings, including 1.4.0. These approved changes are exceptions to the ordinary
-  minor-version rule, not a general relaxation.
+  The safe creation bundle makes it required and nullable only together with safe creation,
+  zones and inventory, in a later contract version assigned at landing after its own approval.
+  The reservation chain is approval history: the maintainer moved the bundle from 1.7.0 to 1.8.0
+  on 2026-10-29 when standing grants took 1.7.0, then to 1.9.0 on 2026-10-30 when E6 and item 11's
+  plans took 1.8.0. On 2026-10-31, message text took 1.9.0; the approval reserved 1.10.0 for
+  parameter-extension evidence and moved safe creation to 1.11.0. Those reservations are superseded:
+  versions are assigned next free at landing; the lead runtime landed first and took 1.10.0
+  (6818b3b). Parameter-extension evidence takes the next free version when it lands; safe creation
+  and E3's confirmation command take the next free version after their own approval. No alternate
+  schema may reuse a landed version string, including 1.4.0. These approved changes are exceptions
+  to the ordinary minor-version rule, not a general relaxation.
 - **To propose a change:**
   1. The front that needs it stops and writes a short request: what, why, the modules it affects,
      and whether it is compatible.
   2. The maintainer decides.
-  3. The coordinator makes one PR on `contracts/<topic>`: the models, the version, `make contracts`,
-     the fixtures, and a line in DECISIONS.md.
+  3. The front includes the models, the next free version at landing, `make contracts`, the
+     fixtures, and the approval in DECISIONS.md in its own PR; a contracts/ branch is not required.
   4. `make check` passes, the maintainer approves the change, and the coordinator merges it.
   5. Open branches merge main.
 
 ## 5. Modules in order
 
 Each front is one worktree, one branch and one PR; it is done when its command passes on the merged
-result. The days assume the build period starts on Tuesday at 01:00. The owners are roles; section
-7 says who fills them.
+result. The days in this section are the original build plan, not current deadlines.
+Level 2 closed on Oct 27 (DECISIONS.md, “Level 2 closed on Tue Oct 27”). The owners are roles;
+section 7 says who fills them today.
 
 | # | Front | Day | Needs | Owner | Done when |
 | --- | --- | --- | --- | --- | --- |
@@ -775,13 +820,10 @@ details outside this repository.
 
 | Role | Who |
 | --- | --- |
-| Decides the critical questions and owns `contracts/` | the maintainer |
-| Coordinator: plans fronts, writes briefs, verifies hand-backs, approves and makes merges; builds the skeleton and the contracts, then writes no product code, only manifests, lockfiles, docs and merges | Claude Code (Opus) |
-| The critical path and the hard backend parts: the event bus, graph core, the agent runtime, the change manager | Claude Opus subagent |
-| Bounded backend tasks: endpoints, glue, tests | Claude Sonnet subagent |
-| Frontend: graph view, Monaco, panels | Codex |
-| Support and mechanical steps: test additions, smoke scripts, surveys, formatting, reruns; no design and no new module | GLM; Claude Haiku or Sonnet when GLM is out of quota |
-| Independent review | a model from another provider than the author's: Claude reviews Codex's changes, Codex reviews Claude's |
+| Decides critical questions and owns contracts/ | the maintainer |
+| Coordinates fronts, verifies hand-backs, approves and makes merges | the coordinating agent, after checks and independent review |
+| Implements backend, frontend, contracts, tooling and docs | Codex, within each approved front |
+| Independently reviews | another provider than the implementer's; Claude or Muse Code for Codex implementations |
 
 - Muse Code (Muse Wonder) contributed bounded implementations, tests, tooling fixes and development plans, and later
   reviewed the coordinator's Codex implementation loops. Development use runs under the maintainer's subscription with
@@ -807,15 +849,14 @@ details outside this repository.
    lifecycle, gates and contracts keep the full rule (added 2026-10-26, the maintainer).
 5. The coordinator approves the merge once the checks pass on the merged result and the review has
    no open BLOCKING finding and no open SHOULD-FIX that step 4 does not turn into a follow-up; its
-   own changes always get Codex's review.
+   own changes also require review by another provider.
 
 The maintainer makes the critical decisions: contracts v1 and any later contract change, spending
 Meta credits, scope and level cuts, the demo script, a new top-level directory or backend module,
 and publication, tags and GitHub settings.
 
 Changes to lifecycle, deletion or gates start with a one-page plan reviewed before any code: the
-workspace reset, worktree removal, the change manager's merge and discard, path validation, and the
-contract-scope check.
+workspace reset, worktree removal, the change manager's merge and discard, and path validation.
 
 **Integration.**
 
@@ -841,7 +882,7 @@ the merged result.
 | Hardened CI: actions pinned by SHA, read-only permissions per job, `persist-credentials: false`, a timeout per job | `.github/workflows/ci.yml` | front 1 |
 | A release age of 14 days | uv and pnpm settings (rule 2) | front 1 |
 | Licenses of every resolved package, and known vulnerabilities | `make audit`; it needs the network, so it stays out of `make check` | by Sunday, then whenever a lockfile changes |
-| Each control fails when it should | the hand-back that adds a control shows it rejecting one deliberate violation: a bad commit message, a forbidden import, `subprocess` outside the runner, an edited generated file, a contract change on another branch | as each control lands |
+| Each control fails when it should | the hand-back that adds a control shows it rejecting one deliberate violation: a bad commit message, a forbidden import, `subprocess` outside the runner, an edited generated file | as each control lands |
 
 When the repository goes public, with the maintainer's confirmation for each GitHub step: first
 gitleaks over the whole history and `make audit`; then a ruleset on main that blocks force pushes
@@ -870,19 +911,38 @@ Left out, because they cost more than they return in nine days:
 
 | Target | Does |
 | --- | --- |
-| `make setup` | installs the Python and Node dependencies and the git hooks: pre-commit, commit-msg and pre-push |
+| `make workspace-fetch-boltons` | explicitly fetch the pinned Boltons checkout (network); never run by check |
+| `make workspace-graph-boltons` | export the pinned Boltons bare graph snapshot offline; no layout or server |
+| `make help` | list the targets |
+| `make install` | install the Python and Node dependencies from the lockfiles |
+| `make frontend-deps` | bring frontend/node_modules up to the frozen lockfile, from the local store only |
+| `make setup` | install the dependencies and the git hooks: pre-commit, commit-msg and pre-push |
 | `make dev` | FastAPI with reload and the Vite dev server, one origin through Vite's proxy |
-| `make check` | ruff, pyright, import-linter, pytest, the contract drift and scope checks, tsc, eslint, prettier, vitest, gitleaks; no credits |
-| `make contracts` | regenerates `contracts/generated/` |
-| `make replay LOG=...` | the backend's fake event player serving a log over SSE, with the dev server |
-| `make demo` | a clean workspace and the built frontend served by FastAPI on one port, with the real models from `.env` |
-| `make demo-fake` | the same with the scripted fake model, spending no credits |
-| `make demo-repo-check` | runs the demo repo's tests in a scratch environment outside the template |
-| `make smoke` | starts the backend, checks `/health` and `/graph`, stops it |
-| `make e2e` | Playwright over replay |
-| `make site` | the static replay site with a bundled recorded run, labeled as one by its build mode |
-| `make probe` | the API probe; spends credits, never part of `make check` |
-| `make audit` | the licenses of every resolved package against the allowed list, then `pip-audit` and `pnpm audit`; needs the network |
+| `make record` | bundle a finished run (RUN=&lt;id&gt;, or the latest run) into fixtures/events/recorded-demo.jsonl; reads a finished run and spends no credits |
+| `make manifest` | summarize recorded model execution from LOG (OUT=prefix, EXPECT_B=model, REAL=1); no API calls |
+| `make replay` | the fake event player serving LOG over SSE (SPEED=0: no pauses), with the Vite dev server |
+| `make demo-setup-check` | check offered agents' keys, budget and prices in .env before the demo |
+| `make demo` | build the UI, then serve it and the API on one port (DEMO_PORT) from .env; Start agent spends credits |
+| `make demo-check` | the demo path three times from a clean start, on the fake model; no credits; not in check |
+| `make shots` | screenshots of the UI from LOG into .shots/ and the Impeccable scan, Chrome capped at 6G; not in check |
+| `make layout` | regenerate the demo preset and replay snapshot positions; not in check |
+| `make smoke` | start the backend and check /health and /graph |
+| `make test-browser` | fake-only launcher/proxy integration and Chromium tests; 1200 s, 6G where supported |
+| `make record-level2` | regenerate the level 2 replay fixture from the HTTP backend and fake scripts |
+| `make e2e` | Playwright over static level 1 and 2 replays; 600 s; 6G cap only with a user systemd (not in CI); not in check |
+| `make check` | every gate, in parallel groups; tests capped at 10G, 120 s each and 15 min in all; no credits |
+| `make check-ci` | check without gitleaks, for CI, where the history is scanned in its own job |
+| `make check-fast` | lint, types, boundaries and contract drift; no tests |
+| `make contracts` | regenerate contracts/generated: JSON Schema and TypeScript from the Pydantic models |
+| `make demo-repo-check` | run the demo repo's tests in a scratch environment outside the template |
+| `make notices` | generate third-party runtime notices offline from the installed frozen locks |
+| `make check-notices` | enforce runtime license policy and detect stale third-party notices offline |
+| `make audit` | audit frontend and exported frozen Python runtime dependencies (network required) |
+
+The internal gate targets are check-python (ruff, pyright, import-linter and pytest),
+check-contracts (tuple and generated-byte drift checks), check-frontend (tsc, ESLint, Prettier,
+Vitest and the boundary test), check-secrets (gitleaks) and check-notices (runtime license policy
+and notice drift). They are the GATES used by make check; no contract-scope check runs.
 
 **Pins (from PyPI and npm on 2026-10-26).**
 
@@ -912,7 +972,7 @@ table are part of the decision. The sections above already follow them.
 | 1 | The UI streams the run's log from `seq` 1, and a gap reconnects from the last applied `seq` | AGENTS.md: read `GET /graph` first, then apply later events; fetch a snapshot on a gap | Agent and change state exist only in events: a tab reloaded mid-demo would lose its cards and the change waiting for review. `GET /graph` stays. |
 | 2 | SSE messages carry no `event:` field; the type travels in the JSON | unspecified | A named SSE event skips `onmessage`, a known trap |
 | 3 | Containment is `parent_id`; no `contains` edges | the plan's edge kinds include `contains` | One encoding of one fact |
-| 4 | `agent.status` carries the slot (`A` or `B`); the theme maps it to a color | the plan: a color | Color is presentation, and the letter is the identity |
+| 4 | `agent.status` carries the slot (`A` through `F`, extended in contracts 1.6.0); the theme maps it to a color | the plan: a color | Color is presentation, and the letter is the identity |
 | 5 | Stopping an agent closes its change through `agent.status`, without `change.resolved` | unspecified | Its decisions stay the three of AGENTS.md |
 | 6 | `list_files` sends no `agent.focus` | "read tools also emit agent.focus" | It reads no source and names no node |
 | 7 | An edit sends `change.updated`, then `agent.focus`, then `agent.step` | unspecified | The UI knows a new node before a focus names it |
@@ -946,11 +1006,13 @@ Answers:
   absolute: the replay logs will be public.
 - **2, 4, 7, 13 and 15:** yes.
 
-## 9. Open questions
+## 9. Original open questions, now answered
 
-- **Monday's work:** does it count? The answer from #questions moves front 1 to Monday night or
-  keeps it at Tuesday 01:00.
-- **The API:** tool calls, parallel tool calls, ignored parameters, usage reporting, the reasoning
-  setting, rate limits, and the same on Baseten. Front 6 answers them before front 12 talks to a
-  model.
-- **Zoom levels:** the demo repo fits on one screen without them. I propose them for level 3.
+- **Monday's work — answered:** the kickoff was Oct 26 at 13:00 ART; the first commit came
+  after it. README.md, “Built during the hackathon”, and DEVLOG.md record the provenance.
+- **The API — answered:** docs/api-probe.md records the Meta and Baseten probes, native tools,
+  parallel calls, usage, reasoning and rate limits, including the Contributor follow-up.
+  The production profiles are in backend/src/oversight/agents/client.py.
+- **Zoom levels — answered:** module/function detail views and camera limits are built in
+  frontend/src/graph/GraphView.tsx and camera.ts. DECISIONS.md, “Start with the whole graph when
+  it fits legibly”, records the current starting-camera rule.
