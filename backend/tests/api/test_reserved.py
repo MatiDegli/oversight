@@ -22,6 +22,7 @@ MERGE_MODE = [
     ("GET", "/merge-mode"),
     ("PUT", "/merge-mode"),
 ]
+LEAD_COMMANDS = [("POST", "/leads"), ("POST", "/leads/{id}/stop")]
 PLAN_COMMANDS = [
     ("POST", "/plans"),
     ("PUT", "/plans/{id}"),
@@ -36,7 +37,8 @@ PLAN_COMMANDS = [
     [
         (mode, method, path)
         for mode in ("live", "replay")
-        for method, path in ROUTES + (PLAN_COMMANDS + MERGE_MODE if mode == "replay" else [])
+        for method, path in ROUTES
+        + (PLAN_COMMANDS + MERGE_MODE + LEAD_COMMANDS if mode == "replay" else [])
     ],
 )
 async def test_reserved_routes_never_read_bodies_or_cause_effects(

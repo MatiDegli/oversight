@@ -133,12 +133,13 @@ def capture(
     return RulesReservation(wait, evidence, rec.decision + 1, wait.spend_pin)
 
 
-def current(ctx: ChangeContext, reservation: RulesReservation) -> bool:
+def current(ctx: ChangeContext, reservation: RulesReservation, *, integrity: bool = False) -> bool:
     """Suppress callbacks after a person, another revision, terminal acknowledgment or close."""
     wait, rec = reservation.wait, reservation.wait.rec
     return (
-        not ctx.state.closing
+        (not ctx.state.closing or (integrity and rec.person_intent is not None))
         and ctx.assessment.waits.get(rec.change_id) is wait
+        and (rec.person_intent is None or integrity)
         and rec.state == "deciding"
         and rec.decision == reservation.decision
         and rec.resolution is None
@@ -228,5 +229,8 @@ async def terminal(
         elif "output was truncated" in reason:
             code = "git_failed"  # Preserve preflight's known failures through its generic bucket.
     await ctx.assessment.report_terminal(
-        reservation.wait, code, reason, lambda: current(ctx, reservation)
+        reservation.wait,
+        code,
+        reason,
+        lambda: current(ctx, reservation, integrity=code in {"main_suspect", "integrity_invalid"}),
     )

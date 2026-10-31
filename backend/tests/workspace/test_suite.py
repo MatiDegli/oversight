@@ -275,3 +275,60 @@ async def test_cancel_during_recording_request_preparation_removes_private_files
             measured_targets=(CallTarget("app:caller", "app.py", "caller", 1, 2),),
         )
     assert not list((tmp_path / "tmp").glob("*.calls*"))
+
+
+@pytest.mark.anyio
+async def test_case_detail_is_redacted_bounded_and_path_free(tmp_path: Path) -> None:
+    from xml.etree import ElementTree as ET
+
+    from oversight.events import absolute_paths
+
+    messages = [
+        "assert secret == 1 at /runtime/tree/shop/pricing.py",
+        "bad ~/private.py",
+        "bad C:\\private\\test.py",
+        "bad C:/private/test.py",
+        r"bad \\host\share\test.py",
+        "file:///private/test.py",
+        "bad //host/private",
+        "assert " + "x" * 300,
+        "assert 1 == 2",
+        " /home/person/private.py",
+    ]
+
+    async def spawn(argv, *, cwd, timeout_s, env=None, output_cap=DEFAULT_OUTPUT_CAP):
+        assert env is not None
+        report = Path(env["OVERSIGHT_REPORT"])
+        report.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(
+            report.write_text,
+            line("start")
+            + "\n"
+            + "\n".join(
+                line("test", f"tests/test_x.py::test_{i}", "call", "failed")
+                for i in range(len(messages))
+            ),
+        )
+        root = ET.Element("testsuite")
+        for i, message in enumerate(messages):
+            case = ET.SubElement(root, "testcase", classname="tests.test_x", name=f"test_{i}")
+            ET.SubElement(case, "failure", message=message)
+        report.with_suffix(".xml").write_text(ET.tostring(root, encoding="unicode"))
+        return ProcessResult(1, "", "", False, False, 1)
+
+    run = await run_suite(
+        python=tmp_path / "python",
+        plugin_dir=tmp_path,
+        runtime_root=tmp_path,
+        tree_root=tmp_path,
+        timeout_s=5,
+        redact=lambda s: s.replace("secret", "[redacted]").replace("/runtime/tree/", ""),
+        spawn=spawn,
+    )
+    details = [c.detail for c in run.cases]
+    assert details[0] == "assert [redacted] == 1 at shop/pricing.py"
+    assert details[1:7] == [None] * 6
+    assert details[7] is not None and len(details[7]) == 240 and details[7].endswith("…")
+    assert details[8] == "assert 1 == 2" and details[9] is None
+    assert all(absolute_paths(d) == [] for d in details if d is not None)
+    assert all(d is None or len(d) <= 240 for d in details)

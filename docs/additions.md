@@ -94,6 +94,8 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 14 | Node card explained by examples | Queued — caller evidence `1c50382`; node example view absent at `454f602` | Yes |
 | 15 | Shape guard | Queued — contract reserved `649ff0d`; no structural comparison producer on main `454f602` | Yes |
 | 16 | Bounded one-hop context for initial tasks | Queued — initial slice absent at `454f602`, waits for bench; revision callers/siblings `ee92691` | No |
+| 19 | [Opening the person's own repository](../AGENTS.md#opening-my-own-repository) | Decided 2026-10-31, after the cut line; plan first, with the double review | Plan decides |
+| 20 | Minimal native Windows port | Decided 2026-10-31, after 19: per-OS layer, mode without isolation | No |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay `a0a4624`, challenge
 `99a57de`, phone practice `0c884f6`/`b7ea554`/`6ce0d19`, recorded evidence `e621acb` on main), graph
@@ -155,12 +157,8 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
   (live, `backend/src/oversight/api/commands.py:307`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
-- No repeated automatic revision for an unchanged failure: before cross-review or rules follow-up
-  starts a round, compare the test and assertion with the last failure and the agent's edits since
-  then. A changed node reaches the test if the test can reach it through the graph's call edges,
-  or it appears in that test's executed nodes when recorded. If nothing relevant changed, the card
-  asks the person. This is deterministic, with no model call; if neither source can tell, ask
-  instead of starting another round on a guess.
+- No repeated automatic revision for an unchanged failure: approved on 2026-10-31 and built; see
+  DECISIONS.md.
 - Behavior diff for methods was approved on 2026-10-30 as part of the bench evidence fix and is
   no longer a candidate; see DECISIONS.md.
 - A dependency guard for package existence, license and vulnerability evidence.
@@ -188,7 +186,7 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
 - [Scale and depth](../DESIGN.md#scale-and-depth): The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
-- A Tauri shell, a local model in slot B, and named editor cursors.
+- A local model in slot B and named editor cursors. The Tauri shell is decided: see Next.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.
@@ -210,6 +208,25 @@ None is queued: nothing is built until the maintainer orders level-3 work (2026-
 - Mask older tool results on long runs; measure dollars and correctness before adoption.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
+- Filesystem isolation for tests and probes (bubblewrap on Linux); today's isolation covers the
+  network and the process tree only. No filesystem sandbox during the hackathon.
+- Native backend ports for Windows and macOS, as their own fronts. First a per-OS layer in
+  `backend/src/oversight/workspace/` (network isolation, process-tree cleanup, file locks, no-follow
+  file opens), then a test-isolation design for each OS. A minimal Windows port, the per-OS layer in
+  the mode without isolation, is item 20 under "Only if time remains"; Windows isolation and macOS
+  come after the hackathon. Until a port has its own isolation, it runs in the existing mode without
+  isolation (network open; rules, Revert and added-test probes disabled). Any new dependency follows
+  the license list; filelock (Unlicense) needs the maintainer's OK.
+- After the hackathon, as a plan first: run the repository's git hooks as evidence, not inside
+  commits: in the isolated runner on the proposal, shown on the card as passed or failed, with any
+  formatter edits appearing in the diff. Agent commits keep hooks disabled.
+- After the hackathon, as a plan first: repositories without Python open without a graph; agents,
+  worktrees, diff, review, cross-review, merge and tests still work. Needs a per-repository test
+  command with JUnit output and a center view without the graph (sketch first).
+- After the hackathon, after the native Windows port: a Tauri shell, starting with one bounded spike
+  in its own directory that touches no product code: a Windows window showing the current UI,
+  starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
+  translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 

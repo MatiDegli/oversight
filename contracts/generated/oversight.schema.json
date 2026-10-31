@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.10.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.11.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -3446,6 +3446,18 @@
             }
           ],
           "description": "The lifecycle explanation."
+        },
+        "requested_plan_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PlanId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The plan this revision's step requested, or null."
         }
       },
       "required": [
@@ -3455,7 +3467,8 @@
         "model",
         "state",
         "step",
-        "detail"
+        "detail",
+        "requested_plan_id"
       ],
       "title": "LeadStatus",
       "type": "object"

@@ -233,3 +233,33 @@ async def test_mode_is_captured_before_proposal_receipt(h: Harness, clock):
     assert rec(h).proposal_mode == captured
     assert "change-1" not in h.manager._ctx.assessment.waits
     assert clock.calls.call_count == 0 and clock.registrations == []
+
+
+@pytest.mark.parametrize("drop", ["validation", "seq", "ts", "type"])
+async def test_received_logs_dropped_receipt(h: Harness, clock, caplog, drop):
+    receipt = await h.publish(
+        ErrorReport(
+            source="server",
+            change_id="change-1",
+            agent_id="agent-1",
+            fatal=False,
+            message="Private receipt payload must never be logged",
+        )
+    )
+    changes = {
+        "validation": {"envelope": "{}"},
+        "seq": {"seq": receipt.seq + 1},
+        "ts": {"ts": "2026-10-31T00:00:00Z"},
+        "type": {"type": "change.resolved"},
+    }
+    with caplog.at_level("WARNING", logger="oversight.changes._assessment"):
+        h.manager.rules_received(replace(receipt, **changes[drop]))
+    [warning] = caplog.records
+    assert warning.levelname == "WARNING"
+    assert f"seq={changes[drop].get('seq', receipt.seq)}" in warning.message
+    assert f"type={changes[drop].get('type', receipt.type)}" in warning.message
+    assert ("validation" if drop == "validation" else "mismatch") in warning.message
+    assert "Private receipt" not in warning.message
+    assert not h.manager._ctx.assessment.events
+    h.manager.rules_received(receipt)
+    assert receipt.seq in h.manager._ctx.assessment.events and len(caplog.records) == 1

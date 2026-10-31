@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Literal
 from xml.etree import ElementTree as ET
@@ -31,10 +31,12 @@ class TestRun:
 
     outcomes: Mapping[str, Outcome]
     problems: tuple[RunProblem, ...] = ()
+    details: Mapping[str, str] = field(default_factory=dict[str, str], compare=False)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "outcomes", MappingProxyType(dict(self.outcomes)))
         object.__setattr__(self, "problems", tuple(self.problems))
+        object.__setattr__(self, "details", MappingProxyType(dict(self.details)))
 
 
 def _problem(code: str) -> TestRun:
@@ -110,6 +112,14 @@ def _outcome(case: ET.Element) -> Outcome:
     return "passed"
 
 
+def _detail(case: ET.Element) -> str | None:
+    tag = {"failed": "failure", "error": "error"}.get(_outcome(case))
+    child = case.find(tag) if tag else None
+    if child is None:
+        return None
+    return " ".join(child.get("message", "").split()) or None
+
+
 def _structure_ok(root: ET.Element) -> bool:
     allowed = {
         "testsuites": {"testsuite"},
@@ -146,6 +156,7 @@ def parse_junit(xml_text: str) -> TestRun:
     if not _structure_ok(root):
         return _problem("invalid_structure")
     outcomes: dict[str, Outcome] = {}
+    details: dict[str, str] = {}
     seen: dict[str, list[Outcome]] = {}
     problems: list[RunProblem] = []
     for case in root.iter("testcase"):
@@ -155,6 +166,10 @@ def parse_junit(xml_text: str) -> TestRun:
             continue
         outcome = _outcome(case)
         previous = seen.setdefault(test_id, [])
+        if not previous or outcome == "error" or "error" not in previous:
+            details.pop(test_id, None)
+            if message := _detail(case):
+                details[test_id] = message
         if previous:
             if len(previous) == 1 and {previous[0], outcome} == {"failed", "error"}:
                 outcome = "error"
@@ -162,4 +177,4 @@ def parse_junit(xml_text: str) -> TestRun:
                 problems.append(RunProblem("duplicate_test_id", test_id))
         previous.append(outcome)
         outcomes[test_id] = outcome
-    return TestRun(outcomes, tuple(problems))
+    return TestRun(outcomes, tuple(problems), details)
