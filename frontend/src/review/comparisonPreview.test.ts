@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { headerCases, headerState } from "./ReviewHeader.fixture";
-import { comparisonPreview } from "./reviewBodyEvidence";
+import { comparisonPreview, selectReviewBody } from "./reviewBodyEvidence";
 
 it.each([
   ["a", "24 inputs, 2 differ · 1 of 36 functions"],
@@ -10,4 +10,15 @@ it.each([
   ["d", ""],
 ] as const)("previews %s from evidence", (name, expected) => {
   expect(comparisonPreview(headerState(name), headerCases[name].changeId)).toBe(expected);
+});
+
+it("returns no preview parts for an eligible merged review without measurements", () => {
+  const state = headerState("merged");
+  const { changeId } = headerCases.merged;
+  const proposal = state.changes[changeId]?.proposal;
+  if (!proposal) throw new Error("Missing merged proposal");
+  state.changeFacts[changeId] = [];
+  proposal.impact.entries = [];
+  expect(selectReviewBody(state, changeId).kind).toBe("g");
+  expect(comparisonPreview(state, changeId)).toBe("");
 });

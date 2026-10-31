@@ -31,6 +31,64 @@ async function capture(page: Page, name: string) {
   await page.evaluate(() => document.fonts.ready);
   return page.screenshot({ path: `${shots}${name}.png` });
 }
+async function revealDecisions(page: Page) {
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Reject", exact: true }).click();
+  await page.getByRole("button", { name: "Show findings", exact: true }).click();
+}
+
+it.each(["dark", "day"])("preserves agent and node sizes in %s", async (theme) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.goto(url);
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    await page.evaluate((theme) => {
+      document.documentElement.dataset.theme = theme;
+    }, theme);
+    for (const view of ["decision", "reveal"]) {
+      const agents = page.locator(".pp-agent");
+      await check(agents).toHaveCount(view === "decision" ? 1 : 2);
+      for (const agent of await agents.all()) {
+        await check(agent).toHaveCSS("font-size", "13px");
+        await check(agent.locator(".pp-letter")).toHaveCSS("width", "22px");
+        await check(agent.locator(".pp-letter")).toHaveCSS("height", "22px");
+      }
+      const badges = page.locator(".pp-node .pp-letter");
+      await check(badges).toHaveCount(view === "decision" ? 1 : 2);
+      for (const badge of await badges.all()) {
+        await check(badge).toHaveCSS("width", view === "decision" ? "22px" : "20px");
+        await check(badge).toHaveCSS("height", view === "decision" ? "22px" : "20px");
+      }
+      if (view === "decision") await revealDecisions(page);
+    }
+  } finally {
+    await page.close();
+  }
+});
+
+it("preserves dock wrapping without a lock caption across practice screens", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.goto(url);
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "nowrap");
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "nowrap");
+    await page.getByRole("button", { name: "Reject", exact: true }).click();
+    await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "nowrap");
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByRole("button", { name: "Reject", exact: true }).click();
+    await page.getByRole("button", { name: "Show findings", exact: true }).click();
+    await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "nowrap");
+    await page.getByRole("button", { name: "See your result", exact: true }).click();
+    await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "nowrap");
+  } finally {
+    await page.close();
+  }
+});
+
 it.each(["dark", "day"])(
   "captures recorded decisions in %s",
   async (theme) => {
@@ -97,6 +155,8 @@ it.each(["dark", "day"])(
   60000,
 );
 
+// Same a/b captures as ReviewPanel.browser.test.ts: headerState("a"/"b") and
+// headerCases in ReviewHeader.fixture.tsx, derived from hand-written event logs.
 it.skipIf(before).each(["a", "b"] as const)(
   "reviews fixture %s with the shared phone evidence",
   async (name) => {
@@ -185,6 +245,7 @@ it.skipIf(before).each(["a", "b"] as const)(
         await check(page.locator(".pp-lock-caption")).toHaveText(
           "Approve opens when every answer is Yes.",
         );
+        await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "wrap");
         const answers = page.locator(".decision-actions button");
         for (const answer of await answers.all()) {
           const box = await answer.boundingBox();
@@ -200,6 +261,7 @@ it.skipIf(before).each(["a", "b"] as const)(
         );
       await check(approve).toBeEnabled();
       await check(page.locator(".pp-lock-caption")).toHaveCount(0);
+      await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "nowrap");
       expect(
         await page.locator(".pp-main").evaluate((el) => el.scrollWidth <= el.clientWidth),
       ).toBe(true);

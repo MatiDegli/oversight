@@ -256,10 +256,14 @@ it("uses words for a finish with no matching decisions", () => {
   expect(html).toContain('<p class="pp-score">None of your decisions matched the recording.</p>');
 });
 
-it.each([1, 2])("previews a diff with %i files", (count) => {
+it.each([
+  [1, "shop/inventory.py · +9 −0"],
+  [2, "shop/inventory.py and 1 more file · +9 −0"],
+  [3, "shop/inventory.py and 2 more files · +9 −0"],
+] as const)("previews a diff with %i files", (count, expected) => {
   const proposal = practice.cases[0]?.proposal;
-  if (!proposal) throw new Error("Missing proposal");
-  expect(diffPreview({ ...proposal, files: proposal.files.slice(0, count) })).toBe(
-    `shop/inventory.py${count === 2 ? " and 1 more file" : ""} · +9 −0`,
-  );
+  const file = proposal?.files[0];
+  if (!proposal || !file) throw new Error("Missing proposal file");
+  const files = [...proposal.files, { ...file, path: "shop/extra.py" }].slice(0, count);
+  expect(diffPreview({ ...proposal, files })).toBe(expected);
 });

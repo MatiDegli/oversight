@@ -30,13 +30,6 @@
   }
 }
 @media (width < 1280px) {
-  .phone-practice .pp-agent {
-    font-size: 14px;
-  }
-  .phone-practice .pp-letter {
-    width: 24px;
-    height: 24px;
-  }
   .phone-practice .pp-main > [aria-label="Facts"] {
     margin-block: 12px 20px;
     gap: 6px;
@@ -45,7 +38,7 @@
     padding-inline: 8px;
     white-space: nowrap;
   }
-  .phone-practice .pp-dock {
+  .phone-practice .pp-dock:has(> .pp-lock-caption) {
     flex-wrap: wrap;
   }
   .phone-practice .pp-lock-caption {
