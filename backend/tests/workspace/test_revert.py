@@ -656,6 +656,9 @@ async def test_cas_mismatch_naming_inverse_settles_checkout(workspace, api, monk
     real = workspace.git
     calls = []
 
+    # The first real update-ref lands C. apply_inverse's own update-ref, the returned
+    # second call, fails with main already at C: that is the mismatch under test.
+    # Collapsing the two calls into one would turn this into a happy-path test.
     async def race(tree, *args, **kwargs):
         if args[0] == "update-ref":
             calls.append(args)
