@@ -1331,7 +1331,9 @@ Depth controls how much unfolds; scale controls how it is drawn. This refines [L
 and the Conversation tab; if ready before the cut line, the map launches before milestone pulses.
 The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
 
-1. **Two axes.** Depth is Modules / Functions / Details; scale is zoom. Enter the map below
+1. **Two axes.** Depth is Modules / Functions / Details; scale is zoom. The map exists only
+   with at least 24 module nodes currently drawn, after the tests filter; smaller graphs stay
+   on cards at every zoom and Fit, with no “· Map” in the readout. Enter the map below
    64.7% (11/17, the 11px floor against the 17px module title); leave above 68.75% (11/16),
    the unchanged start camera's floor. Between them, keep the current level. Explicit camera
    moves choose from their target zoom and suspend hysteresis until the move ends, so landing
@@ -1352,10 +1354,10 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    never places anything. No L-shaped frames. Nine cells per column, widest card plus 120px
    gutter (446px here), header plus 150px (220px here); order modules by box x, box y, then id.
    Order groups by count descending, then label, tests last; pack left to right or stack within
-   the tallest group's band. Leave 340px sideways and 460px stacked between cells, preserving
-   at least 48px of field in the captured map views. Panels in a row share their top edge.
-   CONTESTED: at 20%, stacked panels with wrapped 60px headers leave 26px of field
-   (460 × 20% − 60 − 6), so fixed ground and a universal 48px minimum need a ruling.
+   the tallest group's band. Ground stays 340px sideways and 460px stacked: with one-line
+   headers it is at least 48px at the drawn zooms and down to 20% (49px there); where narrow
+   headers wrap below the drawn zooms it may fall to 26px at 20%, without touching or overlap.
+   Panels in a row share their top edge.
 4. **Quiet panels.** Card surface at 60%, node border, 12px radius and top highlight. Each header
    strip wraps with 8px/12px padding and a divider; name and module count are built. Header agent
    rings, decision chip and “tested by N calls” belong to `frontend/map-lines`, built later.
@@ -1376,9 +1378,8 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    Boltons `d31d821`, tests hidden: measured in the product at 1920×1080, card Fit **43.33%**,
    landing on the map at **37.93%**; at 1280×800, card Fit **26.74%**, map **21.41%**.
    These replace the old 65% estimate; the sketch's shell has different available space.
-   CONTESTED: at 1280×800 the current shell's demo card Fit is **45.62%**, below enter,
-   so the unchanged threshold rule puts it on the map (**41.93%**), contrary to the approved
-   demo-cards premise. No shell or threshold exception is introduced by this front.
+   At 1280×800 the current shell's demo card Fit is **45.62%**, below enter; its six drawn
+   modules keep it on cards under the 24-module rule, at every width and in every take.
 
 ### Motion
 

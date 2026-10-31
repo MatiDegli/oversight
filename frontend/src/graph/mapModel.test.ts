@@ -100,7 +100,7 @@ it("takes the widest expanded card from the snapshot for the map's cells", () =>
   expect(mapModel(nodes, themes.dark).cellWidth).toBe(520);
 });
 
-it("records the contested 26px ground at 20% between stacked panels with wrapped headers", () => {
+it("keeps one-line header ground above 48px and the wrapped floor at 26px", () => {
   const nodes: GraphElement[] = [
     ["library", 30],
     ["helpers", 3],
@@ -123,8 +123,24 @@ it("records the contested 26px ground at 20% between stacked panels with wrapped
   const first = model.groups.find((g) => g.id === "helpers"),
     next = model.groups.find((g) => g.id === "utilities");
   if (!first || !next) throw new Error("Missing stacked groups");
+  first.headerWidth = 70;
+  next.headerWidth = 70;
+  const library = model.groups.find((g) => g.id === "library");
+  if (!library) throw new Error("Missing library group");
+  for (const zoom of [0.2, 0.21414142523805546, 0.3, 0.37929292929643]) {
+    const stacked =
+      (panelBox(next, zoom, model.groups).y1 - panelBox(first, zoom, model.groups).y2) * zoom;
+    const sideways =
+      (panelBox(first, zoom, model.groups).x1 - panelBox(library, zoom, model.groups).x2) * zoom;
+    expect(stacked).toBeGreaterThanOrEqual(48);
+    expect(sideways).toBeGreaterThanOrEqual(48);
+    if (zoom === 0.2) {
+      expect(stacked).toBe(49);
+      expect(sideways).toBe(56);
+    }
+  }
   first.headerWidth = 140;
   next.headerWidth = 140;
   const gap = (panelBox(next, 0.2, model.groups).y1 - panelBox(first, 0.2, model.groups).y2) * 0.2;
-  expect(gap).toBe(26); // 460 × 20% − 60px header − 6px lower padding, below the approved 48px.
+  expect(gap).toBe(26); // Wrapped-header floor: 460 × 20% − 60px header − 6px lower padding.
 });

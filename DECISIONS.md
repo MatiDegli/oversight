@@ -2931,3 +2931,18 @@ rework and the Conversation tab, before milestone pulses if ready before the cut
 - CONTESTED: at the 20% floor, two stacked panels with wrapped headers have 26px between
   panel edges (460 × 20% − 60 − 6), below 48px. The fixed packing values are preserved;
   satisfying both rules needs a maintainer ruling, not an invented spacing exception.
+
+## 2026-10-31 — Map eligibility and panel ground
+
+The maintainer settled both CONTESTED points from “Map view and folder groups”.
+
+- The map exists only with at least 24 module nodes currently shown, after filtering tests.
+  Below that, every zoom and Fit stays on cards and the readout has no “· Map”. The map is for
+  repositories too big for cards, and the demo must look the same in every take at every width.
+  The demo has 12 modules, six drawn with tests hidden; Boltons d31d821 has 66, 34 drawn.
+  Thresholds 11/17 and 11/16, the minimum zoom 0.2, packing and Boltons' map frames stay unchanged.
+- Keep the sketch's 340px sideways and 460px stacked ground. With a one-line 37px header,
+  stacked panel edges have at least 48px at the drawn zooms and down to 0.2 (49px there).
+  Narrow headers wrapping below the drawn zooms may reduce it to the 26px floor at 0.2;
+  panels never touch or overlap. This resolves the earlier universal-48px conflict without
+  changing the approved packing values.

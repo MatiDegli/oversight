@@ -21,7 +21,7 @@ beforeAll(async () => {
   });
   html = await server.transformIndexHtml(
     "/",
-    '<html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { mountMap, mountMapDemo, mapTick } from "/src/app/map.browser.fixture.tsx"; window.mapTest = { mount: mountMap, demo: mountMapDemo, tick: mapTick };</script></body></html>',
+    '<html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { mountMap, mountMapSize, mountMapDemo, mapTick } from "/src/app/map.browser.fixture.tsx"; window.mapTest = { mount: mountMap, sized: mountMapSize, demo: mountMapDemo, tick: mapTick };</script></body></html>',
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
@@ -219,6 +219,31 @@ it("uses hysteresis in both directions and preserves focus and camera on events"
     expect(await level(page)).toBe("cards");
   }, null);
 });
+it.each([23, 24])("gates zoom and Fit on %i shown module nodes", async (modules) => {
+  await withMap(async (page) => {
+    await page.evaluate((count) => {
+      window.mapTest.sized(count);
+    }, modules);
+    await ready(page);
+    expect(
+      await page.evaluate(
+        () =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.nodeBounds(".module").length,
+      ),
+    ).toBe(modules);
+    for (const zoom of [0.646, 0.6875, 0.69, 0.2]) {
+      await zoomTo(page, zoom);
+      expect(await level(page)).toBe(modules === 24 && zoom <= 0.6875 ? "map" : "cards");
+    }
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await ready(page);
+    expect(await level(page)).toBe(modules === 24 ? "map" : "cards");
+    if (modules === 23) await check(page.getByLabel("Zoom percentage")).not.toContainText("Map");
+    else await check(page.getByLabel("Zoom percentage")).toContainText("Map");
+  }, null);
+});
 it.each(
   ["synthetic", ...(boltons ? ["boltons"] : [])].flatMap((kind) =>
     [1280, 1920].map((width) => ({ kind, width })),
@@ -240,7 +265,7 @@ it.each(
     width === 1280 ? 800 : 1080,
   );
 });
-it.fails("CONTESTED: demo Fit at 1280 must stay on cards", async () => {
+it.each([1280, 1920])("keeps the demo on cards after Fit and zoom at %i", async (width) => {
   await withMap(
     async (page) => {
       await page.evaluate(() => {
@@ -256,7 +281,6 @@ it.fails("CONTESTED: demo Fit at 1280 must stay on cards", async () => {
       );
       await page.getByRole("button", { name: "Fit the graph to the view" }).click();
       await ready(page);
-      await page.screenshot({ path: `${shots}demo-debug.png` });
       const info = await page.evaluate(() => ({
         zoom: document
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
@@ -267,7 +291,7 @@ it.fails("CONTESTED: demo Fit at 1280 must stay on cards", async () => {
           return b && { x: b.x, y: b.y, width: b.width, height: b.height };
         })(),
       }));
-      await writeFile(`${shots}demo-fit-1280.json`, JSON.stringify(info, null, 2));
+      await writeFile(`${shots}demo-fit-${String(width)}.json`, JSON.stringify(info, null, 2));
       expect(await level(page), JSON.stringify(info)).toBe("cards");
       expect(
         await page.evaluate(() =>
@@ -276,10 +300,13 @@ it.fails("CONTESTED: demo Fit at 1280 must stay on cards", async () => {
             ?.oversightGraph?.positions(),
         ),
       ).toEqual(before);
+      await zoomTo(page, 0.2);
+      expect(await level(page)).toBe("cards");
+      await check(page.getByLabel("Zoom percentage")).not.toContainText("Map");
     },
     null,
-    1280,
-    800,
+    width,
+    width === 1280 ? 800 : 1080,
   );
 });
 
@@ -419,8 +446,8 @@ describe.skipIf(process.env.MAP_SHOTS !== "1" || !boltons)("approved map capture
             await page.getByRole("button", { name: "Modules", exact: true }).click();
             await ready(page);
             await page.screenshot({ path: `${shots}demo${suffix}` });
-            // The narrow demo is the recorded CONTESTED premise; keep all other capture checks strict.
-            expect(await level(page)).toBe(width === 1280 ? "map" : "cards");
+            expect(await level(page)).toBe("cards");
+            await check(page.getByLabel("Zoom percentage")).not.toContainText("Map");
           },
           boltons,
           width,

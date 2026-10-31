@@ -14,11 +14,11 @@ const recorded = log
   .trim()
   .split("\n")
   .map((line) => JSON.parse(line) as ServerEvent);
-export function syntheticMapGraph(): GraphSnapshot {
+export function syntheticMapGraph(modules = 24): GraphSnapshot {
   const nodes: GraphNode[] = [],
     positions: GraphSnapshot["positions"] = {};
-  for (let i = 0; i < 20; i += 1) {
-    const folder = i < 10 ? "library" : "tools",
+  for (let i = 0; i < modules; i += 1) {
+    const folder = i < Math.ceil(modules / 2) ? "library" : "tools",
       name = `module_${String(i).padStart(2, "0")}`;
     const id = `${folder}.${name}`,
       path = `${folder}/${name}.py`;
@@ -62,7 +62,7 @@ export function syntheticMapGraph(): GraphSnapshot {
         id: "map-call",
         kind: "calls",
         src: "library.module_00:run",
-        dst: "tools.module_10:run",
+        dst: `tools.module_${String(Math.ceil(modules / 2)).padStart(2, "0")}:run`,
         confidence: "exact",
         reason: null,
       },
@@ -180,6 +180,9 @@ export function mountMap(graph = syntheticMapGraph(), name = "map fixture") {
   root = createRoot(host);
   flushSync(() => root?.render(<Harness />));
 }
+export function mountMapSize(modules: number) {
+  mountMap(syntheticMapGraph(modules));
+}
 export function mountMapDemo() {
   mountMap({ ...demo, positions: demoPositions } as unknown as GraphSnapshot, "demo-repo");
 }
@@ -191,6 +194,11 @@ export function mapTick() {
 }
 declare global {
   interface Window {
-    mapTest: { mount: typeof mountMap; demo: typeof mountMapDemo; tick: typeof mapTick };
+    mapTest: {
+      mount: typeof mountMap;
+      sized: typeof mountMapSize;
+      demo: typeof mountMapDemo;
+      tick: typeof mapTick;
+    };
   }
 }

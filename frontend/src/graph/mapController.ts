@@ -7,7 +7,7 @@ import type { Camera } from "./camera";
 import type { GraphElement } from "./elements";
 import type { GraphViewProps } from "./GraphView";
 import type { MapFrame } from "./MapLayer";
-import { nextLevel, targetLevel } from "./mapLevel";
+import { MAP_MIN_MODULES, nextLevel, targetLevel } from "./mapLevel";
 import { mapModel, panelBox } from "./mapModel";
 
 /** Measure only after GraphView's font gate; fitting and drawing then share header bounds. */
@@ -55,8 +55,10 @@ function createMapController(
   let cy: Core | undefined;
   let model: MapFrame["model"] = { groups: [], cellWidth: 446, cellHeight: 220 };
   let level: MapFrame["level"] = "cards";
+  const shownModules = () => cy?.nodes(".module").length ?? 0;
   const publish = () => {
     if (!cy || !latest.current.map) return;
+    if (shownModules() < MAP_MIN_MODULES) level = "cards";
     host.current?.setAttribute("data-map-level", level);
     latest.current.onMapLevel?.(level);
     frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() } };
@@ -81,14 +83,14 @@ function createMapController(
   };
   const navigate = () => {
     if (!cy || !latest.current.map) return;
-    level = nextLevel(level, cy.zoom());
+    level = nextLevel(level, cy.zoom(), shownModules());
     publish();
   };
   // Viewport events only follow the camera. An explicit move therefore holds its target level
   // throughout animation; hysteresis runs again only for the person's next navigation gesture.
   const hold = (zoom: number) => {
     if (latest.current.map) {
-      level = targetLevel(zoom);
+      level = targetLevel(zoom, shownModules());
       publish();
     }
   };
@@ -127,7 +129,7 @@ function createMapController(
     },
     zoom(graph: Core, factor: number) {
       if (latest.current.map) {
-        level = nextLevel(level, graph.zoom() * factor);
+        level = nextLevel(level, graph.zoom() * factor, shownModules());
       }
       zoomBy(graph, factor, prefersReducedMotion());
       publish();
@@ -161,7 +163,8 @@ function createMapController(
       if (!graph) return;
       this.explicit(() => {
         const cards = frameCamera(graph, [], prefersReducedMotion(), geometry);
-        if (!cards || !latest.current.map || targetLevel(cards.zoom) === "cards") return cards;
+        if (!cards || !latest.current.map || targetLevel(cards.zoom, shownModules()) === "cards")
+          return cards;
         return fitPanelCamera(
           graph,
           (zoom) => model.groups.map((g) => panelBox(g, zoom, model.groups)),
