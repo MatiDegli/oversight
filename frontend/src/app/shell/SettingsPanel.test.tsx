@@ -59,7 +59,14 @@ it("keeps pending until both HTTP and the state revision arrive", () => {
   const next = { ...state, mergeMode: { mode: "ask_me", revision: 1 } as const };
   expect(mergeModePending(next, attempt)).toBe(true);
   expect(mergeModePending(next, { ...attempt, responseRevision: 1 })).toBe(false);
-  expect(buttons(SettingsPanel({ state, attempt })).every((b) => b.props.disabled)).toBe(true);
+  const onSetMergeMode = vi.fn();
+  const cards = buttons(SettingsPanel({ state, attempt, onSetMergeMode }));
+  expect(cards.every((b) => b.props["aria-disabled"])).toBe(true);
+  expect(cards.every((b) => b.props.disabled === undefined)).toBe(true);
+  for (const card of cards) {
+    (card.props.onClick as (e: { detail: number }) => void)({ detail: 1 });
+  }
+  expect(onSetMergeMode).not.toHaveBeenCalled();
 });
 it("shows a refusal until revision changes and labels read-only replay", () => {
   const message = "Merge mode revision is stale; read the current mode again";

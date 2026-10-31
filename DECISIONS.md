@@ -2646,5 +2646,6 @@ with no words. Q7: replay cards are read-only, mark the recorded mode, and show
 "Setting the merge mode is not available in a replay." A null mode marks neither card
 and omits the status segment. Q13: the cards act only on their own pointer click;
 Enter and Space send nothing, with no shortcut, palette command or confirmation.
-The enabled live choice deliberately presents the server's 409 refusal before F10,
-as approved for the mode toggle; this is the bounded exception to reserved controls.
+The accepted F7 plan for item 8 (`plan-r1.md`, line 45) specifies a mode toggle
+with the server's 409 reason. Before F10, the live Merge alone when safe choice
+presents that refusal.

@@ -61,8 +61,7 @@ export function SettingsPanel({
               key={mode}
               type="button"
               aria-pressed={marked}
-              aria-disabled={!onSetMergeMode || !current}
-              disabled={pending}
+              aria-disabled={pending || !onSetMergeMode || !current}
               onClick={(event) => {
                 if (event.detail === 0 || marked || pending || !current) return;
                 onSetMergeMode?.(mode);
@@ -84,7 +83,7 @@ export function SettingsPanel({
         })}
       </div>
       {failure && (
-        <p role="alert" className="mt-4 flex items-start gap-2 text-sm text-muted">
+        <p role="alert" className="mt-4 flex items-start gap-2 text-sm text-text">
           <X aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           <span className="min-w-0 wrap-anywhere">{failure}</span>
         </p>

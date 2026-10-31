@@ -14,6 +14,21 @@ beforeAll(async () => {
     const server = await createServer({
       root: fileURLToPath(new URL("../../", import.meta.url)),
       mode,
+      plugins: [
+        {
+          name: "settings-connected-events",
+          configureServer(server) {
+            server.middlewares.use("/events", (_request, response) => {
+              response.writeHead(200, {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+              });
+              // Keep the idle stream open until the browser closes the page.
+              response.write(": connected\n\n");
+            });
+          },
+        },
+      ],
       cacheDir: fileURLToPath(new URL(`../../../.shots/rules-${mode}-cache`, import.meta.url)),
       server: { host: "127.0.0.1", port: 0, strictPort: false },
     });
@@ -37,11 +52,10 @@ async function open(replay = false, width = 1920, height = 1080, theme = "dark")
   if (!entry) throw new Error("Missing server");
   const page = await browser.newPage({ viewport: { width, height } });
   await page.route("**/", (r) => r.fulfill({ contentType: "text/html", body: entry.html }));
-  await page.route("**/events?*", (r) =>
-    r.fulfill({ contentType: "text/event-stream", body: ": connected\n\n" }),
-  );
   await page.goto(entry.url);
-  await check(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+  await check(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   await page.evaluate((theme) => {
     document.documentElement.dataset.theme = theme;
   }, theme);
@@ -68,6 +82,11 @@ async function mode(page: Page, mode: "ask_me" | "merge_when_safe", revision: nu
 const rules = (page: Page) =>
   page.getByRole("button", { name: "Merge alone when safe", exact: false });
 async function shot(page: Page, name: string, suffix: string) {
+  const status = page.getByLabel("Status line");
+  await check(status).not.toContainText("Connection lost");
+  await check(status).not.toContainText("Live event stream disconnected");
+  await check(status.getByRole("button", { name: "Retry connection" })).toHaveCount(0);
+  if (name !== "mode-settings-replay") await check(status).toContainText("Connected");
   if (process.env.RULES_UI_SHOTS !== "1") return;
   const directory = fileURLToPath(new URL("../../../.shots/rules-ui/", import.meta.url));
   await mkdir(directory, { recursive: true });
@@ -103,6 +122,7 @@ it("opens Settings only on demand, preserves focus, and sends one observed-revis
     expect(requests).toEqual([]);
     await rules(page).click();
     await check(page.getByRole("alert").filter({ hasText: refusal })).toBeVisible();
+    await check(rules(page)).toBeFocused();
     expect(requests).toEqual([{ mode: "merge_when_safe", revision: 3 }]);
     await page.getByRole("button", { name: /Open decisions inbox/ }).click();
     await gear.click();
@@ -225,7 +245,9 @@ it.each([
         await shot(page, "mode-settings-ask", suffix);
         const request = page.waitForRequest("**/merge-mode");
         let release: (() => void) | undefined;
+        let requests = 0;
         await page.route("**/merge-mode", async (r) => {
+          requests += 1;
           await new Promise<void>((resolve) => {
             release = resolve;
           });
@@ -237,9 +259,14 @@ it.each([
         await rules(page).click();
         await request;
         await check(rules(page)).toBeDisabled();
+        await check(rules(page)).toBeFocused();
+        // aria-disabled retains focus and still rejects additional pointer clicks.
+        await rules(page).dispatchEvent("click", { detail: 1 });
+        expect(requests).toBe(1);
         await shot(page, "mode-settings-pending", suffix);
         release?.();
         await check(page.getByRole("alert").filter({ hasText: refusal })).toBeVisible();
+        await check(rules(page)).toBeFocused();
         await shot(page, "mode-settings-refused", suffix);
       } finally {
         await page.close();

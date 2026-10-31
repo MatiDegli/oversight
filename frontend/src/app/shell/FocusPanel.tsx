@@ -44,17 +44,18 @@ export function FocusPanel(
             const changeId = tab.review ?? tab.diff?.changeId;
             const change = changeId ? state.changes[changeId] : undefined;
             const slot = change ? state.agents[change.agent_id]?.slot : undefined;
-            const existingTitle =
+            const title =
               tab.id === "inbox"
                 ? "Decisions"
-                : tab.id === "practice"
-                  ? "Two-change practice"
-                  : tab.review
-                    ? `Review · ${tab.review}`
-                    : tab.diff
-                      ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
-                      : (tab.file?.path.split("/").at(-1) ?? "File");
-            const title = tab.id === "settings" ? "Settings" : existingTitle;
+                : tab.id === "settings"
+                  ? "Settings"
+                  : tab.id === "practice"
+                    ? "Two-change practice"
+                    : tab.review
+                      ? `Review · ${tab.review}`
+                      : tab.diff
+                        ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
+                        : (tab.file?.path.split("/").at(-1) ?? "File");
             return (
               <div
                 key={tab.id}
