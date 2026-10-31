@@ -111,11 +111,37 @@ it.each([false, null, undefined])(
   },
 );
 
-it("explains a disabled message box when only the pause callback is available", () => {
+it.each([
+  ["working", "onPause", "Pause"],
+  ["revising", "onPause", "Pause"],
+  ["paused", "onResume", "Resume"],
+  ["working", "onStop", "Stop and discard"],
+  ["revising", "onStop", "Stop and discard"],
+  ["paused", "onStop", "Stop and discard"],
+] as const)("keeps %s controls truthful with only %s", (state, callback, label) => {
   const conversation = selectConversation(sketchState, "agent-1", []);
   if (!conversation) throw new Error("Missing fixture");
   const html = renderToStaticMarkup(
-    <Composer header={conversation.header} onPause={() => Promise.resolve()} />,
+    <Composer
+      header={{ ...conversation.header, state }}
+      {...{ [callback]: () => Promise.resolve() }}
+    />,
+  );
+  expect(html).toContain(label);
+  expect(html).not.toContain("Agent A is not running.");
+  expect(html).not.toContain("<textarea");
+  expect(html).not.toContain(">Send<");
+  expect(html).not.toContain("Recorded run:");
+});
+
+it("explains an inactive agent's disabled message box", () => {
+  const conversation = selectConversation(sketchState, "agent-1", []);
+  if (!conversation) throw new Error("Missing fixture");
+  const html = renderToStaticMarkup(
+    <Composer
+      header={{ ...conversation.header, state: "ready_for_review" }}
+      onSend={() => Promise.resolve()}
+    />,
   );
   expect(html).toContain('aria-disabled="true"');
   expect(html).toContain('readOnly=""');

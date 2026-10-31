@@ -28,7 +28,6 @@ export function Composer({
   const [failure, setFailure] = useState<string | null>(null);
   const captionId = useId();
   const active = ["working", "revising", "paused"].includes(header.state);
-  const disabled = !active || !onSend;
   const replay = !onSend && !onPause && !onResume && !onStop;
   async function send() {
     if (!onSend || !active || !text.trim() || sending.current) return;
@@ -67,19 +66,21 @@ export function Composer({
   const paused = header.state === "paused";
   return (
     <div className="shrink-0 border-t border-divider p-[14px]">
-      <textarea
-        aria-label={`Message Agent ${header.slot}`}
-        aria-describedby={disabled ? captionId : undefined}
-        placeholder={`Message Agent ${header.slot}. It reads it at its next step.`}
-        aria-disabled={disabled}
-        readOnly={pending || disabled}
-        value={text}
-        onChange={(event) => {
-          setText(event.target.value);
-        }}
-        className={`block h-16 w-full resize-none rounded-[10px] border border-control-edge bg-field px-3 py-[10px] text-[15px] text-text placeholder:text-faint aria-disabled:text-faint ${focusRing}`}
-      />
-      {disabled && (
+      {onSend && (
+        <textarea
+          aria-label={`Message Agent ${header.slot}`}
+          aria-describedby={!active ? captionId : undefined}
+          placeholder={`Message Agent ${header.slot}. It reads it at its next step.`}
+          aria-disabled={!active}
+          readOnly={pending || !active}
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value);
+          }}
+          className={`block h-16 w-full resize-none rounded-[10px] border border-control-edge bg-field px-3 py-[10px] text-[15px] text-text placeholder:text-faint aria-disabled:text-faint ${focusRing}`}
+        />
+      )}
+      {!active && (
         <p id={captionId} className="mt-[6px] text-[14px] text-muted">
           Agent {header.slot} is not running.
         </p>
@@ -103,16 +104,18 @@ export function Composer({
           </button>
         )}
         {active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
-        <button
-          type="button"
-          className={`${button} ml-auto bg-raised`}
-          aria-disabled={disabled || pending || !text.trim()}
-          onClick={() => {
-            void send();
-          }}
-        >
-          Send
-        </button>
+        {onSend && (
+          <button
+            type="button"
+            className={`${button} ml-auto bg-raised`}
+            aria-disabled={!active || pending || !text.trim()}
+            onClick={() => {
+              void send();
+            }}
+          >
+            Send
+          </button>
+        )}
       </div>
       {failure && (
         <p
