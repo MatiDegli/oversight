@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.11.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.12.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -1785,6 +1785,49 @@
         "possible"
       ],
       "type": "string"
+    },
+    "ConfirmExamples": {
+      "additionalProperties": false,
+      "description": "Typed human confirmation for `POST /agents/{id}/examples`.",
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "evidence_seq": {
+          "description": "Guards the ready_for_review status carrying the examples the person saw.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText-Input"
+        },
+        "action": {
+          "description": "Guards whether the person selects offered examples or supplies replacements.",
+          "enum": [
+            "confirm",
+            "edit"
+          ],
+          "type": "string"
+        },
+        "examples": {
+          "description": "Guards the bounded, unpinned examples; only the server records confirmation.",
+          "items": {
+            "$ref": "#/$defs/TaskExample-Input"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "evidence_seq",
+        "base_commit",
+        "action",
+        "examples"
+      ],
+      "title": "ConfirmExamples",
+      "type": "object"
     },
     "Conflict": {
       "additionalProperties": false,

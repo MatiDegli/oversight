@@ -30,6 +30,7 @@ FRONTEND = HERE.parent / "frontend"
 REQUESTS: list[type[BaseModel]] = [
     commands.DictateTask,
     commands.StartAgent,
+    commands.ConfirmExamples,
     commands.EnqueueTask,
     commands.QueueRevision,
     commands.StartLead,

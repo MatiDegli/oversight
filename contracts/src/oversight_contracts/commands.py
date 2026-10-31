@@ -52,6 +52,21 @@ class StartAgent(ContractModel):
     """
 
 
+class ConfirmExamples(ContractModel):
+    """Typed human confirmation for `POST /agents/{id}/examples`."""
+
+    run_id: RunId
+    """Guards against confirming examples from another run."""
+    evidence_seq: PositiveInt
+    """Guards the ready_for_review status carrying the examples the person saw."""
+    base_commit: NonEmptyText
+    """Guards against confirming examples on a different task base."""
+    action: Literal["confirm", "edit"]
+    """Guards whether the person selects offered examples or supplies replacements."""
+    examples: list[TaskExample] = Field(min_length=1, max_length=5)
+    """Guards the bounded, unpinned examples; only the server records confirmation."""
+
+
 class AgentCreated(ContractModel):
     """201 from `POST /agents`."""
 

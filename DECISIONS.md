@@ -2897,3 +2897,26 @@ Reason: a docs audit found many docs behind main after several days of changed d
 5. AGENTS.md is aligned only with decisions already recorded.
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
+
+
+## 2026-10-31 — Human confirmation of examples and task carry
+
+The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
+and 1–5 examples. Before any await, guards match agent/run, the ready_for_review offer seq and base. Confirm selects unchanged offered examples of one meaning,
+allowing subsets with unique ids. Edit requires bounded finite JSON inputs and exact outputs for allowed synchronous top-level functions; the server pins copies
+to the original task. The contract number is assigned at landing.
+
+E2 owns POST /agents/{id}/examples and dispatch because its runtime owns Commands, pending evidence and the fresh run. E3 provides the handler and manager
+transition without wiring or model calls. Prose, model replies, answering links and later statuses confer no confirmation authority.
+
+R1: no AgentMessageSent; the command has no text, and the pinned status is durable evidence. R2: refuse client pins. R3: refuse behavior-only and mixed
+replacements (Q3). R4: person=False confirms criteria without acting on code. R5: the manager and fresh run may each emit an identical starting status.
+
+Admission requires an unproposed, review-ready revision zero, no head or examples, the same base, trusted main and an open manager. One ctx.whole
+publish/bookkeeping step records starting before replacing the task and returning to working. Publish failure preserves the phase; cancellation waits for
+settlement. A digest of normalized action and ordered examples makes identical retries return the current task without another event while its record exists.
+Different confirmations and competing decisions in flight fail; Reject and Stop retain their cancellation paths.
+
+AgentTask retains original text, detached confirmed examples and prior_steps. The Done when block has exact results without test ids. Statuses and proposals
+carry examples through revisions and review saves; budgets include prior steps. Empty examples remain null. E2 must fill the runtime-owned halt-for-ledger
+status gap in app.py:962-983, deliberately untouched here.

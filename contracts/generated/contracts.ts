@@ -1374,6 +1374,58 @@ export interface ChangeView {
   revision_rounds: number | null;
 }
 /**
+ * Typed human confirmation for `POST /agents/{id}/examples`.
+ */
+export interface ConfirmExamples {
+  run_id: RunId;
+  /**
+   * Guards the ready_for_review status carrying the examples the person saw.
+   */
+  evidence_seq: number;
+  base_commit: NonEmptyTextInput;
+  /**
+   * Guards whether the person selects offered examples or supplies replacements.
+   */
+  action: "confirm" | "edit";
+  /**
+   * Guards the bounded, unpinned examples; only the server records confirmation.
+   */
+  examples: TaskExample1[];
+}
+/**
+ * An example supplied with a task before editing begins.
+ */
+export interface TaskExample1 {
+  example_id: NonEmptyTextInput;
+  inputs: NonEmptyTextInput;
+  /**
+   * Expected rendered output; the empty string is a valid expectation.
+   */
+  expected_output?: string | null;
+  /**
+   * Expected behavior when output alone does not describe the example.
+   */
+  expected_behavior?: NonEmptyTextInput | null;
+  /**
+   * An optional free-text explanation.
+   */
+  note?: string | null;
+  /**
+   * Human confirmation and originating task; null means unconfirmed.
+   */
+  pin?: ExamplePin1 | null;
+}
+/**
+ * Human confirmation of the containing task example.
+ */
+export interface ExamplePin1 {
+  source_task: NonEmptyTextInput;
+  /**
+   * The existing single-user human principal; the server verifies confirmation.
+   */
+  confirmed_by?: "person";
+}
+/**
  * Request a proposed split without starting coding agents.
  */
 export interface CreatePlan {
@@ -1474,16 +1526,6 @@ export interface ErrorReportEvent {
  */
 export interface ErrorResponse {
   error: ErrorDetail;
-}
-/**
- * Human confirmation of the containing task example.
- */
-export interface ExamplePin1 {
-  source_task: NonEmptyTextInput;
-  /**
-   * The existing single-user human principal; the server verifies confirmation.
-   */
-  confirmed_by?: "person";
 }
 /**
  * 200 from `GET /files?path=&agent=`.
@@ -2224,29 +2266,6 @@ export interface StartAgent {
   answering?: DecisionRef | null;
 }
 /**
- * An example supplied with a task before editing begins.
- */
-export interface TaskExample1 {
-  example_id: NonEmptyTextInput;
-  inputs: NonEmptyTextInput;
-  /**
-   * Expected rendered output; the empty string is a valid expectation.
-   */
-  expected_output?: string | null;
-  /**
-   * Expected behavior when output alone does not describe the example.
-   */
-  expected_behavior?: NonEmptyTextInput | null;
-  /**
-   * An optional free-text explanation.
-   */
-  note?: string | null;
-  /**
-   * Human confirmation and originating task; null means unconfirmed.
-   */
-  pin?: ExamplePin1 | null;
-}
-/**
  * Request a coordination lead.
  */
 export interface StartLead {
@@ -2330,4 +2349,4 @@ export interface UpdatePlan {
   subtasks: SubtaskDraft[];
 }
 
-export const CONTRACT_VERSION = "1.11.0";
+export const CONTRACT_VERSION = "1.12.0";

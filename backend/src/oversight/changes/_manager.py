@@ -15,6 +15,7 @@ it cancels and waits for, then discards it as Reject does. Every git call is `Wo
 with a timeout; decisions hold main's lock, then the agent's, throughout. Once a change enters
 `broken`, `main_suspect` stays true until the process restarts; `check_main` reads main's state,
 and `aclose` drains the close-outs before the store closes.
+Confirm examples returns an unproposed, completed examples phase to working atomically.
 
 The person's edits on main (docs/plans/files.md): `save_main` commits one file as the user and
 `rescan` re-reads main, each one `_whole` step under main's lock, each publishing one
@@ -30,6 +31,7 @@ from oversight.agents import AgentTask, LedgerFile, Publish, ReviewOutcome, RunE
 from oversight.changes import _approval as approval
 from oversight.changes import _cross_review as cross_review
 from oversight.changes import _delivery as delivery
+from oversight.changes import _examples as examples
 from oversight.changes import _files as files
 from oversight.changes import _preemption as preemption
 from oversight.changes import _proposal as proposal
@@ -40,6 +42,7 @@ from oversight.changes._answers import require_yes, validate_answers
 from oversight.changes._assessment import RulesEvidence, RulesScheduler
 from oversight.changes._decision_validation import validate_decision_target
 from oversight.changes._evidence import WriteEvidence
+from oversight.changes._examples import ConfirmOutcome, ExamplesConfirmation
 from oversight.changes._mode import ModeController, start_capability
 from oversight.changes._policy import PolicyInputs
 from oversight.changes._resolution_validation import validate_resolution_intent
@@ -325,6 +328,23 @@ class ChangeManager:
             raise ChangeNotFound(agent_id)
         if self._ctx.state.closing or rec.state != "working":
             raise WrongState(f"{agent_id} cannot take run controls while {rec.state}")
+
+    def confirm_examples(
+        self, agent_id: AgentId, change_id: ChangeId, confirmation: ExamplesConfirmation
+    ) -> asyncio.Task[ConfirmOutcome]:
+        """Reserve before awaiting; durable confirmation replaces the task but starts no run."""
+        rec = self._ctx.state.agents.get(agent_id)
+        if rec is None:
+            raise ChangeNotFound(agent_id)
+        if rec.change_id != change_id:
+            raise WrongState("The pending examples belong to another change")
+        if rec.examples_digest is not None and rec.examples_digest == confirmation.digest:
+            return self._ctx.spawn(examples.repeated(rec))
+        if self._ctx.state.closing or self.main_suspect:
+            raise WrongState("Examples cannot be confirmed while closing or main is suspect")
+        task = examples.check(rec, confirmation)
+        self._take(change_id, frozenset({"unproposed"}), "confirm examples", person=False)
+        return self._decide(rec, examples.confirmed(self._ctx, rec, confirmation, task))
 
     def _take(
         self, change_id: ChangeId, allowed: frozenset[State], verb: str, *, person: bool = True

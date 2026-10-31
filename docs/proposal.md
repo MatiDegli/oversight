@@ -621,6 +621,7 @@ the single error format.
   is not wired yet; these fields do not establish confirmation authority. Standalone starts
   ignore zone; plan dispatch carries its server-owned zone. answering links an inbox decision.
   Approve may carry a standing grant, and the three decision commands may carry review-card answers.
+  ConfirmExamples is the only confirmation channel; its route and dispatch remain unwired until the runtime phase.
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
   `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
   `not_implemented`, `invalid_request`, `internal`, `forbidden` and `too_large`. They map to 404, 409, 409, 503, 403, 422,
