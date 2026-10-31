@@ -34,7 +34,9 @@ it("remounts the live cone card with the last omission count without a new event
       window.omissionHarness.report(3);
     });
     const card = page.getByRole("region", { name: "Possibly affected" });
-    await browserExpect(card.getByRole("status")).toHaveCount(0);
+    await browserExpect(card.getByRole("status")).toHaveText(
+      "+3 call routes omitted: no clear lane",
+    );
     await page.evaluate(() => {
       window.omissionHarness.show(false);
     });
@@ -42,8 +44,10 @@ it("remounts the live cone card with the last omission count without a new event
     await page.evaluate(() => {
       window.omissionHarness.show(true);
     });
-    await browserExpect(card.getByRole("status")).toHaveCount(0);
-    await browserExpect(page.getByRole("status")).toHaveCount(0);
+    await browserExpect(card.getByRole("status")).toHaveText(
+      "+3 call routes omitted: no clear lane",
+    );
+    await browserExpect(page.getByRole("status")).toHaveCount(1);
   } finally {
     await browser.close();
     await server.close();

@@ -196,7 +196,7 @@ it("styles measured words with neutral tokens only and keeps the whole row under
   }
 });
 
-it("orders footer lines and suppresses the entire footer for an empty cone", () => {
+it("orders footer lines and limits an empty cone’s footer to routing omissions", () => {
   const card = (entries = cone.entries) =>
     renderToStaticMarkup(
       <ImpactConeCard
@@ -216,5 +216,13 @@ it("orders footer lines and suppresses the entire footer for an empty cone", () 
     "+4 call routes omitted: no clear lane",
   ]);
   expect(footer).toContain('role="status"');
-  expect(card([])).not.toContain("<footer");
+  const empty = card([]);
+  const emptyFooter = empty.match(/<footer .*?<\/footer>/)?.[0] ?? "";
+  expect([...emptyFooter.matchAll(/<p[^>]*>(.*?)<\/p>/g)].map((m) => m[1])).toEqual([
+    "+4 call routes omitted: no clear lane",
+  ]);
+  expect(emptyFooter).toContain('role="status"');
+  expect(empty).toContain("No exact callers · 2 possible callers, not followed");
+  expect(empty).not.toContain("<li");
+  expect(empty).not.toContain('aria-label="Distance');
 });

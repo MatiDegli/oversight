@@ -47,6 +47,7 @@ export function ImpactConeCard({
   possible?: number;
   words?: ReadonlyMap<string, ConeWord | null> | null;
 }) {
+  const hasEntries = cone.entries.length > 0;
   const names = new Map(nodes.map((node) => [node.id, node.qualname]));
   const groups = new Map<number, ImpactCone["entries"]>();
   for (const entry of cone.entries) {
@@ -123,18 +124,20 @@ export function ImpactConeCard({
           </section>
         ))}
       </div>
-      {cone.entries.length > 0 &&
-        (cone.omitted_by_depth > 0 ||
-          cone.omitted_by_limit > 0 ||
-          possible > 0 ||
-          routingOmissions > 0) && (
-          <footer className="mt-2.5 shrink-0 border-t border-divider pt-2.5 text-muted">
-            {possible > 0 && <p>+{possibleCallersText(possible)}</p>}
-            {cone.omitted_by_depth > 0 && <p>+{cone.omitted_by_depth} omitted by depth</p>}
-            {cone.omitted_by_limit > 0 && <p>+{cone.omitted_by_limit} omitted by the node limit</p>}
-            {routingOmissions > 0 && <p role="status">{routingOmissionText(routingOmissions)}</p>}
-          </footer>
-        )}
+      {(routingOmissions > 0 ||
+        (hasEntries &&
+          (cone.omitted_by_depth > 0 || cone.omitted_by_limit > 0 || possible > 0))) && (
+        <footer className="mt-2.5 shrink-0 border-t border-divider pt-2.5 text-muted">
+          {hasEntries && possible > 0 && <p>+{possibleCallersText(possible)}</p>}
+          {hasEntries && cone.omitted_by_depth > 0 && (
+            <p>+{cone.omitted_by_depth} omitted by depth</p>
+          )}
+          {hasEntries && cone.omitted_by_limit > 0 && (
+            <p>+{cone.omitted_by_limit} omitted by the node limit</p>
+          )}
+          {routingOmissions > 0 && <p role="status">{routingOmissionText(routingOmissions)}</p>}
+        </footer>
+      )}
     </section>
   );
 }
