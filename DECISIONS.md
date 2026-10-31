@@ -2994,3 +2994,20 @@ measured cone is unavailable. These readers keep their existing conservative com
 E4 does not certify a report that its required criteria could not verify. The real-harness
 test_proposal_suite_normalized_and_consistent now asserts all four effects for every covered
 normalization code, including preserved observed parameter ids and no measured probe suites.
+## 2026-10-31 — Pure structural shape comparison
+
+The shape producer compares base and head graph snapshots without I/O or approval effects.
+Functions and methods are observed only when added or modified, longer than 80 lines
+(including decorators), and new or growing: AGENTS.md makes size a review signal, never a gate.
+At most 24 observations are returned in deterministic kind/path/node order to bound the review;
+omission and last-good parse files explicitly mark the evidence incomplete.
+
+A new import dependency is observed only between modules already present in base: imports
+to or from a new module are an ordinary part of adding code. A head import component of two
+or more modules is observed once when it contains a new edge, including an expanded old cycle.
+Test nodes are excluded from all three checks because tests are hidden from cones and long
+parametrized tables are normal. Imports reflect the parser's any-scope edges, including inside
+functions and under TYPE_CHECKING; the wording says "imports" because these edges do not prove
+execution at import time. Git-tree evidence identifies the captured source; a complete empty
+result means checked with no observations, not a safety certification. Wiring and duplicate
+logic remain separate fronts.
