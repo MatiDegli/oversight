@@ -7,6 +7,7 @@ import json
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import AsyncMock
 
 import pytest
@@ -129,10 +130,23 @@ def test_render_source_cap() -> None:
 
 
 @pytest.mark.parametrize("value", [{"z": "é", "a": [1, 1.0, None, True, False, ""]}, "", 1, 1.0])
-def test_render_parity_with_canonical_json(value) -> None:
+def test_render_parity_with_canonical_json(value, monkeypatch) -> None:
     cases = [example(expected_output=json.dumps(value, ensure_ascii=False))]
     assert parse_cases(cases)[0].expected == canonical_json(value)
-    assert render_examples(cases, "change-1") == render_criteria(cases, "change-1")
+    rendered = render_criteria(cases, "change-1")
+    assert render_examples(cases, "change-1") == rendered
+    module = ModuleType("shop.mod")
+    monkeypatch.setattr(module, "value", lambda: value, raising=False)
+    monkeypatch.setitem(sys.modules, "shop.mod", module)
+    namespace: dict[str, object] = {}
+    exec(rendered.source, namespace)
+    check = namespace[rendered.cases[0][1].split("::")[1]]
+    assert callable(check)
+    check()
+    if isinstance(value, float):
+        monkeypatch.setattr(module, "value", lambda: 1)
+        with pytest.raises(AssertionError):
+            check()
     left = example(inputs='{"kwargs":{"b":1,"a":2},"args":[],"node_id":"shop.mod:value"}')
     right = example(inputs='{"node_id":"shop.mod:value","args":[],"kwargs":{"a":2,"b":1}}')
     assert render_criteria([left], "change-1") == render_criteria([right], "change-1")
@@ -148,6 +162,7 @@ def test_render_parity_with_canonical_json(value) -> None:
         {"inputs": '{"node_id":"shop.mod:value","args":{},"kwargs":{}}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[],"kwargs":[]}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[],"kwargs":{"x":1,"x":2}}'},
+        {"inputs": '{"node_id":"shop.mod:value","args":[],"args":[1],"kwargs":{}}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[NaN],"kwargs":{}}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[],"kwargs":{"x":1e999}}'},
         {"inputs": " " * 4001},
@@ -167,6 +182,7 @@ def test_render_parity_with_canonical_json(value) -> None:
             "shop:outer.inner",
             "shop:f#2",
             "a..b:f",
+            "a:b:c",
             "a:if",
             "if:f",
             1,

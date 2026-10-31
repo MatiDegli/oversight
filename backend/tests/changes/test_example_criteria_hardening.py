@@ -19,7 +19,7 @@ from test_rules_transaction import reserved as rules_reserved
 
 from oversight.changes import _mode, _proposal
 from oversight.changes._example_criteria import install_criteria, refusal_code, unverified_run
-from oversight.workspace import ProcessResult, content_hash
+from oversight.workspace import ProcessResult, content_hash, render_examples
 from oversight_contracts.events import ChangeResolved, ChangeUpdated, ErrorReport, SuiteExecution
 
 reserved = rules_reserved
@@ -173,3 +173,12 @@ async def test_install_retry_refuses_existing_different_or_base_file(
         await install_criteria(ctx, rec, [example()])
     write.assert_not_awaited()
     assert rec.criteria is None and not h.payloads(ChangeUpdated)
+
+
+def test_canonical_ascii_input_caps_remain() -> None:
+    inputs = '{"node_id":"shop.mod:value","args":["' + "é" * 1000 + '"],"kwargs":{}}'
+    case = example(inputs=inputs)
+    assert len(inputs) < 4000
+    assert render_examples([case], "change-1")
+    with pytest.raises(ValueError, match="inputs exceed character limit"):
+        render_criteria([case], "change-1")

@@ -31,7 +31,11 @@ class RequiredCriteria:
 
 
 def render_criteria(examples: Sequence[TaskExample], change_id: str) -> RenderedCriteria:
-    """Preview and installation share strict parsing and the public canonical JSON rule."""
+    """Preview and installation share strict parsing and canonical JSON.
+
+    Character caps also apply to canonical ASCII text entering the source and hash.
+    Rebasing those caps to raw input length changes which examples can install.
+    """
     parsed = parse_example_cases(examples)
     # Validate before canonicalization: duplicate keys must never disappear here.
     normalized = [
