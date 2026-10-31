@@ -1,5 +1,10 @@
 # Plan: the API and the backend wiring, level 1 (front 16)
 
+> Status: done. Live wiring merged in `2a7cbb3`; later routes include Revert `69aaee8`
+> and lead runtime `6818b3b`. Checked against main `8b9b589`.
+> The original level-1 design and test matrix below are historical; current route availability is
+> `backend/src/oversight/api/commands.py:add_command_routes`, `NOT_BUILT` and `LIVE_ONLY`.
+
 Revision 2, after the review of ee2ac14. Sources: AGENTS.md, docs/proposal.md (3, 4.5 to 4.7, 5,
 7), `contracts/`, main at 479b3ec, `changes/manager` f93d3e4 (`open`, `run_ended`, `approve`,
 `reject`, `aclose`, `ChangeNotFound`, `WrongState`) plus three additions asked of it (section 4).
@@ -7,7 +12,7 @@ No contract change, no new dependency or module: starter in `app`, routes in `ap
 
 ## 1. Startup and shutdown (`app.py`, `settings.py`, `__main__.py`, `tools/smoke.py`)
 
-`Workspace.reset` (template copy, `git init -b main`, fixed initial commit), `acquire_runtime`,
+At planning time, `Workspace.reset` (template copy, `git init -b main`, fixed initial commit), `acquire_runtime`,
 `ensure_demo_venv`, `EventStore`, `WorkspaceGraph` and `app.state.layout` exist; nothing calls them
 yet, and `make smoke` runs replay. **Settings** gains `agent_model` (`muse-spark`, or `fake` with
 `fake_script`), the budget and prices (section 3), and `demo_python` (tests only, no variable).
@@ -43,7 +48,9 @@ manager and a `Starter` protocol `api` defines and `app` implements. Errors: `Ap
 | `POST /agents` `StartAgent` | 201 `AgentCreated` once `open` returned | `invalid_request` 422, `spend_brake` 403, `wrong_state` 409, `slot_busy` 409 |
 | `POST /changes/{id}/approve` or `reject`, `{revision, head_commit, comment?}` | 202, empty; results as events | `not_found` 404, `wrong_state` 409 |
 | `GET /graph`, `/events`, `/health` | as today, `mode="live"` | as today |
-| stop, request-changes, impact, files, rescan, message, pause, resume | 501 `not_implemented`, body not parsed | |
+| Stop, Request changes, rescan, messages, pause, resume | 202 in live mode | See the current command handlers |
+| impact, files, tree | Built live reads/saves | See the current command handlers |
+| Routes in `NOT_BUILT` | 501 `not_implemented`, body not parsed | Manual review and dictation only |
 
 - **Start: validate, reserve, release on every exit.** Side-effect-free checks, in order: the
   request (`model` is the configured profile and not in `UNVERIFIED_PROFILES`, slot `A`, a task)
@@ -152,13 +159,12 @@ Real uvicorn on a free port, `asyncio.timeout(60)`, waits on events, envelopes v
 
 About 450 lines of code and 600 of tests, four commits: startup, brake, routes, guard.
 
-## Open
+## Closed level-1 questions
 
-1. **Stop** is level 2 in AGENTS.md and the manager has none: 501 now. **`internal` -> 500**: the
-   maintainer's answer picks the branch in section 2.
-2. **Prices** US$0.10 / 0.20 per million: the coordinator's figures, to be confirmed. Limits too.
-3. **Manager additions** (`main_suspect`, `check_main`, the drain): this front waits for them.
-4. **Files the first brief did not list**: root `conftest.py`, `.env.example`, `agents/usage.py`.
+Stop and the manager's main-state/drain ports are delivered. Unexpected failures have the
+contractual `internal` HTTP 500 response (`api/errors.py:_internal`). Dated list prices are
+stored separately from the conservative budget brake (`events/list_prices.py`). The historical
+estimates and one-slot assumptions above do not describe current admission (`slots.resolve_slots`).
 
 ## Contracts 1.4.0 delivery A
 
@@ -169,20 +175,18 @@ stale targets or incompatible states return 409 without effects. The manager cap
 observed target before reserving a decision and rechecks under main and worktree locks.
 Stop keeps its existing body and resolves the latest persisted target as a person.
 
-The following routes are reservations in live and replay. They return 501 before interpreting
-any body or query, including malformed JSON:
+The delivery originally reserved routes that have since been built. Current live behavior:
 
-| Routes | Reserved request / eventual response |
+| Routes | Availability |
 | --- | --- |
-| `POST /changes/{id}/review`, `/revert` | `ReviewChange`, `RevertChange` / 202 |
-| `GET /changes/{id}`, `GET /history` | `ChangeView`, `HistoryPage` |
-| `POST /queue`, `GET /queue`, `GET /queue/{id}`, `POST /queue/{id}/cancel` | `EnqueueTask`, `QueueSnapshot`, `QueuedTask`, `QueueRevision` |
-| `POST /leads`, `GET /leads/{id}`, `POST /leads/{id}/stop` | `StartLead`, `LeadCreated`, `LeadStatus`, `StopLead` |
-| `GET /agents/{id}` | Coding-agent `AgentStatus` |
-| `GET /tree?agent=` | `TreeResponse`; no body or path query |
+| `POST /changes/{id}/review`, `POST /dictation` | `NOT_BUILT`: 501 before body/query parsing, in both modes |
+| `POST /changes/{id}/revert` | Live 202; committed target loaded by the server (`69aaee8`) |
+| `GET /changes/{id}`, `GET /agents/{id}`, `GET /history` | Committed read views in live and replay |
+| Plan and queue reads | Committed views in live and replay; mutations are live only (`efd592f`) |
+| `POST /leads`, `POST /leads/{id}/stop`, `GET /leads/{id}` | Live start/stop and committed status read (`6818b3b`) |
+| `GET /tree?agent=` | Live bounded traversal (`c6b9332`); replay returns 501 |
 
-`TreeResponse` requires run_id, nullable agent_id, sorted unique directories and files,
-nullable graph_version and truncated. Each `TreeFile` requires path and nullable hash.
-The two arrays share a 2,000-entry cap; truncated requires exactly 2,000 retained entries.
-Traversal and the 8 MiB hashing budget are future implementation, with the selected tree locked.
-FastAPI and Vite reserve tree, history, queue and leads as API prefixes.
+`LIVE_ONLY` routes return 501 in replay. `TreeResponse` requires run_id, nullable agent_id,
+sorted unique directories and files, nullable graph_version and truncated. Each `TreeFile`
+requires path and nullable hash. The arrays share a 2,000-entry cap. Traversal and the 8 MiB
+hashing budget are implemented in `workspace/tree.py`; the selected tree is locked.
