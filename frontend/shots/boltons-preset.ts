@@ -27,7 +27,11 @@ try {
   const response = await api.request.get(new URL("graph", url).href);
   assert(response.ok(), "GET /graph failed");
   const live = (await response.json()) as GraphResponse;
-  assert.equal(live.graph.nodes.length, 1624);
+  assert.equal(
+    live.graph.nodes.length,
+    Object.keys(preset).length,
+    `Live node count ${String(live.graph.nodes.length)} differs from preset count ${String(Object.keys(preset).length)}`,
+  );
   assert.deepEqual(live.graph.positions, preset, "OVERSIGHT_LAYOUT did not reach GET /graph");
   assert.deepEqual(Object.keys(preset).sort(), live.graph.nodes.map(({ id }) => id).sort());
   const reports = [];
