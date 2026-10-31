@@ -24,6 +24,14 @@ These records stay: browser tests read images here, and decision history cites t
 | [merge-mid.png](life/merge-mid.png) | Merge light travelling across the graph | Built | Life layer; product is the reference. |
 | [life-v2.webm](life/life-v2.webm) | Contour drift and merge light at 10× speed | Built | Life layer; product is the reference. |
 
+| [ready-mid.png](milestone-pulses/ready-mid.png) | Ready for review mid-pulse, dark, 1920×1080 | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
+| [needs-mid.png](milestone-pulses/needs-mid.png) | Needs you mid-pulse, dark, 1920×1080 | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
+| [merged-mid.png](milestone-pulses/merged-mid.png) | Merge travel mid-way, dark, 1920×1080 | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
+| [ready-mid-day.png](milestone-pulses/ready-mid-day.png) | Ready for review mid-pulse, day, 1920×1080 | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
+| [720-ready.png](milestone-pulses/720-ready.png) | Ready for review reference at 720p | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
+| [720-needs.png](milestone-pulses/720-needs.png) | Needs you reference at 720p | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
+| [720-merged.png](milestone-pulses/720-merged.png) | Merge travel reference at 720p | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
+
 ## Review
 
 Approved baseline of 2026-10-30, retained after `frontend/review-panel-rework`.
