@@ -173,11 +173,7 @@ async def verify_run(
     code = await _file_problem(ctx, rec, run) or _report_problem(required, run)
     if code is None:
         return run
-    normalized = replace(
-        run,
-        result=run.result.model_copy(update={"outcome": "error"}),
-        problems=(*run.problems, f"example_criteria: {code}"),
-    )
+    normalized = _normalize_run(run, code)
     # Counts avoid exposing model-authored ids, slugs or inputs.
     await ctx.error(
         "tests",
@@ -186,6 +182,21 @@ async def verify_run(
         fatal=False,
     )
     return normalized
+
+
+def _normalize_run(run: SuiteRun, code: str) -> SuiteRun:
+    return replace(
+        run,
+        result=run.result.model_copy(update={"outcome": "error"}),
+        problems=(*run.problems, f"example_criteria: {code}"),
+    )
+
+
+def unverified_run(rec: ChangeRecord, run: SuiteRun) -> SuiteRun:
+    """Preserve observed proposal evidence when criteria verification was interrupted."""
+    if rec.criteria is None or run.tested_tree is None or run.result.outcome != "passed":
+        return run
+    return _normalize_run(run, "tree_unreadable")
 
 
 def refusal_code(run: SuiteRun) -> str:
