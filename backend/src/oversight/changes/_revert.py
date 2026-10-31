@@ -159,7 +159,14 @@ class RevertService:
     ) -> asyncio.Task[RevertResult]:
         """Reserve synchronously; deliver the admitted outcome through events."""
         attempt = self._admit(target, command, principal)
-        task = asyncio.get_running_loop().create_task(self._submitted(attempt))
+        work = self._submitted(attempt)
+        try:
+            task = asyncio.get_running_loop().create_task(work)
+        except BaseException:
+            work.close()
+            self._reserved.discard(attempt.key)
+            self._attempts.remove(attempt)
+            raise
         self._owners.add(task)
 
         def done(owner: asyncio.Task[RevertResult]) -> None:

@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 import sys
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from live_helpers import SERVER_EVENT
@@ -40,6 +40,22 @@ async def test_submit_duplicate_refused_before_any_await(system):
         assert len(s.events) == 2 and not task.done()
     finally:
         await task
+
+
+async def test_submit_task_creation_failure_releases_admission(system, monkeypatch):
+    s = system
+    before = list(s.events)
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            asyncio.get_running_loop(),
+            "create_task",
+            Mock(side_effect=RuntimeError("task creation failed")),
+        )
+        with pytest.raises(RuntimeError, match="task creation failed"):
+            s.service.submit(s.target, s.command, principal=Person)
+    assert not s.service._reserved and not s.service._owners and not s.service._attempts
+    assert s.events == before
+    assert (await s.service.submit(s.target, s.command, principal=Person)).result == "reverted"
 
 
 async def test_submit_cancel_before_start_releases_key(system):
