@@ -25,7 +25,7 @@ function camera(page: Page, id: string) {
     if (!element || !view) throw new Error("The graph is not mounted");
     const outside = [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
       .filter((row) => row.textContent.includes("Out of view"))
-      .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? "");
+      .map((row) => row.getAttribute("title") ?? "");
     return {
       representative: view.representative(wanted),
       representedOutOfView: [...new Set(outside.map((id) => view.representative(id)))],
@@ -58,7 +58,7 @@ function camera(page: Page, id: string) {
       })(),
       outOfView: [...document.querySelectorAll('[aria-label="Possibly affected"] li')]
         .filter((row) => row.textContent.includes("Out of view"))
-        .map((row) => row.querySelector("[title]")?.getAttribute("title") ?? ""),
+        .map((row) => row.getAttribute("title") ?? ""),
       pan: view.pan(),
       animating: view.animating(),
       size: { width: element.clientWidth, height: element.clientHeight },
@@ -171,7 +171,7 @@ it("frames the cone with legible labels, clears the card, and marks only clipped
     await panel(page).locator(".line-insert").first().waitFor();
     await browserExpect.poll(async () => (await camera(page, changed)).animating).toBe(false);
     const review = await camera(page, changed);
-    expect(review.leftInset).toBeCloseTo(304);
+    expect(review.leftInset).toBeCloseTo(408);
     expect(
       Math.min(review.labelSizes.name, review.labelSizes.state) * review.zoom,
     ).toBeGreaterThanOrEqual(11 - 1e-6);
@@ -218,7 +218,7 @@ it("pans to a node its cone row lists as out of view only when that row is click
     const card = page.getByRole("region", { name: "Possibly affected", exact: true });
     // The caller is off screen or behind the card, and the camera has not gone to it on its own.
     expect(review.outOfView).toContain(id);
-    await card.locator(`button[title="${id}"]`).click();
+    await card.getByTitle(id).getByRole("button").click();
     await browserExpect.poll(async () => (await camera(page, id)).animating).toBe(false);
     const after = await camera(page, id);
     // The same zoom, the node in the middle of what the card leaves free, and no node moved.
@@ -227,7 +227,7 @@ it("pans to a node its cone row lists as out of view only when that row is click
     expect(after.node?.y).toBeCloseTo(after.size.height / 2, 0);
     expect((await probe(page, ":childless")).positions).toEqual(positions);
     // The row no longer says it is out of view, so it is no longer a button.
-    await browserExpect(card.locator(`button[title="${id}"]`)).toHaveCount(0);
+    await browserExpect(card.getByTitle(id).getByRole("button")).toHaveCount(0);
     expect((await camera(page, id)).outOfView).not.toContain(id);
   });
 }, 30_000);

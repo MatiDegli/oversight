@@ -209,7 +209,9 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     for (const entry of proposal.impact.entries) {
       await expect(cone.locator(`[title="${entry.node_id}"]`)).toBeVisible();
       await expect(
-        cone.locator(`span[aria-label="Distance ${String(entry.distance)}"]`),
+        cone
+          .getByRole("region", { name: `Distance ${String(entry.distance)}`, exact: true })
+          .locator(`span[aria-label="Distance ${String(entry.distance)}"]`),
       ).toBeVisible();
     }
     await expect(cone).toContainText(

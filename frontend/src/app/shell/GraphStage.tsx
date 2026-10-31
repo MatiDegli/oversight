@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { GraphView, possibleCallers } from "../../graph";
 import type { Framing, GraphApi } from "../../graph";
-import { ImpactConeCard } from "../../review";
+import { ImpactConeCard, selectConeWords } from "../../review";
 import type { State } from "../../state";
 import { DetailControls, GraphHeading, Legend, ZoomControls } from "../GraphOverlays";
 import { fieldInput } from "../fieldScope";
@@ -92,6 +92,7 @@ export function GraphStage({
               >
                 <ImpactConeCard
                   cone={cone}
+                  words={shown ? selectConeWords(state, shown) : null}
                   possible={shownChange ? (possibleCallers(state, shownChange, cone) ?? 0) : 0}
                   routingOmissions={routingOmissions}
                   outOfView={framing?.key === frameKey ? framing.outOfView : undefined}
