@@ -2660,9 +2660,11 @@ are sorted, and reason order is stable policy order:
 `too_many_named_candidates`, `large_cone`, `cone_omitted`, `short_task_no_target`,
 `short_task_no_test_calls`, `target_parse_error`, `snapshot_parse_errors`, `ambiguous_name`.
 The last code alone is diagnostic and does not offer examples. Missing parse evidence
-conservatively offers examples: errors anywhere may hide callers or test reach, so cones are
-unavailable rather than fabricated as small/empty. Zero static test reach means “no test calls
-it”, never “no tests exist”. Supplied pins do not confer confirmation authority.
+conservatively offers examples: errors anywhere may hide callers or test reach. Cones are
+unavailable for targets in broken files; other targets retain the cone from `node_cone` at
+the requested bounds, including positive large/omitted evidence. A snapshot parse error
+prevents treating zero static test reach as evidence of absence. Otherwise zero means
+“no test calls it”, never “no tests exist”. Supplied pins do not confer confirmation authority.
 
 `agents/examples.py` constructs Muse Spark with reasoning low, one attempt, a 90-second timeout
 and 4096 output tokens. Missing Meta setup is `not_configured`; there is no provider fallback.

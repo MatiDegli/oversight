@@ -1,10 +1,13 @@
 """Selection boundaries on captured graphs, with actual static cone/test reach."""
 
+import re
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 
 from oversight.examples_selector import select_examples
+from oversight.graph import node_cone
 from oversight_contracts.examples import TaskExample
 from oversight_contracts.graph import GraphEdge, GraphNode, GraphSnapshot, ParseError
 
@@ -137,7 +140,26 @@ def test_parse_errors_report_unknown_not_empty_cone(path: str) -> None:
     result = select("f", snapshot)
     assert result.offer and "snapshot_parse_errors" in result.reasons
     assert ("target_parse_error" in result.reasons) == (path == "pkg.py")
-    assert result.cones[0].cone is None and "short_task_no_test_calls" not in result.reasons
+    expected = (
+        None if path == "pkg.py" else node_cone(snapshot, "pkg::f", max_depth=4, max_nodes=40)
+    )
+    assert result.cones[0].cone == expected
+    assert "short_task_no_test_calls" not in result.reasons
+
+
+@pytest.mark.parametrize("depth,limit", [(4, 40), (0, 40), (4, 0)])
+def test_unrelated_parse_error_preserves_cone_evidence(depth: int, limit: int) -> None:
+    snapshot = graph(node("f"), callers=16).model_copy(
+        update={"parse_errors": [ParseError(path="broken.py", line=1, message="syntax error")]}
+    )
+    result = select("f", snapshot, cone_depth=depth, cone_limit=limit)
+    expected = node_cone(snapshot, "pkg::f", max_depth=depth, max_nodes=limit)
+    assert result.cones[0].cone == expected
+    assert ("large_cone" in result.reasons) == (depth > 0 and limit > 0)
+    assert ("cone_omitted" in result.reasons) == (depth == 0 or limit == 0)
+    assert "snapshot_parse_errors" in result.reasons
+    # Missing callers in the broken file still make negative test reach unknowable.
+    assert "short_task_no_test_calls" not in result.reasons
 
 
 @pytest.mark.parametrize("reference", ["pkg::f", "pkg.f", "f"])
@@ -145,6 +167,27 @@ def test_resolution_and_identifier_boundaries(reference: str) -> None:
     snapshot = graph(node("f"), node("other"))
     assert select(reference, snapshot).targets == ("pkg::f",)
     assert not select("prefixf f_suffix object.f pkg.foo", snapshot).targets
+
+
+@pytest.mark.parametrize(
+    "reference", ["pkg::apply_discount", "pkg.apply_discount", "apply_discount"]
+)
+@pytest.mark.parametrize("punctuation", [".", ",", ")"])
+def test_resolution_with_trailing_punctuation(reference: str, punctuation: str) -> None:
+    result = select(f"Fix {reference}{punctuation}", graph(node("apply_discount"), tested=True))
+    assert result.targets == ("pkg::apply_discount",)
+    assert result.named_candidates == 1 and len(result.cones) == 1
+    assert not result.offer and not result.reasons
+
+
+def test_absent_labels_skip_regex(monkeypatch: pytest.MonkeyPatch) -> None:
+    snapshot = graph(*(node(f"f{i:03}") for i in range(180)))
+    finditer = Mock(wraps=re.finditer)
+    monkeypatch.setattr(re, "finditer", finditer)
+    assert not select("unknown", snapshot).targets
+    finditer.assert_not_called()
+    assert select("Fix f179", snapshot).targets == ("pkg::f179",)
+    assert finditer.call_count == 1
 
 
 def test_qualified_reference_does_not_resolve_ambiguous_suffix() -> None:

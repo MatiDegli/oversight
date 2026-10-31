@@ -53,7 +53,14 @@ def _load(text: str) -> object:
     except json.JSONDecodeError as error:
         raise ExamplesInvalid("malformed_json", str(error)) from error
     except ValueError as error:
-        code = "non_strict_json" if "duplicate JSON key" in str(error) else "non_finite_numbers"
+        message = str(error)
+        code = (
+            "non_strict_json"
+            if "duplicate JSON key" in message
+            else "non_finite_numbers"
+            if "Out of range float values" in message
+            else "malformed_json"
+        )
         raise ExamplesInvalid(code, str(error)) from error
     except RecursionError as error:
         raise ExamplesInvalid("invalid_schema", "JSON nesting exceeds parser limits") from error

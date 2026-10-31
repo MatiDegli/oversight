@@ -1,8 +1,10 @@
 """Examples E1 is inert: scripted replies only, no network or runtime wiring."""
 
+import asyncio
 import json
 from dataclasses import replace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -113,6 +115,34 @@ async def test_clarification_needed() -> None:
     assert not result.examples and len(client.requests) == 1
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("ending", ["examples", "invalid", "call_failed", "timeout", "cancelled"])
+async def test_factory_client_is_closed(ending: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    client = model(arguments="invalid" if ending == "invalid" else None)
+    close = AsyncMock()
+    monkeypatch.setattr(client, "aclose", close, raising=False)
+    failures = {
+        "call_failed": ModelAPIError("transport failed"),
+        "timeout": TimeoutError(),
+        "cancelled": asyncio.CancelledError(),
+    }
+    if ending in failures:
+        monkeypatch.setattr(client, "complete", AsyncMock(side_effect=failures[ending]))
+    if ending == "cancelled":
+        with pytest.raises(asyncio.CancelledError):
+            await run_examples_call(lambda: client, "context", ALLOWED)
+    else:
+        result = await run_examples_call(lambda: client, "context", ALLOWED)
+        assert (result.kind if ending == "examples" else result.reason) == {
+            "examples": "examples",
+            "invalid": "malformed_json",
+            "call_failed": "call_failed",
+            "timeout": "timeout",
+        }[ending]
+    close.assert_awaited_once_with()
+    assert CALL_SCOPE.get() is None
+
+
 def invalid_payload(issue: str) -> dict[str, Any]:
     raw = payload()
     case = raw["cases"][0]
@@ -178,6 +208,7 @@ def invalid_payload(issue: str) -> dict[str, Any]:
         ("empty_arguments", "empty_output"),
         ("empty_summary", "empty_output"),
         ("malformed", "malformed_json"),
+        ("integer_limit", "malformed_json"),
         ("duplicate_keys", "non_strict_json"),
         ("outer_duplicate", "non_strict_json"),
         ("unknown_key", "invalid_schema"),
@@ -213,6 +244,8 @@ async def test_failure_codes(issue: str, code: str) -> None:
     summary = json.dumps(raw)
     if issue == "malformed":
         summary = "```json\n{}\n```"
+    if issue == "integer_limit":
+        summary = '{"clarification_needed":' + "9" * 4301 + "}"
     if issue == "duplicate_keys":
         summary = '{"cases":[],"cases":[]}'
     if issue == "overflow":
@@ -318,17 +351,21 @@ def test_bounded_context_and_prompt_version(monkeypatch: pytest.MonkeyPatch) -> 
     long = example_context("x" * 13000, target_excerpts=[], test_excerpts=[], supplied=[])
     assert len(long) == EXAMPLE_CONTEXT_CHARS and long.endswith("text omitted.]")
     versions = [prompt_version(pack) for pack in (False, True)]
+    assert versions == ["agent-v1-c7ca1d7c6ffe", "agent-v1-b18b69366456"]
     monkeypatch.setattr(phase, "EXAMPLES_PROMPT", "different prompt")
     assert versions == [prompt_version(pack) for pack in (False, True)]
 
 
 @pytest.mark.anyio
-async def test_observed_failed_attempt_and_no_second_send(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("succeeds", [False, True])
+async def test_observed_failed_attempt_and_no_second_send(
+    succeeds: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
     client = model()
     original = client.complete
 
     async def fail(messages: Any, tools: Any) -> Any:
-        await original(messages, tools)
+        reply = await original(messages, tools)
         scope = CALL_SCOPE.get()
         assert scope and scope.attempt_failed
         await scope.attempt_failed(
@@ -344,11 +381,15 @@ async def test_observed_failed_attempt_and_no_second_send(monkeypatch: pytest.Mo
                 "final": "attempts_used",
             }
         )
+        if succeeds:
+            return reply
         raise ModelAPIError("failed once")
 
     monkeypatch.setattr(client, "complete", fail)
     result = await run_examples_call(lambda: client, "context", ALLOWED)
-    assert result.reason == "call_failed" and result.attempt_usage == (Usage(),)
+    assert result.kind == ("examples" if succeeds else "failed")
+    assert result.reason == (None if succeeds else "call_failed")
+    assert result.attempt_usage == ((Usage(), Usage(11, 7)) if succeeds else (Usage(),))
     assert len(client.requests) == 1
 
 

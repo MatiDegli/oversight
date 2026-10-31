@@ -45,7 +45,8 @@ def _resolve(task: str, snapshot: GraphSnapshot) -> tuple[tuple[str, ...], tuple
         (
             (match.start(), match.end(), label)
             for label in labels
-            for match in re.finditer(r"(?<![\w.])" + re.escape(label) + r"(?![\w.])", task)
+            if label in task
+            for match in re.finditer(r"(?<![\w.])" + re.escape(label) + r"(?!\w|\.\w)", task)
         ),
         key=lambda match: (-(match[1] - match[0]), match[0], match[2]),
     )
@@ -80,7 +81,8 @@ def select_examples(
     """Reason order is policy order below, independent of graph storage order.
 
     Candidate count includes ambiguous definitions; aliases and repeated mentions count once.
-    Parse errors anywhere can hide callers/tests, so all cones are unavailable in that snapshot.
+    Cones are unavailable for broken target files; other cones retain known positive evidence.
+    Parse errors anywhere can hide callers/tests, so zero test reach is then inconclusive.
     Unknown evidence conservatively offers examples; ambiguity alone is diagnostic, not an offer.
     """
     if cone_depth < 0 or cone_limit < 0:
@@ -88,11 +90,12 @@ def select_examples(
     task = task.strip()
     targets, ambiguous, candidates = _resolve(task, snapshot)
     bad_paths = {error.path for error in snapshot.parse_errors}
+    broken_targets = {node.id for node in snapshot.nodes if node.path in bad_paths}
     cones = tuple(
         TargetCone(
             target,
             None
-            if bad_paths
+            if target in broken_targets
             else node_cone(snapshot, target, max_depth=cone_depth, max_nodes=cone_limit),
         )
         for target in targets
@@ -111,12 +114,13 @@ def select_examples(
             "short_task_no_test_calls",
             len(task) < SHORT_TASK_CHARS
             and bool(targets)
+            and not bad_paths
             and len(known) == len(targets)
             and all(c.tests_reaching == 0 for c in known),
         ),
         (
             "target_parse_error",
-            any(node.id in targets and node.path in bad_paths for node in snapshot.nodes),
+            any(target in broken_targets for target in targets),
         ),
         ("snapshot_parse_errors", bool(bad_paths)),
     )

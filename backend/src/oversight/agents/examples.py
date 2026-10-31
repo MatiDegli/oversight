@@ -16,6 +16,7 @@ from oversight.agents._examples_validate import (
 from oversight.agents._examples_validate import (
     canonical_json as canonical_json,
 )
+from oversight.agents._lifecycle import close_model
 from oversight.agents.client import (
     CALL_SCOPE,
     META_BASE_URL,
@@ -155,13 +156,15 @@ async def run_examples_call(
 ) -> ExamplesOutcome:
     """One complete invocation, no repair. Injected clients must also disable transport retries.
 
+    This call owns the client returned by the factory and closes it on every exit.
     The CallScope records SDK receipts (including unanswered attempts); the failed-attempt
-    observer supplies unknown usage for HTTP failures without a receipt. Scripted replies are
+    observer supplies unknown usage for HTTP failures without a receipt. Returned replies are
     recorded here. No event is emitted and cancellation propagates to the caller.
     """
     allowed = tuple(allowed)
     receipts: list[Usage] = []
     names: tuple[str, ...] = ()
+    client: ModelClient | None = None
 
     async def record(reply: ModelReply) -> None:
         receipts.append(reply.usage)
@@ -186,8 +189,7 @@ async def run_examples_call(
                 ],
                 [EXAMPLE_FINISH_SCHEMA],
             )
-            if not receipts:
-                await record(reply)
+            await record(reply)
             names = tuple(call.name for call in reply.tool_calls)
             result = _reply(reply, client, allowed)
         return ExamplesOutcome(
@@ -214,3 +216,5 @@ async def run_examples_call(
         )
     finally:
         CALL_SCOPE.reset(token)
+        if client is not None:
+            await close_model(client)
