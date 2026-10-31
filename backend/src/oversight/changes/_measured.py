@@ -438,7 +438,7 @@ async def measure_cone(
             if isinstance(error, TimeoutError)
             else "isolation unavailable"
             if isolation_failed
-            else f"caller measurement unavailable ({type(error).__name__})"
+            else "caller measurement unavailable"
         )
         evidence = replace(evidence, problems=(reason,))
     return replace(evidence, suites=tuple(suites))
