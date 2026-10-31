@@ -67,6 +67,7 @@ class _Actor:
     start: tuple[int, int] | None = None
     has_status: bool = False
     work_seq: int | None = None
+    ready_change: str | None = None
 
     def finish(self, last_ms: int) -> ActorActivity:
         intervals = list(self.intervals)
@@ -151,8 +152,9 @@ class _Builder:
             start_seq, start_ms = actor.start
             actor.intervals.append(ActivityInterval(start_seq, seq, start_ms, ms))
             actor.start = None
-        if status.state == "ready_for_review":
+        if status.state == "ready_for_review" and actor.ready_change != status.change_id:
             self.ready[status.change_id] = (seq, ms)
+        actor.ready_change = status.change_id if status.state == "ready_for_review" else None
 
     def review(self, event: ChangeReviewedEvent, ms: int) -> None:
         review = event.payload

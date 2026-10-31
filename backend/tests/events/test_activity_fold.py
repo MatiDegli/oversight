@@ -457,3 +457,19 @@ def test_previous_review_can_start_an_interval_without_ready_status() -> None:
     assert fold.known_agent_ms == fold.known_active_ms == 3000
     assert fold.coverage == "missing_metrics"
     assert fold.problems == ("review at seq 1 has no ready_for_review start",)
+
+
+@pytest.mark.parametrize("interrupted,start", [(False, 1), (True, 3)])
+def test_repeated_ready_keeps_first_start_until_a_non_ready_status(
+    interrupted: bool, start: int
+) -> None:
+    states: list[AgentState] = ["ready_for_review", "ready_for_review"]
+    if interrupted:
+        states = ["ready_for_review", "paused", "ready_for_review"]
+    events: list[ServerEvent] = [status(n, state, n) for n, state in enumerate(states, 1)]
+    end = len(events) + 1
+    fold = fold_activity([*events, review(end, end)])
+    assert fold.actors[1].intervals == (
+        ActivityInterval(start, end, BASE_MS + start * 1000, BASE_MS + end * 1000),
+    )
+    assert fold.actors[1].ms == (end - start) * 1000
