@@ -44,6 +44,9 @@ def _helpers(roots: tuple[ast.AST, ...], source: Source, deadline: float) -> tup
                         pending.append(helper)
     # Class-level walrus bindings, super().__setattr__, and descriptor classes
     # are outside this construction identity analysis.
+    # Only top-level module defs are indexed: helpers under a module-level if or try
+    # are not reached. Helpers keep module order, so reordering two reached helpers
+    # conservatively makes the identity different.
     return tuple(node for group in functions.values() for node in group if node in selected)
 
 
