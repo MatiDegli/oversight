@@ -2,12 +2,12 @@ import { LockKeyhole, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { FileViewProps } from "../../editor";
 import { languageForPath } from "../../editor";
-import { agentLook, agentSlotStyle } from "../../theme";
-import { costText, selectDecisionInbox, selectActiveGrants } from "../../state";
+import { agentSlotStyle } from "../../theme";
+import { selectDecisionInbox, selectActiveGrants } from "../../state";
 import type { State } from "../../state";
-import { agentStatusLabels as labels } from "../../agents";
+import { ConversationPanelHeader } from "../../agents";
 import type { ConversationHeader } from "../../agents";
-import { ReviewHeader, selectInboxSummary } from "../../review";
+import { ReviewHeader, selectInboxSummary, selectChangeCard } from "../../review";
 import type { Attempt } from "../challenge/attempt";
 import { usePhonePractice } from "../challenge/usePhonePractice";
 
@@ -30,13 +30,10 @@ export function ReviewFrame({
       style={agentSlotStyle(change ? state.agents[change.agent_id]?.slot : undefined)}
     >
       <ReviewHeader
+        inert
         state={state}
         changeId={changeId}
-        status={
-          change?.resolution?.decided_by === "rules" && change.resolution.merge === "merged"
-            ? "Merged"
-            : undefined
-        }
+        status={selectChangeCard(state, changeId)?.kind === "merged" ? "Merged" : undefined}
         onClose={onClose}
       />
       {children}
@@ -75,48 +72,6 @@ export function InboxFrame({ state, children }: { state: State; children?: React
     </section>
   );
 }
-const chip =
-  "max-w-full rounded-control border border-border px-[10px] py-1 text-[14px] wrap-anywhere";
-
-function ConversationHeaderFrame({ header }: { header: ConversationHeader }) {
-  return (
-    <header className="shrink-0 border-b border-divider bg-panel px-[18px] py-4">
-      <div className="flex items-start gap-[10px]">
-        <span
-          className={`flex size-(--letter-badge-size) shrink-0 items-center justify-center rounded-label font-bold ${agentLook[header.slot].swatch}`}
-        >
-          {header.slot}
-        </span>
-        <h2 className="min-w-0 text-[20px] leading-[1.3] font-bold wrap-anywhere">{header.task}</h2>
-        <span className="shrink-0 rounded-full bg-raised px-[10px] py-[3px] text-[13px] font-semibold text-muted">
-          {labels[header.state]}
-        </span>
-      </div>
-      <div className="mt-[14px] flex flex-wrap gap-2">
-        <span className={chip}>
-          {header.modelLabel}
-          {header.reasoning !== null ? ` · reasoning ${header.reasoning}` : ""}
-        </span>
-        <span className={chip}>
-          Step {header.step} of {header.maxSteps}
-        </span>
-        {header.cost !== undefined && (
-          <span className={`${chip} ${header.cost === null ? "" : "font-mono"}`}>
-            {header.cost === null ? "Cost unknown" : costText(header.cost)}
-          </span>
-        )}
-        {header.round > 1 && <span className={chip}>Round {header.round}</span>}
-        {header.zonePaths[0] && (
-          <span className={chip}>
-            Zone: {header.zonePaths[0]}
-            {header.zonePaths.length > 1 ? ` and ${String(header.zonePaths.length - 1)} more` : ""}
-          </span>
-        )}
-      </div>
-    </header>
-  );
-}
-
 export function ConversationFrame({
   header,
   children,
@@ -129,7 +84,7 @@ export function ConversationFrame({
       aria-label={`Agent ${header.slot} conversation`}
       className="flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
     >
-      <ConversationHeaderFrame header={header} />
+      <ConversationPanelHeader header={header} />
       {children}
     </section>
   );
@@ -165,8 +120,7 @@ export function PracticeFrame({
   return (
     <section
       aria-label="Two-change practice"
-      className="practice-panel h-full overflow-auto p-6 text-text"
-      style={{ width: "min(100%, calc(70ch + 3rem))" }}
+      className="practice-panel h-full w-[min(100%,calc(70ch+3rem))] overflow-auto p-6 text-text"
     >
       <div className="mx-auto flex max-w-[70ch] flex-col gap-5">
         <h1 className="text-xl font-semibold">
@@ -190,7 +144,10 @@ export function FileFrame({ target, files, onClose, startAgentAction }: FileView
       aria-label="File view"
       className="flex w-[min(var(--review-panel-width),46vw)] shrink-0 flex-col border-r border-divider bg-page text-text"
     >
-      <header className="flex flex-wrap items-center gap-2.5 border-b border-page-border px-4 py-2.5">
+      <header
+        inert
+        className="flex flex-wrap items-center gap-2.5 border-b border-page-border px-4 py-2.5"
+      >
         <h2 className="min-w-0 break-all text-base font-bold">{target.path}</h2>
         {languageForPath(target.path) !== "python" && (
           <span className="text-sm text-muted">No impact analysis</span>

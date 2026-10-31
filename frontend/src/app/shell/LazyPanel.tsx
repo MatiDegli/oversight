@@ -21,7 +21,7 @@ export class LazyPanel extends Component<
         {},
         <p role="alert" className="flex items-start gap-2 p-4 text-sm text-muted">
           <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-          The editor could not load. Reload the page to try again.
+          This panel could not load. Reload the page to try again.
         </p>,
       )
     ) : (

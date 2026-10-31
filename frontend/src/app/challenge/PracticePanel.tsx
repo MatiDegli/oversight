@@ -2,7 +2,13 @@ import { impactText, omittedText, sentenceList } from "./evidenceCopy";
 import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import type { EvidencePractice as Practice } from "./caseEvidence";
 import { usePhonePractice } from "./usePhonePractice";
-import { PhonePractice } from "./PhonePractice";
+import { lazy } from "react";
+import { LazyPanel } from "../shell/LazyPanel";
+import { PracticeFrame } from "../shell/PanelFallbacks";
+
+const PhonePractice = lazy(() =>
+  import("./PhonePractice").then((m) => ({ default: m.PhonePractice })),
+);
 
 export { answerOnce, complete, freshAttempt, score } from "./attempt";
 export type { Answer, Attempt } from "./attempt";
@@ -151,12 +157,17 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
 
 export function PracticePanel(props: PanelProps) {
   const phone = usePhonePractice(true);
-  if (phone) return <PhonePractice {...props} />;
+  if (phone)
+    return (
+      <LazyPanel frame={<PracticeFrame attempt={props.attempt} onExit={props.onExit} />}>
+        <PhonePractice {...props} />
+      </LazyPanel>
+    );
   const { attempt, onStart, onExit } = props;
   return (
     <section
       aria-label="Two-change practice"
-      className="practice-panel h-full overflow-auto p-6 text-text"
+      className="practice-panel h-full w-[min(100%,calc(70ch+3rem))] overflow-auto p-6 text-text"
     >
       <div className="mx-auto flex max-w-[70ch] flex-col gap-5">
         <h1 className="text-xl font-semibold">

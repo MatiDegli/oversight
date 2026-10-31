@@ -7,6 +7,9 @@ import { Frame } from "./Frame";
 import { FilesProvider } from "./FilesContext";
 import { createRecordedFiles } from "./recordedFiles";
 import { usePractice } from "./challenge/usePractice";
+import { availablePractice } from "./challenge/availability";
+import type { Attempt } from "./challenge/attempt";
+import { PracticeFrame } from "./shell/PanelFallbacks";
 import {
   closePanel,
   conversationTab,
@@ -86,4 +89,35 @@ function Harness() {
 }
 const host = document.getElementById("root");
 if (!host) throw new Error("Missing root");
-createRoot(host).render(<Harness />);
+const root = createRoot(host);
+root.render(<Harness />);
+
+declare global {
+  interface Window {
+    startupPracticeFrame: (attempt: Attempt, loaded: boolean) => Promise<void>;
+  }
+}
+window.startupPracticeFrame = async (attempt, loaded) => {
+  const { PracticePanel } = await import("./challenge/PracticePanel");
+  const practice = availablePractice(true, replaySource, replayRecording);
+  if (!practice) throw new Error("Missing recorded practice");
+  const onExit = () => {};
+  root.render(
+    <div className="focus-body" style={{ height: "100vh" }}>
+      {loaded ? (
+        <PracticePanel
+          practice={practice}
+          attempt={attempt}
+          onExit={onExit}
+          onStart={() => {}}
+          onAnswer={() => {}}
+          onNext={() => {}}
+          onReveal={() => {}}
+          onRestart={() => {}}
+        />
+      ) : (
+        <PracticeFrame attempt={attempt} onExit={onExit} />
+      )}
+    </div>,
+  );
+};

@@ -144,6 +144,13 @@ it.each([1280, 1920])("excludes the phone rows and their styles at %ipx", async 
     await page.getByRole("button", { name: "Start practice", exact: true }).click();
     await check(page.locator(".practice-panel")).toBeVisible();
     await check(page.locator(".phone-practice, .pp-decision-row")).toHaveCount(0);
+    await check(page.locator('style[data-vite-dev-id$="/phoneRows.css"]')).toHaveCount(0);
+    // Load the phone branch before checking that its stylesheet stays inactive on desktop.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await check(page.locator(".pp-decision-row").first()).toBeVisible();
+    await page.setViewportSize({ width, height: 1080 });
+    await check(page.locator(".practice-panel")).toBeVisible();
+    await check(page.locator(".phone-practice, .pp-decision-row")).toHaveCount(0);
     const rules = await page.evaluate(() => {
       const sheet = document.querySelector<HTMLStyleElement>(
         'style[data-vite-dev-id$="/phoneRows.css"]',

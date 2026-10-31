@@ -1,6 +1,6 @@
 import type { ChangeProposed, Slot } from "@contracts";
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { ReactNode } from "react";
 import type { State } from "../../state";
 import { ChangeFactsRow } from "../../review";
@@ -8,7 +8,7 @@ import { loadReviewBody } from "../../review";
 import { AgentLine } from "./PhoneGraph";
 import { Disclosure } from "./PhoneDiff";
 
-const { ReviewBody } = await loadReviewBody();
+const ReviewBody = lazy(() => loadReviewBody().then((m) => ({ default: m.ReviewBody })));
 
 export function diffPreview(proposal: ChangeProposed) {
   if (proposal.files.length === 0)
@@ -40,29 +40,31 @@ export function PhoneReview({
       <AgentLine state={state} changeId={changeId} slot={slot} />
       <h1>{title}</h1>
       <ChangeFactsRow state={state} changeId={changeId} shortReach />
-      <ReviewBody
-        state={state}
-        changeId={changeId}
-        showCrossReview
-        phone
-        diff={
-          <div className="pp-diff-row">
-            <button
-              className="pp-evidence-row"
-              aria-expanded={open}
-              aria-controls="phone-recorded-diff"
-              onClick={() => {
-                setOpen(!open);
-              }}
-            >
-              <span>{open ? "Hide diff" : "Show diff"}</span>
-              <span className="pp-row-preview">{diffPreview(proposal)}</span>
-              <ChevronDown aria-hidden="true" size={14} />
-            </button>
-            {open ? diff : <div id="phone-recorded-diff" hidden />}
-          </div>
-        }
-      />
+      <Suspense fallback={<div className="review-body" />}>
+        <ReviewBody
+          state={state}
+          changeId={changeId}
+          showCrossReview
+          phone
+          diff={
+            <div className="pp-diff-row">
+              <button
+                className="pp-evidence-row"
+                aria-expanded={open}
+                aria-controls="phone-recorded-diff"
+                onClick={() => {
+                  setOpen(!open);
+                }}
+              >
+                <span>{open ? "Hide diff" : "Show diff"}</span>
+                <span className="pp-row-preview">{diffPreview(proposal)}</span>
+                <ChevronDown aria-hidden="true" size={14} />
+              </button>
+              {open ? diff : <div id="phone-recorded-diff" hidden />}
+            </div>
+          }
+        />
+      </Suspense>
       <div className="pp-decision-rows">
         <Disclosure label="Recorded task" variant="decision" preview={proposal.task}>
           <p className="pp-task">{proposal.task}</p>

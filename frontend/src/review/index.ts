@@ -10,7 +10,7 @@ export { DecisionContext } from "./DecisionContext";
 export { useAnswers } from "./answers";
 
 export { selectConeWords } from "./coneWords";
-export { candidateKey, currentCards } from "./answers";
+export { candidateKey, currentCards, approvalLocked, approvalLockedCaption } from "./answers";
 
 // Keep optional focus contents out of the eager public surface.
 export const loadReviewPanel = () => import("./ReviewPanel");
@@ -18,4 +18,4 @@ export const loadDecisionInbox = () => import("./DecisionInbox");
 export const loadReviewBody = () => import("./ReviewBody");
 export const loadDecisionControls = () => import("./ReviewDecisionBar");
 export { ReviewHeader } from "./ReviewHeader";
-export { selectInboxSummary } from "./inboxSelectors";
+export { selectInboxSummary, selectChangeCard } from "./inboxSelectors";

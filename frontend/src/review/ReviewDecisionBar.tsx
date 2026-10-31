@@ -6,6 +6,8 @@ import { cardAnswer, cardKey } from "./AnswerChoices";
 import type { DecisionView } from "./decisions";
 import type { ReviewPanelProps } from "./ReviewPanel";
 import "./inbox.css";
+import { approvalLocked, approvalLockedCaption } from "./answers";
+export { approvalLocked, approvalLockedCaption } from "./answers";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
@@ -55,10 +57,6 @@ const button = `inline-flex h-10 items-center gap-2 rounded-[7px] px-4 text-sm f
 const primary = `${button} bg-text text-page hover:bg-text-hover disabled:bg-page-raised disabled:ring-1 disabled:ring-inset disabled:ring-page-border`;
 const destructive = `${button} text-failed-text hover:bg-raised disabled:hover:bg-transparent`;
 const bar = "review-decision-bar shrink-0 border-t border-divider bg-page";
-
-export const approvalLockedCaption = "Approve opens when every answer is Yes.";
-export const approvalLocked = (cards: ReviewCard[], answers: Answers) =>
-  cards.some((card) => cardAnswer(card, answers) !== "yes");
 
 export function ReviewDecisionBar({
   changeId,

@@ -1,13 +1,11 @@
 import { Check, X, ArrowRight, LockKeyhole } from "lucide-react";
 import { useAnswers, candidateKey, currentCards } from "../../review";
-import { loadDecisionControls } from "../../review";
+import { approvalLocked, approvalLockedCaption } from "../../review";
 import { caseSlot } from "./phoneEvidence";
 import { PhoneDiff } from "./PhoneDiff";
 import { PhoneReview } from "./PhoneReview";
 import type { PanelProps } from "./PracticePanel";
 import "./phoneRows.css";
-
-const { approvalLocked, approvalLockedCaption } = await loadDecisionControls();
 
 export function PhoneDecision({ practice, attempt, ...actions }: PanelProps) {
   const entry = practice.cases[attempt.index];
