@@ -11,7 +11,7 @@ import "./agentCard.css";
 import { ageWords } from "./age";
 import { StopControl } from "./StopControl";
 
-const labels: Record<AgentStatus["state"], string> = {
+export const labels: Record<AgentStatus["state"], string> = {
   starting: "Starting",
   working: "Working",
   ready_for_review: "Ready for review",

@@ -7,3 +7,13 @@ export type { TaskBoxProps } from "./TaskBox";
 export { nextSlot, slotUsage } from "./taskBox";
 export { StartAgentHere } from "./StartAgentHere";
 export { selectAgentCard } from "./selectors";
+export { ConversationPanel } from "./conversation/ConversationPanel";
+export type { ConversationPanelProps } from "./conversation/ConversationPanel";
+export { selectConversation } from "./conversation/selectConversation";
+export type {
+  Conversation,
+  ConversationHeader,
+  ConversationEntry,
+  ConversationMessage,
+} from "./conversation/selectConversation";
+export type { ConversationControls } from "./conversation/Composer";
