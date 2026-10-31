@@ -192,7 +192,8 @@ check-ci: ## check without gitleaks, for CI, where the history is scanned in its
 check-fast: lint-python check-contracts lint-frontend ## lint, types, boundaries and contract drift; no tests
 
 # Keep the bounded pytest command intact: its safety tests pin that invocation. Extend only
-# this gate's discovery, leaving the separately run frontend boundary tests in their own group.
+# this gate's discovery and the non-failing hang dump, leaving the separately run frontend
+# boundary tests in their own group.
 check-python: export PYTEST_ADDOPTS := $(PYTEST_ADDOPTS) -o 'testpaths=contracts/tests backend/tests tools/tests tools/eval/tests' -o faulthandler_timeout=400
 check-python: lint-python frontend-deps
 	$(PYTEST_RUN) $(XDIST) --ignore=$(BOUNDARIES)

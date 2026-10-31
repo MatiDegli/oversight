@@ -161,7 +161,7 @@ def test_make_runs_pytest_through_the_helper_under_the_outer_bound() -> None:
     ), lines[0]
 
 
-def test_check_python_exports_discovery_and_the_non_failing_dump(
+def test_check_python_exports_discovery_and_faulthandler_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A prerequisite inherits the target's exported options. Pin the whole value, including
