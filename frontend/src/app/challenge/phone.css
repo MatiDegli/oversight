@@ -211,15 +211,6 @@
     line-height: 21px;
     overflow-wrap: anywhere;
   }
-  .pp-impact {
-    padding: 10px;
-    color: var(--muted);
-    font-size: 13px;
-    overflow-wrap: anywhere;
-  }
-  .pp-impact p + p {
-    margin-top: 6px;
-  }
   .pp-dock {
     flex: none;
     display: flex;
