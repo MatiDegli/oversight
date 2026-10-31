@@ -483,7 +483,9 @@ def test_unknown_profile_is_preserved_with_a_run_profile_map() -> None:
 
 @pytest.mark.parametrize("working", [False, True])
 def test_first_and_repeated_non_counting_statuses_add_no_interval(working: bool) -> None:
-    states: list[AgentState] = (["working"] if working else []) + ["paused", "paused"]
+    states: list[AgentState] = ["paused", "paused"]
+    if working:
+        states.insert(0, "working")
     fold = fold_activity([status(n, state, n) for n, state in enumerate(states, 1)])
     expected = (ActivityInterval(1, 2, BASE_MS + 1000, BASE_MS + 2000),) if working else ()
     assert fold.actors[0].intervals == expected and not fold.actors[0].open

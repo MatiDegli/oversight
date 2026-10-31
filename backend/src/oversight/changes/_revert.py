@@ -192,17 +192,10 @@ class RevertService:
             return await self._settle(attempt, owner)
         except BaseException as error:
             if attempt.result is None and not attempt.blocked:
-                self._reports.add(
-                    self.ctx.spawn(
-                        self._report(
-                            attempt,
-                            "server",
-                            f"Revert of {attempt.target.change_id} did not run: "
-                            f"{str(error) or type(error).__name__}",
-                            fatal=False,
-                        )
-                    )
-                )
+                reason = str(error) or type(error).__name__
+                message = f"Revert of {attempt.target.change_id} did not run: {reason}"
+                reporting = self.ctx.spawn(self._report(attempt, "server", message, fatal=False))
+                self._reports.add(reporting)
             raise
 
     async def _settle(self, attempt: _Attempt, owner: asyncio.Task[object]) -> RevertResult:
