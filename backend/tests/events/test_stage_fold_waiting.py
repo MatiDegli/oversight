@@ -149,3 +149,27 @@ def test_approval_without_combined_suite_subtracts_nothing():
     )
     assert stages is not None and row(stages.waiting_for_person) == (20, 20, 1, False)
     assert stages.problems == []
+
+
+@pytest.mark.parametrize("decision", ["approved", "changes_requested", "rejected"])
+def test_negative_combined_suite_has_a_distinct_wait_problem_only_on_approval(decision):
+    stages = fold_stages(
+        log(
+            ("change.proposed", 0, {}),
+            ("tests.executed", 10, {"phase": "combined", "duration": -1}),
+            ("change.resolved", 20, {"decision": decision}),
+        ),
+        "change-1",
+    )
+    assert stages is not None
+    assert row(stages.test_runs) == (None, 0, 1, False)
+    assert [(p.phase, p.ms, p.runs) for p in stages.test_phases] == [("combined", 0, 1)]
+    if decision == "approved":
+        assert row(stages.waiting_for_person) == (None, 0, 1, False)
+        assert stages.problems == [
+            "Negative suite duration at seq 2.",
+            "Waiting unknown after negative combined suite at seq 3.",
+        ]
+    else:
+        assert row(stages.waiting_for_person) == (20, 20, 1, False)
+        assert stages.problems == ["Negative suite duration at seq 2."]

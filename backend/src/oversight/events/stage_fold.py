@@ -83,7 +83,8 @@ class _Fold:
 
     def elapsed(self, start: _Point, end: _Point) -> int | None:
         if start.ms is None or end.ms is None or end.ms < start.ms:
-            self.problem(end.seq, f"Timestamp goes back or is invalid at seq {end.seq}.")
+            seq = start.seq if start.ms is None else end.seq
+            self.problem(seq, f"Timestamp goes back or is invalid at seq {seq}.")
             return None
         return end.ms - start.ms
 
@@ -154,10 +155,12 @@ class _Fold:
             and resolution.decision == "approved"
             and window.combined is not None
         ):
-            duration, seq = window.combined
+            duration, _ = window.combined
             if duration < 0:
                 elapsed = None
-                self.problem(seq, f"Negative suite duration at seq {seq}.")
+                self.problem(
+                    end.seq, f"Waiting unknown after negative combined suite at seq {end.seq}."
+                )
             elif duration > elapsed:
                 elapsed = None
                 self.problem(end.seq, f"Combined run longer than the wait at seq {end.seq}.")

@@ -240,6 +240,33 @@ def test_invalid_timestamp_does_not_break_a_read():
     assert stages is not None and row(stages.agent_work) == (None, 0, 1, True)
 
 
+@pytest.mark.parametrize("invalid_index", [0, 1])
+@pytest.mark.parametrize(
+    "stage,rows",
+    [
+        (
+            "agent_work",
+            [("agent.status", 0, {"state": "working"}), ("agent.status", 10, {"state": "done"})],
+        ),
+        (
+            "checks",
+            [
+                ("change.proposed", 0, {}),
+                ("change.facts_recorded", 10, {}),
+                ("change.resolved", 20, {"decided_by": "rules"}),
+            ],
+        ),
+        ("waiting_for_person", [("change.proposed", 0, {}), ("change.resolved", 10, {})]),
+    ],
+)
+def test_invalid_timestamp_problem_cites_the_invalid_event(stage, rows, invalid_index):
+    events = log(*rows)
+    events[invalid_index] = events[invalid_index].model_copy(update={"ts": "invalid"})
+    stages = fold_stages(events, "change-1")
+    assert stages is not None and row(getattr(stages, stage)) == (None, 0, 1, False)
+    assert stages.problems == [f"Timestamp goes back or is invalid at seq {invalid_index + 1}."]
+
+
 def test_problem_cap_and_seq_order_for_more_than_twenty_unknown_intervals():
     rows = []
     for n in range(21):
