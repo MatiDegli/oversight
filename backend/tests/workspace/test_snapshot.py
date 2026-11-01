@@ -244,6 +244,26 @@ async def test_nt_unsafe_snapshot_never_spawns(workspace, monkeypatch, tmp_path,
     assert leaf.read_bytes() == b"untouched"
 
 
+@pytest.mark.parametrize("kind", ["Git metadata", "working file"])
+def test_nt_read_guards_keep_working_mode(tmp_path, monkeypatch, kind):
+    from oversight.workspace import metadata_io as module
+
+    force_nt(monkeypatch)
+    path = tmp_path / "input"
+    path.write_bytes(b"content")
+    original = module.nt_guard
+    modes = []
+
+    def guard(target, deadline, *, working=False):
+        modes.append(working)
+        return original(target, deadline, working=working)
+
+    monkeypatch.setattr(module, "nt_guard", guard)
+    entry = module.read_at(tmp_path, path.name, path, Budget(time.monotonic() + 5), kind=kind)
+    assert entry is not None and entry.data == b"content"
+    assert modes == [kind != "Git metadata"] * 3
+
+
 @pytest.mark.parametrize("failure", ["file", "index", "total", "entries", "deadline"])
 def test_nt_metadata_budgets(tmp_path, monkeypatch, failure):
     from oversight.workspace import metadata_io as module
