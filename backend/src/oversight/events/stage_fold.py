@@ -64,7 +64,7 @@ class _Window:
     revision: int
     start: _Point
     receipt: _Point | None = None
-    combined: tuple[int, int] | None = None  # duration and receipt seq
+    combined: int | None = None
 
 
 @dataclass
@@ -108,7 +108,7 @@ class _Fold:
             and payload.revision == self.window.revision
             and payload.phase == "combined"
         ):
-            self.window.combined = (duration, point.seq)
+            self.window.combined = duration
 
     def close_window(
         self,
@@ -155,7 +155,7 @@ class _Fold:
             and resolution.decision == "approved"
             and window.combined is not None
         ):
-            duration, _ = window.combined
+            duration = window.combined
             if duration < 0:
                 elapsed = None
                 self.problem(
