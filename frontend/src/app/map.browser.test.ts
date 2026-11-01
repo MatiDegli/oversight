@@ -272,6 +272,43 @@ it("keeps the world point under the pointer fixed during map wheel zoom", async 
     expect(await level(page)).toBe("map");
   }, null);
 });
+it("drag-pans the map over a module without moving nodes or stealing focus", async () => {
+  await withMap(async (page) => {
+    await page.getByRole("button", { name: "Modules", exact: true }).click();
+    await ready(page);
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await ready(page);
+    expect(await level(page)).toBe("map");
+    const focus = page.getByRole("button", { name: "Zoom out", exact: true });
+    const snapshot = () =>
+      page.evaluate(() => {
+        const probe = document.querySelector<GraphProbeHost>(
+          '[aria-label="Repository graph"]',
+        )?.oversightGraph;
+        return { pan: probe?.pan(), positions: probe?.positions(), draggable: probe?.draggable() };
+      });
+    const before = await snapshot();
+    expect(before.draggable).toEqual([]);
+    const circle = await page.locator("[data-map-circle]").first().boundingBox();
+    if (!circle) throw new Error("Missing module circle");
+    await page.mouse.move(circle.x + circle.width / 2, circle.y + circle.height / 2);
+    await page.mouse.down();
+    // Cytoscape blurs the current control on mouse-down in cards and map alike. Navigation
+    // after that native gesture must not move keyboard focus again.
+    await focus.focus();
+    await page.mouse.move(circle.x + circle.width / 2 + 80, circle.y + circle.height / 2 + 40, {
+      steps: 8,
+    });
+    await page.mouse.up();
+    const after = await snapshot();
+    expect((after.pan?.x ?? 0) - (before.pan?.x ?? 0)).toBeCloseTo(80, 0);
+    expect((after.pan?.y ?? 0) - (before.pan?.y ?? 0)).toBeCloseTo(40, 0);
+    expect(after.positions).toEqual(before.positions);
+    await check(focus).toBeFocused();
+    await zoomTo(page, 0.7);
+    expect((await snapshot()).draggable?.length).toBeGreaterThan(0);
+  }, null);
+});
 it.each([23, 24])("gates zoom and Fit on %i shown module nodes", async (modules) => {
   await withMap(async (page) => {
     await page.evaluate((count) => {

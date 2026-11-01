@@ -17,6 +17,7 @@ export interface GraphElement {
     id: string;
     kind: GraphNode["kind"] | GraphEdge["kind"];
     group?: string;
+    groupLabel?: string;
     label?: string;
     callCount?: number;
     exactCount?: number;
@@ -133,7 +134,7 @@ export function graphElements(
   const visible = new Map([...nodes].filter(([, node]) => showTests || !node.is_test));
   const groups = new Map(
     folderGroups([...visible.values()]).flatMap((group) =>
-      group.moduleIds.map((id) => [id, group.id] as const),
+      group.moduleIds.map((id) => [id, group] as const),
     ),
   );
   const distances = new Map(cone?.entries.map((entry) => [entry.node_id, entry.distance]));
@@ -225,7 +226,9 @@ export function graphElements(
       data: {
         id: node.id,
         kind: node.kind,
-        ...(groups.has(node.id) ? { group: groups.get(node.id) } : {}),
+        ...(groups.has(node.id)
+          ? { group: groups.get(node.id)?.id, groupLabel: groups.get(node.id)?.label }
+          : {}),
         ...(distance !== undefined ? { distance } : {}),
         ...(word ? { measured: word } : {}),
         label: node.name,

@@ -55,6 +55,7 @@ function createMapController(
   let cy: Core | undefined;
   let model: MapFrame["model"] = { groups: [], cellWidth: 446, cellHeight: 220 };
   let level: MapFrame["level"] = "cards";
+  const pannable = new Set<string>();
   const shownModules = () => cy?.nodes(".module").length ?? 0;
   const publish = () => {
     if (!cy || !latest.current.map) return;
@@ -62,7 +63,18 @@ function createMapController(
     host.current?.setAttribute("data-map-level", level);
     latest.current.onMapLevel?.(level);
     frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() } };
-    if (host.current) host.current.style.pointerEvents = level === "map" ? "none" : "";
+    cy.autoungrabify(level === "map");
+    cy.autounselectify(level === "map");
+    cy.boxSelectionEnabled(false);
+    if (level === "map") {
+      for (const node of cy.nodes().filter((n) => !n.pannable())) {
+        pannable.add(node.id());
+        node.panify();
+      }
+    } else {
+      for (const id of pannable) cy.getElementById(id).unpanify();
+      pannable.clear();
+    }
     for (const listener of listeners) listener();
     host.current?.dispatchEvent(new CustomEvent("graphrender"));
   };
@@ -187,18 +199,43 @@ function createMapController(
 
 let fallbackLayout: Promise<void> | undefined;
 let fallbackReady = false;
+const failedLayouts = new WeakSet<Core>();
 
 /** Presets need no solver download. Wait for fcose only before a graph's first unplaced nodes. */
-export function prepareGraphLayout(cy: Core, elements: readonly GraphElement[], retry: () => void) {
-  if (fallbackReady || cy.nodes().nonempty() || elements.some((e) => e.position !== undefined))
+export function prepareGraphLayout(
+  cy: Core,
+  elements: readonly GraphElement[],
+  retry: (fallback?: GraphElement[]) => void,
+) {
+  if (
+    fallbackReady ||
+    (cy.nodes().nonempty() && !failedLayouts.has(cy)) ||
+    elements.some((e) => e.position !== undefined)
+  )
     return true;
   if (!elements.some((e) => e.group === "nodes")) return true;
   fallbackLayout ??= import("cytoscape-fcose").then(({ default: fcose }) => {
     cytoscape.use(fcose);
     fallbackReady = true;
   });
-  void fallbackLayout.then(() => {
-    if (!cy.destroyed()) retry();
-  });
+  void fallbackLayout.then(
+    () => {
+      failedLayouts.delete(cy);
+      if (!cy.destroyed()) retry();
+    },
+    () => {
+      fallbackLayout = undefined;
+      failedLayouts.add(cy);
+      // Draw a provisional grid without mutating the cached snapshot or caching the rejection.
+      // A later sync retries the solver even though this graph now has visible nodes.
+      if (!cy.destroyed())
+        retry(
+          elements.map((e, i) => ({
+            ...e,
+            position: { x: (i % 9) * 446, y: Math.floor(i / 9) * 220 },
+          })),
+        );
+    },
+  );
   return false;
 }

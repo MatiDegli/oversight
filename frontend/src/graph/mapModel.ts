@@ -83,7 +83,7 @@ export function mapModel(elements: readonly GraphElement[], theme: GeometryToken
     const id = root.data.group ?? root.data.id;
     const group = groups.get(id) ?? {
       id,
-      label: id,
+      label: root.data.groupLabel ?? id,
       panel: false,
       modules: [],
       x: Infinity,

@@ -87,6 +87,9 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 18 | Remaining packages 11–14 | Partial — run controls `d27875a` and message/pause/resume HTTP `d085748` on main; dictation still 501, run-control UI and replay timeline remain; 11 `ee92691` and 12 `c1c19c6` complete | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
 | — | [Standing grants](#standing-grants) | Backend on main `93a3664` — run-local possible_callers grants, module/run scope and revoke wired; rules activation still closed `1824a46`; grants UI and protected-path grants remain | Contracts 1.7.0, approved 2026-10-29; the creation bundle moved to 1.8.0 — grant events, `ApproveChange.grant`, `ChangeResolved.grants`, revoke route; moved again to 1.9.0 on 2026-10-30 when failed model attempts and dependency plans took 1.8.0 `bb9dc43` |
 
+- [Scale and depth](../DESIGN.md#scale-and-depth): Approved map and folder groups, queued before
+  milestone pulses if ready before the cut line. Built scope and remaining interactions are in DESIGN.
+
 ### Only if time remains
 
 | # | Item | State and commit or branch | In contracts proposal |
@@ -104,8 +107,6 @@ polish (8; scale layout `04f0a41`, life layer `8fad4c2`/`ff80c6f`, exact edges `
 patches `724b5c9`, detection arms `75b30f8`, sensitivity gate `cc52a78` and harness pair `ad5de55`,
 split measurement `74b5791`, send accounting `cc023c8`, probe-cause reports `507ce31`/`25d6ea3` on
 main; the gate does not establish a completed paid run).
-
-- [Scale and depth](../DESIGN.md#scale-and-depth): Approved map and folder groups; built scope and remaining interactions are recorded in DESIGN.
 
 ## Undecided candidates
 

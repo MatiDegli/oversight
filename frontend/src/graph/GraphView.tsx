@@ -13,7 +13,7 @@ import { ControlledMapLayer, MapRoutingOmissions } from "./MapLayer";
 import { prepareGraphLayout, useMapController } from "./mapController";
 import type { MapOptions } from "./mapController";
 import { elementSnapshot } from "./elementSnapshot";
-import type { MeasuredWord } from "./elements";
+import type { GraphElement, MeasuredWord } from "./elements";
 import { foldController } from "./foldController";
 import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
@@ -326,14 +326,14 @@ export function GraphView({
           : 0;
       };
       const snapshot = elementSnapshot();
-      const sync = () => {
+      const sync = (fallback?: GraphElement[]) => {
         // A second addition can arrive before the first ease ends. Include both targets when
         // replacing that animation, rather than leaving the first addition outside the view.
         if (!cy.animated() || latest.current.panelOpen) arriving.clear();
         const existing = new Set(cy.nodes().map((node) => node.id()));
         const state = stateStore.getState().state;
-        const full = snapshot(state, latest.current);
-        if (!prepareGraphLayout(cy, full, sync)) return;
+        const full = fallback ?? snapshot(state, latest.current);
+        if (!fallback && !prepareGraphLayout(cy, full, sync)) return;
         const foldsChanged = folding.render(state, full);
         mapControl.sync(full);
         if (
@@ -413,7 +413,9 @@ export function GraphView({
       }
       const unexpose = exposeProbe(host, cy);
       source.attach(cy);
-      const unsubscribe = stateStore.subscribe(sync);
+      const unsubscribe = stateStore.subscribe(() => {
+        sync();
+      });
       sync();
       if (latest.current.panelOpen && startFrame === undefined) frameInitialPanel();
       const resize = new ResizeObserver(() => {
