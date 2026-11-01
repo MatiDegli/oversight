@@ -3646,3 +3646,10 @@ probes. The field controller loads inside the same Oversight boundary and initia
 mount, before the graph's asynchronous font/draw preparation completes. Chat-first still
 loads no rendering implementation. Startup accounting includes the controller in both bases.
 File-tab task entry is hidden in Chat because its destination is the Oversight agents panel.
+
+## 2026-11-01 — C3 presence starts from the C1 hand-off
+
+C3 starts at C1 `9fa9781`, preserving the Usage/replay wiring, Oversight default,
+retained inert graph and shared shell. FilesProvider already carries State; the latest
+focus already includes ranges. Only the work-frame body and Files marks consume this
+front's projection. C1's asynchronous test preparations are already present.
