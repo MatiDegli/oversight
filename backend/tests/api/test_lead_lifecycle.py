@@ -133,7 +133,7 @@ async def test_stop_during_a_model_call_ends_stopped_once_with_plans_intact(tmp_
         assert await model.held.cancelled.wait()
         assert s.live.plans.plans == plans and len(plans) == 2
         assert len(terminal(s)) == 1
-        assert terminal(s)[0].detail == "Stopped by the person. Requested plan-1, plan-2."
+        assert terminal(s)[0].detail == "Stopped by the person."
         assert terminal(s)[0].requested_plan_id is None
         assert not any(
             e.seq > seq
@@ -153,7 +153,7 @@ async def test_shutdown_during_a_model_call_publishes_one_halted(tmp_path: Path)
         await model.held.entered.wait()
         await s.stop()
         assert len(terminal(s)) == 1 and terminal(s)[0].state == "halted"
-        assert terminal(s)[0].detail == "The server shut down. Requested plan-1, plan-2."
+        assert terminal(s)[0].detail == "The server shut down."
     assert model.closed
 
 
@@ -175,7 +175,7 @@ async def test_the_next_run_has_no_lead_and_calls_no_model(tmp_path: Path) -> No
         assert len(built) == 1
 
 
-async def test_the_brake_blocking_mid_run_halts_the_lead(tmp_path: Path) -> None:
+async def test_the_brake_blocking_mid_turn_cuts_to_idle(tmp_path: Path) -> None:
     settings = meta_settings(tmp_path)
     script = load_script(LEAD_SCRIPT)
     models: list[ScriptedModel] = []
@@ -200,8 +200,10 @@ async def test_the_brake_blocking_mid_run_halts_the_lead(tmp_path: Path) -> None
 
         manager.spend_received = block
         await s.client.post("/leads", json={"task": "Coordinate"})
-        await s.until(is_type("lead.status", state="halted"))
-        assert terminal(s)[0].detail == "The spending brake stopped the next model call."
+        await s.until(is_type("lead.status", state="idle"))
+        replies = [e.payload for e in s.events() if e.type == "lead.reply"]
+        assert len(replies) == 1 and replies[0].cut == "spend_brake"
+        assert not terminal(s)
         assert len(models[0].requests) == 1 and not s.live.plans.plans
 
 
@@ -364,8 +366,15 @@ async def test_shutdown_waits_for_a_starting_status_before_halting_the_lead(
         monkeypatch.setattr(s.store, "publish", delayed)
         starting = asyncio.create_task(s.client.post("/leads", json={"task": "Coordinate"}))
         await entered.wait()
-        closing = asyncio.create_task(s.live.leads.close())
-        await asyncio.sleep(0)
+        closing_entered = asyncio.Event()
+        original_close = s.live.leads.close
+
+        async def close() -> None:
+            closing_entered.set()
+            await original_close()
+
+        closing = asyncio.create_task(close())
+        await closing_entered.wait()
         release.set()
         assert (await starting).status_code == 201
         await closing
@@ -437,7 +446,7 @@ async def test_an_unexpected_failure_halts_logs_and_allows_the_next_lead(
 
         async def publish(payload: Any) -> Any:
             if isinstance(payload, LeadStatus) and not failed.is_set():
-                state = "done" if failure == "terminal" else failure
+                state = "idle" if failure == "terminal" else failure
                 if payload.state == state:
                     failed.set()
                     raise RuntimeError("private unexpected status failure")
@@ -465,4 +474,4 @@ async def test_an_unexpected_failure_halts_logs_and_allows_the_next_lead(
         assert any(r.name == "oversight.runtime_leads" and r.exc_info for r in caplog.records)
         response = await s.client.post("/leads", json={"task": "Try again"})
         assert response.status_code == 201 and response.json()["agent_id"] == "agent-2"
-        await s.until(is_type("lead.status", agent_id="agent-2", state="done"))
+        await s.until(is_type("lead.status", agent_id="agent-2", state="idle"))

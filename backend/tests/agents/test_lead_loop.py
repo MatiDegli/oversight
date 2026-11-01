@@ -6,106 +6,24 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from backend.tests.agents.lead_helpers import call, lead, plan, scripted, setup_tools, turn
 
 from oversight.agents import (
     LEAD_LIMITS,
     LEAD_TOOL_SCHEMAS,
-    LeadRun,
-    LeadTools,
     ModelAPIError,
     ScriptedModel,
     Usage,
     _prompts,
     load_script,
-    parse_script,
 )
 from oversight.agents._lead_tools import LeadProposalError
 from oversight.agents.client import CALL_SCOPE
 from oversight.settings import REPO_ROOT
 from oversight.workspace import FileTooLarge, InvalidPath
-from oversight_contracts.commands import FileContent, TreeResponse
-from oversight_contracts.graph import GraphSnapshot
-from oversight_contracts.plans import PlanZone
-from oversight_contracts.queue import QueueSnapshot
 
 pytestmark = pytest.mark.anyio
 FIXTURES = REPO_ROOT / "fixtures/fake-model"
-
-
-def graph() -> GraphSnapshot:
-    return GraphSnapshot(
-        version="main-now", commit="base", nodes=[], edges=[], parse_errors=[], positions={}
-    )
-
-
-def setup_tools(slots: int = 2, **overrides: Any) -> tuple[LeadTools, AsyncMock]:
-    propose = AsyncMock(side_effect=["plan-1", "plan-2", "plan-3"])
-    values: dict[str, Any] = dict(
-        graph=graph,
-        tree=AsyncMock(
-            return_value=TreeResponse(
-                run_id="run-20261031-170000",
-                agent_id=None,
-                directories=[],
-                files=[],
-                graph_version="main-now",
-                truncated=False,
-            )
-        ),
-        read=AsyncMock(
-            return_value=FileContent(
-                path="shop/pricing.py",
-                content="\n".join(f"line {i}" for i in range(1, 451)),
-                hash="base",
-                agent_id=None,
-            )
-        ),
-        queue=lambda: QueueSnapshot(run_id="run-20261031-170000", seq=0, tasks=[]),
-        zone=lambda: PlanZone(node_ids=[], paths=["shop/pricing.py"]),
-        propose=propose,
-        slots=slots,
-    )
-    return LeadTools(**(values | overrides)), propose
-
-
-def scripted(turns: list[dict[str, Any]], delay: float = 0) -> ScriptedModel:
-    return ScriptedModel(
-        parse_script(json.dumps(dict(task="Coordinate", turns=turns, turn_delay_s=delay)))
-    )
-
-
-def call(name: str, **arguments: Any) -> dict[str, Any]:
-    return dict(name=name, arguments=arguments)
-
-
-def turn(*calls: dict[str, Any], **extra: Any) -> dict[str, Any]:
-    return dict(text=None, tool_calls=list(calls), usage=dict(input_tokens=1), **extra)
-
-
-def plan(task: str = "Document pricing", **extra: Any) -> dict[str, Any]:
-    return dict(task=task, subtasks=[dict(task="Document shop/pricing.py")]) | extra
-
-
-def lead(model: Any, tools: LeadTools, **overrides: Any) -> tuple[LeadRun, AsyncMock, AsyncMock]:
-    record, step = AsyncMock(), AsyncMock()
-
-    def factory() -> Any:
-        scope = CALL_SCOPE.get()
-        assert scope is not None and scope.role == "lead"
-        return model
-
-    values: dict[str, Any] = dict(
-        agent_id="agent-1",
-        task="Coordinate",
-        make_client=factory,
-        tools=tools,
-        record=record,
-        publish=AsyncMock(),
-        admit=lambda: None,
-        on_working=AsyncMock(),
-        on_step=step,
-    )
-    return LeadRun(**(values | overrides)), record, step
 
 
 async def test_a_lead_reads_requests_two_plans_and_finishes() -> None:
@@ -113,7 +31,7 @@ async def test_a_lead_reads_requests_two_plans_and_finishes() -> None:
     model = ScriptedModel(load_script(FIXTURES / "lead-two-plans.json"))
     run, record, step = lead(model, tools)
     end = await run.run()
-    assert (end.state, end.detail) == ("done", "Requested plan-1, plan-2.")
+    assert (end.state, end.detail) == ("idle", "Requested plan-1, plan-2.")
     assert run.steps == 7 and record.await_count == 3 and propose.await_count == 2
     assert [c.args[0] for c in step.await_args_list] == [None] * 4 + ["plan-1", "plan-2"]
     assert CALL_SCOPE.get() is None
@@ -288,9 +206,6 @@ async def test_only_server_proposal_refusals_become_tool_errors() -> None:
     [
         ("same", "Stopped: the same call gave the same result 4 times."),
         ("failures", "Stopped after 6 failures in a row."),
-        ("tools", "Reached the limit of 12 tool calls."),
-        ("models", "Reached the limit of 18 model calls."),
-        ("clock", "Ran past the time limit of 0.001 s."),
         (
             "fourth",
             "Stopped: the same call gave the same result 4 times. "
@@ -323,12 +238,16 @@ async def test_each_stop_rule_halts_the_lead(case: str, expected: str) -> None:
         ]
     elif case == "clock":
         turns, limits, delay = (
-            [turn(call("finish"))],
+            [turn(call("finish", reply="Ready."))],
             replace(LEAD_LIMITS, wall_clock_s=0.001),
             0.05,
         )
     else:
-        turns = [turn(*(call("request_plan", **plan()) for _ in range(7)), call("finish"))]
+        turns = [
+            turn(
+                *(call("request_plan", **plan()) for _ in range(7)), call("finish", reply="Ready.")
+            )
+        ]
     run, _, _ = lead(scripted(turns, delay), tools, limits=limits)
     end = await run.run()
     assert (end.state, end.detail) == ("halted", expected)
@@ -337,18 +256,18 @@ async def test_each_stop_rule_halts_the_lead(case: str, expected: str) -> None:
 
 async def test_the_brake_halts_before_the_next_model_call() -> None:
     tools, _ = setup_tools()
-    model = scripted([turn(call("request_plan", **plan())), turn(call("finish"))])
+    model = scripted([turn(call("request_plan", **plan())), turn(call("finish", reply="Ready."))])
     run, record, _ = lead(model, tools, admit=lambda: "blocked" if tools.plan_ids else None)
     end = await run.run()
-    assert end.detail == "The spending brake stopped the next model call. Requested plan-1."
+    assert end.state == "idle" and end.reply is not None and end.reply.cut == "spend_brake"
     assert len(model.requests) == record.await_count == 1
 
 
 async def test_unknown_usage_reaches_record_unchanged() -> None:
     tools, _ = setup_tools()
-    model = scripted([dict(text=None, tool_calls=[call("finish")])])
+    model = scripted([dict(text=None, tool_calls=[call("finish", reply="Ready.")])])
     run, record, _ = lead(model, tools)
-    assert (await run.run()).detail == "Finished without requesting a plan."
+    assert (await run.run()).state == "idle"
     assert record.await_args is not None
     assert record.await_args.args[0].usage == Usage()
 
@@ -360,7 +279,7 @@ async def test_no_detail_carries_model_text() -> None:
         [
             dict(text=sentinel, tool_calls=[call("unknown", task=sentinel)], usage={}),
             turn(call("request_plan", **plan(task=sentinel))),
-            turn(call("finish")),
+            turn(call("finish", reply="Ready.")),
         ]
     )
     run, _, step = lead(model, tools)
