@@ -48,6 +48,28 @@ async def test_thread_fixture_against_generated_schema(tmp_path: Path) -> None:
     fixture = ROOT / "fixtures/events/handwritten-lead-thread.jsonl"
     events = [EVENTS.validate_json(line) for line in fixture.read_text().splitlines()]
     assert [event.seq for event in events] == list(range(1, len(events) + 1))
+    for answers_seq in (None, 2):
+        for cut in CUTS:
+            for text in ("Reply", "x" * 4096, None):
+                # Serialized exports retain nullable text even without a cut.
+                payload = LeadReply.model_validate(
+                    dict(
+                        agent_id="agent-1",
+                        answers_seq=answers_seq,
+                        text=text,
+                        through_seq=None,
+                        cut=cut,
+                    ),
+                    context={"message_text_withheld": True},
+                )
+                events.append(
+                    EVENTS.validate_python(
+                        dict(
+                            seq=20, ts=events[0].ts, type="lead.reply", payload=payload.model_dump()
+                        ),
+                        context={"message_text_withheld": True},
+                    )
+                )
     serialized = tmp_path / "events.json"
     serialized.write_text(
         json.dumps(
@@ -58,3 +80,54 @@ async def test_thread_fixture_against_generated_schema(tmp_path: Path) -> None:
         ["node", "contracts/tests/validate_serialized.cjs", str(serialized)], cwd=ROOT, timeout_s=60
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"text": ""},
+        {"text": " \t\n\r"},
+        {"text": "\u2003\u00a0"},
+        {"text": "x" * 4097},
+        {"cut": "tokens"},
+        {"text": None},
+    ],
+)
+@pytest.mark.parametrize("context", [None, {"live": True}])
+def test_ordinary_and_live_reject_invalid_replies(
+    patch: dict[str, object], context: object
+) -> None:
+    from pydantic import ValidationError
+
+    body = dict(agent_id="agent-1", answers_seq=None, text="Reply", through_seq=None, cut=None)
+    with pytest.raises(ValidationError):
+        LeadReply.model_validate({**body, **patch}, context=context)
+
+
+def test_withholding_context_is_explicit_and_never_overrides_live() -> None:
+    from pydantic import ValidationError
+
+    body = dict(agent_id="agent-1", answers_seq=None, text=None, through_seq=None, cut=None)
+    reply = LeadReply.model_validate(body, context={"message_text_withheld": True})
+    assert reply.model_dump() == body
+    assert (
+        LeadReply.model_validate_json(
+            reply.model_dump_json(), context={"message_text_withheld": True}
+        )
+        == reply
+    )
+    for context in (
+        {},
+        {"message_text_withheld": False},
+        {"message_text_withheld": True, "live": True},
+    ):
+        with pytest.raises(ValidationError, match="null reply text"):
+            LeadReply.model_validate(body, context=context)
+
+
+def test_existing_message_whitespace_shape_is_preserved() -> None:
+    from oversight_contracts.commands import AgentMessage
+    from oversight_contracts.events import AgentMessageSent
+
+    assert AgentMessage(text="  ").text == "  "
+    assert AgentMessageSent(agent_id="agent-1", text="  ").text == "  "

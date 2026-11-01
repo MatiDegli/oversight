@@ -48,11 +48,13 @@ def validate_text(
         if not line.strip():
             continue
         try:
-            event = SERVER_EVENT.validate_json(line)
+            event = SERVER_EVENT.validate_json(
+                line, context={"message_text_withheld": True} if not include_message_text else None
+            )
         except ValueError:
             raise RecordError(f"invalid event at line {number}") from None
         if (
-            event.type == "agent.message"
+            (event.type == "agent.message" or event.type == "lead.reply")
             and event.payload.text is not None
             and not include_message_text
         ):
