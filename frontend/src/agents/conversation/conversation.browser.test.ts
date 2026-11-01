@@ -127,6 +127,7 @@ it("sends only by button, guards pending, retains failed text and clears on succ
 it("discloses structured test results and opens the change diff", async () => {
   const page = await pageFor();
   try {
+    await page.getByRole("button", { name: /^Round 1 ·/ }).click();
     const summary = page.getByText("Test output", { exact: true });
     const output = page.getByText("28 passed in 0.40s", { exact: true });
     await check(output).not.toBeVisible();
@@ -148,6 +149,12 @@ it("pins new entries only at the bottom and never moves focus", async () => {
     const list = timeline(page);
     const distance = () =>
       list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
+    expect(await distance()).toBeLessThanOrEqual(2);
+    await page.getByRole("button", { name: /^Round 1 ·/ }).click();
+    await timeline(page).evaluate((node) => {
+      node.scrollTop = node.scrollHeight;
+      node.dispatchEvent(new Event("scroll"));
+    });
     expect(await distance()).toBeLessThanOrEqual(2);
     await box(page).focus();
     await page.evaluate(() => {
@@ -176,6 +183,14 @@ it.each(["disclosure", "resize"] as const)(
     const page = await pageFor();
     try {
       const list = timeline(page);
+      expect(
+        await list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight),
+      ).toBeLessThanOrEqual(2);
+      await page.getByRole("button", { name: /^Round 1 ·/ }).click();
+      await timeline(page).evaluate((node) => {
+        node.scrollTop = node.scrollHeight;
+        node.dispatchEvent(new Event("scroll"));
+      });
       const before = await list.evaluate((node) => node.scrollTop);
       expect(
         await list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight),
@@ -229,6 +244,7 @@ it.each([608, 304])(
   async (width) => {
     const page = await pageFor("revising", width);
     try {
+      await page.getByRole("button", { name: /^Round 1 ·/ }).click();
       await page.getByRole("heading").evaluate((node) => {
         node.textContent = node.textContent.repeat(4);
       });

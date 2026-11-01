@@ -308,7 +308,7 @@ the plan's. Four points it leaves open, settled here:
 The sketches below describe the 1.0.0 baseline, with selected later additions noted. They are
 not a complete current schema. `contracts/src/oversight_contracts/events.py` ServerEvent is
 the source of truth, including added events for assessments, merge mode, plans, reviews, facts,
-test execution, Revert, grants, queue state, lead status, messages and failed model attempts.
+test execution, Revert, grants, queue state, lead status/replies, messages and failed model attempts.
 Slot examples below reflect the A–F extension from contracts 1.6.0.
 
 Every event is an envelope:
@@ -524,8 +524,29 @@ class ErrorReport:
     fatal: bool                  # the agent's run halted because of it
 ```
 
-v1 sends no model text, so nothing streams per token. If an event ever carries model text, it is
-batched, as AGENTS.md says.
+**`lead.reply` (contracts 1.15.0, declared in L1):** payload `LeadReply`.
+
+```python
+class LeadReply:
+    agent_id: AgentId
+    answers_seq: int | None     # earlier agent.message addressed to this lead; null: opening task
+    text: str | None            # nonblank, at most 4,096 characters, masked before storage
+    through_seq: int | None     # nonnegative horizon strictly below this envelope's seq
+    cut: Literal["tool_calls", "model_calls", "time", "spend_brake"] | None
+```
+
+All five keys are required and the four nullable fields serialize as null when absent in meaning.
+`through_seq` has no target-type requirement. Ordinary/live validation allows null text only with
+a cut. Publication validation additionally admits withheld null text, including with null cut,
+under the existing message-text receipt; this exception cannot override live validation.
+Publication exports withhold both `agent.message` and `lead.reply` text by default. Inclusion
+requires explicit authorization recorded in that receipt; there are no new wire receipt fields.
+Human messages can name a lead as recipient without changing their existing accepted shapes.
+
+Lead replies carry bounded model text; nothing streams per token. Text and SQLite writes are
+batched, as AGENTS.md says. L2 implements the reply producer and masking before storage. L1
+only accepts the event: sequence/clock bookkeeping advances, with no messages, decisions,
+activity, accounting observations or thread UI. L3 builds the Chat thread.
 
 ### 4.5 Order and lifecycles
 
@@ -539,6 +560,15 @@ batched, as AGENTS.md says.
 - **A run that ends on its own**, at the step limit, the no-progress cutoff or an error, goes to
   `halted`, with the reason in `detail`. Its change is proposed as it stands and stays open for
   review; Request changes on it starts a revision with a new step budget.
+- **Lead thread (approved target, L2).** One open thread per run: the opening task and up to
+  49 human messages, at most 50 turns. The lead waits `idle` between turns and halts after
+  turn 50's reply; `halted` stays terminal. `done` remains in `LeadStatus.state` for historical
+  log compatibility. Limits are 12 tool calls, 18 model calls and 300 seconds per turn, with
+  at most 3 plans across the whole thread. `finish` carries a reply and requires no plan.
+  Spending checks, accounting, human authority and shutdown halting stay unchanged. L1 adds
+  acceptance of `idle` without lifecycle/control behavior; L2 implements these transitions,
+  tools and prompts with a new prompt_version. No paid comparison crosses this change.
+  The thread is lost on server restart, which already stops the lead; persistence comes later.
 - **Change.** It opens with the agent. `change.proposed` makes it ready for review. Approve merges
   it, or marks it `conflict` and keeps it open for Request changes or Reject. Request changes sends
   it back to the agent with the comment; Reject discards it. Every change ends with
@@ -605,6 +635,7 @@ the single error format.
 | `POST /leads` | `StartLead {task, model?}` | 201 `LeadCreated` | `invalid_request`, `not_configured`, `spend_brake`, `wrong_state` |
 | `GET /leads/{id}` | none | 200 `LeadStatus` | `not_found` |
 | `POST /leads/{id}/stop` | `StopLead {revision}` | 202 | `not_found`, `wrong_state` |
+| `POST /leads/{agent_id}/message` | existing `AgentMessage {text}` | Declared for L2: empty 202; 501 in replay | 409 `wrong_state` unless the lead is idle |
 | `GET /graph` | none | 200 `GraphResponse {run_id, seq, graph}` | |
 | `POST /graph/rescan` | none | 202 | |
 | `GET /impact?node=&depth=&change=` | none | 200 `ImpactCone`; on main, or on a change's version | `not_found` |
@@ -614,7 +645,11 @@ the single error format.
 | `GET /events` | none | SSE, see 4.6 | |
 | `GET /health` | none | 200 `Health {ok, run_id, contract_version, mode, missing_settings}`; mode is `live` or `replay` | |
 
-- In live mode, only the routes in `api/commands.py` NOT_BUILT (`POST /dictation` and
+- The lead-message row is a contract declaration only in L1; it does not install a handler.
+  L2 implements admission and emits existing `agent.message` with the lead id as recipient;
+  L2 also produces `lead.reply`, and L3 implements the Chat thread. There is no route manifest
+  in the generated schema: routes are described by command docstrings and this table.
+- Among installed routes in live mode, only the routes in `api/commands.py` NOT_BUILT (`POST /dictation` and
   `POST /changes/{id}/review`) are unbuilt and answer 501. Server replay also answers 501
   for the LIVE_ONLY routes, including `GET /tree` and the mutation commands. Event-backed
   reads such as agents, changes, plans, queue and history remain available in replay.

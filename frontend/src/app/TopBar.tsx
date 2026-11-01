@@ -1,4 +1,4 @@
-import { Folder, GitBranch, Search, Settings } from "lucide-react";
+import { Folder, GitBranch, Search, Settings, Timer } from "lucide-react";
 
 import { selectDecisionInboxCount } from "../state";
 import type { State } from "../state";
@@ -18,6 +18,7 @@ export function TopBar({
   onOpenQueue,
   onOpenPalette,
   onOpenSettings,
+  onOpenUsage,
   practice,
 }: {
   practice?: { active: boolean; open: () => void };
@@ -25,6 +26,7 @@ export function TopBar({
   onOpenQueue?: () => void;
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
+  onOpenUsage?: () => void;
 }) {
   const ready = selectDecisionInboxCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
@@ -97,6 +99,17 @@ export function TopBar({
           )}
         </button>
       </div>
+      {onOpenUsage && (
+        <button
+          type="button"
+          aria-label="Usage"
+          title="Usage"
+          onClick={onOpenUsage}
+          className={`p-2 text-muted hover:text-text ${focusRing}`}
+        >
+          <Timer aria-hidden="true" className="size-4" />
+        </button>
+      )}
       <SpendMeter state={state} showBrake={false} />
       {onOpenSettings && (
         <button

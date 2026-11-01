@@ -1,5 +1,6 @@
-import type { AgentStatus, AgentStep, ChangeResolved, CrossReview } from "@contracts";
-import type { State } from "../../state";
+import type { AgentStatus, ChangeResolved, CrossReview } from "@contracts";
+import { selectRounds, type Round, type RoundStep } from "./rounds";
+import type { State, BudgetMark, ModelWait } from "../../state";
 
 export interface ConversationMessage {
   seq: number;
@@ -9,7 +10,9 @@ export interface ConversationMessage {
 
 export type ConversationEntry = { seq: number } & (
   | { kind: "task"; ts: string; text: string }
-  | { kind: "step"; ts: string | undefined; step: AgentStep }
+  | RoundStep
+  | { kind: "activity" | "round"; round: Round; children: ConversationEntry[] }
+  | { kind: "budget"; mark: BudgetMark }
   | { kind: "proposed"; ts: string; summary: string | null }
   | {
       kind: "cross-review";
@@ -33,6 +36,7 @@ export interface ConversationHeader {
   reasoning: string | null;
   step: number;
   maxSteps: number;
+  waiting: boolean;
   cost: number | null | undefined;
   round: number;
   zonePaths: string[];
@@ -41,6 +45,57 @@ export interface ConversationHeader {
 export interface Conversation {
   header: ConversationHeader;
   entries: ConversationEntry[];
+  progress: {
+    wait: ModelWait | undefined;
+    openRound: Round | undefined;
+    limits: number;
+    budget: NonNullable<State["run"]>["budget"] | undefined;
+    spendUnknown: boolean;
+  };
+}
+
+function groupRounds(
+  entries: ConversationEntry[],
+  rounds: Round[],
+  messages: readonly ConversationMessage[],
+) {
+  for (const [index, item] of rounds.entries()) {
+    // Messages split a round into stable segments; accepted person text never folds away.
+    const boundaries = messages
+      .filter((m) => m.seq >= item.seq && m.seq < (rounds[index + 1]?.seq ?? Infinity))
+      .map((m) => m.seq)
+      .sort((a, b) => a - b);
+    const folded =
+      item.end && rounds[index + 1]
+        ? entries.filter(
+            (entry) =>
+              (entry.kind === "proposed" || entry.kind === "cross-review") &&
+              entry.seq >= item.seq &&
+              entry.seq < (rounds[index + 1]?.seq ?? Infinity),
+          )
+        : [];
+    for (const entry of folded) entries.splice(entries.indexOf(entry), 1);
+    const groups = new Map<number, ConversationEntry[]>();
+    for (const entry of [...item.steps, ...folded].sort((a, b) => a.seq - b.seq)) {
+      const segment = boundaries.filter((seq) => seq < entry.seq).length;
+      const group = groups.get(segment) ?? [];
+      group.push(entry);
+      groups.set(segment, group);
+    }
+    for (const children of groups.values()) {
+      const steps = children.filter((entry): entry is RoundStep => entry.kind === "step");
+      if (!steps[0]) {
+        entries.push(...children);
+        continue;
+      }
+      entries.push({
+        kind: item.end ? "round" : "activity",
+        seq: steps[0].seq,
+        round: { ...item, steps, toolMs: steps.reduce((sum, e) => sum + e.step.duration_ms, 0) },
+        children,
+      });
+    }
+  }
 }
 
 /** Project retained evidence only; messages are supplied independently of the event contract. */
@@ -74,11 +129,6 @@ export function selectConversation(
       entries.push({ kind: "resolution", seq, ts, resolution: event.payload, round });
     }
   }
-  for (const step of state.steps[agentId] ?? []) {
-    const seq = state.stepSeqs[agentId]?.[step.step];
-    if (seq !== undefined)
-      entries.push({ kind: "step", seq, ts: state.stepTimes[agentId]?.[step.step], step });
-  }
   for (const { seq, review } of state.changes[agent.change_id]?.reviews ?? []) {
     const profile = state.run?.models.find(
       (model) => model.id === review.reviewer_model || model.model === review.reviewer_model,
@@ -94,6 +144,12 @@ export function selectConversation(
     });
   }
   for (const message of messages) entries.push({ ...message, kind: "message" });
+  const rounds = selectRounds(state, agentId);
+  const firstStatus = entries.find((entry) => entry.kind === "task")?.seq ?? Infinity;
+  for (const mark of state.budgetMarks) {
+    if (mark.seq > firstStatus) entries.push({ kind: "budget", seq: mark.seq, mark });
+  }
+  groupRounds(entries, rounds, messages);
   const profile = state.run?.models.find((model) => model.id === agent.model);
   return {
     header: {
@@ -105,10 +161,18 @@ export function selectConversation(
       modelLabel: profile?.label ?? agent.model,
       reasoning: profile?.reasoning ?? null,
       step: Math.max(agent.step, ...(state.steps[agentId] ?? []).map((step) => step.step)),
-      maxSteps: agent.max_steps,
+      maxSteps: state.run?.limits.max_steps ?? agent.max_steps,
+      waiting: agent.state === "working" && !!state.modelWaits[agentId],
       cost: state.agentCosts[agentId],
       round,
       zonePaths: agent.zone?.paths ?? [],
+    },
+    progress: {
+      wait: state.modelWaits[agentId],
+      openRound: rounds.find((r) => !r.end),
+      limits: state.run?.limits.max_wall_clock_s ?? 0,
+      budget: state.run?.budget,
+      spendUnknown: state.spendUnknown,
     },
     entries: entries.sort((a, b) => a.seq - b.seq),
   };

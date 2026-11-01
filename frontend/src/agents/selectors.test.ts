@@ -24,6 +24,7 @@ describe("agent card details", () => {
       max_attempts: 5,
       cause: "timeout",
       wait_s: 2,
+      status: null,
     };
     for (const status of ["working", "revising", "halted", "ready_for_review", "done"] as const) {
       const agent = state.agents["agent-1"];

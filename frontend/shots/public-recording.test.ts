@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { build } from "vite";
 
@@ -25,6 +25,7 @@ async function publicReplay(files: "both" | "no recording" | "no receipt") {
     const fixtures = join(scratch, "fixtures/events");
     mkdirSync(transport, { recursive: true });
     mkdirSync(fixtures, { recursive: true });
+    writeFileSync(join(scratch, "package.json"), JSON.stringify({ type: "module" }));
     const entry = join(transport, "index.ts");
     // Build the actual public entry in a separate tree; never rename the shared fixture.
     copyFileSync(join(original, "index.ts"), entry);
@@ -54,17 +55,26 @@ async function publicReplay(files: "both" | "no recording" | "no receipt") {
         },
         recordedReplayPlugin(),
       ],
-      build: { write: false, lib: { entry, formats: ["es"] } },
+      build: { outDir: join(scratch, "dist"), lib: { entry, formats: ["es"] } },
     });
     const outputs = Array.isArray(result) ? result : [result];
     assert.equal(outputs.length, 1);
     const output = outputs[0];
     assert.ok(output && "output" in output);
     const chunks = output.output.filter((item) => item.type === "chunk");
-    assert.equal(chunks.length, 1);
-    assert.ok(chunks[0]);
+    const entries = chunks.filter((chunk) => chunk.isEntry);
+    assert.equal(entries.length, 1);
+    const builtEntry = entries[0];
+    assert.ok(builtEntry);
+    const player = chunks.find((chunk) =>
+      Object.keys(chunk.modules).some((id) => id.endsWith("/transport/replayPlayer.ts")),
+    );
+    assert.ok(player, "the controlled player is included in the public build");
+    assert.notEqual(player.fileName, builtEntry.fileName, "the player stays deferred");
+    assert.ok(builtEntry.dynamicImports.includes(player.fileName));
+    assert.ok(!builtEntry.imports.includes(player.fileName));
     const module = (await import(
-      `data:text/javascript;base64,${Buffer.from(chunks[0].code).toString("base64")}`
+      pathToFileURL(join(scratch, "dist", builtEntry.fileName)).href
     )) as { replaySource: ChosenReplaySource };
     return module.replaySource;
   } finally {

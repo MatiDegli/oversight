@@ -225,6 +225,8 @@ def test_schema_changes_only_approved_attachments() -> None:
         "AgentMessageEvent",
         "AgentMessageSent",
         "MessageText",
+        "LeadReply",
+        "LeadReplyEvent",
         "UsageCoverage",
         "UsageCostRow",
         "UsageCost",
@@ -278,6 +280,17 @@ def test_schema_changes_only_approved_attachments() -> None:
                     updated["properties"][field_name] = definition["properties"][field_name]
             assert updated == definition, name
             continue
+        if name == "AgentMessage":
+            updated = deepcopy(current[name])
+            assert updated.pop("description") == (
+                "Human text for `POST /agents/{id}/message` or "
+                "`POST /leads/{agent_id}/message`.\n\n"
+                "The lead route is declared for L2: empty 202 on acceptance, 409 wrong_state "
+                "unless idle,\n"
+                "and 501 in replay. L2 publishes agent.message with the lead as recipient."
+            )
+            assert updated == {k: v for k, v in definition.items() if k != "description"}
+            continue
         if name == "Limits":
             updated = deepcopy(current[name])
             descriptions = {
@@ -309,6 +322,12 @@ def test_schema_changes_only_approved_attachments() -> None:
             field = updated["properties"].pop("requested_plan_id")
             assert field["default"] is None
             assert field["anyOf"] == [{"$ref": "#/$defs/PlanId"}, {"type": "null"}]
+            state = updated["properties"]["state"]
+            assert state["enum"] == ["starting", "working", "idle", "halted", "stopped", "done"]
+            assert state["description"] == (
+                "Idle waits between turns; done is retained for historical log compatibility."
+            )
+            updated["properties"]["state"] = definition["properties"]["state"]
             updated["required"].remove("requested_plan_id")
             assert updated == definition
             continue

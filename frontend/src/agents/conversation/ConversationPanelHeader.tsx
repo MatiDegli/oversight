@@ -17,7 +17,7 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
         </span>
         <h2 className="min-w-0 text-[20px] leading-[1.3] font-bold wrap-anywhere">{header.task}</h2>
         <span className="shrink-0 rounded-full bg-raised px-[10px] py-[3px] text-[13px] font-semibold text-muted">
-          {labels[header.state]}
+          {header.waiting ? "Waiting" : labels[header.state]}
         </span>
       </div>
       <div className="mt-[14px] flex flex-wrap gap-2">
@@ -26,7 +26,8 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
           {header.reasoning !== null ? ` · reasoning ${header.reasoning}` : ""}
         </span>
         <span className={chip}>
-          Step {header.step} of {header.maxSteps}
+          Step <span className="font-mono">{Math.min(header.step, header.maxSteps)}</span> of{" "}
+          <span className="font-mono">{header.maxSteps}</span>
         </span>
         {header.cost !== undefined && (
           <span className={`${chip} ${header.cost === null ? "" : "font-mono"}`}>

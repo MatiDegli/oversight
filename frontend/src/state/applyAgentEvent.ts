@@ -10,10 +10,10 @@ type Event = Extract<
 export function applyAgentEvent(state: State, next: State, event: Event): State {
   switch (event.type) {
     case "model.attempt_failed": {
-      const { agent_id, role, attempt, max_attempts, cause, wait_s, final } = event.payload;
+      const { agent_id, role, attempt, max_attempts, cause, status, wait_s, final } = event.payload;
       const modelWaits = { ...state.modelWaits };
       if (wait_s !== null && final === null && (role === "agent" || role === null)) {
-        modelWaits[agent_id] = { seq: event.seq, attempt, max_attempts, cause, wait_s };
+        modelWaits[agent_id] = { seq: event.seq, attempt, max_attempts, cause, status, wait_s };
       } else Reflect.deleteProperty(modelWaits, agent_id);
       return { ...next, modelWaits };
     }
@@ -75,6 +75,21 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
     }
     case "usage.tick": {
       const tick = event.payload;
+      const rank = { ok: 0, warn_50: 1, warn_80: 2, blocked: 3 };
+      const budgetMarks =
+        tick.brake !== "ok" &&
+        state.budgetMarks.every((mark) => rank[tick.brake] > rank[mark.brake])
+          ? [
+              ...state.budgetMarks,
+              {
+                seq: event.seq,
+                ts: event.ts,
+                brake: tick.brake,
+                spent_usd: tick.spent_usd,
+                budget_usd: tick.budget_usd,
+              },
+            ]
+          : state.budgetMarks;
       const modelWaits = { ...state.modelWaits };
       Reflect.deleteProperty(modelWaits, tick.agent_id);
       const before = state.agentCosts[tick.agent_id];
@@ -86,6 +101,7 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
       return {
         ...next,
         usage: tick,
+        budgetMarks,
         modelWaits,
         agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },
         spendUnknown:
