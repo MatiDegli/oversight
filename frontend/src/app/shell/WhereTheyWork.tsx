@@ -30,11 +30,13 @@ function WorkFiles({ group }: { group: WorkGroup }) {
         ))}
         {file.ranges.map((range, i) => (
           <div className="work-range" key={i}>
-            {range.start_line === null || range.end_line === null
+            {range.start_line === null
               ? "Whole file"
-              : range.start_line === range.end_line
-                ? `line ${String(range.start_line)}`
-                : `lines ${String(range.start_line)} to ${String(range.end_line)}`}
+              : range.end_line === null
+                ? `from line ${String(range.start_line)}`
+                : range.start_line === range.end_line
+                  ? `line ${String(range.start_line)}`
+                  : `lines ${String(range.start_line)} to ${String(range.end_line)}`}
           </div>
         ))}
         {group.mode === "pending" && (
@@ -96,7 +98,9 @@ export function WhereTheyWork() {
           </section>
         </Fragment>
       ))}
-      <p className="work-footer">Files only. The functions around them are on the graph.</p>
+      <p className="work-footer">
+        Files and observed functions. Explore their connections on the graph.
+      </p>
     </div>
   );
 }

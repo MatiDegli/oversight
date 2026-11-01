@@ -1,8 +1,12 @@
 import { expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import type { ServerEvent } from "@contracts";
 import log from "../../../fixtures/events/recorded-demo.jsonl?raw";
 import { applyEvent, createInitialState } from "../state";
 import { selectWorkPresence } from "./workPresence";
+import { FilesProvider } from "./FilesContext";
+import { WhereTheyWork } from "./shell/WhereTheyWork";
 
 const events = log
   .trim()
@@ -34,6 +38,67 @@ function fixture() {
   status();
   return { send, status, state: () => state, presence: () => selectWorkPresence(state) };
 }
+it.each<[number | null, number | null, string]>([
+  [null, null, "Whole file"],
+  [null, 9, "Whole file"],
+  [8, null, "from line 8"],
+  [8, 8, "line 8"],
+  [8, 9, "lines 8 to 9"],
+])("renders observed range %s–%s as %s", (start_line, end_line, label) => {
+  const f = fixture();
+  f.send({
+    ...sample("agent.focus"),
+    payload: {
+      agent_id: "agent-1",
+      mode: "read",
+      ranges: [{ path: "range.py", start_line, end_line }],
+      node_ids: [],
+    },
+  });
+  const html = renderToStaticMarkup(
+    createElement(FilesProvider, {
+      state: f.state(),
+      openFile: () => undefined,
+      children: createElement(WhereTheyWork),
+    }),
+  );
+  expect(html).toContain(`<div class="work-range">${label}</div>`);
+  if (start_line !== null) expect(html).not.toContain("Whole file");
+  expect(html).toContain("Files and observed functions. Explore their connections on the graph.");
+});
+it.each(["working", "revising"])(
+  "restores the latest focus on %s after pause until a new focus arrives",
+  (value) => {
+    const f = fixture();
+    f.send({
+      ...sample("agent.focus"),
+      payload: {
+        agent_id: "agent-1",
+        mode: "read",
+        ranges: [{ path: "retained.py", start_line: 8, end_line: null }],
+        node_ids: [],
+      },
+    });
+    const observed = structuredClone(f.presence().current);
+    f.status("agent-1", "A", "paused");
+    expect(f.presence().current).toEqual([]);
+    f.status("agent-1", "A", value);
+    expect(f.presence().current).toEqual(observed);
+    f.send({
+      ...sample("agent.focus"),
+      payload: {
+        agent_id: "agent-1",
+        mode: "edit",
+        ranges: [{ path: "replacement.py", start_line: null, end_line: null }],
+        node_ids: [],
+      },
+    });
+    expect(f.presence().current[0]).toMatchObject({
+      mode: "edit",
+      files: [{ path: "replacement.py" }],
+    });
+  },
+);
 it("keeps range-only paths, null bounds and distinct observed ranges without mutation", () => {
   const f = fixture();
   const ranges = [
