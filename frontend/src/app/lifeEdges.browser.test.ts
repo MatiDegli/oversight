@@ -85,11 +85,33 @@ async function lifeEnabled(page: Page, enabled: boolean) {
   }, enabled);
 }
 
+async function lightTop(page: Page, selector: string) {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const { root } = await session.send("DOM.getDocument");
+    const { nodeId } = await session.send("DOM.querySelector", { nodeId: root.nodeId, selector });
+    const { node } = await session.send("DOM.describeNode", { nodeId });
+    const light = node.pseudoElements?.find((pseudo) => pseudo.pseudoType === "before");
+    if (!light) throw new Error(`Missing light for ${selector}`);
+    const { model } = await session.send("DOM.getBoxModel", {
+      backendNodeId: light.backendNodeId,
+    });
+    return model.border[1];
+  } finally {
+    await session.detach();
+  }
+}
+
 async function edges(page: Page, theme: string) {
-  const roots = page.locator(
-    ".shell-sidebar, .focus-panel, .bottom-dock, .agents-expanded, .agents-rail",
-  );
-  for (const root of await roots.all()) {
+  for (const selector of [
+    ".shell-sidebar",
+    ".focus-panel",
+    ".bottom-dock",
+    ".agents-expanded",
+    ".agents-rail",
+  ]) {
+    const root = page.locator(selector);
+    if ((await root.count()) === 0) continue;
     const seen = await root.evaluate((element) => {
       const style = getComputedStyle(element, "::before");
       const reference = document.createElement("span");
@@ -100,6 +122,8 @@ async function edges(page: Page, theme: string) {
       reference.remove();
       return {
         absentInDay: element.matches(".focus-panel, .bottom-dock"),
+        dock: element.matches(".bottom-dock"),
+        top: element.getBoundingClientRect().top,
         height: style.height,
         width: style.width,
         inner: element.clientWidth,
@@ -115,6 +139,8 @@ async function edges(page: Page, theme: string) {
       expect(seen).toMatchObject({ height: "1px", pointer: "none", z: "3", content: '""' });
       expect(Number.parseFloat(seen.width)).toBe(seen.inner);
       expect(seen.background).toBe(seen.expected);
+      // The dock's existing 1px top border precedes its in-flow light.
+      expect(await lightTop(page, selector)).toBe(seen.top + (seen.dock ? 1 : 0));
     }
   }
 }
