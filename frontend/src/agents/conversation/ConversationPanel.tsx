@@ -9,6 +9,7 @@ import type { Conversation, ConversationEntry } from "./selectConversation";
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation;
   renderResolution?: (entry: Extract<ConversationEntry, { kind: "resolution" }>) => ReactNode;
+  renderProposed?: (entry: Extract<ConversationEntry, { kind: "proposed" }>) => ReactNode;
   onOpenDiff?: (changeId: string) => void;
 }
 /** The timeline owns scrolling; event arrivals never move keyboard focus. */
@@ -16,6 +17,7 @@ export function ConversationPanel({
   conversation,
   onOpenDiff,
   renderResolution,
+  renderProposed,
   ...controls
 }: ConversationPanelProps) {
   const { header, entries } = conversation;
@@ -74,7 +76,11 @@ export function ConversationPanel({
               ) : entry.kind === "budget" ? (
                 <BudgetNotice mark={entry.mark} progress={conversation.progress} />
               ) : (
-                ((entry.kind === "resolution" ? renderResolution?.(entry) : null) ?? (
+                ((entry.kind === "resolution"
+                  ? renderResolution?.(entry)
+                  : entry.kind === "proposed"
+                    ? renderProposed?.(entry)
+                    : null) ?? (
                   <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
                 ))
               )}

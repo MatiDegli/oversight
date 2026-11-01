@@ -3785,3 +3785,13 @@ preserve failure/unknown and are not an approval gate. Extra rules remain in the
 Run-local usageTicks retain only accepted events through the existing fold. Cost sums exact
 change_id across agents and roles; absent ticks and any null cost remain unknown, and null
 attribution stays unattributed. Sequence-gap protection and run replacement remain authoritative.
+
+## 2026-11-01 — C4 shares review beside the built Chat thread
+
+Chat supplies only an optional current-proposal renderer to the built timeline. Its review
+composition derives the conversation owner from the retained proposal, including C5's resolved
+review tab. One ReviewFocus adapter retains the built lazy loader, local fallback, capabilities,
+keys and decision controls in both layouts. Desktop reserves 880px for review; at the C1 1500px
+breakpoint real tabs hide and inert either mounted content. Chat-scoped CSS hides the where
+column during review. Normal review scrolling and the built diff/evidence order take precedence
+over the sketch's clipped body. Existing Oversight geometry and its default remain authoritative.
