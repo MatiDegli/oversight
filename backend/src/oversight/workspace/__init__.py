@@ -5,6 +5,14 @@ imports only `oversight_contracts`, shared byte limits and the standard library.
 """
 
 from oversight.workspace._behavior_values import MAX_RANGE_ITEMS
+from oversight.workspace._platform import (
+    assign_job,
+    close_job,
+    create_kill_job,
+    job_pids,
+    resume_suspended,
+    terminate_job,
+)
 from oversight.workspace.behavior_run import (
     PER_CALL_TIMEOUT_S,
     BehaviorObservation,
@@ -114,13 +122,17 @@ __all__ = [
     "WorkspaceBusy",
     "WorkspaceError",
     "apply_inverse",
+    "assign_job",
     "base_probe_checkout",
     "check_content",
     "classify_inverse",
+    "close_job",
     "configure_suite",
     "content_hash",
+    "create_kill_job",
     "inverse_suite_problem",
     "is_secret_path",
+    "job_pids",
     "list_tree",
     "parse_cases",
     "parse_junit",
@@ -128,9 +140,11 @@ __all__ = [
     "prepare_merge_guard",
     "print_isolation_probe",
     "render_examples",
+    "resume_suspended",
     "run_process",
     "secret_refusal",
     "select_source",
+    "terminate_job",
     "valid_agent_id",
     "validate_source",
     "validate_suite_execution",

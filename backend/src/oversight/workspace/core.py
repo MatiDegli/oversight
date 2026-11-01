@@ -17,7 +17,7 @@ from functools import partial
 from pathlib import Path
 
 from oversight.limits import bounded_text
-from oversight.workspace._platform import acquire_lock, release_lock
+from oversight.workspace._platform import acquire_lock, ensure_lifetime_job, release_lock
 from oversight.workspace.behavior_run import (
     BehaviorObservation,
     BehaviorTarget,
@@ -61,7 +61,7 @@ from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, 
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.ranges import FileRange, read_range
-from oversight.workspace.runner import ProcessResult, Spawn, run_process
+from oversight.workspace.runner import ProcessResult, Spawn, probe_job_support, run_process
 from oversight.workspace.snapshot import IntegrityState
 from oversight.workspace.suite import SuiteRun, SuiteUnavailable
 from oversight.workspace.suite_guard import guarded_suite
@@ -416,6 +416,9 @@ class Workspace:
         if self._lock_fd is None:
             await offload(self._acquire_sync)
             try:
+                if sys.platform == "win32":
+                    await offload(ensure_lifetime_job)
+                    await probe_job_support(self._root)
                 await offload(partial(refuse_orphans, self._root))
             except BaseException:
                 self.release_runtime()
@@ -423,8 +426,10 @@ class Workspace:
 
     def release_runtime(self) -> None:
         if self._lock_fd is not None:
-            release_lock(self._lock_fd)
-            self._lock_fd = None
+            try:
+                release_lock(self._lock_fd)
+            finally:
+                self._lock_fd = None
 
     def _populate(self) -> None:
         (self._root / "tmp" / "home").mkdir(mode=DIR_MODE, parents=True)
