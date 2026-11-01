@@ -176,8 +176,8 @@ expiry is checked there too. A grant created later does not revive the stopped r
    is built (`7c25429`), reading assessments from decisionEvents. Merge mode is folded by
    `state/applyEvidenceEvent.ts`; assessment and Revert remain selector inputs in decisionEvents.
    F10 opens activation by explicit selection, preserving every later guard.
-3. Contract 1.7.0 and bounded backend delivered in `93a3664`; broader scopes/expiry and
-   protected-path grants remain separate work.
+3. Contract 1.7.0 and bounded backend delivered in `93a3664`; broader grant support remains
+   separate work: path/agent scopes, session expiry and protected-path grants.
 4. Inbox answers and grant controls delivered in `7c25429`. F10 opens activation; live grants
    remain limited to the delivered possible_callers rule, module/run scopes and run expiry.
    The activation recording demonstrates an ungranted rules merge, not broader grant support.
