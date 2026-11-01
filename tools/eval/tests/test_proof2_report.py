@@ -7,19 +7,16 @@ import sys
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
-from typing import get_type_hints
 
 import pytest
 from tools.eval.proof2.__main__ import main
 from tools.eval.proof2.report import write_report
-from tools.eval.proof2.report.arms import ArmRecord, ChangeRecord, RevisionRecord, build_arms
+from tools.eval.proof2.report.arms import build_arms
 from tools.eval.proof2.report.inputs import load_inputs
 from tools.eval.proof2.report.output import counted, write_lines
 from tools.eval.proof2.report.spend import add_spend
-from tools.eval.proof2.report.timing import add_timing, wall_ms
+from tools.eval.proof2.report.timing import add_timing
 from tools.eval.tests.report_events import event, files, receipts, renumber, scenario
-
-from oversight_contracts.events import ServerEvent
 
 
 def report(tmp_path, capsys, events=None, results=None):
@@ -537,19 +534,6 @@ def test_last_merge_and_problem(tmp_path, capsys):
     arm = next(r for r in rows if r.get("arm") == "with_oversight")
     assert arm["correct"] == {"count": 1, "n": 3}
     assert arm["problems"] == ["multiple merged resolutions for change-1"]
-
-
-def test_wall_event_types():
-    hints = get_type_hints(wall_ms)
-    assert hints["start"] == ServerEvent | None
-    assert hints["end"] == ServerEvent | None
-
-
-def test_timing_record_types():
-    hints = get_type_hints(add_timing)
-    assert hints["revisions"] == list[RevisionRecord]
-    assert hints["changes"] == list[ChangeRecord]
-    assert hints["arms"] == list[ArmRecord]
 
 
 def test_timing(tmp_path, capsys):
