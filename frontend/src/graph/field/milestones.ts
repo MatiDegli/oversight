@@ -1,14 +1,17 @@
 // One finite event on the existing lamp field, independent of the eight persistent emitters.
 import type { LightSource, FieldMerge } from "./lights";
 import type { PulseLight } from "./pulseLights";
-import { afterlightOf, MergeLife as AfterlightLife, type Afterlight } from "./afterlight";
+import {
+  afterlightOf,
+  mergeArrivalDelay,
+  MergeLife as AfterlightLife,
+  type Afterlight,
+} from "./afterlight";
 import type { FieldLight } from "./lights";
 import type { Box } from "./model";
 import type { getActiveTheme } from "../../theme";
 type Theme = ReturnType<typeof getActiveTheme>;
-/** Shared arrival rule for field, card and pending marks. */
-export const mergeArrivalDelay = (look: Afterlight, pulse = true) =>
-  pulse ? look.delay + look.travel : 0;
+export { mergeArrivalDelay };
 export type Halo = { key: string; merge: FieldMerge; progress: number };
 
 export interface Milestone extends Omit<FieldMerge, "pulse"> {
