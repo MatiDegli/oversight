@@ -6,6 +6,7 @@ type DecisionEventType =
   | "change.facts_recorded"
   | "change.assessed"
   | "change.resolved"
+  | "queue.updated"
   | "plan.updated"
   | "lead.status"
   | "revert.resolved"
@@ -21,6 +22,7 @@ export function isDecisionEvent(event: ServerEvent): event is DecisionEvent {
     event.type === "change.facts_recorded" ||
     event.type === "change.assessed" ||
     event.type === "change.resolved" ||
+    event.type === "queue.updated" ||
     event.type === "plan.updated" ||
     event.type === "lead.status" ||
     event.type === "revert.resolved" ||
