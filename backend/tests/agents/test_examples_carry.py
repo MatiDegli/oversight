@@ -106,7 +106,15 @@ async def test_examples_run_carry(small_tree: tuple[Workspace, Tree], confirmed:
     end = await run.run()
     assert end.state == "halted" and end.steps == run_task.prior_steps + 2
     assert run.steps == run.max_steps == run_task.prior_steps + 2
-    expected = "Do it." + ("\n\n" + done_when_text(run_task.examples) if confirmed else "")
+    expected = (
+        "Do it.\n\nDone when: the person confirmed these exact results.\n"
+        "Example one\n"
+        'Inputs: {"args":[],"kwargs":{},"node_id":"shop.mod.value"}\n'
+        'Expected output: {"a":1,"z":2}\n'
+        "Note: Exact result"
+        if confirmed
+        else "Do it."
+    )
     assert model.requests[0][1] == {"role": "user", "content": expected}
     statuses = cast(list[AgentStatus], recorder.of("AgentStatus"))
     assert statuses[0].step == run_task.prior_steps

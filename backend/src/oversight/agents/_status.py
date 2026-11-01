@@ -1,13 +1,19 @@
 """Pure server-owned coding-agent provenance checks."""
 
+from __future__ import annotations
+
 import json
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from oversight.agents._examples_validate import canonical_json
 from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.events import AgentStatus
 from oversight_contracts.examples import TaskExample
 from oversight_contracts.plans import PlanZone
+
+if TYPE_CHECKING:
+    from oversight.agents.loop import AgentTask
 
 
 def validate_agent_status(
@@ -79,3 +85,8 @@ def done_when_text(examples: Sequence[TaskExample]) -> str:
             )
         )
     return "\n".join(lines)
+
+
+def task_message(task: AgentTask) -> str:
+    """Keep the original task text and exact confirmed-results separator."""
+    return task.task + ("\n\n" + done_when_text(task.examples) if task.examples else "")
