@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
+import ts from "typescript";
 import type { GraphElement } from "./elements";
 import type { MapModel } from "./mapModel";
 import { headerLines, moduleLayout, panelBox } from "./mapModel";
@@ -13,6 +14,48 @@ import {
   placeChip,
 } from "./mapLines";
 import { MapLayer } from "./MapLayer";
+import design from "../../../DESIGN.md?raw";
+import layerSource from "./MapLayer.tsx?raw";
+import linesSource from "./MapLines.tsx?raw";
+
+it("keeps the map layer functions within the 80-line limit", () => {
+  for (const [source, kind] of [
+    [layerSource, ts.ScriptKind.TSX],
+    [linesSource, ts.ScriptKind.TSX],
+  ] as const) {
+    const file = ts.createSourceFile("map", source, ts.ScriptTarget.Latest, true, kind);
+    const functions = file.statements.filter(ts.isFunctionDeclaration);
+    expect(functions.length).toBeGreaterThan(0);
+    for (const declaration of functions) {
+      const start = file.getLineAndCharacterOfPosition(declaration.getStart()).line;
+      const end = file.getLineAndCharacterOfPosition(declaration.getEnd()).line;
+      expect(end - start + 1, declaration.name?.text).toBeLessThanOrEqual(80);
+    }
+  }
+});
+
+it("preserves the pending name priority and documents built evidence in lines and scope", () => {
+  const scale = design.split("### Scale and depth")[1]?.split("### Motion")[0] ?? "";
+  const point = (number: number) =>
+    scale
+      .match(new RegExp(`(?:^|\\n)${String(number)}\\. \\*\\*[^]*?(?=\\n\\d+\\. \\*\\*|$)`))?.[0]
+      ?.replace(/\s+/g, " ")
+      .trim() ?? "";
+
+  expect(point(6)).toBe(
+    "6. **Names.** Constant size on screen. Group names always shown; module names are 13px/600 in " +
+      "module-label, centered under the circles, ellipsized at the cell width minus 10px; counts " +
+      "are 12px muted. Circle radius is clamp(round(screen cell height × 0.1), 5, 9)px. All colors " +
+      "use theme tokens. Target, not built yet: prioritize names an agent touches, the cone reaches " +
+      "or the selection holds, then by size; the rest on hover.",
+  );
+  expect(point(5)).toContain("Hover restores full names");
+  expect(point(5)).toContain("85% card backing");
+  expect(point(5)).toContain("dim-node");
+  expect(point(5)).toContain("names hide with visibility");
+  expect(point(8)).toContain("distance badges are 20px");
+  expect(point(8)).toContain("panels without members use 0.5 opacity");
+});
 
 function fixture() {
   const model: MapModel = {
@@ -64,6 +107,38 @@ function fixture() {
   elements.push(edge("a", "c"), edge("a", "c"), edge("b", "a"), edge("c", "b", false, true));
   return { model, elements, edge, frame: { model, zoom: 1, pan: { x: 0, y: 0 } } };
 }
+it("lifts only the hovered group or the hovered module's own panel when ids collide", () => {
+  const { model, frame } = fixture();
+  const tools = required(model.groups[1]);
+  required(tools.modules[0]).id = "lib";
+  for (const kind of ["module", "group"] as const) {
+    const markup = renderToStaticMarkup(
+      MapLayer({ frame: { ...frame, level: "map", hover: { kind, id: "lib" } } }),
+    );
+    const panel = (id: string) =>
+      markup.match(new RegExp(`<div data-map-group="${id}"[^>]*>`))?.[0];
+    expect(panel("lib")?.includes("border-color:var(--edge)")).toBe(kind === "group");
+    expect(panel("tools")?.includes("border-color:var(--edge)")).toBe(kind === "module");
+  }
+});
+it("uses only the possible-edge color and width to dim possible call lines", () => {
+  const { frame, elements } = fixture();
+  const markup = renderToStaticMarkup(
+    MapLayer({
+      frame: {
+        ...frame,
+        level: "map",
+        calls: mapCalls(elements),
+        hover: { kind: "module", id: "b" },
+      },
+    }),
+  );
+  const possible = markup.match(/<g data-map-line="possible"[^>]*>[^]*?<\/g>/)?.[0];
+  expect(possible).toContain("var(--edge-possible)");
+  expect(possible).toContain("var(--possible-edge-width)");
+  expect(possible).not.toContain("opacity");
+  expect(possible).not.toContain("dim-node");
+});
 it("hit tests the module block, group header/ground and empty ground after zoom/pan", () => {
   const { model } = fixture(),
     frame = { model, zoom: 0.4, pan: { x: 30, y: 60 } };

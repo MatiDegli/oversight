@@ -1435,15 +1435,17 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    reverse exact calls between cone modules, callee to caller, in lit-edge. A shared pair is
    drawn once, as a cone line. Chips try .5, .4, .6, .3, .7, .2, .8, .12, .88, avoiding names,
    circles and earlier chips; a chip with no room disappears. Hover uses neutral edge.
+   Hover restores full names; cone and hover names have an 85% card backing.
+   Outside-cone circles without agent marks use dim-node; their names hide with visibility,
+   retaining their boxes so circles do not move. Pointing at one reveals its name. Non-seed
+   cone modules without agent marks show the smallest entry distance in a ground badge.
+   The cone remains only "possibly affected".
    Nothing invented. With no lines at rest, the LED field and the contours carry the texture.
 6. **Names.** Constant size on screen. Group names always shown; module names are 13px/600 in
    module-label, centered under the circles, ellipsized at the cell width minus 10px; counts
    are 12px muted. Circle radius is clamp(round(screen cell height × 0.1), 5, 9)px. All colors
-   use theme tokens. Hover restores full names; cone and hover names have an 85% card backing.
-   Outside-cone circles without agent marks use dim-node; their names hide with visibility,
-   retaining their boxes so circles do not move. Pointing at one reveals its name. Non-seed
-   cone modules without agent marks show the smallest entry distance in a 20px ground badge;
-   panels without members use 0.5 opacity. The cone remains only "possibly affected".
+   use theme tokens. Target, not built yet: prioritize names an agent touches, the cone reaches
+   or the selection holds, then by size; the rest on hover.
 7. **Interaction.** Built: a group click centers its card boxes in the clear area, clamping
    the fit to [68.75%, 100%]; oversized groups show their center and scroll for the rest.
    A module block click unfolds only a folded card and centers it at 100%. Both return cards
@@ -1457,6 +1459,7 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    Header strips measure every flex item once: 37px for one line, 60px for two, then 23px
    per additional line; a row shares its tallest strip. The 22px decision chip overhangs the
    20px text line by 1px above and below. Group-click zoom is clamped to 68.75%–100%.
+   Cone distance badges are 20px; panels without members use 0.5 opacity.
    The sketch's Boltons group fit is 47.1% at 1920 and 31.8% at 1280, both raised to 68.75%.
    The proof 2 repository, Boltons `d31d821`, has 66 modules by top folder in
    [its preset](fixtures/layouts/boltons-d31d821.json): boltons 30, tests 32, misc 3, docs 1.

@@ -3,10 +3,11 @@ import type { ComponentProps } from "react";
 import { RoutingOmissions } from "./RoutingOmissions";
 import type { MapController } from "./mapController";
 import { agentLook } from "../theme";
-import type { MapModel } from "./mapModel";
+import type { MapModel, MapGroup, MapModule as Module } from "./mapModel";
+import { MapLines } from "./MapLines";
 import { decisionsLabel, testedLabel } from "./mapEvidence";
 import { moduleLayout, panelBox } from "./mapModel";
-import { distanceBadge, mapSegments, pointed } from "./mapLines";
+import { distanceBadge, pointed } from "./mapLines";
 import type { MapCall, MapHover } from "./mapLines";
 import type { MapLevel } from "./mapLevel";
 
@@ -94,8 +95,7 @@ export interface MapFrame {
 
 /** Screen-sized type and circles, world-sized cells. This layer never accepts input. */
 export function MapLayer({ frame }: { frame: MapFrame }) {
-  const { model, zoom, pan, level } = frame;
-  const segments = mapSegments(frame);
+  const { model, level } = frame;
   return (
     <div
       aria-hidden="true"
@@ -103,200 +103,162 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
       style={{ opacity: level === "map" ? 1 : 0 }}
     >
       <style>{mapStyles}</style>
-      {!!segments.length && (
-        <svg className="absolute inset-0 size-full" style={{ zIndex: 1 }}>
-          {segments.map((line) => {
-            const { start: a, end: b } = line;
-            const angle = Math.atan2(b.y - a.y, b.x - a.x),
-              ux = Math.cos(angle),
-              uy = Math.sin(angle);
-            return (
-              <g
-                key={`${line.source}>${line.target}`}
-                data-map-line={line.cone ? "cone" : line.possible ? "possible" : "exact"}
-                style={{
-                  color: `var(--${line.cone ? "lit-edge" : line.possible ? "edge-possible" : "edge"})`,
-                  opacity: line.possible ? "var(--dim-node)" : 1,
-                }}
+      <MapLines frame={frame} />
+      {model.groups.map((group) => (
+        <div key={group.id}>
+          {group.panel && <MapPanel group={group} frame={frame} />}
+          {group.modules.map((module) => (
+            <MapModule key={module.id} module={module} groupId={group.id} frame={frame} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MapPanel({ group, frame }: { group: MapGroup; frame: MapFrame }) {
+  const { model, zoom, pan } = frame;
+  const box = panelBox(group, zoom, model.groups);
+  return (
+    <div
+      data-map-group={group.id}
+      className="map-panel absolute"
+      style={{
+        opacity: group.modules.every((m) => m.inCone === false) ? 0.5 : 1,
+        borderColor:
+          (frame.hover?.kind === "group" && frame.hover.id === group.id) ||
+          (frame.hover?.kind === "module" && group.modules.some((m) => m.id === frame.hover?.id))
+            ? "var(--edge)"
+            : undefined,
+        left: box.x1 * zoom + pan.x,
+        top: box.y1 * zoom + pan.y,
+        width: (box.x2 - box.x1) * zoom,
+        height: (box.y2 - box.y1) * zoom,
+      }}
+    >
+      <div className="map-header" style={{ height: (group.y - box.y1) * zoom }}>
+        <strong>{group.label}</strong>
+        <span>{group.modules.length} modules</span>
+        {!!group.rings?.length && (
+          <span className="map-rings">
+            {group.rings.map((slot) => (
+              <span
+                key={slot}
+                className={`map-ring ${agentLook[slot].border} ${agentLook[slot].textClass}`}
               >
-                <line
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke="currentColor"
-                  style={{
-                    strokeWidth: `var(--${line.cone ? "lit-edge-width" : line.possible ? "possible-edge-width" : "exact-edge-width"})`,
-                  }}
-                />
-                {!line.possible && (
-                  <polygon
-                    fill="currentColor"
-                    points={`${String(b.x)},${String(b.y)} ${String(b.x - 7 * ux + 3 * uy)},${String(b.y - 7 * uy - 3 * ux)} ${String(b.x - 7 * ux - 3 * uy)},${String(b.y - 7 * uy + 3 * ux)}`}
-                  />
-                )}
-                {line.chip && (
-                  <g data-map-call-chip>
-                    <rect
-                      x={line.chip.x - (line.chip.box.x2 - line.chip.box.x1 - 4) / 2}
-                      y={line.chip.y - 8}
-                      width={line.chip.box.x2 - line.chip.box.x1 - 4}
-                      height={16}
-                      rx={8}
-                      fill="var(--ground)"
-                      stroke="var(--border)"
-                    />
-                    <text
-                      x={line.chip.x}
-                      y={line.chip.y}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fill="var(--text)"
-                      fontSize={10}
-                      fontWeight={600}
-                    >
-                      ×{line.count}
-                    </text>
-                  </g>
-                )}
-              </g>
-            );
-          })}
-        </svg>
+                {slot}
+              </span>
+            ))}
+          </span>
+        )}
+        {!!group.decisions && (
+          <span className="map-decision">{decisionsLabel(group.decisions)}</span>
+        )}
+        {group.coneCount ? (
+          <span>
+            <b>
+              {group.coneCount} of {group.coneTotal}
+            </b>{" "}
+            in {group.label}
+          </span>
+        ) : (
+          testedLabel(group.tested ?? 0, group.id === "tests") && (
+            <span>{testedLabel(group.tested ?? 0, group.id === "tests")}</span>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MapModuleCircle({
+  module,
+  radius,
+  dim,
+}: {
+  module: Module;
+  radius: number;
+  dim: boolean;
+}) {
+  const badge = distanceBadge(module);
+  return (
+    <div className="relative mx-auto" style={{ width: radius * 2, height: radius * 2 }}>
+      <div
+        data-map-circle
+        className="map-circle absolute inset-0 rounded-full"
+        style={{ opacity: dim ? "var(--dim-node)" : 1 }}
+      />
+      {badge !== undefined && (
+        <div
+          data-map-distance
+          className="map-distance"
+          style={{
+            left: radius + 0.75 * radius + 4,
+            top: radius - 0.75 * radius - 4,
+          }}
+        >
+          {badge}
+        </div>
       )}
-      {model.groups.map((group) => {
-        const box = panelBox(group, zoom, model.groups);
-        return (
-          <div key={group.id}>
-            {group.panel && (
-              <div
-                data-map-group={group.id}
-                className="map-panel absolute"
-                style={{
-                  opacity: group.modules.every((m) => m.inCone === false) ? 0.5 : 1,
-                  borderColor:
-                    frame.hover?.id === group.id ||
-                    group.modules.some((m) => m.id === frame.hover?.id)
-                      ? "var(--edge)"
-                      : undefined,
-                  left: box.x1 * zoom + pan.x,
-                  top: box.y1 * zoom + pan.y,
-                  width: (box.x2 - box.x1) * zoom,
-                  height: (box.y2 - box.y1) * zoom,
-                }}
-              >
-                <div className="map-header" style={{ height: (group.y - box.y1) * zoom }}>
-                  <strong>{group.label}</strong>
-                  <span>{group.modules.length} modules</span>
-                  {!!group.rings?.length && (
-                    <span className="map-rings">
-                      {group.rings.map((slot) => (
-                        <span
-                          key={slot}
-                          className={`map-ring ${agentLook[slot].border} ${agentLook[slot].textClass}`}
-                        >
-                          {slot}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  {!!group.decisions && (
-                    <span className="map-decision">{decisionsLabel(group.decisions)}</span>
-                  )}
-                  {group.coneCount ? (
-                    <span>
-                      <b>
-                        {group.coneCount} of {group.coneTotal}
-                      </b>{" "}
-                      in {group.label}
-                    </span>
-                  ) : (
-                    testedLabel(group.tested ?? 0, group.id === "tests") && (
-                      <span>{testedLabel(group.tested ?? 0, group.id === "tests")}</span>
-                    )
-                  )}
-                </div>
-              </div>
-            )}
-            {group.modules.map((module) => {
-              const layout = moduleLayout(module, model, zoom, pan),
-                radius = layout.radius;
-              const full = pointed(module.id, group.id, frame.hover);
-              const dim = module.inCone === false && !module.agents.length;
-              const badge = distanceBadge(module);
-              return (
-                <div
-                  key={module.id}
-                  data-map-module={module.id}
-                  className="absolute text-center"
-                  style={{
-                    zIndex: 2,
-                    left: layout.x,
-                    top: layout.y1,
-                    width: model.cellWidth * zoom - 10,
-                    transform: "translateX(-50%)",
-                  }}
-                >
-                  <div
-                    className="relative mx-auto"
-                    style={{ width: radius * 2, height: radius * 2 }}
-                  >
-                    <div
-                      data-map-circle
-                      className="map-circle absolute inset-0 rounded-full"
-                      style={{ opacity: dim ? "var(--dim-node)" : 1 }}
-                    />
-                    {badge !== undefined && (
-                      <div
-                        data-map-distance
-                        className="map-distance"
-                        style={{
-                          left: radius + 0.75 * radius + 4,
-                          top: radius - 0.75 * radius - 4,
-                        }}
-                      >
-                        {badge}
-                      </div>
-                    )}
-                    {module.agents.map(({ slot }) => (
-                      <div
-                        key={slot}
-                        className={`absolute rounded-full border-2 border-dashed ${agentLook[slot].border}`}
-                        style={{ inset: -5 }}
-                      />
-                    ))}
-                  </div>
-                  <div
-                    className={`map-name mt-[3px] ${full ? "map-full-name" : "truncate"}`}
-                    style={{
-                      visibility: dim && !full ? "hidden" : undefined,
-                      background:
-                        frame.hover || module.inCone !== undefined
-                          ? "color-mix(in srgb, var(--card) 85%, transparent)"
-                          : undefined,
-                    }}
-                  >
-                    {full ? (module.fullName ?? module.name) : module.name}
-                  </div>
-                  <div
-                    className="map-count"
-                    style={{ visibility: dim && !full ? "hidden" : undefined }}
-                  >
-                    {module.functions
-                      ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
-                      : "empty"}
-                  </div>
-                  {module.agents.map(({ slot, text }) => (
-                    <div key={slot} className={`map-agent ${agentLook[slot].textClass}`}>
-                      {text}
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+      {module.agents.map(({ slot }) => (
+        <div
+          key={slot}
+          className={`absolute rounded-full border-2 border-dashed ${agentLook[slot].border}`}
+          style={{ inset: -5 }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MapModule({
+  module,
+  groupId,
+  frame,
+}: {
+  module: Module;
+  groupId: string;
+  frame: MapFrame;
+}) {
+  const { model, zoom, pan } = frame;
+  const layout = moduleLayout(module, model, zoom, pan);
+  const full = pointed(module.id, groupId, frame.hover);
+  const dim = module.inCone === false && !module.agents.length;
+  return (
+    <div
+      data-map-module={module.id}
+      className="absolute text-center"
+      style={{
+        zIndex: 2,
+        left: layout.x,
+        top: layout.y1,
+        width: model.cellWidth * zoom - 10,
+        transform: "translateX(-50%)",
+      }}
+    >
+      <MapModuleCircle module={module} radius={layout.radius} dim={dim} />
+      <div
+        className={`map-name mt-[3px] ${full ? "map-full-name" : "truncate"}`}
+        style={{
+          visibility: dim && !full ? "hidden" : undefined,
+          background:
+            frame.hover || module.inCone !== undefined
+              ? "color-mix(in srgb, var(--card) 85%, transparent)"
+              : undefined,
+        }}
+      >
+        {full ? (module.fullName ?? module.name) : module.name}
+      </div>
+      <div className="map-count" style={{ visibility: dim && !full ? "hidden" : undefined }}>
+        {module.functions
+          ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
+          : "empty"}
+      </div>
+      {module.agents.map(({ slot, text }) => (
+        <div key={slot} className={`map-agent ${agentLook[slot].textClass}`}>
+          {text}
+        </div>
+      ))}
     </div>
   );
 }
