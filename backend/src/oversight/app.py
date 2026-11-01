@@ -351,7 +351,7 @@ class LiveRun:
                 merge_mode=MergeModeState(),
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
-                prompt_version=prompt_version(settings.harness_pack),
+                prompt_version=prompt_version(settings.harness_pack, settings.history_prune_tokens),
                 workspace=self._source.provenance if self._source else TEMPLATE.name,
                 base_commit=base,
                 models=list({profile.id: profile for profile in profiles}.values()),
