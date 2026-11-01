@@ -940,6 +940,44 @@ def test_spend_returns_new_records(tmp_path):
     }
 
 
+def test_timing_returns_new_records(tmp_path):
+    inputs = load_inputs(*files(tmp_path))
+    revisions, changes, arms = build_arms(inputs)
+    changes, arms = add_spend(inputs, changes, arms)
+    for change in changes:
+        change["wall_ms"] = {"without_oversight": -1, "with_oversight": -1}
+    original_inputs, original_revisions, original_changes, original_arms = deepcopy(
+        (inputs, revisions, changes, arms)
+    )
+    enriched_changes, enriched_arms, run = add_timing(inputs, revisions, changes, arms)
+    assert inputs == original_inputs
+    assert revisions == original_revisions
+    assert changes == original_changes
+    assert arms == original_arms
+    assert enriched_changes is not changes
+    assert enriched_arms is not arms
+    assert all(new is not old for new, old in zip(enriched_changes, changes, strict=True))
+    assert all(new is not old for new, old in zip(enriched_arms, arms, strict=True))
+    assert [change.get("wall_ms") for change in enriched_changes] == [
+        {"without_oversight": 60000, "with_oversight": 140000},
+        {"without_oversight": 40000, "with_oversight": 80000},
+        {"without_oversight": None, "with_oversight": None},
+    ]
+    assert [arm.get("wall_ms_per_correct") for arm in enriched_arms] == [40000, 110000]
+    assert run == dict(
+        record="run",
+        agent_ms=188000,
+        known_agent_ms=188000,
+        agent_hours=pytest.approx(0.052222222222),
+        active_ms=128000,
+        known_active_ms=128000,
+        parallelism=1.46875,
+        coverage="complete",
+        problems=[],
+        parallelism_over_time={"status": "not_built"},
+    )
+
+
 def test_stdout_and_file_are_utf8_bytes(tmp_path, monkeypatch):
     buffer = io.BytesIO()
     monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(buffer, encoding="ascii"))
