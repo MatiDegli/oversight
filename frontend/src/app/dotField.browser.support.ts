@@ -58,6 +58,19 @@ interface Options {
   viewport?: { width: number; height: number };
   /** The theme the page is mounted in; the graph reads it when it is made. */
   theme?: "day";
+  /** Delay the lazy controller until after the graph is ready, as on a slow connection. */
+  slowField?: boolean;
+}
+
+async function delayFieldController(page: Page) {
+  await page.route("**/src/graph/field/controller.ts*", async (route) => {
+    await page.waitForFunction(
+      () => (window.fieldTest.elements().graph.oversightGraph?.nodeCenters().length ?? 0) > 0,
+    );
+    // Inject network latency after graph readiness; this is not a readiness wait.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    if (!page.isClosed()) await route.continue();
+  });
 }
 
 async function withPage(options: Options, test: (page: Page) => Promise<void>) {
@@ -77,6 +90,7 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
     else if (!message.location().url.endsWith("/@vite/client")) errors.push(message.text());
   });
   try {
+    if (options.slowField) await delayFieldController(page);
     if (options.noWebGL) {
       // A browser with WebGL switched off: every canvas refuses a webgl context.
       await page.addInitScript(() => {
@@ -119,7 +133,7 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
     // The field loads after the graph; every field assertion needs its initialized probe.
-    await page.waitForFunction(() => !!window.fieldTest.elements().field);
+    await page.waitForFunction(() => !!window.fieldTest.elements().field.oversightField);
     if (options.clock) {
       // Stop time where the scene stands, once the camera has settled: from here the test moves it.
       await settledGraph(page);
