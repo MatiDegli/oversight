@@ -243,3 +243,50 @@ async def test_a_replay_never_serves_the_ui(tmp_path: Path, dist: Path) -> None:
             transport=transport, base_url=f"http://localhost:{settings.port}"
         ) as client:
             assert_api_error(await client.get("/"), 404, "not_found")
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        r"\\host\share\x",
+        "/host/share/x",
+        "C:/x",
+        "x:y",
+        "a//b",
+        "a/./b",
+        "a/../b",
+        "CON",
+        "nul.txt",
+        "COM1.js",
+        "LPT²",
+        "a.",
+        "a /b",
+        "a\x00b",
+        "a?b",
+    ],
+)
+async def test_nt_unsafe_static_is_refused_before_io(tmp_path, dist, monkeypatch, relative):
+    import sys
+    from unittest.mock import Mock
+
+    from oversight.api import static
+
+    async with ui_app(tmp_path, dist) as (app, _):
+        lookup = Mock(side_effect=AssertionError("unsafe input reached filesystem lookup"))
+        monkeypatch.setattr(static, "_file_under", lookup)
+        monkeypatch.setattr(sys, "platform", "win32")
+        status, body = await raw_get(app, "/" + relative)
+        assert status == 404 and b"<!doctype" not in body
+        lookup.assert_not_called()
+
+
+async def test_nt_root_and_regular_client_routes(tmp_path, dist, monkeypatch):
+    import sys
+
+    async with ui_app(tmp_path, dist) as (_, client):
+        monkeypatch.setattr(sys, "platform", "win32")
+        for path in ("/", "/index.html", "/review/agent-1"):
+            response = await client.get(path)
+            assert response.status_code == 200 and response.text == INDEX_HTML
+        assert (await client.get("/assets/index-abc123.js")).status_code == 200
+        assert (await client.get("/ASSETS/no-suffix")).status_code == 404

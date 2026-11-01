@@ -1,11 +1,13 @@
 """Capture the tested working tree with a temporary index; never disturb staging."""
 
+import sys
 import time
 from collections.abc import Mapping, Sequence
 from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
+from oversight.workspace._platform import executable
 from oversight.workspace.errors import WorkspaceError
 from oversight.workspace.integrity import (
     GitIdentity,
@@ -30,8 +32,11 @@ async def capture_test_tree(
     deadline = time.monotonic() + timeout_s
 
     async def git(*args: str) -> str:
+        binary = "git"
+        if sys.platform == "win32":
+            binary = await offload(lambda: executable("git"))
         result = await run_process(
-            ["git", *flags, *args],
+            [binary, *flags, *args],
             cwd=root,
             timeout_s=remaining(deadline),
             env=dict(env) | {"GIT_INDEX_FILE": str(index)},

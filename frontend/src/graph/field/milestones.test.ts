@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { themes } from "../../theme";
-import { MilestoneLife, milestoneRing, type Milestone } from "./milestones";
+import { MilestoneLife, milestoneRing, mergeArrivalDelay, type Milestone } from "./milestones";
 import { createLampField, fieldConfig } from "./model";
 import { MergeLife as AfterlightLife, afterlightOf } from "./afterlight";
 import { MergeLife } from "./milestones";
@@ -126,6 +126,20 @@ describe("milestone rings", () => {
     expect(life.halos(2700, 550)[0]?.progress).toBe(0);
     expect(life.halos(2975, 550)[0]?.progress).toBe(0.5);
     expect(life.halos(3250, 550)).toEqual([]);
+    const custom = { ...afterlightOf(theme), delay: 75, travel: 425 };
+    expect(mergeArrivalDelay(custom)).toBe(500);
+    expect(mergeArrivalDelay(custom, true)).toBe(500);
+    expect(mergeArrivalDelay(custom, false)).toBe(0);
+    const timed = new MergeLife(custom);
+    timed.update([merge], 1000, false, false);
+    expect(timed.halos(1499, 550)).toEqual([]);
+    expect(timed.halos(1500, 550)[0]?.progress).toBe(0);
+    expect(timed.halos(1775, 550)[0]?.progress).toBe(0.5);
+    timed.update([{ ...merge, key: "no-pulse", pulse: false }], 1000, false, false, [
+      { id: merge.id, source: merge.source, weight: custom.weight, pulses: false },
+    ]);
+    expect(timed.halos(1500, 550)).toEqual([]);
+    expect(timed.lights(46_000)[0]?.weight).toBeCloseTo(custom.weight * 0.5 ** 1.6, 10);
     for (const [reduced, history] of [
       [true, false],
       [false, true],

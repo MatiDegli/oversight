@@ -5,12 +5,14 @@ import errno
 import hashlib
 import os
 import stat
+import sys
 import time
 from contextlib import closing
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from oversight.workspace._platform import import_flags
 from oversight.workspace.locks import offload
 from oversight_contracts.commands import TreeFile
 
@@ -28,7 +30,9 @@ ENTRY_CAP = 2000
 HASH_FILE_BYTES = 1024 * 1024
 HASH_TOTAL_BYTES = 8 * 1024 * 1024
 TREE_TIMEOUT_S = 2.0
-_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+_, _, _DIR_FLAGS = import_flags(
+    nt=sys.platform == "win32", binary=getattr(os, "O_BINARY", 0) if sys.platform == "win32" else 0
+)
 
 
 def _check_time(deadline: float) -> None:
@@ -37,6 +41,8 @@ def _check_time(deadline: float) -> None:
 
 
 def _hash(parent: int, name: str, budget: list[int], deadline: float) -> str | None:
+    if sys.platform == "win32":
+        raise OSError("NT tree I/O requires W2")
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
     try:
         with os.fdopen(os.open(name, flags, dir_fd=parent), "rb", buffering=0) as handle:

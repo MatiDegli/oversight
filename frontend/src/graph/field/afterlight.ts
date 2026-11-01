@@ -61,6 +61,10 @@ export function afterlightOf(theme: AfterlightTheme): Afterlight {
   };
 }
 
+/** Shared arrival rule for field, card and pending marks. */
+export const mergeArrivalDelay = (look: Afterlight, pulse = true) =>
+  pulse ? look.delay + look.travel : 0;
+
 /** The share of the light left at progress `p` of its fade: 1 at the start, 0 from the end. */
 export function fadeShare(p: number, curve: number): number {
   return p >= 1 ? 0 : (1 - Math.max(0, p)) ** curve;
@@ -104,7 +108,7 @@ export class MergeLife {
 
   /** Milliseconds from the decision until the pulse has arrived and the light starts to fade. */
   private arrival(run: Running): number {
-    return run.pulse ? this.look.delay + this.look.travel : 0;
+    return mergeArrivalDelay(this.look, run.pulse);
   }
 
   /**

@@ -43,8 +43,10 @@ async def test_observer_on_and_off_preserve_outcomes_and_reconcile_wall_time(tmp
             gaps += child["start"] - cursor
             cursor = child["end"]
         gaps += root_span["end"] - cursor
-        # One historical incident had gaps of about 4% of elapsed; allow 8% for load.
-        # Keep 50 ms for short attempts; exact child names above catch missing phases.
+        # Bound gaps by 8% of each attempt's own elapsed, with a 50 ms floor.
+        # The shortest follow-up sample, 1.369711 s, yields about 0.1096 s.
+        # That does not establish coverage of the original 0.1204 s gap: its elapsed
+        # was not reported. Exact child names above catch missing phases.
         assert gaps < max(0.05, 0.08 * elapsed)
         assert sum(r["end"] - r["start"] for r in children) + gaps == pytest.approx(elapsed)
         assert {r["source"] for r in trace} == {"server", "evaluator"}
