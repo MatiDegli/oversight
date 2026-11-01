@@ -2,18 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useStore } from "zustand";
 
-import type { FileSaved } from "@contracts";
+import type { FileSaved, MergeMode } from "@contracts";
 
 import type { FileDraft } from "../editor";
 import { DecisionContext } from "../review";
-import { sendDecision } from "../review";
-import type { DecisionAction, DecisionAttempt } from "../review";
-import { stateStore } from "../state";
-import { createCommandClient, replayBuild, replaySource } from "../transport";
+import { sendDecision, revertView } from "../review";
+import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
+import { selectMergeMode, stateStore } from "../state";
+import { commandFailure, createCommandClient, replayBuild, replaySource } from "../transport";
 import { createFileSession } from "./files";
 import { createRecordedFiles } from "./recordedFiles";
 import { FilesProvider } from "./FilesContext";
 import { useEscapeCloses } from "./escape";
+import { mergeModePending, type MergeModeAttempt } from "./shell/SettingsPanel";
 import { Frame } from "./Frame";
 import { usePractice } from "./challenge/usePractice";
 import { startAppSession } from "./session";
@@ -36,7 +37,11 @@ export function App() {
   const [connection, setConnection] = useState<"connecting" | "connected" | "lost">("connecting");
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>(tabbedView);
+  const [mergeModeAttempt, setMergeModeAttempt] = useState<MergeModeAttempt>();
+  const settingMode = useRef(false);
   const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
+  const [revertAttempts, setRevertAttempts] = useState<Record<string, RevertAttempt>>({});
+  const reverting = useRef(new Set<string>());
   // The replay build has no backend: it never sends a command or starts an agent, and review shows
   // recorded decisions.
   const commands = useMemo<ReturnType<typeof createCommandClient> | null>(
@@ -124,6 +129,67 @@ export function App() {
   const onOpenQueue = useCallback(() => {
     setView((current) => viewReducer(current, { type: "open", tab: surfaceTab(current, "inbox") }));
   }, []);
+  const onOpenSettings = useCallback(() => {
+    setView((current) =>
+      viewReducer(current, { type: "open", tab: surfaceTab(current, "settings") }),
+    );
+  }, []);
+  const onSetMergeMode = async (mode: MergeMode) => {
+    const current = selectMergeMode(state);
+    if (
+      !commands ||
+      !current ||
+      current.mode === mode ||
+      settingMode.current ||
+      mergeModePending(state, mergeModeAttempt)
+    )
+      return;
+    settingMode.current = true;
+    const started = { run: state.run, revision: current.revision };
+    setMergeModeAttempt({ ...started, phase: "pending" });
+    try {
+      const response = await commands.setMergeMode({ mode, revision: current.revision });
+      setMergeModeAttempt({ ...started, phase: "pending", responseRevision: response.revision });
+    } catch (error) {
+      setMergeModeAttempt({
+        ...started,
+        phase: "failed",
+        message: commandFailure("Setting the merge mode", error),
+      });
+    } finally {
+      settingMode.current = false;
+    }
+  };
+  const onRevert = async (changeId: string) => {
+    const current = stateStore.getState().state;
+    const view = revertView(current, changeId, revertAttempts[changeId]);
+    if (
+      !commands ||
+      reverting.current.has(changeId) ||
+      view.kind === "none" ||
+      view.kind === "pending" ||
+      view.kind === "reverted"
+    )
+      return;
+    reverting.current.add(changeId);
+    const started: RevertAttempt = {
+      run: current.run,
+      target: view.body,
+      afterSeq: current.lastSeq,
+      phase: "pending",
+    };
+    const record = (attempt: RevertAttempt) => {
+      setRevertAttempts((all) => ({ ...all, [changeId]: attempt }));
+    };
+    record(started);
+    try {
+      await commands.revertChange(changeId, view.body);
+    } catch (error) {
+      record({ ...started, phase: "refused", message: commandFailure("Revert", error) });
+    } finally {
+      reverting.current.delete(changeId);
+    }
+  };
   const onOpenConversation = useCallback((agentId: string) => {
     setView((current) =>
       viewReducer(current, {
@@ -209,7 +275,24 @@ export function App() {
           canReview={(changeId) => openReview(state, view, changeId) !== null}
           onReview={onReview}
           onOpenQueue={onOpenQueue}
+          onOpenSettings={onOpenSettings}
+          onSetMergeMode={
+            commands
+              ? (mode) => {
+                  void onSetMergeMode(mode);
+                }
+              : undefined
+          }
+          mergeModeAttempt={mergeModeAttempt}
           attempts={attempts}
+          revertAttempts={revertAttempts}
+          onRevert={
+            commands
+              ? (id) => {
+                  void onRevert(id);
+                }
+              : undefined
+          }
           onDecide={commands ? onDecide : undefined}
           replayOf={replayBuild ? replaySource.kind : undefined}
           replayLabel={replayBuild ? replaySource.label : undefined}

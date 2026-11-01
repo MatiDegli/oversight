@@ -2,13 +2,15 @@ import { expect, test } from "@playwright/test";
 
 import { engaged, installHolds, release } from "./holds";
 import { holds } from "./level2-log";
-import { interceptCommands } from "./level2-support";
+import { interceptCommands, removeRoutes } from "./level2-support";
 import {
   editorAssets,
   expectNoEditorBeforeGraph,
   implementation,
   recordEditorStartup,
 } from "./editor-startup-support";
+
+test.afterEach(async ({ page }) => removeRoutes(page));
 
 for (const idle of ["native", "timeout fallback"] as const) {
   test(`watch prefetches the shared editor once after drawing, using ${idle}`, async ({ page }) => {

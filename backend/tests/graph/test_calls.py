@@ -1,4 +1,4 @@
-"""Call and import resolution (AGENTS.md, "Graph rules"; docs/proposal.md, section 4.3)."""
+"""Call and import resolution (ARCHITECTURE.md, "Graph rules"; docs/proposal.md, section 4.3)."""
 
 from pathlib import Path
 

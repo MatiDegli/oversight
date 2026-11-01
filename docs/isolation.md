@@ -146,14 +146,17 @@ of C availability: restored Git tampering suspends rules but permits isolated su
 | Agent run_tests | best_effort (default) | Isolated | Network open |
 | Proposal suite | best_effort (default) | Isolated | Network open |
 | Human combined suite, Ask me | best_effort (default) | Isolated | Network open |
-| Rules and Revert (future callers) | required | Isolated | Refused with reason |
+| Rules combined suite and Revert | required | Isolated | Refused with reason |
+| Measured-cone base/head suites | required | Isolated | Evidence unavailable |
 | Added-test base/head probes | required | Isolated | Skipped; facts unknown |
 
-The only changed changes-module call site is `_probes._run`, which passes
-`isolation="required"`. Unavailable probes publish no suite execution and retain unknown
-facts with an unavailable diagnostic. Required refuses before suite capture or execution;
-it never falls back. The merge-mode availability port is intentionally left for a later PR:
-its consumer must consult rules_available before enabling rules or Revert.
+Required isolation is passed by `changes/_probes.py:_run`, `_merge.py:combined_tests_pass`
+(for rules), `_measured.py:_execute` and `_revert.py`. Unavailable added-test probes publish no
+suite execution and retain unknown facts with an unavailable diagnostic. Required refuses before
+suite capture or execution; it never falls back. `changes/_mode.py:start_capability` and
+`_revert_port.py:RevertPort.revert` consult rules_available before admitting rules or Revert.
+Rules activation is still closed by `RULES_ACTIVATION = False`; wired capability checks do not
+mean automatic merges are enabled.
 
 A session born without C never enables C later, rules, their probes or Revert. Ask me needs
 no acceptance step: startup emits a log warning and an existing nonfatal `error` event from

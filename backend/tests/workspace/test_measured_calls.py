@@ -266,10 +266,12 @@ def test_wait():
     try:
         async with asyncio.timeout(10):
             for _ in range(1000):
-                if pid_file.exists():
+                if pid_file.exists() and (pid_text := pid_file.read_text().strip()):
                     break
                 await asyncio.sleep(0.01)
-        pid = int(pid_file.read_text())
+            else:
+                pytest.fail("Pytest did not write non-empty PID text")
+        pid = int(pid_text)
         task.cancel()
         with pytest.raises(SuiteInterrupted) as caught:
             await task

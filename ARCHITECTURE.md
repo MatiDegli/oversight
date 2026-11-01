@@ -1,9 +1,11 @@
 # Architecture
 
-This document describes main at the level 2 close on Tue Oct 27, 2026,
-and the current validation tooling.
+This document describes main on Oct 31, 2026, including level 3 wiring
+and the current validation tooling. Levels 1 and 2 closed on Oct 27.
 
 ## Startup and serving
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
 
 [app.py](backend/src/oversight/app.py) composes the Python 3.12 FastAPI backend.
 [settings.py](backend/src/oversight/settings.py) reads configuration from the environment
@@ -15,7 +17,7 @@ without calling a provider. Health reports missing settings without exposing the
 - `make dev` starts FastAPI with reload and Vite. Both processes receive resolved `OVERSIGHT_PORT`
   (8710) and `OVERSIGHT_VITE_PORT` (launcher fallback 5710), with environment precedence over `.env`.
   Vite uses strictPort and proxies API routes while preserving Host and Origin.
-  The SSE proxy streams without buffering.
+  The SSE proxy streams without compression or buffering.
 - `make demo` checks setup, builds the frontend and serves it with the API on one origin.
   `DEMO_PORT` defaults to 8710; demo explicitly clears `OVERSIGHT_VITE_PORT`, overriding `.env`.
   Starting the server spends no model credits.
@@ -46,12 +48,20 @@ Main lives at `.runtime/workspace/`; product agent worktrees live at
 `.runtime/worktrees/{agent_id}`, outside the parsed main tree. Run logs, the spend ledger
 and the separate demo test environment survive this reset.
 
+The backend runs `git init` in the copied workspace. `.runtime/` is gitignored.
+The demo template is plain files with no git of its own: a Python project written here,
+with 4–6 modules, 20–40 functions and tests, and one central function with many callers.
+After the hackathon, `desktop/` will hold a Tauri shell with the backend inside WSL,
+before the native Windows and macOS backend ports. The demo runs in the browser.
+See [Opening the person's own repository](docs/own-repository.md) for its separate plan and rules.
+
 ## Data flow
 
 1. `LiveRun` publishes `run.started` with model profiles, slots, prompt version, limits and
    budget. It scans main and publishes `graph.snapshot` with the saved demo positions.
 2. `POST /agents` checks the task, model, setup, spend brake and slot availability.
-   Slots A and B can run in parallel, each with its own worktree and model client.
+   Up to six slots (A–F), four by default, can run in parallel, each with its own
+   worktree and model client.
    A slot stays held until its change is merged or rejected, including Stop/discard.
 3. `AgentRun` drives `ModelClient`. Muse Spark uses the official OpenAI SDK at Meta's
    endpoint in Contributor mode. Muse Spark Open uses the same interface at Baseten's
@@ -65,10 +75,11 @@ and the separate demo test environment survive this reset.
    a unique old-text match and the hash from the agent's last read. Tests use the demo's
    own environment and a fixed command with a timeout. Status follows tool execution and
    human run controls, never model text.
-5. Every completed tool call emits `agent.step`. Read focus precedes the step. Successful
-   edits publish `change.updated`, edit focus and then the step. Updates carry full original
-   and modified file contents, author and a pending graph overlay. Model replies produce
-   `usage.tick`; the loop does not stream model text.
+5. Every completed tool call emits `agent.step`. Read focus precedes the step; `list_files`
+   sends none, and `search` focuses only its first five matching nodes. Successful edits publish
+   `change.updated`, edit focus and then the step. Updates carry full original and modified file
+   contents, author and a pending graph overlay. Model replies produce `usage.tick`; the loop
+   does not stream model text.
 6. The event store assigns increasing `seq` values and timestamps. One writer batches
    SQLite transactions and exposes events only after commit. SQLite uses WAL and a busy
    timeout. Each run has its own append-only database. Disk work runs in a thread.
@@ -121,6 +132,17 @@ but stop contributing pending marks.
 
 ## Backend module contracts
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The backend uses Python 3.12, uv and FastAPI. The graph core parses Python `ast` into nodes
+and edges. Changed files are reparsed after every edit, merge or discard, driven by each
+file's content hash.
+For the person's own repository, a watcher only triggers that same rescan path.
+The runtime's small client interface allows the provider format to be swapped. Model and
+endpoint are set per agent: agent B may use Muse Spark Open
+(`meta-models/muse-spark-open-1026`) through Baseten's Chat Completions API.
+The event store uses stdlib `sqlite3`.
+
 Cross-package imports use each package's `__init__.py`. The import-linter rules in
 [pyproject.toml](pyproject.toml) enforce `app -> api -> changes -> agents -> graph | events |
 workspace`. The bottom three packages are independent. Protected contracts keep package
@@ -128,8 +150,9 @@ internals private. Contracts import neither the backend nor web/model frameworks
 may import OpenAI; only app and API may import FastAPI or Starlette.
 
 - [API](backend/src/oversight/api/__init__.py) exports `Commands`, route construction, error
-  mapping and static serving. `Commands` covers start, stop, approve, reject, request_changes,
-  get_file, save_file and rescan. The package owns HTTP responses and SSE framing.
+  mapping and static serving. `Commands` covers, for example, start, stop, approve, reject,
+  request_changes, get_file, save_file and rescan; its full interface is in `api/commands.py`.
+  The package owns HTTP responses and SSE framing.
 - [Agents](backend/src/oversight/agents/__init__.py) exports the loop, model interface, SDK
   client, scripted fake client, tool schemas, profiles and usage ledger. Provider calls set
   reasoning explicitly. Retries use backoff and jitter for 429 and 5xx. Unverified profiles
@@ -175,6 +198,75 @@ Its facade delegates to private stages:
 `changes-no-facade-backedge` prevents helpers from importing `_manager`, including typing imports.
 The [stage plan](docs/plans/changes.md#1-facade-and-callers) records the split and fidelity checks.
 
+### Graph rules
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+- A call is "exact" only when its name resolves to a single function; everything else is
+  "possible", with its reason.
+- Methods are nodes from day one. A function's range starts at its first decorator.
+- Comprehensions, generator expressions, lambdas and nested functions are not nodes. Their
+  calls belong to the nearest enclosing function or method, because it runs them or returns
+  them. Names resolve in the nested scope first: a parameter, a comprehension target or a
+  local assignment hides a module-level function of the same name. Exactness follows
+  resolution only: a call that may not run, such as one inside an `if`, is still "exact"
+  if its name binds to one function.
+- Calls at module level belong to the module node; calls in a class body belong to the class node.
+- Imports resolve: relative imports differ for a package `__init__.py` and a plain module,
+  and `import a.b` binds the name `a`. Star imports, rebound names, attribute calls on unknown
+  receivers, and methods a framework calls by name are "possible".
+- Node ids never include line numbers. Two definitions with the same qualified name, such as
+  a property getter and setter, get a suffix.
+
+### Impact cone
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The cone is a reverse BFS over call edges. The data flow above specifies its depth and
+node-count bounds, omissions and agent-version proposals; DESIGN.md's Impact cone section
+specifies the UI's "+12 omitted by depth" and "possibly affected", never a complete list.
+
+### Agent tools
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The data flow above specifies the six tools, per-call steps, read and edit focus, the first
+five search matches, unique-match and last-read-hash edit checks, and the fixed test command.
+A worktree does not isolate: it shares `.git/config` and the stash, hence the no-shell rule.
+Read focus uses read mode; edit focus uses edit mode.
+
+- `read_file` returns numbered lines and has a size cap; long files are read by line range.
+  Prefer few, large reads of whole functions: every step resends the full history.
+- If `edit_file` fails because the old text does not appear exactly once or the file changed
+  since the agent last read it, the error goes back to the model.
+- No tool returns the content of an obvious secret file, even a tracked one:
+  `.env*`, `*.pem`, `*.key`, `id_*`. The maintainer's 2026-10-31 secret-filter decision in
+  DECISIONS.md narrows `id_*` to SSH identity names.
+- The test environment is never the backend's virtual environment.
+- Tool results carry no extra metadata.
+
+The Agents module contract above specifies the four-identical-results and six-failures stop
+limits; the data flow specifies that status comes from tool execution, never model text.
+
+### Pending changes, approval and conflicts
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+Each agent records its base commit. The data flow above specifies combined-result tests
+when main moved, Request changes keeping the worktree and comment, and review edits with person attribution
+that invalidate the agent's earlier read.
+If a merge conflicts or tests fail, mark the change. The person chooses between asking the
+agent to redo it on the new base and rejecting it. DESIGN.md's Review panel and Live diff
+and file view sections specify review-only editing while the agent is idle.
+
+### Test coverage badges
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The level 3 "no tests" badge comes from coverage: `run_tests` runs with pytest-cov (MIT),
+and covered lines map to functions by their line ranges. If that is not ready, the badge
+reads "no test calls it" and is computed from the call graph.
+
 ### Usage and the spend brake
 
 [usage.py](backend/src/oversight/agents/usage.py) owns pricing, the in-memory usage ledger
@@ -190,6 +282,12 @@ Baseten and fake calls do not debit Meta's credit ledger.
 
 ## Frontend module contracts
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The frontend uses React, strict TypeScript, Vite and pnpm. Monaco's workers are configured
+in Vite. Agent and review panels use Tailwind CSS; Cytoscape and Monaco keep their own
+styling. Icons come from lucide-react.
+
 [eslint.config.js](frontend/eslint.config.js) requires cross-feature imports through `index.ts`,
 including dynamic imports. Only transport may use `fetch` or `EventSource`. Only graph imports
 Cytoscape/fcose; only editor imports Monaco. State cannot import React or React DOM.
@@ -200,8 +298,8 @@ Cytoscape/fcose; only editor imports Monaco. State cannot import React or React 
   It checks event envelopes; generated TypeScript types do not validate payloads at runtime.
 - [App](frontend/src/app/index.ts) composes panels, owns transport lifetime and local view
   selection, and keeps file drafts and saves across panel changes.
-- [Agents](frontend/src/agents/index.ts) presents both slots, status, steps, per-agent spend,
-  task entry and Stop and discard.
+- [Agents](frontend/src/agents/index.ts) presents the offered slots A–F (four by default), status, steps,
+  per-agent spend, task entry, Pause/Resume and Stop and discard.
 - [Review](frontend/src/review/index.ts) presents proposals, impact and the three decisions.
   Accepted decisions stay pending until an event or error settles them. Unsaved review edits
   block Approve and Request changes until saved or discarded. Approve has no keyboard shortcut.
@@ -241,22 +339,41 @@ It adds no server events.
 
 ## Wire contracts and routes
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
 Pydantic models in [contracts/src/oversight_contracts](contracts/src/oversight_contracts) are the
 source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScript with pinned
-json-schema-to-typescript. `make check-contracts` compares both generated outputs byte for byte.
+TypeScript and json-schema-to-typescript. `make check-contracts` compares both generated
+outputs byte for byte, including in CI.
 
-Live events are `run.started`, `graph.snapshot`, `graph.delta`, `agent.status`, `agent.step`,
-`agent.message`, `agent.focus`, `change.updated`, `change.proposed`, `change.resolved`, `usage.tick` and `error`.
+The 24 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
+`agent.status`, `agent.step`, `agent.message`, `agent.focus`, `change.updated`, `change.proposed`,
+`change.resolved`, `usage.tick` and `error`.
+The complete `ServerEvent` union is in `contracts/src/oversight_contracts/events.py`.
 Every envelope has `seq`, `ts`, `type` and `payload`.
+`run.started` includes the run id, exact model, prompt version and limits.
+`agent.status` includes `revising` after Request changes and `paused` in level 3.
+`agent.step` is emitted once per tool call when it ends, carrying the step number, tool,
+short summary, result (`ok` or `error`) and duration; it feeds the agent card.
+The full contents in `change.updated` are required by Monaco's DiffEditor; replay must never
+depend on worktrees that no longer exist. In addition to the proposal fields in the data flow,
+`change.proposed` carries the summary and each cone entry's node and distance.
+`change.resolved` carries the decision (`approved`, `changes_requested` or `rejected`), the person's comment and the
+merge result (`merged` or `conflict`). Never one event per token: model text is batched
+every few hundred milliseconds and SQLite writes are batched.
+Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
+gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text, masked before storage and withheld by default in exports.
 
-Live routes implement `POST /agents`, `POST /agents/{agent_id}/stop`,
+Live routes implement, for example, `POST /agents`, `POST /agents/{agent_id}/stop`,
 `POST /agents/{agent_id}/message`, `POST /agents/{agent_id}/pause`,
 `POST /agents/{agent_id}/resume`,
 `POST /changes/{change_id}/approve`, `POST /changes/{change_id}/reject`,
 `POST /changes/{change_id}/request-changes`, `POST /grants/{grant_id}/revoke`, `GET /files`,
 `PUT /files` and `POST /graph/rescan`.
 `GET /graph`, `GET /health` and `GET /events` provide graph, readiness and events.
+The complete route registrations are in `api/commands.py` and `api/routes.py` under
+`backend/src/oversight/`; request and response models are in `contracts/`.
 
 | Read route (live and replay) | Response |
 | --- | --- |
@@ -268,10 +385,13 @@ The manager's public eligibility check admits only working changes; the drive al
 controls once proposal or halt finalization begins. Preparation/decisions, review, conflicts,
 broken and closed changes return 409 `wrong_state`; unknown agents return 404 `not_found`.
 All three routes answer 501 in replay before reading the body. No lead or agent tool exposes
-these controls, and there is no frontend control in this package.
+these controls. Pause and Resume are mounted on the agent card. The Conversation
+panel and its message composer are mounted as a focus-panel tab by
+`frontend/src/app/shell/FocusPanel.tsx`, opened from the agent card.
 
-Messages queue in arrival order until the next safe model-call boundary. Text lives only in
-memory (the queue and retained conversation); no event or SSE envelope carries it. Admission
+Messages queue in arrival order until the next safe model-call boundary. Accepted text persists
+in `agent.message`, masked before storage; the agent receives the original. Publication exports
+withhold message text by default, with explicit inclusion available. Admission
 refuses blank text, more than 4,096 characters, more than 32 queued messages, or more than
 8,192 accepted UTF-8 bytes over the agent's lifetime with 422 `invalid_request`. Delivery,
 closing and revision never replenish that lifetime budget.
@@ -285,19 +405,24 @@ worktree, so review decisions and review writes remain refused. The wait holds n
 decisions retain main-then-worktree lock order. Stop closes the control and cancels the wait,
 then follows the existing discard path: stopped status before the rejected resolution.
 
-`GET /impact`, merge-mode and plan routes still return 501.
-The 1.4 reservations also include tree, history, queue, leads, and change
-review. `GET /tree?agent=` is shape-only: no traversal or hashing runs yet.
+`GET /impact`, merge-mode, plan, queue, history and lead routes are implemented.
+`GET /tree?agent=` traverses the selected workspace and returns its file inventory.
+Only the `NOT_BUILT` routes in `api/commands.py` remain unconditional 501 responses:
+`POST /dictation` and `POST /changes/{change_id}/review`.
 The Revert route answers 202 after synchronous admission, loads its target from this run's
 committed log, and reports its outcome only through events.
-Five more event types are reserved: change.reviewed, change.facts_recorded, tests.executed,
-queue.updated and lead.status. Transport and reducer consume their sequences.
+`change.reviewed` (when enabled), `change.facts_recorded`, `tests.executed`,
+`queue.updated` and `lead.status` have live producers, as do `change.assessed`,
+`merge_mode.changed` and `plan.updated`. Publication does not imply that rules activation is open.
 Approve, Reject and Request changes require the revision and head shown by the review render;
 revision zero is limited to rejecting the published agent base before any proposal.
 During a rules decision, the person’s Reject or Request changes is admitted until rules
 authorization starts and cancels the rules attempt; from that cutoff it answers 409.
 Each confirmed main commit parks idle armed rules waits; once the graph snapshot holds that
 commit, a new generation renews them against that main with the original absolute deadline.
+A queued rules attempt finding an announced newer main publishes no notice and, once its decision
+ends, a new generation re-assesses against that main with the original deadline, a fresh combined
+suite and fresh spend; every in-flight outcome closes following.
 Live resolutions record principal and head explicitly. The writer validates each frozen
 candidate independently before SQL admission. EventRejected is terminal for that delivery;
 valid neighbors still commit with contiguous sequences. A rejected post-effect resolution
@@ -312,7 +437,8 @@ Backend replay returns 501 for all command routes, including file reads and resc
 Scripted fake models spend no credits. Fixture tests validate every recorded envelope against
 Pydantic `ServerEvent`, check seq order and reject absolute paths.
 
-`make check` runs Python, contracts, frontend and secrets groups in parallel. It runs Ruff,
+`make check` runs five groups in parallel: Python, contracts, frontend, secrets and
+third-party notices (`check-notices`). It runs Ruff,
 Pyright, import-linter, pytest, strict TypeScript, ESLint, Prettier, Vitest, boundary tests and
 gitleaks. CI runs `check-ci` with gitleaks in its own job, then smoke checks. The browser job
 runs `make e2e` over the static replay build and Monaco/graph browser tests. Browser tests and
@@ -325,15 +451,23 @@ approval and main file edits. It also checks static serving, shutdown, subproces
 release of the runtime lock. It is outside `make check`.
 
 The static build, `pnpm -C frontend build --mode replay`, needs no backend. It bundles a verified
-real recording when present, otherwise a labeled fixture. `make record` exports a finished real
-run with a provenance sidecar. The build checks provenance, contracts and secrets. No real run
-is bundled yet. `make e2e` runs two Playwright tests over level 1 and scripted level 2 replays.
+real recording from `fixtures/events/recorded-demo.jsonl` and its provenance sidecar; the public
+build requires both. UI tests explicitly select their fixtures. `make record` exports a finished
+real run with a provenance sidecar. The build checks provenance, contracts and secrets.
+`make e2e` runs 15 Playwright tests in eight spec files, including level 1 and scripted level 2
+replays, practice, Files, editor startup/prefetch, subpath serving and third-party notices.
 
-## Private level 3 cores
+## Level 3 wiring and remaining private cores
 
-Main contains `changes/_policy`, `_zones`, `_runrule`, `_beforeafter`, `_reviewfacts` and
-`agents/_crossreview`. They cover merge rules, plan zones, test-run evidence, before/after
-results, review facts and cross-review parsing. They are private and not wired into the live
-flow. Reserved `change.assessed`, `merge_mode.changed` and `plan.updated` events only advance
-the frontend sequence. Contracts are at 1.4.0; delivery A was approved by the maintainer, 2026-10-27.
-Level 3 wiring starts after this level 2 close.
+Contracts are at 1.11.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+run-rule findings, before/after test evidence and optional cross-review are wired into the live
+flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
+Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,
+but `changes/_mode.py` keeps rules activation closed pending approval. Every merge today still
+requires the person's decision. Plans, dependency dispatch, the queue and the lead runtime are
+wired; the lead requests plans and leaves their approval to the person.
+`merge_mode.changed` sets the merge mode that the status line and the Settings tab show.
+
+`changes/_reviewfacts` remains a private unwired core. The `_zones` and `_partition` algorithms
+also remain outside live plan production; the public partition export does not wire a producer.
+Future contract versions take the next free version at landing.

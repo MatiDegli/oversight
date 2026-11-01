@@ -123,7 +123,12 @@ same `--labels` and `--labels-sha256` pin as `report`: `model_sensitive` counts 
 cases whose `let_through` flips. This read-only comparison spends nothing, makes no model call,
 and reports the maintainer's fixed paid-run gate and failures without starting a run.
 
-## Future paid gate and durable accounting
+## Paid gate and accounting
+
+A paid detection run took place on 2026-10-30 (October 29, about 22:30–22:45 ART), with total
+spend US$0.0513 including pilots; every arm failed its criteria. The later H1 paid pair was
+declined after the free sensitivity gate refused. See [recorded results](RESULTS.md); this
+historical run does not authorize another paid execution.
 
 Paid execution additionally requires `--paid`, finite positive Meta and Baseten tariffs,
 `0 < --cap-usd <= 20`, an explicit `--env-file /path/to/.env`, and `--demo-python` in the demo's

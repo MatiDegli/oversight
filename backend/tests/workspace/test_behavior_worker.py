@@ -174,7 +174,7 @@ async def test_exception_full_message_fingerprint_survives_clipping(tmp_path):
 async def test_fingerprint_timeout_excludes_uncertain_result(tmp_path):
     # Leave time for the tiny import; the call cannot finish under any alarm budget.
     body = "def f():\n    while True: pass\n"
-    result = await invoke(tmp_path, body, ["((), {})"], timeout_s=0.2)
+    result = await invoke(tmp_path, body, ["((), {})"], timeout_s=0.3)
     assert result["problem"] is None, f"Expected a successful import before the call: {result}"
     assert result["results"][0]["kind"] in ("timed_out", "unrepresentable")
 

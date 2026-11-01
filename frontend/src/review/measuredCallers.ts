@@ -1,10 +1,11 @@
 import type { MeasuredCaller } from "@contracts";
 import type { State } from "../state";
 import { factsForRevision } from "./factsForRevision";
+import { noDifferenceSentence } from "./behaviorEvidence";
 
 export const callerOutcomes = {
   changed: "Result change measured",
-  unchanged: "No difference measured on these inputs",
+  unchanged: noDifferenceSentence,
   not_compared: "Possible, no change measured",
 } as const;
 

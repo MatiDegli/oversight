@@ -110,8 +110,7 @@ async def test_republication_preserves_calls_and_latest_other_producer_data(h, m
         job.capture.target,
         {
             "review_cards": [card.model_dump()],
-            "shape": [],
-            "shape_complete": True,
+            "shape_complete": False,
         },
     )
     await cards._finish(job)
@@ -136,7 +135,7 @@ async def test_republication_preserves_calls_and_latest_other_producer_data(h, m
     )
     assert len(h.log) == events
     assert len(client.calls) == 1
-    assert latest.shape_complete and latest.review_cards[0].answer == "yes"
+    assert latest.shape_complete is False and latest.review_cards[0].answer == "yes"
     assert job.facts == latest
 
 
@@ -190,8 +189,8 @@ async def test_no_confirmed_measurement_no_classification(h, monkeypatch):
         {"edited_paths": ["shop/other.py"]},
         {"behavior_diff": None},
         {"measured_cone": []},
-        {"shape": []},
-        {"shape_complete": True},
+        {"shape": None},
+        {"shape_complete": False},
         {"complete": True, "problems": []},
     ],
 )
@@ -348,10 +347,10 @@ async def test_concurrent_other_producer_update_survives_classification(h, monke
     async with asyncio.timeout(5):
         await client.entered.wait()
     [job] = cards.jobs.values()
-    await h.manager.update_facts(job.capture.target, {"shape": [], "shape_complete": True})
+    await h.manager.update_facts(job.capture.target, {"shape_complete": False})
     client.release.set()
     await settled(cards)
-    assert job.facts is not None and job.facts.shape_complete and job.facts.review_cards
+    assert job.facts is not None and job.facts.shape_complete is False and job.facts.review_cards
 
 
 async def test_same_revision_cannot_reset_budget_under_different_main_context(h, monkeypatch):

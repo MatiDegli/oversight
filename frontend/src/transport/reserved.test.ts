@@ -16,6 +16,7 @@ describe("reserved level 3 events", () => {
     const next = applyEvent(state, event);
     expect(next).toEqual({
       ...state,
+      mergeMode: event.type === "merge_mode.changed" ? event.payload : state.mergeMode,
       lastSeq: event.seq,
       clock: event.ts,
       gap: false,
@@ -43,6 +44,7 @@ describe("reserved level 3 events", () => {
     await replay.ready;
     expect(store.getState().state).toEqual({
       ...state,
+      mergeMode: { mode: "merge_when_safe", revision: 1 },
       lastSeq: state.lastSeq + additions.length,
       clock: additions.at(-1)?.ts,
       decisionEvents: [
