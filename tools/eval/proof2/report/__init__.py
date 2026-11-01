@@ -7,6 +7,7 @@ from oversight.events import LIST_PRICES
 
 from .arms import build_arms
 from .inputs import load_inputs
+from .measures import measures
 from .output import write_lines
 from .spend import add_spend
 
@@ -31,4 +32,4 @@ def write_report(log: Path, results: Path, out: Path | None = None) -> None:
     )
     revisions, changes, arms = build_arms(inputs)
     add_spend(inputs, changes, arms)
-    write_lines([meta, *revisions, *changes, *arms], out)
+    write_lines([meta, *revisions, *changes, *measures(inputs, revisions), *arms], out)

@@ -125,6 +125,7 @@ def test_cli_output(tmp_path, monkeypatch, capsys):
 @pytest.mark.parametrize("command", ["check", "validate"])
 def test_lazy_import(monkeypatch, command):
     import builtins
+    import importlib
 
     from tools.eval.proof2 import __main__ as cli
 
@@ -138,6 +139,7 @@ def test_lazy_import(monkeypatch, command):
         return {"exit_code": 0} if command == "check" else []
 
     monkeypatch.setattr(builtins, "__import__", guarded)
+    importlib.reload(cli)
     monkeypatch.setattr(cli, command, fake)
     monkeypatch.setattr(
         sys,
@@ -189,6 +191,10 @@ def test_correctness_and_selections(tmp_path, capsys):
         ({"status": "known", "ids": []}, {"status": "known", "ids": []}),
         ({"status": "not_applicable", "ids": []}, {"status": "not_applicable", "ids": []}),
     ]
+
+
+def test_change_records_and_arm_counts(tmp_path, capsys):
+    rows = report(tmp_path, capsys)
     changes = [r for r in rows if r["record"] == "change"]
     assert [
         (
@@ -379,3 +385,99 @@ def test_zero_and_unattributed_cost(tmp_path, capsys):
         )
         assert without["usd_per_correct"] is None
         assert without["problems"] == ["1 agent ticks without a change"]
+
+
+def test_e1_e2(tmp_path, capsys):
+    rows = report(tmp_path, capsys)
+    e1 = next(r for r in rows if r["record"] == "E1")
+    assert (e1["n"], e1["duplicate_reviews"]) == (3, 0)
+    assert [
+        (c["verdict"], c["hidden_pass"], c["hidden_fail"], c["hidden_unknown"]) for c in e1["cells"]
+    ] == [
+        ("clean", {"count": 2, "n": 3}, {"count": 0, "n": 3}, {"count": 0, "n": 3}),
+        ("changes_requested", {"count": 0, "n": 3}, {"count": 1, "n": 3}, {"count": 0, "n": 3}),
+        ("unknown", {"count": 0, "n": 3}, {"count": 0, "n": 3}, {"count": 0, "n": 3}),
+    ]
+    assert e1["review_cost"] == dict(calls=3, usd=0.15, known_usd=0.15, coverage="complete")
+    assert next(r for r in rows if r["record"] == "E2") == dict(
+        record="E2",
+        changes_with_requests=1,
+        rounds=1,
+        requests_by=dict(person=0, rules=0, cross_review=1, lead_agent=0, unrecorded=0),
+        regress_vs_base=dict(checks=1, unknown_revisions=0),
+        regress_vs_previous=dict(checks=0, unknown_revisions=0),
+        hidden_by_round=[
+            {"round": 0, "pass": 1, "fail": 1, "unknown": 0},
+            {"round": 1, "pass": 1, "fail": 0, "unknown": 0},
+        ],
+        findings=dict(status="not_built"),
+    )
+    rows = report(tmp_path, capsys, results=[r for r in receipts() if r.get("revision") != 2])
+    e1 = next(r for r in rows if r["record"] == "E1")
+    assert e1["cells"][0]["hidden_pass"] == {"count": 1, "n": 3}
+    assert e1["cells"][0]["hidden_unknown"] == {"count": 1, "n": 3}
+    e2 = next(r for r in rows if r["record"] == "E2")
+    assert e2["hidden_by_round"][1] == {"round": 1, "pass": 0, "fail": 0, "unknown": 1}
+    assert (
+        e2["regress_vs_base"]["unknown_revisions"],
+        e2["regress_vs_previous"]["unknown_revisions"],
+    ) == (1, 1)
+
+
+def test_duplicate_reviews(tmp_path, capsys):
+    events = [*scenario(), event("change.reviewed", 142)]
+    rows = report(tmp_path, capsys, renumber(events))
+    e1 = next(r for r in rows if r["record"] == "E1")
+    assert (e1["n"], e1["duplicate_reviews"]) == (3, 1)
+    assert e1["cells"][0]["hidden_fail"] == {"count": 0, "n": 3}
+    assert e1["cells"][1]["hidden_fail"] == {"count": 1, "n": 3}
+    revision = next(r for r in rows if r["record"] == "revision")
+    assert revision["verdicts"] == ["changes_requested", "clean"]
+
+
+def test_ten_reviewed_pairs(tmp_path, capsys):
+    events = [
+        e
+        for i in range(1, 11)
+        for e in (event("change.proposed", change=i), event("change.reviewed", change=i))
+    ]
+    results = [
+        {**receipts()[1], "change_id": f"change-{i}", "result": {"exit_code": 0}}
+        for i in range(1, 11)
+    ]
+    rows = report(tmp_path, capsys, renumber(events), results)
+    e1 = next(r for r in rows if r["record"] == "E1")
+    assert e1["n"] == 10
+    assert e1["cells"][0]["hidden_pass"] == {"count": 10, "n": 10, "pct": 100.0}
+    assert e1["cells"][2]["hidden_unknown"] == {"count": 0, "n": 10, "pct": 0.0}
+    assert [r["change_id"] for r in rows if r["record"] == "change"][-2:] == [
+        "change-9",
+        "change-10",
+    ]
+
+
+@pytest.mark.parametrize("code, hidden", [(None, "unknown"), (0, "pass"), (1, "fail")])
+def test_unknown_verdict_is_separate(tmp_path, capsys, code, hidden):
+    events = renumber(
+        [
+            event("change.proposed"),
+            event("change.reviewed", verdict="unknown", complete=False, problems=["unavailable"]),
+        ]
+    )
+    results = [] if code is None else [{**receipts()[1], "result": {"exit_code": code}}]
+    rows = report(tmp_path, capsys, events, results)
+    e1 = next(r for r in rows if r["record"] == "E1")
+    assert e1["n"] == 1
+    assert e1["cells"][2][f"hidden_{hidden}"] == {"count": 1, "n": 1}
+    assert e1["cells"][0][f"hidden_{hidden}"] == {"count": 0, "n": 1}
+    assert e1["cells"][1][f"hidden_{hidden}"] == {"count": 0, "n": 1}
+
+
+def test_last_merge_and_problem(tmp_path, capsys):
+    events = renumber([*scenario(), event("change.resolved", 142)])
+    rows = report(tmp_path, capsys, events)
+    change = next(r for r in rows if r["record"] == "change")
+    assert change["merged_revision"] == 1
+    arm = next(r for r in rows if r.get("arm") == "with_oversight")
+    assert arm["correct"] == {"count": 1, "n": 3}
+    assert arm["problems"] == ["multiple merged resolutions for change-1"]

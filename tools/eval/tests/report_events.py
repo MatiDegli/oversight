@@ -191,9 +191,9 @@ def receipts() -> list[dict]:
             result=dict(
                 exit_code=0,
                 production_unchanged=True,
-                tests_added=True,
-                candidate_passed=True,
-                mutants_killed=True,
+                new_tests_present=True,
+                new_tests_pass=True,
+                mutation_threshold=True,
             ),
         ),
     ]
