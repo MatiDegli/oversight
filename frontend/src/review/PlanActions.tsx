@@ -26,9 +26,11 @@ export default function PlanActions({
   const wave = firstWaveSize(plan);
   const waiting =
     queue?.detail ??
-    (slots
+    (queue?.state === "queued" && slots
       ? `Needs ${String(wave)} free ${wave === 1 ? "slot" : "slots"}; ${String(slots.held)} of ${String(slots.total)} slots are held.`
-      : "Waiting for slot evidence.");
+      : queue?.state === "queued"
+        ? "Waiting for slot evidence."
+        : null);
   return (
     <div className="plan-content">
       {plan.queued_task_id && (

@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import type { ServerEvent } from "@contracts";
 import { stateStore } from "../state";
-import { DecisionInbox, DecisionContext } from "../review";
+import { chooseReplaySource, replayBuild, replaySource } from "../transport";
 import { App } from "./App";
 import {
   leadActionsBase,
@@ -26,10 +26,8 @@ function update(plan: Partial<typeof orderPlan>, queue?: Partial<typeof queueIte
   emit([{ seq: 0, ts: "", type: "plan.updated", payload: { ...orderPlan, ...plan } }]);
 }
 stateStore.getState().applyEvents(leadActionsBase);
-let proposedState = stateStore.getState().state;
 function propose() {
   emit([...planRequest(cartPlan, 2), ...planRequest(orderPlan, 3)]);
-  proposedState = stateStore.getState().state;
 }
 let runs = 0;
 function restart(slots = 2) {
@@ -51,7 +49,6 @@ function restart(slots = 2) {
 }
 Object.assign(window, {
   leadActions: {
-    readonly,
     emit,
     update,
     propose,
@@ -67,12 +64,13 @@ const root = document.getElementById("root");
 if (!root) throw new Error("Missing fixture root");
 const appRoot = createRoot(root);
 appRoot.render(<App />);
-export function readonly() {
-  appRoot.render(
-    <DecisionContext value={{ replayOf: "hand-written fixture" }}>
-      <DecisionInbox state={proposedState} />
-    </DecisionContext>,
+// Keep App's real replay capability gate; only the session's evidence source is a fixture.
+if (replayBuild) {
+  Object.assign(
+    replaySource,
+    chooseReplaySource(null, leadActionsBase.map((event) => JSON.stringify(event)).join("\n")),
   );
+  propose();
 }
 
 declare global {
@@ -82,7 +80,6 @@ declare global {
       update: typeof update;
       propose: typeof propose;
       restart: typeof restart;
-      readonly: typeof readonly;
       cartPlan: typeof cartPlan;
       orderPlan: typeof orderPlan;
       fourthTask: typeof fourthTask;

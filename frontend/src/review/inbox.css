@@ -35,11 +35,10 @@
   padding: var(--spacing-lg) var(--spacing-overlay);
   border-bottom: 1px solid var(--divider);
 }
-.inbox-count {
-  font-family: var(--code-font);
-  font-size: 64px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+.decisions-inbox .inbox-heading h2 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 .inbox-entries,
 .decision-card-body {

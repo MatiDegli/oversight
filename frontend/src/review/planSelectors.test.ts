@@ -1,3 +1,4 @@
+import type { Plan, ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 import { applyEvent, createInitialState } from "../state";
 import log from "../../../fixtures/events/handwritten-lead-plans.jsonl?raw";
@@ -72,4 +73,77 @@ const queueTask = () => ({
   depends_on: [],
   state: null,
   agent_id: null,
+});
+
+const source = log.trim().split("\n").map(parseEvent);
+const leads = leadActionsBase.filter((event) => event.type === "lead.status");
+const lead = leads.at(-1);
+if (!lead) throw new Error("Missing lead");
+function retained(updates: ServerEvent[], base = leadActionsBase) {
+  return selectRetainedPlans(
+    [...base, ...updates]
+      .map((event, index) => ({ ...event, seq: index + 1 }))
+      .reduce(applyEvent, createInitialState()),
+  );
+}
+const planUpdate = (plan: Partial<Plan>): ServerEvent => ({
+  ...proposal,
+  payload: { ...orderPlan, ...plan },
+});
+
+it("retains a real starting plan outside decisions while dispatching", () => {
+  const result = retained([
+    planUpdate({ revision: 2, state: "starting", queued_task_id: "queue-test" }),
+  ]);
+  expect(result.queued.map((event) => event.payload.state)).toEqual(["starting"]);
+});
+
+it("keeps all requested plans after a later null attachment and rejects a foreign author", () => {
+  const result = retained([
+    planUpdate({ revision: 2, queued_task_id: "queue-test" }),
+    { ...lead, payload: { ...lead.payload, revision: 5, requested_plan_id: null } },
+    planUpdate({ plan_id: "foreign", started_by: "another-lead", queued_task_id: "other" }),
+    { ...lead, payload: { ...lead.payload, revision: 6, requested_plan_id: "foreign" } },
+  ]);
+  expect(result.queued.map((event) => event.payload.plan_id)).toEqual([orderPlan.plan_id]);
+});
+
+it("supports the unique legacy fallback without attributing multiple failed plans", () => {
+  const legacy = [source[0], lead, proposal]
+    .filter((event) => event !== undefined)
+    .map((event) =>
+      event.type === "lead.status"
+        ? { ...event, payload: { ...event.payload, requested_plan_id: null } }
+        : event,
+    );
+  expect(
+    retained([planUpdate({ revision: 2, queued_task_id: "queue-test" })], legacy).queued,
+  ).toHaveLength(1);
+  const failed = planUpdate({ revision: 2, state: "failed" });
+  expect(retained([failed], legacy).failed).toHaveLength(1);
+  expect(
+    retained([failed, planUpdate({ plan_id: "another", state: "failed" })], legacy).failed,
+  ).toEqual([]);
+  expect(
+    retained([planUpdate({ plan_id: "another", queued_task_id: "other" })], legacy).queued,
+  ).toEqual([]);
+});
+
+it("orders retained plans by their first joined evidence, even when requests arrive last", () => {
+  const base = [
+    source[0],
+    planUpdate({ queued_task_id: "queue-test" }),
+    planUpdate({
+      plan_id: "earlier-request",
+      queued_task_id: "other",
+    }),
+    { ...lead, payload: { ...lead.payload, requested_plan_id: "earlier-request" } },
+    lead,
+  ].filter((event) => event !== undefined);
+  const result = retained([planUpdate({ revision: 2, queued_task_id: "queue-test" })], base);
+  expect(result.queued.map((event) => event.payload.plan_id)).toEqual([
+    "earlier-request",
+    orderPlan.plan_id,
+  ]);
+  expect(result.queued.map((event) => event.firstTs)).toEqual([lead.ts, lead.ts]);
 });

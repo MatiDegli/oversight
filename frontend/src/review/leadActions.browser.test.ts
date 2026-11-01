@@ -7,18 +7,52 @@ import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
 let server: ViteDevServer, browser: Browser, html: string, url: string;
+let replayServer: ViteDevServer, replayHtml: string, replayUrl: string;
 beforeAll(async () => {
-  server = await createServer({
-    root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: fileURLToPath(new URL("../../../.shots/lead-actions-cache", import.meta.url)),
-    server: { host: "127.0.0.1", port: 0, strictPort: false },
-  });
-  html = await server.transformIndexHtml(
-    "/",
-    '<!doctype html><html><body><div id="root"></div><script type="module">import "/src/theme/index.css";import "/src/app/leadActions.browser.fixture.tsx";</script></body></html>',
-  );
-  await server.listen();
-  url = server.resolvedUrls?.local[0] ?? "";
+  for (const mode of ["development", "replay"]) {
+    const instance = await createServer({
+      root: fileURLToPath(new URL("../../", import.meta.url)),
+      mode,
+      cacheDir: fileURLToPath(
+        new URL(`../../../.shots/lead-actions-${mode}-cache`, import.meta.url),
+      ),
+      plugins: [
+        {
+          name: "lead-actions-replay-session",
+          enforce: "pre",
+          resolveId(source, importer) {
+            if (
+              mode === "replay" &&
+              source === "./session" &&
+              importer?.endsWith("/src/app/App.tsx")
+            )
+              return "\0lead-actions-replay-session";
+            return null;
+          },
+          load(id) {
+            if (id === "\0lead-actions-replay-session")
+              return "export function startAppSession() { return () => {}; }";
+            return null;
+          },
+        },
+      ],
+      server: { host: "127.0.0.1", port: 0, strictPort: false },
+    });
+    const document = await instance.transformIndexHtml(
+      "/",
+      '<!doctype html><html><body><div id="root"></div><script type="module">import "/src/theme/index.css";import "/src/app/leadActions.browser.fixture.tsx";</script></body></html>',
+    );
+    await instance.listen();
+    if (mode === "replay") {
+      replayServer = instance;
+      replayHtml = document;
+      replayUrl = instance.resolvedUrls?.local[0] ?? "";
+    } else {
+      server = instance;
+      html = document;
+      url = instance.resolvedUrls?.local[0] ?? "";
+    }
+  }
   browser = await launchBrowser({
     webGL: process.env.LEAD_ACTIONS_SHOTS === "1",
     softwareRendering: true,
@@ -26,7 +60,7 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(async () => {
   await browser.close();
-  await server.close();
+  await Promise.all([server.close(), replayServer.close()]);
 });
 
 async function reachable(page: Page) {
@@ -150,6 +184,12 @@ it.each([
       await page.evaluate((t) => {
         document.documentElement.dataset.theme = t;
       }, theme);
+      await chip.click();
+      await expect(page.locator(".inbox-heading h2")).toHaveCSS("font-size", "20px");
+      await expect(page.locator(".inbox-heading h2")).toHaveCSS("font-weight", "700");
+      await expect(page.locator(".inbox-heading h2")).toHaveCSS("line-height", "26px");
+      expect(loaded.filter((u) => /\/(PlanActions|planActions)\./.test(u))).toEqual([]);
+      await page.getByRole("button", { name: "Close tab Decisions" }).click();
       await chip.focus();
       await page.evaluate(() => {
         window.leadActions.propose();
@@ -262,11 +302,28 @@ it.each([
         );
       });
       await expect(queued).toContainText("Waiting for the spending brake to clear");
+      await page.evaluate(() => {
+        window.leadActions.emit([
+          {
+            seq: 0,
+            ts: "",
+            type: "queue.updated",
+            payload: {
+              ...window.leadActions.queueItem,
+              revision: 9,
+              state: "blocked",
+              detail: null,
+            },
+          },
+        ]);
+      });
+      await expect(queued).toContainText("Blocked");
+      await expect(queued).not.toContainText("Needs 2 free slots");
       await queued.getByRole("button", { name: "Take out of the queue" }).click();
       await expect(queued.getByRole("status")).toContainText("queue cancellation evidence");
       expect(requests.at(-1)).toEqual({
         path: "/queue/queue-orders/cancel",
-        body: { revision: 8 },
+        body: { revision: 9 },
       });
       expect(requests).toHaveLength(4);
       await page.evaluate(() => {
@@ -275,7 +332,7 @@ it.each([
             seq: 0,
             ts: "",
             type: "queue.updated",
-            payload: { ...window.leadActions.queueItem, revision: 9, state: "cancelled" },
+            payload: { ...window.leadActions.queueItem, revision: 10, state: "cancelled" },
           },
         ]);
       });
@@ -287,16 +344,18 @@ it.each([
       await expect(orders.getByRole("button", { name: "Queue plan" })).toBeEnabled();
       await page.evaluate(() => {
         window.leadActions.update(
-          { revision: 4, queued_task_id: "queue-orders" },
-          { revision: 10, state: "starting", agent_ids: ["agent-1", "agent-2"] },
+          { revision: 4, state: "starting", queued_task_id: "queue-orders" },
+          { revision: 11, state: "starting", agent_ids: ["agent-1", "agent-2"] },
         );
       });
       await expect(queued).toContainText("Starting");
       await expect(queued.getByRole("button")).toHaveCount(0);
+      await expect(queued.locator(".plan-piece li")).toHaveCount(3);
+      await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
       await page.evaluate(() => {
         window.leadActions.update(
           { revision: 5, state: "failed", detail: "The dispatch could not start" },
-          { revision: 11, state: "failed", detail: "The dispatch could not start" },
+          { revision: 12, state: "failed", detail: "The dispatch could not start" },
         );
       });
       const failed = inbox.getByRole("region", { name: "Ended without running" });
@@ -327,13 +386,6 @@ it.each([
       });
       await expect(orders.getByRole("button", { name: "Queue plan" })).toBeDisabled();
       await expect(orders).toContainText("The first wave exceeds the 1 offered slots.");
-      await page.evaluate(() => {
-        window.leadActions.readonly();
-      });
-      await expect(page.getByText(/^Replay of a hand-written fixture:/).first()).toBeVisible();
-      await expect(
-        page.getByRole("button", { name: /Queue plan|Reject plan|Take out/ }),
-      ).toHaveCount(0);
       expect(errors).toEqual([]);
     } finally {
       await page.close();
@@ -341,3 +393,34 @@ it.each([
   },
   60_000,
 );
+
+it("keeps plan pieces readable through App's replay path without mutation requests", async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const sent: string[] = [];
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: replayHtml }));
+  await page.route(/\/(plans|queue)\/[^/]+\/(start|reject|cancel)$/, (route) => {
+    sent.push(new URL(route.request().url()).pathname);
+    return route.fulfill({ status: 501 });
+  });
+  try {
+    await page.goto(replayUrl);
+    await page.getByRole("button", { name: /^Decisions:/ }).click();
+    const inbox = page.getByRole("region", { name: "Decisions inbox" });
+    await expect(inbox.locator(".plan-piece li")).toHaveCount(5);
+    await expect(inbox.getByText(/^Replay of a hand-written demo fixture:/).first()).toBeVisible();
+    await expect(
+      inbox.getByRole("button", { name: /Queue plan|Reject plan|Take out/ }),
+    ).toHaveCount(0);
+    await page.evaluate(() => {
+      const a = window.leadActions;
+      a.update({ revision: 2, queued_task_id: a.queueItem.queued_task_id }, {});
+    });
+    const queued = inbox.getByRole("region", { name: "Queued plans" });
+    await expect(queued.locator(".plan-piece li")).toHaveCount(3);
+    await expect(queued.getByRole("button")).toHaveCount(0);
+    await expect(inbox.locator(".plan-piece li")).toHaveCount(5);
+    expect(sent).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});

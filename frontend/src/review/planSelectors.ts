@@ -35,21 +35,40 @@ export function selectPlanQueue(state: State, plan: Plan) {
 export function selectRetainedPlans(state: State) {
   const { plans } = selectPlanEvidence(state);
   const leads = state.decisionEvents.filter((event) => event.type === "lead.status");
-  const requested = [...plans.values()].filter(({ payload: plan }) => {
-    const history = leads.filter((event) => event.payload.agent_id === plan.started_by);
-    if (history.some((event) => event.payload.requested_plan_id))
-      return history.some((event) => event.payload.requested_plan_id === plan.plan_id);
-    return (
-      history.length > 0 &&
-      [...plans.values()].filter(
-        (event) =>
-          event.payload.started_by === plan.started_by && event.payload.state === "proposed",
-      ).length === (plan.state === "proposed" ? 1 : 0)
-    );
-  });
+  const requested = [...plans.values()]
+    .flatMap((event) => {
+      const plan = event.payload;
+      const history = leads.filter((lead) => lead.payload.agent_id === plan.started_by);
+      const explicit = history.some((lead) => lead.payload.requested_plan_id);
+      const request = explicit
+        ? history.find((lead) => lead.payload.requested_plan_id === plan.plan_id)
+        : history[0];
+      if (!request) return [];
+      if (!explicit) {
+        // Legacy leads name no plan. Proposed decisions use the lifecycle's unique-proposal rule;
+        // later states need a unique sibling too, rather than attributing every terminal plan.
+        const siblings = [...plans.values()].filter(
+          ({ payload }) =>
+            payload.started_by === plan.started_by &&
+            (plan.state !== "proposed" || payload.state === "proposed"),
+        );
+        if (siblings.length !== 1) return [];
+      }
+      const firstPlan = state.decisionEvents.find(
+        (item) =>
+          item.type === "plan.updated" &&
+          item.payload.plan_id === plan.plan_id &&
+          item.payload.started_by === plan.started_by,
+      );
+      const first = firstPlan && firstPlan.seq > request.seq ? firstPlan : request;
+      return [{ ...event, firstSeq: first.seq, firstTs: first.ts }];
+    })
+    .sort((a, b) => a.firstSeq - b.firstSeq);
+
   return {
     queued: requested.filter(
-      ({ payload }) => payload.state === "proposed" && payload.queued_task_id,
+      ({ payload }) =>
+        (payload.state === "proposed" || payload.state === "starting") && payload.queued_task_id,
     ),
     failed: requested.filter(({ payload }) => payload.state === "failed"),
   };

@@ -57,7 +57,12 @@ function InboxRow({
     : (change?.proposal?.summary ?? entry.decisions[0]?.reason);
   const reasons = [
     ...new Set(entry.decisions.filter((d) => d.kind !== "change").map((d) => d.reason)),
-  ].filter((reason) => !plan && reason !== heading && reason !== paragraph);
+  ].filter(
+    (reason) =>
+      reason !== heading &&
+      reason !== paragraph &&
+      !(plan?.subtasks && reason === "Lead plan awaits approval"),
+  );
   const example =
     question?.example.source === "review_card"
       ? question.example.value
@@ -238,11 +243,11 @@ export function DecisionInbox({
                     key={group}
                   >
                     <h3>{group === "queued" ? "Queued plans" : "Ended without running"}</h3>
-                    {retained[group].map(({ payload: plan, ts }) => (
+                    {retained[group].map(({ payload: plan, firstTs }) => (
                       <article className="inbox-row" key={plan.plan_id}>
                         <div className="decision-heading">
                           <span className="decision-muted">
-                            Decision · <time>{eventTime(ts)}</time>
+                            Plan · <time>{eventTime(firstTs)}</time>
                           </span>
                         </div>
                         <h3>{plan.task}</h3>

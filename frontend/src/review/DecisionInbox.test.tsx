@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import * as selectors from "../state";
@@ -8,6 +8,7 @@ import leadPlans from "../../../fixtures/events/handwritten-lead-plans.jsonl?raw
 import { applyEvent, createInitialState } from "../state";
 import { parseEvent } from "../transport";
 import { DecisionInbox } from "./DecisionInbox";
+import PlanActions from "./PlanActions";
 
 const state = log.trim().split("\n").map(parseEvent).reduce(applyEvent, createInitialState());
 
@@ -168,3 +169,89 @@ it("lists a second distinct reason once, excluding the heading and paragraph", (
     projection.mockRestore();
   }
 });
+
+it("ships the inbox headline before any lazy plan and removes the obsolete hero count", () => {
+  const inbox = readFileSync(new URL("./inbox.css", import.meta.url), "utf8");
+  const lazy = readFileSync(new URL("./planActions.css", import.meta.url), "utf8");
+  expect(inbox).toMatch(
+    /\.decisions-inbox \.inbox-heading h2\s*\{[^}]*font-size: 20px;[^}]*font-weight: 700;[^}]*line-height: 1\.3;/,
+  );
+  expect(inbox).not.toContain(".inbox-count");
+  expect(lazy).not.toContain(".inbox-heading");
+});
+
+it("keeps additional plan reasons while omitting only duplicate or generic fallback copy", () => {
+  const entry = selectors
+    .selectDecisionInbox(leadState)
+    .find((entry) => entry.decisions[0]?.planId);
+  const decision = entry?.decisions[0];
+  if (!entry || !decision) throw new Error("Missing lead decision");
+  const reason = "Check the stock recovery before starting.";
+  const projection = vi.spyOn(selectors, "selectDecisionInbox").mockReturnValue([
+    {
+      ...entry,
+      decisions: [...entry.decisions, { ...decision, id: "extra", reason }],
+    },
+  ]);
+  try {
+    expect(renderToStaticMarkup(<DecisionInbox state={leadState} />)).toContain(
+      `<ul class="decision-reasons"><li>${reason}</li></ul>`,
+    );
+  } finally {
+    projection.mockRestore();
+  }
+});
+
+it.each(["starting", "failed"] as const)(
+  "labels retained %s evidence as a plan at its first time",
+  (status) => {
+    const first = leadEvents[7];
+    if (first?.type !== "plan.updated") throw new Error("Missing plan");
+    const next = applyEvent(leadState, {
+      ...first,
+      seq: 9,
+      ts: "2026-11-01T19:30:00Z",
+      payload: { ...first.payload, revision: 2, state: status, queued_task_id: "queue-test" },
+    });
+    const row = rowContaining(
+      renderToStaticMarkup(<DecisionInbox state={next} />),
+      first.payload.task,
+    );
+    expect(row).toContain("Plan · <time>15:00 ART</time>");
+    expect(row).not.toContain("Decision ·");
+  },
+);
+
+it.each(["queued", "blocked"] as const)(
+  "uses slot-derived waiting copy only for queued evidence: %s",
+  (status) => {
+    const event = leadEvents[7];
+    if (event?.type !== "plan.updated") throw new Error("Missing plan");
+    const plan = { ...event.payload, queued_task_id: "queue-test" };
+    const next = applyEvent(leadState, {
+      seq: 9,
+      ts: event.ts,
+      type: "queue.updated",
+      payload: {
+        queued_task_id: "queue-test",
+        revision: 1,
+        state: status,
+        plan_id: plan.plan_id,
+        plan_revision: plan.revision,
+        agent: null,
+        agent_ids: [],
+        detail: null,
+        started_by: null,
+      },
+    });
+    const html = renderToStaticMarkup(
+      <PlanActions state={next} plan={plan} slots={{ held: 2, total: 2 }} />,
+    );
+    if (status === "queued") expect(html).toContain("Needs 1 free slot; 2 of 2 slots are held.");
+    else {
+      expect(html).toContain("Blocked");
+      expect(html).not.toContain("Needs 1 free slot");
+      expect(html).not.toContain("Waiting for slot evidence");
+    }
+  },
+);
