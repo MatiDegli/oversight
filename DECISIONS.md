@@ -3497,3 +3497,10 @@ The maintainer excepted 700ms rings and the 550ms halo from the 160–320ms rang
 Waiting's “never pulses”. Card glow, an extra merged sentence and a 300ms node-light hold are excluded
 for good; a merged node word stays held. Evidence: dark/day pulses, overlap, arrival, 1280×800 and 720p
 frames, software-GL costs, and the coordinator's Windows real-GPU timing.
+
+## 2026-11-01 — Displaced fronts may start before the freeze
+The maintainer allowed the fronts the Chat plan had moved past the freeze to start before it, each when a writer slot
+is free and behind the Chat and lead fronts: lead actions slices 2 and 4, item 10 (team and period grouping), the
+optional-parameter evidence review, item 20, and the map fronts (map 1d, the map brief, map lines). For these fronts
+this supersedes "No new graph or map work before the freeze" in the Chat view entry above. Reason: free slots should
+do useful work, while Chat and the lead keep priority. The freeze itself is unchanged: Tue Nov 3 20:00 ART.
