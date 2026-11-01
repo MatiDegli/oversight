@@ -60,7 +60,7 @@ function Introduction({ practice, onStart }: PanelProps) {
             });
           }}
         >
-          {pending ? "Preparing practice…" : "Start practice"}
+          Start practice
           <ArrowRight size={18} />
         </button>
       </footer>

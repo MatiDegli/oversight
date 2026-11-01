@@ -124,7 +124,7 @@ it("loads evidence before painting the first phone decision without a layout shi
     await check(start).toBeVisible();
     await check(start).toBeDisabled();
     await check(start).toHaveAttribute("aria-busy", "true");
-    await check(start).toHaveText("Preparing practice…");
+    await check(start).toHaveText("Start practice");
     await check(page.locator(".pp-progress")).toHaveCount(0);
     expect(await page.locator(".pp-main").boundingBox()).toEqual(introduction);
     const firstDecision = page.evaluate(
@@ -378,7 +378,7 @@ it.each(
       const heading = panel.locator(tab === "practice" ? "h1" : "header").first();
       const header = await heading.boundingBox();
       const headerMarkup = await heading.innerHTML();
-      if (tab === "file-view") await check(panel).not.toContainText("Loading editor…");
+      if (tab === "file-view") await check(panel.getByRole("status")).toHaveText("Loading editor…");
       if (tab === "review" || tab === "file-view") {
         const close = panel.getByRole("button", {
           name: tab === "review" ? "Close review" : "Close file",

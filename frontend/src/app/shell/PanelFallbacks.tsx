@@ -185,7 +185,9 @@ export function FileFrame({ target, files, onClose, startAgentAction }: FileView
       <p
         role="status"
         className="h-(--caption-line-height) shrink-0 px-4 text-(length:--caption-size) leading-(--caption-line-height) text-muted"
-      />
+      >
+        Loading editor…
+      </p>
       <div className="min-h-0 flex-1" />
     </aside>
   );
