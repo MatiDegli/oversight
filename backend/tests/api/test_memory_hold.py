@@ -177,6 +177,45 @@ async def test_memory_drop_respects_persons_agent_cap(
         assert states(s, second) == ["queued", "blocked", "queued"]
 
 
+async def test_busy_slot_does_not_leave_later_memory_holds_stale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reading: list[int | None]
+) -> None:
+    monkeypatch.setattr("oversight.runtime_queue.MEMORY_RECHECK_S", 0.01)
+    model = GatedModel()
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path, max_agents=1), lambda _p, _s: model) as s,
+    ):
+        items = [await enqueue(s) for _ in range(3)]
+        await state(s, items[-1], "blocked")
+        async with s.live.dispatcher.queue_lock:
+            assert all(s.live.dispatcher.items[i.queued_task_id].detail == REASON for i in items)
+            # Arm the pass barrier only after the initial holds are all recorded.
+            done = selected(s, monkeypatch)
+            reserve = Mock(wraps=s.live.dispatcher._reserve)
+            monkeypatch.setattr(s.live.dispatcher, "_reserve", reserve)
+            wake_set = Mock(wraps=s.live.dispatcher.wake.set)
+            monkeypatch.setattr(s.live.dispatcher.wake, "set", wake_set)
+            reading[0] = 89
+        await state(s, items[0], "running")
+        await done.wait()  # The next selection has encountered the full slot.
+        async with s.live.dispatcher.queue_lock:
+            for item in items[1:]:
+                remaining = s.live.dispatcher.items[item.queued_task_id]
+                assert remaining.state == "queued" and remaining.detail is None
+                assert not remaining.agent_ids
+            assert list(s.live._slots.values()) == ["agent-1"]
+            assert not s.live.dispatcher._held
+        await model.entered.wait()
+        assert not model.gate.is_set()
+        assert [call.args[0].queued_task_id for call in reserve.call_args_list] == [
+            item.queued_task_id for item in items[:2]
+        ]
+        assert states(s, items[0]) == ["queued", "blocked", "queued", "running"]
+        assert all(states(s, item) == ["queued", "blocked", "queued"] for item in items[1:])
+        wake_set.assert_not_called()
+
+
 async def test_shutdown_cancels_memory_wait_without_dispatcher_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reading: list[int | None]
 ) -> None:

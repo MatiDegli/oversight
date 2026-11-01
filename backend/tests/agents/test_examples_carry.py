@@ -47,6 +47,24 @@ def test_agent_task_refusals(kind: str) -> None:
         )
 
 
+@pytest.mark.parametrize("output", [None, "not JSON", "", "NaN", "1e999"])
+def test_agent_task_rejects_unusable_output(output: str | None) -> None:
+    example = TaskExample.model_validate(
+        EXAMPLE.model_dump()
+        | {"expected_output": output, "expected_behavior": "Return the exact result."}
+    )
+    with pytest.raises(ValueError):
+        replace(task(), examples=(example,))
+
+
+@pytest.mark.parametrize("output", ["null", '""'])
+def test_agent_task_keeps_json_null_and_empty_string(output: str) -> None:
+    example = TaskExample.model_validate(EXAMPLE.model_dump() | {"expected_output": output})
+    retained = replace(task(), examples=(example,))
+    assert retained.examples[0].expected_output == output
+    assert f"Expected output: {output}\n" in done_when_text(retained.examples)
+
+
 def test_done_when_text_and_copies() -> None:
     retained = task()
     assert done_when_text(retained.examples) == (
@@ -88,7 +106,15 @@ async def test_examples_run_carry(small_tree: tuple[Workspace, Tree], confirmed:
     end = await run.run()
     assert end.state == "halted" and end.steps == run_task.prior_steps + 2
     assert run.steps == run.max_steps == run_task.prior_steps + 2
-    expected = "Do it." + ("\n\n" + done_when_text(run_task.examples) if confirmed else "")
+    expected = (
+        "Do it.\n\nDone when: the person confirmed these exact results.\n"
+        "Example one\n"
+        'Inputs: {"args":[],"kwargs":{},"node_id":"shop.mod.value"}\n'
+        'Expected output: {"a":1,"z":2}\n'
+        "Note: Exact result"
+        if confirmed
+        else "Do it."
+    )
     assert model.requests[0][1] == {"role": "user", "content": expected}
     statuses = cast(list[AgentStatus], recorder.of("AgentStatus"))
     assert statuses[0].step == run_task.prior_steps

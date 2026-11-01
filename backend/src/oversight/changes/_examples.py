@@ -24,6 +24,8 @@ class ExamplesConfirmation:
 
 @dataclass(frozen=True)
 class ConfirmOutcome:
+    """Repeated means these examples were already confirmed, regardless of whether a run exists."""
+
     task: AgentTask
     repeated: bool
 
