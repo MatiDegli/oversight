@@ -5,8 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 
 import { AgentCard, selectAgentCard } from "../agents";
-import { ChangeFactsRow } from "../review";
-import { loadReviewPanel } from "../review";
+import { ChangeFactsRow, loadReviewPanel } from "../review";
 import { applyEvent, createInitialState, costText } from "../state";
 
 vi.mock("../state", async (importOriginal) => ({

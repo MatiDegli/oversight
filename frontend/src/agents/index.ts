@@ -19,5 +19,4 @@ export type {
 export type { ConversationControls } from "./conversation/Composer";
 
 export const loadConversationPanel = () => import("./conversation/ConversationPanel");
-export { labels as agentStatusLabels } from "./AgentCard";
 export { ConversationPanelHeader } from "./conversation/ConversationPanelHeader";

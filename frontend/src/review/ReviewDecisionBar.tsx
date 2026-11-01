@@ -7,7 +7,6 @@ import type { DecisionView } from "./decisions";
 import type { ReviewPanelProps } from "./ReviewPanel";
 import "./inbox.css";
 import { approvalLocked, approvalLockedCaption } from "./answers";
-export { approvalLocked, approvalLockedCaption } from "./answers";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";

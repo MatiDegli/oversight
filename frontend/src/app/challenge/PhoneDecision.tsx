@@ -1,6 +1,11 @@
 import { Check, X, ArrowRight, LockKeyhole } from "lucide-react";
-import { useAnswers, candidateKey, currentCards } from "../../review";
-import { approvalLocked, approvalLockedCaption } from "../../review";
+import {
+  useAnswers,
+  candidateKey,
+  currentCards,
+  approvalLocked,
+  approvalLockedCaption,
+} from "../../review";
 import { caseSlot } from "./phoneEvidence";
 import { PhoneDiff } from "./PhoneDiff";
 import { PhoneReview } from "./PhoneReview";

@@ -100,6 +100,107 @@ it("opens the phone introduction while review evidence is unavailable", async ()
   }
 });
 
+it("loads evidence before painting the first phone decision without a layout shift", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/ReviewBody.tsx*", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  try {
+    await page.goto(url);
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    const start = page.getByRole("button", { name: "Start practice", exact: true });
+    await check(start).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const introduction = await page.locator(".pp-main").boundingBox();
+    const requested = page.waitForRequest("**/ReviewBody.tsx*");
+    await start.click();
+    await requested;
+    await check(start).toBeVisible();
+    await check(page.locator(".pp-progress")).toHaveCount(0);
+    expect(await page.locator(".pp-main").boundingBox()).toEqual(introduction);
+    const firstDecision = page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const observer = new MutationObserver(() => {
+            if (!document.querySelector(".pp-progress")) return;
+            observer.disconnect();
+            resolve(
+              Array.from(
+                document.querySelectorAll(".pp-main, .review-body, .pp-decision-rows"),
+                (element) => {
+                  const { x, y, width, height } = element.getBoundingClientRect();
+                  return { x, y, width, height };
+                },
+              ),
+            );
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+        }),
+    );
+    await page.evaluate(() => true);
+    release();
+    const initial = await firstDecision;
+    await check(page.getByRole("region", { name: "Review lead" })).toBeVisible();
+    const loaded = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll(".pp-main, .review-body, .pp-decision-rows"),
+        (element) => {
+          const { x, y, width, height } = element.getBoundingClientRect();
+          return { x, y, width, height };
+        },
+      ),
+    );
+    expect(loaded).toEqual(initial);
+  } finally {
+    release();
+    await page.close();
+  }
+});
+
+it.each(["failed", "left"])("handles a pending phone decision when %s", async (outcome) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/ReviewBody.tsx*", async (route) => {
+    await gate;
+    if (outcome === "failed") await route.abort("failed");
+    else await route.continue();
+  });
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  try {
+    await page.goto(url);
+    const open = page.getByRole("button", { name: "Try two-change practice", exact: true });
+    await open.click();
+    const requested = page.waitForRequest("**/ReviewBody.tsx*");
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    await requested;
+    if (outcome === "left")
+      await page.getByRole("button", { name: "Leave practice", exact: true }).click();
+    release();
+    if (outcome === "failed") {
+      await check(page.getByRole("alert")).toHaveText(
+        "This panel could not load. Reload the page to try again.",
+      );
+    } else {
+      await page.evaluate<undefined>("import('/src/review/ReviewBody.tsx').then(() => undefined)");
+      await open.click();
+      await check(page.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
+      await check(page.locator(".pp-progress")).toHaveCount(0);
+    }
+  } finally {
+    release();
+    await page.close();
+  }
+});
+
 it.each([390, 1280, 1920])(
   "keeps practice frame geometry through every stage at %ipx",
   async (width) => {
@@ -197,7 +298,9 @@ it.each(
           name: tab === "review" ? "Close review" : "Close file",
           includeHidden: true,
         });
-        await close.evaluate((element: HTMLButtonElement) => element.focus());
+        await close.evaluate((element: HTMLButtonElement) => {
+          element.focus();
+        });
         await check(close).not.toBeFocused();
       }
       if (tab === "inbox") {
