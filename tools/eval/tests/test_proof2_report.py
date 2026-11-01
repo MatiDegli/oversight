@@ -1,5 +1,6 @@
 """Proof 2 measures use frozen definitions and independent expected values."""
 
+import asyncio
 import json
 import sys
 from hashlib import sha256
@@ -583,3 +584,200 @@ def test_wall_mean_floors_milliseconds(tmp_path, capsys):
     results = [{**receipts()[1], "result": {"exit_code": 0}}, receipts()[3]]
     rows = report(tmp_path, capsys, events, results)
     assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [1500, None]
+
+
+@pytest.mark.parametrize(
+    "kind, keys",
+    [
+        (
+            "meta",
+            (
+                "changes",
+                "contract_version",
+                "log_sha256",
+                "price_retrieved",
+                "price_source",
+                "prompt_version",
+                "record",
+                "results_sha256",
+                "revisions",
+                "run_id",
+                "schema",
+                "through_seq",
+                "with_hidden",
+            ),
+        ),
+        (
+            "revision",
+            (
+                "change_id",
+                "correct",
+                "first_green",
+                "head_commit",
+                "hidden",
+                "merged",
+                "previous",
+                "record",
+                "regress_vs_base",
+                "regress_vs_previous",
+                "request",
+                "revision",
+                "seq",
+                "task",
+                "tests",
+                "verdicts",
+            ),
+        ),
+        (
+            "change",
+            (
+                "agent_id",
+                "change_id",
+                "end",
+                "first_green",
+                "merged_by",
+                "merged_revision",
+                "proposals",
+                "record",
+                "review_cost",
+                "rounds",
+                "task",
+                "wall_ms",
+            ),
+        ),
+        ("E1", ("cells", "duplicate_reviews", "n", "record", "review_cost")),
+        (
+            "E2",
+            (
+                "changes_with_requests",
+                "findings",
+                "hidden_by_round",
+                "record",
+                "regress_vs_base",
+                "regress_vs_previous",
+                "requests_by",
+                "rounds",
+            ),
+        ),
+        (
+            "arm",
+            (
+                "arm",
+                "by_role",
+                "changes",
+                "correct",
+                "cost",
+                "incorrect",
+                "not_selected",
+                "problems",
+                "questions",
+                "questions_not_needed",
+                "record",
+                "regressions_let_through",
+                "unknown",
+                "usd_per_correct",
+                "wall_ms_per_correct",
+            ),
+        ),
+        (
+            "run",
+            (
+                "active_ms",
+                "agent_hours",
+                "agent_ms",
+                "coverage",
+                "known_active_ms",
+                "known_agent_ms",
+                "parallelism",
+                "parallelism_over_time",
+                "problems",
+                "record",
+            ),
+        ),
+        ("E3", ("record", "status")),
+        ("E4", ("record", "status")),
+        ("E6", ("record", "status")),
+        ("E7", ("record", "status")),
+    ],
+)
+def test_record_keys(tmp_path, capsys, kind, keys):
+    records = [r for r in report(tmp_path, capsys) if r["record"] == kind]
+    assert records
+    assert all(tuple(sorted(r)) == keys for r in records)
+
+
+def test_full_record_order_and_not_built(tmp_path, capsys):
+    rows = report(tmp_path, capsys)
+    assert tuple(r["record"] for r in rows) == (
+        "meta",
+        "revision",
+        "revision",
+        "revision",
+        "change",
+        "change",
+        "change",
+        "E1",
+        "E2",
+        "arm",
+        "arm",
+        "run",
+        "E3",
+        "E4",
+        "E6",
+        "E7",
+    )
+    assert [r["arm"] for r in rows if r["record"] == "arm"] == [
+        "without_oversight",
+        "with_oversight",
+    ]
+    assert rows[-4:] == [
+        {"record": "E3", "status": "not_built"},
+        {"record": "E4", "status": "not_built"},
+        {"record": "E6", "status": "not_built"},
+        {"record": "E7", "status": "not_built"},
+    ]
+    assert [r["questions"] for r in rows if r["record"] == "arm"] == [
+        {"status": "not_built"},
+        {"status": "not_built"},
+    ]
+    assert [r["questions_not_needed"] for r in rows if r["record"] == "arm"] == [
+        {"status": "not_built"},
+        {"status": "not_built"},
+    ]
+
+
+@pytest.mark.anyio
+async def test_cli_deterministic_bytes(tmp_path):
+    log, results = files(tmp_path)
+    command = [
+        sys.executable,
+        "-m",
+        "tools.eval.proof2",
+        "report",
+        "--log",
+        str(log),
+        "--results",
+        str(results),
+    ]
+
+    async def invoke(*extra):
+        process = await asyncio.create_subprocess_exec(
+            *command, *extra, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+        assert process.returncode == 0
+        assert stderr == b""
+        return stdout
+
+    first = await invoke()
+    assert first.endswith(b'\n{"record": "E7", "status": "not_built"}\n')
+    assert b'"pct":' not in first
+    assert await invoke() == first
+    out = tmp_path / "report.jsonl"
+    assert await invoke("--out", str(out)) == b""
+    assert out.read_bytes() == first
