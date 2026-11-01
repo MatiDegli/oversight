@@ -379,6 +379,8 @@ it.each(
       await check(panel).toBeVisible();
       await check(panel.locator(content)).toHaveCount(0);
       const before = await panel.boundingBox();
+      if (tab === "conversation")
+        expect(before).toEqual(await page.getByRole("tabpanel").boundingBox());
       const heading = panel
         .locator(tab === "practice" ? "h1" : tab === "settings" ? "h2" : "header")
         .first();
