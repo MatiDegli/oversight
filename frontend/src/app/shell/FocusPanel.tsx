@@ -31,6 +31,7 @@ const ConversationPanel = lazy(() =>
 export function FocusPanel(
   props: FrameProps & {
     startAgentAction: ReactNode;
+    chat?: boolean;
     practiceOnly?: boolean;
     maximized: boolean;
     onMaximize: () => void;
@@ -54,7 +55,7 @@ export function FocusPanel(
   const Icon = props.maximized ? Minimize2 : Maximize2;
   return (
     <section className="focus-panel" aria-label="Focus panel">
-      <div className="focus-tabs">
+      <div className="focus-tabs" hidden={props.chat && Boolean(agentId)}>
         <div
           ref={tablist}
           role="tablist"
@@ -193,6 +194,7 @@ export function FocusPanel(
   );
 }
 
+/** The same adapter and mounted conversation serve both shell layouts. */
 function ConversationFocus({
   state,
   agentId,

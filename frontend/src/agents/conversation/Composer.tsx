@@ -59,13 +59,13 @@ export function Composer({
   }
   if (replay)
     return (
-      <p className="shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted">
+      <p className="conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted">
         Recorded run: messages, pause and stop are off.
       </p>
     );
   const paused = header.state === "paused";
   return (
-    <div className="shrink-0 border-t border-divider p-[14px]">
+    <div className="conversation-composer shrink-0 border-t border-divider p-[14px]">
       {onSend && (
         <textarea
           aria-label={`Message Agent ${header.slot}`}
@@ -85,7 +85,7 @@ export function Composer({
           Agent {header.slot} is not running.
         </p>
       )}
-      <div className="mt-[10px] flex flex-wrap items-start gap-2">
+      <div className="composer-actions mt-[10px] flex flex-wrap items-start gap-2">
         {active && (paused ? onResume : onPause) && (
           <button
             type="button"

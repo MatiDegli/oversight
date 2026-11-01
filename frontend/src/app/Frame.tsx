@@ -9,7 +9,7 @@ import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
 import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
-import { ChatShell } from "./shell/ChatShell";
+import { ChatEmpty, ChatShell } from "./shell/ChatShell";
 import { FocusPanel } from "./shell/FocusPanel";
 import { GraphStage } from "./shell/GraphStage";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
@@ -143,10 +143,19 @@ export function Frame(props: FrameProps) {
               <FocusPanel
                 {...props}
                 view={view}
+                chat={shell.layout === "Chat"}
                 practiceOnly={phone}
                 startAgentAction={task.action}
                 maximized={shell.maximized}
                 onMaximize={shell.toggleMaximize}
+              />
+            )}
+            {shell.layout === "Chat" && !open && (
+              <ChatEmpty
+                state={state}
+                onStart={props.onStartAgent}
+                replayOf={props.replayOf}
+                inputRef={task.inputRef}
               />
             )}
             <div

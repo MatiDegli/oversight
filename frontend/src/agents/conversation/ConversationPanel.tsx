@@ -39,7 +39,7 @@ export function ConversationPanel({
   return (
     <section
       aria-label={`Agent ${header.slot} conversation`}
-      className="flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
+      className="conversation-panel flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
     >
       <ConversationPanelHeader header={header} />
       <div
@@ -47,13 +47,13 @@ export function ConversationPanel({
         role="list"
         aria-label="Conversation timeline"
         tabIndex={0}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-[9px] [overflow-anchor:none] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-text"
+        className="conversation-timeline min-h-0 flex-1 overflow-y-auto overscroll-contain py-[9px] [overflow-anchor:none] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-text"
         onScroll={(event) => {
           const node = event.currentTarget;
           atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight <= 2;
         }}
       >
-        <div ref={content}>
+        <div ref={content} className="conversation-entries">
           {entries.map((entry) => (
             <div role="listitem" key={`${entry.kind}:${String(entry.seq)}`}>
               <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />

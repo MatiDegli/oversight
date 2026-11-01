@@ -1,3 +1,4 @@
+import { TaskBox, type TaskBoxProps } from "../../agents";
 import type { ReactNode } from "react";
 
 export interface ChatAgentsFrameProps {
@@ -53,6 +54,17 @@ export function ChatShell({
       {children}
       {!active && agents}
       {active && <ChatWorkFrame />}
+    </div>
+  );
+}
+
+export function ChatEmpty(props: TaskBoxProps) {
+  return (
+    <div className="chat-empty">
+      <div>
+        <h1>What should change{props.state.run ? ` in ${props.state.run.workspace}` : ""}?</h1>
+        <TaskBox {...props} />
+      </div>
     </div>
   );
 }
