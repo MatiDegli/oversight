@@ -1112,7 +1112,24 @@ The graph stays visible and keeps positions.
 5. **What was compared:** 14/600 title, then two to four muted 15px lines on 22px lines,
    numbers in text color and Next, 4px below the title. One faint sentence follows, 4px below:
    "Only recorded inputs were compared; others can still differ." Then a closed 44px "Details"
-   row, 8px below, for further samples, method details and test runs. No summary or Details in d/d2.
+   row, 8px below, for further samples, method details and test runs. When current-revision
+   parameter extensions exist, insert a sibling **New-parameter calls** section before Details,
+   with its own divider and 14/600 title on 20px lines. Keep comparison and diff ordering.
+   Without a comparison, show the extension section alone, with no invented summary or Details.
+   Null or empty extensions retain the original comparison and Details structure.
+   Extension prose is 15/22; parameter names and sample values are Mono 15. Show the function,
+   published calls run and positive aggregate base rejections, never discovered totals or per-row
+   rejection flags. No positional-binding explanation is supported by events. Omit zero counters
+   when unavailable. The muted sentence is exactly: "These calls use the new parameter, so What
+   was compared does not count them." Keep mapped limitations beside this evidence with a 16px
+   icon column. Native Samples has a 44px summary, starts closed and retains every supplied row,
+   equal results and published instability included. Show retained-sample/run counts when partial.
+   Before/After cells sit side by side at 1920, stack at 1280 and phone width with a downward
+   arrow and wrapping input text. Counts never enter comparison, caller or question totals.
+   A matching existing node popover may echo "4 calls using cap_percent; see review." using its
+   current candidate's event fields. Only the underlined, focusable "see review" button scrolls
+   the matching section into view, then focuses its tabIndex=-1 target without a second scroll.
+   Evidence arrival opens nothing and preserves focus, scroll and user-opened disclosures.
 6. **Decision bar:** pinned, divider above, padding 12px top, 24px sides, 10px bottom. Comment
    box 64px, radius 10px, "Comment for the agent"; buttons 10px below, gap 10px, 40px high,
    14/600, radius 7px: "Approve and merge" (primary, merge icon), "Request changes" (outline),
@@ -1197,6 +1214,10 @@ The first three chips keep "1 file", "+2 −0" and "28 passed". Examples stack B
 with a down arrow and Mono 15 soft-wrapped values. "What was compared" and "Show diff" become
 44px rows with one-line muted previews and chevrons. Dock buttons read "Approve" and "Reject"
 in equal 48px containers.
+New-parameter calls stays outside the phone comparison disclosure, followed by closed Details
+only when a comparison exists. It uses the same scrolling evidence body and 16px gutters.
+The existing graph chip retains its drawn 22px size and anchor; invisible vertical padding
+provides a minimum 44px touch area without overlapping neighboring chip targets.
 
 - **f:** graph caption "possible call, not followed"; fourth chip "No exact callers". Lead
   "2 choices need you" / "1 of 2 answered"; the answered row wraps fully, and the three answers

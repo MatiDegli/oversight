@@ -3612,3 +3612,26 @@ crosses this change.
 
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
+
+## 2026-11-01 — New-parameter calls evidence
+
+Approved at 16:20 ART (19:20 UTC), all six answers override the sketch's conflicting markup,
+comments and copy:
+
+1. Show a sibling section after What was compared, outside its phone disclosure, and before
+   closed Details when comparison exists. Keep separate counts: proposed-only calls are separate
+   evidence and must not change comparison, measured-caller, preview or question totals.
+2. Make "see review" an underlined, keyboard-focusable button in an existing matching popover.
+   Explicit activation scrolls the current change/revision/head/node section into view, then
+   focuses its tabIndex=-1 target with preventScroll. Arrival moves nothing; navigation belongs
+   to the person and must never reach stale evidence or another change.
+3. Remove the values-state positional-binding explanation. No event field supports that causal
+   claim; recorded values are sufficient evidence.
+4. Show only event-backed totals and supplied samples, including equal results and published
+   instability. Omit discovered totals and per-row rejection flags: neither is published.
+   Positive aggregate base rejections are supported; zero unavailable counters add no evidence.
+5. Supply the phone chip's minimum 44px touch area with invisible padding while preserving its
+   drawn 22px geometry, anchor and neighboring targets. Touch usability must not move the graph.
+6. Use exactly "These calls use the new parameter, so What was compared does not count them."
+   as the muted sentence. It explains count separation without suggesting additional measurement
+   or an unsupported binding interpretation.
