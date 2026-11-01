@@ -349,6 +349,9 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 
 | What | Sketch | Here | Why |
 | --- | --- | --- | --- |
+| Conversation edit row | +4 −0 | no line counts | agent.step carries no line counts |
+| Conversation retry pill | Waiting | Revising stays Revising | the card's rule; only working becomes Waiting |
+| Conversation time limit | from the run start | from this round's start, pauses excluded | the server times each round; maintainer answer 2 |
 | Border of a changed node | solid | dashed | AGENTS.md: a dashed border means a pending change, changed and new alike |
 | Module names on the graph | Mono | Next | DESIGN.md, Typography: graph labels use Next |
 | Long name on a touched row | not drawn | the name is cut with an ellipsis where it would meet the state word | a row is fixed at 282px; the state word and badges keep their place |
@@ -635,8 +638,20 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 | Focus panel | up to 880px wide | file view, live diff, review, Conversation, Decisions with standing grants, Two-change practice and Settings tabs; target, not built yet: Plan |
 | Graph stage | remaining width, at least 560px | the same graph, its heading, legend and controls |
 | Agents panel / rail | 400px / 56px wide | cards and task composer, or letter avatars with state |
-| Bottom dock | 280px high when open | Terminal, Tests, Activity log; later the replay timeline |
+| Bottom dock | 280px high when open | Terminal, Tests, Activity log |
+| Recorded replay row (built) | 44px high | Play/pause, Restart, position, milestones and 1×/2×/4× speed; below the open dock and above status |
 | Status line | 24px high | live or named replay, practice state, merge mode, budget brake, notices, connection and Dock toggle (Ctrl backtick) |
+
+The desktop replay row is built for browser-owned recordings, including the static site.
+It uses 14px horizontal padding, 12px gaps, 34px controls, a 100px two-line time display,
+and 24px milestone targets above a 4px track. Restart shows its word from 1600px.
+The timeline is fixed 1× time: first event at zero, then cumulative timestamp gaps clamped
+between zero and 2000ms before speed is applied. Times floor seconds. The slider alone handles
+Left/Right (one second), Shift+Left/Right (five seconds), Home and End. Hover/focus previews
+milestone details; activation or pointer release seeks without opening a tab. The row is hidden
+below 1280px and during practice. At overlay widths it subtracts the agents panel occlusion,
+leaving the existing graph owner and framing rules intact. Neutral replay paint and control
+gradients belong to theme tokens; control boundaries use control-edge and focus uses text.
 
 - **Watch:** the focus panel is closed, leaving the graph beside the agents panel.
 - **Focus:** opening any focus tab folds the agents panel into its rail. Up to six tabs open by
@@ -1186,6 +1201,38 @@ The sketch's +2 −0 line-change pair remains; do not print empty evidence count
   An occupied or starting task box keeps its text and explains why the action is unavailable.
   Events and later mounts never repeat the click's focus request.
 
+### Conversation progress
+
+Progress pieces redraw in place in the agent's Conversation tab; events never open a tab,
+select anything or move keyboard focus. The timeline keeps its bottom anchoring.
+
+- **Activity block:** one open round, split around accepted person messages so each message keeps
+  its event order. Reads status envelopes, stepSeqs, stepTimes, steps.duration_ms and state.clock.
+  "Working" and elapsed agent time; "Paused" with a still ring while paused. The newest completed
+  call stays last and visible; earlier calls fold behind "{n} earlier calls" and "{t} in tools".
+  StepRow retains its tool, summary, result, milliseconds, error, View in diff and Test output.
+  Blocks sit 56px from the left and 22px from the right: card fill, border, 12px radius,
+  40px call rows (errors grow), divider lines and a 38px muted fold button with aria-expanded.
+- **Round row:** first proposal or ready_for_review/halted/stopped/done ends the round. Reads the
+  same envelopes plus change.resolved revision: "Round {n} · proposed", "proposed, then you asked
+  for changes", "halted" or "stopped", with "{c} calls · {elapsed}". It opens its calls and,
+  when a later round exists, its proposal and cross-review in sequence order. Messages never fold.
+- **Retry notice:** modelWaits while working or revising: "Waiting for model (retry {next}/{max})",
+  cause and optional HTTP status; max_attempts ticks, the first attempt + 1 filled. No countdown.
+- **Time notice:** only at 80% of run.limits.max_wall_clock_s, while a round is open (answer 3).
+  "{m} min of {M} min · time limit for this round"; non-whole-minute bounds read "{s} s".
+  Answer 2: time is per round, minus paused spans; the wait for the maintainer between rounds
+  never counts. All elapsed time comes from event timestamps, never a reader clock or timer.
+- **Budget notice:** budgetMarks retain each rise in usage.tick.brake. Reads run.budget.warn_at
+  and block_at: "Budget at {p}% · {spent} of {budget} · new Meta runs stop at {b}%", or
+  "Budget at {a}% · {spent} of {budget} · new Meta runs are refused" (actual whole percent).
+  spendUnknown omits amounts and meter. Time and budget meters are 150px with their real bound;
+  all notices use inset, divider, 10px radius, at least 44px height, 6px/14px padding and muted icons.
+  Below 400px of panel width, notice text keeps its space beside the icon; supporting details
+  and meters wrap onto another line so zoom and narrow containers do not overlap the message.
+  Numbers use Mono. Elapsed reads "{s} s" or "{m} min {ss} s"; tools read milliseconds,
+  one decimal second below a minute, then elapsed words. Header uses the real run step cap.
+
 ### Dot field and rings (signature component)
 
 The signal sketch's LED field stays: light follows the box it comes from, rather than making a
@@ -1461,6 +1508,7 @@ event causes stay allowed on the graph's ground, and the rest contours are that 
 transitions take 160 to 320ms with `cubic-bezier(0.2, 0.7, 0.2, 1)`; the standard is 240ms,
 including module and class opening. Each motion says what changed:
 
+- **Activity block:** a running round's ring spins while the agent works; reduced motion stops it.
 - **Agent starts:** its card slides and fades in from the right.
 - **agent.step / usage.tick:** a new step row slides in at the top, older rows move down; the
   step bar and spend number ease to the reported value.
@@ -1654,7 +1702,7 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 | --- | --- |
 | 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the decisions chip; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
-| 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
+| 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; desktop recorded replay row (built Nov 1) |
 | Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker, the rest contours and merge travel; plain ground (#070707 in dark) whenever WebGL2 is missing |
 | After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

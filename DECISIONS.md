@@ -2990,6 +2990,32 @@ rework and the Conversation tab, before milestone pulses if ready before the cut
   stacked panel edges have at least 48px at the drawn zooms and down to 0.2 (49px there).
   Narrow headers wrapping below the drawn zooms may reduce it to the 26px floor at 0.2;
   panels never touch or overlap. This preserves the approved packing values.
+## 2026-10-31 — Progress pieces, part 1: activity blocks and notices
+
+The maintainer approved progress sketch round 2 at 2026-10-31T15:19:19Z. Progress lives as
+separate pieces that redraw in place in Conversation. Evidence and the card's evidence line
+are part 2. His binding answers: "2 the time limit counts only the agent's time, not the wait
+for the maintainer between rounds; 3 time notice at 80% only"; "6 the agent's own plan is not
+shown before the checkpoint (it needs a contract change)"; "8 the lead's tool names
+(start_agent) are confirmed when the lead is built".
+
+Each round starts with the first starting/working/revising status, just before its deadline.
+run and revise call _drive independently (backend/src/oversight/agents/loop.py:217, :248);
+asyncio.timeout wraps each drive (:264). Pausing suspends and reschedules that deadline by
+paused time (backend/src/oversight/agents/_control.py:155-170; status at :163, resume at :176).
+Thus elapsed time is round end (or state.clock), minus start and paused spans, excluding review
+waits. The notice says "time limit for this round" although contracts/src/oversight_contracts/
+events.py:69-70 says "Per task"; the contract is unchanged.
+
+Budget marks retain rises in usage.tick.brake, not inferred thresholds or just the latest tick;
+falling brakes add nothing. The brake applies to metered Meta runs: notices say "new Meta runs"
+and blocked uses the actual spent/budget percentage, floored, because blocking is above block_at.
+All denominators and thresholds come from the run or event, and unknown spend hides amounts/meters.
+
+The earlier "of 30" departure was reverted by the maintainer at 2026-10-31T16:55:00Z: the header
+uses run.limits.max_steps and min(step, bound), retaining the largest observed step. There are no
+line counts on edit calls because agent.step has none; retries preserve Revising as the card does.
+Accepted person messages stay between activity segments of the same round; they never fold away.
 ## 2026-10-31 — Human confirmation of examples and task carry
 
 The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
@@ -3306,6 +3332,46 @@ Panel pseudo-elements use a compensated flex row so static and floating roots ke
 positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
 light that stays outside its row gap. Monaco and the graph host receive neither control effect.
 
+
+## 2026-11-01 — Browser-owned replay controls
+
+The approved b-1101a sketch (01:03:27 ART) adds a desktop row to Vite replay mode and the
+static recording. Its premises reference main `6ab92e7`; implementation starts at `54dc64d`,
+where the same session, navigation and shell code moved and panel edge feedback is already built.
+Backend SSE replay (`make replay`) keeps the ordinary live frontend and has no controls.
+
+Seek rebuilds the complete recorded prefix through the existing reducer and publishes it once.
+It preserves playing/paused state; seeking backward from ended pauses. Restart and Play again
+start at zero and play at the selected rate. The end stops, without looping. Only absent tab
+subjects close, using the existing history behavior. Recorded file access refreshes after a
+seek even when the graph commit is unchanged; snapshot-only paths still lack source contents.
+
+Milestones are sibling buttons beside the slider, so assistive technology can reach them
+without nested interactive descendants. Pointer preview changes no prefix. Only slider keys
+seek; there is no global Space handler and no automatic focus. The neutral focus ring and
+agent/state labels retain DESIGN.md's meaning and take precedence over generic skill advice
+about touch target sizes: these approved desktop targets are 24px and the row excludes phones.
+
+The controlled player and timeline are separately deferred from the shell, and the row uses
+React.lazy with a local 44px Suspense reservation. Session cleanup cancels pending imports,
+clock callbacks and loading publications; practice stops that same session before setting its cut.
+The existing startReplay API remains compatible for direct callers and test seams: it divides
+each gap by speed before applying the two-second cap and supports speed zero. The new player
+caps each gap first, forming one stable axis for every rate; its ready promise means loaded and
+validated, while legacy ready still means the entire log finished. Keeping both avoids changing
+backend-like timing or the tested immediate replay API.
+
+## 2026-11-01 — Public recording guard follows the deferred player
+
+The replay controls also updated `frontend/shots/public-recording.test.ts`, outside the
+front's original item 1 file list, because the controlled player adds a dynamic chunk.
+The old `assert.equal(chunks.length, 1)` fails on the entry plus the separately emitted
+`replayPlayer` chunk: the build necessarily has at least two JavaScript chunks. It was
+replaced with exactly one entry, a separate player chunk, a dynamic import from that entry
+and no static import of the player. The guard still imports the emitted entry and verifies
+the exact recording bytes, provenance hash, label and run identity, and still refuses a
+missing recording or receipt. Writing and importing the emitted ES modules replaces the
+single-chunk data URL, which cannot resolve relative chunk imports.
 ## 2026-10-31 — Time per stage for each change
 
 Packet A 1031d, item 2, was approved at 2026-10-31T18:25:03Z under the maintainer's
@@ -3495,3 +3561,10 @@ The maintainer excepted 700ms rings and the 550ms halo from the 160–320ms rang
 Waiting's “never pulses”. Card glow, an extra merged sentence and a 300ms node-light hold are excluded
 for good; a merged node word stays held. Evidence: dark/day pulses, overlap, arrival, 1280×800 and 720p
 frames, software-GL costs, and the coordinator's Windows real-GPU timing.
+
+## 2026-11-01 — Displaced fronts may start before the freeze
+The maintainer allowed the fronts the Chat plan had moved past the freeze to start before it, each when a writer slot
+is free and behind the Chat and lead fronts: lead actions slices 2 and 4, item 10 (team and period grouping), the
+optional-parameter evidence review, item 20, and the map fronts (map 1d, the map brief, map lines). For these fronts
+this supersedes "No new graph or map work before the freeze" in the Chat view entry above. Reason: free slots should
+do useful work, while Chat and the lead keep priority. The freeze itself is unchanged: Tue Nov 3 20:00 ART.

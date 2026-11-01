@@ -74,7 +74,7 @@ Build Chat only from an approved sketch round.
   Otherwise Oversight stays the default and Chat sits behind the switch.
 - Chat adds no events, contracts or endpoints. Presence in "Where they work" and marks in the
   Files tree read the existing `agent.focus` event and `change.proposed.files`.
-- No new graph or map work before the freeze.
+- Graph and map work comes after Chat and the lead; since 2026-11-01 it may start before the freeze when a slot is free (DECISIONS.md).
 
 ### Queue inventory
 
@@ -285,8 +285,9 @@ new candidate work waits for the maintainer’s order.
 - After the hackathon, after the Tauri shell: native backend ports for Windows and macOS, as their
   own fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
   process-tree cleanup, file locks, no-follow file opens), then a test-isolation design for each OS.
-  A minimal Windows port, the per-OS layer in the mode without isolation, is item 20 below;
-  Windows isolation follows that port. Until a port has its own isolation, it runs
+  A minimal Windows port, the per-OS layer in the mode without isolation, is item 20 below; since
+  2026-11-01 it may start before the freeze when a slot is free, behind Chat and the lead
+  (DECISIONS.md). Windows isolation follows that port. Until a port has its own isolation, it runs
   in the existing mode without isolation (network open; rules, Revert and added-test probes disabled).
   Any new dependency follows the license list; filelock (Unlicense) needs the maintainer's OK.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the

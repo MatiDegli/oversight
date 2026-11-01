@@ -47,6 +47,7 @@ it.each(["agent", null] as const)("retains waiting call data for role %s immutab
     max_attempts: 5,
     cause: "rate_limited",
     wait_s: 0,
+    status: 429,
   });
   expect(initial.modelWaits).toEqual({});
 });
