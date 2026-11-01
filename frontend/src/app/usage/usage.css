@@ -44,6 +44,11 @@
   gap: 18px;
   margin-top: 18px;
 }
+.usage-facts > section,
+.usage-fact > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .usage-group-header {
   display: flex;
   align-items: center;
@@ -82,7 +87,6 @@
 .usage-fact dd {
   margin: 0;
   text-align: end;
-  white-space: nowrap;
 }
 .usage-panel small {
   display: block;
@@ -147,10 +151,12 @@
   font-weight: 400;
   text-align: start;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .usage-panel td {
+  min-width: 0;
   text-align: end;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .usage-panel thead tr {
   min-height: 35px;

@@ -213,6 +213,75 @@ it("retains the initial-panel camera on close and waits for an absent run", asyn
     await absent.close();
   }
 });
+it("recovers from timeout, offline and unreadable responses without leaking a run's error", async () => {
+  const pending: Route[] = [];
+  const page = await open(recorded, {
+    handler: (route) => {
+      pending.push(route);
+      return Promise.resolve();
+    },
+  });
+  try {
+    await page.clock.install();
+    await enter(page);
+    await check.poll(() => pending.length).toBe(1);
+    await page.clock.fastForward(15_001);
+    await check(page.getByRole("alert")).toContainText("Usage took too long to load. Try again.");
+    await refresh(page, "run-next");
+    await check.poll(() => pending.length).toBe(2);
+    await check(page.getByRole("alert")).toHaveCount(0);
+    await check(page.getByRole("status").filter({ hasText: "Loading usage" })).toBeVisible();
+    await required(pending[1]).abort("internetdisconnected");
+    await check(page.getByRole("alert")).toContainText("Check the connection and try again.");
+    for (const [index, status] of [503, 200, 200].entries()) {
+      await page.getByRole("button", { name: "Retry usage" }).click();
+      await check.poll(() => pending.length).toBe(index + 3);
+      await required(pending[index + 2]).fulfill({
+        status,
+        body: index === 2 ? "null" : "<html>Proxy response</html>",
+      });
+      await check(page.getByRole("alert")).toContainText(
+        status === 503
+          ? "The usage service is unavailable. Try again."
+          : "Usage response could not be read. Try again.",
+      );
+    }
+    await page.getByRole("button", { name: "Retry usage" }).click();
+    await check.poll(() => pending.length).toBe(6);
+    await required(pending[5]).fulfill({ json: { ...recorded, run_id: "run-next" } });
+    await check(page.locator(".usage-scope")).toHaveText("Up to event 69");
+  } finally {
+    await page.close();
+  }
+});
+it("wraps long multilingual identities and large figures at the narrow desktop width", async () => {
+  const data = structuredClone(early);
+  const label = "LongModel".repeat(15) + " العربية 中文 🙂";
+  data.teams = [{ ...required(data.teams[0]), agents: ["agent-1"] }];
+  for (const cost of data.cost.rows) {
+    cost.model = label + cost.agent_id;
+    cost.known_usd = 987654321012345600;
+  }
+  data.cost.known_usd = 987654321012345600;
+  for (const actor of data.hours.actors) actor.model = label + (actor.agent_id ?? "");
+  const page = await open(data, { width: 1280 });
+  try {
+    await enter(page);
+    await check(page.locator(".usage-closing")).toContainText("1 agent has worked");
+    await check(page.locator(".usage-facts")).toContainText("US$987654321012345600.00");
+    await check(page.locator("tbody")).toContainText(label);
+    await page.getByRole("button", { name: "By model", exact: true }).click();
+    expect(
+      await page.locator(".usage-scroll").evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+    await page.getByRole("button", { name: "Maximize focus panel", exact: true }).click();
+    expect(
+      await page.locator(".usage-scroll").evaluate((node) => node.scrollWidth <= node.clientWidth),
+    ).toBe(true);
+  } finally {
+    await page.close();
+  }
+});
 it("renders incomplete and ranged values as lower bounds and quotes problems", async () => {
   const data = structuredClone(hosted);
   data.cost.coverage = "incomplete";

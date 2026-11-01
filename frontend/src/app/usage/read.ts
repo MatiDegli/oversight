@@ -15,17 +15,24 @@ export async function readUsage(
     throw new Error("Usage did not reach the server. Check the connection and try again.");
   }
   if (!response.ok) {
-    let message = `HTTP ${String(response.status)} ${response.statusText}`.trim();
+    let message = "The usage service is unavailable. Try again.";
     try {
       const body = (await response.json()) as { error?: { message?: unknown } };
       if (typeof body.error?.message === "string" && body.error.message)
-        message = body.error.message;
+        message = `${body.error.message} Try again.`;
     } catch {
       /* The proxy may return HTML or an empty body. */
     }
     throw new Error(`Usage could not be read: ${message}`);
   }
-  const data = (await response.json()) as UsageView;
+  let data: UsageView;
+  try {
+    const body: unknown = await response.json();
+    if (body === null || typeof body !== "object") throw new Error("Missing usage response");
+    data = body as UsageView;
+  } catch {
+    throw new Error("Usage response could not be read. Try again.");
+  }
   if (data.run_id !== runId)
     throw new Error("Usage belongs to another run. Try again for the current run.");
   return data;

@@ -26,11 +26,17 @@ export default function UsagePanel({ state, recorded }: { state: State; recorded
   useEffect(() => {
     if (!runId) return;
     const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+      setResult({ error: "Usage took too long to load. Try again." });
+    }, 15_000);
     void readUsage(runId, controller.signal).then(
       (data) => {
+        clearTimeout(timeout);
         if (!controller.signal.aborted) setResult({ data });
       },
       (error: unknown) => {
+        clearTimeout(timeout);
         if (!controller.signal.aborted)
           setResult({
             error: error instanceof Error ? error.message : "Usage could not be read. Try again.",
@@ -38,6 +44,7 @@ export default function UsagePanel({ state, recorded }: { state: State; recorded
       },
     );
     return () => {
+      clearTimeout(timeout);
       controller.abort();
     };
   }, [runId, state.lastSeq, retry]);
@@ -285,7 +292,13 @@ export function UsageContent({
         <p className={`usage-closing ${lead || open ? "is-long" : ""}`}>
           {agents} {agents === 1 ? "agent" : "agents"}
           {lead ? " and a lead" : ""}
-          {knownTime ? ": " : open ? " have worked " : " worked "}
+          {open
+            ? agents === 1 && !lead
+              ? " has worked "
+              : " have worked "
+            : knownTime
+              ? ": "
+              : " worked "}
           <Value text={knownTime ? time.replace("At least", "at least") : time} />
           {knownTime ? " of agent time over " : " together over "}
           <Value text={knownTime ? active.replace("At least", "at least") : active} /> of project
