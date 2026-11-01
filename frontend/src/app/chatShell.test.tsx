@@ -9,7 +9,7 @@ import { initialView } from "./view";
 it("offers empty extension slots without inventing inactivity or compact agents", () => {
   const html = renderToStaticMarkup(
     <>
-      <ChatAgentsFrame selectedAgentId="agent-1" onOpenConversation={vi.fn()} />
+      <ChatAgentsFrame state={through(2)} selectedAgentId="agent-1" onOpenConversation={vi.fn()} />
       <ChatWorkFrame />
     </>,
   );
@@ -74,7 +74,7 @@ it("passes the selected agent and conversation callback to the C2 body slot", ()
   const onOpenConversation = vi.fn();
   const body = vi.fn(() => null);
   renderToStaticMarkup(
-    <ChatAgentsFrame selectedAgentId="agent-1" onOpenConversation={onOpenConversation}>
+    <ChatAgentsFrame state={through(2)} selectedAgentId="agent-1" onOpenConversation={onOpenConversation}>
       {body}
     </ChatAgentsFrame>,
   );

@@ -118,6 +118,7 @@ export function Frame(props: FrameProps) {
         practice={props.practice}
       />
       <ChatShell
+        state={state}
         active={shell.layout === "Chat"}
         selectedAgentId={view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation}
         onOpenConversation={props.onOpenConversation}
