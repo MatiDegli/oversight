@@ -3774,3 +3774,14 @@ remain the coordinator's merge prerequisites; activation does not complete proof
 Reason: approval and delivered prerequisites allow explicit rules selection, while live fake
 proof, committed receipts and repeatable clean starts establish the activation path without
 spending provider credits or relaxing any authority condition.
+
+## 2026-11-01 — C4 proposal evidence and change-local cost
+
+Chat's current proposal card joins the retained proposal position and exact change/revision/head.
+Historical entries keep the built timeline renderer. Candidate facts and assessments never fall
+back to an earlier revision. The six indicators summarize combined_tests, cross_review,
+small_change, small_cone, existing_tests_untouched and known_spend; they count recorded passes,
+preserve failure/unknown and are not an approval gate. Extra rules remain in the shared review.
+Run-local usageTicks retain only accepted events through the existing fold. Cost sums exact
+change_id across agents and roles; absent ticks and any null cost remain unknown, and null
+attribution stays unattributed. Sequence-gap protection and run replacement remain authoritative.
