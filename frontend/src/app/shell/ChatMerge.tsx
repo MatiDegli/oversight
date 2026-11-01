@@ -1,3 +1,6 @@
+import type { View, ViewAction } from "../view";
+// eslint-disable-next-line no-restricted-imports -- This hook consumes the existing projected resolution, not another timeline.
+import type { ConversationEntry } from "../../agents/conversation/selectConversation";
 import type { ChangeResolved } from "@contracts";
 // eslint-disable-next-line no-restricted-imports -- C5 reuses the timeline timestamp leaf without a graph/editor barrel.
 import { EventTime } from "../../agents/conversation/rows";
@@ -100,4 +103,59 @@ export function ChatMergeReceipt({
       </article>
     </div>
   );
+}
+
+/** Only the exact retained candidate can open the shared review; no cone is requested. */
+export function resolvedReviewAction(
+  state: State,
+  view: View,
+  entry: Extract<ConversationEntry, { kind: "resolution" }>,
+): ViewAction | null {
+  const resolution = entry.resolution;
+  const change = state.changes[resolution.change_id];
+  const proposal = change?.proposal;
+  if (
+    !isRulesMerge(resolution) ||
+    !proposal ||
+    proposal.change_id !== resolution.change_id ||
+    proposal.agent_id !== resolution.agent_id ||
+    proposal.revision !== resolution.revision ||
+    change.resolutionEvent?.seq !== entry.seq ||
+    change.resolution?.revision !== resolution.revision ||
+    change.resolution.agent_id !== resolution.agent_id ||
+    change.resolution.merge_commit !== resolution.merge_commit ||
+    !isRulesMerge(change.resolution) ||
+    !state.decisionEvents.some(
+      (e) =>
+        e.type === "change.proposed" &&
+        e.seq < entry.seq &&
+        e.payload.change_id === resolution.change_id &&
+        e.payload.agent_id === resolution.agent_id &&
+        e.payload.revision === resolution.revision,
+    ) ||
+    !state.decisionEvents.some(
+      (e) =>
+        e.type === "change.resolved" &&
+        e.seq === entry.seq &&
+        e.ts === entry.ts &&
+        e.payload.change_id === resolution.change_id &&
+        e.payload.agent_id === resolution.agent_id &&
+        e.payload.revision === resolution.revision &&
+        e.payload.merge_commit === resolution.merge_commit &&
+        isRulesMerge(e.payload),
+    )
+  )
+    return null;
+  return {
+    type: "open",
+    tab: {
+      id: `review:${resolution.change_id}`,
+      review: resolution.change_id,
+      selected: view.selected,
+      file: null,
+      diff: null,
+      frameIds: [],
+      frameKey: `review:${resolution.change_id}`,
+    },
+  };
 }

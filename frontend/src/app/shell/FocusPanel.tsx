@@ -16,7 +16,7 @@ import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
 import { UsageMount } from "../usage/UsageMount";
 import { LivePanel } from "./LivePanel";
-import { ChatMergeChip, ChatMergeReceipt, isRulesMerge } from "./ChatMerge";
+import { ChatMergeChip, ChatMergeReceipt, isRulesMerge, resolvedReviewAction } from "./ChatMerge";
 import { focusRing } from "./shared";
 
 const SettingsPanel = lazy(() =>
@@ -219,6 +219,8 @@ function ConversationFocus({
   canOpenChange,
   chat,
   onOpenSettings,
+  onTabAction,
+  view,
 }: FrameProps & { agentId: string; chat?: boolean }) {
   const conversation = selectConversation(state, agentId, state.messages[agentId] ?? []);
   if (!conversation)
@@ -229,10 +231,17 @@ function ConversationFocus({
         conversation={conversation}
         renderResolution={
           chat
-            ? (entry) =>
-                isRulesMerge(entry.resolution) ? (
-                  <ChatMergeReceipt resolution={entry.resolution} ts={entry.ts} />
-                ) : null
+            ? (entry) => {
+                if (!isRulesMerge(entry.resolution)) return null;
+                const action = resolvedReviewAction(state, view, entry);
+                return (
+                  <ChatMergeReceipt
+                    resolution={entry.resolution}
+                    ts={entry.ts}
+                    onReview={action && onTabAction ? () => onTabAction(action) : undefined}
+                  />
+                );
+              }
             : undefined
         }
         actionAccessory={

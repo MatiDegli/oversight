@@ -3660,3 +3660,10 @@ approved, merged, rules-authored decision. Other resolutions keep their existing
 renderer. The caption, rule/grant explanation, commit and timestamp belong to that
 immutable envelope; later mode events update only the chips. Missing assessment
 adds no historical claims. No event, retained projection or timeline is added.
+
+The C5 review link dispatches an existing `open` focus-tab action with stable
+`review:<change_id>` identity, preserved selection and empty framing IDs. It requires
+matching retained proposal/resolution identity, revision and envelope position plus
+the current review evidence. Missing evidence or dispatcher leaves a readable
+unavailable explanation. Shared pending-change guards remain unchanged; Chat stays
+selected and FocusPanel loads its existing ReviewPanel and tab history.
