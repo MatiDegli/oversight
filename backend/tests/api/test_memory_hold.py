@@ -6,6 +6,7 @@
 import asyncio
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from live_helpers import (
@@ -122,6 +123,8 @@ async def test_queue_rechecks_memory_without_wake(
     ):
         passes = selected(s, monkeypatch, 3)
         item = await enqueue(s)
+        wake_set = Mock(wraps=s.live.dispatcher.wake.set)
+        monkeypatch.setattr(s.live.dispatcher.wake, "set", wake_set)
         await state(s, item, "blocked")
         await passes.wait()
         held = s.live.dispatcher.items[item.queued_task_id]
@@ -131,6 +134,7 @@ async def test_queue_rechecks_memory_without_wake(
         reading[0] = 89
         await state(s, item, "running")
         assert states(s, item) == ["queued", "blocked", "queued", "running"]
+        wake_set.assert_not_called()
 
 
 async def test_rechecks_do_not_spam_queue_events(
