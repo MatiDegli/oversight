@@ -48,7 +48,7 @@ from oversight.workspace.revert import (
     prepare_inverse,
 )
 from oversight.workspace.runner import ProcessResult, Spawn, run_process
-from oversight.workspace.secret_paths import SECRET_FILE_REFUSAL, is_secret_path
+from oversight.workspace.secret_paths import SECRET_FILE_REFUSAL, is_secret_path, secret_refusal
 from oversight.workspace.source import (
     BOLTONS,
     SOURCE_GIT_ENV,
@@ -127,6 +127,7 @@ __all__ = [
     "print_isolation_probe",
     "render_examples",
     "run_process",
+    "secret_refusal",
     "select_source",
     "valid_agent_id",
     "validate_source",

@@ -3133,3 +3133,39 @@ renewed evaluation, without changing preemption. Revert's landed success/receipt
 announce its verified inverse commit and deliver the graph before queued work renews.
 The activation latch stays closed; no wire contract, event type, public field, route or response
 body changes.
+
+## 2026-10-31 — Secret-file defaults and criteria evidence hardening
+
+The maintainer approved the secret-filter defaults on 2026-10-31: AGENTS.md's id_* means
+id_rsa, id_dsa, id_ecdsa and id_ed25519 with the existing identity-name boundaries, so
+id_utils.py stays readable. Basename examples remain exempt. One shared refusal formatter
+keeps the message byte-for-byte, limits disclosure to 60 basename characters, and never
+checks existence; an ordinary trailing slash still has an empty, non-secret basename.
+
+At 20:05:33 ART on 2026-10-31 the maintainer decided that any directory segment whose
+case-folded name starts with .env also makes the file secret. This name-only check precedes
+the basename exemption, so even an app.example inside .envs is refused. Search already
+filters each repository-relative path before reading it; list_files still exposes names.
+
+Criteria error diagnostics report only the server-controlled code and required-case count.
+Example ids and pytest slugs are model text, so neither belongs in that diagnostic. Required
+example ids remain stored for confirmation. If criteria normalization turns an observed pass
+into an error and its problems contain code=integrity_invalid, the required combined suite
+preserves that refusal code rather than substituting suite_failed. This keeps the same
+needs-you integrity signal as a run without criteria; ordinary suite failures keep their code.
+
+Cancellation during proposal criteria verification publishes the observed suite as an error
+with tree_unreadable before propagating cancellation. A shared normalization helper preserves
+observed cases, and the no-I/O fallback keeps the verifier's ineligible-run early returns.
+Unchecked criteria cannot certify an observed pass. Combined-path cancellation remains owned
+by the existing recovery path.
+
+Criteria installation reads the worktree file under the held locks. An identical generated
+file can complete an interrupted installation without another write; different worktree or
+head bytes, or any base entry, still refuse. The same bytes bind the same hash, so repeated
+file publication is safe; assigning the record's criteria remains the last step.
+
+The input and output character caps stay on canonical ASCII text entering generated source
+and its hash. Non-ASCII expansion can therefore refuse otherwise short raw input. Rebasing
+the caps to raw length would change which examples install and requires a separate product
+decision; this change only documents and tests the existing behavior.

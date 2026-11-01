@@ -31,7 +31,11 @@ class RequiredCriteria:
 
 
 def render_criteria(examples: Sequence[TaskExample], change_id: str) -> RenderedCriteria:
-    """Preview and installation share strict parsing and the public canonical JSON rule."""
+    """Preview and installation share strict parsing and canonical JSON.
+
+    Character caps also apply to canonical ASCII text entering the source and hash.
+    Rebasing those caps to raw input length changes which examples can install.
+    """
     parsed = parse_example_cases(examples)
     # Validate before canonicalization: duplicate keys must never disappear here.
     normalized = [
@@ -102,7 +106,7 @@ async def install_criteria(
     ctx: ChangeContext, rec: ChangeRecord, confirmed: Sequence[TaskExample]
 ) -> RequiredCriteria:
     """E3's future confirmation port; no production caller in E4."""
-    from oversight.changes._proposal import refresh, send_file
+    from oversight.changes._proposal import read, refresh, send_file
 
     _installable(rec)
     rendered = render_criteria(confirmed, rec.change_id)
@@ -120,9 +124,15 @@ async def install_criteria(
             reason = await eligible_target(rec, case.node_id)
             if reason is not None:
                 raise ValueError(reason)
-        if rendered.path in rec.base_files or rendered.path in rec.head_files:
+        current = await read(ctx, rec.tree, rendered.path)
+        if (
+            rendered.path in rec.base_files
+            or current not in {None, rendered.source}
+            or rec.head_files.get(rendered.path) not in {None, rendered.source}
+        ):
             raise ValueError("criteria path already exists")
-        await rec.tree.write_text(rendered.path, rendered.source, expected_hash=None)
+        if current is None:
+            await rec.tree.write_text(rendered.path, rendered.source, expected_hash=None)
         rec.observed_paths.add(rendered.path)
         rec.touched.add(rendered.path)
         await refresh(ctx, rec, {rendered.path})
@@ -173,12 +183,37 @@ async def verify_run(
     code = await _file_problem(ctx, rec, run) or _report_problem(required, run)
     if code is None:
         return run
-    normalized = replace(
+    normalized = _normalize_run(run, code)
+    # Counts avoid exposing model-authored ids, slugs or inputs.
+    await ctx.error(
+        "tests",
+        f"example_criteria: {code}; required_cases={len(required.test_ids)}",
+        rec,
+        fatal=False,
+    )
+    return normalized
+
+
+def _normalize_run(run: SuiteRun, code: str) -> SuiteRun:
+    return replace(
         run,
         result=run.result.model_copy(update={"outcome": "error"}),
         problems=(*run.problems, f"example_criteria: {code}"),
     )
-    # Only server-controlled code and recorded ids: never inputs, expected values or source.
-    ids = canonical_json(sorted(required.example_ids))
-    await ctx.error("tests", f"example_criteria: {code}; example_ids={ids}", rec, fatal=False)
-    return normalized
+
+
+def unverified_run(rec: ChangeRecord, run: SuiteRun) -> SuiteRun:
+    """Preserve observed proposal evidence when criteria verification was interrupted."""
+    if rec.criteria is None or run.tested_tree is None or run.result.outcome != "passed":
+        return run
+    return _normalize_run(run, "tree_unreadable")
+
+
+def refusal_code(run: SuiteRun) -> str:
+    if (
+        run.problems
+        and run.problems[-1].startswith("example_criteria: ")
+        and any("code=integrity_invalid" in problem for problem in run.problems)
+    ):
+        return "integrity_invalid"
+    return "suite_failed"

@@ -7,6 +7,7 @@ import json
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import ModuleType
 from unittest.mock import AsyncMock
 
 import pytest
@@ -129,10 +130,23 @@ def test_render_source_cap() -> None:
 
 
 @pytest.mark.parametrize("value", [{"z": "é", "a": [1, 1.0, None, True, False, ""]}, "", 1, 1.0])
-def test_render_parity_with_canonical_json(value) -> None:
+def test_render_parity_with_canonical_json(value, monkeypatch) -> None:
     cases = [example(expected_output=json.dumps(value, ensure_ascii=False))]
     assert parse_cases(cases)[0].expected == canonical_json(value)
-    assert render_examples(cases, "change-1") == render_criteria(cases, "change-1")
+    rendered = render_criteria(cases, "change-1")
+    assert render_examples(cases, "change-1") == rendered
+    module = ModuleType("shop.mod")
+    monkeypatch.setattr(module, "value", lambda: value, raising=False)
+    monkeypatch.setitem(sys.modules, "shop.mod", module)
+    namespace: dict[str, object] = {}
+    exec(rendered.source, namespace)
+    check = namespace[rendered.cases[0][1].split("::")[1]]
+    assert callable(check)
+    check()
+    if isinstance(value, float):
+        monkeypatch.setattr(module, "value", lambda: 1)
+        with pytest.raises(AssertionError):
+            check()
     left = example(inputs='{"kwargs":{"b":1,"a":2},"args":[],"node_id":"shop.mod:value"}')
     right = example(inputs='{"node_id":"shop.mod:value","args":[],"kwargs":{"a":2,"b":1}}')
     assert render_criteria([left], "change-1") == render_criteria([right], "change-1")
@@ -148,6 +162,7 @@ def test_render_parity_with_canonical_json(value) -> None:
         {"inputs": '{"node_id":"shop.mod:value","args":{},"kwargs":{}}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[],"kwargs":[]}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[],"kwargs":{"x":1,"x":2}}'},
+        {"inputs": '{"node_id":"shop.mod:value","args":[],"args":[1],"kwargs":{}}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[NaN],"kwargs":{}}'},
         {"inputs": '{"node_id":"shop.mod:value","args":[],"kwargs":{"x":1e999}}'},
         {"inputs": " " * 4001},
@@ -167,6 +182,7 @@ def test_render_parity_with_canonical_json(value) -> None:
             "shop:outer.inner",
             "shop:f#2",
             "a..b:f",
+            "a:b:c",
             "a:if",
             "if:f",
             1,
@@ -336,10 +352,7 @@ async def test_verify_run_codes(h: Harness, monkeypatch) -> None:
         assert normalized.problems == (*observed.problems, f"example_criteria: {code}")
         assert normalized.cases is observed.cases and normalized.tested_tree == observed.tested_tree
         assert normalized.result.failed_tests == observed.result.failed_tests
-        assert (
-            h.payloads(ErrorReport)[-1].message
-            == f'example_criteria: {code}; example_ids=["basic"]'
-        )
+        assert h.payloads(ErrorReport)[-1].message == f"example_criteria: {code}; required_cases=1"
     spy.return_value = ProcessResult(0, rendered.source, "", False, False, 0)
     full = replace(
         passed,
@@ -361,7 +374,7 @@ async def test_verify_read_failure(h: Harness, monkeypatch, failure) -> None:
     normalized = await verify_run(h.manager._ctx, rec, run(), phase="combined")
     assert normalized.problems == ("example_criteria: tree_unreadable",)
     assert h.payloads(ErrorReport)[0].message == (
-        'example_criteria: tree_unreadable; example_ids=["a","z"]'
+        "example_criteria: tree_unreadable; required_cases=1"
     )
 
 
@@ -419,7 +432,7 @@ async def test_proposal_suite_normalized_and_consistent(h: Harness, fault: str, 
         phase="proposal",
     )
     [error] = h.payloads(ErrorReport)
-    assert error.message == f'example_criteria: {code}; example_ids=["basic"]'
+    assert error.message == f"example_criteria: {code}; required_cases=1"
     [facts] = h.payloads(ChangeFacts)
     assert {
         f"suite {seq}: example_criteria: {code}",
