@@ -251,6 +251,7 @@ def test_schema_changes_only_approved_attachments() -> None:
         "ModelAttemptFailed",
         "ModelAttemptFailedEvent",
         "ParameterExtensionDiff",
+        "ConfirmExamples",
     }
     assert not set(baseline) - set(current)
     for name, definition in baseline.items():
