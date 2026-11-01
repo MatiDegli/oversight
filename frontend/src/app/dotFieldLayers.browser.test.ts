@@ -5,6 +5,60 @@ import { expect, it } from "vitest";
 import { look, settledGraph, STRAY, withPage } from "./dotField.browser.support";
 import type { Rect } from "./dotField.browser.support";
 
+it.each(["reduce", "no-preference"] as const)(
+  "waits for the lazy field controller before checking layers or motion (%s)",
+  async (reducedMotion) => {
+    let releaseController = () => {};
+    const probeRead = new Promise<void>((resolve) => {
+      releaseController = resolve;
+    });
+    let requested = false;
+    await withPage(
+      {
+        reducedMotion,
+        beforeMount: async (page) => {
+          // Hold the real lazy module until someone first asks for the canvas's probe. The canvas
+          // already exists then, but its controller cannot have initialized it yet.
+          await page.route("**/src/graph/field/controller.ts", async (route) => {
+            requested = true;
+            await probeRead;
+            await route.continue();
+          });
+          await page.exposeFunction("readFieldProbe", releaseController);
+          await page.evaluate(() => {
+            Object.defineProperty(HTMLCanvasElement.prototype, "oversightField", {
+              configurable: true,
+              get() {
+                void (
+                  window as unknown as { readFieldProbe: () => Promise<void> }
+                ).readFieldProbe();
+                return undefined;
+              },
+              set(probe: unknown) {
+                Object.defineProperty(this, "oversightField", {
+                  configurable: true,
+                  writable: true,
+                  value: probe,
+                });
+              },
+            });
+          });
+        },
+      },
+      async (page) => {
+        const ready = await page.evaluate(() => {
+          const probe = window.fieldTest.elements().field.oversightField;
+          return probe ? { state: probe.state(), draws: probe.draws() } : null;
+        });
+        expect(requested).toBe(true);
+        expect(ready?.state).toBe("webgl");
+        expect(ready?.draws).toBeGreaterThan(0);
+      },
+    );
+  },
+  30_000,
+);
+
 it("sits under the Cytoscape canvas, takes no pointer and no focus, and shows through it", async () => {
   await withPage({ reducedMotion: "reduce" }, async (page) => {
     const stack = await page.evaluate(() => {
