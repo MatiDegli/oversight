@@ -467,13 +467,18 @@ it("keeps plan pieces readable through App's replay path without mutation reques
     const cart = inbox.locator("article").filter({ hasText: "Reject bad quantities in the cart" });
     const rowLayout = async () => ({
       padding: await cart.evaluate((row) => getComputedStyle(row).padding),
+      timeFont: await cart.locator("time").evaluate((time) => getComputedStyle(time).fontFamily),
       title: await cart.locator("h3").evaluate((title) => ({
         size: getComputedStyle(title).fontSize,
         weight: getComputedStyle(title).fontWeight,
       })),
     });
     const eagerLayout = await rowLayout();
-    expect(eagerLayout).toEqual({ padding: "12px 22px", title: { size: "15px", weight: "600" } });
+    expect(eagerLayout).toEqual({
+      padding: "12px 22px",
+      timeFont: '"Atkinson Hyperlegible Mono", monospace',
+      title: { size: "15px", weight: "600" },
+    });
     await page.evaluate(() => {
       const a = window.leadActions;
       a.update({ revision: 2, queued_task_id: a.queueItem.queued_task_id }, {});
@@ -509,6 +514,28 @@ it("keeps plan pieces readable through App's replay path without mutation reques
     await expect(queued.getByRole("button")).toHaveCount(0);
     await expect(inbox.locator(".plan-piece li")).toHaveCount(5);
     expect(sent).toEqual([]);
+    await page.evaluate(() => {
+      window.leadActions.update({
+        revision: 3,
+        queued_task_id: "queue-orders",
+        task: "A long queued plan title that must wrap without running underneath its status pill ".repeat(
+          3,
+        ),
+      });
+    });
+    const queuedRow = queued.locator("article");
+    await expect(queuedRow.locator("h3")).toContainText("A long queued plan title");
+    const separated = await queuedRow.evaluate((row) => {
+      const title = row.querySelector("h3"),
+        pill = row.querySelector(".plan-status");
+      if (!title || !pill) throw new Error("Missing queued title or status");
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      return [...range.getClientRects()].every(
+        (line) => line.right <= pill.getBoundingClientRect().left,
+      );
+    });
+    expect(separated).toBe(true);
   } finally {
     releaseChunk();
     await page.close();

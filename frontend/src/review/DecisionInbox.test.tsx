@@ -172,15 +172,34 @@ it("lists a second distinct reason once, excluding the heading and paragraph", (
 });
 
 it("ships the inbox headline before any lazy plan and removes the obsolete hero count", () => {
+  const eager = readFileSync(new URL("./inbox.css", import.meta.url), "utf8");
   const lazy = readFileSync(new URL("./planActions.css", import.meta.url), "utf8");
   for (const inbox of [
     renderToStaticMarkup(<DecisionInbox state={leadState} />),
     renderToStaticMarkup(<InboxHeading count={3} agents={1} steps={3} minutes={0} />),
   ]) {
-    expect(inbox).toContain('<h2 style="font-size:20px;font-weight:700;line-height:1.3">');
-    expect(inbox).not.toContain('class="inbox-count"');
+    expect(inbox).toContain("<h2>Decisions waiting for you</h2>");
+    expect(inbox).not.toContain("<style>");
+    expect(inbox).not.toContain('style="');
   }
+  expect(eager).toMatch(
+    /\.inbox-heading h2\s*\{[^}]*font-size: 20px;[^}]*font-weight: 700;[^}]*line-height: 1\.3;/s,
+  );
+  expect(eager).toMatch(/\.inbox-count\s*\{\s*display: none;\s*\}/);
+  expect(eager).not.toContain("font-size: 64px");
   expect(lazy).not.toContain(".inbox-heading");
+});
+
+it("records the ratified eager stylesheet and separates the next decision entry", () => {
+  const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
+  const entry = decisions
+    .split("## 2026-11-01 — Lead plan actions keep their eager layout within scope\n")[1]
+    ?.split("## ")[0];
+  expect(entry).toContain("17:25 UTC");
+  expect(entry).toContain("`inbox.css`");
+  expect(entry).not.toContain("exclude");
+  expect(entry).not.toContain("style element");
+  expect(entry).toMatch(/\n\n$/);
 });
 
 it("attributes the plan only to its author while tracking remains pending", () => {
@@ -316,6 +335,21 @@ it.each([
       expect(html).toContain("Blocked");
       expect(html).not.toContain("Waits for");
       expect(html).not.toContain("Waiting for slot evidence");
+      expect(html).not.toContain('<p class="plan-explanation"></p>');
     }
   },
 );
+
+it("omits the explanation spacing for a queue link without observed queue evidence", () => {
+  const event = leadEvents[7];
+  if (event?.type !== "plan.updated") throw new Error("Missing plan");
+  const html = renderToStaticMarkup(
+    <PlanActions
+      state={leadState}
+      plan={{ ...event.payload, queued_task_id: "unobserved" }}
+      slots={null}
+    />,
+  );
+  expect(html).toContain("Queue link recorded");
+  expect(html).not.toContain('<p class="plan-explanation"></p>');
+});

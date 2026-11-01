@@ -3310,13 +3310,15 @@ lead lifecycle and the reserved Plan tab's tracking remain follow-up fronts.
 
 ## 2026-11-01 — Lead plan actions keep their eager layout within scope
 
-The lead-actions allowed paths exclude `inbox.css`, so restore it byte for byte to `54dc64d`.
-Keep the headline in the shared InboxHeading and the surrounding plan-row/group layout in
-DecisionInbox's style element, including the loading fallback's plan-content marker.
+The coordinator ratified `inbox.css` at 17:25 UTC (14:25 ART) on Nov 1 for the eager inbox
+headline, row-title and plan-group layout. Keep those rules in that stylesheet, including
+the loading fallback's plan-content marker. Restore the shared InboxHeading to main's markup
+and hide its separate hero numeral through the eager stylesheet.
 Only the plan piece and controls need the lazy stylesheet; their arrival must not change
 row gutters, titles or group labels.
 Reject opens with focus in the comment; Keep returns it to the original Reject control.
 The caption attributes drafting to the lead only: post-dispatch tracking remains pending.
+
 ## 2026-11-01 — Usage read lifecycle, camera and lower bounds
 
 Packet b-1101a item 1 was approved at 01:03:27 ART. Premises refer to main `6ab92e7`;

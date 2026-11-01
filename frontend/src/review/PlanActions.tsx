@@ -35,6 +35,9 @@ export default function PlanActions({
       : queue?.state === "queued"
         ? "Waiting for slot evidence."
         : null);
+  const explanation = plan.queued_task_id
+    ? waiting
+    : `${String(wave)} ${wave === 1 ? "subtask starts" : "subtasks start"} first${wave < (plan.subtasks?.length ?? 0) ? "; the rest start after a prerequisite merges" : ""}.`;
   return (
     <div className="plan-content">
       {plan.queued_task_id && (
@@ -79,16 +82,14 @@ export default function PlanActions({
         </blockquote>
       ) : (
         <>
-          <p className="plan-explanation">
-            {plan.queued_task_id && queue?.state === "queued" && (
-              <Clock size={13} aria-hidden="true" />
-            )}
-            {plan.queued_task_id
-              ? queue?.state === "queued" || queue?.state === "blocked"
-                ? waiting
-                : queue?.detail
-              : `${String(wave)} ${wave === 1 ? "subtask starts" : "subtasks start"} first${wave < (plan.subtasks?.length ?? 0) ? "; the rest start after a prerequisite merges" : ""}.`}
-          </p>
+          {explanation && (
+            <p className="plan-explanation">
+              {plan.queued_task_id && queue?.state === "queued" && (
+                <Clock size={13} aria-hidden="true" />
+              )}
+              {explanation}
+            </p>
+          )}
           {planActions ? (
             <PlanControls state={state} plan={plan} queue={queue} />
           ) : (

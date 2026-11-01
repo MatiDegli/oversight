@@ -50,10 +50,9 @@ export function InboxHeading({
 } & ReturnType<typeof selectInboxSummary>) {
   return (
     <header className="inbox-heading">
+      <span className="inbox-count">{count}</span>
       <div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.3 }}>
-          {count ? "Decisions waiting for you" : "No decisions waiting"}
-        </h2>
+        <h2>{count ? "Decisions waiting for you" : "No decisions waiting"}</h2>
         <p className="decision-muted">
           {agents} {agents === 1 ? "agent" : "agents"} took {steps} {steps === 1 ? "step" : "steps"}
           {minutes === null ? "" : ` in ${String(minutes)} min`}.{" "}

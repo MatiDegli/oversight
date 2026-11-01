@@ -15,25 +15,6 @@ import { selectPlanEvidence, selectRetainedPlans } from "./planSelectors";
 import "./inbox.css";
 
 const PlanActions = lazy(() => import("./PlanActions"));
-// The surrounding layout must be ready while the plan chunk is still loading.
-const planLayout = `
-.inbox-row:has(.plan-content) {
-  padding: 12px 22px;
-  position: relative;
-}
-.inbox-row:has(.plan-content) > h3 {
-  font-size: 15px;
-  font-weight: 600;
-}
-.plan-content {
-  margin-top: 8px;
-  color: var(--text);
-}
-.plan-group > h3 {
-  padding: 12px 22px 0;
-  color: var(--muted);
-}
-`;
 const planPiece = (state: State, plan: Plan) => (
   <Suspense
     fallback={
@@ -199,7 +180,6 @@ export function DecisionInbox({
   const retained = selectRetainedPlans(state);
   return (
     <section aria-label="Decisions inbox" className="decisions-inbox">
-      <style>{planLayout}</style>
       <InboxViews count={entries.length} grants={grants.length} view={view} onView={setView} />
       {view === "grants" ? (
         <StandingGrants state={state} />
