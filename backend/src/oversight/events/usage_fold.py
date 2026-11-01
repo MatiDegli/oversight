@@ -182,6 +182,7 @@ def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
                 | "revert.resolved"
                 | "queue.updated"
                 | "lead.status"
+                | "lead.reply"
                 | "grant.created"
                 | "grant.revoked"
             ):

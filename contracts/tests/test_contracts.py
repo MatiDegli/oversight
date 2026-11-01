@@ -234,6 +234,7 @@ def test_the_event_types_include_the_approved_level3_reservations() -> None:
         "revert.resolved",
         "queue.updated",
         "lead.status",
+        "lead.reply",
         "grant.created",
         "grant.revoked",
         "model.attempt_failed",

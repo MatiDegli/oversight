@@ -150,6 +150,9 @@ export function App() {
       viewReducer(current, { type: "open", tab: surfaceTab(current, "settings") }),
     );
   }, []);
+  const onOpenUsage = useCallback(() => {
+    setView((current) => viewReducer(current, { type: "open", tab: surfaceTab(current, "usage") }));
+  }, []);
   const onSetMergeMode = async (mode: MergeMode) => {
     const current = selectMergeMode(state);
     if (
@@ -352,6 +355,7 @@ export function App() {
           onReview={onReview}
           onOpenQueue={onOpenQueue}
           onOpenSettings={onOpenSettings}
+          onOpenUsage={replayBuild ? undefined : onOpenUsage}
           onSetMergeMode={
             commands
               ? (mode) => {

@@ -9,6 +9,54 @@ import type { EventStream } from "./index";
 import { log, run, graph, FakeSource, stops, setup } from "./transport.support";
 
 describe("live transport", () => {
+  it("accepts lead replies and idle status without creating a thread", async () => {
+    const { transport, store, source, onError } = setup();
+    await transport.ready;
+    for (const event of log) source().emit(event);
+    const before = store.getState().state;
+    const reply = parseEvent(
+      JSON.stringify({
+        seq: before.lastSeq + 1,
+        ts: "2026-11-01T17:04:57.000Z",
+        type: "lead.reply",
+        payload: {
+          agent_id: "agent-1",
+          answers_seq: null,
+          text: "Reply",
+          through_seq: 1,
+          cut: null,
+        },
+      }),
+    );
+    source().emit(reply);
+    expect(store.getState().state).toEqual({ ...before, lastSeq: reply.seq, clock: reply.ts });
+    const idle = parseEvent(
+      JSON.stringify({
+        seq: reply.seq + 1,
+        ts: reply.ts,
+        type: "lead.status",
+        payload: {
+          agent_id: "agent-1",
+          revision: 2,
+          task: "Coordinate",
+          model: "fake",
+          state: "idle",
+          step: 1,
+          detail: null,
+          requested_plan_id: null,
+        },
+      }),
+    );
+    source().emit(idle);
+    expect(store.getState().state).toEqual({
+      ...before,
+      lastSeq: idle.seq,
+      clock: idle.ts,
+      decisionEvents: [...before.decisionEvents, idle],
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("reports a connected stream even with no new events and ignores opens after stop", async () => {
     const onOpen = vi.fn();
     const { source, transport, onError } = setup(onOpen);

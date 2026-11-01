@@ -51,6 +51,7 @@ export interface FrameProps {
   /** The queue counter's click: review of the next proposed change. */
   onOpenQueue?: () => void;
   onOpenSettings?: () => void;
+  onOpenUsage?: () => void;
   onSetMergeMode?: (mode: MergeMode) => void;
   mergeModeAttempt?: MergeModeAttempt;
   /** The person's last decision per change. */
@@ -105,6 +106,7 @@ export function Frame(props: FrameProps) {
         state={state}
         onOpenQueue={props.onOpenQueue}
         onOpenSettings={props.onOpenSettings}
+        onOpenUsage={props.onOpenUsage}
         onOpenPalette={shell.openPalette}
         practice={props.practice}
       />
