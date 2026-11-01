@@ -289,10 +289,20 @@ it.each([
           {},
         );
       });
-      const queued = inbox.getByRole("region", { name: "Queued plans" });
+      const queued = inbox.getByRole("region", { name: "Queued, waiting for slots" });
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
       await expect(queued.locator("li")).toHaveCount(4);
-      await expect(queued).toContainText("Needs 2 free slots; 2 of 2 slots are held.");
+      const groupHeading = queued.getByRole("heading", { name: "Queued, waiting for slots" });
+      await expect(groupHeading).toHaveText("Queued, waiting for slots");
+      await expect(groupHeading).toHaveCSS("font-size", "11.5px");
+      await expect(groupHeading).toHaveCSS("font-weight", "600");
+      await expect(groupHeading).toHaveCSS("letter-spacing", "0.92px");
+      await expect(groupHeading).toHaveCSS("text-transform", "uppercase");
+      const waitingLine = queued
+        .locator(".plan-explanation")
+        .filter({ hasText: "Needs 2 free slots; 2 of 2 slots are held." });
+      await expect(waitingLine).toHaveText("Needs 2 free slots; 2 of 2 slots are held.");
+      await expect(waitingLine.locator('svg.lucide-clock[aria-hidden="true"]')).toHaveCount(1);
       await reachable(page);
       await capture(page, "queued", width, theme);
       await page.evaluate(() => {
@@ -359,6 +369,11 @@ it.each([
         );
       });
       const failed = inbox.getByRole("region", { name: "Ended without running" });
+      const failedHeading = failed.getByRole("heading", { name: "Ended without running" });
+      await expect(failedHeading).toHaveCSS("font-size", "11.5px");
+      await expect(failedHeading).toHaveCSS("font-weight", "600");
+      await expect(failedHeading).toHaveCSS("letter-spacing", "0.92px");
+      await expect(failedHeading).toHaveCSS("text-transform", "uppercase");
       await expect(failed.locator("blockquote")).toHaveText("The dispatch could not start");
       await expect(failed.getByRole("button")).toHaveCount(0);
       expect(await camera()).toEqual(unchanged);
@@ -415,7 +430,7 @@ it("keeps plan pieces readable through App's replay path without mutation reques
       const a = window.leadActions;
       a.update({ revision: 2, queued_task_id: a.queueItem.queued_task_id }, {});
     });
-    const queued = inbox.getByRole("region", { name: "Queued plans" });
+    const queued = inbox.getByRole("region", { name: "Queued, waiting for slots" });
     await expect(queued.locator(".plan-piece li")).toHaveCount(3);
     await expect(queued.getByRole("button")).toHaveCount(0);
     await expect(inbox.locator(".plan-piece li")).toHaveCount(5);

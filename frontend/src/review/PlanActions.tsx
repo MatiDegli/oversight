@@ -76,6 +76,9 @@ export default function PlanActions({
       ) : (
         <>
           <p className="plan-explanation">
+            {plan.queued_task_id && queue?.state === "queued" && (
+              <Clock size={13} aria-hidden="true" />
+            )}
             {plan.queued_task_id
               ? queue?.state === "queued" || queue?.state === "blocked"
                 ? waiting

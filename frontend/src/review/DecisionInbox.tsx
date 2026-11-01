@@ -239,10 +239,14 @@ export function DecisionInbox({
                 retained[group].length > 0 && (
                   <section
                     className="plan-group"
-                    aria-label={group === "queued" ? "Queued plans" : "Ended without running"}
+                    aria-label={
+                      group === "queued" ? "Queued, waiting for slots" : "Ended without running"
+                    }
                     key={group}
                   >
-                    <h3>{group === "queued" ? "Queued plans" : "Ended without running"}</h3>
+                    <h3 className="group-label">
+                      {group === "queued" ? "Queued, waiting for slots" : "Ended without running"}
+                    </h3>
                     {retained[group].map(({ payload: plan, firstTs }) => (
                       <article className="inbox-row" key={plan.plan_id}>
                         <div className="decision-heading">

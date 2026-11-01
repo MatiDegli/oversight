@@ -219,6 +219,10 @@ it.each(["starting", "failed"] as const)(
     );
     expect(row).toContain("Plan · <time>15:00 ART</time>");
     expect(row).not.toContain("Decision ·");
+    const label = status === "starting" ? "Queued, waiting for slots" : "Ended without running";
+    const html = renderToStaticMarkup(<DecisionInbox state={next} />);
+    expect(html).toContain(`aria-label="${label}"`);
+    expect(html).toContain(`<h3 class="group-label">${label}</h3>`);
   },
 );
 
@@ -247,8 +251,12 @@ it.each(["queued", "blocked"] as const)(
     const html = renderToStaticMarkup(
       <PlanActions state={next} plan={plan} slots={{ held: 2, total: 2 }} />,
     );
-    if (status === "queued") expect(html).toContain("Needs 1 free slot; 2 of 2 slots are held.");
-    else {
+    if (status === "queued") {
+      expect(html).toContain("Needs 1 free slot; 2 of 2 slots are held.");
+      expect(html).toMatch(
+        /<p class="plan-explanation"><svg[^>]*class="lucide lucide-clock"[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Needs 1 free slot/s,
+      );
+    } else {
       expect(html).toContain("Blocked");
       expect(html).not.toContain("Needs 1 free slot");
       expect(html).not.toContain("Waiting for slot evidence");
