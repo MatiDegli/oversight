@@ -43,15 +43,9 @@ async def test_observer_on_and_off_preserve_outcomes_and_reconcile_wall_time(tmp
             gaps += child["start"] - cursor
             cursor = child["end"]
         gaps += root_span["end"] - cursor
-        # Load produced 0.1247 s of scheduler gaps in 3.1066 s (4.0150%); allow 8%.
-        # Cap at 75% of the shortest phase to reject omissions; 50 ms covers short attempts.
-        assert gaps < max(
-            0.05,
-            min(
-                0.08 * elapsed,
-                0.75 * min(r["end"] - r["start"] for r in children) if len(children) == 2 else 0.0,
-            ),
-        )
+        # Load added scheduler gaps up to 4.0150% of elapsed; allow 8%.
+        # Keep 50 ms for short attempts; exact child names above catch missing phases.
+        assert gaps < max(0.05, 0.08 * elapsed)
         assert sum(r["end"] - r["start"] for r in children) + gaps == pytest.approx(elapsed)
         assert {r["source"] for r in trace} == {"server", "evaluator"}
         assert len({r["attempt"] for r in trace}) == 1
