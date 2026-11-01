@@ -1,0 +1,8 @@
+{
+  "task": "Explain the current run, then check it again when asked.",
+  "turns": [
+    {"text": "I can explain the current run without proposing a plan.", "usage": {}},
+    {"tool_calls": [{"name": "status", "arguments": {}}], "usage": {}},
+    {"tool_calls": [{"name": "finish", "arguments": {"reply": "I checked the committed status for this turn."}}], "usage": {}}
+  ]
+}

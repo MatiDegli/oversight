@@ -635,7 +635,7 @@ the single error format.
 | `POST /leads` | `StartLead {task, model?}` | 201 `LeadCreated` | `invalid_request`, `not_configured`, `spend_brake`, `wrong_state` |
 | `GET /leads/{id}` | none | 200 `LeadStatus` | `not_found` |
 | `POST /leads/{id}/stop` | `StopLead {revision}` | 202 | `not_found`, `wrong_state` |
-| `POST /leads/{agent_id}/message` | existing `AgentMessage {text}` | Declared for L2: empty 202; 501 in replay | 409 `wrong_state` unless the lead is idle |
+| `POST /leads/{agent_id}/message` | existing `AgentMessage {text}` | L2: empty 202; 501 in replay before parsing | `not_found`, `invalid_request`, `spend_brake`, 409 `wrong_state` unless idle |
 | `GET /graph` | none | 200 `GraphResponse {run_id, seq, graph}` | |
 | `POST /graph/rescan` | none | 202 | |
 | `GET /impact?node=&depth=&change=` | none | 200 `ImpactCone`; on main, or on a change's version | `not_found` |
@@ -645,9 +645,11 @@ the single error format.
 | `GET /events` | none | SSE, see 4.6 | |
 | `GET /health` | none | 200 `Health {ok, run_id, contract_version, mode, missing_settings}`; mode is `live` or `replay` | |
 
-- The lead-message row is a contract declaration only in L1; it does not install a handler.
-  L2 implements admission and emits existing `agent.message` with the lead id as recipient;
-  L2 also produces `lead.reply`, and L3 implements the Chat thread. There is no route manifest
+- L2 installs lead-message admission and emits existing `agent.message` with the lead id as recipient,
+  followed by `lead.reply` for completed/cut turns. The run-local thread waits idle between at most
+  50 turns, retains three plans across the thread, and stops/halts terminally. L3 implements the Chat
+  composer/navigation, freshness, withheld/cut notices, plan links, graph/focus and approval-key
+  protections, fixture exclusion and the 50-turn decision-count cost fixture and Playwright coverage. There is no route manifest
   in the generated schema: routes are described by command docstrings and this table.
 - Among installed routes in live mode, only the routes in `api/commands.py` NOT_BUILT (`POST /dictation` and
   `POST /changes/{id}/review`) are unbuilt and answer 501. Server replay also answers 501

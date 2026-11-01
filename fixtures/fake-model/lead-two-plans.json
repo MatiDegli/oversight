@@ -33,7 +33,7 @@
       "usage": {"input_tokens": 120, "output_tokens": 40, "cached_tokens": 0}
     },
     {
-      "tool_calls": [{"name": "finish", "arguments": {}}],
+      "tool_calls": [{"name": "finish", "arguments": {"reply": "The requested plans are ready for your decision."}}],
       "usage": {"input_tokens": 120, "output_tokens": 40, "cached_tokens": 0}
     }
   ]

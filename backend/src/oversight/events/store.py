@@ -22,6 +22,7 @@ from pydantic import TypeAdapter
 
 from oversight.events.clock import Clock, format_ts, system_clock
 from oversight.events.graph_fold import apply_delta
+from oversight.events.lead_fold import CommittedLeadPrefix, fold_lead_status
 from oversight.events.needs_you import TerminalClaim, TerminalClaims, terminal_key
 from oversight.events.references import validate_references
 from oversight_contracts.events import (
@@ -358,6 +359,13 @@ class EventStore:
     @property
     def last_seq(self) -> int:
         return len(self._events)
+
+    def lead_status(self) -> tuple[int, str]:
+        """Fold one committed prefix without copying or exposing the full event log."""
+        through_seq = self.last_seq
+        return fold_lead_status(
+            CommittedLeadPrefix(self._reference_events, through_seq), through_seq
+        )
 
     def committed_events(self) -> tuple[ServerEvent, ...]:
         """Independent envelopes from this run, after SQL commit only; no disk IO."""

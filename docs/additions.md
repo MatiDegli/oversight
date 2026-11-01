@@ -612,7 +612,13 @@ A partition heuristic does not prove independence; speed claims wait for the spl
 
 ### Lead agent
 
-The lead runtime landed in `6818b3b` (`runtime_leads.py:LeadService`, live POST /leads and
+L2 adds the run-local lead thread: idle between turns, masked replies, per-turn cuts and
+bounded exchange history, committed-prefix status, and live message admission with serialized
+Stop/shutdown ownership. Three plans remain the thread-wide limit; turn 50 replies then halts.
+L3 remains the Chat composer/navigation, freshness and withheld/cut UI, plan links, graph/focus,
+fixture exclusion, approval keyboard protection, decision-count cost fixture and Playwright work.
+
+The original lead runtime landed in `6818b3b` (`runtime_leads.py:LeadService`, live POST /leads and
 POST /leads/{id}/stop). It reads repository context and requests plans through
 `PlanService.create_and_propose`; it does not start agents, approve plans, review or merge.
 The person starts a proposed plan through plan routes; the server owns dispatch and zones.

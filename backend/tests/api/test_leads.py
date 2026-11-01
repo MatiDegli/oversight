@@ -50,11 +50,11 @@ def lead_factory() -> Any:
     return factory
 
 
-async def start_done(s: Any) -> str:
+async def start_idle(s: Any) -> str:
     response = await s.client.post("/leads", json={"task": "Coordinate documentation"})
     assert response.status_code == 201, response.text
     agent_id = response.json()["agent_id"]
-    await s.until(is_type("lead.status", agent_id=agent_id, state="done"))
+    await s.until(is_type("lead.status", agent_id=agent_id, state="idle"))
     return agent_id
 
 
@@ -104,17 +104,22 @@ async def test_get_lead_reads_the_latest_status_and_agents_route_stays_404(tmp_p
         asyncio.timeout(DEADLINE_S),
         live_server(two_fakes(tmp_path, max_agents=2), lead_factory()) as s,
     ):
-        agent_id = await start_done(s)
+        agent_id = await start_idle(s)
         response = await s.client.get(f"/leads/{agent_id}")
         latest = [e.payload for e in s.events() if e.type == "lead.status"][-1]
         assert LeadStatus.model_validate(response.json()) == latest
-        assert latest.state == "done" and latest.detail == "Requested plan-1, plan-2."
+        assert latest.state == "idle" and latest.detail == "Requested plan-1, plan-2."
         assert latest.revision == 9 and latest.step == 7 and latest.requested_plan_id is None
         assert error_code(await s.client.get(f"/agents/{agent_id}")) == (404, "not_found")
         response = await s.client.get("/leads/agent-999")
         assert error_code(response) == (404, "not_found")
         assert response.json()["error"]["message"] == "there is no lead 'agent-999'"
-        assert await start_done(s) == "agent-2"
+        assert error_code(await s.client.post("/leads", json={"task": "Another"})) == (
+            409,
+            "wrong_state",
+        )
+        replies = [e.payload for e in s.events() if e.type == "lead.reply"]
+        assert len(replies) == 1 and replies[0].answers_seq is None
 
 
 @pytest.mark.parametrize(
@@ -158,7 +163,7 @@ async def test_selected_baseten_profile_needs_its_key_and_ignores_reviewer(tmp_p
             "/leads", json={"task": "Coordinate", "model": "muse-spark-open"}
         )
         assert response.status_code == 201, response.text
-        await s.until(is_type("lead.status", state="done"))
+        await s.until(is_type("lead.status", state="idle"))
         statuses = [e.payload for e in s.events() if e.type == "lead.status"]
         assert all(status.model == MUSE_SPARK_OPEN.id for status in statuses)
         assert s.live.ledger.state is not None
@@ -181,7 +186,7 @@ async def test_lead_plans_carry_started_by_and_no_plan_call_runs(tmp_path: Path)
     ):
         _, snapshot = s.store.graph()
         assert snapshot is not None
-        agent_id = await start_done(s)
+        agent_id = await start_idle(s)
         events = s.events()
         plans = [
             e.payload for e in events if e.type == "plan.updated" and e.payload.state == "proposed"
@@ -212,7 +217,7 @@ async def test_a_person_queues_a_lead_plan_and_its_agents_have_no_started_by(
         asyncio.timeout(DEADLINE_S),
         live_server(two_fakes(tmp_path, max_agents=2), lead_factory()) as s,
     ):
-        lead_id = await start_done(s)
+        lead_id = await start_idle(s)
         plan = s.live.plans.get("plan-1")
         response = await s.client.post(
             "/queue", json={"plan_id": plan.plan_id, "plan_revision": plan.revision}
@@ -252,7 +257,7 @@ async def test_metered_lead_ticks_reach_the_ledger_and_spend_receipt(
         original = manager.spend_received
         manager.spend_received = Mock(wraps=original)
         await s.client.post("/leads", json={"task": "Coordinate"})
-        await s.until(lambda e: e.type == "lead.status" and e.payload.state in {"done", "halted"})
+        await s.until(lambda e: e.type == "lead.status" and e.payload.state in {"idle", "halted"})
         ticks = [e.payload for e in s.events() if e.type == "usage.tick"]
         assert ticks and all(
             t.role == "lead" and t.plan_id is None and t.change_id is None for t in ticks
@@ -273,7 +278,7 @@ async def test_replay_refuses_lead_posts_and_reads_lead_status(tmp_path: Path) -
         asyncio.timeout(DEADLINE_S),
         live_server(two_fakes(tmp_path / "live", max_agents=2), lead_factory()) as s,
     ):
-        agent_id = await start_done(s)
+        agent_id = await start_idle(s)
         log = tmp_path / "lead.jsonl"
         log.write_text("\n".join(e.model_dump_json() for e in s.events()) + "\n")
         expected = (await s.client.get(f"/leads/{agent_id}")).json()
@@ -294,7 +299,7 @@ async def test_replay_refuses_lead_posts_and_reads_lead_status(tmp_path: Path) -
                         from oversight_contracts.events import ServerEvent
 
                         parsed = TypeAdapter(ServerEvent).validate_json(event.envelope)
-                        if parsed.type == "lead.status" and parsed.payload.state == "done":
+                        if parsed.type == "lead.status" and parsed.payload.state == "idle":
                             return
 
         assert client.portal is not None
@@ -352,7 +357,7 @@ async def test_a_lead_zone_is_main_at_request_time_even_if_the_graph_moves(
             return await original(task, drafts, started_by=started_by)
 
         monkeypatch.setattr(s.live.plans, "create_and_propose", move)
-        await start_done(s)
+        await start_idle(s)
         plan = s.live.plans.get("plan-1")
         assert plan.graph_version == newer.version
         assert plan.subtasks and plan.subtasks[0].zone == plan_core.whole_graph(snapshot)

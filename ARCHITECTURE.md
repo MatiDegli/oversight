@@ -364,7 +364,7 @@ every few hundred milliseconds and SQLite writes are batched.
 Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
 gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text to a coding agent or lead, masked before storage.
-Contracts 1.15.0 declares `lead.reply {agent_id, answers_seq, text, through_seq, cut}` for L2.
+Contracts 1.15.0 defines `lead.reply {agent_id, answers_seq, text, through_seq, cut}`, produced by L2.
 `answers_seq` is null for the opening task, or names an earlier `agent.message` to the same lead.
 `through_seq` is null or a nonnegative horizon strictly below the reply's seq, with no target-type
 requirement. Non-null reply text is nonblank and at most 4,096 characters, masked before storage
@@ -374,7 +374,7 @@ cut under the existing message-text receipt. Both event types withhold text by d
 explicit inclusion authorization includes the stored masked text. No new wire receipt fields exist.
 `LeadStatus.state` gains `idle` between turns; `done` remains accepted for historical logs.
 L1 accepts replies as no-ops: only envelope sequence/clock bookkeeping advances, with no messages,
-decisions, activity or accounting observations and no thread UI. Idle adds no control behavior.
+decisions, activity or accounting observations and no thread UI. L2 gives idle leads message admission and Stop; L3 supplies the thread UI.
 
 Live routes implement, for example, `POST /agents`, `POST /agents/{agent_id}/stop`,
 `POST /agents/{agent_id}/message`, `POST /agents/{agent_id}/pause`,
@@ -391,12 +391,20 @@ The complete route registrations are in `api/commands.py` and `api/routes.py` un
 | `GET /agents/{agent_id}` | 200 latest committed coding `AgentStatus`; 404 `not_found` otherwise. |
 | `GET /changes/{change_id}` | 200 archived `ChangeView` at one committed seq, with usage and confirmed revision rounds (null when unavailable); 404 `not_found` otherwise. |
 
-L1 also declares `POST /leads/{agent_id}/message` with the existing `AgentMessage` body:
-empty 202 on acceptance, 409 `wrong_state` unless idle, and 501 in replay. It has no installed
-handler in L1. L2 implements admission and publishes the existing `agent.message` with the lead
-id as recipient, plus `lead.reply` production; L3 presents the Chat thread. The approved thread
-belongs to one run and is lost on server restart; restart already stops the lead. Persistence
-is a later design step.
+L2 installs `POST /leads/{agent_id}/message` with the existing `AgentMessage` body:
+empty 202 on acceptance, 409 unless idle, 404 for unknown leads, and 501 in replay before parsing.
+Admission checks the brake and claims working under the lead lock before publication awaits.
+Shutdown awaits retained publication tasks and every turn/client cleanup, including idle leads.
+The thread is run-local and lost on restart; L3 presents Chat. Persistence remains a later step.
+
+Turns return idle after a reply or a tool/model/time/brake cut; failures and Stop remain terminal.
+Limits reset per turn (12 tools, 18 calls, 300 s); cumulative steps and three plans last per thread.
+Reply 50 is followed by halted without idle. finish(reply) needs no plan; ordinary text also replies.
+Masked replies fit 4,096 characters; history keeps whole exchanges within 24,000, without old tools.
+status folds one committed prefix, fences escaped fields at 200 characters and omits whole entries
+within 20,000 characters; through_seq is the maximum status S read this turn, or null.
+L3 owns Chat/composer, freshness/cut/withheld UI, plan links, graph/focus, fixture exclusion,
+approval keyboard protection, the 50-turn cost fixture and separate Playwright coverage.
 
 The installed coding-agent Message, Pause and Resume routes accept only human HTTP commands
 and answer an empty 202.
