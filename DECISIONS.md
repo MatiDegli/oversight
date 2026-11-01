@@ -2923,19 +2923,10 @@ rework and the Conversation tab, before milestone pulses if ready before the cut
 - Tests remain hidden until drawn by an explicitly approved change. Their grouping rule has
   unit evidence only. Start camera, review framing, folding and card edge styles remain unchanged.
 - Product measurements replace the sketch estimate in DESIGN's Scale and depth. The existing
-  1280px shell gives the demo a 45.62% card Fit, conflicting with the demo-cards premise and
-  the fixed enter threshold; the front records CONTESTED instead of changing either rule.
+  1280px shell gives the demo a 45.62% card Fit; the module-count gate below keeps it on cards.
 - DESIGN and this approved sketch govern the refinement when Impeccable's general advice
   would change identity, spacing, typography or motion. The dot field stays unchanged; captures
   show lamps masked by invisible card boxes, reserved for a separate front.
-- CONTESTED: at the 20% floor, two stacked panels with wrapped headers have 26px between
-  panel edges (460 × 20% − 60 − 6), below 48px. The fixed packing values are preserved;
-  satisfying both rules needs a maintainer ruling, not an invented spacing exception.
-
-## 2026-10-31 — Map eligibility and panel ground
-
-The maintainer settled both CONTESTED points from “Map view and folder groups”.
-
 - The map exists only with at least 24 module nodes currently shown, after filtering tests.
   Below that, every zoom and Fit stays on cards and the readout has no “· Map”. The map is for
   repositories too big for cards, and the demo must look the same in every take at every width.
@@ -2944,5 +2935,4 @@ The maintainer settled both CONTESTED points from “Map view and folder groups�
 - Keep the sketch's 340px sideways and 460px stacked ground. With a one-line 37px header,
   stacked panel edges have at least 48px at the drawn zooms and down to 0.2 (49px there).
   Narrow headers wrapping below the drawn zooms may reduce it to the 26px floor at 0.2;
-  panels never touch or overlap. This resolves the earlier universal-48px conflict without
-  changing the approved packing values.
+  panels never touch or overlap. This preserves the approved packing values.

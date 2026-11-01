@@ -1,7 +1,6 @@
 import cytoscape from "cytoscape";
 import type { Core, EdgeSingular, NodeSingular } from "cytoscape";
 import type { ImpactCone } from "@contracts";
-import fcose from "cytoscape-fcose";
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
@@ -11,7 +10,7 @@ import { getActiveTheme } from "../theme";
 import { includeNewNodes, prefersReducedMotion, revealNode, ZOOM_RANGE } from "./camera";
 import type { Camera, Framing } from "./camera";
 import { ControlledMapLayer, MapRoutingOmissions } from "./MapLayer";
-import { useMapController } from "./mapController";
+import { prepareGraphLayout, useMapController } from "./mapController";
 import type { MapOptions } from "./mapController";
 import { elementSnapshot } from "./elementSnapshot";
 import type { MeasuredWord } from "./elements";
@@ -24,8 +23,6 @@ import { setScratch } from "./scratch";
 import { edgeShape, graphStyles } from "./styles";
 import { openingCone, panelGeometry, reportFraming } from "./viewFraming";
 import { applyRoutes, dragRoutes } from "./routes";
-
-cytoscape.use(fcose);
 
 const NAVIGATION_QUIET_MS = 3000;
 
@@ -336,6 +333,7 @@ export function GraphView({
         const existing = new Set(cy.nodes().map((node) => node.id()));
         const state = stateStore.getState().state;
         const full = snapshot(state, latest.current);
+        if (!prepareGraphLayout(cy, full, sync)) return;
         const foldsChanged = folding.render(state, full);
         mapControl.sync(full);
         if (

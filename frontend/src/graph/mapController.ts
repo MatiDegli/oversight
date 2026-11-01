@@ -1,4 +1,4 @@
-import type { Core } from "cytoscape";
+import cytoscape, { type Core } from "cytoscape";
 import { useRef } from "react";
 import type { RefObject } from "react";
 import { getActiveTheme } from "../theme";
@@ -75,7 +75,15 @@ function createMapController(
     )
       return;
     event.preventDefault();
-    zoomBy(cy, Math.pow(10, -event.deltaY / 250), true);
+    const box = host.current?.getBoundingClientRect();
+    if (!box) return;
+    cy.zoom({
+      level: Math.min(
+        cy.maxZoom(),
+        Math.max(cy.minZoom(), cy.zoom() * Math.pow(10, -event.deltaY / 250)),
+      ),
+      renderedPosition: { x: event.clientX - box.left, y: event.clientY - box.top },
+    });
     navigate();
   };
   const viewport = () => {
@@ -175,4 +183,22 @@ function createMapController(
       });
     },
   };
+}
+
+let fallbackLayout: Promise<void> | undefined;
+let fallbackReady = false;
+
+/** Presets need no solver download. Wait for fcose only before a graph's first unplaced nodes. */
+export function prepareGraphLayout(cy: Core, elements: readonly GraphElement[], retry: () => void) {
+  if (fallbackReady || cy.nodes().nonempty() || elements.some((e) => e.position !== undefined))
+    return true;
+  if (!elements.some((e) => e.group === "nodes")) return true;
+  fallbackLayout ??= import("cytoscape-fcose").then(({ default: fcose }) => {
+    cytoscape.use(fcose);
+    fallbackReady = true;
+  });
+  void fallbackLayout.then(() => {
+    if (!cy.destroyed()) retry();
+  });
+  return false;
 }

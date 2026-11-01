@@ -219,6 +219,59 @@ it("uses hysteresis in both directions and preserves focus and camera on events"
     expect(await level(page)).toBe("cards");
   }, null);
 });
+it("preserves the routing omissions notice after visiting the map", async () => {
+  await withMap(async (page) => {
+    await zoomTo(page, 0.7);
+    await page.evaluate(() => {
+      document
+        .querySelector('[aria-label="Repository graph"]')
+        ?.dispatchEvent(new CustomEvent("routingomissions", { detail: 7 }));
+    });
+    const notice = page
+      .getByRole("status")
+      .filter({ hasText: "+7 call routes omitted: no clear lane" });
+    await check(notice).toBeVisible();
+    await zoomTo(page, 0.3);
+    expect(await level(page)).toBe("map");
+    await check(notice).toHaveCount(0);
+    await zoomTo(page, 0.7);
+    expect(await level(page)).toBe("cards");
+    await check(notice).toBeVisible();
+  }, null);
+});
+it("keeps the world point under the pointer fixed during map wheel zoom", async () => {
+  await withMap(async (page) => {
+    await zoomTo(page, 0.3);
+    const area = await page.locator("[data-graph-clear-area]").boundingBox();
+    if (!area) throw new Error("Missing clear area");
+    const pointer = {
+      x: Math.round(area.x + area.width * 0.3),
+      y: Math.round(area.y + area.height * 0.4),
+    };
+    const atPointer = () =>
+      page.evaluate((pointer) => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+        const probe = host?.oversightGraph;
+        if (!host || !probe) throw new Error("Missing graph");
+        const box = host.getBoundingClientRect(),
+          pan = probe.pan(),
+          zoom = probe.zoom();
+        return {
+          x: (pointer.x - box.left - pan.x) / zoom,
+          y: (pointer.y - box.top - pan.y) / zoom,
+          zoom,
+        };
+      }, pointer);
+    const before = await atPointer();
+    await page.mouse.move(pointer.x, pointer.y);
+    await page.mouse.wheel(0, -20);
+    await check.poll(async () => (await atPointer()).zoom).toBeGreaterThan(before.zoom);
+    const after = await atPointer();
+    expect(after.x).toBeCloseTo(before.x, 4);
+    expect(after.y).toBeCloseTo(before.y, 4);
+    expect(await level(page)).toBe("map");
+  }, null);
+});
 it.each([23, 24])("gates zoom and Fit on %i shown module nodes", async (modules) => {
   await withMap(async (page) => {
     await page.evaluate((count) => {
@@ -291,7 +344,8 @@ it.each([1280, 1920])("keeps the demo on cards after Fit and zoom at %i", async 
           return b && { x: b.x, y: b.y, width: b.width, height: b.height };
         })(),
       }));
-      await writeFile(`${shots}demo-fit-${String(width)}.json`, JSON.stringify(info, null, 2));
+      if (process.env.MAP_SHOTS === "1")
+        await writeFile(`${shots}demo-fit-${String(width)}.json`, JSON.stringify(info, null, 2));
       expect(await level(page), JSON.stringify(info)).toBe("cards");
       expect(
         await page.evaluate(() =>
@@ -335,10 +389,11 @@ it("records the base demo Fit and unchanged positions without the map opt-in", a
       expect(result.level).toBe("cards");
       expect(result.zoom).toBeLessThan(11 / 17);
       expect(result.positions).toEqual(before);
-      await writeFile(
-        `${shots}demo-base-fit-1280.json`,
-        JSON.stringify({ zoom: result.zoom, level: result.level }, null, 2),
-      );
+      if (process.env.MAP_SHOTS === "1")
+        await writeFile(
+          `${shots}demo-base-fit-1280.json`,
+          JSON.stringify({ zoom: result.zoom, level: result.level }, null, 2),
+        );
     },
     null,
     1280,

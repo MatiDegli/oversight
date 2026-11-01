@@ -28,8 +28,8 @@ export interface GraphProbe {
   /** Layout positions of the nodes with no children, which no camera move may change. A box's own position follows its children. */
   positions(): Record<string, { x: number; y: number }>;
   representative(id: string): string;
-  /** Drawn node box in host pixels, excluding labels and overlays; folded nodes return null. */
   level(): "cards" | "map";
+  /** Drawn node box in host pixels, excluding labels and overlays; folded nodes return null. */
   renderedBox(
     id: string,
   ): { x1: number; y1: number; x2: number; y2: number; w: number; h: number } | null;

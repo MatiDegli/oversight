@@ -163,5 +163,9 @@ export function MapRoutingOmissions({
   ...props
 }: ComponentProps<typeof RoutingOmissions> & { control: MapController }) {
   const frame = useSyncExternalStore(control.subscribe, control.getFrame, control.getFrame);
-  return frame.level === "map" ? null : <RoutingOmissions {...props} />;
+  return (
+    <div hidden={frame.level === "map"}>
+      <RoutingOmissions {...props} />
+    </div>
+  );
 }
