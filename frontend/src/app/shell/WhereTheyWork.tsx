@@ -6,7 +6,7 @@ import { selectWorkPresence, type WorkGroup } from "../workPresence";
 import "./whereTheyWork.css";
 
 function WorkFiles({ group }: { group: WorkGroup }) {
-  const Icon = group.mode === "edit" ? Pencil : File;
+  const Icon = group.mode === "edit" ? Pencil : group.mode === "read" ? Eye : File;
   return group.files.map((file) => (
     <div className="work-file" key={file.path}>
       <Icon aria-hidden="true" size={15} />

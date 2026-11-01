@@ -198,6 +198,8 @@ it.each(
       if (state === "merged") window.chatWhereTest.stage("merged");
     }, state);
     await check(page.locator(".where-they-work")).toBeVisible();
+    if (state !== "empty" && state !== "picker")
+      await check(page.getByRole("textbox", { name: "Message Agent A" })).toBeVisible();
     await page.evaluate(() => document.fonts.ready);
     const measured = await measure(page);
     expect(measured.column?.width).toBe(width === 1920 ? 300 : 260);

@@ -3653,3 +3653,18 @@ C3 starts at C1 `9fa9781`, preserving the Usage/replay wiring, Oversight default
 retained inert graph and shared shell. FilesProvider already carries State; the latest
 focus already includes ranges. Only the work-frame body and Files marks consume this
 front's projection. C1's asynchronous test preparations are already present.
+
+`selectWorkPresence` is the single pure projection for Chat and Files. Current presence
+uses only the latest focus of working/revising agents: ranges survive without a graph,
+known IDs add paths and function names, and the owner's added nodes override main.
+Unknown IDs invent nothing. Agent IDs preserve identity even when slots are reused.
+Pending files/counts come only from the current proposal in ready-for-review/conflict;
+approval, rejection and Request changes remove that waiting group. A conflict remains
+pending and names the observed merge/test failure. Current focus wins per agent/path.
+
+C3 uses approved dense body metrics and existing theme roles, overriding Impeccable's
+generic body/card-size and motion suggestions. C1's 15px header stays (sketch: 16px);
+card replaces sketch-only card2, and the footer omits C4's graph action. C4 still owns
+hiding the work column in review; proposal events do not infer review navigation.
+DESIGN.md and the coordinated inventory stay unchanged; proposed text and full-frame
+comparison evidence live under `.shots/chat-where/`.
