@@ -91,6 +91,52 @@ async function camera(page: Page) {
 const row = (page: Page, name: string) =>
   page.getByRole("row").filter({ has: page.getByRole("rowheader", { name, exact: false }) });
 
+async function groupingStyle(page: Page) {
+  const selected = page.locator('.usage-grouping button[aria-pressed="true"]');
+  const styles = await selected.evaluate((button) => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--text)";
+    button.append(probe);
+    const text = getComputedStyle(probe).color;
+    probe.remove();
+    const style = getComputedStyle(button);
+    return {
+      text,
+      underline: [style.borderBottomWidth, style.borderBottomStyle, style.borderBottomColor],
+      focus: [style.outlineWidth, style.outlineStyle, style.outlineOffset, style.outlineColor],
+    };
+  });
+  expect(styles.underline).toEqual(["2px", "solid", styles.text]);
+  await check(selected).toBeFocused();
+  expect(styles.focus).toEqual(["2px", "solid", "2px", styles.text]);
+}
+
+async function coverageStyles(page: Page) {
+  const chips = await page.locator(".usage-coverage").evaluateAll((elements) =>
+    elements.map((chip) => {
+      const label = chip.textContent;
+      const probe = document.createElement("span");
+      probe.style.color = label === "Incomplete" ? "var(--failed-text)" : "var(--muted)";
+      chip.append(probe);
+      const expected = getComputedStyle(probe).color;
+      probe.remove();
+      const icon = chip.querySelector("svg");
+      if (!icon) throw new Error("Missing coverage icon");
+      return {
+        label,
+        expected,
+        color: getComputedStyle(chip).color,
+        icon: getComputedStyle(icon).stroke,
+      };
+    }),
+  );
+  expect(chips).toHaveLength(2);
+  for (const chip of chips) {
+    expect(chip.color).toBe(chip.expected);
+    expect(chip.icon).toBe(chip.expected);
+  }
+}
+
 it("fetches only on opening, preserves the camera, graph identity, selection and focus", async () => {
   let requests = 0;
   const page = await open(recorded, {
@@ -115,6 +161,7 @@ it("fetches only on opening, preserves the camera, graph identity, selection and
     await model.focus();
     await page.keyboard.press("Space");
     await check(model).toHaveAttribute("aria-pressed", "true");
+    await groupingStyle(page);
     await refresh(page);
     await check.poll(() => requests).toBe(2);
     await check(model).toHaveAttribute("aria-pressed", "true");
@@ -135,6 +182,78 @@ it("fetches only on opening, preserves the camera, graph identity, selection and
     await enter(page);
     await check(page.locator(".usage-scope")).toBeVisible();
     expect(requests).toBe(4);
+  } finally {
+    await page.close();
+  }
+});
+it("shows the local alert when the deferred Usage chunk fails to load", async () => {
+  let chunkRequests = 0;
+  let usageRequests = 0;
+  const page = await open(recorded, {
+    handler: (route) => {
+      usageRequests++;
+      return route.fulfill({ json: recorded });
+    },
+  });
+  try {
+    await page.route("**/src/app/usage/UsagePanel.tsx*", (route) => {
+      chunkRequests++;
+      return route.abort("failed");
+    });
+    await enter(page);
+    await check(page.getByRole("alert")).toHaveText(
+      "Usage could not load. Reload the page to try again.",
+    );
+    expect(chunkRequests).toBe(1);
+    expect(usageRequests).toBe(0);
+    await check(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
+  } finally {
+    await page.close();
+  }
+});
+it.each([null, 0, 2])("renders unpriced costs and revision rounds %s", async (rounds) => {
+  const page = await open({ ...recorded, revision_rounds: rounds });
+  try {
+    await enter(page);
+    await check(row(page, "Agent B").getByRole("cell").nth(1)).toHaveText("No list price");
+    await check(
+      page
+        .locator(".usage-fact")
+        .filter({ has: page.getByText("Revision rounds", { exact: true }) })
+        .locator("dd"),
+    ).toHaveText(rounds === null ? "—" : String(rounds));
+  } finally {
+    await page.close();
+  }
+});
+it.each(["dark", "day"])("switches fact columns at a 760px panel in %s", async (theme) => {
+  const page = await open(recorded, { theme });
+  try {
+    await enter(page);
+    await check(page.locator(".usage-scope")).toBeVisible();
+    for (const width of [759, 760]) {
+      // The focus panel has a 1px border outside the Usage content container.
+      await page.locator(".focus-panel").evaluate((panel, width) => {
+        panel.style.width = `${String(width + 1)}px`;
+      }, width);
+      const layout = await page.locator(".usage-facts").evaluate((facts) => {
+        const [time, cost] = [...facts.children].map((node) => node.getBoundingClientRect());
+        if (!time || !cost || !facts.parentElement?.parentElement)
+          throw new Error("Missing fact groups");
+        return {
+          panel: facts.parentElement.parentElement.getBoundingClientRect().width,
+          columns: getComputedStyle(facts).gridTemplateColumns.split(" ").length,
+          gap: getComputedStyle(facts).gap,
+          stacked: cost.top >= time.bottom,
+          aligned: time.top === cost.top,
+        };
+      });
+      expect(layout.panel).toBe(width);
+      expect(layout.columns).toBe(width < 760 ? 1 : 2);
+      expect(layout.gap).toBe(width < 760 ? "18px" : "44px");
+      expect(layout.stacked).toBe(width < 760);
+      expect(layout.aligned).toBe(width >= 760);
+    }
   } finally {
     await page.close();
   }
@@ -282,32 +401,37 @@ it("wraps long multilingual identities and large figures at the narrow desktop w
     await page.close();
   }
 });
-it("renders incomplete and ranged values as lower bounds and quotes problems", async () => {
-  const data = structuredClone(hosted);
-  data.cost.coverage = "incomplete";
-  data.hours.coverage = "incomplete";
-  data.cost.problems = ["tokens are invalid"];
-  data.hours.problems = ["time moved backwards"];
-  data.cost.ranged_calls = 1;
-  const page = await open(data);
-  try {
-    await enter(page);
-    await check(page.locator(".usage-coverage.is-incomplete")).toHaveCount(2);
-    await check(page.locator(".usage-facts")).toContainText("At least US$0.00184");
-    await check(page.locator(".usage-facts")).toContainText("At least 33.0 s");
-    await check(page.locator(".usage-facts")).toContainText("“tokens are invalid”");
-    await check(page.locator(".usage-facts")).toContainText("“time moved backwards”");
-    data.cost.coverage = "missing_metrics";
-    data.cost.problems = ["1 call has unreported tokens"];
-    data.cost.usd = null;
-    await page.route("**/usage", (route) => route.fulfill({ json: data }));
-    await refresh(page);
-    await check(page.locator(".usage-facts")).toContainText("“1 call has unreported tokens”");
-    await check(page.locator(".usage-facts")).not.toContainText("From");
-  } finally {
-    await page.close();
-  }
-});
+it.each(["dark", "day"])(
+  "renders incomplete and ranged values as lower bounds in %s",
+  async (theme) => {
+    const data = structuredClone(hosted);
+    data.cost.coverage = "incomplete";
+    data.hours.coverage = "incomplete";
+    data.cost.problems = ["tokens are invalid"];
+    data.hours.problems = ["time moved backwards"];
+    data.cost.ranged_calls = 1;
+    const page = await open(data, { theme });
+    try {
+      await enter(page);
+      await check(page.locator(".usage-coverage.is-incomplete")).toHaveCount(2);
+      await coverageStyles(page);
+      await check(page.locator(".usage-facts")).toContainText("At least US$0.00184");
+      await check(page.locator(".usage-facts")).toContainText("At least 33.0 s");
+      await check(page.locator(".usage-facts")).toContainText("“tokens are invalid”");
+      await check(page.locator(".usage-facts")).toContainText("“time moved backwards”");
+      data.cost.coverage = "missing_metrics";
+      data.cost.problems = ["1 call has unreported tokens"];
+      data.cost.usd = null;
+      await page.route("**/usage", (route) => route.fulfill({ json: data }));
+      await refresh(page);
+      await check(page.locator(".usage-facts")).toContainText("“1 call has unreported tokens”");
+      await coverageStyles(page);
+      await check(page.locator(".usage-facts")).not.toContainText("From");
+    } finally {
+      await page.close();
+    }
+  },
+);
 it("keeps static replay without a Usage entry or request and preserves the phone notice", async () => {
   let requests = 0;
   const page = await open(recorded, {
@@ -371,6 +495,7 @@ it.each([1920, 1280])(
             await button.focus();
             await page.keyboard.press("Enter");
             await check(button).toHaveAttribute("aria-pressed", "true");
+            await groupingStyle(page);
             if (name === "by-agent") await check(row(page, "Reviews")).toContainText("——10.0 s");
             if (name === "by-team") {
               await check(row(page, "Lead team")).toContainText("At least 48.3 s");
@@ -424,27 +549,37 @@ it.each([1920, 1280])(
             }
           }
           await page.evaluate(() => document.fonts.ready);
-          if (name === "missing")
-            measurements.push(
-              await page.evaluate(() => {
-                const element = (selector: string) => {
-                  const node = document.querySelector(selector);
-                  if (!node) throw new Error(selector);
-                  return node;
-                };
-                const rect = (selector: string) => element(selector).getBoundingClientRect();
-                return {
-                  width: innerWidth,
-                  theme: document.documentElement.dataset.theme,
-                  panel: rect(".focus-panel").width,
-                  inset: rect(".usage-closing").left - rect(".focus-panel").left,
-                  closing: getComputedStyle(element(".usage-closing")).fontSize,
-                  mono: getComputedStyle(element(".usage-closing .usage-number")).fontSize,
-                  headerY: rect(".usage-panel thead").top,
-                  footer: rect(".usage-scope").height,
-                };
-              }),
-            );
+          await coverageStyles(page);
+          if (name === "missing") {
+            await check(row(page, "Agent B").getByRole("cell").nth(1)).toHaveText("No list price");
+            const measurement = await page.evaluate(() => {
+              const element = (selector: string) => {
+                const node = document.querySelector(selector);
+                if (!node) throw new Error(selector);
+                return node;
+              };
+              const rect = (selector: string) => element(selector).getBoundingClientRect();
+              return {
+                width: innerWidth,
+                theme: document.documentElement.dataset.theme,
+                panel: rect(".focus-panel").width,
+                inset: rect(".usage-closing").left - rect(".focus-panel").left,
+                closing: getComputedStyle(element(".usage-closing")).fontSize,
+                mono: getComputedStyle(element(".usage-closing .usage-number")).fontSize,
+                headerY: rect(".usage-panel thead").top,
+                footer: rect(".usage-scope").height,
+              };
+            });
+            expect(measurement.panel).toBe(width === 1920 ? 880 : 608);
+            expect(measurement.inset).toBe(width === 1920 ? 32 : 28);
+            expect(measurement.closing).toBe("20px");
+            expect(measurement.mono).toBe("19px");
+            expect(
+              Math.abs(measurement.headerY - (width === 1920 ? 460 : 583)),
+            ).toBeLessThanOrEqual(1);
+            expect(measurement.footer).toBe(46);
+            measurements.push(measurement);
+          }
           if (process.env.USAGE_SCREEN_SHOTS === "1") {
             await mkdir(directory, { recursive: true });
             await page.screenshot({ path: `${directory}${name}-${String(width)}-${theme}.png` });

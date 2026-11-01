@@ -6,6 +6,7 @@ import { replayBuild, replaySource } from "../../transport";
 import type { ServerEvent } from "@contracts";
 import log from "../../../../fixtures/events/recorded-demo.jsonl?raw";
 import { Frame } from "../Frame";
+import { App } from "../App";
 import { closePanel, surfaceTab, tabbedView, viewReducer, type View } from "../view";
 import { useEscapeCloses } from "../escape";
 
@@ -40,15 +41,9 @@ function Harness() {
       onTabAction={(action) => {
         setView((view) => viewReducer(view, action));
       }}
-      onOpenUsage={
-        replayBuild
-          ? undefined
-          : () => {
-              setView((view) =>
-                viewReducer(view, { type: "open", tab: surfaceTab(view, "usage") }),
-              );
-            }
-      }
+      onOpenUsage={() => {
+        setView((view) => viewReducer(view, { type: "open", tab: surfaceTab(view, "usage") }));
+      }}
       onOpenSettings={() => {
         setView((view) => viewReducer(view, { type: "open", tab: surfaceTab(view, "settings") }));
       }}
@@ -79,4 +74,5 @@ Object.assign(window, {
 });
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing root");
-createRoot(root).render(<Harness />);
+// Exercise App's real capability gate in replay, rather than duplicating it here.
+createRoot(root).render(replayBuild ? <App /> : <Harness />);
