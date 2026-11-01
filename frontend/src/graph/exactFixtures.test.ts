@@ -48,7 +48,33 @@ it("documents every opaque graph plate that masks lines behind text", () => {
   const design = readFileSync(new URL("DESIGN.md", root), "utf8");
   const elevation = design.split("## Elevation & Depth")[1]?.split("### Named Rules")[0];
   expect(elevation?.replace(/\s+/g, " ")).toContain(opaquePlates);
-  expect(elevation).toMatch(/other graph overlays[\s\S]*90 to 94%/i);
+  expect(elevation?.replace(/\s+/g, " ")).toContain(
+    "The legend, zoom controls and node chip popover use opaque `panel` plates with a 12px blur declared behind them.",
+  );
+  expect(elevation?.replace(/\s+/g, " ")).toContain(
+    "Their `frosted` backing declares overlay-panel (84% in dark, 96% in day), but the opaque plate overrides that fill.",
+  );
+  expect(elevation).toMatch(/Other graph overlays use the 96% overlay-fill with no blur/);
+  expect(design.replace(/\s+/g, " ")).toContain(
+    "legend, zoom controls and node chip popover use opaque panel plates with blur declared behind them",
+  );
+  expect(design.replace(/\s+/g, " ")).toContain(
+    "The legend, zoom controls and node chip popover declare blur behind opaque plates.",
+  );
+});
+
+it("documents separate node and module frame opacities at rest", () => {
+  const design = readFileSync(new URL("DESIGN.md", root), "utf8").replace(/\s+/g, " ");
+  expect(design).toContain("at rest use card at 94%");
+  expect(design).toContain("**Rest:** card fill at 94%");
+  expect(design).toContain("A module frame: panel fill at module-opacity");
+});
+
+it("forbids an Approve key hint while documenting the pointer caption", () => {
+  const design = readFileSync(new URL("DESIGN.md", root), "utf8").replace(/\s+/g, " ");
+  expect(design).toContain("a hint that advertises an Approve key");
+  expect(design).not.toContain("an Approve keyboard hint");
+  expect(design).toContain("Approve with a click: it merges into main");
 });
 
 it("records the same complete opaque graph plate rule in the exact-call decision", () => {

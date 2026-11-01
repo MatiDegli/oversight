@@ -450,8 +450,9 @@ The neutral roles:
 
 - **Ground** (ground): behind the graph, and the page itself.
 - **Shell** (shell): the app frame: top bar and left rail.
-- **Panel** (panel): the agents panel; legend and zoom use overlay-panel with blur, and the cone
-  card uses the 96% overlay-fill without blur. Module frames use module-opacity.
+- **Panel** (panel): the agents panel; legend, zoom controls and node chip popover use opaque
+  panel plates with blur declared behind them. The cone card uses the 96% overlay-fill without
+  blur. Module frames use module-opacity.
 - **Inset** (inset): inputs and terminal. Field (field) takes the same value for search, task and
   comment boxes.
 - **Page** (page): the focus panel: review, live diff, file view and settings; Monaco's background.
@@ -732,15 +733,18 @@ ring when a boundary carries meaning.
 
 The graph heading, legend, zoom controls and Modules/Functions/Details control (including zoom
 percentage) use fully opaque `panel` plates to mask lines behind their text.
-Only the legend and zoom controls blur the graph beneath them by 12px, with overlay-panel
-(84% in dark, 96% in day). Other overlays use the 96% overlay-fill with no blur. Their field
-mask keeps moving light out of the overlay. The review header retains its matte still grain. Every gradient end, highlight, shadow and overlay color is
-a theme token under `data-theme`, including what Cytoscape, Monaco and the field canvas receive.
+The legend, zoom controls and node chip popover use opaque `panel` plates with a 12px blur
+declared behind them. Their `frosted` backing declares overlay-panel (84% in dark, 96% in day),
+but the opaque plate overrides that fill. Other graph overlays use the 96% overlay-fill with no blur.
+Their field mask keeps moving light out of the overlay. The review header retains its matte still
+grain. Every gradient end, highlight, shadow and overlay color is a theme token under `data-theme`,
+including what Cytoscape, Monaco and the field canvas receive.
 
 ### Named Rules
 
 **The Plain Panel Rule.** Tonal layers separate the person's work. Cards have the specified soft
-shadow; frosting belongs only behind the legend and zoom controls. Agent light stays on the graph.
+shadow. The legend, zoom controls and node chip popover declare blur behind opaque plates.
+Agent light stays on the graph.
 
 ## Shapes
 
@@ -880,9 +884,9 @@ node ("read", "editing", "changed", "new"):
    change.
 
 - **Rest:** card fill at 94%, 1px node-border, node radius, name in text at 18px. Hover turns the
-  border node-hover. A module frame: panel fill at 90%, 1px card-border, module radius, its name in
-  module-label, its function count in faint. An exact call edge: 1.4px in edge, with a small filled
-  arrowhead of the same color.
+  border node-hover. A module frame: panel fill at module-opacity, 1px card-border, module radius,
+  its name in module-label, its function count in faint. An exact call edge: 1.4px in edge, with a
+  small filled arrowhead of the same color.
 - **Read:** the agent read the node in its current run, and the node has no pending change. Solid
   1.5px border in the agent's color, an outlined letter badge, the word "read" in the agent's text
   color. Fill unchanged.
@@ -1148,8 +1152,8 @@ mid-dot compound headings, uppercase text or eyebrow labels; Mono prose or sente
 example values above 15px; amber/yellow, green for same/unchanged, colored side stripes, dashes
 outside pending graph changes, panel glow or glass, or gradients beyond the matte header;
 more than four chips, multiple dock caption lines, duplicate provenance or overlapping text,
-or an Approve keyboard hint. Panel vocabulary excludes "invocations", "unmatched", "static cone
-bounds", "signals", "said versus did", "probe", "equivalence", and "Available" as a status.
+or a hint that advertises an Approve key. Panel vocabulary excludes "invocations", "unmatched",
+"static cone bounds", "signals", "said versus did", "probe", "equivalence", and "Available" as a status.
 The sketch's +2 −0 line-change pair remains; do not print empty evidence counters.
 
 ### Live diff and file view
