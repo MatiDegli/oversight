@@ -430,3 +430,123 @@ async def verify_merge_abort(
     deadline = time.monotonic() + timeout_s
     async with lease_until(workspace.git_lease(), deadline):
         await offload(partial(verify_merge_metadata, tree.git_identity, pre, head, deadline))
+
+
+BYTE_OVERRIDE = b"* -text\n"
+
+
+def _policy_bytes(path: Path, shown: str, deadline: float) -> bytes | None:
+    # Local import: metadata_io already uses IntegrityError and remaining from this module.
+    from oversight.workspace.metadata_io import Budget, read_entry
+
+    try:
+        entry = read_entry(path, Budget(deadline))
+        if entry is not None and entry.data is None:
+            raise IntegrityError("attribute policy must be a regular file", shown)
+        return None if entry is None else entry.data
+    except (OSError, WorkspaceError) as error:
+        raise IntegrityError(
+            "unsafe attribute policy; remove links or restore a plain file", shown
+        ) from error
+
+
+def _veto_attributes(data: bytes, relative: str) -> None:
+    # Git's attributes are ASCII names even when patterns contain arbitrary filename bytes.
+    # Inspect all tokens conservatively; reject custom macro definitions rather than interpret
+    # recursion, quoting or precedence differently from Git. The built-in binary macro is safe.
+    for line in data.removeprefix(b"\xef\xbb\xbf").splitlines():
+        tokens = line.strip().split()
+        if not tokens or tokens[0].startswith(b"#"):
+            continue
+        if tokens[0].startswith(b"[attr]"):
+            raise IntegrityError(
+                "attribute macros unsupported; expand the macro explicitly", relative
+            )
+        for token in tokens[1:]:
+            name = token.lstrip(b"-!").split(b"=", 1)[0]
+            if name in {b"filter", b"working-tree-encoding", b"ident"}:
+                raise IntegrityError(
+                    "attribute transform forbidden; remove filter, encoding or ident", relative
+                )
+
+
+def validate_source_byte_policy(
+    root: Path, common: Path, manifest: Sequence[str], deadline: float
+) -> None:
+    """Before copying/reset: validate explicit, already selected source entries, without Git.
+
+    The selector supplies the registered source common directory and complete copy manifest;
+    excluded contents are never walked. No source config, index or working file is changed.
+    """
+    from oversight.workspace.files import split_relative
+    from oversight.workspace.metadata_io import Budget
+
+    budget = Budget(deadline)
+    info = _policy_bytes(common / "info" / "attributes", ".git/info/attributes", deadline)
+    if info:
+        raise IntegrityError(
+            "source info attributes unsupported; move policy into .gitattributes",
+            ".git/info/attributes",
+        )
+    for relative in manifest:
+        budget.charge(0)
+        parts = split_relative(relative, nt=True)
+        if parts[-1].casefold() == ".gitattributes":
+            data = _policy_bytes(root.joinpath(*parts), relative, deadline)
+            if data is None:
+                raise IntegrityError(
+                    "source attribute entry disappeared; retry selection", relative
+                )
+            budget.charge(len(data))
+            _veto_attributes(data, relative)
+
+
+def install_byte_override(identity: GitIdentity, deadline: float) -> None:
+    """Init-only installation, before add; an existing entry is never repaired or replaced."""
+    from oversight.workspace.metadata_io import Entry, replace_file
+
+    path = identity.common / "info" / "attributes"
+    if _policy_bytes(path, ".git/info/attributes", deadline) is not None:
+        raise IntegrityError(
+            "unexpected runtime attributes; restart with a fresh runtime", ".git/info/attributes"
+        )
+    replace_file(path, None, Entry(0o600, BYTE_OVERRIDE), deadline, cas=False)
+    verify_byte_override(identity, deadline)
+
+
+def verify_byte_override(identity: GitIdentity, deadline: float) -> None:
+    if (
+        _policy_bytes(identity.common / "info" / "attributes", ".git/info/attributes", deadline)
+        != BYTE_OVERRIDE
+    ):
+        raise IntegrityError(
+            "runtime attributes changed or missing; restart with a fresh runtime",
+            ".git/info/attributes",
+        )
+
+
+def verify_tree_byte_policy(identity: GitIdentity, deadline: float) -> None:
+    """Recheck the relevant runtime tree before every Git spawn, including object-only queries."""
+    from oversight.workspace.metadata_io import Budget, directory
+
+    budget = Budget(deadline)
+    pending = [identity.root]
+    while pending:
+        parent = pending.pop()
+        with directory(parent, deadline) as fd, os.scandir(fd) as entries:
+            for entry in entries:
+                budget.charge(0)
+                if entry.name.casefold() == ".git":
+                    continue
+                path = parent / entry.name
+                if entry.name.casefold() == ".gitattributes":
+                    relative = path.relative_to(identity.root).as_posix()
+                    data = _policy_bytes(path, relative, deadline)
+                    if data is None:
+                        raise IntegrityError(
+                            "attribute entry disappeared; retry operation", relative
+                        )
+                    budget.charge(len(data))
+                    _veto_attributes(data, relative)
+                elif not is_link_like(entry, nt=True) and entry.is_dir(follow_symlinks=False):
+                    pending.append(path)
