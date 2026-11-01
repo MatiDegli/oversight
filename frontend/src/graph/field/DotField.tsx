@@ -33,17 +33,19 @@ export function DotField({
     const initial = input.current;
     let cancelled = false;
     let resize: ResizeObserver | undefined;
-    void import("./controller").then(({ createFieldController }) => {
-      if (cancelled) return;
-      const created = createFieldController(element, source.current);
-      created.update(initial);
-      created.update(input.current);
-      controller.current = created;
-      resize = new ResizeObserver(() => {
-        created.redraw();
-      });
-      resize.observe(element);
-    });
+    void import("./controller")
+      .then(({ createFieldController }) => {
+        if (cancelled) return;
+        const created = createFieldController(element, source.current);
+        created.update(initial);
+        created.update(input.current);
+        controller.current = created;
+        resize = new ResizeObserver(() => {
+          created.redraw();
+        });
+        resize.observe(element);
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
       resize?.disconnect();

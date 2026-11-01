@@ -11,11 +11,12 @@ import json
 import os
 import re
 import sqlite3
+import sys
 from collections import ChainMap
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import TypeAdapter
 
@@ -155,9 +156,14 @@ def _connect(path: Path) -> sqlite3.Connection:
     # The writer task is the only user, through one worker thread at a time.
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.parent.chmod(0o700)
-    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    flags = os.O_CREAT | os.O_RDWR
+    if sys.platform == "win32":
+        flags |= os.O_BINARY
+    descriptor = os.open(path, flags, 0o600)
     try:
-        os.fchmod(descriptor, 0o600)
+        name = "fchmod"
+        if hasattr(os, name):
+            cast(Callable[[int, int], None], getattr(os, name))(descriptor, 0o600)
     finally:
         os.close(descriptor)
     # SQLite derives new WAL/SHM permissions from the database. Tighten existing sidecars too.

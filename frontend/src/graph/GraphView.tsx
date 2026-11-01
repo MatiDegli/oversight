@@ -1,25 +1,19 @@
 import cytoscape from "cytoscape";
 import type { Core, EdgeSingular, NodeSingular } from "cytoscape";
 import type { ImpactCone } from "@contracts";
-import fcose from "cytoscape-fcose";
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 import { stateStore } from "../state";
 import { getActiveTheme } from "../theme";
 
-import {
-  frameCamera,
-  includeNewNodes,
-  prefersReducedMotion,
-  revealNode,
-  startCamera,
-  ZOOM_RANGE,
-  zoomBy,
-} from "./camera";
+import { includeNewNodes, prefersReducedMotion, revealNode, ZOOM_RANGE } from "./camera";
 import type { Camera, Framing } from "./camera";
+import { ControlledMapLayer, MapRoutingOmissions } from "./MapLayer";
+import { prepareGraphLayout, useMapController } from "./mapController";
+import type { MapOptions } from "./mapController";
 import { elementSnapshot } from "./elementSnapshot";
-import type { MeasuredWord } from "./elements";
+import type { GraphElement, MeasuredWord } from "./elements";
 import { foldController } from "./foldController";
 import { createBoxSource, DotField } from "./field";
 import type { FieldInput } from "./field";
@@ -29,9 +23,6 @@ import { setScratch } from "./scratch";
 import { edgeShape, graphStyles } from "./styles";
 import { openingCone, panelGeometry, reportFraming } from "./viewFraming";
 import { applyRoutes, dragRoutes } from "./routes";
-import { RoutingOmissions } from "./RoutingOmissions";
-
-cytoscape.use(fcose);
 
 const NAVIGATION_QUIET_MS = 3000;
 
@@ -48,7 +39,7 @@ export interface GraphApi {
 
 const ZOOM_STEP = 1.25;
 
-export interface GraphViewProps {
+export interface GraphViewProps extends MapOptions {
   /** The node with the selected ring. The app owns it; taps only report. */
   selectedId?: string | null;
   onNodeTap?: (nodeId: string) => void;
@@ -57,6 +48,8 @@ export interface GraphViewProps {
    * camera moves (to the nodes in `frameIds` on open, back to the saved watch camera on close).
    */
   panelOpen?: boolean;
+  /** Usage resizes the viewport while retaining the person's current camera. */
+  preserveCamera?: boolean;
   /**
    * The change's nodes, framed with the cone while keeping names and state words legible.
    * Read only when the panel target changes; incoming events move nothing. Empty falls back to the
@@ -94,9 +87,12 @@ export function GraphView({
   selectedId = null,
   onNodeTap,
   panelOpen = false,
+  preserveCamera = false,
   litIds = null,
   frameIds = null,
   cone = null,
+  map = false,
+  onMapLevel,
   measured = null,
   merging,
   liveCone = null,
@@ -114,6 +110,7 @@ export function GraphView({
   const boxes = useRef(createBoxSource());
   const graph = useRef<Core | undefined>(undefined);
   const latest = useRef<GraphViewProps>({});
+  const mapControl = useMapController(container, latest);
   const resync = useRef<(() => void) | undefined>(undefined);
   const framedFor = useRef(panelOpen);
   const framedKey = useRef(frameKey);
@@ -125,6 +122,7 @@ export function GraphView({
     const relit =
       latest.current.litIds !== litIds ||
       latest.current.cone !== cone ||
+      latest.current.map !== map ||
       latest.current.measured !== measured ||
       latest.current.merging !== merging ||
       latest.current.liveCone !== liveCone ||
@@ -133,9 +131,12 @@ export function GraphView({
       selectedId,
       onNodeTap,
       panelOpen,
+      preserveCamera,
       litIds,
       frameIds,
       cone,
+      map,
+      onMapLevel,
       measured,
       merging,
       liveCone,
@@ -152,9 +153,12 @@ export function GraphView({
     selectedId,
     onNodeTap,
     panelOpen,
+    preserveCamera,
     litIds,
     frameIds,
     cone,
+    map,
+    onMapLevel,
     measured,
     merging,
     liveCone,
@@ -171,12 +175,20 @@ export function GraphView({
     const wasOpen = framedFor.current;
     framedFor.current = panelOpen;
     framedKey.current = frameKey;
-    if (graph.current) {
-      if (!wasOpen && panelOpen)
-        watchCamera.current = { zoom: graph.current.zoom(), pan: { ...graph.current.pan() } };
+    const cy = graph.current;
+    if (cy) {
+      if (!wasOpen && panelOpen) watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+      if (preserveCamera) {
+        cy.stop();
+        cy.resize();
+        targetFrame.current = null;
+        reportViewport.current?.();
+        observeCard.current?.();
+        return;
+      }
       const { frameIds: framed, selectedId: selected } = latest.current;
       const focus = framed?.length ? framed : selected ? [selected] : [];
-      const framing = frameCamera(graph.current, panelOpen ? focus : [], prefersReducedMotion(), {
+      const framing = mapControl.frame(cy, panelOpen ? focus : [], {
         coneIds: panelOpen ? openingCone(latest.current) : undefined,
         ...(panelOpen && container.current ? panelGeometry(container.current, latest.current) : {}),
         restoreCamera: panelOpen ? undefined : watchCamera.current,
@@ -186,7 +198,7 @@ export function GraphView({
       observeCard.current?.();
       if (!panelOpen) watchCamera.current = undefined;
     }
-  }, [panelOpen, frameKey]);
+  }, [panelOpen, frameKey, mapControl, preserveCamera]);
   useEffect(() => {
     const host = container.current;
     if (!host) return;
@@ -211,6 +223,7 @@ export function GraphView({
       const shape = edgeShape(
         import.meta.env.DEV ? (typeof location === "undefined" ? "" : location.search) : "",
       );
+      const detachMap = mapControl.attach(cy);
       cy.style(graphStyles(theme, shape));
       // A failed initial load may recover later. Replace the layer caches once the faces load.
       const refreshFonts = () => {
@@ -315,7 +328,11 @@ export function GraphView({
       const mountedWithPanel = latest.current.panelOpen;
       const frameInitialPanel = () => {
         watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
-        const framing = frameCamera(cy, latest.current.frameIds ?? [], prefersReducedMotion(), {
+        if (latest.current.preserveCamera) {
+          cy.resize();
+          return;
+        }
+        const framing = mapControl.frame(cy, latest.current.frameIds ?? [], {
           coneIds: openingCone(latest.current),
           ...panelGeometry(host, latest.current),
         });
@@ -331,13 +348,16 @@ export function GraphView({
           : 0;
       };
       const snapshot = elementSnapshot();
-      const sync = () => {
+      const sync = (fallback?: GraphElement[]) => {
         // A second addition can arrive before the first ease ends. Include both targets when
         // replacing that animation, rather than leaving the first addition outside the view.
         if (!cy.animated() || latest.current.panelOpen) arriving.clear();
         const existing = new Set(cy.nodes().map((node) => node.id()));
         const state = stateStore.getState().state;
-        const foldsChanged = folding.render(state, snapshot(state, latest.current));
+        const full = fallback ?? snapshot(state, latest.current);
+        if (!fallback && !prepareGraphLayout(cy, full, sync)) return;
+        const foldsChanged = folding.render(state, full);
+        mapControl.sync(full);
         if (
           existing.size === 0 &&
           Object.keys(state.graph?.positions ?? {}).length > 0 &&
@@ -349,7 +369,7 @@ export function GraphView({
             if (!startAreaRef.current || (latest.current.panelOpen && !mountedWithPanel)) return;
             const area = startAreaRef.current.getBoundingClientRect();
             const box = host.getBoundingClientRect();
-            startCamera(cy, {
+            mapControl.start(cy, {
               x1: area.left - box.left,
               y1: area.top - box.top,
               x2: area.right - box.left,
@@ -361,6 +381,7 @@ export function GraphView({
         showSelection(cy, latest.current.selectedId ?? null);
         reportSoon();
         if (
+          mapControl.level() !== "map" &&
           existing.size > 0 &&
           !foldsChanged &&
           !latest.current.panelOpen &&
@@ -379,6 +400,7 @@ export function GraphView({
       };
       resync.current = sync;
       cy.on("tap", "node", (event) => {
+        if (mapControl.level() === "map") return;
         const node = event.target as NodeSingular;
         const id = node.id();
         if (node.isParent() && node.is(".module, .class")) {
@@ -395,20 +417,12 @@ export function GraphView({
       if (apiRef) {
         apiRef.current = {
           zoomIn: () => {
-            zoomBy(cy, ZOOM_STEP, prefersReducedMotion());
+            mapControl.zoom(cy, ZOOM_STEP);
           },
           zoomOut: () => {
-            zoomBy(cy, 1 / ZOOM_STEP, prefersReducedMotion());
+            mapControl.zoom(cy, 1 / ZOOM_STEP);
           },
-          fit: () => {
-            frameCamera(cy, [], prefersReducedMotion(), panelGeometry(host, latest.current));
-          },
-          detail: (level) => {
-            folding.detail(level);
-            sync();
-            if (level === "Modules")
-              frameCamera(cy, [], prefersReducedMotion(), panelGeometry(host, latest.current));
-          },
+          ...mapControl.api(folding, sync, () => panelGeometry(host, latest.current)),
           reveal: (nodeId) => {
             const target = revealNode(cy, nodeId, prefersReducedMotion());
             if (!target) return;
@@ -421,7 +435,9 @@ export function GraphView({
       }
       const unexpose = exposeProbe(host, cy);
       source.attach(cy);
-      const unsubscribe = stateStore.subscribe(sync);
+      const unsubscribe = stateStore.subscribe(() => {
+        sync();
+      });
       sync();
       if (latest.current.panelOpen && startFrame === undefined) frameInitialPanel();
       const resize = new ResizeObserver(() => {
@@ -443,6 +459,7 @@ export function GraphView({
         host.removeEventListener("pointerleave", clearPointer);
         document.fonts.removeEventListener("loadingdone", refreshFonts);
         if (apiRef) apiRef.current = null;
+        detachMap();
         source.detach();
         unsubscribe();
         unexpose();
@@ -470,7 +487,7 @@ export function GraphView({
       cancelled = true;
       dispose?.();
     };
-  }, [apiRef, startAreaRef]);
+  }, [apiRef, startAreaRef, mapControl]);
   // The dot field is its own canvas under Cytoscape's transparent one: first in the tree, so
   // everything the graph draws is painted over it.
   return (
@@ -484,13 +501,19 @@ export function GraphView({
         milestones={field.milestones}
         mergeStarts={field.mergeStarts}
       />
+      {map && <ControlledMapLayer control={mapControl} />}
       <div
         ref={container}
         className="relative h-full w-full"
         role="img"
         aria-label="Repository graph"
       />
-      <RoutingOmissions hostRef={container} inCone={cone !== null} onCount={onRoutingOmissions} />
+      <MapRoutingOmissions
+        control={mapControl}
+        hostRef={container}
+        inCone={cone !== null}
+        onCount={onRoutingOmissions}
+      />
     </div>
   );
 }
