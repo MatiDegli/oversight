@@ -31,5 +31,5 @@ def write_report(log: Path, results: Path, out: Path | None = None) -> None:
         price_retrieved=LIST_PRICES.retrieved,
     )
     revisions, changes, arms = build_arms(inputs)
-    add_spend(inputs, changes, arms)
+    changes, arms = add_spend(inputs, changes, arms)
     write_lines([meta, *revisions, *changes, *measures(inputs, revisions), *arms], out)

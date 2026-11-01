@@ -2,12 +2,13 @@
 
 from collections import Counter
 
-from .inputs import hidden_status
+from .arms import RevisionRecord
+from .inputs import Inputs, hidden_status
 from .output import counted
 from .spend import cost
 
 
-def measures(inputs, revisions) -> list[dict]:
+def measures(inputs: Inputs, revisions: list[RevisionRecord]) -> list[dict[str, object]]:
     reviews, duplicates = {}, 0
     requests = []
     review_ticks = []
@@ -26,7 +27,7 @@ def measures(inputs, revisions) -> list[dict]:
     cells = Counter(
         (verdict, hidden_status(inputs.results.get(key))) for key, verdict in reviews.items()
     )
-    e1 = dict(
+    e1: dict[str, object] = dict(
         record="E1",
         n=len(reviews),
         cells=[
@@ -43,7 +44,7 @@ def measures(inputs, revisions) -> list[dict]:
         review_cost=cost(review_ticks),
     )
     by_round = Counter((r["revision"] - 1, r["hidden"]) for r in revisions)
-    e2 = dict(
+    e2: dict[str, object] = dict(
         record="E2",
         changes_with_requests=len({p.change_id for p in requests}),
         rounds=len(requests),

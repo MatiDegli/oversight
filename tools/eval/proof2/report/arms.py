@@ -1,10 +1,78 @@
 """Revision correctness, hidden regressions and the two fixed selections."""
 
-from .inputs import Inputs, change_number, hidden_status
-from .output import counted
+from typing import Literal, NotRequired, TypedDict
+
+from oversight_contracts.events import ChangeResolved
+
+from .inputs import Inputs, Result, RevisionKey, change_number, hidden_status
+from .output import Cost, Counted, counted
 
 
-def failing_ids(result: dict | None) -> set[str] | None:
+class Regression(TypedDict):
+    status: Literal["known", "unknown", "not_applicable"]
+    ids: list[str]
+
+
+class RevisionRecord(TypedDict):
+    record: str
+    change_id: str
+    task: str | None
+    revision: int
+    previous: int | None
+    seq: int
+    head_commit: str
+    tests: str
+    hidden: str
+    correct: bool | None
+    first_green: bool
+    merged: bool
+    verdicts: list[str]
+    request: str | None
+    regress_vs_base: Regression
+    regress_vs_previous: Regression
+
+
+class ChangeRecord(TypedDict):
+    record: str
+    change_id: str
+    agent_id: str
+    task: str | None
+    proposals: int
+    rounds: int
+    end: str
+    first_green: int | None
+    merged_revision: int | None
+    merged_by: str | None
+    review_cost: NotRequired[Cost]
+
+
+class ArmRecord(TypedDict):
+    record: str
+    arm: str
+    changes: int
+    correct: Counted
+    incorrect: int
+    unknown: int
+    not_selected: int
+    regressions_let_through: dict[str, int]
+    questions: dict[str, str]
+    questions_not_needed: dict[str, str]
+    problems: list[str]
+    cost: NotRequired[Cost]
+    by_role: NotRequired[dict[str, Cost]]
+    usd_per_correct: NotRequired[float | None]
+
+
+type Receipts = tuple[
+    dict[str, int],
+    dict[str, ChangeResolved],
+    dict[RevisionKey, list[str]],
+    dict[RevisionKey, str],
+    list[str],
+]
+
+
+def failing_ids(result: Result | None) -> set[str] | None:
     if result is None:
         return None
     failed, errors, ids = (result.get(k) for k in ("failed", "errors", "failing_test_ids"))
@@ -19,18 +87,31 @@ def failing_ids(result: dict | None) -> set[str] | None:
     return None
 
 
-def regression(current, reference, applicable=True) -> dict:
+def regression(
+    current: Result | None,
+    reference: Result | None,
+    applicable: bool = True,
+    *,
+    no_previous: bool = False,
+) -> Regression:
     if not applicable:
-        return dict(status="not_applicable", ids=[])
+        return Regression(status="not_applicable", ids=[])
+    if current is None:
+        return Regression(status="unknown", ids=[])
+    if no_previous:
+        return Regression(status="not_applicable", ids=[])
     now, before = failing_ids(current), failing_ids(reference)
     if now is None or before is None:
-        return dict(status="unknown", ids=[])
-    return dict(status="known", ids=sorted(now - before))
+        return Regression(status="unknown", ids=[])
+    return Regression(status="known", ids=sorted(now - before))
 
 
-def receipts(inputs: Inputs):
-    green, merged, reviews, requests = {}, {}, {}, {}
-    problems = []
+def receipts(inputs: Inputs) -> Receipts:
+    green: dict[str, int] = {}
+    merged: dict[str, ChangeResolved] = {}
+    reviews: dict[RevisionKey, list[str]] = {}
+    requests: dict[RevisionKey, str] = {}
+    problems: list[str] = []
     for event in inputs.events:
         if event.type == "change.proposed" and event.payload.tests.outcome == "passed":
             green.setdefault(event.payload.change_id, event.payload.revision)
@@ -48,8 +129,14 @@ def receipts(inputs: Inputs):
     return green, merged, reviews, requests, problems
 
 
-def revision_records(inputs: Inputs, green, merged, reviews, requests) -> list[dict]:
-    revisions = []
+def revision_records(
+    inputs: Inputs,
+    green: dict[str, int],
+    merged: dict[str, ChangeResolved],
+    reviews: dict[RevisionKey, list[str]],
+    requests: dict[RevisionKey, str],
+) -> list[RevisionRecord]:
+    revisions: list[RevisionRecord] = []
     for key, event in sorted(
         inputs.proposals.items(), key=lambda item: (change_number(item[0][0]), item[0][1])
     ):
@@ -63,7 +150,7 @@ def revision_records(inputs: Inputs, green, merged, reviews, requests) -> list[d
             correct = False
         previous = max((r for c, r in inputs.results if c == cid and r < revision), default=None)
         revisions.append(
-            dict(
+            RevisionRecord(
                 record="revision",
                 change_id=cid,
                 task=task,
@@ -84,18 +171,19 @@ def revision_records(inputs: Inputs, green, merged, reviews, requests) -> list[d
                 regress_vs_previous=regression(
                     inputs.results.get(key),
                     inputs.results.get((cid, previous)) if previous is not None else None,
-                    not tests_only and previous is not None,
+                    not tests_only,
+                    no_previous=previous is None,
                 ),
             )
         )
     return revisions
 
 
-def build_arms(inputs: Inputs) -> tuple[list[dict], list[dict], list[dict]]:
+def build_arms(inputs: Inputs) -> tuple[list[RevisionRecord], list[ChangeRecord], list[ArmRecord]]:
     green, merged, reviews, requests, problems = receipts(inputs)
     revisions = revision_records(inputs, green, merged, reviews, requests)
-    changes = [
-        dict(
+    changes: list[ChangeRecord] = [
+        ChangeRecord(
             record="change",
             change_id=c.change_id,
             agent_id=c.agent_id,
@@ -109,7 +197,7 @@ def build_arms(inputs: Inputs) -> tuple[list[dict], list[dict], list[dict]]:
         )
         for c in sorted(inputs.supervision.changes, key=lambda c: change_number(c.change_id))
     ]
-    arms = []
+    arms: list[ArmRecord] = []
     for name, selection in (
         ("without_oversight", green),
         ("with_oversight", {cid: p.revision for cid, p in merged.items()}),
@@ -117,7 +205,7 @@ def build_arms(inputs: Inputs) -> tuple[list[dict], list[dict], list[dict]]:
         selected = [r for r in revisions if selection.get(r["change_id"]) == r["revision"]]
         regressions = [r["regress_vs_base"] for r in selected]
         arms.append(
-            dict(
+            ArmRecord(
                 record="arm",
                 arm=name,
                 changes=len(changes),
