@@ -13,7 +13,7 @@ import { score } from "./PracticePanel";
 import type { PanelProps } from "./PracticePanel";
 
 function Introduction({ practice, onStart }: PanelProps) {
-  const [, startTransition] = useTransition();
+  const [pending, startTransition] = useTransition();
   const active = useRef(false);
   useEffect(() => {
     active.current = true;
@@ -50,6 +50,9 @@ function Introduction({ practice, onStart }: PanelProps) {
       <footer className="pp-dock">
         <button
           className="pp-button pp-primary"
+          aria-label="Start practice"
+          aria-busy={pending}
+          disabled={pending}
           onClick={() => {
             startTransition(async () => {
               await preparePhoneReview();
@@ -57,7 +60,7 @@ function Introduction({ practice, onStart }: PanelProps) {
             });
           }}
         >
-          Start practice
+          {pending ? "Preparing practice…" : "Start practice"}
           <ArrowRight size={18} />
         </button>
       </footer>

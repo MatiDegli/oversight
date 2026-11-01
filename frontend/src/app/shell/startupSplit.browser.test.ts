@@ -3,14 +3,14 @@ import { fileURLToPath } from "node:url";
 import { expect as check, type Browser } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { launchBrowser } from "../browserLaunch.support";
-import type {} from "./startupSplit.browser.fixture";
-import { freshAttempt } from "./challenge/attempt";
+import { launchBrowser } from "../../browserLaunch.support";
+import type {} from "../startupSplit.browser.fixture";
+import { freshAttempt } from "../challenge/attempt";
 
 let server: ViteDevServer, browser: Browser, html: string, url: string;
 beforeAll(async () => {
   server = await createServer({
-    root: fileURLToPath(new URL("../../", import.meta.url)),
+    root: fileURLToPath(new URL("../../../", import.meta.url)),
     mode: "replay",
     server: { host: "127.0.0.1", port: 0, strictPort: false },
   });
@@ -122,6 +122,9 @@ it("loads evidence before painting the first phone decision without a layout shi
     await start.click();
     await requested;
     await check(start).toBeVisible();
+    await check(start).toBeDisabled();
+    await check(start).toHaveAttribute("aria-busy", "true");
+    await check(start).toHaveText("Preparing practice…");
     await check(page.locator(".pp-progress")).toHaveCount(0);
     expect(await page.locator(".pp-main").boundingBox()).toEqual(introduction);
     const firstDecision = page.evaluate(
@@ -391,7 +394,7 @@ it.each(
         await check(panel.getByRole("button", { name: /^Standing grants/ })).toBeDisabled();
       }
       if (!failed && process.env.STARTUP_SPLIT_SHOTS === "1") {
-        const directory = fileURLToPath(new URL("../../.shots/startup-split/", import.meta.url));
+        const directory = fileURLToPath(new URL("../../../.shots/startup-split/", import.meta.url));
         await mkdir(directory, { recursive: true });
         await page.screenshot({ path: `${directory}/${tab}-first-open.png` });
       }

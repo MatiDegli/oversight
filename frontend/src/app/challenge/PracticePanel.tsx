@@ -5,6 +5,8 @@ import { usePhonePractice } from "./usePhonePractice";
 import { lazy } from "react";
 import { LazyPanel } from "../shell/LazyPanel";
 import { PracticeFrame } from "../shell/PanelFallbacks";
+import { complete, score } from "./attempt";
+import type { Answer, Attempt } from "./attempt";
 
 const PhonePractice = lazy(() =>
   import("./PhonePractice").then((m) => ({ default: m.PhonePractice })),
@@ -12,8 +14,6 @@ const PhonePractice = lazy(() =>
 
 export { answerOnce, complete, freshAttempt, score } from "./attempt";
 export type { Answer, Attempt } from "./attempt";
-import { complete, score } from "./attempt";
-import type { Answer, Attempt } from "./attempt";
 const control =
   "rounded-control border border-control-edge px-4 py-2 text-sm enabled:hover:bg-raised disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 const primary =
