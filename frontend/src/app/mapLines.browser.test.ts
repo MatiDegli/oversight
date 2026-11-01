@@ -151,6 +151,54 @@ it("shows calls for module/group hover alone, without graph render, camera or fo
     await page.close();
   }
 });
+it("rechecks hover after viewport changes with a stationary pointer", async () => {
+  const page = await setup();
+  try {
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await ready(page);
+    const id = "library.module_00";
+    const point = await modulePoint(page, id);
+    await pointAt(page, point);
+    const name = page.locator(`[data-map-module="${id}"] .map-name`);
+    await check(name).toHaveClass(/map-full-name/);
+    await zoomTo(page, 0.2);
+    const moved = await modulePoint(page, id);
+    expect(Math.hypot(moved.x - point.x, moved.y - point.y)).toBeGreaterThan(40);
+    const expected = await page.evaluate((point) => {
+      const contains = (el: Element) => {
+        const box = el.getBoundingClientRect();
+        return (
+          point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom
+        );
+      };
+      const modules = [...document.querySelectorAll<HTMLElement>("[data-map-module]")];
+      const module = modules.find(contains);
+      if (module) return [module.dataset.mapModule];
+      const group = [...document.querySelectorAll<HTMLElement>("[data-map-group]")].find(contains);
+      return group
+        ? [...(group.parentElement?.querySelectorAll<HTMLElement>("[data-map-module]") ?? [])].map(
+            (m) => m.dataset.mapModule,
+          )
+        : [];
+    }, point);
+    await check
+      .poll(() =>
+        page
+          .locator("[data-map-module]")
+          .evaluateAll((modules) =>
+            modules
+              .filter((m) => m.querySelector(".map-full-name"))
+              .map((m) => m.getAttribute("data-map-module")),
+          ),
+      )
+      .toEqual(expected);
+    expect((await camera(page)).level).toBe("map");
+    await clearPointer(page);
+    await check(page.locator("[data-map-line]")).toHaveCount(0);
+  } finally {
+    await page.close();
+  }
+});
 it.each([1280, 1920])(
   "centers a group on cards within the zoom clamp at %i without blur/taps",
   async (width) => {

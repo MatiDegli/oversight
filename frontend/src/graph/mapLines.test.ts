@@ -15,12 +15,16 @@ import {
 } from "./mapLines";
 import { MapLayer } from "./MapLayer";
 import design from "../../../DESIGN.md?raw";
+import controllerSource from "./mapController.ts?raw";
 import layerSource from "./MapLayer.tsx?raw";
+import pointerSource from "./mapPointer.ts?raw";
 import linesSource from "./MapLines.tsx?raw";
 
-it("keeps the map layer functions within the 80-line limit", () => {
+it("keeps the map controller and layer functions within the 80-line limit", () => {
   for (const [source, kind] of [
+    [controllerSource, ts.ScriptKind.TS],
     [layerSource, ts.ScriptKind.TSX],
+    [pointerSource, ts.ScriptKind.TS],
     [linesSource, ts.ScriptKind.TSX],
   ] as const) {
     const file = ts.createSourceFile("map", source, ts.ScriptTarget.Latest, true, kind);

@@ -19,7 +19,8 @@ import { FIT_PADDING } from "./geometry";
 import type { GraphViewProps } from "./GraphView";
 import type { MapFrame } from "./MapLayer";
 import { MAP_MIN_MODULES, nextLevel, targetLevel } from "./mapLevel";
-import { mapCalls, mapHit } from "./mapLines";
+import { mapCalls } from "./mapLines";
+import { createMapPointer } from "./mapPointer";
 import type { MapHover } from "./mapLines";
 import { mapModel, panelBox } from "./mapModel";
 import { settle } from "./updateGraph";
@@ -76,238 +77,137 @@ export function useMapController(
 
 export type MapController = ReturnType<typeof createMapController>;
 
-function createMapController(
-  host: RefObject<HTMLDivElement | null>,
-  latest: RefObject<GraphViewProps>,
+interface MapRuntime {
+  host: RefObject<HTMLDivElement | null>;
+  latest: RefObject<GraphViewProps>;
+  cy?: Core;
+  frame: MapFrame;
+  listeners: Set<() => void>;
+  pannable: Set<string>;
+  clickApi?: {
+    folding: { toggle: (id: string) => boolean };
+    sync: () => void;
+    geometry: () => Parameters<typeof frameCamera>[3];
+  };
+}
+const shownModules = (runtime: MapRuntime) => runtime.cy?.nodes(".module").length ?? 0;
+const notify = (runtime: MapRuntime) => {
+  for (const listener of runtime.listeners) listener();
+};
+
+function publishMap(runtime: MapRuntime) {
+  const { cy, host, latest, pannable } = runtime;
+  if (!cy || !latest.current.map) return;
+  const level = shownModules(runtime) < MAP_MIN_MODULES ? "cards" : runtime.frame.level;
+  host.current?.setAttribute("data-map-level", level);
+  latest.current.onMapLevel?.(level);
+  runtime.frame = {
+    ...runtime.frame,
+    level,
+    zoom: cy.zoom(),
+    pan: { ...cy.pan() },
+    hover: level === "map" ? runtime.frame.hover : undefined,
+  };
+  cy.autoungrabify(level === "map");
+  cy.boxSelectionEnabled(false);
+  if (level === "map") {
+    for (const node of cy.nodes().filter((n) => !n.pannable())) {
+      pannable.add(node.id());
+      node.panify();
+    }
+  } else {
+    for (const id of pannable) cy.getElementById(id).unpanify();
+    pannable.clear();
+  }
+  notify(runtime);
+  host.current?.dispatchEvent(new CustomEvent("graphrender"));
+}
+
+function openMapHit(runtime: MapRuntime, explicit: <T>(move: () => T) => T, hit: MapHover) {
+  const graph = runtime.cy,
+    api = runtime.clickApi;
+  if (!graph || !api) return;
+  if (hit.kind === "module" && graph.getElementById(hit.id).hasClass("folded")) {
+    api.folding.toggle(hit.id);
+    api.sync();
+  }
+  const ids =
+    hit.kind === "module"
+      ? [hit.id]
+      : (runtime.frame.model.groups.find((g) => g.id === hit.id)?.modules.map((m) => m.id) ?? []);
+  explicit(() =>
+    centerMapCards(graph, ids, prefersReducedMotion(), api.geometry()?.area, hit.kind === "module"),
+  );
+}
+
+function fitMap(
+  runtime: MapRuntime,
+  explicit: <T>(move: () => T) => T,
+  geometry: Parameters<typeof frameCamera>[3],
 ) {
-  let frame: MapFrame = {
-    model: { groups: [], cellWidth: 446, cellHeight: 220 },
-    zoom: 1,
-    pan: { x: 0, y: 0 },
-    level: "cards",
-  };
-  const listeners = new Set<() => void>();
-  let cy: Core | undefined;
-  let model: MapFrame["model"] = { groups: [], cellWidth: 446, cellHeight: 220 };
-  let level: MapFrame["level"] = "cards";
-  let calls: MapFrame["calls"];
-  let hover: MapHover | undefined;
-  let pointerFrame = 0;
-  let pointer: { x: number; y: number } | undefined;
-  let clickApi:
-    | {
-        folding: { toggle: (id: string) => boolean };
-        sync: () => void;
-        geometry: () => Parameters<typeof frameCamera>[3];
-      }
-    | undefined;
-  let down: { x: number; y: number } | undefined,
-    dragged = false;
-  const surface = (event: MouseEvent) =>
-    host.current?.contains(event.target as Node) || event.target === host.current?.parentElement;
-  const active = () => latest.current.map && level === "map";
-  const setHover = (hit?: MapHover) => {
-    if (hover?.kind === hit?.kind && hover?.id === hit?.id) return;
-    hover = hit;
-    frame = { ...frame, hover };
-    for (const listener of listeners) listener();
-  };
-  const point = (event: MouseEvent) => {
-    const box = host.current?.getBoundingClientRect();
-    return box ? { x: event.clientX - box.left, y: event.clientY - box.top } : undefined;
-  };
-  const pointermove = (event: PointerEvent) => {
-    if (!active()) return;
-    pointer = point(event);
-    if (down && pointer && cy) {
-      const dx = pointer.x - down.x,
-        dy = pointer.y - down.y;
-      if (Math.hypot(dx, dy) > 3 || dragged) {
-        dragged = true;
-        cy.panBy({ x: dx, y: dy });
-        down = pointer;
-      }
-    }
-    if (pointerFrame) return;
-    pointerFrame = requestAnimationFrame(() => {
-      pointerFrame = 0;
-      if (active()) setHover(pointer && mapHit(pointer, frame));
-    });
-  };
-  const pointerleave = () => {
-    if (!active()) return;
-    cancelAnimationFrame(pointerFrame);
-    pointerFrame = 0;
-    pointer = undefined;
-    setHover();
-  };
-  const mousedown = (event: MouseEvent) => {
-    if (!active() || !surface(event) || event.button !== 0) return;
-    event.preventDefault();
-    // Cytoscape explicitly blurs on mousedown; own the map gesture before it reaches its canvas.
-    event.stopPropagation();
-    down = pointer ?? point(event);
-    dragged = false;
-  };
-  const mousemove = (event: MouseEvent) => {
-    if (active() && surface(event)) event.stopPropagation();
-  };
-  const mouseup = () => {
-    down = undefined;
-  };
-  const click = (event: MouseEvent) => {
-    if (!active() || !cy || !surface(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (dragged) return;
-    const p = point(event),
-      hit = p && mapHit(p, frame);
-    if (!hit || !clickApi) return;
-    const graph = cy,
-      api = clickApi;
-    if (hit.kind === "module" && graph.getElementById(hit.id).hasClass("folded")) {
-      api.folding.toggle(hit.id);
-      api.sync();
-    }
-    const ids =
-      hit.kind === "module"
-        ? [hit.id]
-        : (model.groups.find((g) => g.id === hit.id)?.modules.map((m) => m.id) ?? []);
-    explicit(() =>
-      centerMapCards(
-        graph,
-        ids,
-        prefersReducedMotion(),
-        api.geometry()?.area,
-        hit.kind === "module",
-      ),
-    );
-  };
-  const pannable = new Set<string>();
-  const shownModules = () => cy?.nodes(".module").length ?? 0;
-  const publish = () => {
-    if (!cy || !latest.current.map) return;
-    if (shownModules() < MAP_MIN_MODULES) level = "cards";
-    host.current?.setAttribute("data-map-level", level);
-    latest.current.onMapLevel?.(level);
-    if (level !== "map") hover = undefined;
-    frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() }, calls, hover };
-    cy.autoungrabify(level === "map");
-    cy.boxSelectionEnabled(false);
-    if (level === "map") {
-      for (const node of cy.nodes().filter((n) => !n.pannable())) {
-        pannable.add(node.id());
-        node.panify();
-      }
-    } else {
-      for (const id of pannable) cy.getElementById(id).unpanify();
-      pannable.clear();
-    }
-    for (const listener of listeners) listener();
-    host.current?.dispatchEvent(new CustomEvent("graphrender"));
-  };
-  const wheel = (event: WheelEvent) => {
+  const graph = runtime.cy;
+  if (!graph) return;
+  explicit(() => {
+    const cards = frameCamera(graph, [], prefersReducedMotion(), geometry);
     if (
-      !cy ||
-      !latest.current.map ||
-      level !== "map" ||
-      host.current?.contains(event.target as Node)
+      !cards ||
+      !runtime.latest.current.map ||
+      targetLevel(cards.zoom, shownModules(runtime)) === "cards"
     )
-      return;
-    event.preventDefault();
-    const box = host.current?.getBoundingClientRect();
-    if (!box) return;
-    cy.zoom({
-      level: Math.min(
-        cy.maxZoom(),
-        Math.max(cy.minZoom(), cy.zoom() * Math.pow(10, -event.deltaY / 250)),
-      ),
-      renderedPosition: { x: event.clientX - box.left, y: event.clientY - box.top },
-    });
-    navigate();
-  };
-  const viewport = () => {
-    publish();
-  };
-  const navigate = () => {
-    if (!cy || !latest.current.map) return;
-    level = nextLevel(level, cy.zoom(), shownModules());
-    publish();
-  };
-  // Viewport events only follow the camera. An explicit move therefore holds its target level
-  // throughout animation; hysteresis runs again only for the person's next navigation gesture.
+      return cards;
+    const { model } = runtime.frame;
+    return fitPanelCamera(
+      graph,
+      (zoom) => model.groups.map((g) => panelBox(g, zoom, model.groups)),
+      prefersReducedMotion(),
+      geometry?.area,
+      cards.zoom,
+    );
+  });
+}
+
+function mapCommands(runtime: MapRuntime, publish: () => void) {
+  const { latest } = runtime;
   const hold = (zoom: number) => {
     if (latest.current.map) {
-      level = targetLevel(zoom, shownModules());
+      runtime.frame = { ...runtime.frame, level: targetLevel(zoom, shownModules(runtime)) };
       publish();
     }
   };
+  // Viewport events follow the camera; an explicit move holds its target level during animation.
   const explicit = <T>(move: () => T): T => {
     if (!latest.current.map) return move();
     const target = move();
-    hold((target as Camera | null | undefined)?.zoom ?? cy?.zoom() ?? 1);
+    hold((target as Camera | null | undefined)?.zoom ?? runtime.cy?.zoom() ?? 1);
     return target;
   };
+  const fit = (geometry: Parameters<typeof frameCamera>[3]) => {
+    fitMap(runtime, explicit, geometry);
+  };
   return {
-    getFrame: () => frame,
-    level: () => level,
-    subscribe: (listener: () => void) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
+    explicit,
+    navigate: () => {
+      if (!runtime.cy || !latest.current.map) return;
+      runtime.frame = {
+        ...runtime.frame,
+        level: nextLevel(runtime.frame.level, runtime.cy.zoom(), shownModules(runtime)),
       };
-    },
-    attach(graph: Core) {
-      cy = graph;
-      const stage = host.current?.parentElement;
-      stage?.addEventListener("mousedown", mousedown, true);
-      stage?.addEventListener("mousemove", mousemove, true);
-      stage?.addEventListener("click", click, true);
-      stage?.ownerDocument.defaultView?.addEventListener("mouseup", mouseup);
-      stage?.addEventListener("pointermove", pointermove);
-      stage?.addEventListener("pointerleave", pointerleave);
-      cy.on("viewport", viewport);
-      cy.on("scrollzoom pinchzoom", navigate);
-      host.current?.parentElement?.addEventListener("wheel", wheel, { passive: false });
-      return () => {
-        stage?.removeEventListener("mousedown", mousedown, true);
-        stage?.removeEventListener("mousemove", mousemove, true);
-        stage?.removeEventListener("click", click, true);
-        stage?.ownerDocument.defaultView?.removeEventListener("mouseup", mouseup);
-        stage?.removeEventListener("pointermove", pointermove);
-        stage?.removeEventListener("pointerleave", pointerleave);
-        cancelAnimationFrame(pointerFrame);
-        host.current?.parentElement?.removeEventListener("wheel", wheel);
-        cy?.off("viewport", viewport);
-        cy?.off("scrollzoom pinchzoom", navigate);
-        cy = undefined;
-      };
-    },
-    sync(elements: readonly GraphElement[]) {
-      if (!latest.current.map) return;
-      model = mapEvidence(
-        mapModel(elements, getActiveTheme()),
-        elements,
-        stateStore.getState().state,
-        latest.current.cone ?? latest.current.liveCone,
-      );
-      calls = mapCalls(elements);
-      measureHeaders(model);
       publish();
     },
-    explicit,
     zoom(graph: Core, factor: number) {
-      if (latest.current.map) {
-        level = nextLevel(level, graph.zoom() * factor, shownModules());
-      }
+      if (latest.current.map)
+        runtime.frame = {
+          ...runtime.frame,
+          level: nextLevel(runtime.frame.level, graph.zoom() * factor, shownModules(runtime)),
+        };
       zoomBy(graph, factor, prefersReducedMotion());
       publish();
     },
     frame(graph: Core, ids: readonly string[], geometry: Parameters<typeof frameCamera>[3]) {
-      return this.explicit(() => frameCamera(graph, ids, prefersReducedMotion(), geometry));
+      return explicit(() => frameCamera(graph, ids, prefersReducedMotion(), geometry));
     },
     start(graph: Core, area: Parameters<typeof startCamera>[1]) {
-      this.explicit(() => {
+      explicit(() => {
         startCamera(graph, area);
       });
     },
@@ -319,33 +219,92 @@ function createMapController(
       sync: () => void,
       geometry: () => Parameters<typeof frameCamera>[3],
     ) {
-      clickApi = { folding, sync, geometry };
+      runtime.clickApi = { folding, sync, geometry };
       return {
         fit: () => {
-          this.fit(geometry());
+          fit(geometry());
         },
         detail: (level: "Modules" | "Functions" | "Details") => {
           folding.detail(level);
           sync();
-          if (level === "Modules") this.fit(geometry());
+          if (level === "Modules") fit(geometry());
         },
       };
     },
-    fit(geometry: Parameters<typeof frameCamera>[3]) {
-      const graph = cy;
-      if (!graph) return;
-      this.explicit(() => {
-        const cards = frameCamera(graph, [], prefersReducedMotion(), geometry);
-        if (!cards || !latest.current.map || targetLevel(cards.zoom, shownModules()) === "cards")
-          return cards;
-        return fitPanelCamera(
-          graph,
-          (zoom) => model.groups.map((g) => panelBox(g, zoom, model.groups)),
-          prefersReducedMotion(),
-          geometry?.area,
-          cards.zoom,
-        );
-      });
+    fit,
+  };
+}
+
+function createMapController(
+  host: RefObject<HTMLDivElement | null>,
+  latest: RefObject<GraphViewProps>,
+) {
+  const runtime: MapRuntime = {
+    host,
+    latest,
+    frame: {
+      model: { groups: [], cellWidth: 446, cellHeight: 220 },
+      zoom: 1,
+      pan: { x: 0, y: 0 },
+      level: "cards",
+    },
+    listeners: new Set(),
+    pannable: new Set(),
+  };
+  const publish = () => {
+    publishMap(runtime);
+    pointer.refresh();
+  };
+  const commands = mapCommands(runtime, publish);
+  const pointer = createMapPointer({
+    host,
+    active: () => latest.current.map && runtime.frame.level === "map",
+    graph: () => runtime.cy,
+    frame: () => runtime.frame,
+    setHover: (hover) => {
+      if (runtime.frame.hover?.kind === hover?.kind && runtime.frame.hover?.id === hover?.id)
+        return;
+      runtime.frame = { ...runtime.frame, hover };
+      notify(runtime);
+    },
+    open: (hit) => {
+      openMapHit(runtime, commands.explicit, hit);
+    },
+    navigate: commands.navigate,
+  });
+  return {
+    ...commands,
+    getFrame: () => runtime.frame,
+    level: () => runtime.frame.level,
+    subscribe: (listener: () => void) => {
+      runtime.listeners.add(listener);
+      return () => {
+        runtime.listeners.delete(listener);
+      };
+    },
+    attach(graph: Core) {
+      runtime.cy = graph;
+      const detach = pointer.attach();
+      graph.on("viewport", publish);
+      graph.on("scrollzoom pinchzoom", commands.navigate);
+      return () => {
+        detach();
+        graph.off("viewport", publish);
+        graph.off("scrollzoom pinchzoom", commands.navigate);
+        runtime.cy = undefined;
+      };
+    },
+    sync(elements: readonly GraphElement[]) {
+      if (!latest.current.map) return;
+      const model = mapEvidence(
+        mapModel(elements, getActiveTheme()),
+        elements,
+        stateStore.getState().state,
+        latest.current.cone ?? latest.current.liveCone,
+      );
+      measureHeaders(model);
+      runtime.frame = { ...runtime.frame, model, calls: mapCalls(elements) };
+      publish();
     },
   };
 }
