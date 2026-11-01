@@ -356,6 +356,7 @@ Merge-mode controls, standing grants, follow-main for idle rules waits and Rever
 but `changes/_mode.py` keeps rules activation closed pending approval. Every merge today still
 requires the person's decision. Plans, dependency dispatch, the queue and the lead runtime are
 wired; the lead requests plans and leaves their approval to the person.
+`merge_mode.changed` sets the merge mode that the status line and the Settings tab show.
 
 `changes/_reviewfacts` remains a private unwired core. The `_zones` and `_partition` algorithms
 also remain outside live plan production; the public partition export does not wire a producer.

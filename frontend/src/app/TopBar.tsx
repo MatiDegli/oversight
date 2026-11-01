@@ -1,4 +1,4 @@
-import { Folder, GitBranch, Search } from "lucide-react";
+import { Folder, GitBranch, Search, Settings } from "lucide-react";
 
 import { selectDecisionInboxCount } from "../state";
 import type { State } from "../state";
@@ -9,20 +9,22 @@ const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
 /**
- * The top bar: name, repository, branch and commit, the review queue and spend. The sketches also
- * show "Earlier today" and settings; each joins the bar when its feature is built, so
+ * The top bar: name, repository, branch and commit, the review queue, spend and settings.
+ * "Earlier today" joins the bar when its feature is built, so
  * the bar never carries a control that looks present and does nothing.
  */
 export function TopBar({
   state,
   onOpenQueue,
   onOpenPalette,
+  onOpenSettings,
   practice,
 }: {
   practice?: { active: boolean; open: () => void };
   state: State;
   onOpenQueue?: () => void;
   onOpenPalette?: () => void;
+  onOpenSettings?: () => void;
 }) {
   const ready = selectDecisionInboxCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
@@ -96,6 +98,17 @@ export function TopBar({
         </button>
       </div>
       <SpendMeter state={state} showBrake={false} />
+      {onOpenSettings && (
+        <button
+          type="button"
+          aria-label="Settings"
+          title="Settings"
+          onClick={onOpenSettings}
+          className={`p-2 text-muted hover:text-text ${focusRing}`}
+        >
+          <Settings aria-hidden="true" className="size-4" />
+        </button>
+      )}
     </header>
   );
 }

@@ -14,6 +14,8 @@ import { candidateKey, useAnswers } from "./answers";
 import { agentSlotStyle } from "../theme";
 
 import { ReviewDecisionBar } from "./ReviewDecisionBar";
+import { RevertControl } from "./RevertControl";
+import type { RevertAttempt } from "./revert";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
@@ -23,6 +25,8 @@ export interface ReviewPanelProps {
   changeId: string;
   /** The person's last decision on this change, kept by the app across panel closes. */
   attempt?: DecisionAttempt;
+  revertAttempt?: RevertAttempt;
+  onRevert?: (changeId: string) => void;
   /** Absent in a replay: the replay build has no backend and sends no commands. */
   onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
   /** What a replay plays, such as "hand-written demo fixture"; absent in a live run. */
@@ -39,6 +43,8 @@ export function ReviewPanel({
   files: fileAccess,
   changeId,
   attempt,
+  revertAttempt,
+  onRevert,
   onDecide,
   replayOf,
   onClose,
@@ -187,8 +193,16 @@ export function ReviewPanel({
         }
       />
       {body.kind === "g" ? (
-        <footer className="review-merged">
-          Merged into main <code>{change?.resolution?.merge_commit?.slice(0, 7)}</code>
+        <footer className="review-merged-row">
+          <p className="review-merged">
+            Merged into main <code>{change?.resolution?.merge_commit?.slice(0, 7)}</code>
+          </p>
+          <RevertControl
+            state={state}
+            changeId={changeId}
+            attempt={revertAttempt}
+            onRevert={onRevert}
+          />
         </footer>
       ) : (
         change && (
