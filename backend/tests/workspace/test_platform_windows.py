@@ -293,3 +293,153 @@ async def test_reduced_env_restart(tmp_path, template, monkeypatch):
             (workspace.main.root / "readonly").chmod(0o400)
         finally:
             workspace.release_runtime()
+
+
+async def test_lstat_fstat_identity(tmp_path):
+    import os
+
+    from oversight.workspace.files import open_file
+
+    target = tmp_path / "identity.py"
+    target.write_bytes(b"x\r\n\x1a")
+    with open_file(tmp_path, target.name) as handle:
+        fresh, opened = target.lstat(), os.fstat(handle.fileno())
+        assert fresh.st_ino != 0 and (fresh.st_dev, fresh.st_ino) == (opened.st_dev, opened.st_ino)
+        assert handle.read() == b"x\r\n\x1a"
+
+
+async def test_binary_write_hash(tmp_path):
+    from oversight.workspace.files import content_hash, read_file, write_file
+
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    digest = write_file(tmp_path, temp, "a.py", "x\n\r\n\x1aé", None)
+    assert (tmp_path / "a.py").read_bytes() == "x\n\r\n\x1aé".encode()
+    assert (
+        read_file(tmp_path, "a.py").hash == digest == content_hash((tmp_path / "a.py").read_bytes())
+    )
+    assert list(temp.iterdir()) == []
+
+
+async def test_gitdir_roundtrip(workspace):
+    from oversight.workspace.files import registered_worktree
+
+    tree = await workspace.create_worktree("agent-1")
+    pointer = (tree.root / ".git").read_bytes()
+    assert pointer.startswith(b"gitdir: ") and pointer.endswith(b"\n")
+    tree.git_identity.verify_registration()
+    assert registered_worktree(workspace.runtime_root, workspace.main.root, "agent-1") == tree.root
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".GIT",
+        ".g\u0131t",
+        ".git.",
+        ".git ",
+        "GIT~1",
+        "a.py:s",
+        "CON",
+        "nul.txt",
+        "COM1",
+        "C:x",
+        "a/../b",
+        "CON/x.py",
+        "NUL/a.py",
+        "COM1/b/",
+        "sub/CON",
+        "CONIN$",
+        "CONOUT$.txt",
+        "LPT1.txt",
+        "COM¹",
+    ],
+)
+async def test_nt_path_refusals(tmp_path, path):
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import open_file
+
+    with pytest.raises(InvalidPath):
+        open_file(tmp_path, path)
+
+
+async def test_ads_and_short_names(tmp_path):
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import open_file
+    from oversight.workspace.secret_paths import is_secret_path
+
+    target = tmp_path / "privatecredential.pem"
+    target.write_bytes(b"private")
+    stream = Path(str(target) + ":secret")
+    await asyncio.to_thread(stream.write_bytes, b"ADS canary")
+    assert is_secret_path(target.name + ":secret")
+    with pytest.raises(InvalidPath):
+        open_file(tmp_path, target.name + ":secret")
+
+
+async def test_short_names_support(tmp_path):
+    if sys.platform != "win32":
+        pytest.skip("native Windows proof")
+    import ctypes
+
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import open_file
+
+    target = tmp_path / "longprivatecredential.txt"
+    target.write_bytes(b"canary")
+    result = ctypes.create_unicode_buffer(32768)
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    api.GetShortPathNameW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+    assert api.GetShortPathNameW(str(target), result, len(result)), ctypes.get_last_error()
+    alias = Path(result.value).name
+    if alias.casefold() == target.name.casefold():
+        pytest.skip("8.3 names disabled on native test volume")
+    with pytest.raises(InvalidPath):
+        open_file(tmp_path, alias)
+
+
+async def test_junction_site_matrix(tmp_path):
+    import time
+
+    from oversight.graph import WorkspaceGraph
+    from oversight.graph._completeness import graph_completeness
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import (
+        copy_template,
+        list_files,
+        open_file,
+        resolve_in,
+        write_file,
+    )
+    from oversight.workspace.integrity import GitIdentity, scan_nested_git, veto_gitmodules
+
+    root, outside, temp = tmp_path / "root", tmp_path / "outside", tmp_path / "tmp"
+    for directory in (root, outside, temp):
+        directory.mkdir()
+    (root / ".git").mkdir()
+    (outside / "canary.py").write_bytes(b"secret = True\n")
+    (outside / ".gitmodules").touch()
+    junction = root / "out"
+    result = await run_process(
+        ["cmd.exe", "/c", "mklink", "/J", str(junction), str(outside)], cwd=tmp_path, timeout_s=5
+    )
+    assert result.returncode == 0, result.stderr
+    before = (outside / "canary.py").read_bytes()
+    try:
+        for operation in (
+            lambda: resolve_in(root, "out/canary.py"),
+            lambda: open_file(root, "out/canary.py"),
+            lambda: write_file(root, temp, "out/new.py", "bad", None),
+            lambda: copy_template(junction, tmp_path / "copy"),
+        ):
+            with pytest.raises(InvalidPath):
+                operation()
+        assert list_files(root) == []
+        identity = GitIdentity(root, root / ".git", root / ".git")
+        scan_nested_git(identity, time.monotonic() + 5)
+        veto_gitmodules(root, time.monotonic() + 5)
+        assert WorkspaceGraph(root).scan("main").nodes == []
+        assert graph_completeness(root) == ()
+    finally:
+        junction.rmdir()
+    assert (outside / "canary.py").read_bytes() == before

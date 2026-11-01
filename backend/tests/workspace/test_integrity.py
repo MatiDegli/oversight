@@ -350,3 +350,58 @@ async def test_lease_wait_deadline_prevents_git(
         await task
     spawn.assert_not_awaited()
     assert workspace.operations.idle
+
+
+@pytest.mark.parametrize("name", [".GIT", ".g\u0131t"])
+async def test_nt_nested_shadow_refuses_before_git(workspace, monkeypatch, name):
+    from types import SimpleNamespace
+
+    (workspace.main.root / "ignored" / name).mkdir(parents=True)
+    monkeypatch.setattr(integrity, "sys", SimpleNamespace(platform="win32"))
+    spawn = AsyncMock()
+    monkeypatch.setattr(core, "run_process", spawn)
+    async with workspace.locks(main=True):
+        with pytest.raises(IntegrityError, match="nested or linked"):
+            await workspace.git(workspace.main, "add", "-A")
+    spawn.assert_not_awaited()
+
+
+async def test_nt_scan_never_follows_other_links(workspace, tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    outside = tmp_path / "outside"
+    (outside / ".git").mkdir(parents=True)
+    (outside / ".gitmodules").touch()
+    (workspace.main.root / "junction").symlink_to(outside, target_is_directory=True)
+    monkeypatch.setattr(integrity, "sys", SimpleNamespace(platform="win32"))
+    scan_nested_git(workspace.main.git_identity, time.monotonic() + 5)
+    integrity.veto_gitmodules(workspace.main.root, time.monotonic() + 5)
+
+
+async def test_nt_metadata_bounded_and_no_follow(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace.files import gitdir_matches
+
+    monkeypatch.setattr(integrity, "sys", SimpleNamespace(platform="win32"))
+    target = tmp_path / "index"
+    target.write_bytes(b"12345")
+    deadline = time.monotonic() + 5
+    with pytest.raises(IntegrityError):
+        integrity._plain_bytes(target, 4, deadline)
+    assert integrity._plain_bytes(target, 5, deadline) == b"12345"
+    link = tmp_path / "linked"
+    link.symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(IntegrityError):
+        integrity._plain_bytes(link / "index", 5, deadline)
+    from pathlib import PureWindowsPath
+
+    expected = PureWindowsPath("C:/Runtime/worktrees/agent-1/.git")
+    assert gitdir_matches("c:/runtime/worktrees/agent-1/.git\n", expected)
+    for value in (
+        "C:/Runtime/worktrees/agent-1/.git",
+        "C:/Runtime/worktrees/agent-1/.git\n\n",
+        " C:/Runtime/worktrees/agent-1/.git\n",
+        "C:/Runtime/x/../worktrees/agent-1/.git\n",
+    ):
+        assert not gitdir_matches(value, expected)

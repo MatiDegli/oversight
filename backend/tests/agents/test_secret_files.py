@@ -171,3 +171,43 @@ async def test_lead_refuses_before_read_and_still_reads_public_files(path: str) 
     public = await tools.call("read_file", json.dumps(dict(path="README.md")))
     assert public.ok and PUBLIC["README.md"].strip() in public.content
     read.assert_awaited_once_with("README.md")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".ENV",
+        ".env::$DATA",
+        ".env.",
+        ".env /x",
+        ".ENV/private.py",
+        "KEY.PEM/x.py",
+        "private.KEY/a.py",
+        "ID_RSA/a.py",
+        "\u0131d_rsa",
+        "GIT~1",
+        "plain:stream",
+        "plain.",
+    ],
+)
+async def test_nt_worker_and_lead_zero_content_io(secret_tools, monkeypatch, path):
+    from types import SimpleNamespace
+
+    from oversight.workspace import secret_paths
+
+    monkeypatch.setattr(secret_paths, "sys", SimpleNamespace(platform="win32"))
+    tools, tree = secret_tools
+    read, ranged, write = AsyncMock(), AsyncMock(), AsyncMock()
+    monkeypatch.setattr(tree, "read_text", read)
+    monkeypatch.setattr(tree, "read_range", ranged)
+    monkeypatch.setattr(tree, "write_text", write)
+    assert secret_paths.is_secret_path(path)
+    for arguments in (dict(path=path), dict(path=path, start_line=1, end_line=1)):
+        assert not (await call(tools, "read_file", **arguments)).ok
+    assert not (await call(tools, "edit_file", path=path, old_text="x", new_text="y")).ok
+    await test_lead_refuses_before_read_and_still_reads_public_files(path)
+    read.assert_not_awaited()
+    ranged.assert_not_awaited()
+    write.assert_not_awaited()
+    assert not secret_paths.is_secret_path(".env.example")
+    assert not secret_paths.is_secret_path("id_utils.py")
