@@ -87,3 +87,55 @@ def test_absent_earlier_answer_is_rejected() -> None:
     event = LeadReplyEvent(seq=4, ts=TS, type="lead.reply", payload=reply(answers_seq=1))
     with pytest.raises(ValueError, match="absent or not earlier"):
         validate_references(event, {})
+
+
+def test_replies_add_no_observations_to_any_fold() -> None:
+    from dataclasses import replace
+
+    from oversight.events import (
+        build_usage_view,
+        fold_activity,
+        fold_stages,
+        fold_supervision,
+        fold_usage,
+        price_usage,
+        read_jsonl,
+    )
+
+    fixture = Path(__file__).resolve().parents[3] / "fixtures/events/handwritten-level1.jsonl"
+    events = read_jsonl(fixture)
+    assert events[0].type == "run.started"
+    run_id = events[0].payload.run_id
+    before = list(events)
+    # A reply can advance the horizon without inventing a call, actor, change or interval.
+    for cut in (None, "tool_calls", "model_calls", "time", "spend_brake"):
+        events.append(
+            LeadReplyEvent(
+                seq=len(events) + 1,
+                ts=events[-1].ts,
+                type="lead.reply",
+                payload=reply(text="Reply" if cut is None else None, cut=cut),
+            )
+        )
+        for fold in (fold_usage, fold_activity, fold_supervision, price_usage):
+            assert fold(events) == replace(fold(before), through_seq=len(events))
+        assert fold_stages(events, "change-1") == fold_stages(before, "change-1")
+        assert build_usage_view(run_id, events) == build_usage_view(run_id, before).model_copy(
+            update={"seq": len(events)}
+        )
+
+
+def test_idle_does_not_change_state_agnostic_lead_readers() -> None:
+    from oversight.events import build_usage_view, fold_activity, read_jsonl
+
+    fixture = Path(__file__).resolve().parents[3] / "fixtures/events/handwritten-lead-thread.jsonl"
+    events = read_jsonl(fixture)[:4]
+    assert events[-1].type == "lead.status" and events[-1].payload.state == "idle"
+    idle = events[-1]
+    working = idle.model_copy(
+        update={"payload": idle.payload.model_copy(update={"state": "working"})}
+    )
+    assert fold_activity(events) == fold_activity([*events[:-1], working])
+    assert build_usage_view("run-20261101-170457", events) == build_usage_view(
+        "run-20261101-170457", [*events[:-1], working]
+    )
