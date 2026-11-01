@@ -2663,6 +2663,28 @@ The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inve
 probe-inputs parameter-extension evidence.
 
 Amended 2026-10-31 (Docs audit): versions are assigned next free at landing; the chain above is approval history.
+
+## Contracts 1.12.0 — approved by the maintainer, 2026-10-31
+
+GET /usage serves UsageView live and in a replay. It maps the existing list-price, activity and
+revision-round folds over one committed event inventory. Ledger figures never appear in this view:
+the costs are list-price equivalents, never a bill or the budget ledger. A null figure is unknown;
+its known_* sibling is a lower bound, and zero remains zero.
+
+Item 10 uses the maintainer's 2026-10-31 team rule, shared with team colors: the plan's lead when
+Plan.started_by names one, else the plan, else the agent itself. A plan the person requests is one
+team; two plans of the same lead are one team. additions.md now states this rule. Hour/day periods
+come later as an additive front with a time-zone parameter.
+
+The Limits docstrings now say per round, matching the runtime's revision budgets. A named alias
+for bounded message text keeps generated names stable without changing accepted document shapes.
+proposal.md no longer claims a contract-scope check: recorded maintainer approval accompanies a
+contract change and its first producer, and CI compares regenerated artifacts byte for byte.
+
+The usage view took 1.12.0 at landing, next free after the lead runtime (1.10.0)
+and the parameter-extension evidence (1.11.0). Safe creation takes a later contract version
+assigned at landing after its own approval.
+
 ## 2026-10-31 — Supervision is a pure fold over the committed event prefix
 
 Reason: the maintainer needs reproducible supervision counts and spend for any recorded run
@@ -2717,6 +2739,37 @@ Review time is refused because proposal-to-resolution elapsed time mixes waiting
 Rankings and scores are refused because agents receive different tasks. Percentages and ratios
 such as lines per dollar or cost per merge are refused because these receipts provide no fair
 normalization for task scope; every printed rate retains its explicit denominator.
+
+## 2026-10-31 — Settings shows the merge mode only
+
+The maintainer accepted the recommended answers at 12:47 ART. A refused mode change shows
+one inline line below the cards, with an X icon, the server's words and role="alert";
+no toast. Ask me's second sentence is dropped. Merge alone when safe reads
+"A change merges by itself only when every rule holds. Otherwise it waits for you."
+The rules checklist waits for a backed source. No left navigation, repository
+label, Saved or scope line; Merge mode fills the tab. Both cards disable in flight,
+with no words. Replay cards are read-only, mark the recorded mode, and show
+"Setting the merge mode is not available in a replay." A null mode marks neither card
+and omits the status segment. The cards act only on their own pointer click;
+Enter and Space send nothing, with no shortcut, palette command or confirmation.
+Item 8's accepted plan asks for a mode toggle that shows the server's 409 reason. Until rules
+mode is activated, the live Merge alone when safe choice presents that refusal.
+
+## 2026-10-31 — Revert in the merged review footer
+
+Approved in packet B: "Todo como recomendás", at
+2026-10-31T15:47:21Z (12:47:21 ART).
+
+The merged review footer offers Revert for a rules merge with its recorded resolution and
+main commit. In flight, the button disables and a line reads "Reverting: waiting for the result."
+A refusal appears below the footer row, with an X icon, the server's words and role="alert".
+After a Revert, the button goes away and a second line reads "Reverted in main {revert_commit}",
+using seven characters, under "Merged into main {hash}". The header pill stays "Merged".
+A Revert that needs you shows its reason verbatim as a muted line; Revert remains available.
+In a replay, "Revert is not available in a replay." takes the button's place.
+Revert acts only on its own pointer click. It stays focusable; Enter and Space send nothing.
+There is no shortcut, palette command or confirmation. Availability does not read the merge mode.
+Outcomes update the current view without opening a tab, moving focus or selecting a node.
 
 ## 2026-10-31 — The lead runs inside one run with fixed limits
 
@@ -2897,3 +2950,420 @@ Reason: a docs audit found many docs behind main after several days of changed d
 5. AGENTS.md is aligned only with decisions already recorded.
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
+
+
+## 2026-10-31 — Human confirmation of examples and task carry
+
+The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
+and 1–5 examples. Before any await, guards match agent/run, the ready_for_review offer seq and base. Confirm selects unchanged offered examples of one meaning,
+allowing subsets with unique ids. Edit requires bounded finite JSON inputs and exact outputs for allowed synchronous top-level functions; the server pins copies
+to the original task. The contract number is assigned at landing.
+
+E2 owns POST /agents/{id}/examples and dispatch because its runtime owns Commands, pending evidence and the fresh run. E3 provides the handler and manager
+transition without wiring or model calls. Prose, model replies, answering links and later statuses confer no confirmation authority.
+
+R1: no AgentMessageSent; the command has no text, and the pinned status is durable evidence. R2: refuse client pins. R3: refuse behavior-only and mixed
+replacements (Q3). R4: person=False confirms criteria without acting on code. R5: the manager and fresh run may each emit an identical starting status.
+
+Admission requires an unproposed, review-ready revision zero, no head or examples, the same base, trusted main and an open manager. One ctx.whole
+publish/bookkeeping step records starting before replacing the task and returning to working. Publish failure preserves the phase; cancellation waits for
+settlement. A digest of normalized action and ordered examples makes identical retries return the current task without another event while its record exists.
+Different confirmations and competing decisions in flight fail; Reject and Stop retain their cancellation paths.
+
+AgentTask retains original text, detached confirmed examples and prior_steps. The Done when block has exact results without test ids. Statuses and proposals
+carry examples through revisions and review saves; budgets include prior steps. Empty examples remain null. E2 must fill the runtime-owned halt-for-ledger
+status gap in app.py:962-983, deliberately untouched here.
+## 2026-10-31 — Refuse obvious secret files at model tool boundaries
+
+A shared pure basename predicate in workspace enforces the Agent tools rule before the coding
+agent's whole/ranged read_file and edit_file can read a file, and before the lead's read_file
+calls its shared reader. Search excludes secret names before reading any listed file. Refusals
+share one rule message and at most 60 basename characters, without checking whether a file exists.
+Both list_files tools still expose names: a name is not file content.
+
+Names are case-folded; a final .example exempts every pattern, matching the repository's
+committed examples. The .env* rule is literal, including .envrc, and intentionally wider than
+the repository's own .gitignore patterns .env and .env.*. The other patterns are *.pem, *.key
+and SSH identity names id_rsa, id_dsa, id_ecdsa and id_ed25519, followed by the end of the name
+or _, . or -. The identity names live in one constant. This implements the front's requested
+SSH interpretation of id_* so ordinary id_utils.py and id_generator.py remain readable;
+id_rsa_loader.py is refused. The alternative is a literal id_* prefix that would refuse those
+ordinary source files too. Widening the identity names or adopting that alternative remains a
+pending maintainer product decision.
+
+GET /files, PUT /files and Tree stay unchanged: the person may read or edit their own files.
+The lead shares GET /files' reader, so its guard belongs in the tool rather than the route.
+Path validation, contracts, events, prompts and both tool tables stay unchanged.
+
+Residual risks outside this front: run_tests output may expose secrets (up to 4,000 characters);
+the reviewer's git diff may expose one if something outside a tool changes a secret file;
+the person's own PUT /files may write one into change evidence; and secrets with non-obvious
+names remain readable. This is a name policy, not content detection or output redaction.
+## 2026-10-31 — Item 12 E4: inert deterministic criteria and candidate checks
+
+Q3 remains as decided at 13:49:39 ART: v1 criteria call synchronous top-level functions with
+JSON node_id/args/kwargs and compare an exact JSON result. Behavior-only examples are refused;
+TaskExample and every other contract stay unchanged. The pure workspace renderer returns fixed
+ASCII pytest source, its SHA-256 and all ordered pytest ids. Strict parsing rejects duplicate
+keys and non-finite numbers, including overflowing exponents, before canonicalization.
+The canonical rule is json.dumps(value, sort_keys=True, separators=(",", ":"),
+ensure_ascii=True, allow_nan=False); test_render_parity_with_canonical_json pins parity with the
+public oversight.agents.canonical_json without a workspace-to-agents import.
+
+A frozen RequiredCriteria records the path, hash and required test/example ids. ChangeRecord
+adds only criteria: RequiredCriteria | None = None after suite_runs (an E3 overlap outside the
+original plan's file list). Installation is an inert library port for E3: it requires person
+pins and eligible base targets, creates a new file under main-then-agent locks, publishes its
+change.updated as the user, and only then retains the record. No production caller installs it.
+
+verify_run sits at the proposal suite and combined_tests_pass, the existing point shared by
+personal and rules merge paths. An otherwise passed suite becomes error plus an
+example_criteria problems entry when its captured tested tree has an unreadable, missing or
+edited file, or its full retained report cannot prove each required id passed exactly once.
+It emits one server-built tests diagnostic; counters, cases, failed_tests and tested tree stay
+observed. No fabricated case, failed id, extra suite, merge path, event or hidden rules veto is
+added. The normalized run is the run published, retained, returned and judged. No edits were
+needed in _suite_evidence.py, _candidate.py, _approval.py, _transaction.py or _assessment.py.
+The existing tests and combined_tests evidence carry the outcome; no rule, profile, policy
+version or ChangeAssessment changes. RULES_ACTIVATION stays False.
+
+When main has not moved, personal approval still runs no combined suite: its evidence remains
+the verified proposal suite, displayed exactly as an existing failing proposal is displayed.
+With criteria absent, the verifier returns the original run without Git I/O. The file hash
+binds the rendered criteria source in the tested candidate; it does not defend against a
+hostile conftest or module edit, which remain covered only by current test-integrity and
+isolation checks. E2's lifecycle and E3's human confirmation remain separate fronts.
+
+### Review round 1: accepted effects on retained-run readers
+
+An unmet criterion deliberately makes the retained proposal run unverifiable through its
+example_criteria problem, even though its observed cases are preserved. We accept the resulting
+loss of review evidence: _facts.py cannot resolve parametrized integrity identities and reports
+"integrity parameter ids unavailable"; it also adds "suite N: example_criteria: <code>" and
+"suite N: incomplete retained cases", because the published cases_complete is false. _probes.py
+reports "added tests: parameter ids unavailable" for added parametrized tests. _measured.py
+declines to select proposal tests and reports "proposal test selection unavailable", so the
+measured cone is unavailable. These readers keep their existing conservative completeness rules;
+E4 does not certify a report that its required criteria could not verify. The real-harness
+test_proposal_suite_normalized_and_consistent now asserts all four effects for every covered
+normalization code, including preserved observed parameter ids and no measured probe suites.
+## 2026-10-31 — Pure structural shape comparison
+
+The shape producer compares base and head graph snapshots without I/O or approval effects.
+Functions and methods are observed only when added or modified, longer than 80 lines
+(including decorators), and new or growing: AGENTS.md makes size a review signal, never a gate.
+At most 24 observations are returned in deterministic kind/path/node order to bound the review;
+omission and last-good parse files explicitly mark the evidence incomplete.
+
+A new import dependency is observed only between modules already present in base: imports
+to or from a new module are an ordinary part of adding code. A head import component of two
+or more modules is observed once when it contains a new edge, including an expanded old cycle.
+Test nodes are excluded from all three checks because tests are hidden from cones and long
+parametrized tables are normal. Imports reflect the parser's any-scope edges, including inside
+functions and under TYPE_CHECKING; the wording says "imports" because these edges do not prove
+execution at import time. Git-tree evidence identifies the captured source; a complete empty
+result means checked with no observations, not a safety certification. Wiring and duplicate
+logic remain separate fronts.
+## 2026-10-31 — Observe newly duplicated function structure
+
+The shape duplicate producer compares only non-test function and method graph nodes against
+the candidate tree. It hashes the exact AST of the signature and body after removing the
+function's name, decorators, annotations and docstrings, and consistently renaming parameters
+and stored names in first-appearance order (signature parameters first). Nested bindings are
+included, but nested functions are not independent observations. Global and attribute names,
+calls, defaults, literals, operators and control flow otherwise stay in the structure. This
+deliberately separate normalizer has no dependency on the test-integrity detectors: the two
+checks answer different questions.
+
+Four body statements, including nested statements and excluding docstrings, are the minimum:
+smaller wrappers and accessors are too ordinary to justify an observation. Each fingerprint
+group emits at most one fact, anchored on the least changed id, and only if a member is new or
+its fingerprint differs from base. This new-pair rule avoids repeatedly asking about existing
+duplication and ignores formatting or documentation-only changes. At most three peers are
+named; the remaining count excludes the anchor and those peers. Function and fact limits,
+unavailable source and parse failures explicitly make evidence incomplete instead of implying
+that the candidate was fully checked.
+
+Exact structural equality is conservative, but still permits false positives: independent
+implementations can intentionally repeat an algorithm; decorators and annotations can affect
+runtime behavior; and a single binding table across nested scopes does not prove lexical or
+semantic equivalence. These are accepted because the result is a neutral question for the
+person, never a reuse mandate, approval gate or claim that extraction is safe. This front
+only produces evidence; capturing and wiring it into change facts remain separate work.
+## 2026-10-31 — Bounded initial-task context builder, pending its bench
+
+The pure internal builder in `changes/_initial_context.py` takes a graph snapshot,
+whole-tree source text and target node ids, returning text, its estimated tokens and
+explicit omission reasons. It has no caller yet: wiring and adoption wait for A16w's
+bench; B16e can evaluate the builder independently. It adds no agent graph tool.
+
+The global default is 1,500 estimated tokens, using ceil(UTF-8 bytes / 3), without a
+new tokenizer dependency. This conservative estimate charges the introduction, target
+headings, complete entries, separators and omission summary together. Greedy allocation
+tries every later entry even after one fails to fit; a target without a fitting signature
+gets no other sections. The estimate is a budget rule, not measured provider usage.
+
+Across targets sorted by qualified name, path and id, allocation order is signatures,
+exact callers, exact callees, constants used, possible callers, then possible callees.
+Signatures establish the task's subjects before their neighbors; exact relationships and
+source-proven constants precede uncertain relationships. Direct callers and callees each
+share the existing eight-item limit across exact and possible edges, deduplicated with
+exact winning. Output combines exact and possible neighbors with explicit labels.
+
+A module constant is a single uppercase name assigned once in module scope to a value
+accepted by `ast.literal_eval`, including annotated assignments. Imported, rebound,
+unused and lexically shadowed names are excluded: context must describe source evidence,
+not guess values. Python's symbol tables resolve body loads through nested scopes;
+set representations sort their members so hash seeds cannot change the text. Signatures
+are capped at 400 characters and constant representations over 120 characters are
+omitted, with reasons, to keep individual entries bounded without copying source bodies.
+
+## 2026-10-31 — Use words at three problem sites
+
+Problem texts are read by the person; exception class names are not words. In
+`backend/src/oversight/changes/_measured.py`, the fallback is "caller measurement
+unavailable"; timeout stays "caller measurement budget exhausted" and isolation stays
+"isolation unavailable". In `backend/src/oversight/changes/_probes.py`, timeouts say
+"added tests: {phase} timed out" and workspace or operating-system failures say
+"added tests: {phase} unavailable"; the redacted isolation detail suffix stays. In
+`backend/src/oversight/workspace/measured_report.py`, operating-system failures say
+"caller report unavailable" and invalid report contents say "caller report unreadable".
+
+Tech debt and residual risk: type names remain at two sites in
+`backend/src/oversight/changes/_review_cards.py` because the bench classifies them as
+"review unavailable" through a frozen pattern in `tools/eval/detection/reporting.py`;
+changing them invalidates the recorded paid pilots. They also remain at two sites in
+`backend/src/oversight/changes/_proposal.py`, with the same texts as two sites here,
+while open fronts edit that file. A later front words them when the bench fingerprints
+may change.
+## 2026-10-31 — Queued rules attempts follow verified main after settlement
+
+Per-record attempt keys `(revision, head, main, mode_revision)` decide admission; an exact
+key never runs twice. `rules_consumed` remains the revision audit required by reservation
+revalidation, including callers that reserve without scheduler admission. Neither attempts
+nor live rules authority survive restart.
+
+A legitimate move is both announced through `main_changed` and verified by reading actual
+HEAD under the still-held main lock and a Git lease. Preflight suppresses `main_moved` only
+when that HEAD equals the announced commit and differs from the reserved main, neither
+integrity owner is suspect, availability remains confirmed, no person intent/action exists,
+and the reservation is still current after the read. Otherwise the existing terminal path
+runs. Unannounced snapshot/HEAD moves keep their terminal `main_moved` behavior, including
+`evaluate`'s existing branch; neither `revalidate` nor `rules_tree` changes its codes.
+
+The successful queue path sets a private decision-number marker as its final synchronous
+step, without publishing a terminal or retargeting the reservation. `invalidate` clears the
+marker for person takeover, mode disable, close, terminal acknowledgement, resolution and
+new proposals; cancellation clears it too. Only `_decide`'s done callback, after the old task
+and verified recovery finish and `preemption.restore` retires that owner, calls
+`decision_finished`. Its guards require the same unfinished target, ready state, no rules
+owner or person action, unchanged mode/authority, and no close, resolution, rejected delivery
+or suspect state. It clears the marker before checking whether renewal is still eligible.
+
+The replacement is explicitly active, with a new private generation and the live graph's
+main, parked when the latest announced commit has not reached the graph. It carries only
+immutable proposal-source captures with retained receipts for the same revision/base/head;
+latest assessment, spend pin, tasks and terminal state reset. Parked waits are exempt from
+the attempt-key clause so an old snapshot's consumed key cannot invalidate their deadline.
+They can neither evaluate nor admit until graph delivery retargets a new generation. The
+first absolute deadline is never extended: a long queue may renew directly into one EXPIRED
+policy_invalid notice, without any assessment or admission.
+
+Renewal only schedules assessment through the unchanged admission path. Every transaction
+already remeasures its combined candidate, including protected paths, and executes a fresh
+combined suite; spend is sampled from durable truth at every guard. A pending merge's suite
+identifies `tested_tree`; `tested_commit` is None because that tree is not yet HEAD's tree
+(coordinator ruling, 2026-10-31 19:40 ART). Its definitive assessment identifies the new main.
+Every in-flight outcome closes following: merge, conflict, failed suite, F4 veto, integrity
+failure, out-of-band HEAD move or cancellation. The main lock still spans suite, effect and
+recovery, so managed saves and Revert queue behind it.
+
+No new task cancellation is added. F5a's park cancellation remains unchanged: production
+terminal publication completes through ReviewCards.publish -> ctx.whole under the cards
+lock; cards-None scheduler harnesses lack that protection. Queued rules owners are inactive
+waits and main moves never cancel them. F6 person intent wins before renewal and during the
+renewed evaluation, without changing preemption. Revert's landed success/receipt hooks
+announce its verified inverse commit and deliver the graph before queued work renews.
+The activation latch stays closed; no wire contract, event type, public field, route or response
+body changes.
+
+## 2026-10-31 — Secret-file defaults and criteria evidence hardening
+
+The maintainer approved the secret-filter defaults on 2026-10-31: AGENTS.md's id_* means
+id_rsa, id_dsa, id_ecdsa and id_ed25519 with the existing identity-name boundaries, so
+id_utils.py stays readable. Basename examples remain exempt. One shared refusal formatter
+keeps the message byte-for-byte, limits disclosure to 60 basename characters, and never
+checks existence; an ordinary trailing slash still has an empty, non-secret basename.
+
+At 20:05:33 ART on 2026-10-31 the maintainer decided that any directory segment whose
+case-folded name starts with .env also makes the file secret. This name-only check precedes
+the basename exemption, so even an app.example inside .envs is refused. Search already
+filters each repository-relative path before reading it; list_files still exposes names.
+
+Criteria error diagnostics report only the server-controlled code and required-case count.
+Example ids and pytest slugs are model text, so neither belongs in that diagnostic. Required
+example ids remain stored for confirmation. If criteria normalization turns an observed pass
+into an error and its problems contain code=integrity_invalid, the required combined suite
+preserves that refusal code rather than substituting suite_failed. This keeps the same
+needs-you integrity signal as a run without criteria; ordinary suite failures keep their code.
+
+Cancellation during proposal criteria verification publishes the observed suite as an error
+with tree_unreadable before propagating cancellation. A shared normalization helper preserves
+observed cases, and the no-I/O fallback keeps the verifier's ineligible-run early returns.
+Unchecked criteria cannot certify an observed pass. Combined-path cancellation remains owned
+by the existing recovery path.
+
+Criteria installation reads the worktree file under the held locks. An identical generated
+file can complete an interrupted installation without another write; different worktree or
+head bytes, or any base entry, still refuse. The same bytes bind the same hash, so repeated
+file publication is safe; assigning the record's criteria remains the last step.
+
+The input and output character caps stay on canonical ASCII text entering generated source
+and its hash. Non-ASCII expansion can therefore refuse otherwise short raw input. Rebasing
+the caps to raw length would change which examples install and requires a separate product
+decision; this change only documents and tests the existing behavior.
+
+## 2026-11-01 — Capture structural observations with candidate facts
+
+`backend/src/oversight/changes/_facts.py` captures shape before publishing the proposal,
+under the main and agent locks. `backend/src/oversight/changes/_shape_facts.py` takes the
+record's base/head graphs, copies both source maps and freezes added/modified node ids on
+the loop thread. Each producer compares those snapshots against the captured Git trees;
+publication and replay therefore retain the exact candidate's observations.
+
+Size/import observations precede duplicate observations. Both successful producers must
+be complete for shape completeness to be true; a successful empty result means checked
+with no observations. One failed producer preserves the other's observations with false
+completeness, its problems followed by the failure text. Two failures yield null findings
+and null completeness. The exact diagnostics are "shape: size and import checks unavailable"
+or "shape: size and import checks timed out", and "shape: duplicate check unavailable" or
+"shape: duplicate check timed out". Exception names, text and paths never enter these
+diagnostics. Cancellation propagates. Each producer runs in a thread with a four-second
+wait bound: a timeout stops waiting, not the worker thread. There is no setting or flag
+because both checks are static and pure. Shape remains an observation with no effect on
+approval, rules, cards, summaries or overall facts completeness.
+
+Projection deep-copies each finding and its evidence. Validation checks both shape fields
+against the capture and requires every capture problem. In
+`backend/src/oversight/changes/_shape_duplicates.py`, function-level PEP 695 TypeVar,
+ParamSpec and TypeVarTuple names are bindings, including references in bodies; TypeVar
+bounds are annotations and are stripped. Generic and non-generic signatures remain
+distinct. Class-level type parameters stay unrenamed, an accepted residual of the
+function-wide structural normalizer.
+
+Three sentinels in `backend/tests/changes/test_review_card_lifecycle.py` now differ from
+the live capture: the preservation and concurrent-update cases use false shape completeness;
+the mutation-rejection cases use null shape or false completeness. Previously empty shape
+and true completeness matched a clean capture: preservation failed, four mutation cases
+failed to raise, and the concurrent-update case passed without testing a changed value.
+
+## 2026-10-31 — Panel edges and control feedback
+
+Reason: the maintainer approved the life-layer look on 2026-10-29: "a 1px top-edge light on
+panels; a soft glow on keyboard focus; buttons press down 1-2px". The implementation follows
+main `04a32ab`: themed edge and glow tokens, a 1px gradient, a 6px focus drop-shadow at 55%
+text and a 1.5px press over 70ms ease-out (instant under reduced motion). The ring stays intact.
+Panel pseudo-elements use a compensated flex row so static and floating roots keep their
+positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
+light that stays outside its row gap. Monaco and the graph host receive neither control effect.
+
+## 2026-10-31 — Time per stage for each change
+
+Packet A 1031d, item 2, was approved at 2026-10-31T18:25:03Z under the maintainer's
+delegation to the coordinator: "Candidate 2 contract (`ChangeView.stages`, module
+stages.py): APPROVED, text exactly as in packet.md, except one typing-only spelling
+ruled 2026-11-01 00:33Z: `test_phases` uses `default_factory=list[SuitePhaseTime]`
+(the repo's pattern, commands.py:171, review.py:264) so Pyright passes; the generated
+schema must not change." The approved on-screen names are
+"Agent work", "Automatic checks", "Waiting for your decision", and "Test runs";
+their eventual view is a separate front. The contract takes the next free minor at landing.
+
+The read model derives its definitions from the committed log alone, with no new event
+or producer change. Agent work counts the author's starting, working and revising
+intervals for this change. Waiting includes reading time: the refusal to call elapsed
+proposal-to-resolution time review time remains. There is no total, score, ranking,
+ratio, percentage or comparison between agents; test runs overlap the other stages,
+so stages are never added together.
+
+F2: Each proposal opens a revision window ending at its first matching resolution, the
+next proposal or the inventory horizon, with replaced revisions retained and unpaired
+resolutions adding nothing.
+F3: Checks end at the last facts, review or assessment receipt of that revision inside
+its window, remaining open until the first receipt when the window is open, while a
+closed window without receipts has no checks interval and waiting starts at proposal.
+F4: A replaced or null-decider wait is unknown and never inferred, only a person's
+recorded decision counts a resolved wait, and only their approval subtracts the last
+combined run of that revision inside the window once, with an excessive subtraction
+remaining unknown, and on a person's approval a negative combined suite duration
+leaves the wait unknown.
+F5: Test runs count only recorded tests.executed suite durations and their phases,
+never their mirrors in proposals, steps or conflicts, and a negative duration is an
+unknown interval with its known phase milliseconds omitted and its run still counted.
+
+Known limit: the approve click publishes no event; until a merge-queue event exists,
+waiting for an approval ends at the receipt less the combined test run, so a merge that
+waited behind another adds that wait. Raw integer milliseconds use the last committed
+event's timestamp, including for open intervals, with unknown intervals preserving
+known lower bounds and bounded, sequence-ordered diagnostics. `stages` is null on an
+incomplete prefix; older recordings and clients without the optional field remain valid.
+
+## Opt-in pruning of superseded file reads (2026-11-01)
+
+Repeated file reads accumulate in retained agent history, including across Request changes.
+`OVERSIGHT_HISTORY_PRUNE_TOKENS` enables deterministic read stubs at an integer threshold of
+at least 8,000; unset or empty keeps pruning off and preserves existing prompt-version hashes.
+The UTF-8 byte length of messages and tool schemas serialized as JSON, divided by four, is a
+trigger estimate only: provider usage and unknown usage accounting are unchanged.
+
+After message delivery and before a model call, a batch starts at the threshold and replaces
+the newest eligible results first until the estimate reaches 75% or candidates are exhausted.
+It re-arms after growth of 25% of the threshold from the preceding batch's ending estimate,
+including a batch with no eligible result; this state survives revision. Only older `read_file`
+results covered by a later read of the same raw path qualify. A later whole-file result covers
+any earlier read; a later range must contain every earlier numbered row with identical text.
+Returned rows and the range note determine coverage, never requested range arguments. Errors,
+skipped results and existing stubs supply no coverage. Empty reads remain unchanged.
+
+The one-line stub is `[Lines A-B of PATH: a later read of this path covers these lines.]`.
+It must strictly shorten both result text and the JSON estimate. Every user message, system
+prompt, assistant message, non-read result, uncovered read and the last six individual tool calls
+are retained. Calls/results retain their local positional pairing, identifiers and order.
+The stub template, threshold, low-water fraction, re-arm fraction and protected-call count
+participate in the enabled prompt version. Live tool outcomes, edit checks, stop rules, events,
+contracts and replay do not change. This ships off by default with scripted measurements only;
+enabling it by default requires a separate maintainer-approved paid A/B. Bounded history with
+a visible handoff and fresh revision context remain separate candidates.
+
+Proposed replacement for the maintainer in `AGENTS.md` (the file is unchanged):
+
+> read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the retained history. With history pruning explicitly enabled, covered older read_file results may become shorter stubs; every user message is retained.
+
+## 2026-10-31 — Host memory may hold new agent starts
+
+Resource admission keeps the person's running-agent cap as the limit. Host memory can only
+hold a new start below that cap; it never offers another slot. `backend/src/oversight/resources.py`
+reads Linux's MemTotal and MemAvailable inline and floors the used percentage, clamped to
+0–100. `backend/src/oversight/settings.py` and `.env.example` expose
+OVERSIGHT_MEMORY_HOLD_PERCENT, an integer from 1 to 100, defaulting to the approved 90.
+
+`backend/src/oversight/app.py` checks memory on new starts after the model, task, setup,
+spending brake and suspect-main checks. Revisions, reviewer calls, resumes, plan calls and
+already running agents keep their existing behavior: this is a courtesy admission hold,
+not a mechanism for interrupting work. It uses the existing temporary wrong_state refusal
+and the existing queue blocked detail, so no contract or error code changes. The sentence
+"Waiting: memory at 90% or more" names the configured threshold rather than the live reading;
+rechecks therefore keep a stable detail and produce no repeated queue events.
+
+`backend/src/oversight/runtime_queue.py` rechecks every five seconds only while a selection
+has seen a memory hold. Once the reading drops, existing blocked-item rechecking and slot
+reservation start the item automatically. Other refusals retain their event-driven waits,
+and cancellation still interrupts the wait at shutdown. An unknown reading never holds:
+missing /proc/meminfo, unreadable data or unsupported hosts must not prevent all work.
+This differs deliberately from the spending brake's fail-closed protection of actual credits.
+
+The fake model is held too: the resource being protected is host memory, regardless of the
+provider. Consequently `make demo-check` can encounter a hold on a host at or above the
+threshold; the message names the cause. Setting 100 effectively turns off the courtesy hold,
+except at a full 100% reading. Tests inject readings so general tests never depend on host load.
+Test-run queue words (such as "2 test runs ahead"), running-agent card words and frontend
+changes are not built here.

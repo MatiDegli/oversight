@@ -87,110 +87,120 @@ for (const [name, graph, exactPairs, faint, exactCalls] of [
     applyRoutes(cy, themes.dark);
     return cy;
   };
-  it(`${name}: exact-only directed counts, one faint line per surviving unordered pair`, () => {
-    const cy = mount(false);
-    try {
-      expect(cy.edges(".exact").filter((e) => e.visible())).toHaveLength(exactPairs);
-      expect(cy.edges(".possible").filter((e) => e.visible())).toHaveLength(faint);
-      const pairs = new Set(
-        cy.edges(".faint").map((e) => [e.source().id(), e.target().id()].sort().join(">")),
-      );
-      expect(pairs.size).toBe(faint);
-      for (const e of cy.edges(".aggregate")) {
-        expect(e.data("callCount")).toBe(e.data("exactCount") || e.data("possibleCount"));
-        expect(e.hasClass("exact") && e.hasClass("possible")).toBe(false);
-      }
-      if (name === "Boltons") {
-        expect(cy.nodes()).toHaveLength(34);
-        expect(
-          cy.nodes().filter((n) =>
-            n
-              .connectedEdges()
-              .filter((e) => e.visible())
-              .empty(),
-          ),
-        ).toHaveLength(16);
-        expect(
-          cy
-            .edges(".aggregate")
-            .reduce(
-              (n, e) => n + Number(e.data("exactCount")) + Number(e.data("possibleCount")),
-              0,
+  // Large headless Boltons mounts need room under parallel checks; demo keeps Vitest's default.
+  const timeout = name === "Boltons" ? 20_000 : undefined;
+  it(
+    `${name}: exact-only directed counts, one faint line per surviving unordered pair`,
+    () => {
+      const cy = mount(false);
+      try {
+        expect(cy.edges(".exact").filter((e) => e.visible())).toHaveLength(exactPairs);
+        expect(cy.edges(".possible").filter((e) => e.visible())).toHaveLength(faint);
+        const pairs = new Set(
+          cy.edges(".faint").map((e) => [e.source().id(), e.target().id()].sort().join(">")),
+        );
+        expect(pairs.size).toBe(faint);
+        for (const e of cy.edges(".aggregate")) {
+          expect(e.data("callCount")).toBe(e.data("exactCount") || e.data("possibleCount"));
+          expect(e.hasClass("exact") && e.hasClass("possible")).toBe(false);
+        }
+        if (name === "Boltons") {
+          expect(cy.nodes()).toHaveLength(34);
+          expect(
+            cy.nodes().filter((n) =>
+              n
+                .connectedEdges()
+                .filter((e) => e.visible())
+                .empty(),
             ),
-        ).toBe(1530);
+          ).toHaveLength(16);
+          expect(
+            cy
+              .edges(".aggregate")
+              .reduce(
+                (n, e) => n + Number(e.data("exactCount")) + Number(e.data("possibleCount")),
+                0,
+              ),
+          ).toBe(1530);
+        }
+        const hidden = cy
+          .edges(".possible")
+          .filter((e) => !e.visible())
+          .first();
+        if (hidden.isEdge()) {
+          showSelection(cy, hidden.source().id());
+          expect(hidden.style("display")).toBe("element");
+          showSelection(cy, null);
+          expect(hidden.style("display")).toBe("none");
+        }
+      } finally {
+        cy.destroy();
       }
-      const hidden = cy
-        .edges(".possible")
-        .filter((e) => !e.visible())
-        .first();
-      if (hidden.isEdge()) {
-        showSelection(cy, hidden.source().id());
-        expect(hidden.style("display")).toBe("element");
-        showSelection(cy, null);
-        expect(hidden.style("display")).toBe("none");
-      }
-    } finally {
-      cy.destroy();
-    }
-  });
-  it(`${name}: open calls stay exact at rest, possible calls reveal and clear without agent revival`, () => {
-    const functions = mount(true, full, new Set());
-    expect(
-      functions
-        .edges(".exact")
-        .not(".internal")
-        .filter((e) => e.visible()),
-    ).toHaveLength(name === "demo" ? 10 : exactCalls);
-    expect(functions.edges(".possible").filter((e) => e.visible())).toHaveLength(0);
-    functions.destroy();
-    const cy = mount(true);
-    try {
+    },
+    timeout,
+  );
+  it(
+    `${name}: open calls stay exact at rest, possible calls reveal and clear without agent revival`,
+    () => {
+      const functions = mount(true, full, new Set());
       expect(
-        cy
+        functions
           .edges(".exact")
           .not(".internal")
           .filter((e) => e.visible()),
-      ).toHaveLength(exactCalls);
-      expect(cy.edges(".possible").filter((e) => e.visible())).toHaveLength(0);
-      const edge = cy.edges(".possible").not(".internal").toArray()[0];
-      if (!edge?.isEdge()) throw new Error("Missing possible edge");
-      const source = edge.source();
-      for (const show of [showNodeHover, showSelection]) {
-        for (const id of [source.id(), source.ancestors(".module").first().id()]) {
-          show(cy, id);
-          expect(edge.style("display")).toBe("element");
-          show(cy, null);
-          expect(edge.style("display")).toBe("none");
+      ).toHaveLength(name === "demo" ? 10 : exactCalls);
+      expect(functions.edges(".possible").filter((e) => e.visible())).toHaveLength(0);
+      functions.destroy();
+      const cy = mount(true);
+      try {
+        expect(
+          cy
+            .edges(".exact")
+            .not(".internal")
+            .filter((e) => e.visible()),
+        ).toHaveLength(exactCalls);
+        expect(cy.edges(".possible").filter((e) => e.visible())).toHaveLength(0);
+        const edge = cy.edges(".possible").not(".internal").toArray()[0];
+        if (!edge?.isEdge()) throw new Error("Missing possible edge");
+        const source = edge.source();
+        for (const show of [showNodeHover, showSelection]) {
+          for (const id of [source.id(), source.ancestors(".module").first().id()]) {
+            show(cy, id);
+            expect(edge.style("display")).toBe("element");
+            show(cy, null);
+            expect(edge.style("display")).toBe("none");
+          }
         }
+        edge.removeClass("quiet").addClass("pending-A");
+        expect(edge.style("display")).toBe("none");
+        edge.addClass("cone-call");
+        expect(edge.style("display")).toBe("element");
+        expect(edge.style("line-style")).toBe("solid");
+        edge.removeClass("cone-call");
+        expect(edge.style("display")).toBe("none");
+      } finally {
+        cy.destroy();
       }
-      edge.removeClass("quiet").addClass("pending-A");
-      expect(edge.style("display")).toBe("none");
-      edge.addClass("cone-call");
-      expect(edge.style("display")).toBe("element");
-      expect(edge.style("line-style")).toBe("solid");
-      edge.removeClass("cone-call");
-      expect(edge.style("display")).toBe("none");
-    } finally {
-      cy.destroy();
-    }
-    const possible = graph.edges.find(
-      (e) =>
-        e.confidence === "possible" &&
-        e.kind === "calls" &&
-        full.some((n) => n.data.id === e.src) &&
-        full.some((n) => n.data.id === e.dst),
-    );
-    if (!possible) throw new Error("Missing possible call");
-    const shown = graphElements(state, false, new Set([possible.src, possible.dst]), {
-      seeds: [possible.src],
-      entries: [{ node_id: possible.dst, distance: 1 }],
-      edges_followed: "exact",
-      max_depth: 3,
-      max_nodes: 40,
-      omitted_by_depth: 0,
-      omitted_by_limit: 0,
-      tests_reaching: 0,
-    });
-    expect(shown.find((e) => e.data.id === possible.id)?.classes).toContain("cone-call");
-  });
+      const possible = graph.edges.find(
+        (e) =>
+          e.confidence === "possible" &&
+          e.kind === "calls" &&
+          full.some((n) => n.data.id === e.src) &&
+          full.some((n) => n.data.id === e.dst),
+      );
+      if (!possible) throw new Error("Missing possible call");
+      const shown = graphElements(state, false, new Set([possible.src, possible.dst]), {
+        seeds: [possible.src],
+        entries: [{ node_id: possible.dst, distance: 1 }],
+        edges_followed: "exact",
+        max_depth: 3,
+        max_nodes: 40,
+        omitted_by_depth: 0,
+        omitted_by_limit: 0,
+        tests_reaching: 0,
+      });
+      expect(shown.find((e) => e.data.id === possible.id)?.classes).toContain("cone-call");
+    },
+    timeout,
+  );
 }

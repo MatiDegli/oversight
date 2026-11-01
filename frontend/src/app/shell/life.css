@@ -1,0 +1,61 @@
+/* A compensated flex row preserves static roots and their measured mask boxes. */
+:is(.shell-sidebar, .focus-panel, .bottom-dock, .agents-expanded, .agents-rail)::before {
+  content: "";
+  position: relative;
+  display: block;
+  flex: 0 0 1px;
+  height: 1px;
+  width: 100%;
+  margin-bottom: -1px;
+  pointer-events: none;
+  z-index: 3;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--edge-light) 30%,
+    var(--edge-light) 70%,
+    transparent
+  );
+}
+
+:root[data-theme="day"] :is(.focus-panel, .bottom-dock)::before {
+  content: none;
+}
+
+/* The rail has a row gap; keep its light outside that flex flow. */
+.agents-rail {
+  position: relative;
+}
+.agents-rail::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin-bottom: 0;
+}
+
+button:not(:is(.monaco-editor *, [aria-label="Repository graph"] *)) {
+  transition: transform 70ms ease-out;
+}
+
+button:not(:disabled, [aria-disabled="true"]):not(
+    :is(.monaco-editor *, [aria-label="Repository graph"] *)
+  ):active {
+  transform: translateY(1.5px);
+}
+
+:focus-visible:not(
+  :is(
+    .monaco-editor,
+    .monaco-editor *,
+    [aria-label="Repository graph"],
+    [aria-label="Repository graph"] *
+  )
+) {
+  filter: drop-shadow(0 0 6px var(--focus-glow));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:is(.monaco-editor *, [aria-label="Repository graph"] *)) {
+    transition: none;
+  }
+}

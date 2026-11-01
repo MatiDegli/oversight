@@ -1,5 +1,5 @@
 import { agentSlotStyle } from "../../theme";
-import { Maximize2, Minimize2, X } from "lucide-react";
+import { Maximize2, Minimize2, Settings, X } from "lucide-react";
 import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
 import { selectConversation, loadConversationPanel } from "../../agents";
@@ -8,6 +8,7 @@ import { LazyPanel } from "./LazyPanel";
 
 import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
+import { SettingsPanel } from "./SettingsPanel";
 import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
 
@@ -63,17 +64,19 @@ export function FocusPanel(
             const title =
               tab.id === "inbox"
                 ? "Decisions"
-                : tab.id === "practice"
-                  ? "Two-change practice"
-                  : tab.conversation
-                    ? slot
-                      ? `Agent ${slot} · conversation`
-                      : "Conversation"
-                    : tab.review
-                      ? `Review · ${tab.review}`
-                      : tab.diff
-                        ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
-                        : (tab.file?.path.split("/").at(-1) ?? "File");
+                : tab.id === "settings"
+                  ? "Settings"
+                  : tab.id === "practice"
+                    ? "Two-change practice"
+                    : tab.conversation
+                      ? slot
+                        ? `Agent ${slot} · conversation`
+                        : "Conversation"
+                      : tab.review
+                        ? `Review · ${tab.review}`
+                        : tab.diff
+                          ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
+                          : (tab.file?.path.split("/").at(-1) ?? "File");
             return (
               <div
                 key={tab.id}
@@ -90,6 +93,9 @@ export function FocusPanel(
                   className={`min-w-0 truncate px-3 py-2 ${focusRing}`}
                 >
                   {slot && <span className="mr-2 font-bold">{slot}</span>}
+                  {tab.id === "settings" && (
+                    <Settings aria-hidden="true" className="mr-2 inline size-3.5" />
+                  )}
                   {title}
                   {tab.review && (
                     <span className="ml-2 text-faint">
@@ -120,7 +126,13 @@ export function FocusPanel(
         </button>
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
-        {view.activeTab === "inbox" ? (
+        {view.activeTab === "settings" ? (
+          <SettingsPanel
+            state={state}
+            attempt={props.mergeModeAttempt}
+            onSetMergeMode={props.onSetMergeMode}
+          />
+        ) : view.activeTab === "inbox" ? (
           <LazyPanel key="inbox" frame={<InboxFrame state={state} />}>
             <DecisionInbox state={state} onReview={props.onReview} />
           </LazyPanel>
@@ -138,6 +150,8 @@ export function FocusPanel(
               state={state}
               changeId={view.review}
               attempt={props.attempts?.[view.review]}
+              revertAttempt={props.revertAttempts?.[view.review]}
+              onRevert={props.onRevert}
               files={props.files?.readOnly ? undefined : props.files}
               onDecide={props.onDecide}
               replayOf={props.replayOf}

@@ -24,6 +24,8 @@
   --raised: #1b1b1f;
   --page-raised: #131313;
   --text: #ededea;
+  --edge-light: rgba(255, 255, 255, 0.17);
+  --focus-glow: color-mix(in srgb, var(--text) 55%, transparent);
   --text-hover: #ffffff;
   --muted: #a3a39e;
   --faint: #85857f;
@@ -102,6 +104,8 @@
   --raised: #e4e2dc;
   --page-raised: #efeee9;
   --text: #1c1c1a;
+  --edge-light: rgba(255, 255, 255, 0.9);
+  --focus-glow: color-mix(in srgb, var(--text) 55%, transparent);
   --text-hover: #000000;
   --muted: #56554f;
   --faint: #67665f;
@@ -381,6 +385,8 @@
   --color-raised: var(--raised);
   --color-page-raised: var(--page-raised);
   --color-text: var(--text);
+  --color-edge-light: var(--edge-light);
+  --color-focus-glow: var(--focus-glow);
   --color-text-hover: var(--text-hover);
   --color-muted: var(--muted);
   --color-faint: var(--faint);

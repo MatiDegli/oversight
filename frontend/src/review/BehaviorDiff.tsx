@@ -1,6 +1,10 @@
 import { ChevronRight } from "lucide-react";
 import type { State } from "../state";
-import { selectBehaviorEvidence } from "./behaviorEvidence";
+import {
+  noDifferenceSentence,
+  selectBehaviorEvidence,
+  unstableBehaviorSentence,
+} from "./behaviorEvidence";
 
 /** Portable evidence block: its parent owns width, spacing and scrolling. */
 export function BehaviorDiff({
@@ -52,7 +56,7 @@ export function BehaviorDiff({
                     {detailsOnly ? `${node.label}: ${node.words ?? ""}.` : node.limitation}
                   </p>
                 )}
-                {node.noDifference && <p>No difference measured on these inputs</p>}
+                {node.noDifference && <p>{noDifferenceSentence}</p>}
                 {node.compared_count === 0 &&
                   (detailsOnly ? node.words : node.limitation) === null && (
                     <p>No input comparisons were recorded.</p>
@@ -80,11 +84,7 @@ export function BehaviorDiff({
                           key={rowIndex}
                           className="flex min-w-0 flex-col gap-1 border-t border-page-border pt-2"
                         >
-                          {row.unstable && (
-                            <p>
-                              Results varied between runs; this is not an established difference.
-                            </p>
-                          )}
+                          {row.unstable && <p>{unstableBehaviorSentence}</p>}
                           <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2.5 gap-y-1">
                             {(
                               [

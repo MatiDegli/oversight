@@ -1,5 +1,11 @@
 # Plan: file editing on main, level 2 (GET /files, PUT /files, POST /graph/rescan, the file view)
 
+> Status: done for existing-file editing: backend `ac8c718`, file view `400a8de`,
+> tree sidebar/traversal `c6b9332`. Checked against main `8b9b589`.
+> Agent saves now route to `ChangeManager.save_for_review`; R5 is built. Safe creation remains
+> unbuilt. P1/P2 below are unadopted in the tree: rescan refusals still use an error event,
+> and no file.saved event exists. The original implementation sequence/test matrix is historical.
+
 Revision 3 (revision 1 by Muse Wonder), plan only, for an independent review before any code. It
 answers plan review 1 (B1 to B4, S1 to S7) and re-review 1 (F1 to F3), each marked where it lands. Sources:
 docs/proposal.md 4.3 to 4.9, `contracts/` 1.1.0, docs/plans/changes.md rev. 8, docs/plans/api.md,
@@ -22,7 +28,7 @@ owner of main's graph, `snapshot` and lock order.
 | --- | --- | --- | --- |
 | `GET /files?path=&agent=` | 200 `FileContent` | 501 | `invalid_path` 422, `not_found` 404 |
 | `PUT /files`, no `agent_id` | 200 `FileSaved` | 501 | `invalid_path`, `stale_file` 409, `wrong_state` 409 |
-| `PUT /files`, `agent_id` set | 501, nothing read or written | 501 | until request-changes step 2 |
+| `PUT /files`, `agent_id` set | 200 `FileSaved`, through `save_for_review` | 501 | `stale_file` 409, `wrong_state` 409 |
 | `POST /graph/rescan` | 202, empty | 501 | none of its own (S7, section 4 P1) |
 
 - As every route, also `invalid_request` (live validation; replay's no-body 501 answers first) and
@@ -46,7 +52,10 @@ owner of main's graph, `snapshot` and lock order.
 
 ### 1.3 Mechanisms shared by saves, rescans and merges
 
-After the stage split, `_finish_pending` and `_record_merge` are `_delivery.finish_pending` and `_delivery.record_merge`; `_recover` is `_recovery.recover`.
+After the stage split, `_finish_pending` and `_record_merge` are `_delivery.finish_pending` and
+`_delivery.record_merge`; `_recover` is `_recovery.recover`, and `_whole` is `ctx.whole`
+(`changes/_support.py:ChangeContext.whole`, used in `_proposal.py` and `_revision.py`).
+Historical `_whole` references below name that operation.
 
 - **M1, one whole step (B3, S1, the cancel half of B2).** `save_main` and `rescan` run their body
   as one `_whole(...)` step; the spawned task takes main's lock itself (locks are reentrant per
@@ -298,8 +307,7 @@ are a `threading.Event`. * = shown failing with its change reverted.
   *test_rescan_after_a_commit_behind_the_server*; *test_rescan_with_no_change_publishes_nothing*;
   *test_rescan_refuses_a_dirty_or_merging_main* (one `error`, nothing published).
 - API: *test_get_and_save_a_file_on_main_round_trips*; *test_get_file_for_both_targets*;
-  *test_get_file_for_a_closed_agent_is_not_found*; *test_agent_save_answers_501_until_the_review_front*
-  (worktree, main, log untouched). Error table: `../x`, `/etc/passwd`, `a/.git/config`, a symlinked
+  *test_get_file_for_a_closed_agent_is_not_found*; review-save tests (re-proposal and new hash after `save_for_review`). Error table: `../x`, `/etc/passwd`, `a/.git/config`, a symlinked
   directory, a directory → `invalid_path` with no runtime path; missing → 404; wrong hash → 409;
   replay 501s all three with a malformed body unread.
 - E2E: the fake agent proposes, a main file is saved over HTTP, the approval runs R5 and merges on
@@ -346,30 +354,29 @@ The maintainer approved the recommended answer to each question below. On questi
 and accepted the reason: creating a file needs a contract change (a null `base_hash` meaning "create,
 and fail if the file exists"), a "New file" action, and a new module placed in the preset layout
 without moving the rest. It is a separate small front right after editing works, with that contract
-change proposed in the contracts 1.4.0 PR.
+change taking the next free version after its approval. That creation bundle is still unbuilt.
 
 
-1. Agent saves answer 501 until request-changes step 2 lands `save_for_review`? **Recommended:
-   yes**: one implementation of its re-proposal and Approve race.
+1. Agent saves were gated until `save_for_review` landed; they are now live, sharing its
+   re-proposal and Approve race checks.
 2. GET and PUT on any UTF-8 text? **Recommended: yes**; M3 makes a non-Python save visible as a
    commit, and `.py`-only would forbid fixing `pyproject.toml`.
 3. May PUT create a missing file? **Recommended: no**: no "must not exist" sentinel in the
    contract; a missing file is `stale_file`. Creation later, by proposal.
-4. P1 and P2 (section 4). **Recommended: approve P1** (202 plus `error` until then), **defer P2**.
+4. P1 and P2 (section 4). The original recommendation was approve P1 and defer P2; neither
+   wire change is adopted in the current tree (202 plus `error`; no file.saved event).
 5. Saves enabled only once R5 (`changes/request` step 1) merges, commit message `Edit <path>`, no
    tests per save? **Recommended: yes** to all three; R5 tests every combination at approval.
 
-## Contracts 1.4.0 tree reservation
+## Tree reservation delivered
 
-`GET /tree?agent=` is reserved and returns 501 in live and replay. Omitted agent selects main;
-a supplied agent will select its active worktree. It accepts neither body nor path selector.
-The future `TreeResponse` contains sorted unique directory paths and `TreeFile` entries, with a
-joint cap of 2,000 and explicit truncation. Hash is a required nullable lowercase SHA-256 of
-exact bytes. Null means hashing was incomplete; it does not mean the file disappeared.
-A future implementation shares workspace path eligibility, holds the appropriate tree lock,
-and spends at most 8 MiB hashing retained files, without partial digests or extra reads.
-No listing, hashing, exclusions or graph-version calculation is built in delivery A.
+`GET /tree?agent=` was reserved in delivery A and is now built (`c6b9332`). Omitted agent selects
+main; a supplied agent selects its active worktree. It accepts neither body nor path selector.
+`workspace/tree.py` implements sorted unique directories and files with a joint 2,000-entry
+cap, explicit truncation and a shared 8 MiB hashing budget under the selected tree's lock.
+Hash is a required nullable lowercase SHA-256; null means hashing was incomplete.
+Replay still returns 501 for the live tree listing.
 
-`SaveFile` remains the 1.3 shape: base_hash is a required string for both main and review.
-Null and omitted hashes fail validation before any file handler runs. Safe creation, nullable
-base_hash, zones and inventory arrive together under 1.6.0.
+`SaveFile.base_hash` remains a required string for both main and review. Safe creation, nullable
+base_hash, zones and inventory take the next free version after its approval; no numbered
+future version is promised here.

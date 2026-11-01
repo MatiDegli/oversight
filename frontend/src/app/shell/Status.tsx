@@ -1,11 +1,12 @@
-import { PanelBottom } from "lucide-react";
+import { GitMerge, PanelBottom } from "lucide-react";
 import type { FrameProps } from "../Frame";
-import { selectBudgetLine } from "./statusSelectors";
+import { selectBudgetLine, selectMergeModeLine } from "./statusSelectors";
 import { focusRing } from "./shared";
 
 export { Dock as BottomDock } from "./dock/Dock";
 
 export function StatusLine(props: FrameProps & { dock: boolean; onToggleDock: () => void }) {
+  const mergeMode = selectMergeModeLine(props.state);
   const budget = selectBudgetLine(props.state);
   return (
     <footer aria-label="Status line" className="status-line">
@@ -14,6 +15,12 @@ export function StatusLine(props: FrameProps & { dock: boolean; onToggleDock: ()
         {props.replayOf === "real recorded run" && " · Real recorded run"}
         {props.practice?.active && " · Two-change practice"}
       </span>
+      {mergeMode && (
+        <span className="inline-flex items-center gap-2 text-muted">
+          <GitMerge aria-hidden="true" className="size-3.5" />
+          {mergeMode}
+        </span>
+      )}
       {budget && (
         <span role="status" className="text-muted">
           {budget}

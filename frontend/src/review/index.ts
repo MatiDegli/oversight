@@ -1,5 +1,7 @@
 import "./inbox.css";
 
+export { revertView } from "./revert";
+export type { RevertAttempt } from "./revert";
 export { ImpactConeCard } from "./ImpactCone";
 export type { ReviewPanelProps } from "./ReviewPanel";
 export { decisionView, failureMessage, sendDecision, startAttempt } from "./decisions";

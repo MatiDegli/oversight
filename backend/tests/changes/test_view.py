@@ -8,7 +8,7 @@ from test_policy_profiles import policy_inputs
 
 from oversight.changes import ChangeNotFound, build_change_view
 from oversight.changes._policy import assess
-from oversight.events import EVENT_TYPES, EventPayload, fold_usage, read_jsonl
+from oversight.events import EVENT_TYPES, EventPayload, fold_stages, fold_usage, read_jsonl
 from oversight_contracts.events import ServerEvent
 from oversight_contracts.policy import ChangeAssessment
 from oversight_contracts.review import ChangeFacts, ChangeTarget, CrossReview
@@ -94,6 +94,7 @@ def test_incomplete_history_never_invents_rounds_or_costs(events, partial):
     assert view.proposal is not None and view.resolution is not None
     assert view.proposal.revision == 3 and view.resolution.decision == "approved"
     assert view.usage is None and view.revision_rounds is None
+    assert view.stages is None
     assert view.seq == events[-1].seq
 
 
@@ -234,3 +235,22 @@ def test_usage_and_error_receipts_alone_do_not_establish_a_change(events):
     ticks = [e for e in events if e.type == "usage.tick" and e.payload.change_id == "change-2"]
     with pytest.raises(ChangeNotFound):
         build_change_view("change-2", ticks)
+
+
+def test_stages_match_fold_and_expected_recording(events):
+    stages = build_change_view("change-2", events).stages
+    assert stages is not None and stages == fold_stages(events, "change-2")
+    assert stages.agent_work.model_dump() == dict(ms=13925, known_ms=13925, intervals=2, open=False)
+    assert stages.checks.model_dump() == dict(ms=2045, known_ms=2045, intervals=3, open=False)
+    assert stages.waiting_for_person.model_dump() == dict(
+        ms=None, known_ms=2577, intervals=3, open=False
+    )
+    assert stages.test_runs.model_dump() == dict(ms=3044, known_ms=3044, intervals=11, open=False)
+
+
+def test_every_known_change_prefix_builds_without_raising(events):
+    for n in range(1, len(events) + 1):
+        known = {e.payload.change_id for e in events[:n] if e.type == "agent.status"}
+        for change in known:
+            view = build_change_view(change, events[:n])
+            assert view.seq == n and view.stages == fold_stages(events[:n], change)

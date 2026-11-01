@@ -42,6 +42,7 @@ from oversight.events.needs_you import (
 from oversight.events.paths import absolute_paths
 from oversight.events.player import MAX_GAP_S, Sleep, play, replay_delays
 from oversight.events.references import validate_cross_review_limit
+from oversight.events.stage_fold import fold_stages
 from oversight.events.store import (
     EVENT_TYPES,
     EventPayload,
@@ -69,6 +70,7 @@ from oversight.events.usage_fold import (
     UsageFold,
     fold_usage,
 )
+from oversight.events.usage_view import build_usage_view
 
 
 def run_store_path(runtime_dir: Path, run_id: str) -> Path:
@@ -117,8 +119,10 @@ __all__ = [
     "UnassignedUsage",
     "UsageFold",
     "absolute_paths",
+    "build_usage_view",
     "export_run",
     "fold_activity",
+    "fold_stages",
     "fold_supervision",
     "fold_usage",
     "format_needs_you",

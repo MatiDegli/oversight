@@ -35,7 +35,8 @@ backend requests. The current bundle plays the real recorded run in
 (`Recorded run · Oct 27, 2026` for the current export). A missing recording or
 receipt fails the public build; the e2e and scan seams select their fixtures explicitly.
 
-`createCommandClient` exposes every JSON command in proposal 4.7. Accepted commands return no
+`createCommandClient` exposes the commands the UI uses: 16 methods in `commands.ts`, including
+reads. It does not cover every reserved or implemented backend route. Accepted commands return no
 result; SSE provides their results. HTTP errors use `CommandError` with `status`, contract `code`
 and server `message`. A body with a `message` but a code the contract does not name keeps the
 message and has `code: undefined`. Non-JSON or malformed error bodies fall back to an HTTP status

@@ -7,6 +7,7 @@ from oversight.changes._answers import InvalidAnswers
 from oversight.changes._assessment import RulesEvidence
 from oversight.changes._behavior import BehaviorDiff, BehaviorRow, FunctionBehavior
 from oversight.changes._behavior_inputs import BehaviorInput, BehaviorInputs, behavior_inputs
+from oversight.changes._examples import ConfirmOutcome, ExamplesConfirmation
 from oversight.changes._grants import GrantNotFound, InvalidGrant
 from oversight.changes._manager import ChangeManager
 from oversight.changes._mode import ModeController
@@ -39,7 +40,9 @@ __all__ = [
     "CannotSplit",
     "ChangeManager",
     "ChangeNotFound",
+    "ConfirmOutcome",
     "DetectionResult",
+    "ExamplesConfirmation",
     "Finding",
     "FunctionBehavior",
     "GrantNotFound",

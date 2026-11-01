@@ -589,6 +589,7 @@ the single error format.
 | `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
 | `GET /changes/{id}` | none | 200 `ChangeView` | `not_found` |
 | `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | 200 `HistoryPage` | `invalid_request`, `too_large` |
+| `GET /usage` | none | 200 `UsageView`; the committed log, live or in a replay | |
 | `POST /queue` | `EnqueueTask {agent?, plan_id?, plan_revision?}`; exactly one task or exact plan | 201 `QueuedTask` | `invalid_request`, `not_found`, `wrong_state` |
 | `GET /queue`, `GET /queue/{id}` | none | 200 `QueueSnapshot` / `QueuedTask` | `not_found` for an unknown item |
 | `POST /queue/{id}/cancel` | `QueueRevision {revision}` | 202 | `not_found`, `wrong_state` |
@@ -621,6 +622,7 @@ the single error format.
   is not wired yet; these fields do not establish confirmation authority. Standalone starts
   ignore zone; plan dispatch carries its server-owned zone. answering links an inbox decision.
   Approve may carry a standing grant, and the three decision commands may carry review-card answers.
+  ConfirmExamples is the only confirmation channel; its route and dispatch remain unwired until the runtime phase.
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
   `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
   `not_implemented`, `invalid_request`, `internal`, `forbidden` and `too_large`. They map to 404, 409, 409, 503, 403, 422,

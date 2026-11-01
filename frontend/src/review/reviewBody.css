@@ -123,9 +123,16 @@
 .review-body-d2 .review-diff-viewport {
   height: max(400px, 45vh);
 }
-.review-merged {
+.review-merged-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
   padding: 16px 24px;
   border-top: 1px solid var(--divider);
+}
+.review-merged {
   font-size: 15px;
 }
 .review-body .choice-question {

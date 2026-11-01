@@ -20,6 +20,8 @@ const baseThemes = {
     raised: "#1b1b1f",
     "page-raised": "#131313",
     text: "#ededea",
+    "edge-light": { color: "#ffffff", alpha: 0.17 },
+    "focus-glow": { color: "#ededea", alpha: 0.55 },
     "text-hover": "#ffffff",
     muted: "#a3a39e",
     faint: "#85857f",

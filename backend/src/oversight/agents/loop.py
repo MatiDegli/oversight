@@ -16,12 +16,14 @@ from typing import Literal
 
 from oversight.agents._attempts import attempt_observer
 from oversight.agents._control import RunControl, answer_unanswered
+from oversight.agents._history import HistoryPruner
 from oversight.agents._lifecycle import close_model
 from oversight.agents._prompts import PROMPT_VERSION as PROMPT_VERSION
 from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
 from oversight.agents._prompts import SYSTEM_PROMPT as SYSTEM_PROMPT
 from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._replies import ReplyError, ReplyRecovery
+from oversight.agents._status import done_when_text, task_examples, validate_task_examples
 from oversight.agents._tick import publish_usage
 from oversight.agents._trace import model_turn, publications, timed, traced_drive
 from oversight.agents.client import (
@@ -49,6 +51,7 @@ from oversight_contracts.events import (
     ErrorReport,
     Limits,
 )
+from oversight_contracts.examples import TaskExample
 from oversight_contracts.review import FinishDeclaration
 
 NO_TOOL_REMINDER = "Use a tool to continue, or call finish when the task is done."
@@ -70,8 +73,13 @@ class AgentTask:
     task: str
     limits: Limits
     answering: DecisionRef | None = None
+    examples: tuple[TaskExample, ...] = ()
+    prior_steps: int = 0
 
     def __post_init__(self) -> None:
+        if self.prior_steps < 0:
+            raise ValueError("prior_steps must be nonnegative")
+        object.__setattr__(self, "examples", validate_task_examples(self.examples, self.task))
         if self.answering is not None:
             object.__setattr__(self, "answering", self.answering.model_copy(deep=True))
 
@@ -129,6 +137,7 @@ class AgentRun:
         ledger: UsageLedger,
         pricing: Pricing | None = None,
         harness_pack: bool = False,
+        history_prune_tokens: int | None = None,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         require_verified(model.profile)
@@ -143,12 +152,13 @@ class AgentRun:
         self._pricing = pricing
         self._monotonic = monotonic
         self._system_prompt = system_prompt(harness_pack)
-        self.prompt_version = prompt_version(harness_pack)
+        self.prompt_version = prompt_version(harness_pack, history_prune_tokens)
+        self._history = HistoryPruner(history_prune_tokens)
         self._tools = Toolbox(
             workspace, tree, test_timeout_s=task.limits.test_timeout_s, harness_pack=harness_pack
         )
         self._declaration: FinishDeclaration | None = None
-        self._step = 0
+        self._step = task.prior_steps
         self._halted = False
         self._turns = 0
         """Model calls so far. Bounded on their own, so the run ends even if a stop rule fails."""
@@ -157,7 +167,7 @@ class AgentRun:
         self._seen: Counter[tuple[str, str, str]] = Counter()
         self._messages: list[Message] | None = None
         """The conversation, kept across `run` and every `revise` on this run."""
-        self._max_steps = task.limits.max_steps
+        self._max_steps = task.prior_steps + task.limits.max_steps
         """The step budget: `limits.max_steps` per task or revision, cumulative."""
         self._max_turns = task.limits.max_steps + FAILURE_LIMIT
         """The model-call bound, grown with the step budget on each revision."""
@@ -200,6 +210,7 @@ class AgentRun:
                 max_steps=self._max_steps,
                 detail=detail,
                 answering=task.answering,
+                examples=task_examples(task.examples),
             )
         )
 
@@ -212,7 +223,11 @@ class AgentRun:
         try:
             self._messages = [
                 {"role": "system", "content": self._system_prompt},
-                {"role": "user", "content": self._task.task},
+                {
+                    "role": "user",
+                    "content": self._task.task
+                    + ("\n\n" + done_when_text(self._task.examples) if self._task.examples else ""),
+                },
             ]
             return await self._drive("starting")
         finally:
@@ -355,6 +370,7 @@ class AgentRun:
                 raise _Halt(f"Reached the limit of {self._max_turns} model calls.")
             await self.control.gate(deadline, self._status, active)
             self.control.deliver(messages)
+            self._history.prune(messages, TOOL_SCHEMAS)
             self._turns += 1
             reply = await model_turn(self, messages, TOOL_SCHEMAS)
             await self._usage(reply)
