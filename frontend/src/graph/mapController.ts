@@ -256,7 +256,7 @@ function createMapController(
       stage?.addEventListener("mousedown", mousedown, true);
       stage?.addEventListener("mousemove", mousemove, true);
       stage?.addEventListener("click", click, true);
-      stage?.ownerDocument?.defaultView?.addEventListener("mouseup", mouseup);
+      stage?.ownerDocument.defaultView?.addEventListener("mouseup", mouseup);
       stage?.addEventListener("pointermove", pointermove);
       stage?.addEventListener("pointerleave", pointerleave);
       cy.on("viewport", viewport);
@@ -266,7 +266,7 @@ function createMapController(
         stage?.removeEventListener("mousedown", mousedown, true);
         stage?.removeEventListener("mousemove", mousemove, true);
         stage?.removeEventListener("click", click, true);
-        stage?.ownerDocument?.defaultView?.removeEventListener("mouseup", mouseup);
+        stage?.ownerDocument.defaultView?.removeEventListener("mouseup", mouseup);
         stage?.removeEventListener("pointermove", pointermove);
         stage?.removeEventListener("pointerleave", pointerleave);
         cancelAnimationFrame(pointerFrame);
