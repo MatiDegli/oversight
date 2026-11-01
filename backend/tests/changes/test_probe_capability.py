@@ -81,3 +81,16 @@ async def test_nt_probe_unavailable_before_any_checkout(h, monkeypatch):
     assert not list(h.workspace.tmp_dir.glob("base-probe-*"))
     for spy in (checkout, run, discovery):
         spy.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_nt_missing_probe_root_is_invalid_path(h: Harness, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace import InvalidPath, probes
+
+    root = h.workspace.tmp_dir / ("base-probe-" + "a" * 32)
+    tree = probes._ProbeTree(h.workspace, root, "agent-1", "", "base")
+    monkeypatch.setattr(probes, "sys", SimpleNamespace(platform="win32"))
+    with pytest.raises(InvalidPath, match=r"^probe checkout path is missing or linked$"):
+        tree.verify_root()

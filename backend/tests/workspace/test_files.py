@@ -406,6 +406,17 @@ def test_nt_path_refusals(path: str) -> None:
         split_relative(path, nt=True)
 
 
+@pytest.mark.parametrize("path", ["missing.py", "a/b/c/missing.py"])
+def test_nt_stale_missing_file_creates_nothing(tree: Path, tmp_path: Path, path: str) -> None:
+    from oversight.workspace.files import _write_nt
+
+    with pytest.raises(StaleFile) as refused:
+        _write_nt(tree, tmp_path / "tmp", path, "new", content_hash(b"old"))
+    assert str(refused.value) == f"{path} no longer exists"
+    assert list(tree.iterdir()) == []
+    assert list((tmp_path / "tmp").iterdir()) == []
+
+
 def test_nt_binary_stale_and_cleanup(tree: Path, tmp_path: Path, monkeypatch) -> None:
     from oversight.workspace.files import _write_nt, open_file
 
@@ -416,7 +427,7 @@ def test_nt_binary_stale_and_cleanup(tree: Path, tmp_path: Path, monkeypatch) ->
     with open_file(tree, "pkg/a.py", nt=True) as handle:
         assert handle.read() == data.encode()
     assert digest == content_hash((tree / "pkg/a.py").read_bytes())
-    with pytest.raises(StaleFile):
+    with pytest.raises(StaleFile, match=r"^pkg/a\.py changed since it was read$"):
         _write_nt(tree, temp, "pkg/a.py", "other", "stale")
     assert list(temp.iterdir()) == []
 

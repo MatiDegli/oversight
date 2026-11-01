@@ -359,7 +359,8 @@ def _write_nt(root: Path, tmp_dir: Path, path: str, content: str, expected_hash:
     except SizeLimitError as error:
         raise FileTooLarge(str(error)) from error
     if current_hash != expected_hash:
-        raise StaleFile(f"{path} changed since it was read")
+        message = "changed since it was read" if current_hash is not None else "no longer exists"
+        raise StaleFile(f"{path} {message}")
     current = root
     for part in split_relative(path, nt=True)[:-1]:
         current = current / part

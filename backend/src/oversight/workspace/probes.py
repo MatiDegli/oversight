@@ -24,7 +24,10 @@ class _ProbeTree(Tree):
         if self.root.parent != runtime / "tmp" or not self.root.name.startswith("base-probe-"):
             raise InvalidPath("invalid probe checkout root")
         if sys.platform == "win32":
-            nt_plain_parents(self.root)
+            try:
+                nt_plain_parents(self.root)
+            except FileNotFoundError:
+                raise InvalidPath("probe checkout path is missing or linked") from None
             return
         for path in (runtime, self.root.parent, self.root):
             if not stat.S_ISDIR(path.lstat().st_mode) or os.path.realpath(path) != str(path):
