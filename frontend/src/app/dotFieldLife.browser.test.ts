@@ -295,6 +295,18 @@ it.each(["dark", "day"] as const)(
             // Compound frame centers can change when the pending badge disappears.
             return { zoom: graph?.zoom(), pan: graph?.pan(), nodes: graph?.positions() };
           });
+        // Initial review framing is deferred to a frame; drive it before accepting idle.
+        await browserExpect
+          .poll(
+            async () => {
+              await page.clock.runFor(32);
+              return page.evaluate(() =>
+                window.fieldTest.elements().graph.oversightGraph?.animating(),
+              );
+            },
+            { intervals: [0], timeout: 15_000 },
+          )
+          .toBe(false);
         const before = await view();
         const letter = await page
           .getByRole("group", { name: "Agent A: Ready for review", exact: true })
