@@ -1,9 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
 import { ConversationPanelHeader } from "./ConversationPanelHeader";
-import { Composer } from "./Composer";
-import type { ConversationControls } from "./Composer";
-import type { Conversation } from "./selectConversation";
+import { Composer, type ConversationControls } from "./Composer";
+import { ActivityBlock } from "./ActivityBlock";
+import { BudgetNotice, Notices } from "./Notices";
 import { TimelineEntry } from "./rows";
+import type { Conversation } from "./selectConversation";
 
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation;
@@ -16,6 +17,7 @@ export function ConversationPanel({
   ...controls
 }: ConversationPanelProps) {
   const { header, entries } = conversation;
+  const lastActivity = entries.findLast((entry) => entry.kind === "activity");
   const list = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -55,10 +57,26 @@ export function ConversationPanel({
       >
         <div ref={content} className="conversation-entries">
           {entries.map((entry) => (
-            <div role="listitem" key={`${entry.kind}:${String(entry.seq)}`}>
-              <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
+            <div
+              role="listitem"
+              key={`${entry.kind === "activity" ? "round" : entry.kind}:${String(entry.seq)}`}
+            >
+              {entry.kind === "activity" || entry.kind === "round" ? (
+                <ActivityBlock
+                  entry={entry}
+                  slot={header.slot}
+                  changeId={header.changeId}
+                  onOpenDiff={onOpenDiff}
+                  showHeader={entry === lastActivity}
+                />
+              ) : entry.kind === "budget" ? (
+                <BudgetNotice mark={entry.mark} progress={conversation.progress} />
+              ) : (
+                <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
+              )}
             </div>
           ))}
+          <Notices conversation={conversation} />
         </div>
       </div>
       <Composer key={header.agentId} header={header} {...controls} />

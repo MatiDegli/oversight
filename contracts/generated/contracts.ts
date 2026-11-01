@@ -83,6 +83,7 @@ export type ServerEvent =
   | RevertResolvedEvent
   | QueueUpdatedEvent
   | LeadStatusEvent
+  | LeadReplyEvent
   | GrantCreatedEvent
   | GrantRevokedEvent;
 export type UsageCoverage = "complete" | "missing_metrics" | "incomplete";
@@ -150,7 +151,10 @@ export interface AgentFocusEvent {
   payload: AgentFocus;
 }
 /**
- * `POST /agents/{id}/message`, level 3: answers 501 until then.
+ * Human text for `POST /agents/{id}/message` or `POST /leads/{agent_id}/message`.
+ *
+ * The lead route is declared for L2: empty 202 on acceptance, 409 wrong_state unless idle,
+ * and 501 in replay. L2 publishes agent.message with the lead as recipient.
  */
 export interface AgentMessage {
   text: NonEmptyText;
@@ -2156,9 +2160,9 @@ export interface LeadStatus {
   task: NonEmptyText;
   model: NonEmptyText;
   /**
-   * The lead's lifecycle state.
+   * Idle waits between turns; done is retained for historical log compatibility.
    */
-  state: "starting" | "working" | "halted" | "stopped" | "done";
+  state: "starting" | "working" | "idle" | "halted" | "stopped" | "done";
   /**
    * Completed public-command tool calls.
    */
@@ -2171,6 +2175,40 @@ export interface LeadStatus {
    * The plan this revision's step requested, or null.
    */
   requested_plan_id: PlanId | null;
+}
+/**
+ * The lead.reply envelope.
+ */
+export interface LeadReplyEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  type: "lead.reply";
+  payload: LeadReply;
+}
+/**
+ * One lead turn's reply; L2 produces it and L3 presents the thread.
+ */
+export interface LeadReply {
+  agent_id: AgentId;
+  /**
+   * An earlier agent.message to this lead; null answers the opening task.
+   */
+  answers_seq: number | null;
+  /**
+   * Nonblank text, masked before storage like messages; null with a cut or withheld export.
+   */
+  text: string | null;
+  /**
+   * The observed horizon, strictly lower than this reply's envelope seq, or null.
+   */
+  through_seq: number | null;
+  /**
+   * The turn limit that cut the reply short, or null.
+   */
+  cut: ("tool_calls" | "model_calls" | "time" | "spend_brake") | null;
 }
 /**
  * The created coordination lead.
@@ -2580,4 +2618,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.14.0";
+export const CONTRACT_VERSION = "1.15.0";

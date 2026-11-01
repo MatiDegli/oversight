@@ -2952,6 +2952,32 @@ Reason: a docs audit found many docs behind main after several days of changed d
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
 
+## 2026-10-31 — Progress pieces, part 1: activity blocks and notices
+
+The maintainer approved progress sketch round 2 at 2026-10-31T15:19:19Z. Progress lives as
+separate pieces that redraw in place in Conversation. Evidence and the card's evidence line
+are part 2. His binding answers: "2 the time limit counts only the agent's time, not the wait
+for the maintainer between rounds; 3 time notice at 80% only"; "6 the agent's own plan is not
+shown before the checkpoint (it needs a contract change)"; "8 the lead's tool names
+(start_agent) are confirmed when the lead is built".
+
+Each round starts with the first starting/working/revising status, just before its deadline.
+run and revise call _drive independently (backend/src/oversight/agents/loop.py:217, :248);
+asyncio.timeout wraps each drive (:264). Pausing suspends and reschedules that deadline by
+paused time (backend/src/oversight/agents/_control.py:155-170; status at :163, resume at :176).
+Thus elapsed time is round end (or state.clock), minus start and paused spans, excluding review
+waits. The notice says "time limit for this round" although contracts/src/oversight_contracts/
+events.py:69-70 says "Per task"; the contract is unchanged.
+
+Budget marks retain rises in usage.tick.brake, not inferred thresholds or just the latest tick;
+falling brakes add nothing. The brake applies to metered Meta runs: notices say "new Meta runs"
+and blocked uses the actual spent/budget percentage, floored, because blocking is above block_at.
+All denominators and thresholds come from the run or event, and unknown spend hides amounts/meters.
+
+The earlier "of 30" departure was reverted by the maintainer at 2026-10-31T16:55:00Z: the header
+uses run.limits.max_steps and min(step, bound), retaining the largest observed step. There are no
+line counts on edit calls because agent.step has none; retries preserve Revising as the card does.
+Accepted person messages stay between activity segments of the same round; they never fold away.
 ## 2026-10-31 — Human confirmation of examples and task carry
 
 The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
@@ -3268,6 +3294,71 @@ Panel pseudo-elements use a compensated flex row so static and floating roots ke
 positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
 light that stays outside its row gap. Monaco and the graph host receive neither control effect.
 
+## 2026-11-01 — Usage read lifecycle, camera and lower bounds
+
+Packet b-1101a item 1 was approved at 01:03:27 ART. Premises refer to main `6ab92e7`;
+implementation starts from `54dc64d`, after contract 1.13.0 and the intervening frontend
+fronts. Usage remains an aggregate of list-price equivalents; the top-bar budget ledger
+keeps its existing meaning and implementation.
+
+Opening Usage loads its local chunk and reads GET /usage. Committed-event sequence
+changes refresh only while mounted. Each effect aborts its predecessor and ignores a
+late settlement; run identity keys the mount and is checked against the response. The
+footer uses the response's own seq. The deferred read has one documented local lint
+exception for fetch, as required by the approved file scope; transport's general boundary
+remains in force. Errors stay inline with Retry, clearing failed data;
+no response from another run is retained and no elapsed reader time becomes activity.
+
+Usage alone requests camera preservation from GraphStage to GraphView. The graph keeps
+its instance and selected node, resizes without framing an empty target, and retains the
+saved watch camera. The initial-panel creation path follows the same exception. Existing
+framing for every other tab and restoration to watch keep their behavior.
+
+The contract offers no ranged-call upper bound. A ranged or otherwise incomplete cost
+therefore displays its supplied known lower bound, including zero, and quotes the response
+problem. Unknown intervals remain unknown; observed time is retained beside unknown work.
+Model time with incomplete interval coverage remains a lower bound, including where a
+model has observed work. No reconciliation claim is made from incomplete figures.
+
+## 2026-11-01 — Browser-owned replay controls
+
+The approved b-1101a sketch (01:03:27 ART) adds a desktop row to Vite replay mode and the
+static recording. Its premises reference main `6ab92e7`; implementation starts at `54dc64d`,
+where the same session, navigation and shell code moved and panel edge feedback is already built.
+Backend SSE replay (`make replay`) keeps the ordinary live frontend and has no controls.
+
+Seek rebuilds the complete recorded prefix through the existing reducer and publishes it once.
+It preserves playing/paused state; seeking backward from ended pauses. Restart and Play again
+start at zero and play at the selected rate. The end stops, without looping. Only absent tab
+subjects close, using the existing history behavior. Recorded file access refreshes after a
+seek even when the graph commit is unchanged; snapshot-only paths still lack source contents.
+
+Milestones are sibling buttons beside the slider, so assistive technology can reach them
+without nested interactive descendants. Pointer preview changes no prefix. Only slider keys
+seek; there is no global Space handler and no automatic focus. The neutral focus ring and
+agent/state labels retain DESIGN.md's meaning and take precedence over generic skill advice
+about touch target sizes: these approved desktop targets are 24px and the row excludes phones.
+
+The controlled player and timeline are separately deferred from the shell, and the row uses
+React.lazy with a local 44px Suspense reservation. Session cleanup cancels pending imports,
+clock callbacks and loading publications; practice stops that same session before setting its cut.
+The existing startReplay API remains compatible for direct callers and test seams: it divides
+each gap by speed before applying the two-second cap and supports speed zero. The new player
+caps each gap first, forming one stable axis for every rate; its ready promise means loaded and
+validated, while legacy ready still means the entire log finished. Keeping both avoids changing
+backend-like timing or the tested immediate replay API.
+
+## 2026-11-01 — Public recording guard follows the deferred player
+
+The replay controls also updated `frontend/shots/public-recording.test.ts`, outside the
+front's original item 1 file list, because the controlled player adds a dynamic chunk.
+The old `assert.equal(chunks.length, 1)` fails on the entry plus the separately emitted
+`replayPlayer` chunk: the build necessarily has at least two JavaScript chunks. It was
+replaced with exactly one entry, a separate player chunk, a dynamic import from that entry
+and no static import of the player. The guard still imports the emitted entry and verifies
+the exact recording bytes, provenance hash, label and run identity, and still refuses a
+missing recording or receipt. Writing and importing the emitted ES modules replaces the
+single-chunk data URL, which cannot resolve relative chunk imports.
 ## 2026-10-31 — Time per stage for each change
 
 Packet A 1031d, item 2, was approved at 2026-10-31T18:25:03Z under the maintainer's
@@ -3482,3 +3573,66 @@ than the sketch-only picker, counts or explanatory cards. Built conversation row
 recorded-source wording remain authoritative. C2–C6 and L3 remain pending; C6 owns any
 default change after the Nov 2, 23:00 ART gate. DESIGN's proposed addition is held under
 `.shots/chat-shell/design-md.md` until the coordinator releases that document's lane.
+## 2026-11-01 — Displaced fronts may start before the freeze
+The maintainer allowed the fronts the Chat plan had moved past the freeze to start before it, each when a writer slot
+is free and behind the Chat and lead fronts: lead actions slices 2 and 4, item 10 (team and period grouping), the
+optional-parameter evidence review, item 20, and the map fronts (map 1d, the map brief, map lines). For these fronts
+this supersedes "No new graph or map work before the freeze" in the Chat view entry above. Reason: free slots should
+do useful work, while Chat and the lead keep priority. The freeze itself is unchanged: Tue Nov 3 20:00 ART.
+
+## Contracts 1.15.0 — approved by the maintainer, 2026-11-01
+
+The maintainer approved this exact delta at 14:04:57 ART. It is the only contract change in
+flight; 1.15.0 is next free after 1.14.0. L1 declares the wire shapes and route documentation,
+with compatibility acceptance only. L2 implements backend conversation admission and producers;
+L3 implements the Chat thread. No lead loop, tools, prompt, runtime or HTTP handler changes land
+in L1, and no paid run is needed.
+
+- Declare `POST /leads/{agent_id}/message`, body existing `AgentMessage`: empty 202 on acceptance,
+  409 `wrong_state` when the lead is not idle, 501 in replay. L2 publishes existing `agent.message`
+  with the lead id as recipient. Message aliases retain all existing accepted shapes.
+- `LeadStatus.state` gains `idle`; `done` remains so old logs validate. L1 adds no lifecycle or
+  control behavior for idle.
+- Add `lead.reply`, its `LeadReply` payload, envelope and `ServerEvent` member. Its five keys are
+  `agent_id`, nullable `answers_seq`, nullable `text`, nullable `through_seq` and nullable `cut`.
+  `answers_seq` names the person's earlier `agent.message` addressed to this same lead; null
+  answers the opening task. Missing, self/future, wrong-type and other-lead answers are refused
+  against committed or earlier accepted events before storage.
+- Non-null reply text is nonblank, at most 4,096 characters and masked before storage like
+  messages. Null text is allowed only with a cut or when a publication export withholds it under
+  the existing message-text receipt. Ordinary/live validation refuses null text with null cut;
+  publication validation has explicit receipt-derived withholding context which cannot override
+  live validation. The nullable serialized shape remains usable by publication validation.
+- `cut` is exactly `tool_calls`, `model_calls`, `time`, `spend_brake` or null. Non-null
+  `through_seq` is a nonnegative horizon strictly lower than the reply envelope's seq; it has no
+  target-type requirement. Null carries no horizon.
+- Export withholding and receipt-aware validation cover both message types. Text is withheld by
+  default; including stored masked text requires explicit inclusion authorization in the existing
+  receipt. No wire receipt fields are added, and historical fixtures and receipts are preserved.
+- Registry and exhaustive no-op consumers accept replies immediately. Replies consume only
+  sequence/clock bookkeeping: no messages, decisions, activity, accounting observations or thread
+  UI. History and decision-event subsets stay unchanged; existing lead-status readers stay
+  state-agnostic. The future producer owns masking and delivery.
+
+Pydantic models remain the source of truth. `make contracts` generates JSON Schema and TypeScript
+together with byte drift checking and array conversion preserved. Frozen tuple baselines, their
+hashes and independent negative controls remain unchanged. The hand-written thread fixture and
+focused contract, reference, publication and no-op regressions cover this additive delta. The
+maintainer's final L1 instruction limits this session to targeted checks; the coordinator's loop
+runs the complete gates before merging.
+
+## 2026-11-01 — The lead keeps one thread per run
+This supersedes the 2026-10-30 rule that the lead ends when done (and its amendment) and the 2026-10-31 run-wide
+limits, where they conflict. A lead holds one open thread per run: the opening task and up to 49 messages from the
+person, at most 50 turns. Between turns it waits idle; after turn 50's reply it halts, and halted stays terminal.
+The limits of 12 tool calls, 18 model calls and 300 seconds now apply per turn; the limit of 3 plans stays per lead
+for the whole thread, so a thread requests at most 3 plans across its 50 turns. finish carries a reply and no
+longer requires a plan. The tools stay closed (graph, list_files, read_file, queue, request_plan, finish, status).
+The spending brake is still checked at admission and before every model call; accounting, the person's authority
+and halting on shutdown are unchanged. The prompt and schema changes move prompt_version, and no paid comparison
+crosses this change.
+
+## 2026-11-01 — Lead thread lifetime and restart
+
+The maintainer confirmed that the thread lives per run and is lost on server restart.
+Persistence is a later design step; restart already stops the lead today.

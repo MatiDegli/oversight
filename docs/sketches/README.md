@@ -60,7 +60,7 @@ Approved shell designs of 2026-10-27. The earlier review image was replaced by
 | [watch.png](v4/watch.png) | Watch mode with the graph and agent cards | Built | Watch mode; product is the reference. |
 | [focus.png](v4/focus.png) | Focus panel beside the graph | Built | Focus panel; product is the reference. |
 | [motion-marker.png](v4/motion-marker.png) | Agent marker on the graph during work | Built | Motion pass; product is the reference. |
-| [conversation.png](v4/conversation.png) | Agent conversation in the focus panel | Target | `frontend/conversation-panel` and `frontend/conversation-tab`. |
+| [conversation.png](v4/conversation.png) | Agent conversation in the focus panel | Built | `frontend/conversation-panel` and `frontend/conversation-tab`. |
 | [changes.png](v4/changes.png) | Changes view | Target | No delivery front specified yet. |
 | [settings.png](v4/settings.png) | Settings view | Target | No delivery front specified yet. |
 
@@ -72,3 +72,12 @@ Approved graph-evidence sketch of 2026-10-31.
 | --- | --- | --- | --- |
 | [behavior-dark.png](graph-evidence/behavior-dark.png) | Changed function count and behavior samples, dark | Built | `frontend/node-chip` |
 | [watch-ready-dark.png](graph-evidence/watch-ready-dark.png) | Ready for review count on the pending node in watch, dark | Built | `frontend/node-chip` |
+
+## Conversation progress round 2
+
+| File | What it shows | Status | Delivery or replacement |
+| --- | --- | --- | --- |
+| [working-1920-dark.png](progress-r2/working-1920-dark.png) | Working activity block | Target | `frontend/progress-activity` |
+| [working-open-1920-dark.png](progress-r2/working-open-1920-dark.png) | Earlier calls opened | Target | `frontend/progress-activity` |
+| [retry-1920-dark.png](progress-r2/retry-1920-dark.png) | Model retry notice | Target | `frontend/progress-activity` |
+| [limits-1920-dark.png](progress-r2/limits-1920-dark.png) | Budget and time notices | Target | `frontend/progress-activity` |

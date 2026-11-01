@@ -1,5 +1,6 @@
 import type { MergeMode, StartAgent } from "@contracts";
-import { lazy, type ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
+import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
@@ -24,7 +25,11 @@ import { usePhonePractice } from "./challenge/usePhonePractice";
 const OversightStage = lazy(() =>
   import("./shell/OversightStage").then((module) => ({ default: module.OversightStage })),
 );
+const ReplayBar = lazy(() => import("./replay/ReplayBar"));
+
 export interface FrameProps {
+  replay?: ReplayPlayer | null;
+  onReplayCommit?: (reconcile: (view: View) => View) => void;
   practice?: { active: boolean; open: () => void; content: ReactNode; focus: FocusTab };
   state: State;
   view: View;
@@ -47,6 +52,7 @@ export interface FrameProps {
   /** The queue counter's click: review of the next proposed change. */
   onOpenQueue?: () => void;
   onOpenSettings?: () => void;
+  onOpenUsage?: () => void;
   onSetMergeMode?: (mode: MergeMode) => void;
   mergeModeAttempt?: MergeModeAttempt;
   /** The person's last decision per change. */
@@ -102,6 +108,7 @@ export function Frame(props: FrameProps) {
         onLayout={shell.setLayout}
         onOpenQueue={props.onOpenQueue}
         onOpenSettings={props.onOpenSettings}
+        onOpenUsage={props.onOpenUsage}
         onOpenPalette={shell.openPalette}
         practice={props.practice}
       />
@@ -189,6 +196,15 @@ export function Frame(props: FrameProps) {
             </div>
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
+          {props.replay && props.onReplayCommit && !props.practice?.active && (
+            <Suspense fallback={<div className="hidden h-[44px] shrink-0 min-[1280px]:block" />}>
+              <ReplayBar
+                key={props.replay.id}
+                player={props.replay}
+                onCommit={props.onReplayCommit}
+              />
+            </Suspense>
+          )}
         </div>
       </ChatShell>
       <StatusLine {...props} dock={shell.dock} onToggleDock={shell.toggleDock} />

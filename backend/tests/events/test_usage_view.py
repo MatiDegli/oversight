@@ -291,6 +291,22 @@ def test_unknown_is_never_zero() -> None:
     assert view.teams[1].known_ms == 4000
 
 
+def test_priced_call_with_missing_input_keeps_totals_unknown() -> None:
+    log = Log()
+    log.status()
+    log.tick(input_tokens=None)
+    log.status(state="done")
+    view = log.view()
+    (row,) = view.cost.rows
+    (team,) = view.teams
+    assert row.priced and team.priced
+    assert row.usd is team.usd is view.cost.usd is None
+    assert row.known_usd == team.known_usd == view.cost.known_usd == pytest.approx(0.00002)
+    assert (view.cost.priced_calls, view.cost.unpriced_calls, view.cost.ranged_calls) == (1, 0, 1)
+    assert view.cost.coverage == "missing_metrics" and view.hours.coverage == "complete"
+    assert not view.teams_add_up
+
+
 def test_teams_add_up_only_when_complete() -> None:
     log = complete_log()
     view = log.view()

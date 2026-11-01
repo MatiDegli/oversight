@@ -3,7 +3,8 @@ import { expect, it, vi } from "vitest";
 import { FileView } from "../../editor";
 import { loadDecisionInbox } from "../../review";
 import { createInitialState } from "../../state";
-import { FileFrame, InboxFrame } from "./PanelFallbacks";
+import { loadConversationPanel, type Conversation } from "../../agents";
+import { ConversationFrame, FileFrame, InboxFrame } from "./PanelFallbacks";
 
 vi.mock("../../editor/monaco", () => ({ monaco: {} }));
 vi.mock("../../graph/firstDraw", async (importOriginal) => ({
@@ -21,6 +22,45 @@ vi.mock("../../review/InboxHeader", () => ({
   InboxViews: () => <nav>Updated views</nav>,
   InboxHeading: () => <header>Updated heading</header>,
 }));
+
+it.each(["working", "revising"] as const)(
+  "shares the progress header between the conversation frame and loaded %s panel",
+  async (status) => {
+    const conversation: Conversation = {
+      header: {
+        agentId: "agent-1",
+        changeId: "change-1",
+        task: "Check the quantity",
+        slot: "A",
+        state: status,
+        modelLabel: "Muse Spark",
+        reasoning: null,
+        step: 99,
+        maxSteps: 30,
+        waiting: status === "working",
+        cost: undefined,
+        round: 2,
+        zonePaths: [],
+      },
+      entries: [],
+      progress: {
+        wait: undefined,
+        openRound: undefined,
+        limits: 600,
+        budget: undefined,
+        spendUnknown: false,
+      },
+    };
+    const { ConversationPanel } = await loadConversationPanel();
+    const frame = renderToStaticMarkup(<ConversationFrame header={conversation.header} />);
+    const panel = renderToStaticMarkup(<ConversationPanel conversation={conversation} />);
+    const header = frame.match(/<header[\s\S]*?<\/header>/)?.[0];
+    expect(header).toBeDefined();
+    expect(panel.match(/<header[\s\S]*?<\/header>/)?.[0]).toBe(header);
+    expect(header?.replace(/<[^>]*>/g, "")).toContain("Step 30 of 30");
+    expect(header).toContain(status === "working" ? "Waiting" : "Revising");
+  },
+);
 
 it("propagates inbox header edits to both the loaded panel and its frame", async () => {
   const { DecisionInbox } = await loadDecisionInbox();
