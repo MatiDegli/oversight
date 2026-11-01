@@ -538,12 +538,12 @@ class ChangeManager:
         except (ValueError, WrongState) as error:
             return "policy_invalid", str(error)
         try:
+            assert rec.head_commit is not None
             self._take(rec.change_id, APPROVABLE, "rules approval", person=False)
         except WrongState:
             return None
         rec.taken = rec.revision
         rec.rules_consumed.add(rec.revision)
-        assert rec.head_commit is not None
         rec.rules_attempts.add(
             (rec.revision, rec.head_commit, wait.main_commit, wait.mode.revision)
         )
