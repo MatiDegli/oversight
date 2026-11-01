@@ -224,16 +224,10 @@ def _resolve_nt(root: Path, path: str) -> Path:
             info = os.lstat(current)
         except FileNotFoundError:
             break
-        if is_link_like(info, nt=True) or not (
-            stat.S_ISREG(info.st_mode) if index == len(parts) - 1 else stat.S_ISDIR(info.st_mode)
-        ):
-            # Directory targets are valid for search scopes, but never for open_nt.
-            if (
-                index == len(parts) - 1
-                and not is_link_like(info, nt=True)
-                and stat.S_ISDIR(info.st_mode)
-            ):
-                continue
+        allowed = stat.S_ISDIR(info.st_mode) or (
+            index == len(parts) - 1 and stat.S_ISREG(info.st_mode)
+        )
+        if is_link_like(info, nt=True) or not allowed:
             raise _refuse(path, "linked or non-plain component")
     real_root = ntpath.normcase(os.path.realpath(root))
     real = ntpath.normcase(os.path.realpath(root.joinpath(*parts)))
@@ -385,7 +379,10 @@ def _write_nt(root: Path, tmp_dir: Path, path: str, content: str, expected_hash:
         with handle:
             owned = os.fstat(handle.fileno())
             fresh, opened = _nt_plain(tmp, directory=False), owned
-            if (fresh.st_dev, fresh.st_ino) != (opened.st_dev, opened.st_ino):
+            if not stat.S_ISREG(opened.st_mode) or (fresh.st_dev, fresh.st_ino) != (
+                opened.st_dev,
+                opened.st_ino,
+            ):
                 raise _refuse(path, "temporary file identity changed")
             handle.write(data)
         replace_retry(tmp, resolve_in(root, path, nt=True), nt=True)
@@ -409,6 +406,8 @@ def list_files(root: Path) -> list[str]:
             nt_plain_parents(directory)
         with os.scandir(directory) as entries:
             for entry in entries:
+                if sys.platform == "win32" and is_link_like(entry, nt=True):
+                    continue
                 if is_link_like(entry):
                     continue
                 if entry.is_dir(follow_symlinks=False):
@@ -447,7 +446,7 @@ def copy_template(template: Path, destination: Path) -> None:
             entry.name.casefold() if sys.platform == "win32" else entry.name
         ) in CACHE_DIRS or entry.name.endswith(".pyc"):
             continue
-        if is_link_like(entry):
+        if (sys.platform == "win32" and is_link_like(entry, nt=True)) or is_link_like(entry):
             raise WorkspaceError(f"the template contains a symbolic link: {entry.name}")
         target = destination / entry.name
         if entry.is_dir(follow_symlinks=False):
@@ -460,12 +459,20 @@ def copy_template(template: Path, destination: Path) -> None:
                         os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
                         FILE_MODE,
                     )
-                    with os.fdopen(fd, "wb") as output:
+                    try:
+                        output = os.fdopen(fd, "wb")
+                    except BaseException:
+                        os.close(fd)
+                        raise
+                    with output:
                         fresh, opened = (
                             _nt_plain(target, directory=False),
                             os.fstat(output.fileno()),
                         )
-                        if (fresh.st_dev, fresh.st_ino) != (opened.st_dev, opened.st_ino):
+                        if not stat.S_ISREG(opened.st_mode) or (fresh.st_dev, fresh.st_ino) != (
+                            opened.st_dev,
+                            opened.st_ino,
+                        ):
                             raise _refuse(target.name, "copy identity changed")
                         shutil.copyfileobj(source, output)
             else:

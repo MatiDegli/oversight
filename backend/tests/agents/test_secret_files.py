@@ -211,3 +211,26 @@ async def test_nt_worker_and_lead_zero_content_io(secret_tools, monkeypatch, pat
     write.assert_not_awaited()
     assert not secret_paths.is_secret_path(".env.example")
     assert not secret_paths.is_secret_path("id_utils.py")
+
+
+async def test_nt_search_scopes_and_parents_never_open_secrets(secret_tools, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace import files, secret_paths
+
+    tools, tree = secret_tools
+    for path in ("KEY.PEM/a.py", "ID_RSA/a.py", "\u0131d_ed25519/a.py"):
+        target = tree.root / path
+        target.parent.mkdir()
+        target.write_text("CANARY_NT")
+    monkeypatch.setattr(secret_paths, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(files, "sys", SimpleNamespace(platform="win32"))
+    read = AsyncMock(wraps=tree.read_text)
+    monkeypatch.setattr(tree, "read_text", read)
+    for scope in (None, "KEY.PEM", "ID_RSA", "\u0131d_ed25519", ".ENV", "parent:ads", "ID_RSA "):
+        arguments = {} if scope is None else {"path": scope}
+        outcome = await call(tools, "search", query="CANARY", **arguments)
+        assert "CANARY_" not in outcome.content
+    assert all(not secret_paths.is_secret_path(c.args[0]) for c in read.await_args_list)
+    # The person's direct read still goes through guarded NT I/O and remains unrestricted.
+    assert CANARIES[".env"] in (await tree.read_text(".env")).content

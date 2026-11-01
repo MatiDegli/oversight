@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.workspace._platform import executable, is_link_like
 from oversight.workspace.errors import WorkspaceError
-from oversight.workspace.files import gitdir_matches, nt_plain_parents, open_nt
+from oversight.workspace.files import gitdir_matches, nt_ambiguous, nt_plain_parents, open_nt
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import ProcessResult, Spawn
 
@@ -137,8 +137,6 @@ def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: boo
             raise IntegrityError("linked Git scan root", ".")
     except OSError as error:
         raise IntegrityError("unreadable Git scan root", ".") from error
-    if sys.platform == "win32":
-        nt_plain_parents(root)
     pending = [root]
     while pending:
         remaining(deadline)
@@ -157,11 +155,16 @@ def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: boo
                         if (
                             path != root / ".git"
                             or is_link_like(entry)
-                            or (sys.platform == "win32" and entry.name != ".git")
+                            or (
+                                sys.platform == "win32"
+                                and (entry.name != ".git" or is_link_like(entry, nt=True))
+                            )
                         ):
                             raise IntegrityError("nested or linked Git entry", relative)
                         continue
-                    if sys.platform == "win32" and is_link_like(entry):
+                    if sys.platform == "win32" and nt_ambiguous(entry.name):
+                        raise IntegrityError("ambiguous Windows entry", relative)
+                    if sys.platform == "win32" and is_link_like(entry, nt=True):
                         continue
                     if entry.is_dir(follow_symlinks=False):
                         pending.append(path)
@@ -237,7 +240,11 @@ def veto_index(output: str) -> None:
             raise IntegrityError("invalid Git index query", ".", code="git_failed")
         if fields[0] == "160000":
             raise IntegrityError("Git links are forbidden", path)
-        if any(part.casefold() == ".gitmodules" for part in path.split("/")):
+        if any(
+            part.casefold() == ".gitmodules"
+            or (sys.platform == "win32" and part.upper() == ".GITMODULES")
+            for part in path.split("/")
+        ):
             raise IntegrityError("Git modules are forbidden", path)
 
 
@@ -256,11 +263,13 @@ def veto_gitmodules(root: Path, deadline: float) -> None:
                 for entry in entries:
                     remaining(deadline)
                     path = Path(entry.path)
-                    if entry.name.casefold() == ".gitmodules":
+                    if entry.name.casefold() == ".gitmodules" or (
+                        sys.platform == "win32" and entry.name.upper() == ".GITMODULES"
+                    ):
                         raise IntegrityError(
                             "Git modules are forbidden", str(path.relative_to(root))
                         )
-                    if sys.platform == "win32" and is_link_like(entry):
+                    if sys.platform == "win32" and is_link_like(entry, nt=True):
                         continue
                     if entry.name.casefold() != ".git" and entry.is_dir(follow_symlinks=False):
                         pending.append(path)

@@ -405,3 +405,41 @@ async def test_nt_metadata_bounded_and_no_follow(tmp_path, monkeypatch):
         "C:/Runtime/x/../worktrees/agent-1/.git\n",
     ):
         assert not gitdir_matches(value, expected)
+
+
+@pytest.mark.parametrize("name", [".git.", ".git ", "GIT~1", "CON", ".g\u0131tmodules"])
+async def test_nt_ambiguous_scan_entries(workspace, monkeypatch, name):
+    from types import SimpleNamespace
+
+    (workspace.main.root / name).mkdir()
+    monkeypatch.setattr(integrity, "sys", SimpleNamespace(platform="win32"))
+    with pytest.raises(IntegrityError):
+        if name.endswith("modules"):
+            integrity.veto_gitmodules(workspace.main.root, time.monotonic() + 5)
+        else:
+            scan_nested_git(workspace.main.git_identity, time.monotonic() + 5)
+
+
+async def test_nt_registration_strict_pointer_roundtrip(monkeypatch):
+    from types import SimpleNamespace
+
+    identity = GitIdentity(
+        Path("C:/Runtime/tree"), Path("C:/Runtime/.git/worktrees/agent-1"), Path("C:/Runtime/.git")
+    )
+    pointer = b"gitdir: c:/runtime/.git/worktrees/agent-1\n"
+    named = b"c:/runtime/tree/.git\n"
+
+    def read(path, limit, deadline):
+        return pointer if path.name == ".git" else named
+
+    monkeypatch.setattr(integrity, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(integrity, "nt_plain_parents", lambda _: None)
+    monkeypatch.setattr(integrity, "_plain_bytes", read)
+    identity.verify_registration()
+    identity.verify_root_entry()
+    pointer = b"gitdir: C:/Runtime/other/../.git/worktrees/agent-1\n"
+    with pytest.raises(IntegrityError):
+        identity.verify_registration()
+    pointer = b"gitdir: c:/runtime/.git/worktrees/agent-1\n\n"
+    with pytest.raises(IntegrityError):
+        identity.verify_root_entry()

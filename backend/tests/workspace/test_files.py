@@ -512,3 +512,45 @@ def test_nt_exclusive_temp_and_failed_replace(tree: Path, tmp_path: Path, monkey
     with pytest.raises(FileExistsError):
         files._write_nt(tree, temp, "a.py", "new", content_hash(b"old"))
     assert (temp / ".write-fixed").read_bytes() == b"not owned"
+
+
+def test_nt_listing_cache_names_and_ambiguous_egress(tree, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace import files
+
+    for name in ("__PYCACHE__", ".PyTest_Cache", "junction"):
+        (tree / name).mkdir()
+        (tree / name / "canary.py").write_text("canary")
+    for name in ("ok.py", ".GIT", "file.", "alias~1.py"):
+        (tree / name).write_text("value")
+    from oversight.workspace._platform import is_link_like
+
+    real = is_link_like
+
+    def reparse(entry, *, nt=None):
+        return (getattr(entry, "name", None) == "junction" and nt is True) or real(entry, nt=nt)
+
+    monkeypatch.setattr(files, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(files, "is_link_like", reparse)
+    assert files.list_files(tree) == ["ok.py"]
+
+
+def test_nt_owned_cleanup_error_is_visible(tree, tmp_path, monkeypatch):
+    from oversight.workspace import files
+
+    def fail(*args, **kwargs):
+        raise PermissionError("owned cleanup failed")
+
+    monkeypatch.setattr(files, "unlink_retry", fail)
+
+    def replace_failure(*args, **kwargs):
+        raise PermissionError("replace failed")
+
+    monkeypatch.setattr(files, "replace_retry", replace_failure)
+    with pytest.raises(PermissionError, match="owned cleanup failed"):
+        files._write_nt(tree, tmp_path / "tmp", "a.py", "new", None)
+    assert not (tree / "a.py").exists()
+    leftovers = list((tmp_path / "tmp").iterdir())
+    assert len(leftovers) == 1
+    leftovers[0].unlink()

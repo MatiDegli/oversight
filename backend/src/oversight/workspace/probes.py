@@ -2,6 +2,7 @@
 
 import os
 import stat
+import sys
 import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -9,7 +10,7 @@ from functools import partial
 
 from oversight.workspace.core import Tree, Workspace
 from oversight.workspace.errors import InvalidPath
-from oversight.workspace.files import ensure_plain_dir, remove_tree
+from oversight.workspace.files import ensure_plain_dir, nt_plain_parents, remove_tree
 from oversight.workspace.locks import offload
 
 CLEANUP_TIMEOUT_S = 5
@@ -22,6 +23,9 @@ class _ProbeTree(Tree):
         runtime = self._workspace.runtime_root
         if self.root.parent != runtime / "tmp" or not self.root.name.startswith("base-probe-"):
             raise InvalidPath("invalid probe checkout root")
+        if sys.platform == "win32":
+            nt_plain_parents(self.root)
+            return
         for path in (runtime, self.root.parent, self.root):
             if not stat.S_ISDIR(path.lstat().st_mode) or os.path.realpath(path) != str(path):
                 raise InvalidPath("probe checkout path is missing or linked")

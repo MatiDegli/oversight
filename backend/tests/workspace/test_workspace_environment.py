@@ -301,3 +301,27 @@ async def test_run_tests_timeout_reports_partial_counts(
     assert (run.result.passed, run.result.failed) == (1, 0)
     wait_gone(int(pid_file.read_text()))
     assert list((workspace.main.root.parent / "tmp").glob("*.jsonl")) == []
+
+
+@pytest.mark.parametrize("drive", [False, True])
+async def test_nt_redaction_variants(make_workspace, monkeypatch, drive):
+    from types import SimpleNamespace
+
+    workspace = make_workspace("nt-redact")
+    if drive:
+        monkeypatch.setattr(workspace, "_root", Path("C:/Users/Person/.runtime"))
+    monkeypatch.setattr(workspace_core, "sys", SimpleNamespace(platform="win32"))
+    slash = str(workspace.runtime_root).replace("\\", "/")
+    for root, separator in (
+        (slash, "/"),
+        (slash.replace("/", "\\"), "\\"),
+        (slash.replace("/", "\\\\"), "\\\\"),
+        ("file:///" + slash.lstrip("/"), "/"),
+    ):
+        for area in ("workspace", "worktrees" + separator + "agent-12"):
+            assert (
+                workspace.redact(root.upper() + separator + area.upper() + separator + "a.py")
+                == "a.py"
+            )
+        assert workspace.redact(root.upper() + separator + "tmp") == ".runtime/tmp"
+        assert workspace.redact(root.upper()) == ".runtime"
