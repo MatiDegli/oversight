@@ -100,6 +100,7 @@ class LeadRun:
     async def run(self, human: str | None = None, answers_seq: int | None = None) -> LeadEnd:
         self.turns = self.failures = self.turn_steps = 0
         self.seen.clear()
+        self.tools.through_seq = None
         self.human, self.answers_seq, self.text = human, answers_seq, None
         try:
             async with asyncio.timeout(self.limits.wall_clock_s) as deadline:
@@ -188,7 +189,7 @@ class LeadRun:
             agent_id=self.agent_id,
             answers_seq=self.answers_seq,
             text=text,
-            through_seq=None,
+            through_seq=self.tools.through_seq,
             cut=cut,
         )
         self.history.append(self.human, text)

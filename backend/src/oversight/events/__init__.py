@@ -20,6 +20,7 @@ from oversight.events.history import (
     resolution_at,
 )
 from oversight.events.jsonl import LogError, export_run, read_jsonl, write_jsonl
+from oversight.events.lead_fold import fold_lead_status, serialize_status
 from oversight.events.list_prices import (
     LIST_PRICES,
     ListPrice,
@@ -122,6 +123,7 @@ __all__ = [
     "build_usage_view",
     "export_run",
     "fold_activity",
+    "fold_lead_status",
     "fold_stages",
     "fold_supervision",
     "fold_usage",
@@ -138,6 +140,7 @@ __all__ = [
     "replay_delays",
     "resolution_at",
     "run_store_path",
+    "serialize_status",
     "system_clock",
     "validate_cross_review_limit",
     "write_jsonl",

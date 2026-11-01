@@ -83,3 +83,17 @@ async def test_terminal_rules_never_reply_even_with_text(kind: str) -> None:
     run, _, _ = lead(model, tools)
     end = await run.run()
     assert end.state == "halted" and end.reply is None
+
+
+async def test_reply_horizon_is_maximum_status_read_in_this_turn_only() -> None:
+    readings = iter([(4, "first"), (9, "new"), (7, "older")])
+    tools, _ = setup_tools(status=lambda: next(readings))
+    model = scripted(
+        [turn(call("status"), call("status"), call("status")), dict(text="Fact", usage={})]
+    )
+    run, _, _ = lead(model, tools)
+    end = await run.run()
+    assert end.reply and end.reply.through_seq == 9
+    run.make_client = lambda: scripted([dict(text="No status", usage={})])
+    end = await run.run("another question", 10)
+    assert end.reply and end.reply.answers_seq == 10 and end.reply.through_seq is None

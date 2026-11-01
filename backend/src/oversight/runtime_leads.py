@@ -165,6 +165,7 @@ class LeadService:
             propose=propose,
             slots=len(self.live._slots),
             mask=self.live._redactor,
+            status=self.live.store.lead_status,
         )
 
     async def _drive(
