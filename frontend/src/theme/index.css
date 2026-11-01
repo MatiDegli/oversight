@@ -24,6 +24,16 @@
   --raised: #1b1b1f;
   --page-raised: #131313;
   --text: #ededea;
+  --replay-control-top: #1e1e22;
+  --replay-control-bottom: #18181b;
+  --replay-track: color-mix(in srgb, var(--text) 18%, transparent);
+  --replay-fill: color-mix(in srgb, var(--text) 85%, transparent);
+  --replay-knob-edge: color-mix(in srgb, var(--text) 45%, transparent);
+  --replay-stem: color-mix(in srgb, var(--text) 38%, transparent);
+  --replay-hover: color-mix(in srgb, var(--text) 12%, transparent);
+  --replay-ghost: color-mix(in srgb, var(--text) 50%, transparent);
+  --replay-edge-light: rgba(255, 255, 255, 0.17);
+
   --edge-light: rgba(255, 255, 255, 0.17);
   --focus-glow: color-mix(in srgb, var(--text) 55%, transparent);
   --text-hover: #ffffff;
@@ -104,6 +114,16 @@
   --raised: #e4e2dc;
   --page-raised: #efeee9;
   --text: #1c1c1a;
+  --replay-control-top: #fdfcfa;
+  --replay-control-bottom: #f1f0eb;
+  --replay-track: color-mix(in srgb, var(--text) 18%, transparent);
+  --replay-fill: color-mix(in srgb, var(--text) 85%, transparent);
+  --replay-knob-edge: color-mix(in srgb, var(--text) 45%, transparent);
+  --replay-stem: color-mix(in srgb, var(--text) 38%, transparent);
+  --replay-hover: color-mix(in srgb, var(--text) 12%, transparent);
+  --replay-ghost: color-mix(in srgb, var(--text) 50%, transparent);
+  --replay-edge-light: rgba(255, 255, 255, 0);
+
   --edge-light: rgba(255, 255, 255, 0.9);
   --focus-glow: color-mix(in srgb, var(--text) 55%, transparent);
   --text-hover: #000000;
@@ -477,6 +497,15 @@
   --color-agent-a-node-new: var(--agent-a-node-new);
   --color-agent-b-node: var(--agent-b-node);
   --color-agent-b-node-new: var(--agent-b-node-new);
+  --color-replay-control-top: var(--replay-control-top);
+  --color-replay-control-bottom: var(--replay-control-bottom);
+  --color-replay-track: var(--replay-track);
+  --color-replay-fill: var(--replay-fill);
+  --color-replay-knob-edge: var(--replay-knob-edge);
+  --color-replay-stem: var(--replay-stem);
+  --color-replay-hover: var(--replay-hover);
+  --color-replay-ghost: var(--replay-ghost);
+  --color-replay-edge-light: var(--replay-edge-light);
   --font-sans: var(--text-font);
   --font-mono: var(--code-font);
 }
