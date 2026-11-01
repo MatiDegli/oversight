@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useStore } from "zustand";
-import { applyEvent, createInitialState, stateStore } from "../state";
-import { parseEvent, replayRecording, replaySource } from "../transport";
-import { Frame } from "./Frame";
-import { FilesProvider } from "./FilesContext";
-import { createRecordedFiles } from "./recordedFiles";
-import { usePractice } from "./challenge/usePractice";
-import { availablePractice } from "./challenge/availability";
-import type { Attempt } from "./challenge/attempt";
-import { PracticeFrame } from "./shell/PanelFallbacks";
+import { applyEvent, createInitialState, stateStore } from "../../state";
+import { parseEvent, replayRecording, replaySource } from "../../transport";
+import { Frame } from "../Frame";
+import { FilesProvider } from "../FilesContext";
+import { createRecordedFiles } from "../recordedFiles";
+import { usePractice } from "../challenge/usePractice";
+import { availablePractice } from "../challenge/availability";
+import type { Attempt } from "../challenge/attempt";
+import { PracticeFrame } from "./PanelFallbacks";
 import {
   closePanel,
   conversationTab,
@@ -18,7 +18,7 @@ import {
   surfaceTab,
   tabbedView,
   viewReducer,
-} from "./view";
+} from "../view";
 
 const state = replayRecording.text
   .trim()
@@ -98,7 +98,7 @@ declare global {
   }
 }
 window.startupPracticeFrame = async (attempt, loaded) => {
-  const { PracticePanel } = await import("./challenge/PracticePanel");
+  const { PracticePanel } = await import("../challenge/PracticePanel");
   const practice = availablePractice(true, replaySource, replayRecording);
   if (!practice) throw new Error("Missing recorded practice");
   const onExit = () => {};

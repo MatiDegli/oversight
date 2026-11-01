@@ -4,7 +4,7 @@ import { expect as check, type Browser } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchBrowser } from "../../browserLaunch.support";
-import type {} from "../startupSplit.browser.fixture";
+import type {} from "./startupSplit.browser.fixture";
 import { freshAttempt } from "../challenge/attempt";
 
 let server: ViteDevServer, browser: Browser, html: string, url: string;
@@ -16,7 +16,7 @@ beforeAll(async () => {
   });
   html = await server.transformIndexHtml(
     "/",
-    '<!doctype html><html data-theme="dark"><body><div id="root" style="height:100vh"></div><script type="module">import "/src/theme/index.css"; import "/src/app/startupSplit.browser.fixture.tsx";</script></body></html>',
+    '<!doctype html><html data-theme="dark"><body><div id="root" style="height:100vh"></div><script type="module">import "/src/theme/index.css"; import "/src/app/shell/startupSplit.browser.fixture.tsx";</script></body></html>',
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
