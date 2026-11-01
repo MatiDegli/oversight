@@ -3646,3 +3646,37 @@ probes. The field controller loads inside the same Oversight boundary and initia
 mount, before the graph's asynchronous font/draw preparation completes. Chat-first still
 loads no rendering implementation. Startup accounting includes the controller in both bases.
 File-tab task entry is hidden in Chat because its destination is the Oversight agents panel.
+
+## 2026-11-01 — C2 builds compact Chat agents and conversation selection
+
+C2 fills C1's existing agents frame with coding-agent rows. State is forwarded at the existing
+Frame call; Oversight, its default, shared conversation identity and lazy graph boundary stay
+unchanged. The first structural child position remains empty for L3's lead row. C3–C6 and L3
+remain pending; DESIGN's coordinated lane remains held beside C1's proposed addition.
+
+The pure Chat projection reuses the card's model, tool/focus/model-wait activity, maximum observed
+step, per-round limit and cumulative per-agent cost. No tick omits a reading; unknown remains
+unknown after priced ticks. Review activity uses a matching retained needs-you reason, otherwise
+"Waiting for your review". "Merged by your rules" requires an approved, merged rules resolution.
+No merge time is shown. The count reuses slotUsage: paused, halted, conflicting and review work
+hold a slot until resolution, so the approved wording is "N of M running"; no metadata means no
+numeric claim. It does not mean agents currently calling a tool.
+
+Teams follow explicit agent origin, else the highest-revision plan's lead, else plan, else agent.
+Allocation and release replay retained sequence order: first coding status introduces a team,
+new teams take the longest-idle A–F hue with A–F ties, and member numbers follow first status.
+Ended rows keep their identities; later statuses and physical slot reuse do not replace them.
+This presentation is Chat-only and resets through the existing new-run reducer.
+
+Native row buttons expose full identity and pressed selection. Tab reaches each row; Up/Down
+and Home/End move focus only on those keypresses, and Enter/Space activates without moving focus
+away. Without the callback rows are noninteractive groups. Events never select, focus or scroll
+another row. Tests cover the actual reducer and Frame, command targets, replay navigation, layout
+round trips, independent scrolling and team-label wrapping at 1280.
+
+The approved compact geometry and theme tokens replace sketch literals. Ready pills fit beside
+standalone names at 260px; team labels can wrap the line without shrinking or clipping state.
+The fixture's A remains waiting for review after B merges because it has no rules-hold receipt.
+The C2 review capture retains proposed list state and A's conversation; C4's review layout is
+intentionally deferred. Twenty captures and twenty full-reference-size comparisons live under
+`.shots/chat-agents/`; proposed DESIGN text remains uncommitted there. No other-front work lands.
