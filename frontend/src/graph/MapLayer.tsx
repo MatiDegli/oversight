@@ -6,6 +6,7 @@ import { agentLook } from "../theme";
 import type { MapModel } from "./mapModel";
 import { decisionsLabel, testedLabel } from "./mapEvidence";
 import { panelBox } from "./mapModel";
+import type { MapHover } from "./mapLines";
 import type { MapLevel } from "./mapLevel";
 
 const mapStyles = `
@@ -84,6 +85,7 @@ export interface MapFrame {
   zoom: number;
   pan: { x: number; y: number };
   level: MapLevel;
+  hover?: MapHover;
 }
 
 /** Screen-sized type and circles, world-sized cells. This layer never accepts input. */

@@ -12,6 +12,8 @@ import { FIT_PADDING } from "./geometry";
 import type { GraphViewProps } from "./GraphView";
 import type { MapFrame } from "./MapLayer";
 import { MAP_MIN_MODULES, nextLevel, targetLevel } from "./mapLevel";
+import { mapHit } from "./mapLines";
+import type { MapHover } from "./mapLines";
 import { mapModel, panelBox } from "./mapModel";
 import { settle } from "./updateGraph";
 
@@ -74,6 +76,36 @@ function createMapController(
   let cy: Core | undefined;
   let model: MapFrame["model"] = { groups: [], cellWidth: 446, cellHeight: 220 };
   let level: MapFrame["level"] = "cards";
+  let hover: MapHover | undefined;
+  let pointerFrame = 0;
+  let pointer: { x: number; y: number } | undefined;
+  const active = () => latest.current.map && level === "map";
+  const setHover = (hit?: MapHover) => {
+    if (hover?.kind === hit?.kind && hover?.id === hit?.id) return;
+    hover = hit;
+    frame = { ...frame, hover };
+    for (const listener of listeners) listener();
+  };
+  const point = (event: MouseEvent) => {
+    const box = host.current?.getBoundingClientRect();
+    return box ? { x: event.clientX - box.left, y: event.clientY - box.top } : undefined;
+  };
+  const pointermove = (event: PointerEvent) => {
+    if (!active()) return;
+    pointer = point(event);
+    if (pointerFrame) return;
+    pointerFrame = requestAnimationFrame(() => {
+      pointerFrame = 0;
+      if (active()) setHover(pointer && mapHit(pointer, frame));
+    });
+  };
+  const pointerleave = () => {
+    if (!active()) return;
+    cancelAnimationFrame(pointerFrame);
+    pointerFrame = 0;
+    pointer = undefined;
+    setHover();
+  };
   const pannable = new Set<string>();
   const shownModules = () => cy?.nodes(".module").length ?? 0;
   const publish = () => {
@@ -81,7 +113,8 @@ function createMapController(
     if (shownModules() < MAP_MIN_MODULES) level = "cards";
     host.current?.setAttribute("data-map-level", level);
     latest.current.onMapLevel?.(level);
-    frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() } };
+    if (level !== "map") hover = undefined;
+    frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() }, hover };
     cy.autoungrabify(level === "map");
     cy.boxSelectionEnabled(false);
     if (level === "map") {
@@ -143,10 +176,16 @@ function createMapController(
     },
     attach(graph: Core) {
       cy = graph;
+      const stage = host.current?.parentElement;
+      stage?.addEventListener("pointermove", pointermove);
+      stage?.addEventListener("pointerleave", pointerleave);
       cy.on("viewport", viewport);
       cy.on("scrollzoom pinchzoom", navigate);
       host.current?.parentElement?.addEventListener("wheel", wheel, { passive: false });
       return () => {
+        stage?.removeEventListener("pointermove", pointermove);
+        stage?.removeEventListener("pointerleave", pointerleave);
+        cancelAnimationFrame(pointerFrame);
         host.current?.parentElement?.removeEventListener("wheel", wheel);
         cy?.off("viewport", viewport);
         cy?.off("scrollzoom pinchzoom", navigate);
