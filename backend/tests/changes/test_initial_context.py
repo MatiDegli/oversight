@@ -2,6 +2,7 @@
 
 import ast
 import random
+import symtable
 from pathlib import Path
 from textwrap import dedent
 
@@ -208,6 +209,16 @@ def test_unavailable_source_skips_every_section(source: str | None) -> None:
     snapshot = graph(files)
     supplied = {} if source is None else {"mod.py": source}
     assert initial_context(snapshot, supplied, ["mod:target"]) == InitialContext(
+        "", 0, ("target mod:target: source unavailable",)
+    )
+
+
+def test_nonmatching_symbol_table_makes_source_unavailable(monkeypatch) -> None:
+    files = {"mod.py": "def target(): pass\ndef caller(): target()"}
+    snapshot = graph(files)
+    unrelated = symtable.symtable("def other(): pass", "mod.py", "exec")
+    monkeypatch.setattr(symtable, "symtable", lambda *args: unrelated)
+    assert initial_context(snapshot, files, ["mod:target"]) == InitialContext(
         "", 0, ("target mod:target: source unavailable",)
     )
 

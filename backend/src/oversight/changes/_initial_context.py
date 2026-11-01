@@ -144,6 +144,8 @@ def _source(node: GraphNode, source: str) -> tuple[str, dict[str, str]]:
         if table.get_name() == definition.name and table.get_lineno() == definition.lineno:
             break
         pending.extend(table.get_children())
+    else:
+        raise ValueError("target symbol table unavailable")
     signature = "\n".join(
         [f"@{ast.unparse(d)}" for d in definition.decorator_list]
         + [
