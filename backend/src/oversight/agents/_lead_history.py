@@ -1,0 +1,34 @@
+"""Run-local human/reply exchanges; never retain an earlier turn's tools."""
+
+from oversight.agents.client import Message
+
+HISTORY_CHARS = 24_000
+
+
+class LeadHistory:
+    def __init__(self, task: str) -> None:
+        self.task = task
+        self.exchanges: list[tuple[str | None, str | None]] = []
+
+    def append(self, human: str | None, reply: str | None) -> None:
+        self.exchanges.append((human, reply))
+        self._trim(0)
+
+    def _trim(self, reserved: int) -> None:
+        while self.exchanges and (
+            len(self.task) + reserved + sum(len(h or "") + len(r or "") for h, r in self.exchanges)
+            > HISTORY_CHARS
+        ):
+            self.exchanges.pop(0)
+
+    def messages(self, human: str | None = None) -> list[Message]:
+        self._trim(len(human or ""))
+        messages: list[Message] = [{"role": "user", "content": self.task}]
+        for question, answer in self.exchanges:
+            if question is not None:
+                messages.append({"role": "user", "content": question})
+            if answer is not None:
+                messages.append({"role": "assistant", "content": answer})
+        if human is not None:
+            messages.append({"role": "user", "content": human})
+        return messages
