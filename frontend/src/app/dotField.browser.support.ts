@@ -58,8 +58,6 @@ interface Options {
   viewport?: { width: number; height: number };
   /** The theme the page is mounted in; the graph reads it when it is made. */
   theme?: "day";
-  /** Install barriers before the scene's effects and lazy imports start. */
-  beforeMount?: (page: Page) => Promise<void>;
 }
 
 async function withPage(options: Options, test: (page: Page) => Promise<void>) {
@@ -105,7 +103,6 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     await page.goto(url);
     await page.waitForFunction(() => "fieldTest" in window);
-    await options.beforeMount?.(page);
     const scene = options.scene ?? "watch";
     if (options.theme) {
       await page.evaluate((name) => {
@@ -122,7 +119,7 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
     // The field loads after the graph; every field assertion needs its initialized probe.
-    await page.waitForFunction(() => !!window.fieldTest.elements().field.oversightField);
+    await page.waitForFunction(() => !!window.fieldTest.elements().field);
     if (options.clock) {
       // Stop time where the scene stands, once the camera has settled: from here the test moves it.
       await settledGraph(page);
