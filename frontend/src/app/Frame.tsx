@@ -10,6 +10,7 @@ import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
 import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
+import { ChatMergeChip } from "./shell/ChatMerge";
 import { ChatEmpty, ChatShell } from "./shell/ChatShell";
 import { FocusPanel } from "./shell/FocusPanel";
 import { LazyPanel } from "./shell/LazyPanel";
@@ -165,6 +166,9 @@ export function Frame(props: FrameProps) {
             )}
             {shell.layout === "Chat" && !open && (
               <ChatEmpty
+                actionAccessory={
+                  <ChatMergeChip state={state} onOpenSettings={props.onOpenSettings} />
+                }
                 state={state}
                 onStart={props.onStartAgent}
                 replayOf={props.replayOf}

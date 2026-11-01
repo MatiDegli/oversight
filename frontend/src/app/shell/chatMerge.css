@@ -1,0 +1,37 @@
+.chat-merge-accessory {
+  display: inline-flex;
+  margin-left: auto;
+  max-width: 100%;
+}
+.chat-shell .chat-merge-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  gap: 7px;
+  padding: 0 9px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--raised);
+  box-shadow: var(--top-highlight);
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.chat-merge-chip > svg:first-child {
+  color: var(--muted);
+}
+.chat-merge-chip > svg:last-child {
+  color: var(--faint);
+}
+.chat-merge-chip:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.chat-shell .composer-actions:has(.chat-merge-accessory) {
+  align-items: center;
+  gap: 12px;
+}
+.chat-empty div:has(> .chat-merge-accessory) {
+  gap: 8px;
+}

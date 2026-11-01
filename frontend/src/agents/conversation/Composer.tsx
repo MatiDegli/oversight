@@ -1,11 +1,12 @@
 import { Pause, Play, TriangleAlert } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { commandFailure } from "../../transport";
 import { StopControl } from "../StopControl";
 import type { ConversationHeader } from "./selectConversation";
 import { focusRing } from "./rows";
 
 export interface ConversationControls {
+  actionAccessory?: ReactNode;
   onSend?: (text: string) => Promise<unknown>;
   onPause?: () => Promise<unknown>;
   onResume?: () => Promise<unknown>;
@@ -20,6 +21,7 @@ export function Composer({
   onPause,
   onResume,
   onStop,
+  actionAccessory,
 }: { header: ConversationHeader } & ConversationControls) {
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
@@ -59,9 +61,10 @@ export function Composer({
   }
   if (replay)
     return (
-      <p className="conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted">
-        Recorded run: messages, pause and stop are off.
-      </p>
+      <div className="conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted">
+        <p>Recorded run: messages, pause and stop are off.</p>
+        {actionAccessory && <div className="composer-actions flex">{actionAccessory}</div>}
+      </div>
     );
   const paused = header.state === "paused";
   return (
@@ -104,10 +107,11 @@ export function Composer({
           </button>
         )}
         {active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
+        {actionAccessory}
         {onSend && (
           <button
             type="button"
-            className={`${button} ml-auto bg-raised`}
+            className={`${button} ${actionAccessory ? "" : "ml-auto"} bg-raised`}
             aria-disabled={!active || pending || !text.trim()}
             onClick={() => {
               void send();

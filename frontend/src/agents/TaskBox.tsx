@@ -3,7 +3,7 @@ import { agentLook } from "../theme";
 import type { Slot, StartAgent } from "@contracts";
 import { Check, Cpu, X } from "lucide-react";
 import { useId } from "react";
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand";
 
@@ -29,6 +29,7 @@ const modifier =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent) ? "Cmd" : "Ctrl";
 
 export interface TaskBoxViewProps {
+  actionAccessory?: ReactNode;
   inputRef?: Ref<HTMLTextAreaElement>;
   draft: string;
   pending: boolean;
@@ -64,6 +65,7 @@ export function TaskBoxView({
   onSlot,
   model,
   maxSteps,
+  actionAccessory,
 }: TaskBoxViewProps) {
   const id = useId();
   const canStart = !pending && draft.trim() !== "" && block === null;
@@ -131,6 +133,7 @@ export function TaskBoxView({
               Up to {maxSteps} {maxSteps === 1 ? "step" : "steps"}
             </span>
           )}
+          {actionAccessory}
           <button
             type="button"
             aria-disabled={!canStart}
@@ -138,7 +141,7 @@ export function TaskBoxView({
             onClick={() => {
               if (canStart) onStart();
             }}
-            className={`${primary} ml-auto`}
+            className={`${primary} ${actionAccessory ? "" : "ml-auto"}`}
           >
             Start agent
           </button>
@@ -168,6 +171,7 @@ export function TaskBoxView({
 }
 
 export interface TaskBoxProps {
+  actionAccessory?: ReactNode;
   /** Only an explicit action requests focus through this ref. */
   inputRef?: Ref<HTMLTextAreaElement>;
   state: State;
@@ -186,6 +190,7 @@ export function TaskBox({
   replayOf,
   inputRef,
   store = taskBoxStore,
+  actionAccessory,
 }: TaskBoxProps) {
   const draft = useStore(store, (model) => model.draft);
   const pending = useStore(store, (model) => model.pending);
@@ -210,11 +215,13 @@ export function TaskBox({
         <p className="text-sm text-muted">
           {`${replayOf === undefined ? "Replay" : `Replay of a ${replayOf}`}: agents cannot be started here.`}
         </p>
+        {actionAccessory}
       </section>
     );
   }
   return (
     <TaskBoxView
+      actionAccessory={actionAccessory}
       inputRef={inputRef}
       draft={draft}
       pending={pending}

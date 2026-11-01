@@ -3646,3 +3646,11 @@ probes. The field controller loads inside the same Oversight boundary and initia
 mount, before the graph's asynchronous font/draw preparation completes. Chat-first still
 loads no rendering implementation. Startup accounting includes the controller in both bases.
 File-tab task entry is hidden in Chat because its destination is the Oversight agents panel.
+
+## 2026-11-01 — C5 Chat merge mode uses the shared Settings tab
+
+Chat's empty TaskBox and conversation Composer receive an optional action accessory;
+Oversight supplies none. Both chips navigate through the existing `onOpenSettings`
+callback to the single Merge mode section. Only retained mode evidence labels the
+chip (run metadata is the fallback); missing evidence reads unknown. Replay keeps
+its explanations and command guards; opening Settings grants no command capability.
