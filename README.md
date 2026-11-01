@@ -3,10 +3,11 @@
 Agents write code faster than anyone can review it. Oversight is how you stop reading code without
 losing control.
 
-Today, in a small web IDE for Python projects, you watch coding agents built on Meta's Muse Spark
-work on a live graph of your repository. Each agent has its own git worktree. The functions an
-agent reads or edits light up in its color, and each change shows its impact cone, the functions
-possibly affected. Nothing reaches main until you approve it.
+Oversight is where a person plans, watches and reviews the work of several coding agents built on
+Meta's Muse Spark, with cost, evidence and the merge decision in one place. Today, in a small web
+IDE for Python projects, the agents work on a live graph of your repository. Each agent has its own
+git worktree. The functions an agent reads or edits light up in its color, and each change shows
+its impact cone, the functions possibly affected. Nothing reaches main until you approve it.
 
 Try [Would you approve it?](https://matidegli.github.io/oversight/): a real recorded run in your browser, no install, works at phone width; choose “Two-change practice”.
 
