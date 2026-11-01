@@ -1,6 +1,8 @@
 import cytoscape, { type Core } from "cytoscape";
 import { useRef } from "react";
 import type { RefObject } from "react";
+import { stateStore } from "../state";
+import { decisionsLabel, mapEvidence, testedLabel } from "./mapEvidence";
 import { getActiveTheme } from "../theme";
 import { fitPanelCamera, frameCamera, prefersReducedMotion, startCamera, zoomBy } from "./camera";
 import type { Camera } from "./camera";
@@ -22,8 +24,22 @@ function measureHeaders(model: MapFrame["model"]) {
     context.font = `600 15px ${font}`;
     const name = context.measureText(group.label).width;
     context.font = `400 13px ${font}`;
-    group.headerWidth =
-      name + context.measureText(`${String(group.modules.length)} modules`).width + 36;
+    const count = context.measureText(`${String(group.modules.length)} modules`).width;
+    const widths = [name, count];
+    if (group.rings?.length) widths.push(group.rings.length * 24 - 4);
+    context.font = `600 12px ${font}`;
+    const decision = decisionsLabel(group.decisions ?? 0);
+    if (decision) widths.push(context.measureText(decision).width + 31);
+    context.font = `400 13px ${font}`;
+    const tested = group.coneCount
+      ? `${String(group.coneCount)} of ${String(group.coneTotal)} in ${group.label}`
+      : testedLabel(group.tested ?? 0, group.id === "tests");
+    if (tested) widths.push(context.measureText(tested).width);
+    group.headerItemWidths = widths;
+    for (const module of group.modules) {
+      context.font = `600 13px ${font}`;
+      module.nameWidth = context.measureText(module.fullName ?? module.name).width;
+    }
   }
 }
 
@@ -139,7 +155,12 @@ function createMapController(
     },
     sync(elements: readonly GraphElement[]) {
       if (!latest.current.map) return;
-      model = mapModel(elements, getActiveTheme());
+      model = mapEvidence(
+        mapModel(elements, getActiveTheme()),
+        elements,
+        stateStore.getState().state,
+        latest.current.cone ?? latest.current.liveCone,
+      );
       measureHeaders(model);
       publish();
     },

@@ -4,6 +4,7 @@ import { RoutingOmissions } from "./RoutingOmissions";
 import type { MapController } from "./mapController";
 import { agentLook } from "../theme";
 import type { MapModel } from "./mapModel";
+import { decisionsLabel, testedLabel } from "./mapEvidence";
 import { panelBox } from "./mapModel";
 import type { MapLevel } from "./mapLevel";
 
@@ -23,7 +24,7 @@ const mapStyles = `
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
+  gap: 3px 10px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--divider);
   line-height: 20px;
@@ -35,6 +36,12 @@ const mapStyles = `
   font-weight: 600;
   color: var(--module-label);
 }
+.map-header > * { flex-shrink: 0; white-space: nowrap; }
+.map-rings { display: flex; gap: 4px; }
+.map-ring { width: 20px; height: 20px; border-width: 2px; border-style: solid; border-radius: 50%; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+.map-decision { height: 22px; margin-block: -1px; padding: 0 8px; border: 1px solid var(--border); border-radius: 11px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; color: var(--text); }
+.map-decision::before { content: ""; width: 7px; height: 7px; background: var(--text); border-radius: 50%; }
+.map-header b { color: var(--text); font-weight: 600; }
 .map-circle {
   background: var(--card);
   border: 1.5px solid var(--edge);
@@ -108,6 +115,33 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                 <div className="map-header" style={{ height: (group.y - box.y1) * zoom }}>
                   <strong>{group.label}</strong>
                   <span>{group.modules.length} modules</span>
+                  {!!group.rings?.length && (
+                    <span className="map-rings">
+                      {group.rings.map((slot) => (
+                        <span
+                          key={slot}
+                          className={`map-ring ${agentLook[slot].border} ${agentLook[slot].textClass}`}
+                        >
+                          {slot}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  {!!group.decisions && (
+                    <span className="map-decision">{decisionsLabel(group.decisions)}</span>
+                  )}
+                  {group.coneCount ? (
+                    <span>
+                      <b>
+                        {group.coneCount} of {group.coneTotal}
+                      </b>{" "}
+                      in {group.label}
+                    </span>
+                  ) : (
+                    testedLabel(group.tested ?? 0, group.id === "tests") && (
+                      <span>{testedLabel(group.tested ?? 0, group.id === "tests")}</span>
+                    )
+                  )}
                 </div>
               </div>
             )}
