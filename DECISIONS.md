@@ -3680,3 +3680,12 @@ The fixture's A remains waiting for review after B merges because it has no rule
 The C2 review capture retains proposed list state and A's conversation; C4's review layout is
 intentionally deferred. Twenty captures and twenty full-reference-size comparisons live under
 `.shots/chat-agents/`; proposed DESIGN text remains uncommitted there. No other-front work lands.
+
+### C2 reference verification
+
+The five required Impeccable references were re-read in full. Rendered stress at 1280 showed
+unbroken model text clipping, so row content now permits arbitrary-token wrapping. A row's
+accessible description exposes model, full activity, step and optional cost alongside its
+existing full identity and pressed selection. A browser regression covers Arabic/CJK/emoji,
+long model/activity text, unknown cost and forced-colors focus. Approved geometry, visible
+copy, team allocation, selection and lazy boundaries stay unchanged.
