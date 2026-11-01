@@ -1,6 +1,7 @@
 """Injected NT own-source policy, without enabling public source selection."""
 
 import hashlib
+import json
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -8,10 +9,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from oversight.agents.tools import Toolbox
 from oversight.workspace import (
     IntegrityError,
     ProcessResult,
+    StaleFile,
     Workspace,
+    content_hash,
     core,
     run_process,
     test_tree,
@@ -38,6 +42,22 @@ async def opened(tmp_path: Path, files: dict[str, bytes], autocrlf: str | None =
                 ["git", "init", "-q", "--template="], cwd=source, timeout_s=10
             )
             assert result.returncode == 0
+            for command in [("add", "-A"), ("commit", "-q", "-m", "Source baseline")]:
+                result = await run_process(
+                    [
+                        "git",
+                        "-c",
+                        f"core.autocrlf={autocrlf}",
+                        "-c",
+                        "user.name=Fixture",
+                        "-c",
+                        "user.email=fixture@example.invalid",
+                        *command,
+                    ],
+                    cwd=source,
+                    timeout_s=10,
+                )
+                assert result.returncode == 0, result.stderr
             config = source / ".git/config"
             config.write_bytes(
                 config.read_bytes()
@@ -47,6 +67,10 @@ async def opened(tmp_path: Path, files: dict[str, bytes], autocrlf: str | None =
                 ).encode()
             )
         before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()}
+        if autocrlf is not None:
+            validate_source_byte_policy(
+                source, source / ".git", tuple(files), time.monotonic() + 10
+            )
         await workspace.reset()
         assert before == {
             p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()
@@ -64,12 +88,16 @@ async def test_initial_bytes_and_shared_override(tmp_path: Path, autocrlf: str) 
         "nested/.gitattributes": b"* eol=crlf\r\n",
         "nested/a.py": b"# unicode: \xc3\xa9\r\nx = 1\r\n# mixed\n",
         "data.bin": b"\x00\xff\r\n\x80",
+        "crlf.txt": b"a\r\nb\r\n",
+        "lf.txt": b"a\nb\n",
     }
     # Source config is deliberately misleading and contains a filter that must never run.
     workspace = await opened(tmp_path, files, autocrlf)
     try:
         source = tmp_path / "source"
         before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()}
+        # Change only the stat cache relationship; validation must not refresh source's index.
+        (source / "nested/a.py").write_bytes(files["nested/a.py"])
         validate_source_byte_policy(source, source / ".git", tuple(files), time.monotonic() + 10)
         agent = await workspace.create_worktree("agent-1")
         assert agent.git_identity.common == workspace.main.git_identity.common
@@ -95,6 +123,7 @@ async def test_initial_bytes_and_shared_override(tmp_path: Path, autocrlf: str) 
         b"* filter=evil",
         b"* working-tree-encoding=UTF-16",
         b"* ident",
+        b"* ident\0hidden",
         b"[attr]hidden filter=evil\n* hidden",
         b"[attr]a b\n[attr]b a\n* a",
     ],
@@ -211,3 +240,138 @@ async def test_installation_precedes_first_add(
     workspace = await opened(tmp_path, {"a.py": b"x=1\r\n"})
     workspace.release_runtime()
     assert calls == ["add"]
+
+
+@pytest.mark.parametrize("autocrlf", ["true", "false"])
+async def test_edit_merge_export_byte_parity(tmp_path: Path, autocrlf: str) -> None:
+    """Exercise runtime merge seams directly; public selection/Approve startup stays closed."""
+    files = {
+        ".gitattributes": b"* text=auto\n*.py text\n*.bin binary\n",
+        "nested/.gitattributes": b"* eol=crlf\r\n",
+        "nested/a.py": "# é\r\nvalue = 1\r\n# mixed\n".encode(),
+        "old.bin": b"\x00\xff\r\n",
+    }
+    workspace = await opened(tmp_path, files, autocrlf)
+    try:
+        base = await workspace.main.head()
+        agent = await workspace.create_worktree("agent-1")
+        tools = Toolbox(workspace, agent, test_timeout_s=10)
+        path = "nested/a.py"
+        await tools.call("read_file", json.dumps({"path": path}))
+        request = json.dumps(
+            {"path": path, "old_text": "value = 1\n# mixed", "new_text": "value = 2\n# changed"}
+        )
+        assert (await tools.call("edit_file", request)).ok
+        raw = "# é\r\nvalue = 2\r\n# changed\n".encode()
+        assert (agent.root / path).read_bytes() == raw
+        with pytest.raises(StaleFile):
+            await agent.write_text(path, "stale", expected_hash=content_hash(files[path]))
+        assert (await agent.read_text(path)).hash == content_hash(raw)
+        (agent.root / "old.bin").unlink()
+        binary = b"\x00\xfe\r\n\x80\n"
+        (agent.root / "new.bin").write_bytes(binary)
+        await agent.write_text("added.txt", "new\r\nline\n", expected_hash=None)
+        head = await agent.commit_all("Byte edit", workspace.agent_author("agent-1"))
+        assert head is not None
+        # Fake evidence names the exact candidate; capture does not alter the real index.
+        index = agent.git_identity.directory / "index"
+        before = index.read_bytes()
+        tested, commit = await capture_test_tree(
+            agent.root,
+            workspace.tmp_dir,
+            env=workspace._git_env(agent, None, None),
+            flags=workspace.git_flags,
+            timeout_s=10,
+            nt_source_bytes=True,
+        )
+        assert commit == head and index.read_bytes() == before
+        async with workspace.locks(main=True, agent_id="agent-1"):
+            assert tested == (await workspace.git_ok(agent, "rev-parse", "HEAD^{tree}")).strip()
+            await workspace.git_ok(
+                workspace.main, "merge", "--no-ff", "-m", "Approved byte fixture", head
+            )
+            patch = await workspace.git_ok(workspace.main, "diff", "--binary", base, "HEAD")
+        expected = files | {path: raw, "new.bin": binary, "added.txt": b"new\r\nline\n"}
+        del expected["old.bin"]
+        clone = tmp_path / "export-target"
+        result = await run_process(
+            [
+                "git",
+                "clone",
+                "-q",
+                "--no-checkout",
+                "--no-hardlinks",
+                str(workspace.main.root),
+                str(clone),
+            ],
+            cwd=tmp_path,
+            timeout_s=10,
+        )
+        assert result.returncode == 0, result.stderr
+        (clone / ".git/info/attributes").write_bytes(BYTE_OVERRIDE)
+        patch_file = tmp_path / "export.patch"
+        patch_file.write_bytes(patch.encode())
+        for args in [("checkout", "-q", "--detach", base), ("apply", "--binary", str(patch_file))]:
+            result = await run_process(["git", *args], cwd=clone, timeout_s=10)
+            assert result.returncode == 0, result.stderr
+        assert not (clone / "old.bin").exists()
+        for name, data in expected.items():
+            assert (workspace.main.root / name).read_bytes() == data
+            assert (clone / name).read_bytes() == data
+            async with workspace.locks(main=True):
+                oid = (await workspace.git_ok(workspace.main, "rev-parse", f"HEAD:{name}")).strip()
+            assert oid == hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+    finally:
+        workspace.release_runtime()
+
+
+async def test_detached_combined_policy_before_object_query(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from oversight.workspace import base_probe_checkout
+
+    workspace = await opened(tmp_path, {"a.py": b"x=1\r\n"})
+    try:
+        agent = await workspace.create_worktree("agent-1")
+        head = await agent.head()
+        async with (
+            workspace.locks(main=True, agent_id="agent-1"),
+            base_probe_checkout(
+                workspace, agent=agent, base=head, head=head, paths=(), timeout_s=10
+            ) as combined,
+        ):
+            assert combined.git_identity.common == agent.git_identity.common
+            policy = combined.root / ".gitattributes"
+            policy.write_bytes(b"* filter=evil\n")
+            try:
+                with monkeypatch.context() as patch:
+                    spawn = AsyncMock()
+                    patch.setattr(core, "run_process", spawn)
+                    with pytest.raises(IntegrityError, match="transform forbidden"):
+                        await workspace.git(combined, "rev-parse", "HEAD")
+                    spawn.assert_not_awaited()
+            finally:
+                policy.unlink()
+    finally:
+        workspace.release_runtime()
+
+
+async def test_source_transform_never_refreshes_index_or_runs_filter(tmp_path: Path) -> None:
+    workspace = await opened(tmp_path, {"a.py": b"x=1\r\n", ".gitattributes": b"* text\n"}, "true")
+    try:
+        source = tmp_path / "source"
+        # A stat-dirty source with a real HEAD/index and misleading core.worktree.
+        (source / "a.py").write_bytes(b"x=2\r\n")
+        (source / ".gitattributes").write_bytes(b"* filter=evil\n")
+        before = {p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()}
+        with pytest.raises(IntegrityError, match="transform forbidden"):
+            validate_source_byte_policy(
+                source, source / ".git", ("a.py", ".gitattributes"), time.monotonic() + 10
+            )
+        assert before == {
+            p.relative_to(source): p.read_bytes() for p in source.rglob("*") if p.is_file()
+        }
+        assert not (source / "FILTER_SENTINEL").exists()
+        assert not (workspace.main.root / "FILTER_SENTINEL").exists()
+    finally:
+        workspace.release_runtime()

@@ -451,6 +451,8 @@ def _policy_bytes(path: Path, shown: str, deadline: float) -> bytes | None:
 
 
 def _veto_attributes(data: bytes, relative: str) -> None:
+    if b"\0" in data:
+        raise IntegrityError("NUL in attribute policy; restore a plain attributes file", relative)
     # Git's attributes are ASCII names even when patterns contain arbitrary filename bytes.
     # Inspect all tokens conservatively; reject custom macro definitions rather than interpret
     # recursion, quoting or precedence differently from Git. The built-in binary macro is safe.
