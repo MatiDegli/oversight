@@ -41,3 +41,60 @@
     margin-left: 8px;
   }
 }
+
+.oversight-stage {
+  display: contents;
+}
+.oversight-stage[hidden] {
+  display: none;
+}
+.chat-shell {
+  --chat-gutter: 24px;
+}
+.chat-side {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+  background: var(--panel);
+}
+.chat-agents {
+  width: 280px;
+  border-right: 1px solid var(--divider);
+}
+.chat-work {
+  width: 300px;
+  border-left: 1px solid var(--divider);
+}
+.chat-side > header {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  flex-shrink: 0;
+  padding-inline: 18px;
+  border-bottom: 1px solid var(--divider);
+  font-size: 15px;
+  font-weight: 700;
+}
+.chat-side-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.chat-shell .focus-panel {
+  width: 100%;
+  border-right: 0;
+}
+.chat-shell > .shell-sidebar {
+  position: absolute;
+  inset: 0 auto 0 var(--left-rail-width);
+}
+@media (max-width: 1500px) {
+  .chat-shell {
+    --chat-gutter: 20px;
+  }
+  .chat-agents,
+  .chat-work {
+    width: 260px;
+  }
+}

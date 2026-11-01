@@ -9,6 +9,7 @@ import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
 import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
+import { ChatShell } from "./shell/ChatShell";
 import { FocusPanel } from "./shell/FocusPanel";
 import { GraphStage } from "./shell/GraphStage";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
@@ -103,24 +104,39 @@ export function Frame(props: FrameProps) {
         onOpenPalette={shell.openPalette}
         practice={props.practice}
       />
-      <div className="shell-workspace">
-        <LeftRail
-          watching={!open}
-          sidebar={shell.sidebar}
-          onSidebar={shell.openSidebar}
-          onWatch={onClosePanel}
-          onShortcuts={() => {
-            shell.setShortcuts(true);
-          }}
-        />
-        {shell.sidebar && (
-          <Sidebar
-            section={shell.sidebar}
-            onClose={() => {
-              shell.openSidebar(shell.sidebar);
+      <ChatShell
+        active={shell.layout === "Chat"}
+        selectedAgentId={view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation}
+        onOpenConversation={props.onOpenConversation}
+        rail={
+          <LeftRail
+            watching={!open}
+            sidebar={shell.sidebar}
+            onSidebar={shell.openSidebar}
+            onWatch={onClosePanel}
+            onShortcuts={() => {
+              shell.setShortcuts(true);
             }}
           />
-        )}
+        }
+        sidebar={
+          shell.sidebar && (
+            <Sidebar
+              section={shell.sidebar}
+              onClose={() => {
+                shell.openSidebar(shell.sidebar);
+              }}
+            />
+          )
+        }
+        agents={
+          open && !task.expanded ? (
+            <AgentsRail state={state} />
+          ) : (
+            <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
+          )
+        }
+      >
         <div className={`shell-center ${shell.maximized && open ? "is-maximized" : ""}`}>
           <div className="shell-stage">
             {open && (
@@ -133,23 +149,24 @@ export function Frame(props: FrameProps) {
                 onMaximize={shell.toggleMaximize}
               />
             )}
-            <Stage
-              arrival={arrival}
-              state={state}
-              view={view}
-              onNodeTap={phone ? () => undefined : props.onNodeTap}
-              {...(props.practice ? { stacked: phone } : {})}
-              layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
-            />
+            <div
+              className="oversight-stage"
+              hidden={shell.layout === "Chat"}
+              inert={shell.layout === "Chat"}
+            >
+              <Stage
+                arrival={arrival}
+                state={state}
+                view={view}
+                onNodeTap={phone ? () => undefined : props.onNodeTap}
+                {...(props.practice ? { stacked: phone } : {})}
+                layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
+              />
+            </div>
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
         </div>
-        {open && !task.expanded ? (
-          <AgentsRail state={state} />
-        ) : (
-          <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
-        )}
-      </div>
+      </ChatShell>
       <StatusLine {...props} dock={shell.dock} onToggleDock={shell.toggleDock} />
       <p className="narrow-notice" role="status">
         This window is too narrow. Widen it to at least 1280 px.
