@@ -29,6 +29,7 @@ afterAll(async () => {
 
 const tabs = [
   ["review", "/src/review/ReviewPanel.tsx", "Review panel", ".review-body"],
+  ["settings", "/src/app/shell/SettingsPanel.tsx", "Merge mode", ".grid"],
   ["inbox", "/src/review/DecisionInbox.tsx", "Decisions inbox", ".inbox-entries"],
   [
     "conversation",
@@ -359,6 +360,8 @@ it.each(
       await page.evaluate(() => document.fonts.ready);
       if (tab === "review")
         await page.getByRole("button", { name: "Review change", exact: true }).first().click();
+      if (tab === "settings")
+        await page.getByRole("button", { name: "Settings", exact: true }).click();
       if (tab === "inbox") await page.getByRole("button", { name: /^Decisions:/ }).click();
       if (tab === "conversation")
         await page
@@ -376,7 +379,9 @@ it.each(
       await check(panel).toBeVisible();
       await check(panel.locator(content)).toHaveCount(0);
       const before = await panel.boundingBox();
-      const heading = panel.locator(tab === "practice" ? "h1" : "header").first();
+      const heading = panel
+        .locator(tab === "practice" ? "h1" : tab === "settings" ? "h2" : "header")
+        .first();
       const header = await heading.boundingBox();
       const headerMarkup = await heading.innerHTML();
       if (tab === "file-view") await check(panel.getByRole("status")).toHaveText("Loading editor…");
@@ -416,7 +421,8 @@ it.each(
       await check(panel.locator(content).first()).toBeVisible();
       expect(await panel.boundingBox()).toEqual(before);
       expect(await heading.boundingBox()).toEqual(header);
-      if (tab === "conversation") expect(await heading.innerHTML()).toEqual(headerMarkup);
+      if (tab === "conversation" || tab === "settings")
+        expect(await heading.innerHTML()).toEqual(headerMarkup);
       if (tab === "review" || tab === "file-view")
         await check(
           panel.getByRole("button", { name: tab === "review" ? "Close review" : "Close file" }),

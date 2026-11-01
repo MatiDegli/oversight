@@ -17,6 +17,8 @@ import {
 import type { Attempt } from "../challenge/attempt";
 import { usePhonePractice } from "../challenge/usePhonePractice";
 
+export { SettingsFrame } from "./SettingsFrame";
+
 export function ReviewFrame({
   state,
   changeId,

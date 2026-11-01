@@ -3,15 +3,23 @@ import { Maximize2, Minimize2, Settings, X } from "lucide-react";
 import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
 import { selectConversation, loadConversationPanel } from "../../agents";
-import { ReviewFrame, InboxFrame, ConversationFrame, FileFrame } from "./PanelFallbacks";
+import {
+  ReviewFrame,
+  InboxFrame,
+  ConversationFrame,
+  FileFrame,
+  SettingsFrame,
+} from "./PanelFallbacks";
 import { LazyPanel } from "./LazyPanel";
 
 import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
-import { SettingsPanel } from "./SettingsPanel";
 import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
 
+const SettingsPanel = lazy(() =>
+  import("./SettingsPanel").then((m) => ({ default: m.SettingsPanel })),
+);
 const ReviewPanel = lazy(() => loadReviewPanel().then((m) => ({ default: m.ReviewPanel })));
 const DecisionInbox = lazy(() => loadDecisionInbox().then((m) => ({ default: m.DecisionInbox })));
 const ConversationPanel = lazy(() =>
@@ -127,11 +135,13 @@ export function FocusPanel(
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
         {view.activeTab === "settings" ? (
-          <SettingsPanel
-            state={state}
-            attempt={props.mergeModeAttempt}
-            onSetMergeMode={props.onSetMergeMode}
-          />
+          <LazyPanel key="settings" frame={<SettingsFrame />}>
+            <SettingsPanel
+              state={state}
+              attempt={props.mergeModeAttempt}
+              onSetMergeMode={props.onSetMergeMode}
+            />
+          </LazyPanel>
         ) : view.activeTab === "inbox" ? (
           <LazyPanel key="inbox" frame={<InboxFrame state={state} />}>
             <DecisionInbox state={state} onReview={props.onReview} />

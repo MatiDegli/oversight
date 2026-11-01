@@ -72,6 +72,9 @@ function Harness() {
         onClosePanel={() => {
           setView(closePanel);
         }}
+        onOpenSettings={() => {
+          setView((v) => viewReducer(v, { type: "open", tab: surfaceTab(v, "settings") }));
+        }}
         onOpenQueue={() => {
           setView((v) => viewReducer(v, { type: "open", tab: surfaceTab(v, "inbox") }));
         }}
