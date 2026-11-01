@@ -3011,3 +3011,29 @@ functions and under TYPE_CHECKING; the wording says "imports" because these edge
 execution at import time. Git-tree evidence identifies the captured source; a complete empty
 result means checked with no observations, not a safety certification. Wiring and duplicate
 logic remain separate fronts.
+## 2026-10-31 — Observe newly duplicated function structure
+
+The shape duplicate producer compares only non-test function and method graph nodes against
+the candidate tree. It hashes the exact AST of the signature and body after removing the
+function's name, decorators, annotations and docstrings, and consistently renaming parameters
+and stored names in first-appearance order (signature parameters first). Nested bindings are
+included, but nested functions are not independent observations. Global and attribute names,
+calls, defaults, literals, operators and control flow otherwise stay in the structure. This
+deliberately separate normalizer has no dependency on the test-integrity detectors: the two
+checks answer different questions.
+
+Four body statements, including nested statements and excluding docstrings, are the minimum:
+smaller wrappers and accessors are too ordinary to justify an observation. Each fingerprint
+group emits at most one fact, anchored on the least changed id, and only if a member is new or
+its fingerprint differs from base. This new-pair rule avoids repeatedly asking about existing
+duplication and ignores formatting or documentation-only changes. At most three peers are
+named; the remaining count excludes the anchor and those peers. Function and fact limits,
+unavailable source and parse failures explicitly make evidence incomplete instead of implying
+that the candidate was fully checked.
+
+Exact structural equality is conservative, but still permits false positives: independent
+implementations can intentionally repeat an algorithm; decorators and annotations can affect
+runtime behavior; and a single binding table across nested scopes does not prove lexical or
+semantic equivalence. These are accepted because the result is a neutral question for the
+person, never a reuse mandate, approval gate or claim that extraction is safe. This front
+only produces evidence; capturing and wiring it into change facts remain separate work.
