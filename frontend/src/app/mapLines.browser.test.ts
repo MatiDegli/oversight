@@ -287,3 +287,73 @@ it("keeps the demo on cards without map lines, badges or click behavior", async 
     await page.close();
   }
 });
+for (const width of [1920, 1280])
+  for (const theme of ["dark", "day"]) {
+    it(`captures evidence at ${String(width)} in ${theme}`, async () => {
+      const page = await setup(width, theme, true);
+      const capture = async (name: string) => {
+        if (process.env.MAP_LINES_SHOTS === "1")
+          await page.screenshot({ path: `${shots}${name}-${String(width)}-${theme}.png` });
+      };
+      try {
+        await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+        await ready(page);
+        await clearPointer(page);
+        expect((await camera(page)).level).toBe("map");
+        await capture("map");
+        const id = boltons ? "boltons.typeutils" : "library.module_00",
+          group = boltons ? "boltons" : "library";
+        await pointAt(page, await modulePoint(page, id));
+        await capture("map-hover");
+        await check(page.locator("[data-map-line]").first()).toBeVisible();
+        const measured = await page.evaluate(() => {
+          const size = (selector: string, property: "width" | "height") => {
+            const el = document.querySelector(selector);
+            return el ? el.getBoundingClientRect()[property] : null;
+          };
+          return {
+            ring: size(".map-ring", "width"),
+            chip: size(".map-decision", "height"),
+            line: getComputedStyle(document.querySelector("[data-map-line] line") ?? document.body)
+              .strokeWidth,
+            tested: [...document.querySelectorAll(".map-header")].map((e) => e.textContent),
+          };
+        });
+        expect(measured.ring).toBe(20);
+        expect(measured.chip).toBe(22);
+        expect(measured.line).toBe("1.4px");
+        await pointAt(page, await groupPoint(page, group));
+        await capture("map-hover-group");
+        const click = await groupPoint(page, group);
+        await page.mouse.click(click.x, click.y);
+        await ready(page);
+        const groupZoom = (await camera(page)).zoom;
+        await capture("group");
+        await page.evaluate(() => {
+          window.mapLinesTest.review();
+        });
+        await ready(page);
+        await zoomTo(page, width === 1280 ? 0.2 : 0.3);
+        await clearPointer(page);
+        await capture("map-cone");
+        const badge = await page.locator("[data-map-distance]").first().boundingBox();
+        expect(badge?.width).toBe(20);
+        if (process.env.MAP_LINES_SHOTS === "1")
+          await writeFile(
+            `${shots}measurements-${String(width)}-${theme}.json`,
+            JSON.stringify(
+              {
+                ...measured,
+                badge: badge?.width,
+                snapshot: boltons ? "boltons" : "synthetic",
+                groupZoom,
+              },
+              null,
+              2,
+            ),
+          );
+      } finally {
+        await page.close();
+      }
+    }, 60_000);
+  }
