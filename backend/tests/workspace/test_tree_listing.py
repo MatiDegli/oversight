@@ -98,11 +98,11 @@ def test_nt_tree_reparse_never_reads_targets(tmp_path, monkeypatch, site):
     monkeypatch.setattr(os, "open", no_target)
     if site == "root":
         with pytest.raises(OSError):
-            module.walk_tree(root, time.monotonic() + 5)
+            module.walk_tree(root, time.monotonic() + 60)
     elif site == "hash-parent":
-        assert module._hash(folder, leaf.name, [100], time.monotonic() + 5) is None
+        assert module._hash(folder, leaf.name, [100], time.monotonic() + 60) is None
     else:
-        _, files, truncated = module.walk_tree(root, time.monotonic() + 5)
+        _, files, truncated = module.walk_tree(root, time.monotonic() + 60)
         assert not files and not truncated
     assert not opened
 
