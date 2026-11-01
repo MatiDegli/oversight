@@ -96,6 +96,8 @@ class Settings:
     """OVERSIGHT_MEASURED_CONE: opt-in pytest caller evidence, independent of direct probes."""
     harness_pack: bool = False
     """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
+    history_prune_tokens: int | None = None
+    """OVERSIGHT_HISTORY_PRUNE_TOKENS: opt-in covered-read pruning; minimum 8,000."""
     reviewer_fake_script: Path | None = None
     """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
     reviewer_fake_b_script: Path | None = None
@@ -125,6 +127,10 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if self.history_prune_tokens is not None and (
+            type(self.history_prune_tokens) is not int or self.history_prune_tokens < 8000
+        ):
+            raise ValueError("OVERSIGHT_HISTORY_PRUNE_TOKENS must be an integer of at least 8000")
         if type(self.max_agents) is not int or not 1 <= self.max_agents <= 6:
             raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
         if (
@@ -178,6 +184,11 @@ class Settings:
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
             harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
+            history_prune_tokens=(
+                int(merged["OVERSIGHT_HISTORY_PRUNE_TOKENS"])
+                if merged.get("OVERSIGHT_HISTORY_PRUNE_TOKENS")
+                else None
+            ),
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),

@@ -16,6 +16,7 @@ from typing import Literal
 
 from oversight.agents._attempts import attempt_observer
 from oversight.agents._control import RunControl, answer_unanswered
+from oversight.agents._history import HistoryPruner
 from oversight.agents._lifecycle import close_model
 from oversight.agents._prompts import PROMPT_VERSION as PROMPT_VERSION
 from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
@@ -129,6 +130,7 @@ class AgentRun:
         ledger: UsageLedger,
         pricing: Pricing | None = None,
         harness_pack: bool = False,
+        history_prune_tokens: int | None = None,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         require_verified(model.profile)
@@ -143,7 +145,8 @@ class AgentRun:
         self._pricing = pricing
         self._monotonic = monotonic
         self._system_prompt = system_prompt(harness_pack)
-        self.prompt_version = prompt_version(harness_pack)
+        self.prompt_version = prompt_version(harness_pack, history_prune_tokens)
+        self._history = HistoryPruner(history_prune_tokens)
         self._tools = Toolbox(
             workspace, tree, test_timeout_s=task.limits.test_timeout_s, harness_pack=harness_pack
         )
@@ -355,6 +358,7 @@ class AgentRun:
                 raise _Halt(f"Reached the limit of {self._max_turns} model calls.")
             await self.control.gate(deadline, self._status, active)
             self.control.deliver(messages)
+            self._history.prune(messages, TOOL_SCHEMAS)
             self._turns += 1
             reply = await model_turn(self, messages, TOOL_SCHEMAS)
             await self._usage(reply)

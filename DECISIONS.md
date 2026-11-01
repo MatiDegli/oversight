@@ -3283,3 +3283,34 @@ waited behind another adds that wait. Raw integer milliseconds use the last comm
 event's timestamp, including for open intervals, with unknown intervals preserving
 known lower bounds and bounded, sequence-ordered diagnostics. `stages` is null on an
 incomplete prefix; older recordings and clients without the optional field remain valid.
+
+## Opt-in pruning of superseded file reads (2026-11-01)
+
+Repeated file reads accumulate in retained agent history, including across Request changes.
+`OVERSIGHT_HISTORY_PRUNE_TOKENS` enables deterministic read stubs at an integer threshold of
+at least 8,000; unset or empty keeps pruning off and preserves existing prompt-version hashes.
+The UTF-8 byte length of messages and tool schemas serialized as JSON, divided by four, is a
+trigger estimate only: provider usage and unknown usage accounting are unchanged.
+
+After message delivery and before a model call, a batch starts at the threshold and replaces
+the newest eligible results first until the estimate reaches 75% or candidates are exhausted.
+It re-arms after growth of 25% of the threshold from the preceding batch's ending estimate,
+including a batch with no eligible result; this state survives revision. Only older `read_file`
+results covered by a later read of the same raw path qualify. A later whole-file result covers
+any earlier read; a later range must contain every earlier numbered row with identical text.
+Returned rows and the range note determine coverage, never requested range arguments. Errors,
+skipped results and existing stubs supply no coverage. Empty reads remain unchanged.
+
+The one-line stub is `[Lines A-B of PATH: a later read of this path covers these lines.]`.
+It must strictly shorten both result text and the JSON estimate. Every user message, system
+prompt, assistant message, non-read result, uncovered read and the last six individual tool calls
+are retained. Calls/results retain their local positional pairing, identifiers and order.
+The stub template, threshold, low-water fraction, re-arm fraction and protected-call count
+participate in the enabled prompt version. Live tool outcomes, edit checks, stop rules, events,
+contracts and replay do not change. This ships off by default with scripted measurements only;
+enabling it by default requires a separate maintainer-approved paid A/B. Bounded history with
+a visible handoff and fresh revision context remain separate candidates.
+
+Proposed replacement for the maintainer in `AGENTS.md` (the file is unchanged):
+
+> read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the retained history. With history pruning explicitly enabled, covered older read_file results may become shorter stubs; every user message is retained.
