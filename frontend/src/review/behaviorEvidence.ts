@@ -13,6 +13,9 @@ export interface BehaviorNodeView extends NodeBehaviorDiff {
 }
 
 export const behaviorNotRecorded = "Behavior evidence was not recorded for this revision.";
+export const unstableBehaviorSentence =
+  "Results varied between runs; this is not an established difference.";
+export const noDifferenceSentence = "No difference measured on these inputs";
 
 function limitation(reason: string | null, kind: string | undefined): string | null {
   switch (reason) {

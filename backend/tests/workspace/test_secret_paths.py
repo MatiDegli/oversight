@@ -2,7 +2,7 @@
 
 import pytest
 
-from oversight.workspace import is_secret_path
+from oversight.workspace import SECRET_FILE_REFUSAL, is_secret_path, secret_refusal
 
 
 @pytest.mark.parametrize(
@@ -42,9 +42,24 @@ from oversight.workspace import is_secret_path
         ("environment.py", False),
         ("id_rsa2", False),
         ("id_ed25519loader.py", False),
-        (".env/ordinary.py", False),
+        (".env/ordinary.py", True),
+        (".env/", True),
+        (".envs/.production/.django", True),
+        ("sub/.ENV/x.py", True),
+        (".envs/app.example", True),
+        (".venv/lib/x.py", False),
+        ("env/x.py", False),
+        ("x.env/y.py", False),
+        ("sub/", False),  # Empty basename pins the no-raise behavior.
         ("", False),
     ],
 )
 def test_secret_path_names(path: str, secret: bool) -> None:
     assert is_secret_path(path) is secret
+
+
+@pytest.mark.parametrize("path", ["../.env", "sub/" + ".env" + "x" * 100])
+def test_secret_refusal_basename_and_bound(path: str) -> None:
+    message = secret_refusal(path)
+    assert message == SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1][:60]
+    assert "/" not in message[len(SECRET_FILE_REFUSAL) :]

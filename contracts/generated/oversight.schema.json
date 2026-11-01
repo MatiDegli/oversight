@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.12.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.14.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -1528,6 +1528,50 @@
       "title": "ChangeReviewedEvent",
       "type": "object"
     },
+    "ChangeStages": {
+      "additionalProperties": false,
+      "description": "Raw elapsed time per stage for one change: never a score, ranking, rate or review time.\n\nwaiting_for_person runs from the end of a revision's automatic checks to the person's\ndecision receipt, less the combined test run approval starts; it includes reading. A\nrevision decided by rules, cross-review or the lead adds nothing; an unrecorded decider\nmakes that interval unknown. test_runs overlaps the other stages.",
+      "properties": {
+        "agent_work": {
+          "$ref": "#/$defs/StageTime"
+        },
+        "checks": {
+          "$ref": "#/$defs/StageTime"
+        },
+        "waiting_for_person": {
+          "$ref": "#/$defs/StageTime"
+        },
+        "test_runs": {
+          "$ref": "#/$defs/StageTime"
+        },
+        "test_phases": {
+          "description": "One entry per phase that ran, in the order above.",
+          "items": {
+            "$ref": "#/$defs/SuitePhaseTime"
+          },
+          "maxItems": 5,
+          "type": "array"
+        },
+        "problems": {
+          "description": "Why an interval is unknown, with the seq that shows it.",
+          "items": {
+            "$ref": "#/$defs/NonEmptyText"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "agent_work",
+        "checks",
+        "waiting_for_person",
+        "test_runs",
+        "test_phases",
+        "problems"
+      ],
+      "title": "ChangeStages",
+      "type": "object"
+    },
     "ChangeUpdated": {
       "additionalProperties": false,
       "properties": {
@@ -1762,6 +1806,18 @@
           ],
           "default": null,
           "description": "Confirmed changes_requested resolutions through seq; null for incomplete history."
+        },
+        "stages": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChangeStages"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Raw time per stage through seq; null for incomplete history."
         }
       },
       "required": [
@@ -1774,7 +1830,8 @@
         "assessment",
         "resolution",
         "usage",
-        "revision_rounds"
+        "revision_rounds",
+        "stages"
       ],
       "title": "ChangeView",
       "type": "object"
@@ -1785,6 +1842,49 @@
         "possible"
       ],
       "type": "string"
+    },
+    "ConfirmExamples": {
+      "additionalProperties": false,
+      "description": "Typed human confirmation for `POST /agents/{id}/examples`.",
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "evidence_seq": {
+          "description": "Guards the ready_for_review status carrying the examples the person saw.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "base_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "action": {
+          "description": "Guards whether the person selects offered examples or supplies replacements.",
+          "enum": [
+            "confirm",
+            "edit"
+          ],
+          "type": "string"
+        },
+        "examples": {
+          "description": "Guards the bounded, unpinned examples; only the server records confirmation.",
+          "items": {
+            "$ref": "#/$defs/TaskExample-Input"
+          },
+          "maxItems": 5,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "evidence_seq",
+        "base_commit",
+        "action",
+        "examples"
+      ],
+      "title": "ConfirmExamples",
+      "type": "object"
     },
     "Conflict": {
       "additionalProperties": false,
@@ -5826,6 +5926,46 @@
       "title": "SlotInfo",
       "type": "object"
     },
+    "StageTime": {
+      "additionalProperties": false,
+      "description": "One stage's elapsed time through the view's seq. Stages are never added together.",
+      "properties": {
+        "ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The stage's total; null when any of its intervals is unknown."
+        },
+        "known_ms": {
+          "description": "The sum of known intervals; a lower bound when ms is null.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "intervals": {
+          "description": "Intervals counted, known or not.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "open": {
+          "description": "Still running at the view's seq; the open interval ends at that event's ts.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ms",
+        "known_ms",
+        "intervals",
+        "open"
+      ],
+      "title": "StageTime",
+      "type": "object"
+    },
     "StartAgent": {
       "additionalProperties": false,
       "description": "`POST /agents`.",
@@ -6046,6 +6186,38 @@
         "suite"
       ],
       "title": "SuiteExecution",
+      "type": "object"
+    },
+    "SuitePhaseTime": {
+      "additionalProperties": false,
+      "description": "Recorded suite time for one phase. Not \"TestPhaseTime\", which pytest would try to collect.",
+      "properties": {
+        "phase": {
+          "enum": [
+            "agent",
+            "proposal",
+            "combined",
+            "base_probe",
+            "head_probe"
+          ],
+          "type": "string"
+        },
+        "ms": {
+          "description": "The sum of the phase's recorded duration_ms.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "runs": {
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "phase",
+        "ms",
+        "runs"
+      ],
+      "title": "SuitePhaseTime",
       "type": "object"
     },
     "SuiteResult": {

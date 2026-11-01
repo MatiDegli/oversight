@@ -171,24 +171,8 @@ describe("theme", () => {
       (match) => !required(match[1]).startsWith("day-"),
     );
     expect(entries.length).toBeGreaterThan(0);
-    // DECISIONS.md: Shell-frame docs front (DESIGN.md parity) removes these on landing.
-    const approved: Record<string, string> = {
-      shell: "#09090a",
-      panel: "#0d0d0f",
-      page: "#101012",
-      card: "#151518",
-      raised: "#1b1b1f",
-      divider: "rgba(255, 255, 255, 0.06)",
-      border: "rgba(255, 255, 255, 0.1)",
-    };
     for (const [, name, value] of entries) {
-      if (approved[required(name)])
-        expect(value, `Remove the landed DESIGN.md override for ${required(name)}`).not.toBe(
-          approved[required(name)],
-        );
-      expect(tokens[name as keyof typeof tokens], name).toEqual(
-        cssValue(approved[required(name)] ?? required(value)),
-      );
+      expect(tokens[name as keyof typeof tokens], name).toEqual(cssValue(required(value)));
     }
     expect(tokens["dim-node"]).toBe(0.16);
     expect(tokens["dim-module"]).toBe(0.6);

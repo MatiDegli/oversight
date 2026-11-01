@@ -1,3 +1,6 @@
+import { mkdir, readFile } from "node:fs/promises";
+import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 import { expect as browserExpect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { expect, it } from "vitest";
@@ -6,6 +9,8 @@ import type {} from "./review.browser.fixture";
 import type { FieldProbe, GraphProbeHost } from "../graph";
 import { assertReadableFrame } from "../../shots/framing";
 import { panel, withPage } from "./review.browser.support";
+import { logForScene } from "../../shots/plan";
+import { streamReplay } from "../../shots/replay";
 
 /** The graph's read-only probe: which nodes match a selector, and every node's layout position. */
 function probe(page: Page, selector: string) {
@@ -297,7 +302,7 @@ it("never approves from the keyboard in the comment box; the click waits for cha
   });
 }, 30_000);
 
-it("approves only on a pointer click: Tab then Enter or Space sends nothing and gives no hint", async () => {
+it("approves only on a pointer click: Tab then Enter or Space sends nothing and shows why", async () => {
   await withPage(false, async (page) => {
     await page.getByRole("button", { name: /^Decisions:/ }).click();
     const approve = panel(page).getByRole("button", { name: "Approve and merge" });
@@ -313,7 +318,8 @@ it("approves only on a pointer click: Tab then Enter or Space sends nothing and 
     await browserExpect(caption).toHaveCount(0);
     for (const key of ["Enter", "Space"]) {
       await page.keyboard.press(key);
-      await browserExpect(caption).toHaveCount(0);
+      await browserExpect(caption).toHaveCount(1);
+      await browserExpect(caption).toBeVisible();
       expect(await page.evaluate(() => window.reviewTest.decisions.length)).toBe(0);
       await browserExpect(approve).toBeEnabled();
       // Pressing a key does not move focus either.
@@ -336,6 +342,58 @@ it("approves only on a pointer click: Tab then Enter or Space sends nothing and 
     });
   });
 }, 30_000);
+
+it.skipIf(process.env.DESIGN_AUDIT_SHOTS !== "1")("pointer click caption", async () => {
+  const source = new URL("../../../fixtures/events/recorded-demo.jsonl", import.meta.url);
+  const jsonl = logForScene(await readFile(source, "utf8"), { log: "proposed" }) ?? "";
+  const stream = createServer((_request, response) => {
+    streamReplay(response, jsonl, 0);
+  });
+  await new Promise<void>((resolve) => stream.listen(0, "127.0.0.1", resolve));
+  try {
+    await withPage(false, async (page) => {
+      const address = stream.address();
+      if (!address || typeof address === "string") throw new Error("Missing event server");
+      await page.route("**/events?**", (route) =>
+        route.continue({ url: `http://127.0.0.1:${String(address.port)}/events` }),
+      );
+      await page.route("**/?theme=*", (route) =>
+        route.fulfill({
+          contentType: "text/html",
+          body: `<!doctype html><html data-theme="${new URL(route.request().url()).searchParams.get("theme") ?? "dark"}"><body><div id="root" style="height:100vh"></div><script type="module">import "/src/theme/index.css"; import RefreshRuntime from "/@react-refresh"; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$ = () => {}; window.$RefreshSig$ = () => (type) => type; window.__vite_plugin_react_preamble_installed__ = true;</script><script type="module">
+        import React from "/@id/react"; import ReactDOM from "/@id/react-dom/client";
+        import { stateStore } from "/src/state"; import { startLive } from "/src/transport";
+        import { Frame } from "/src/app/Frame"; import { initialView, openReview } from "/src/app/view";
+        const h = React.createElement, root = ReactDOM.createRoot(document.getElementById("root"));
+        stateStore.subscribe(({ state }) => {
+          const change = Object.values(state.changes).find(c => c.status === "ready_for_review");
+          if (change) root.render(h(Frame, { state, view: openReview(state, initialView, change.change_id), connection: "connected", onNodeTap() {}, canOpenChange: () => true, onOpenChange() {}, onClosePanel() {}, onDecide() {} }));
+        });
+        startLive({ store: stateStore });
+        </script></body></html>`,
+        }),
+      );
+      const directory = fileURLToPath(new URL("../../.shots/design-audit/", import.meta.url));
+      await mkdir(directory, { recursive: true });
+      await page.context().grantPermissions(["local-network-access"]);
+      for (const theme of ["dark", "day"]) {
+        await page.goto(new URL(`?theme=${theme}`, page.url()).href);
+        await panel(page).locator(".line-insert").first().waitFor();
+        await panel(page).getByRole("button", { name: "Approve and merge" }).focus();
+        await page.keyboard.press("Enter");
+        await panel(page).getByText("Approve with a click: it merges into main").waitFor();
+        await browserExpect
+          .poll(async () => (await camera(page, "shop.pricing:compute_price")).animating)
+          .toBe(false);
+        await browserExpect(page.getByLabel("Status line")).toContainText("Connected");
+        await page.screenshot({ path: `${directory}approve-caption-1920-${theme}.png` });
+      }
+    });
+  } finally {
+    stream.closeAllConnections();
+    stream.close();
+  }
+});
 
 it("keeps Reject keyboard-operable", async () => {
   await withPage(false, async (page) => {

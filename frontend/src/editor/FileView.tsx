@@ -1,9 +1,10 @@
-import { LockKeyhole, TriangleAlert, X } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import type { editor, IDisposable } from "monaco-editor";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { getActiveTheme } from "../theme";
+import { FileViewHeader, fileControl as control } from "./FileViewHeader";
 import { FileDocument } from "./fileDocument";
 import type { FileAccess, FileLocation, FileState } from "./fileDocument";
 import { loadEditorFonts } from "./fonts";
@@ -19,9 +20,6 @@ export interface FileViewProps {
   onClose: () => void;
   startAgentAction?: ReactNode;
 }
-
-const control =
-  "rounded-control px-3 h-(--button-small-height) text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text disabled:opacity-50";
 
 /** Attach first: disposing a model still attached to Monaco is an editor lifecycle error. */
 export function showFile(
@@ -168,7 +166,6 @@ export function FileView({ target, files, commit, onClose, startAgentAction }: F
     shown.current?.observeCommit(commit);
   }, [commit]);
 
-  const saving = state.phase === "saving";
   return (
     <aside
       aria-label="File view"
@@ -188,56 +185,19 @@ export function FileView({ target, files, commit, onClose, startAgentAction }: F
         }
       }}
     >
-      <header className="flex flex-wrap items-center gap-2.5 border-b border-page-border px-4 py-2.5">
-        <h2 className="min-w-0 break-all text-base font-bold">{target.path}</h2>
-        {languageForPath(target.path) !== "python" && (
-          <span className="text-sm text-muted">No impact analysis</span>
-        )}
-        {state.dirty && <span className="text-sm text-muted">Unsaved edits</span>}
-        {files.readOnly || target.agentId !== null ? (
-          <span className="inline-flex items-center gap-2 text-sm text-muted">
-            <LockKeyhole aria-hidden="true" className="size-4" />
-            {files.readOnly
-              ? "Read-only · Recorded file"
-              : `Read-only · Agent ${target.agentId ?? ""}`}
-          </span>
-        ) : (
-          <>
-            <button
-              type="button"
-              className={`${control} border border-outline text-text enabled:hover:bg-raised`}
-              disabled={!state.canSave}
-              onClick={() => {
-                shown.current?.save();
-              }}
-            >
-              Save
-            </button>
-            {state.dirty && (
-              <button
-                type="button"
-                className={`${control} text-failed-text enabled:hover:bg-raised`}
-                disabled={saving}
-                onClick={() => {
-                  shown.current?.discard();
-                }}
-              >
-                Discard edits
-              </button>
-            )}
-          </>
-        )}
-        {startAgentAction}
-        <button
-          type="button"
-          aria-label="Close file"
-          title="Close (Escape)"
-          onClick={onClose}
-          className={`${control} ml-auto text-muted hover:bg-raised hover:text-text`}
-        >
-          <X aria-hidden="true" className="size-4" />
-        </button>
-      </header>
+      <FileViewHeader
+        target={target}
+        files={files}
+        onClose={onClose}
+        startAgentAction={startAgentAction}
+        state={state}
+        onSave={() => {
+          shown.current?.save();
+        }}
+        onDiscard={() => {
+          shown.current?.discard();
+        }}
+      />
       <FileFeedback
         state={state}
         fontError={fontError}

@@ -487,6 +487,7 @@ async def test_awakened_expiry_revalidates_every_authority_field(h: Harness, clo
         rec(h).state = "working"
     elif guard == "consumed":
         rec(h).rules_consumed.add(1)
+        rec(h).rules_attempts.add((1, head(h), old.main_commit, old.mode.revision))
     elif guard == "resolution":
         rec(h).resolution = ChangeResolved(
             change_id="change-1",

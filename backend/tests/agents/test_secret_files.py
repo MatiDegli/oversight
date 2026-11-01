@@ -16,7 +16,13 @@ from oversight_contracts.plans import PlanZone
 from oversight_contracts.queue import QueueSnapshot
 
 pytestmark = pytest.mark.anyio
-CANARIES = {".env": "CANARY_ENV", "sub/.env.local": "CANARY_LOCAL", "server.key": "CANARY_KEY"}
+CANARIES = {
+    ".env": "CANARY_ENV",
+    "sub/.env.local": "CANARY_LOCAL",
+    "server.key": "CANARY_KEY",
+    "sub/.ENV/ordinary.py": "CANARY_DIRECTORY",
+    ".envs/app.example": "CANARY_DIRECTORY_EXAMPLE",
+}
 PUBLIC = {".env.example": "example_setting=sample\n", "README.md": "Read this documentation.\n"}
 
 
@@ -109,16 +115,24 @@ async def test_refusal_is_bounded_and_does_not_disclose_existence_or_absolute_pa
     tools, tree = secret_tools
     read = AsyncMock()
     monkeypatch.setattr(tree, "read_text", read)
+    write, read_range = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(tree, "write_text", write)
+    monkeypatch.setattr(tree, "read_range", read_range)
     basename = ".env" + "x" * 100
-    for path in (basename, "/absolute/private/" + basename):
+    for path in (basename, "/absolute/private/" + basename, "../.env", "sub/../../.env"):
         outcome = await call(tools, "read_file", path=path)
         assert not outcome.ok
-        assert outcome.content == "Error: " + SECRET_FILE_REFUSAL + basename[:60]
+        expected = "Error: " + SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1][:60]
+        assert outcome.content == expected
+        edit = await call(tools, "edit_file", path=path, old_text="x", new_text="y")
+        assert not edit.ok and edit.content == expected
         assert len(outcome.content) < 200 and "/absolute/private" not in outcome.content
     read.assert_not_awaited()
+    read_range.assert_not_awaited()
+    write.assert_not_awaited()
 
 
-@pytest.mark.parametrize("path", [*CANARIES, "/absolute/private/.env", ".env.missing"])
+@pytest.mark.parametrize("path", [*CANARIES, "/absolute/private/.env", "../.env", ".env.missing"])
 async def test_lead_refuses_before_read_and_still_reads_public_files(path: str) -> None:
     read = AsyncMock(
         return_value=FileContent(

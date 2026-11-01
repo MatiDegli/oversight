@@ -108,6 +108,8 @@ async def test_combined_suite_records_the_staged_tree_without_claiming_a_commit(
 async def test_facts_validator_rejects_wrong_target_foreign_runs_and_fake_completeness(
     h: Harness,
 ) -> None:
+    from oversight.changes._shape_facts import ShapeCapture
+
     await h.run_agent(1, EDIT)
     [facts] = h.payloads(ChangeFacts)
     rec = h.manager._agents["agent-1"]
@@ -123,6 +125,11 @@ async def test_facts_validator_rejects_wrong_target_foreign_runs_and_fake_comple
         rec.suite_runs,
         summary_evidence=capture_summary(rec, added_test_ids=()),
         reach=facts.reach,
+        shape=ShapeCapture(
+            tuple(facts.shape) if facts.shape is not None else None,
+            facts.shape_complete,
+            tuple(problem for problem in facts.problems if problem.startswith("shape:")),
+        ),
     )
     validate_change_facts(facts, evidence)
     for update in (

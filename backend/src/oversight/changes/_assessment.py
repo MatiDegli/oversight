@@ -337,7 +337,11 @@ class RulesScheduler:
             and (rec.state in {"ready", "working"} if working_ok else rec.state == "ready")
             and (not check_main or wait.main_commit == self.ctx.state.snapshot.commit)
             and rec.resolution is None
-            and rec.revision not in rec.rules_consumed
+            and (
+                wait.parked
+                or (rec.revision, rec.head_commit, wait.main_commit, wait.mode.revision)
+                not in rec.rules_attempts
+            )
             and (rec.revision, rec.head_commit, rec.base_commit)
             == (wait.target.revision, wait.target.head, wait.proposal.base_commit)
             and rec.proposal_mode == wait.mode == self.ctx.mode.snapshot()
@@ -368,6 +372,9 @@ class RulesScheduler:
     def main_delivered(self, post: str) -> None:
         _follow.delivered(self, post)
 
+    def decision_finished(self, rec: ChangeRecord, decision: int) -> None:
+        _follow.decision_finished(self, rec, decision)
+
     @staticmethod
     def _observe_task(task: asyncio.Task[None]) -> None:
         if not task.cancelled() and (error := task.exception()) is not None:
@@ -376,6 +383,7 @@ class RulesScheduler:
             )
 
     def invalidate(self, rec: ChangeRecord) -> None:
+        rec.follow_pending = None
         wait = self.waits.get(rec.change_id)
         if wait is not None:
             wait.active = False

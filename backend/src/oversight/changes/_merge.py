@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from oversight.changes import _delivery as delivery
 from oversight.changes import _recovery as recovery
-from oversight.changes._example_criteria import verify_run
+from oversight.changes._example_criteria import refusal_code, verify_run
 from oversight.changes._resolution_validation import validate_resolution_evidence
 from oversight.changes._state import ChangeRecord
 from oversight.changes._suite_evidence import publish_suite
@@ -150,7 +150,7 @@ async def combined_tests_pass(
     if run.result.outcome == "passed":
         return run
     if required:
-        raise RulesFailure("suite_failed", "The required combined suite did not pass.")
+        raise RulesFailure(refusal_code(run), "The required combined suite did not pass.")
     await verify_merge_abort(
         ctx.workspace, main, pre=pre, head=rec.head_commit or rec.base_commit, timeout_s=ctx.timeout
     )

@@ -5,6 +5,8 @@ and the current validation tooling. Levels 1 and 2 closed on Oct 27.
 
 ## Startup and serving
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
 [app.py](backend/src/oversight/app.py) composes the Python 3.12 FastAPI backend.
 [settings.py](backend/src/oversight/settings.py) reads configuration from the environment
 and `.env`. [setup.py](backend/src/oversight/setup.py) checks the offered slots' setup
@@ -15,7 +17,7 @@ without calling a provider. Health reports missing settings without exposing the
 - `make dev` starts FastAPI with reload and Vite. Both processes receive resolved `OVERSIGHT_PORT`
   (8710) and `OVERSIGHT_VITE_PORT` (launcher fallback 5710), with environment precedence over `.env`.
   Vite uses strictPort and proxies API routes while preserving Host and Origin.
-  The SSE proxy streams without buffering.
+  The SSE proxy streams without compression or buffering.
 - `make demo` checks setup, builds the frontend and serves it with the API on one origin.
   `DEMO_PORT` defaults to 8710; demo explicitly clears `OVERSIGHT_VITE_PORT`, overriding `.env`.
   Starting the server spends no model credits.
@@ -45,6 +47,13 @@ worktrees, copies [demo-repo](demo-repo) and creates an initial git commit on `m
 Main lives at `.runtime/workspace/`; product agent worktrees live at
 `.runtime/worktrees/{agent_id}`, outside the parsed main tree. Run logs, the spend ledger
 and the separate demo test environment survive this reset.
+
+The backend runs `git init` in the copied workspace. `.runtime/` is gitignored.
+The demo template is plain files with no git of its own: a Python project written here,
+with 4–6 modules, 20–40 functions and tests, and one central function with many callers.
+After the hackathon, `desktop/` will hold a Tauri shell with the backend inside WSL,
+before the native Windows and macOS backend ports. The demo runs in the browser.
+See [Opening the person's own repository](docs/own-repository.md) for its separate plan and rules.
 
 ## Data flow
 
@@ -123,6 +132,17 @@ but stop contributing pending marks.
 
 ## Backend module contracts
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The backend uses Python 3.12, uv and FastAPI. The graph core parses Python `ast` into nodes
+and edges. Changed files are reparsed after every edit, merge or discard, driven by each
+file's content hash.
+For the person's own repository, a watcher only triggers that same rescan path.
+The runtime's small client interface allows the provider format to be swapped. Model and
+endpoint are set per agent: agent B may use Muse Spark Open
+(`meta-models/muse-spark-open-1026`) through Baseten's Chat Completions API.
+The event store uses stdlib `sqlite3`.
+
 Cross-package imports use each package's `__init__.py`. The import-linter rules in
 [pyproject.toml](pyproject.toml) enforce `app -> api -> changes -> agents -> graph | events |
 workspace`. The bottom three packages are independent. Protected contracts keep package
@@ -178,6 +198,75 @@ Its facade delegates to private stages:
 `changes-no-facade-backedge` prevents helpers from importing `_manager`, including typing imports.
 The [stage plan](docs/plans/changes.md#1-facade-and-callers) records the split and fidelity checks.
 
+### Graph rules
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+- A call is "exact" only when its name resolves to a single function; everything else is
+  "possible", with its reason.
+- Methods are nodes from day one. A function's range starts at its first decorator.
+- Comprehensions, generator expressions, lambdas and nested functions are not nodes. Their
+  calls belong to the nearest enclosing function or method, because it runs them or returns
+  them. Names resolve in the nested scope first: a parameter, a comprehension target or a
+  local assignment hides a module-level function of the same name. Exactness follows
+  resolution only: a call that may not run, such as one inside an `if`, is still "exact"
+  if its name binds to one function.
+- Calls at module level belong to the module node; calls in a class body belong to the class node.
+- Imports resolve: relative imports differ for a package `__init__.py` and a plain module,
+  and `import a.b` binds the name `a`. Star imports, rebound names, attribute calls on unknown
+  receivers, and methods a framework calls by name are "possible".
+- Node ids never include line numbers. Two definitions with the same qualified name, such as
+  a property getter and setter, get a suffix.
+
+### Impact cone
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The cone is a reverse BFS over call edges. The data flow above specifies its depth and
+node-count bounds, omissions and agent-version proposals; DESIGN.md's Impact cone section
+specifies the UI's "+12 omitted by depth" and "possibly affected", never a complete list.
+
+### Agent tools
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The data flow above specifies the six tools, per-call steps, read and edit focus, the first
+five search matches, unique-match and last-read-hash edit checks, and the fixed test command.
+A worktree does not isolate: it shares `.git/config` and the stash, hence the no-shell rule.
+Read focus uses read mode; edit focus uses edit mode.
+
+- `read_file` returns numbered lines and has a size cap; long files are read by line range.
+  Prefer few, large reads of whole functions: every step resends the full history.
+- If `edit_file` fails because the old text does not appear exactly once or the file changed
+  since the agent last read it, the error goes back to the model.
+- No tool returns the content of an obvious secret file, even a tracked one:
+  `.env*`, `*.pem`, `*.key`, `id_*`. The maintainer's 2026-10-31 secret-filter decision in
+  DECISIONS.md narrows `id_*` to SSH identity names.
+- The test environment is never the backend's virtual environment.
+- Tool results carry no extra metadata.
+
+The Agents module contract above specifies the four-identical-results and six-failures stop
+limits; the data flow specifies that status comes from tool execution, never model text.
+
+### Pending changes, approval and conflicts
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+Each agent records its base commit. The data flow above specifies combined-result tests
+when main moved, Request changes keeping the worktree and comment, and review edits with person attribution
+that invalidate the agent's earlier read.
+If a merge conflicts or tests fail, mark the change. The person chooses between asking the
+agent to redo it on the new base and rejecting it. DESIGN.md's Review panel and Live diff
+and file view sections specify review-only editing while the agent is idle.
+
+### Test coverage badges
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The level 3 "no tests" badge comes from coverage: `run_tests` runs with pytest-cov (MIT),
+and covered lines map to functions by their line ranges. If that is not ready, the badge
+reads "no test calls it" and is computed from the call graph.
+
 ### Usage and the spend brake
 
 [usage.py](backend/src/oversight/agents/usage.py) owns pricing, the in-memory usage ledger
@@ -192,6 +281,12 @@ refuses new Meta runs and revisions. It does not cancel other runs already worki
 Baseten and fake calls do not debit Meta's credit ledger.
 
 ## Frontend module contracts
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The frontend uses React, strict TypeScript, Vite and pnpm. Monaco's workers are configured
+in Vite. Agent and review panels use Tailwind CSS; Cytoscape and Monaco keep their own
+styling. Icons come from lucide-react.
 
 [eslint.config.js](frontend/eslint.config.js) requires cross-feature imports through `index.ts`,
 including dynamic imports. Only transport may use `fetch` or `EventSource`. Only graph imports
@@ -244,15 +339,30 @@ It adds no server events.
 
 ## Wire contracts and routes
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
 Pydantic models in [contracts/src/oversight_contracts](contracts/src/oversight_contracts) are the
 source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScript with pinned
-json-schema-to-typescript. `make check-contracts` compares both generated outputs byte for byte.
+TypeScript and json-schema-to-typescript. `make check-contracts` compares both generated
+outputs byte for byte, including in CI.
 
 The 24 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
 `agent.status`, `agent.step`, `agent.message`, `agent.focus`, `change.updated`, `change.proposed`,
 `change.resolved`, `usage.tick` and `error`.
 The complete `ServerEvent` union is in `contracts/src/oversight_contracts/events.py`.
 Every envelope has `seq`, `ts`, `type` and `payload`.
+`run.started` includes the run id, exact model, prompt version and limits.
+`agent.status` includes `revising` after Request changes and `paused` in level 3.
+`agent.step` is emitted once per tool call when it ends, carrying the step number, tool,
+short summary, result (`ok` or `error`) and duration; it feeds the agent card.
+The full contents in `change.updated` are required by Monaco's DiffEditor; replay must never
+depend on worktrees that no longer exist. In addition to the proposal fields in the data flow,
+`change.proposed` carries the summary and each cone entry's node and distance.
+`change.resolved` carries the decision (`approved`, `changes_requested` or `rejected`), the person's comment and the
+merge result (`merged` or `conflict`). Never one event per token: model text is batched
+every few hundred milliseconds and SQLite writes are batched.
+Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
+gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text, masked before storage and withheld by default in exports.
 
 Live routes implement, for example, `POST /agents`, `POST /agents/{agent_id}/stop`,
@@ -310,6 +420,9 @@ During a rules decision, the person’s Reject or Request changes is admitted un
 authorization starts and cancels the rules attempt; from that cutoff it answers 409.
 Each confirmed main commit parks idle armed rules waits; once the graph snapshot holds that
 commit, a new generation renews them against that main with the original absolute deadline.
+A queued rules attempt finding an announced newer main publishes no notice and, once its decision
+ends, a new generation re-assesses against that main with the original deadline, a fresh combined
+suite and fresh spend; every in-flight outcome closes following.
 Live resolutions record principal and head explicitly. The writer validates each frozen
 candidate independently before SQL admission. EventRejected is terminal for that delivery;
 valid neighbors still commit with contiguous sequences. A rejected post-effect resolution
@@ -353,6 +466,7 @@ Merge-mode controls, standing grants, follow-main for idle rules waits and Rever
 but `changes/_mode.py` keeps rules activation closed pending approval. Every merge today still
 requires the person's decision. Plans, dependency dispatch, the queue and the lead runtime are
 wired; the lead requests plans and leaves their approval to the person.
+`merge_mode.changed` sets the merge mode that the status line and the Settings tab show.
 
 `changes/_reviewfacts` remains a private unwired core. The `_zones` and `_partition` algorithms
 also remain outside live plan production; the public partition export does not wire a producer.

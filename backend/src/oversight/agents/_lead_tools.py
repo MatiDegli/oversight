@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Annotated
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from oversight.agents.tools import MAX_READ_CHARS, MAX_READ_LINES, _function
-from oversight.workspace import SECRET_FILE_REFUSAL, FileTooLarge, InvalidPath, is_secret_path
+from oversight.workspace import FileTooLarge, InvalidPath, is_secret_path, secret_refusal
 from oversight_contracts.commands import FileContent, TreeResponse
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import PlanZone, SubtaskDraft, validate_dependencies
@@ -169,7 +169,7 @@ class LeadTools:
     async def _read_file(self, request: _Read) -> LeadOutcome:
         path = request.path
         if is_secret_path(path):
-            return LeadOutcome(SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1][:60], False)
+            return LeadOutcome(secret_refusal(path), False)
         try:
             file = await self.read(path)
         except FileNotFoundError:

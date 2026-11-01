@@ -4,6 +4,7 @@ import type { Plan } from "@contracts";
 import type { DecisionInboxEntry, State } from "../state";
 import { selectDecisionInbox, selectActiveGrants } from "../state";
 import { ChangeCard, eventTime } from "./ChangeCard";
+import { InboxViews, InboxHeading } from "./InboxHeader";
 import { StandingGrants } from "./StandingGrants";
 import { Example } from "./AnswerChoices";
 import { selectChangeCard, selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
@@ -158,44 +159,12 @@ export function DecisionInbox({
   }
   return (
     <section aria-label="Decisions inbox" className="decisions-inbox">
-      <nav aria-label="Inbox views" className="inbox-views">
-        <button
-          type="button"
-          aria-pressed={view === "decisions"}
-          onClick={() => {
-            setView("decisions");
-          }}
-        >
-          Decisions <span>{entries.length}</span>
-        </button>
-        <button
-          type="button"
-          aria-pressed={view === "grants"}
-          onClick={() => {
-            setView("grants");
-          }}
-        >
-          Standing grants <span>{grants.length}</span>
-        </button>
-      </nav>
+      <InboxViews count={entries.length} grants={grants.length} view={view} onView={setView} />
       {view === "grants" ? (
         <StandingGrants state={state} />
       ) : (
         <>
-          <header className="inbox-heading">
-            <span className="inbox-count">{entries.length}</span>
-            <div>
-              <h2>{entries.length ? "Decisions waiting for you" : "No decisions waiting"}</h2>
-              <p className="decision-muted">
-                {agents} {agents === 1 ? "agent" : "agents"} took {steps}{" "}
-                {steps === 1 ? "step" : "steps"}
-                {minutes === null ? "" : ` in ${String(minutes)} min`}.{" "}
-                {entries.length
-                  ? `These ${String(entries.length)} need a person.`
-                  : "Nothing needs your decision now."}
-              </p>
-            </div>
-          </header>
+          <InboxHeading count={entries.length} agents={agents} steps={steps} minutes={minutes} />
           <div className="inbox-entries">
             {entries.length ? (
               entries.map((entry) => {

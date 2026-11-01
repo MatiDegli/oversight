@@ -82,6 +82,12 @@ async def test_fake_model_view_survives_revision_and_worktree_disposal(tmp_path)
         assert archived.resolution is not None
         assert archived.resolution.decision == "approved"
         assert archived.files == revised.files and archived.revision_rounds == 1
+        assert archived.stages is not None
+        assert archived.stages.agent_work.intervals == 2
+        assert not archived.stages.agent_work.open
+        assert archived.stages.waiting_for_person.intervals == 2
+        assert archived.stages.waiting_for_person.ms is not None
+        assert not archived.stages.waiting_for_person.open
         inventory = s.store.committed_events()
         assert archived == build_change_view(
             created["change_id"], [e for e in inventory if e.seq <= archived.seq]

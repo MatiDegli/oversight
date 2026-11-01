@@ -72,6 +72,33 @@ def test_async_pair_matches() -> None:
     assert len(compare({"app.py": source}).facts) == 1
 
 
+@pytest.mark.parametrize("parameters", ["T", "**T", "*T"])
+def test_generic_type_parameter_names_are_bindings(parameters: str) -> None:
+    source = function(f"a[{parameters}]") + function(f"b[{parameters.replace('T', 'U')}]")
+    assert len(compare({"app.py": source}).facts) == 1
+
+
+def test_generic_body_type_parameter_references_are_renamed() -> None:
+    body = BODY.replace("clean(result)", "cast(T, result)")
+    source = function("a[T]", body) + function("b[U]", body.replace("cast(T", "cast(U"))
+    assert len(compare({"app.py": source}).facts) == 1
+
+
+def test_generic_bounds_are_annotations() -> None:
+    source = function("a[T: int]") + function("b[T: str]")
+    assert len(compare({"app.py": source}).facts) == 1
+
+
+def test_generic_and_non_generic_signatures_stay_distinct() -> None:
+    assert compare({"app.py": function("a[T]") + function("b")}).facts == ()
+
+
+def test_nested_class_type_parameters_stay_unrenamed() -> None:
+    body = "    class Box[T]:\n        pass\n" + BODY
+    source = function("a", body) + function("b", body.replace("Box[T]", "Box[U]"))
+    assert compare({"app.py": source}).facts == ()
+
+
 @pytest.mark.parametrize(
     ("body", "signature"),
     [

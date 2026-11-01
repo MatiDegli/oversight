@@ -83,9 +83,14 @@ export function applyResolution(
       : resolution.decision === "changes_requested"
         ? "revising"
         : resolution.decision;
-  const changeReads = { ...state.changeReads };
-  if (status === "approved" || status === "rejected")
+  let changeReads = state.changeReads;
+  if (
+    (status === "approved" || status === "rejected") &&
+    Object.hasOwn(state.changeReads, resolution.change_id)
+  ) {
+    changeReads = { ...state.changeReads };
     Reflect.deleteProperty(changeReads, resolution.change_id);
+  }
   return {
     ...next,
     changeReads,

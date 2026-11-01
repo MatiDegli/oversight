@@ -11,6 +11,7 @@ from live_helpers import DEADLINE_S, two_fakes
 from oversight.agents import LedgerError, LedgerFile, ScriptedModel, parse_script, review_candidate
 from oversight.app import TEMPLATE, LiveRun
 from oversight.changes import WrongState
+from oversight.changes._assessment import AssessmentWait
 from oversight.changes._mode import RULES_ACTIVATION
 from oversight.changes._policy import assess
 from oversight.events import parse_needs_you
@@ -129,6 +130,13 @@ async def running_paths(tmp_path, path, reviewer, *, armed=True, status="modifie
             await live.shutdown()
 
 
+async def assessed(w: AssessmentWait) -> None:
+    # Review entry/completion does not join the separate evaluation task.
+    async with asyncio.timeout(DEADLINE_S):
+        while w.latest is None:  # noqa: ASYNC110 - The evaluator exposes no completion event.
+            await asyncio.sleep(0.01)
+
+
 @pytest.mark.parametrize("path", PROTECTED)
 @pytest.mark.parametrize("status", ["added", "modified", "deleted"])
 async def test_protected_hit_without_grant_waits_and_reviews(tmp_path, path, status):
@@ -140,7 +148,9 @@ async def test_protected_hit_without_grant_waits_and_reviews(tmp_path, path, sta
         await until(live, "change.reviewed")
         await asyncio.gather(*list(live._runs.values()), *list(live._reviews.values()))
         record = live._manager._agents["agent-1"]
-        assessment = live._manager._ctx.assessment.waits["change-1"].latest
+        w = live._manager._ctx.assessment.waits["change-1"]
+        await assessed(w)
+        assessment = w.latest
         assert assessment is not None
         rule = next(r for r in assessment.rules if r.rule == "protected_paths")
         assert rule.result == "fail" and rule.observed == {"violations": 1, "complete": True}
@@ -159,6 +169,7 @@ async def test_path_veto_does_not_cancel_cross_review(tmp_path):
         await live.start(StartAgent(task="Edit the file", slot="A"))
         await reviewer.entered.wait()
         w = live._manager._ctx.assessment.waits["change-1"]
+        await assessed(w)
         assert w.latest is not None
         assert not w.active and any(
             r.rule == "protected_paths" and r.result == "fail" for r in w.latest.rules
@@ -177,6 +188,7 @@ async def test_model_claimed_path_waiver_has_no_authority(tmp_path):
         await live.start(StartAgent(task="Edit the file", slot="A"))
         await until(live, "change.reviewed")
         w = live._manager._ctx.assessment.waits["change-1"]
+        await assessed(w)
         assert w.latest is not None
         assert any(r.rule == "protected_paths" and r.result == "fail" for r in w.latest.rules)
         assert not any(e.type in {"grant.created", "change.resolved"} for e in events(live))
@@ -253,6 +265,7 @@ async def test_table_capture_without_durable_ledger_state(tmp_path, monkeypatch)
         await live.start(StartAgent(task="Edit the file", slot="A"))
         await until(live, "change.reviewed")
         w = scheduler.waits["change-1"]
+        await assessed(w)
         assert w.paths is not None and w.latest is not None
         assert any(r.rule == "protected_paths" and r.result == "fail" for r in w.latest.rules)
         assert not any(e.type == "change.resolved" for e in events(live))
@@ -267,6 +280,7 @@ async def test_zero_budget_run_still_identifies_protected_table(tmp_path):
         scheduler = live._manager._ctx.assessment
         assert scheduler.run_started_seq is not None and scheduler.spend_receipt is None
         w = scheduler.waits["change-1"]
+        await assessed(w)
         assert w.latest is not None
         assert any(r.rule == "protected_paths" and r.result == "fail" for r in w.latest.rules)
         assert not any(e.type == "change.resolved" for e in events(live))
@@ -281,6 +295,8 @@ async def test_unavailable_or_cancelled_review_keeps_path_wait(tmp_path, review)
         await reviewer.entered.wait()
         await asyncio.gather(*list(live._reviews.values()), return_exceptions=True)
         w = live._manager._ctx.assessment.waits["change-1"]
+        assert w.task is not None
+        await w.task
         assert w.latest is not None
         assert any(r.rule == "protected_paths" and r.result == "fail" for r in w.latest.rules)
         assert live._manager._agents["agent-1"].state == "ready"

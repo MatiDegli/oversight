@@ -15,6 +15,7 @@ from oversight.changes._behavior_publish import (
 from oversight.changes._measured import MeasuredEvidence, project_measured, validate_measured
 from oversight.changes._probes import added_cases, comparison
 from oversight.changes._run_findings import RunEvidence, project_run_findings
+from oversight.changes._shape_facts import ShapeCapture, capture_shape, project_shape
 from oversight.changes._shortcut_detector import (
     DetectionResult,
     Finding,
@@ -140,6 +141,7 @@ class FactsEvidence:
     impact: ImpactCone | None = None
     run_evidence: RunEvidence | None = None
     reach: ReachFacts | None = None
+    shape: ShapeCapture | None = None
 
 
 def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
@@ -226,6 +228,10 @@ def validate_change_facts(facts: ChangeFacts, evidence: FactsEvidence) -> None:
             raise ValueError("probe result differs from captured evidence")
     if facts.reach != evidence.reach:
         raise ValueError("facts test call-graph reach differs from captured evidence")
+    if (facts.shape, facts.shape_complete) != project_shape(evidence.shape):
+        raise ValueError("facts shape differs from captured evidence")
+    if evidence.shape is not None and not set(evidence.shape.problems).issubset(facts.problems):
+        raise ValueError("facts omit shape uncertainty")
     if facts.zone is not None:
         raise ValueError("unbuilt producers cannot supply facts")
     if facts.complete or facts.problems != list(evidence.problems):
@@ -397,6 +403,8 @@ async def capture_facts(
         )
     )
     inventory = await asyncio.to_thread(added_tests_inventory, rec, revision)
+    shape = await capture_shape(rec, base_tree=base_tree, head_tree=tree)
+    problems.extend(shape.problems)
     return FactsEvidence(
         rec.agent_id,
         target,
@@ -408,6 +416,7 @@ async def capture_facts(
         runs,
         run_evidence=run_evidence,
         reach=await asyncio.to_thread(_reach_facts, rec, tree),
+        shape=shape,
         integrity_status=status,
         summary_evidence=capture_summary(
             rec, added_test_ids=inventory.test_ids if inventory.complete else None
@@ -417,6 +426,7 @@ async def capture_facts(
 
 def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
     """Construct and validate after change.proposed, with no I/O or mutable reads."""
+    shape, shape_complete = project_shape(evidence.shape)
     integrity, findings, _ = project_run_findings(
         evidence.run_evidence,
         evidence.integrity,
@@ -443,6 +453,8 @@ def build_change_facts(evidence: FactsEvidence) -> ChangeFacts:
         run_findings=findings,
         zone=None,
         reach=evidence.reach.model_copy(deep=True) if evidence.reach is not None else None,
+        shape=shape,
+        shape_complete=shape_complete,
         complete=False,
         problems=list(evidence.problems),
         measured_cone=project_measured(evidence.measured, evidence.target)

@@ -102,6 +102,11 @@ class ChangeRecord:
     revision: int = 0
     proposal_mode: MergeModeState | None = None
     rules_consumed: set[int] = field(default_factory=set[int])
+    rules_attempts: set[tuple[int, str, str, int]] = field(
+        default_factory=set[tuple[int, str, str, int]]
+    )
+    """The exact revision/head/main/mode keys tried; rules_consumed remains audit history."""
+    follow_pending: int | None = None
     head_commit: str | None = None
     """The head of the last revision the store took."""
     proposed_now: bool = False
@@ -167,6 +172,8 @@ class ChangeRecord:
     """Permanent per change, including all future re-proposals."""
     review_ready: bool = False
     """The author run ended ready_for_review; a request clears it before resumption."""
+    examples_digest: str | None = None
+    """Confirmed command's digest, based on normalized action and ordered examples."""
     review_task: asyncio.Task[Any] | None = None
     card_generation: int = 0
     card_task: asyncio.Task[None] | None = None
