@@ -2,8 +2,9 @@
 
 Oversight is built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026). The maintainer is the
 architect: they own the contracts and make the critical decisions. Only the coordinating agent merges, once the checks
-pass and a reviewer from another provider has no open blocking or should-fix finding; for frontend views and docs, a
-should-fix off the demo path becomes a follow-up front (docs/proposal.md, section 7).
+pass and a reviewer from another provider has no open blocking or should-fix finding; on any front, a should-fix off
+the demo path and outside security, authority, lifecycle, gates, contracts and the event log may be deferred by the
+reviewer and becomes residual risk and a follow-up (docs/proposal.md, section 7).
 
 Repository content is in English. Talk to the maintainer in Spanish, with times in ART (UTC-3).
 
@@ -51,7 +52,7 @@ DESIGN.md (every visual rule), DECISIONS.md (each decision with its reason; it w
 - An agent's status comes from its tool calls, never from its text. Runs without progress stop.
 
 ## UI invariants
-- One graph, always visible; the panels change with what the person does. Never steal focus.
+- One graph, always visible in the Oversight view; Chat loads it on the first switch. The panels change with what the person does. Never steal focus.
 - Approve has no keyboard shortcut, not even Ctrl+Enter.
 - A dashed node border means only a pending change, in its agent's color.
 - Color is an agent or a state, never alone and never amber; every color comes from a theme token.

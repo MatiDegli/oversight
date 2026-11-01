@@ -21,6 +21,7 @@ import type { Contours } from "./terrain";
 import { createLampField } from "./model";
 import { MarkerLayer } from "./markerLayer";
 import { TravelLayer } from "./travel";
+import type { Milestone } from "./milestones";
 
 let now = 0;
 setupControllerClock({
@@ -369,6 +370,74 @@ describe("a merge's pulse and light", () => {
     expect(burning()?.weight).toBeGreaterThan(0);
     controller.dispose();
   });
+});
+
+it("uses the shared merge acceptance when the local cap still includes ending rings", () => {
+  const travel = vi.spyOn(TravelLayer.prototype, "draw");
+  const halos = vi.spyOn(TravelLayer.prototype, "halos");
+  const controller = createFieldController(canvas, source);
+  Object.assign(document, { querySelectorAll: () => [] });
+  Object.assign(canvas, { getBoundingClientRect: () => ({ left: 0, top: 0 }) });
+  controller.update({ mode: "watch", lights: [] });
+  const milestones: Milestone[] = (["agent-b", "agent-c", "agent-d", "agent-e"] as const).map(
+    (source, i) => ({ key: String(i), id: String(i), kind: "needs", source, slot: "B", age: 0 }),
+  );
+  controller.update({ mode: "watch", lights: [], milestones });
+  now = 859; // Local rings have 1ms left; the shared clock already accepted the merge.
+  const merge = {
+    key: "merge",
+    id: "a",
+    source: "agent-a" as const,
+    slot: "A" as const,
+    age: 0,
+    pulse: true,
+  };
+  const live: FieldInput = {
+    mode: "watch",
+    lights: [],
+    merges: [merge],
+    milestones: [...milestones, { ...merge, kind: "merged" }],
+    mergeStarts: new Map([[merge.key, now]]),
+  };
+  controller.update(live);
+  advance(now + 500);
+  expect(travel.mock.calls.at(-1)?.[0]).toHaveLength(1);
+  advance(859 + 1700);
+  expect(halos.mock.calls.at(-1)?.[0]).toHaveLength(1);
+  controller.update({ ...live, mergeStarts: new Map([[merge.key, -Infinity]]) });
+  expect(travel.mock.calls.at(-1)?.[0]).toHaveLength(0);
+  expect(halos.mock.calls.at(-1)?.[0]).toHaveLength(0);
+  controller.dispose();
+});
+
+it("dips the ring team's rendered lamps while the other team's lamps keep their level", async () => {
+  const real = await vi.importActual<typeof import("./model")>("./model");
+  vi.mocked(createLampField).mockReturnValue(real.createLampField());
+  Object.assign(canvas, { clientWidth: 1000, clientHeight: 400 });
+  const boxes = new Map([
+    ["a", { x1: 140, y1: 140, x2: 280, y2: 182 }],
+    ["b", { x1: 700, y1: 140, x2: 840, y2: 182 }],
+  ]);
+  const controller = createFieldController(canvas, { ...source, boxes: () => boxes });
+  const lights = (["agent-a", "agent-b"] as const).map((source, i) => ({
+    id: i === 0 ? "a" : "b",
+    source,
+    weight: 0.8,
+    pulses: false,
+  }));
+  controller.update({ mode: "watch", lights });
+  settle();
+  const before = [213.5, 773.5].map((x) => canvas.oversightField?.lamp(x, 164.5)?.level);
+  controller.update({
+    mode: "watch",
+    lights,
+    milestones: [{ key: "ready", kind: "ready", id: "a", slot: "A", source: "agent-a", age: 0 }],
+  });
+  const after = [213.5, 773.5].map((x) => canvas.oversightField?.lamp(x, 164.5)?.level);
+  expect(before[0]).toBeGreaterThan(0);
+  expect(after[0]).toBeLessThan(before[0] ?? 0);
+  expect(after[1]).toBe(before[1]);
+  controller.dispose();
 });
 
 describe("frame headers", () => {

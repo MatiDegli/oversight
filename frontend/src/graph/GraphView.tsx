@@ -69,6 +69,7 @@ export interface GraphViewProps {
   litIds?: readonly string[] | null;
   /** The review proposal's cone, used for its card, framing and out-of-view report. */
   cone?: ImpactCone | null;
+  merging?: readonly string[];
   measured?: ReadonlyMap<string, MeasuredWord | null> | null;
   /** Live preview: framed once on opening, then updates badges and dimming without following edits. */
   liveCone?: ImpactCone | null;
@@ -100,6 +101,7 @@ export function GraphView({
   frameIds = null,
   cone = null,
   measured = null,
+  merging,
   liveCone = null,
   frameKey = null,
   onFramed,
@@ -127,6 +129,7 @@ export function GraphView({
       latest.current.litIds !== litIds ||
       latest.current.cone !== cone ||
       latest.current.measured !== measured ||
+      latest.current.merging !== merging ||
       latest.current.liveCone !== liveCone ||
       latest.current.field?.mode !== field.mode;
     latest.current = {
@@ -138,6 +141,7 @@ export function GraphView({
       frameIds,
       cone,
       measured,
+      merging,
       liveCone,
       frameKey,
       onFramed,
@@ -157,6 +161,7 @@ export function GraphView({
     frameIds,
     cone,
     measured,
+    merging,
     liveCone,
     frameKey,
     onFramed,
@@ -493,6 +498,8 @@ export function GraphView({
         lights={field.lights}
         merges={field.merges}
         modules={field.modules}
+        milestones={field.milestones}
+        mergeStarts={field.mergeStarts}
       />
       <div
         ref={container}

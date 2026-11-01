@@ -399,6 +399,7 @@ Ours wins in every case below.
   authority, lifecycle, gates and contracts keep the full rule. Reason: on day one the design
   document took four review rounds over consistency details while the critical path waited, and a
   finished graph view waited on styles it could adopt later. Recorded in docs/proposal.md, section 7.
+  Extended to every front on 2026-11-01 (entry below).
 
 ## Model API
 
@@ -2951,7 +2952,6 @@ Reason: a docs audit found many docs behind main after several days of changed d
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
 
-
 ## 2026-10-31 — Human confirmation of examples and task carry
 
 The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
@@ -2973,6 +2973,7 @@ Different confirmations and competing decisions in flight fail; Reject and Stop 
 AgentTask retains original text, detached confirmed examples and prior_steps. The Done when block has exact results without test ids. Statuses and proposals
 carry examples through revisions and review saves; budgets include prior steps. Empty examples remain null. E2 must fill the runtime-owned halt-for-ledger
 status gap in app.py:962-983, deliberately untouched here.
+
 ## 2026-10-31 — Refuse obvious secret files at model tool boundaries
 
 A shared pure basename predicate in workspace enforces the Agent tools rule before the coding
@@ -3292,6 +3293,46 @@ therefore displays its supplied known lower bound, including zero, and quotes th
 problem. Unknown intervals remain unknown; observed time is retained beside unknown work.
 Model time with incomplete interval coverage remains a lower bound, including where a
 model has observed work. No reconciliation claim is made from incomplete figures.
+
+## 2026-11-01 — Browser-owned replay controls
+
+The approved b-1101a sketch (01:03:27 ART) adds a desktop row to Vite replay mode and the
+static recording. Its premises reference main `6ab92e7`; implementation starts at `54dc64d`,
+where the same session, navigation and shell code moved and panel edge feedback is already built.
+Backend SSE replay (`make replay`) keeps the ordinary live frontend and has no controls.
+
+Seek rebuilds the complete recorded prefix through the existing reducer and publishes it once.
+It preserves playing/paused state; seeking backward from ended pauses. Restart and Play again
+start at zero and play at the selected rate. The end stops, without looping. Only absent tab
+subjects close, using the existing history behavior. Recorded file access refreshes after a
+seek even when the graph commit is unchanged; snapshot-only paths still lack source contents.
+
+Milestones are sibling buttons beside the slider, so assistive technology can reach them
+without nested interactive descendants. Pointer preview changes no prefix. Only slider keys
+seek; there is no global Space handler and no automatic focus. The neutral focus ring and
+agent/state labels retain DESIGN.md's meaning and take precedence over generic skill advice
+about touch target sizes: these approved desktop targets are 24px and the row excludes phones.
+
+The controlled player and timeline are separately deferred from the shell, and the row uses
+React.lazy with a local 44px Suspense reservation. Session cleanup cancels pending imports,
+clock callbacks and loading publications; practice stops that same session before setting its cut.
+The existing startReplay API remains compatible for direct callers and test seams: it divides
+each gap by speed before applying the two-second cap and supports speed zero. The new player
+caps each gap first, forming one stable axis for every rate; its ready promise means loaded and
+validated, while legacy ready still means the entire log finished. Keeping both avoids changing
+backend-like timing or the tested immediate replay API.
+
+## 2026-11-01 — Public recording guard follows the deferred player
+
+The replay controls also updated `frontend/shots/public-recording.test.ts`, outside the
+front's original item 1 file list, because the controlled player adds a dynamic chunk.
+The old `assert.equal(chunks.length, 1)` fails on the entry plus the separately emitted
+`replayPlayer` chunk: the build necessarily has at least two JavaScript chunks. It was
+replaced with exactly one entry, a separate player chunk, a dynamic import from that entry
+and no static import of the player. The guard still imports the emitted entry and verifies
+the exact recording bytes, provenance hash, label and run identity, and still refuses a
+missing recording or receipt. Writing and importing the emitted ES modules replaces the
+single-chunk data URL, which cannot resolve relative chunk imports.
 ## 2026-10-31 — Time per stage for each change
 
 Packet A 1031d, item 2, was approved at 2026-10-31T18:25:03Z under the maintainer's
@@ -3413,3 +3454,71 @@ context on every call; module detail and history belong to the document that own
 Moved rules keep AGENTS.md's authority and change only with the maintainer's approval.
 DESIGN.md's and PRODUCT.md's precedence statements still name AGENTS.md for the rules it
 keeps. This relocation changes no behavior, test logic or contract.
+
+## 2026-11-01 — Two views of one shell, and the Tauri shell before the native ports
+
+The maintainer approved this direction in chat on 2026-11-01. Chat is **Not built**;
+implementation follows an approved sketch round.
+
+- One shell has two views. Chat lists agents on the left, the run's lead first and the agents
+  it queued under it; the selected agent's conversation is in the center, with a narrow
+  "Where they work" panel on the right. Oversight keeps its existing shell unchanged: graph,
+  Files and conversations as tabs. The top-bar "Chat | Oversight" switch changes layout only:
+  both views share one client state, switching never reloads, and the graph loads on the first
+  switch to Oversight.
+- The lead is Chat's first conversation. The lead's thread itself is step 1 of the lead plan,
+  waiting on its own contract approval.
+- Both views share review, merge mode and approve rules. Chat opens the same review panel and
+  merge-mode setting, with impact as text and "See on graph" to switch to Oversight with the
+  cone framed.
+- Chat becomes the default only if its screenshots pass review by Mon Nov 2, 2026, 23:00 ART;
+  otherwise Oversight stays the default and Chat sits behind the switch.
+- Chat adds no events, contracts or endpoints. "Where they work" and presence marks in the
+  Files tree read the existing `agent.focus` event and `change.proposed.files`.
+- No new graph or map work before the freeze.
+- After the hackathon, the Tauri shell comes first, with the backend inside WSL; native
+  Windows and macOS backend ports follow it. Item 20, the minimal native Windows port, moves
+  out of "Only if time remains" to after the hackathon and after Tauri. Item 19, opening the
+  person's own repository, keeps its place.
+- After the hackathon, as a plan first, repositories without Python open in Chat. Oversight
+  shows the Files tree with presence instead of the graph.
+
+This supersedes the old platform order in ARCHITECTURE.md, README.md, docs/additions.md,
+docs/own-repository.md and docs/proposal.md, and AGENTS.md's "always visible" for the Chat view.
+
+Reason: the lead becomes the person's first conversation, and the Tauri shell needs no native
+port because its backend runs inside WSL.
+## 2026-11-01 — Deferred SHOULD-FIX findings on every front
+
+The maintainer approved this extension in chat on 2026-11-01. It extends the 2026-10-26 review
+tiers rule for frontend views and docs to every front (backend, frontend, docs and tooling),
+and adds the event log to the areas that keep the full rule.
+
+- The reviewer may rank a SHOULD-FIX as DEFERRED only if it is off the demo path (what the level's
+  demo shows or runs) and outside security, authority, lifecycle, gates, contracts and the event
+  log. The finding states why it is harmless before submission. The reviewer decides, never the
+  coordinator; a BLOCKING finding is never deferred, and the coordinator never overrides the
+  reviewer's verdict.
+- A DEFERRED finding does not block the merge. It becomes residual risk, listed under "Residual
+  risk" in the merge message, and goes to the state record as a follow-up.
+
+Reason: findings that are not really problematic are documented as residual risk and merged
+anyway, for pace before the freeze.
+## 2026-10-29/30 — Milestone pulses and merge arrival
+
+Approved Oct 29 about 22:18 ART (Oct 30 01:18 UTC), answers about 22:35 ART; confirmed
+Oct 31 at 12:47:21 ART, packet B 1031b item 3. Reason: card and queue milestones left the graph
+silent; finite team-colored field light reports them through the same 7px lamps, levels, dither and mask.
+The PNGs in `docs/sketches/milestone-pulses/` are superseded on ring shape and Needs you beats.
+Ready expands quietly once in 700ms; Needs you contracts twice in one 700ms event, at least as bright,
+never looping or moving focus. Both circles use the node center and half its rendered width as inner radius.
+Merged keeps r6 travel: “Merging” until the shared 250ms delay plus 1450ms journey ends, then “Merged”,
+removal of pending marks, and a 7px, 40% team-colored box halo contracting to zero in 550ms.
+Reduced motion skips rings, travel, halo and wait; history has arrived. Same-team events within 1s coalesce;
+Merged replaces a ring with travel. Only its own team dips; another team's same-node ring waits 350ms.
+Each lamp takes its strongest source hue while intensities add, giving resting lights a clean edge.
+At most four effects: drop Ready before Merged, never Needs you (excess Needs you waits).
+The maintainer excepted 700ms rings and the 550ms halo from the 160–320ms range, and Needs you from
+Waiting's “never pulses”. Card glow, an extra merged sentence and a 300ms node-light hold are excluded
+for good; a merged node word stays held. Evidence: dark/day pulses, overlap, arrival, 1280×800 and 720p
+frames, software-GL costs, and the coordinator's Windows real-GPU timing.

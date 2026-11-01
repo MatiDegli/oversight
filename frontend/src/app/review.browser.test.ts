@@ -298,7 +298,8 @@ it("never approves from the keyboard in the comment box; the click waits for cha
     await browserExpect.poll(async () => (await probe(page, "node.dimmed")).ids).toEqual([]);
     const after = await probe(page, "node");
     expect(after.positions).toEqual(before.positions);
-    expect((await probe(page, "node.pending")).ids).toEqual([]);
+    // The pending mark leaves at travel arrival, after the merge result is shown.
+    await browserExpect.poll(async () => (await probe(page, "node.pending")).ids).toEqual([]);
   });
 }, 30_000);
 

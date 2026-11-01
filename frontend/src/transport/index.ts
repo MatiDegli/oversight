@@ -3,11 +3,12 @@ import recorded from "../../../fixtures/events/recorded-demo.jsonl?recorded-repl
 
 import type { TransportStore } from "./events";
 import { startLive } from "./live";
-import { startReplay } from "./replay";
+import type { ReplayPlayer } from "./replayPlayer";
 import { chooseReplaySource } from "./replay-source";
 
 export { CommandError, createCommandClient } from "./commands";
 export { commandFailure } from "./failure";
+export type { ReplayPlayer, ReplaySnapshot, ReplayRate } from "./replayPlayer";
 export type { Transport, TransportStore } from "./events";
 export { startLive } from "./live";
 export type { EventStream, LiveOptions } from "./live";
@@ -36,8 +37,23 @@ export function startAppTransport(
   store: TransportStore,
   onError?: (error: unknown) => void,
   onOpen?: () => void,
+  onReplay?: (player: ReplayPlayer) => void,
 ) {
-  return replayBuild
-    ? startReplay({ store, source: replaySource })
-    : startLive({ store, onError, onOpen });
+  if (!replayBuild) return startLive({ store, onError, onOpen });
+  let stopped = false;
+  const isStopped = () => stopped;
+  let player: ReplayPlayer | undefined;
+  const ready = import("./replayPlayer").then(async ({ createReplayPlayer }) => {
+    if (isStopped()) return;
+    player = createReplayPlayer({ store, source: replaySource });
+    await player.ready;
+    if (!isStopped()) onReplay?.(player);
+  });
+  return {
+    ready,
+    stop: () => {
+      stopped = true;
+      player?.dispose();
+    },
+  };
 }

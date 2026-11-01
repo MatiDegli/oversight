@@ -51,8 +51,8 @@ and the separate demo test environment survive this reset.
 The backend runs `git init` in the copied workspace. `.runtime/` is gitignored.
 The demo template is plain files with no git of its own: a Python project written here,
 with 4–6 modules, 20–40 functions and tests, and one central function with many callers.
-After the hackathon and after the native Windows port, `desktop/` will hold a Tauri shell;
-the demo runs in the browser.
+After the hackathon, `desktop/` will hold a Tauri shell with the backend inside WSL,
+before the native Windows and macOS backend ports. The demo runs in the browser.
 See [Opening the person's own repository](docs/own-repository.md) for its separate plan and rules.
 
 ## Data flow

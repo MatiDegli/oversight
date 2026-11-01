@@ -118,6 +118,8 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
           .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
           ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
     );
+    // The field loads after the graph; every field assertion needs its initialized probe.
+    await page.waitForFunction(() => !!window.fieldTest.elements().field);
     if (options.clock) {
       // Stop time where the scene stands, once the camera has settled: from here the test moves it.
       await settledGraph(page);

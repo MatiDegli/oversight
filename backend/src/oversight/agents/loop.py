@@ -23,7 +23,7 @@ from oversight.agents._prompts import REVISION_PROMPT as REVISION_PROMPT
 from oversight.agents._prompts import SYSTEM_PROMPT as SYSTEM_PROMPT
 from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._replies import ReplyError, ReplyRecovery
-from oversight.agents._status import done_when_text, task_examples, validate_task_examples
+from oversight.agents._status import task_examples, task_message, validate_task_examples
 from oversight.agents._tick import publish_usage
 from oversight.agents._trace import model_turn, publications, timed, traced_drive
 from oversight.agents.client import (
@@ -223,11 +223,7 @@ class AgentRun:
         try:
             self._messages = [
                 {"role": "system", "content": self._system_prompt},
-                {
-                    "role": "user",
-                    "content": self._task.task
-                    + ("\n\n" + done_when_text(self._task.examples) if self._task.examples else ""),
-                },
+                {"role": "user", "content": task_message(self._task)},
             ]
             return await self._drive("starting")
         finally:

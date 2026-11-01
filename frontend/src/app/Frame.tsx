@@ -1,5 +1,7 @@
 import type { MergeMode, StartAgent } from "@contracts";
+import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
+import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
@@ -8,7 +10,7 @@ import { panelOpen } from "./view";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
-import type { MergeModeAttempt } from "./shell/SettingsPanel";
+import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { FocusPanel } from "./shell/FocusPanel";
 import { GraphStage } from "./shell/GraphStage";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
@@ -18,9 +20,15 @@ import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 import "./shell/life.css";
 import "./challenge/phone.css";
+import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
 import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
+
+const ReplayBar = lazy(() => import("./replay/ReplayBar"));
+
 export interface FrameProps {
+  replay?: ReplayPlayer | null;
+  onReplayCommit?: (reconcile: (view: View) => View) => void;
   practice?: { active: boolean; open: () => void; content: ReactNode; focus: FocusTab };
   state: State;
   view: View;
@@ -65,6 +73,7 @@ export interface FrameProps {
 /** Fixed zones compose around one persistent graph instance. */
 export function Frame(props: FrameProps) {
   const { state, onClosePanel } = props;
+  const arrival = useMergeArrival(state);
   const phone = usePhonePractice(props.practice?.active ?? false);
   // Availability stays fixed throughout a replay session, so entry, exit and resizing
   // keep the same graph owner. Only the practice composition knows about stacked overlays.
@@ -132,6 +141,7 @@ export function Frame(props: FrameProps) {
               />
             )}
             <Stage
+              arrival={arrival}
               state={state}
               view={view}
               onNodeTap={phone ? () => undefined : props.onNodeTap}
@@ -140,11 +150,20 @@ export function Frame(props: FrameProps) {
             />
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
+          {props.replay && props.onReplayCommit && !props.practice?.active && (
+            <Suspense fallback={<div className="hidden h-[44px] shrink-0 min-[1280px]:block" />}>
+              <ReplayBar
+                key={props.replay.id}
+                player={props.replay}
+                onCommit={props.onReplayCommit}
+              />
+            </Suspense>
+          )}
         </div>
         {open && !task.expanded ? (
           <AgentsRail state={state} />
         ) : (
-          <AgentsPanel {...props} inputRef={task.inputRef} />
+          <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
         )}
       </div>
       <StatusLine {...props} dock={shell.dock} onToggleDock={shell.toggleDock} />

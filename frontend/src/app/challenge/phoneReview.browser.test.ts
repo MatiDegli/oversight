@@ -104,6 +104,7 @@ it.each(["dark", "day"])(
       }, theme);
       for (const index of [1, 2]) {
         await check(page.locator(".pp-progress")).toContainText(`Decision ${String(index)} of 2`);
+        if (!before) await check(page.getByRole("region", { name: "Review lead" })).toBeVisible();
         await capture(page, `${before ? "before" : "after"}-${String(index)}-${theme}`);
         if (!before) {
           await check(page.getByRole("region", { name: "Review lead" })).toHaveText(

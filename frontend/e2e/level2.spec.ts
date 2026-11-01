@@ -24,7 +24,16 @@ import {
   reviewEdit,
   revised,
 } from "./level2-log";
-import { appearance, append, interceptCommands, settledFrame, tapNode } from "./level2-support";
+import {
+  appearance,
+  append,
+  interceptCommands,
+  removeRoutes,
+  settledFrame,
+  tapNode,
+} from "./level2-support";
+
+test.afterEach(async ({ page }) => removeRoutes(page));
 
 test("level 2 over replay: parallel agents, impact, revisions, edits, spend, stop and discard", async ({
   page,
@@ -425,7 +434,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect(
       page.locator(`header span[title="${approved.payload.merge_commit ?? ""}"]`),
     ).toBeVisible();
-    expect(await nodeIds(page, "node.pending")).toEqual([]);
+    await expect.poll(() => nodeIds(page, "node.pending")).toEqual([]);
     await review.getByRole("button", { name: "Close review" }).click();
   });
 
@@ -458,7 +467,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect.poll(() => nodeIds(page, `node[id="${added.id}"]`)).toEqual([added.id]);
     await expect(file).toContainText(added.path);
     await file.getByRole("button", { name: "Close file" }).click();
-    await expect(cardA.getByText("Done", { exact: true })).toBeVisible();
+    await expect(cardA.getByText("Merged", { exact: true })).toBeVisible();
     expect(unexpected).toEqual([]);
     expect(errors).toEqual([]);
     const origin = new URL(baseURL ?? "").origin;

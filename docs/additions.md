@@ -55,6 +55,29 @@ The maintainer set this order on 2026-10-30, ahead of the queue below. Delivery 
 4. The retry card landed in `26d59f1`: `state/applyAgentEvent.ts:applyAgentEvent` folds
    model.attempt_failed into model waits; the card shows retry data and provider halt detail.
 
+### Chat view with the lead (2026-11-01)
+
+State: **Not built**. The maintainer approved two views of one shell on 2026-11-01.
+Build Chat only from an approved sketch round.
+
+- Chat lists agents on the left, with the run's lead first and the agents it queued under it;
+  the selected agent's conversation is in the center, and a narrow "Where they work" panel is
+  on the right. Oversight keeps the existing shell unchanged: graph, Files and conversations
+  as tabs. A "Chat | Oversight" switch in the top bar changes layout only: both views share
+  one client state and switching never reloads. The graph loads on the first switch to Oversight.
+- The lead is Chat's first conversation. The lead's thread itself is step 1 of the lead plan
+  and waits on its own contract approval.
+- Review, merge mode and approve rules are shared. Chat opens the same review panel and the
+  same merge-mode setting; it shows impact as text plus "See on graph", which switches to
+  Oversight with the cone framed.
+- Chat becomes the default only if its screenshots pass review by Mon Nov 2, 2026, 23:00 ART.
+  Otherwise Oversight stays the default and Chat sits behind the switch.
+- Chat adds no events, contracts or endpoints. Presence in "Where they work" and marks in the
+  Files tree read the existing `agent.focus` event and `change.proposed.files`.
+- No new graph or map work before the freeze.
+
+### Queue inventory
+
 This is the working home for everything beyond level 2. The maintainer set this order on
 2026-10-28. When capacity opens, take the first unfinished item that can proceed; dates do not
 supersede priority. Level 2 closed on Oct 27; its demo remains the fallback. Queue numbers replace
@@ -105,7 +128,6 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 15 | Shape guard | Queued — contract reserved `649ff0d`; no structural comparison producer on main `8b9b589` | Yes |
 | 16 | Bounded one-hop context for initial tasks | Queued — initial slice absent at `8b9b589`, waits for bench; revision callers/siblings `ee92691` | No |
 | 19 | [Opening the person's own repository](own-repository.md) | Decided 2026-10-31, after the cut line; plan first, with the double review | Plan decides |
-| 20 | Minimal native Windows port | Decided 2026-10-31, after 19: per-OS layer, mode without isolation | No |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay `a0a4624`, challenge
 `99a57de`, phone practice `0c884f6`/`b7ea554`/`6ce0d19`, recorded evidence `e621acb` on main), graph
@@ -166,9 +188,9 @@ new candidate work waits for the maintainer’s order.
 
 - Benchmarks view: a read-only view of the bench and proof results inside Oversight. Until it
   exists, the README and the demo video carry the proofs.
-- Linux on demand: with the Tauri shell on Windows, git, Python and Node run natively, and only
-  what needs the Linux kernel (isolated test runs, the sandbox) goes to WSL, which starts on demand
-  and stops when idle.
+- Linux on demand: after the native Windows backend port, with the Tauri shell on Windows,
+  git, Python and Node run natively, and only what needs the Linux kernel (isolated test runs,
+  the sandbox) goes to WSL, which starts on demand and stops when idle.
 - Resume a halted agent in the same conversation and worktree remains a candidate; the live
   Resume command only releases a pending or active pause (`agents/_control.py:RunControl`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
@@ -247,25 +269,30 @@ new candidate work waits for the maintainer’s order.
 - Run the bench on a real repository.
 - Filesystem isolation for tests and probes (bubblewrap on Linux); today's isolation covers the
   network and the process tree only. No filesystem sandbox during the hackathon.
-- Native backend ports for Windows and macOS, as their own fronts. First a per-OS layer in
-  `backend/src/oversight/workspace/` (network isolation, process-tree cleanup, file locks, no-follow
-  file opens), then a test-isolation design for each OS. A minimal Windows port, the per-OS layer in
-  the mode without isolation, is item 20 under "Only if time remains"; Windows isolation and macOS
-  come after the hackathon. Until a port has its own isolation, it runs in the existing mode without
-  isolation (network open; rules, Revert and added-test probes disabled). Any new dependency follows
-  the license list; filelock (Unlicense) needs the maintainer's OK.
 - After the hackathon, as a plan first: run the repository's git hooks as evidence, not inside
   commits: in the isolated runner on the proposal, shown on the card as passed or failed, with any
   formatter edits appearing in the diff. Agent commits keep hooks disabled.
-- After the hackathon, as a plan first: repositories without Python open without a graph; agents,
-  worktrees, diff, review, cross-review, merge and tests still work. Needs a per-repository test
-  command with JUnit output and a center view without the graph (sketch first).
-- After the hackathon, after the native Windows port: a Tauri shell, starting with one bounded spike
+- After the hackathon, as a plan first: repositories without Python open in Chat; Oversight shows
+  the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
+  merge and tests still work. Needs a per-repository test command with JUnit output and an approved
+  sketch first.
+- After the hackathon: a Tauri shell, starting with one bounded spike
   in its own directory that touches no product code: a Windows window showing the current UI,
   starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
   translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
+- After the hackathon, after the Tauri shell: native backend ports for Windows and macOS, as their
+  own fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
+  process-tree cleanup, file locks, no-follow file opens), then a test-isolation design for each OS.
+  A minimal Windows port, the per-OS layer in the mode without isolation, is item 20 below;
+  Windows isolation follows that port. Until a port has its own isolation, it runs
+  in the existing mode without isolation (network open; rules, Revert and added-test probes disabled).
+  Any new dependency follows the license list; filelock (Unlicense) needs the maintainer's OK.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
+
+| # | Item | State and commit or branch | In contracts proposal |
+| --- | --- | --- | --- |
+| 20 | Minimal native Windows port | Moved 2026-11-01: after the hackathon, after the Tauri shell; per-OS layer, mode without isolation | No |
 
 ## No
 

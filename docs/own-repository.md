@@ -35,8 +35,10 @@ The demo path (`demo-repo/`, `make demo`, `make demo-check`) does not change.
 Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
 
 After level 2, once the cut line is drawn and only if time remains, build opening the
-person's own repository first, then a minimal native Windows port: a per-OS layer in
-`backend/src/oversight/workspace/` (process-tree cleanup, file locks, no-follow file opens)
-that runs in the existing mode without isolation (network open; rules, Revert and
-added-test probes disabled). Windows isolation, macOS and the Tauri shell come after
-the hackathon; the Tauri shell follows the native Windows port.
+person's own repository first. After the hackathon, the Tauri shell comes next, with
+the backend inside WSL; the native Windows and macOS backend ports follow it.
+Item 20, the minimal native Windows port, therefore moves after the hackathon and
+after the Tauri shell: a per-OS layer in `backend/src/oversight/workspace/`
+(process-tree cleanup, file locks, no-follow file opens) that runs in the existing
+mode without isolation (network open; rules, Revert and added-test probes disabled).
+Windows isolation also remains after the hackathon.

@@ -48,3 +48,7 @@ export function answeredCards(state: State, id: string) {
   });
 }
 export { cardKey };
+
+export const approvalLockedCaption = "Approve opens when every answer is Yes.";
+export const approvalLocked = (cards: ReviewCard[], answers: Answers) =>
+  cards.some((card) => cardAnswer(card, answers) !== "yes");
