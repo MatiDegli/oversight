@@ -260,6 +260,7 @@ async def test_revert_repeated_cancel_and_delivery_budget(system, monkeypatch):
     old = ctx.state.snapshot
     calls = []
 
+    normal_timeout = ctx.timeout
     success = s.service._success
 
     async def short_delivery(attempt):
@@ -292,6 +293,7 @@ async def test_revert_repeated_cancel_and_delivery_budget(system, monkeypatch):
     with pytest.raises(RevertRefused, match="settlement"):
         await s.service.aclose()
     assert not s.ws.integrity.main_suspect
+    ctx.timeout = normal_timeout
     release.set()
     await s.service.aclose()
     assert ctx.state.snapshot is old  # An outcome acknowledgment cannot invent a delta.
