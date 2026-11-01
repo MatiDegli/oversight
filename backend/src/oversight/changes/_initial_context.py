@@ -62,6 +62,13 @@ def _global_loads(table: symtable.SymbolTable) -> set[str]:
     return names
 
 
+def _global_assignments(table: symtable.SymbolTable) -> set[str]:
+    names = {s.get_name() for s in table.get_symbols() if s.is_global() and s.is_assigned()}
+    for child in table.get_children():
+        names.update(_global_assignments(child))
+    return names
+
+
 def _literal_repr(value: _Literal) -> str:
     """Use Python representations, with set members ordered independently of hash seeds."""
     if isinstance(value, set):
@@ -154,7 +161,7 @@ def _source(node: GraphNode, source: str) -> tuple[str, dict[str, str]]:
             + (f" -> {ast.unparse(definition.returns)}" if definition.returns else "")
         ]
     )
-    loads = _global_loads(table)
+    loads = _global_loads(table) - _global_assignments(table)
     return signature, {n: v for n, v in _module_constants(tree).items() if n in loads}
 
 
