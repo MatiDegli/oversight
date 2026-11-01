@@ -66,7 +66,7 @@ export function selectWorkPresence(state: State) {
       if (files.length && focus) current.push({ ...identity, mode: focus.mode, files });
     }
     for (const change of Object.values(state.changes)) {
-      if (change.agent_id !== agent.agent_id || !change.proposal) continue;
+      if (change.proposal?.agent_id !== agent.agent_id) continue;
       if (change.status !== "ready_for_review" && change.status !== "conflict") continue;
       if (!change.proposal.files.length) continue;
       pending.push({

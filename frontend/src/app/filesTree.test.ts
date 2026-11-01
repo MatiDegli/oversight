@@ -3,7 +3,8 @@ import type { ServerEvent } from "@contracts";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import { applyEvent, createInitialState } from "../state";
 import type { State } from "../state";
-import { recordedTree, visibleTree } from "./filesTree";
+import { fileMarks, recordedTree, visibleTree } from "./filesTree";
+import { selectWorkPresence } from "./workPresence";
 import { createRecordedFiles } from "./recordedFiles";
 
 const events = log
@@ -178,4 +179,70 @@ it("marks only the chosen deleted revision and explains why it cannot open", asy
   expect(row()).toMatchObject({ deleted: true });
   await expect(files.readFile(path)).rejects.toThrow("file was deleted in this change");
   await expect(files.readFile("no-recorded-contents.py")).rejects.toThrow("no source contents");
+});
+
+it("adapts the same agent/path/mode through focus, proposals, resolutions and reset", () => {
+  let current = createInitialState();
+  for (const event of events) {
+    current = applyEvent(current, event);
+    const before = structuredClone(current);
+    const presence = selectWorkPresence(current);
+    const expected = new Map<string, { agentId: string; slot: string; mode: string }[]>();
+    for (const group of [...presence.current, ...presence.pending])
+      for (const file of group.files) {
+        const marks = expected.get(file.path) ?? [];
+        if (!marks.some((m) => m.agentId === group.agentId))
+          marks.push({ agentId: group.agentId, slot: group.slot, mode: group.mode });
+        expected.set(file.path, marks);
+      }
+    expect(fileMarks(current)).toEqual(expected);
+    expect(current).toEqual(before);
+  }
+  const run = events.find((e) => e.type === "run.started");
+  if (!run) throw new Error("Missing run");
+  expect(
+    fileMarks(
+      applyEvent(current, { ...run, seq: 1, payload: { ...run.payload, run_id: "fresh" } }),
+    ),
+  ).toEqual(new Map());
+});
+
+it("keeps identities sharing a slot and gives current focus precedence over pending", () => {
+  const agent = Object.values(state.agents)[0];
+  const change = Object.values(state.changes).find((c) => c.proposal);
+  const path = change?.proposal?.files[0]?.path;
+  if (!agent || !change || !path) throw new Error("Missing fixture proposal");
+  const shared = {
+    ...state,
+    agents: {
+      first: { ...agent, agent_id: "first", state: "working" as const },
+      second: { ...agent, agent_id: "second", state: "working" as const },
+    },
+    changes: {
+      pending: {
+        ...change,
+        agent_id: "first",
+        proposal: change.proposal ? { ...change.proposal, agent_id: "first" } : null,
+        status: "ready_for_review" as const,
+      },
+    },
+    focus: {
+      first: {
+        agent_id: "first",
+        mode: "edit" as const,
+        ranges: [{ path, start_line: null, end_line: null }],
+        node_ids: [],
+      },
+      second: {
+        agent_id: "second",
+        mode: "read" as const,
+        ranges: [{ path, start_line: null, end_line: null }],
+        node_ids: [],
+      },
+    },
+  };
+  expect(fileMarks(shared).get(path)).toEqual([
+    { agentId: "first", slot: agent.slot, mode: "edit" },
+    { agentId: "second", slot: agent.slot, mode: "read" },
+  ]);
 });
