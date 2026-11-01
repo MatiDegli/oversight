@@ -228,6 +228,27 @@ async def test_repeated_cancel_waits_for_responsive_empty_poll(tmp_path, launch,
 
 
 @pytest.mark.anyio
+async def test_repeated_cancel_during_final_reap_wait_closes_transport(monkeypatch):
+    collector = runner.ProcessCollector(100)
+    transport = Transport(collector)
+    terminated, job_closed = asyncio.Event(), asyncio.Event()
+    monkeypatch.setattr(runner, "terminate_job", lambda job: terminated.set())
+    monkeypatch.setattr(runner, "close_job", lambda job: job_closed.set())
+
+    task = asyncio.create_task(runner._reap_nt(transport, collector, 101))
+    await terminated.wait()
+    task.cancel()
+    await job_closed.wait()
+    assert not task.done()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert transport.was_closed
+    assert not collector.exited.cancelled()
+
+
+@pytest.mark.anyio
 async def test_cleanup_failure_refuses_output(tmp_path, launch, monkeypatch):
     state, calls = launch
     monkeypatch.setattr(runner, "job_pids", Mock(side_effect=OSError("membership unknown")))

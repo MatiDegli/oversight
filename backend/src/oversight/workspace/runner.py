@@ -217,7 +217,8 @@ async def _reap_nt(
         try:
             close_job(job)
         finally:
-            await wait_done(collector.exited, KILL_WAIT_S)
+            with contextlib.suppress(asyncio.CancelledError):
+                await wait_done(collector.exited, KILL_WAIT_S)
             transport.close()
 
 
