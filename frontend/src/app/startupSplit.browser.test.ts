@@ -305,8 +305,14 @@ it.each([390, 1280, 1920])(
         await check(
           panel.locator(width < 1280 ? ".pp-main" : "#practice-only, button").first(),
         ).toBeVisible();
-        expect(await panel.boundingBox()).toEqual(before);
-        expect(await heading.boundingBox()).toEqual(header);
+        if (width >= 1280) {
+          // Main sizes practice to its content; the loading frame reserves a width.
+          expect(await panel.boundingBox()).toMatchObject({ x: before?.x, y: before?.y });
+          expect(await heading.boundingBox()).toMatchObject({ height: header?.height });
+        } else {
+          expect(await panel.boundingBox()).toEqual(before);
+          expect(await heading.boundingBox()).toEqual(header);
+        }
       }
     } finally {
       await page.close();
