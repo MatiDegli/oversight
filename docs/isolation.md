@@ -215,3 +215,12 @@ Windows still has OPEN_NOTICE, open network mode and no filesystem sandbox or me
 acceptance above is unchanged. W3 grants no own-repository permission. W4 qualification and
 complete two-machine/six-run evidence remain pending. Advisory failures are not swallowed;
 30-minute workflow and three-minute smoke bounds supplement the driver's phase/overall clocks.
+
+### Copied own repositories: approved residual scope (2026-11-01)
+
+The maintainer's acceptance now includes copied own repositories: concurrent path replacement
+between check and open, and inherited folder ACLs on copies/logs. This supersedes the demo-only
+scope above (see DECISIONS.md). It adds no isolation or ACL hardening. Tests/plugins execute
+trusted code as the user, with network and potential writes outside runtime; child interpreters
+may import original source beyond the future guard. Public trust disclosure remains W4c2 work.
+W4a1 provides internal selection only; every public NT repository path still refuses.

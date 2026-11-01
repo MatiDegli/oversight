@@ -3772,3 +3772,20 @@ A skipped proof is not acceptance. Windows retains open mode and no memory cap. 
 races and inherited ACLs remain accepted for the disposable demo only, never own repositories.
 Before required status, measure complete installs/build/tests/six runs, set the timeout to
 ceil(1.5 × slowest green duration), and remove PR path filters. No required-status change here.
+
+## 2026-11-01 — Copied own repositories: accepted Windows residuals and internal selection
+
+At 20:18 ART the maintainer accepted, also for copied own repositories, the two residuals
+previously accepted only for the disposable demo: concurrent replacement between a path
+check and open, and inherited folder ACLs on copies/logs that may permit other local users
+to read them. This supersedes the earlier demo-only scope in the W1/W3 entries. It permits
+W4 implementation; it grants neither Windows isolation nor ACL hardening. Future public
+trust disclosure must explain these residuals and child interpreters importing the original
+source outside the import guard. Trusted code and private nonsynced folders remain necessary.
+
+W4a1 uses the already approved `workspace/source_nt.py` module for internal placement and
+read-only Git selection. The public selector still accepts only demo/Boltons and rejects
+all repository paths, including valid local NT paths, until W4c2. Existing profile validation
+and Linux behavior remain unchanged. Lock/server Job, previous-runtime guard and trust must
+precede future source operations; validated staging must precede reset. Production startup
+does not yet implement that own-source order. W4a2 supplies guard/staging; W4c2 wires startup.

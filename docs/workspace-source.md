@@ -114,3 +114,25 @@ native qualification of the pinned profile, W4's path-based COPY and native own-
 qualification are pending; do not pass arbitrary repository paths. Demo acceptance requires
 both W2 fronts before read/edit/tests/proposal/Approve and three-start proof. Record raw bytes,
 hashes, Git EOL output and initial/merge commits; do not infer LF from text-mode reads.
+
+## Internal native selection (W4a1)
+
+`workspace/source_nt.py` prepares internal NT placements and a read-only Git inventory.
+It does not activate COPY: public repository paths still fail before Workspace/EventStore
+construction or source Git. Demo/Boltons selection and pinned-profile `status` validation
+are unchanged. Own-source queries use a separate path: verified HEAD, staged index listing,
+tracked plus untracked-not-ignored listing, and bounded ignored-root listing. No recursive
+walk of ignored trees, filters, status, diff, configuration writes or source mutation occurs.
+Tracked ignored files remain selected; absent tracked files represent working deletions.
+Secrets, `.venv`, caches, `node_modules` and bytecode are excluded before content access.
+
+Placements must be short private local NTFS nonsynced drive paths. UNC/device/relative paths,
+ADS, aliases, unsafe components, reparse/offline/recall entries, SUBST/mapped/network drives,
+ReFS and known sync roots refuse. Outside USERPROFILE warns; unknown sync clients cannot be
+detected. Source/runtime ancestry overlap requires a separate clone; only the existing named
+profile under runtime `sources` is exempt. A source cannot be inside a reset target.
+
+The future startup contract is lexical placement before resolve/constructors/source Git;
+lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
+reset. Current startup does not yet provide this own-source ordering. W4a2/W4c2 own staging,
+guard and wiring. No disk manifest, source provenance publication, reset or copy exists here.

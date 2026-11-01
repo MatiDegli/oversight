@@ -233,3 +233,20 @@ async def test_source_suite_argv_and_collection(tmp_path: Path, case_ids: tuple[
         )
     finally:
         workspace.release_runtime()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        r"C:\private\project",
+        "C:/private/project",
+        r"\\host\share\project",
+        r"\\?\C:\project",
+        "C:project",
+    ],
+)
+async def test_public_nt_paths_remain_closed(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("oversight.workspace.source.sys.platform", "win32")
+    with pytest.raises(ValueError, match="OVERSIGHT_WORKSPACE_SOURCE"):
+        select_source(path)
+    assert select_source("") is None and select_source(BOLTONS.name) == BOLTONS
