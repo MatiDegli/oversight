@@ -1,8 +1,10 @@
 import type { LeadReplyEvent, LeadStatusEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
-import { log } from "../transport/transport.support";
+import fixture from "../../../fixtures/events/handwritten-level1.jsonl?raw";
+import { parseEvent } from "../transport";
 import { applyEvent, createInitialState } from "./index";
 
+const log = fixture.trim().split("\n").map(parseEvent);
 const seeded = () => log.reduce(applyEvent, createInitialState());
 const ts = "2026-11-01T17:04:57.000Z";
 

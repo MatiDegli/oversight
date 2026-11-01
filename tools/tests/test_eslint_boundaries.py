@@ -3,14 +3,15 @@
 Each case is a throwaway file under frontend/src/, linted with the real configuration and deleted
 afterwards. Only the two boundary rules are read: an unresolved module also trips type-aware rules
 that say nothing about boundaries. A probe is created exclusively under a name no existing file can
-have, and only what the test created is removed.
+have, and only what the test created is removed. A regression also lints the lead reply reducer
+test itself, so importing another feature's test helpers cannot bypass these boundaries.
 """
 
+import asyncio
 import contextlib
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -47,19 +48,33 @@ def case_id(case: tuple[str, str, bool]) -> str:
 
 
 def lint(files: list[Path]) -> list[dict[str, object]]:
+    return asyncio.run(lint_async(files))
+
+
+async def lint_async(files: list[Path]) -> list[dict[str, object]]:
     pnpm = shutil.which("pnpm")
     assert pnpm, "pnpm is needed to lint the frontend: run `make install`"
-    done = subprocess.run(
-        [pnpm, "exec", "eslint", "--format", "json", *map(str, files)],
+    process = await asyncio.create_subprocess_exec(
+        pnpm,
+        "exec",
+        "eslint",
+        "--format",
+        "json",
+        *map(str, files),
         cwd=FRONTEND,
-        capture_output=True,
-        text=True,
-        timeout=300,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
     )
     try:
-        report: list[dict[str, object]] = json.loads(done.stdout)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=300)
+    except TimeoutError:
+        process.kill()
+        await process.wait()
+        raise
+    try:
+        report: list[dict[str, object]] = json.loads(stdout)
     except json.JSONDecodeError:
-        pytest.fail(f"eslint printed no report (exit {done.returncode}): {done.stderr}")
+        pytest.fail(f"eslint printed no report (exit {process.returncode}): {stderr.decode()}")
     return report
 
 
@@ -67,8 +82,13 @@ def make_directories(directory: Path, root: Path, created: list[Path]) -> None:
     """Create `directory` and its missing parents inside `root`, recording each one made."""
     inside = [d for d in [directory, *directory.parents] if d.is_relative_to(root)]
     for folder in reversed([d for d in inside if not d.exists()]):
-        folder.mkdir()
-        created.append(folder)
+        try:
+            folder.mkdir()
+        except FileExistsError:
+            if not folder.is_dir():
+                raise
+        else:
+            created.append(folder)
 
 
 @pytest.fixture(scope="module")
@@ -108,3 +128,29 @@ def test_a_feature_folder_is_reached_only_through_its_index(
     boundary_reports: dict[int, bool], index: int
 ) -> None:
     assert boundary_reports[index] is CASES[index][2]
+
+
+def test_lead_reply_reducer_test_respects_feature_boundaries() -> None:
+    reports = lint([FRONTEND / "src/state/leadReply.test.ts"])
+    assert len(reports) == 1
+    messages = reports[0]["messages"]
+    assert isinstance(messages, list)
+    violations = [message for message in messages if message["ruleId"] in BOUNDARY_RULES]
+    assert not violations, violations
+
+
+def test_directory_created_by_another_worker_is_not_owned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "panels"
+    mkdir = Path.mkdir
+
+    def concurrent_mkdir(path: Path) -> None:
+        mkdir(path)  # Another worker creates it between exists() and mkdir().
+        mkdir(path)
+
+    monkeypatch.setattr(Path, "mkdir", concurrent_mkdir)
+    created: list[Path] = []
+    make_directories(directory, tmp_path, created)
+    assert directory.is_dir()
+    assert created == []
