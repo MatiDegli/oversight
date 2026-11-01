@@ -62,9 +62,13 @@ jobs:
           PY
 
   browser:
-    name: browser tests
+    name: browser tests (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
-    # Green CI: test-browser took 8m46s; 25 minutes covers setup and a slow runner with margin.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    # Each shard keeps the 1200 s test bound; 25 minutes also covers setup.
     # Exceeding the cap on a fast runner is a test defect, not a reason to raise it.
     timeout-minutes: 25
     permissions:
@@ -85,13 +89,22 @@ jobs:
       # The Chromium build is the one the pinned @playwright/test (frontend/package.json) names.
       - name: Install Playwright's Chromium and its system libraries
         run: pnpm -C frontend exec playwright install --with-deps chromium
+      # Cache the repository-root fixture directories, separately for each shard.
+      # Vite validates its own cache hash and rebundles stale restored dependencies.
+      - name: Cache browser fixture dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .shots/*-vite-cache
+          key: browser-vite-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-of-2-${{ hashFiles('frontend/pnpm-lock.yaml', 'frontend/vite.config.ts', 'frontend/**/*.support.ts') }}
+          restore-keys: |
+            browser-vite-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-of-2-
       - name: Monaco and graph tests in Chromium
-        run: make test-browser
+        run: make test-browser BROWSER_SHARD=${{ matrix.shard }}/2
       - name: Upload browser failure evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: browser-failure-evidence
+          name: browser-failure-evidence-${{ matrix.shard }}-of-2
           path: |
             frontend/test-results/
             frontend/playwright-report/
