@@ -32,6 +32,9 @@
   align-items: center;
   gap: 12px;
 }
+.chat-shell .conversation-composer > p:first-child + .composer-actions:has(.chat-merge-accessory) {
+  margin-top: 8px;
+}
 .chat-empty div:has(> .chat-merge-accessory) {
   gap: 8px;
 }

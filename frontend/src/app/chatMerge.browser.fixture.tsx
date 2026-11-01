@@ -1,4 +1,4 @@
-import type { MergeMode, ServerEvent } from "@contracts";
+import type { ChangeResolved, MergeMode, ServerEvent } from "@contracts";
 import { useReducer } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -92,6 +92,43 @@ export const chatMergeTest = {
   mode(mode: MergeMode) {
     flushSync(() => {
       stateStore.getState().applyEvents([modeEvent(stateStore.getState().state.lastSeq + 1, mode)]);
+    });
+  },
+  resolve(patch: Partial<ChangeResolved>) {
+    const state = stateStore.getState().state;
+    const resolution = state.changes["change-1"]?.resolution;
+    if (!resolution) throw new Error("Missing resolution");
+    flushSync(() => {
+      stateStore.getState().applyEvents([
+        {
+          seq: state.lastSeq + 1,
+          ts: "2026-11-01T19:04:00Z",
+          type: "change.resolved",
+          payload: { ...resolution, ...patch },
+        },
+      ]);
+    });
+  },
+  repropose() {
+    const state = stateStore.getState().state;
+    const proposal = state.changes["change-1"]?.proposal;
+    const agent = state.agents["agent-1"];
+    if (!proposal || !agent) throw new Error("Missing proposal or agent");
+    flushSync(() => {
+      stateStore.getState().applyEvents([
+        {
+          seq: state.lastSeq + 1,
+          ts: "2026-11-01T19:05:00Z",
+          type: "change.proposed",
+          payload: { ...proposal, revision: proposal.revision + 1 },
+        },
+        {
+          seq: state.lastSeq + 2,
+          ts: "2026-11-01T19:05:01Z",
+          type: "agent.status",
+          payload: { ...agent, state: "ready_for_review" },
+        },
+      ]);
     });
   },
   messages(count: number) {
