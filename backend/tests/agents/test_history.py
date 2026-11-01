@@ -174,6 +174,15 @@ def test_parallel_calls_local_pairing_and_individual_protection() -> None:
     assert len(history) == len(snapshot)
 
 
+def test_seventh_most_recent_covered_read_is_pruned() -> None:
+    history: list[Message] = []
+    old = add(history, rows())
+    add(history, rows(1, 20))
+    protect(history, 5)
+    prune(history)
+    assert old["content"] == "[Lines 1-10 of x.py: a later read of this path covers these lines.]"
+
+
 def test_threshold_low_water_newest_first_and_rearm(monkeypatch: pytest.MonkeyPatch) -> None:
     history: list[Message] = []
     large = rows(text="x" * 1000)
