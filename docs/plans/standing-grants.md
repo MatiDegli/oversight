@@ -1,8 +1,8 @@
 # Standing grants: plan
 
 > Status: partly built. Contract and backend merged in `93a3664`; inbox answers, grant choice,
-> list and revoke in `7c25429`. Checked against main `8b9b589`. Live creation still requires
-> rules activation, closed by `changes/_mode.py:RULES_ACTIVATION`. Remaining: protected_path,
+> list and revoke in `7c25429`. F10 opens activation on 2026-11-01; live creation requires
+> explicitly selected rules mode, a current wait and all grant checks. Remaining: protected_path,
 > path/agent scopes and session expiry. The broader design below is historical where marked.
 
 Proposed on 2026-10-29 and approved by the maintainer the same day, with its contract change as
@@ -158,7 +158,7 @@ on Approve, grant-aware admission/barriers and revoke. Protected_path, path/agen
 session expiry remain refused. Delivered UI (`7c25429`): “Don't ask again” on an inbox entry,
 standing-grant list and Revoke in the inbox (`review/DecisionInbox.tsx`, `StandingGrants.tsx`,
 `GrantChoice.tsx`); the historical Settings home below was a sketch proposal, not the mounted home.
-Grant use receipts are shown by the review card. Live rules activation remains closed.
+Grant use receipts are shown by the review card. Activation is open; every fresh run starts in Ask me.
 
 At admission, the candidate re-measure, and every revalidation barrier, re-check that each grant
 used is active and still covers the current wait and scope. Read current server state, never
@@ -173,12 +173,14 @@ expiry is checked there too. A grant created later does not revive the stopped r
 
 1. Done on 2026-10-29: the maintainer approved this plan and the contract change.
 2. The `small_cone` rule and candidate re-measure are already on main. The caller-listing inbox entry
-   is built (`7c25429`), reading assessments from decisionEvents. No separate assessment/mode
-   state is folded by `state/applyEvidenceEvent.ts`; activation remains closed.
-3. Contract 1.7.0 and bounded backend delivered in `93a3664`; broader scopes/expiry and
-   protected-path grants remain separate work.
-4. Inbox answers and grant controls delivered in `7c25429`. Activation is still closed, so these
-   surfaces do not establish that live grants can be created or authorize rules merges today.
+   is built (`7c25429`), reading assessments from decisionEvents. Merge mode is folded by
+   `state/applyEvidenceEvent.ts`; assessment and Revert remain selector inputs in decisionEvents.
+   F10 opens activation by explicit selection, preserving every later guard.
+3. Contract 1.7.0 and bounded backend delivered in `93a3664`; broader grant support remains
+   separate work: path/agent scopes, session expiry and protected-path grants.
+4. Inbox answers and grant controls delivered in `7c25429`. F10 opens activation; live grants
+   remain limited to the delivered possible_callers rule, module/run scopes and run expiry.
+   The activation recording demonstrates an ungranted rules merge, not broader grant support.
 
 The original half-day displacement estimate is historical, not a current scheduling commitment.
 

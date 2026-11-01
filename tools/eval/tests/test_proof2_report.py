@@ -7,19 +7,16 @@ import sys
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
-from typing import get_type_hints
 
 import pytest
 from tools.eval.proof2.__main__ import main
 from tools.eval.proof2.report import write_report
-from tools.eval.proof2.report.arms import ArmRecord, ChangeRecord, RevisionRecord, build_arms
+from tools.eval.proof2.report.arms import build_arms
 from tools.eval.proof2.report.inputs import load_inputs
 from tools.eval.proof2.report.output import counted, write_lines
 from tools.eval.proof2.report.spend import add_spend
-from tools.eval.proof2.report.timing import add_timing, wall_ms
+from tools.eval.proof2.report.timing import add_timing
 from tools.eval.tests.report_events import event, files, receipts, renumber, scenario
-
-from oversight_contracts.events import ServerEvent
 
 
 def report(tmp_path, capsys, events=None, results=None):
@@ -539,19 +536,6 @@ def test_last_merge_and_problem(tmp_path, capsys):
     assert arm["problems"] == ["multiple merged resolutions for change-1"]
 
 
-def test_wall_event_types():
-    hints = get_type_hints(wall_ms)
-    assert hints["start"] == ServerEvent | None
-    assert hints["end"] == ServerEvent | None
-
-
-def test_timing_record_types():
-    hints = get_type_hints(add_timing)
-    assert hints["revisions"] == list[RevisionRecord]
-    assert hints["changes"] == list[ChangeRecord]
-    assert hints["arms"] == list[ArmRecord]
-
-
 def test_timing(tmp_path, capsys):
     rows = report(tmp_path, capsys)
     assert [r["wall_ms"] for r in rows if r["record"] == "change"] == [
@@ -830,7 +814,11 @@ async def test_cli_deterministic_bytes(tmp_path):
 
     async def invoke(*extra):
         process = await asyncio.create_subprocess_exec(
-            *command, *extra, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *command,
+            *extra,
+            cwd=Path(__file__).resolve().parents[3],  # noqa: ASYNC240 - Static test location.
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
@@ -938,6 +926,44 @@ def test_spend_returns_new_records(tmp_path):
         "known_usd": pytest.approx(0.3),
         "coverage": "complete",
     }
+
+
+def test_timing_returns_new_records(tmp_path):
+    inputs = load_inputs(*files(tmp_path))
+    revisions, changes, arms = build_arms(inputs)
+    changes, arms = add_spend(inputs, changes, arms)
+    for change in changes:
+        change["wall_ms"] = {"without_oversight": -1, "with_oversight": -1}
+    original_inputs, original_revisions, original_changes, original_arms = deepcopy(
+        (inputs, revisions, changes, arms)
+    )
+    enriched_changes, enriched_arms, run = add_timing(inputs, revisions, changes, arms)
+    assert inputs == original_inputs
+    assert revisions == original_revisions
+    assert changes == original_changes
+    assert arms == original_arms
+    assert enriched_changes is not changes
+    assert enriched_arms is not arms
+    assert all(new is not old for new, old in zip(enriched_changes, changes, strict=True))
+    assert all(new is not old for new, old in zip(enriched_arms, arms, strict=True))
+    assert [change.get("wall_ms") for change in enriched_changes] == [
+        {"without_oversight": 60000, "with_oversight": 140000},
+        {"without_oversight": 40000, "with_oversight": 80000},
+        {"without_oversight": None, "with_oversight": None},
+    ]
+    assert [arm.get("wall_ms_per_correct") for arm in enriched_arms] == [40000, 110000]
+    assert run == dict(
+        record="run",
+        agent_ms=188000,
+        known_agent_ms=188000,
+        agent_hours=pytest.approx(0.052222222222),
+        active_ms=128000,
+        known_active_ms=128000,
+        parallelism=1.46875,
+        coverage="complete",
+        problems=[],
+        parallelism_over_time={"status": "not_built"},
+    )
 
 
 def test_stdout_and_file_are_utf8_bytes(tmp_path, monkeypatch):

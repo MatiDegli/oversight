@@ -33,7 +33,7 @@ def write_report(log: Path, results: Path, out: Path | None = None) -> None:
     )
     revisions, changes, arms = build_arms(inputs)
     changes, arms = add_spend(inputs, changes, arms)
-    run = add_timing(inputs, revisions, changes, arms)
+    changes, arms, run = add_timing(inputs, revisions, changes, arms)
     not_built = [dict(record=name, status="not_built") for name in ("E3", "E4", "E6", "E7")]
     write_lines(
         [meta, *revisions, *changes, *measures(inputs, revisions), *arms, run, *not_built], out

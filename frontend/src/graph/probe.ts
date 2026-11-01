@@ -28,6 +28,7 @@ export interface GraphProbe {
   /** Layout positions of the nodes with no children, which no camera move may change. A box's own position follows its children. */
   positions(): Record<string, { x: number; y: number }>;
   representative(id: string): string;
+  level(): "cards" | "map";
   /** Drawn node box in host pixels, excluding labels and overlays; folded nodes return null. */
   renderedBox(
     id: string,
@@ -83,6 +84,7 @@ export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
     positions: () =>
       Object.fromEntries(cy.nodes(":childless").map((node) => [node.id(), { ...node.position() }])),
     representative: (id) => visibleId(cy, id),
+    level: () => (host.dataset.mapLevel === "map" ? "map" : "cards"),
     renderedBox: (id) => {
       const node = cy.getElementById(id);
       if (node.empty() || !node.isNode() || visibleId(cy, id) !== id || !node.visible())

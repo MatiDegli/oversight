@@ -1,12 +1,26 @@
 """Change wall spans and observed activity for one run."""
 
 from datetime import timedelta
+from typing import TypedDict
 
 from oversight.events import fold_activity, parse_ts
 from oversight_contracts.events import ServerEvent
 
 from .arms import ArmRecord, ChangeRecord, RevisionRecord
 from .inputs import Inputs
+
+
+class RunRecord(TypedDict):
+    record: str
+    agent_ms: int | None
+    known_agent_ms: int
+    agent_hours: float | None
+    active_ms: int | None
+    known_active_ms: int
+    parallelism: float | None
+    coverage: str
+    problems: list[str]
+    parallelism_over_time: dict[str, str]
 
 
 def wall_ms(start: ServerEvent | None, end: ServerEvent | None) -> int | None:
@@ -21,8 +35,9 @@ def add_timing(
     revisions: list[RevisionRecord],
     changes: list[ChangeRecord],
     arms: list[ArmRecord],
-) -> dict:
-    starts, merges = {}, {}
+) -> tuple[list[ChangeRecord], list[ArmRecord], RunRecord]:
+    starts: dict[str, ServerEvent] = {}
+    merges: dict[str, ServerEvent] = {}
     for event in inputs.events:
         cid = getattr(event.payload, "change_id", None)
         if cid is not None:
@@ -32,8 +47,9 @@ def add_timing(
             and event.payload.decision == "approved"
             and event.payload.merge == "merged"
         ):
-            merges[cid] = event
-    for change in changes:
+            merges[event.payload.change_id] = event
+    timed_changes = [change.copy() for change in changes]
+    for change in timed_changes:
         cid = change["change_id"]
         first_green = change["first_green"]
         green = inputs.proposals.get((cid, first_green)) if first_green is not None else None
@@ -43,19 +59,20 @@ def add_timing(
             with_oversight=wall_ms(starts.get(cid), merged),
         )
     correct = {(r["change_id"], r["revision"]) for r in revisions if r["correct"] is True}
-    for arm, selection in zip(arms, ("first_green", "merged_revision"), strict=True):
+    timed_arms = [arm.copy() for arm in arms]
+    for arm, selection in zip(timed_arms, ("first_green", "merged_revision"), strict=True):
         spans: list[int] = []
-        for change in changes:
+        for change in timed_changes:
             span = change.get("wall_ms", {}).get(arm["arm"])
             if (change["change_id"], change[selection]) in correct and span is not None:
                 spans.append(span)
         arm["wall_ms_per_correct"] = sum(spans) // len(spans) if spans else None
-    return run_record(inputs)
+    return timed_changes, timed_arms, run_record(inputs)
 
 
-def run_record(inputs: Inputs) -> dict:
+def run_record(inputs: Inputs) -> RunRecord:
     activity = fold_activity(inputs.events)
-    return dict(
+    return RunRecord(
         record="run",
         agent_ms=activity.agent_ms,
         known_agent_ms=activity.known_agent_ms,

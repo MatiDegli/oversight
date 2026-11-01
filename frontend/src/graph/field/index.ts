@@ -1,4 +1,4 @@
-export { DotField } from "./DotField";
+export { DotField, prepareDotField } from "./DotField";
 export { createBoxSource } from "./boxSource";
 export type { BoxSource } from "./boxSource";
 export type { FieldHost, FieldInput, FieldProbe } from "./controller";

@@ -2,6 +2,7 @@
 `python -m oversight ledger [settle --spent-usd X]`."""
 
 import argparse
+import sys
 from pathlib import Path
 
 import uvicorn
@@ -39,6 +40,8 @@ def main() -> None:
         help="dedicated probe runtime (absolute path ending in .runtime)",
     )
     args = parser.parse_args()
+    if args.command == "serve" and args.reload and sys.platform == "win32":
+        parser.error("serve --reload is unavailable on Windows; use ordinary serve")
     settings = Settings.load()
 
     if args.command == "isolation-probe":

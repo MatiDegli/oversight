@@ -175,3 +175,19 @@ async def test_invalidation_warns_once_with_redacted_cause(tmp_path, caplog):
     assert len(caplog.records) == 2
     assert all("entry failed at .runtime/launcher" in r.message for r in caplog.records)
     assert str(tmp_path) not in caplog.text
+
+
+@pytest.mark.parametrize("failure", [None, AttributeError("effect must never run")])
+async def test_nt_capability_never_checks_effect(tmp_path, monkeypatch, failure):
+    from oversight.workspace.capability import SessionIsolation
+    from oversight.workspace.snapshot import IntegrityState
+
+    effect = AsyncMock(side_effect=failure)
+    monkeypatch.setattr(capability, "check_effect", effect)
+    monkeypatch.setattr(sys, "platform", "win32")
+    session = SessionIsolation(tmp_path, IntegrityState())
+    for _ in range(2):
+        result = await session.check()
+        assert result.checked and not result.available and not result.rules_available
+        assert result.reason is not None and "Windows" in result.reason
+    effect.assert_not_called()

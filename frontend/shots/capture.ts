@@ -25,20 +25,8 @@ const VIEWPORT = { width: 1920, height: 1080 };
 const FIELD_TIME = "2";
 const TIMEOUT_MS = 30_000;
 
-const { values } = parseArgs({
-  options: {
-    url: { type: "string" },
-    log: { type: "string" },
-    out: { type: "string", default: resolve(import.meta.dirname, "../../.shots") },
-  },
-});
-if (values.url === undefined || values.log === undefined) {
-  throw new Error("usage: capture.ts --url <served url> --log <event log> [--out <dir>]");
-}
-const { url, log, out } = { url: values.url, log: values.log, out: resolve(values.out) };
-
 // The previous set goes first, so a stale image is never taken for a fresh one.
-async function clearPreviousSet(): Promise<void> {
+async function clearPreviousSet(out: string): Promise<void> {
   await mkdir(out, { recursive: true });
   for (const name of await readdir(out)) {
     if (name.endsWith(".png") || /^watch-.*\.json$/.test(name) || name === "detect.json")
@@ -69,12 +57,47 @@ async function waitUntilReady(page: Page, seq: number): Promise<void> {
   );
 }
 
+export async function writeSceneMetrics(page: Page, path: string) {
+  const metrics = await page.evaluate(() => {
+    const probe = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    if (!probe) throw new Error("Graph renderer missing");
+    const canvas = document.createElement("canvas");
+    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    const debug = gl?.getExtension("WEBGL_debug_renderer_info");
+    const unmasked: unknown = debug && gl?.getParameter(debug.UNMASKED_RENDERER_WEBGL);
+    const plain: unknown = gl?.getParameter(gl.RENDERER);
+    const webglRenderer =
+      typeof unmasked === "string" && unmasked.length > 0
+        ? unmasked
+        : typeof plain === "string" && plain.length > 0
+          ? plain
+          : "unavailable";
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return { ...probe.metrics(), webglRenderer };
+  });
+  await writeFile(path, JSON.stringify(metrics, null, 2) + "\n");
+  return metrics;
+}
+
 async function main(): Promise<number> {
+  const { values } = parseArgs({
+    options: {
+      url: { type: "string" },
+      log: { type: "string" },
+      out: { type: "string", default: resolve(import.meta.dirname, "../../.shots") },
+    },
+  });
+  if (values.url === undefined || values.log === undefined) {
+    throw new Error("usage: capture.ts --url <served url> --log <event log> [--out <dir>]");
+  }
+  const { url, log, out } = { url: values.url, log: values.log, out: resolve(values.out) };
   const sourceLog = await readFile(resolve(log), "utf8");
   let liveLog = "";
   const expectedSeq = lastSeq(sourceLog);
   stdout.write(`shots: waiting for fixture seq ${String(expectedSeq)} and the graph renderer\n`);
-  await clearPreviousSet();
+  await clearPreviousSet(out);
 
   // This tiny player serves each scene's cut or fixture. Keep SSE open through reconnects.
   const streams = new Set<ServerResponse>();
@@ -155,16 +178,9 @@ async function main(): Promise<number> {
         if (pageErrors.length > 0) throw new Error(`page errors: ${pageErrors.join("; ")}`);
         const path = join(out, job.file);
         await page.screenshot({ path });
-        const metrics = await page.evaluate(() => {
-          const probe = document.querySelector<GraphProbeHost>(
-            '[aria-label="Repository graph"]',
-          )?.oversightGraph;
-          if (!probe) throw new Error("Graph renderer missing");
-          return probe.metrics();
-        });
-        await writeFile(
+        const metrics = await writeSceneMetrics(
+          page,
           join(out, job.file.replace(/\.png$/, ".json")),
-          JSON.stringify(metrics, null, 2) + "\n",
         );
         stdout.write(
           `shots: ${job.file} label minimum ${metrics.minLabelPx.toFixed(2)} CSS px, ${metrics.edgeShape}\n`,
@@ -192,4 +208,4 @@ async function main(): Promise<number> {
   return failures === 0 ? 0 : 1;
 }
 
-exit(await main());
+if (import.meta.main) exit(await main());

@@ -29,10 +29,12 @@ change may affect. A change reaches main only with your approval or by meeting r
 review then shows the rules and grants that let it in, and Revert undoes it in one step when it
 applies cleanly.
 
-Status on main, 2026-10-31: the behavior diff and the measured callers are built and opt-in, off by default;
-merge by rules and its Revert exist in the backend but stay closed until their activation is approved, so today
-every change reaches main through the person's decision. Where this file describes those in the present tense,
-it describes the target.
+Status, 2026-11-01: rules activation is open following the maintainer's approval. Each fresh run
+starts in Ask me; the person explicitly selects Merge alone when safe. Selection requires session
+isolation C and an independent cross-reviewer; every merge still requires all current evidence and
+transaction guards. Clean rules merges offer person-triggered Revert. Behavior diff and measured
+callers remain opt-in, off by default. Activation evidence uses scripted fake models; the public
+static build continues to replay the separately labeled real recording.
 
 ## Positioning
 
