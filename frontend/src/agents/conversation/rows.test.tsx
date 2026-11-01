@@ -1,10 +1,141 @@
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
+import { PauseControl } from "../PauseControl";
+import { draftStore } from "./drafts";
+
+const hooks = vi.hoisted(() => ({ active: null as null | { values: unknown[]; cursor: number } }));
+vi.mock("react", async (original) => {
+  const react = await original<typeof import("react")>();
+  return {
+    ...react,
+    useState: <T,>(initial: T): [T, (next: T | ((value: T) => T)) => void] => {
+      if (!hooks.active) return react.useState(initial);
+      const { values } = hooks.active;
+      const index = hooks.active.cursor++;
+      if (!(index in values)) values[index] = initial;
+      return [
+        values[index] as T,
+        (next: T | ((value: T) => T)) => {
+          values[index] =
+            typeof next === "function" ? (next as (value: T) => T)(values[index] as T) : next;
+        },
+      ];
+    },
+    useRef: <T,>(value: T) => (hooks.active ? { current: value } : react.useRef(value)),
+    useId: () => (hooks.active ? "caption" : react.useId()),
+  };
+});
+vi.mock("zustand", async (original) => {
+  const zustand = await original<typeof import("zustand")>();
+  return {
+    ...zustand,
+    useStore: (
+      store: Parameters<typeof zustand.useStore>[0],
+      select: (value: unknown) => unknown,
+    ) => (hooks.active ? select(store.getState()) : zustand.useStore(store, select)),
+  };
+});
 import { ConversationPanel } from "./ConversationPanel";
 import { Composer } from "./Composer";
 import { sketchState } from "./fixture";
 import { selectConversation } from "./selectConversation";
 import { TimelineEntry } from "./rows";
+
+beforeEach(() => {
+  draftStore.setState({}, true);
+});
+
+function mountComposer(agentId = "agent-1") {
+  const conversation = selectConversation(sketchState, "agent-1", []);
+  if (!conversation) throw new Error("Missing fixture");
+  const props = {
+    header: { ...conversation.header, agentId, state: "working" as const },
+    onSend: vi.fn().mockResolvedValue(undefined),
+    onPause: vi.fn().mockResolvedValue(undefined),
+    onResume: vi.fn().mockResolvedValue(undefined),
+  };
+  const values: unknown[] = [],
+    pauseValues: unknown[] = [];
+  function render(pause = false) {
+    hooks.active = { values, cursor: 0 };
+    try {
+      const tree = Composer(props);
+      if (!pause) return tree;
+      const control = find(tree, PauseControl) as ReactElement<Parameters<typeof PauseControl>[0]>;
+      hooks.active = { values: pauseValues, cursor: 0 };
+      return PauseControl(control.props);
+    } finally {
+      hooks.active = null;
+    }
+  }
+  return { props, render };
+}
+
+type Interactive = {
+  children?: ReactNode;
+  value?: string;
+  onClick?: () => void;
+  onChange?: (event: { target: { value: string } }) => void;
+};
+function find(
+  tree: ReactNode,
+  type: string | typeof PauseControl,
+  text?: string,
+): ReactElement<Interactive> {
+  for (const child of Children.toArray(tree)) {
+    if (!isValidElement<Interactive>(child)) continue;
+    if (child.type === type && (!text || child.props.children === text)) return child;
+    if (child.props.children) {
+      try {
+        return find(child.props.children, type, text);
+      } catch {
+        /* Continue with siblings. */
+      }
+    }
+  }
+  throw new Error(`Missing ${String(type)}`);
+}
+
+it("uses the shared pause states and preserves no-argument command callbacks", async () => {
+  const view = mountComposer();
+  expect(renderToStaticMarkup(view.render(true))).toContain("Pause</button>");
+  find(view.render(true), "button").props.onClick?.();
+  await Promise.resolve();
+  expect(view.props.onPause).toHaveBeenCalledExactlyOnceWith();
+  expect(renderToStaticMarkup(view.render(true))).toContain("Pausing after this step");
+});
+
+it("shows a shared pause failure and permits retry", async () => {
+  const view = mountComposer();
+  view.props.onPause.mockRejectedValueOnce(new Error("offline"));
+  find(view.render(true), "button").props.onClick?.();
+  await Promise.resolve();
+  const html = renderToStaticMarkup(view.render(true));
+  expect(html).toContain('role="alert"');
+  expect(html).toContain("Pause did not reach the server. Check the connection and try again.");
+  expect(html).toContain('aria-disabled="false"');
+});
+
+it("restores a draft after remount only for the same agent", () => {
+  find(mountComposer().render(), "textarea").props.onChange?.({
+    target: { value: "Read pricing.py" },
+  });
+  expect(find(mountComposer().render(), "textarea").props.value).toBe("Read pricing.py");
+  expect(find(mountComposer("agent-2").render(), "textarea").props.value).toBe("");
+});
+
+it.each([true, false])("clears the draft only when sending succeeds: %s", async (success) => {
+  const view = mountComposer();
+  if (!success) view.props.onSend.mockRejectedValueOnce(new Error("offline"));
+  find(view.render(), "textarea").props.onChange?.({ target: { value: "Read pricing.py" } });
+  find(view.render(), "button", "Send").props.onClick?.();
+  await Promise.resolve();
+  expect(view.props.onSend).toHaveBeenCalledExactlyOnceWith("Read pricing.py");
+  expect(find(mountComposer().render(), "textarea").props.value).toBe(
+    success ? "" : "Read pricing.py",
+  );
+});
 
 it("keeps a positive cost below half a cent visible in the header chip", () => {
   const conversation = selectConversation(sketchState, "agent-1", []);
