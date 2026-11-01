@@ -57,8 +57,8 @@ async def test_exhaustion_below_cap_is_complete_even_when_display_is_cut(tmp_pat
 @pytest.mark.anyio
 async def test_consumption_timeout_has_fixed_reason_and_no_fingerprint(tmp_path):
     source = "def f():\n    yield 1\n    while True: pass\n"
-    result = await invoke(tmp_path, source, [consumed()], timeout_s=0.2)
-    assert result["problem"] is None
+    result = await invoke(tmp_path, source, [consumed()], timeout_s=0.3)
+    assert result["problem"] is None, f"Expected a successful import before the call: {result}"
     assert result["results"] == [{"kind": "timed_out", "reason": "iterator observation timeout"}]
 
 
@@ -120,8 +120,9 @@ async def test_blocking_generator_finally_does_not_prevent_the_next_call(tmp_pat
             tmp_path,
             source,
             [consumed(repr(((mode,), {}))), consumed("(('next',), {})")],
-            timeout_s=0.1,
+            timeout_s=0.3,
         )
+    assert result["problem"] is None, f"Expected a successful import before the call: {result}"
     first, second = result["results"]
     assert first == {"kind": "timed_out", "reason": "iterator observation timeout"}
     assert second["kind"] == "value" and second["value"] == ["int", "0x2a"]
@@ -186,8 +187,9 @@ async def test_timeout_cleanup_that_blocks_is_bounded_and_the_target_continues(t
     )
     async with asyncio.timeout(5):
         result = await invoke(
-            tmp_path, source, [consumed("((0,), {})"), consumed("((1,), {})")], timeout_s=0.1
+            tmp_path, source, [consumed("((0,), {})"), consumed("((1,), {})")], timeout_s=0.3
         )
+    assert result["problem"] is None, f"Expected a successful import before the call: {result}"
     first, second = result["results"]
     assert first == {"kind": "timed_out", "reason": "iterator observation timeout"}
     assert second["kind"] == "value" and second["value"] == ["int", "0x2a"]

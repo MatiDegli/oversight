@@ -50,8 +50,8 @@ class Settings:
     max_agents: int = 4
     """OVERSIGHT_MAX_AGENTS: offer the first N letters from A, from 1 through 6."""
     agent_model: str = "muse-spark"
-    """The profile agents run on: `muse-spark` (Meta) or `fake` (the scripted model, which needs
-    `fake_script`). OVERSIGHT_AGENT_MODEL."""
+    """The profile agents run on: `muse-spark` (Meta), `muse-spark-open` (Baseten), `fake` or
+    `fake-b` (scripted models requiring a slot script). OVERSIGHT_AGENT_MODEL."""
     fake_script: Path | None = None
     """The fake model's script, for `fake`; a relative path starts at the repository root.
     OVERSIGHT_FAKE_SCRIPT."""

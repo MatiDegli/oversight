@@ -3,6 +3,8 @@
 Each decision with its reason. The design approved before the build is in
 [docs/proposal.md](docs/proposal.md); this file adds what is decided while building.
 
+Entries are ordered by merge, not by date; when two entries conflict, the later date wins.
+
 ## 2026-10-31 — Measured caller words on the graph
 
 Approved by the maintainer at 13:55:35 ART (2026-10-31T16:55:35Z; packet B 1031e item 1): review callers say
@@ -27,6 +29,7 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 | openai | 3.29.0 | Apache-2.0 | the official SDK, pointed at Meta's and Baseten's endpoints (AGENTS.md) |
 | pydantic | 2.14.1 | MIT | the contracts' source of truth |
 | ruff, pyright, pytest, import-linter, httpx | 0.17.0, 1.1.414, 9.1.1, 2.15, 0.28.1 | MIT, MIT, MIT, BSD-2-Clause, BSD-3-Clause | lint and format, types, tests, import contracts, the test client |
+| httpx2 | 2.13.1 | BSD-3-Clause | direct dev dependency used by the no-credits test guard alongside httpx (`pyproject.toml`, `conftest.py`) |
 | pytest-timeout | 2.4.0 | MIT | a time limit per test: a hang fails alone, with its name |
 | pytest-xdist (and execnet 2.1.2) | 3.8.0 | MIT | runs the suite on 8 worker processes: `make check` waits for the slowest group, not the sum |
 | react, react-dom | 19.3.0 | MIT | the UI |
@@ -108,6 +111,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
     with a lint error and with a failing test). CI runs `make check-ci`, the same without
     gitleaks, which its check job has not got (the history is scanned in a job of its own), so
     the two cannot drift apart.
+
+    Amended 2026-10-31 (Docs audit): `Makefile` GATES also includes `check-notices`; the groups are Python, contracts, frontend, secrets and notices.
   - *xdist.* Chosen over splitting the suite by hand because the tests were already isolated:
     real uvicorn on a socket bound before it starts, `tmp_path` runtimes, no shared state.
     `-n 8` is fixed, not `auto`, so the memory share below is the same on every machine;
@@ -161,6 +166,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   `graph`, `events` and `commands`, so each import says which part of the contract it uses.
 - **The contract-scope check** (docs/proposal.md, section 4.8) comes in its own small PR, with its
   plan reviewed first, since it guards the tree.
+
+Superseded by 2026-10-31 Docs audit: the record follows main (decision 6); the contract-scope check never existed, and each approved contract change rides in its own front.
 - **Contract 1.1 adds the error code `internal` (500)** (the maintainer, 2026-10-26): without it an
   unexpected server-side failure, such as the change manager failing to open, answered FastAPI's
   plain 500, outside the single `ErrorResponse` format. A minor version, since it only adds a code;
@@ -210,6 +217,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   Approve has no keyboard shortcut and must never fire while a comment is typed, and Tab then Space
   from the comment box would merge into main. Cost: keyboard and screen-reader users cannot approve;
   they are told why, and the merge stays a deliberate pointer act.
+
+Amended 2026-10-31 (Docs audit): the caption was dropped in ff9ddb9 without a decision; decision 2 of “Docs audit: the record follows main” reinstates it through line B's design-docs front. Approve stays pointer-only.
 - **Bezier edges kept over taxi (maintainer, 2026-10-26), superseded on 2026-10-27 by the graph
   at the sketch's direction, below:** captures of both on the preset layout were compared; curves
   read better. That preset packed every module in a tight box, with no room for lanes; on the wide
@@ -232,11 +241,15 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
   draws calls, and with 36 functions the imports doubled the lines without saying what a change
   reaches. Cost of the whole: in review, at the 12px floor, only the nearest callers of the demo's
   hub fit beside the cone card; the rest are lit and listed as out of view.
+
+Amended 2026-10-31 (Start with the whole graph when it fits legibly; b860ef4): `frontend/src/graph/camera.ts` startCamera fits the whole graph when legible, otherwise frames the hub at the legibility floor.
 - **Answers on the graph at the sketch (maintainer, 2026-10-27):** edges at a lit node stay grey,
   and only a change's own edges take the agent's color; imports stay hidden; a cone row that says
   "Out of view" pans the camera to its node only when clicked (at the zoom it has, never on its
   own, and the card then lists what is still out of view); the start view is the module of the hub
   (pricing).
+
+Amended 2026-10-31 (Start with the whole graph when it fits legibly; b860ef4): startCamera now fits the whole graph when legible.
 - **Fit stops at the zoom range (2026-10-27):** a graph too wide for 20% is framed at 20%, centered,
   and is not fitted below it, rather than letting Fit go below the range for its own framing and
   restoring the limit afterwards. A wheel or button zoom that started below the range would have
@@ -286,6 +299,8 @@ is adopted only once it is 14 days old (proposal, rule 2). Licenses were read fr
 - **R3: function edges on demand.** Module edges show at rest. Function edges appear on hover,
   selection and working agents' cones; calls within one file stay hidden. This reduces clutter
   while keeping the calls relevant to the current work visible.
+
+Amended 2026-10-29 (Exact calls at rest, possible links as quiet context): open modules show exact cross-file calls at rest; possible calls appear on hover, selection or displayed cones. Same-file calls stay hidden (`frontend/src/graph/styles.ts`, `exactEdges.test.ts`).
 - **R4: local light, amended by the maintainer on 2026-10-27.** The approved v4 field keeps
   square LEDs and box-shaped light from the current node and last read, not a round glow.
   The full amendment is recorded under v4 below and in DESIGN.md; it replaces the earlier
@@ -410,6 +425,8 @@ Ours wins in every case below.
 - **Classes start folded (maintainer, 2026-10-27):** one row names the class and its method count; a click toggles it, and a new change adding or modifying a method opens it. Reads and cone membership project onto the folded row (nearest distance). Preset positions plus fold state determine all positions; only later rows and modules in that column slide for 240ms with cubic-bezier(0.2, 0.7, 0.2, 1), or jump under reduced motion. Incoming calls share a target trunk outside frames; endpoint taps alone traverse their own containing frame.
 
 - **Graph cleanup evidence (2026-10-27):** comparison images and work reports stay outside the product repository; the start camera stays at 100%, frames settled header bounds, and treats the heading, notices and bottom overlays as viewport edges when choosing the nearest clear gutter.
+
+Amended 2026-10-31 (Start with the whole graph when it fits legibly; b860ef4): the start camera now fits the whole graph when legible.
 - **Dot field brought forward (maintainer, 2026-10-27):** the dot field and working rings
   behind the graph move from "after level 1" to now, with the v4 R4 amendment above; it must never
   block level 1, so with no WebGL, a failed draw or a lost context the graph shows plain ground.
@@ -423,6 +440,8 @@ Ours wins in every case below.
   holds a `_support.ChangeContext` with dependencies and that state, rather than copied aliases.
   Assignable compatibility properties preserve private test access. Public signatures and tasks,
   lock/await order, combined tests, permanent main suspicion and receipt ordering remain intact.
+
+Amended 2026-10-31 (Docs audit): names and sizes as of Oct 27; `_manager.py` now has 728 lines, and file transactions live in `changes/_files.py` as save_main, settle_save and restore_save.
 - **Typed ports only while needed:** ports are a record of lambdas that resolve facade methods
   on each invocation, preserving class-level monkeypatches without making the facade implement a
   protocol. PR 2 adds finish_pending/send_requested for proposal; PR 3 adds drain_pending/finish
@@ -445,11 +464,15 @@ Ours wins in every case below.
   scope; no function exceeds 80 lines. Two unsuccessful fidelity/review repair rounds stop the
   sequence for a coordinator decision.
 
+Amended 2026-10-31 (Docs audit): names and sizes as of Oct 27; save_main, settle_save and restore_save now live in `changes/_files.py`.
+
 ## Level 2 closed on Tue Oct 27
 
 Level 2 closed on Tue Oct 27 when `make demo-check` passed three runs in a row from a clean
 start using the scripted fake model (anyone can rerun it), and `make e2e` passed over the
 scripted two-agent replay. A real recorded run will be bundled for the static replay.
+
+Amended 2026-10-31 (Docs audit): the real recorded run is bundled in `fixtures/events/recorded-demo.jsonl`; `frontend/tools/recorded-replay.ts` loads it for the static replay build.
 
 Level 3 wiring starts now. Contracts 1.4.0 delivery A was approved by the maintainer, 2026-10-27.
 
@@ -498,6 +521,8 @@ all shell shortcuts pause except Escape, which dismisses only the sheet.
    Require revision/head guards, explicit live provenance and published agent bases. Reserve
    GET /tree with required nullable file hashes, a joint 2,000-entry cap and a future 8 MiB
    hashing budget; no traversal is enabled yet.
+
+Amended 2026-10-31 (Docs audit): GET /tree is built in `backend/src/oversight/api/commands.py`; replay answers 501.
 2. **Finish declarations** — approved by the maintainer, 2026-10-27.
    Optional files, tests_run and pytest ids preserve agent claims separately from observed facts.
 3. **Evidence rules** — approved by the maintainer, 2026-10-27.
@@ -575,6 +600,8 @@ separate 1 MiB limits; regular files use 256 KiB, while agent ranged reads allow
 Event line limits exclude the trailing newline and apply to both import and export. Ledger
 writes are compact and refuse growth beyond their read cap before replacing the previous file.
 
+Amended 2026-10-31 (d157a33): event lines retain 1 MiB except graph events, 8 MiB (`backend/src/oversight/limits.py` MAX_GRAPH_EVENT_LINE_BYTES).
+
 ## Monaco's vendored DOMPurify — 2026-10-27
 
 Pin Monaco's DOMPurify dependency to 3.4.17 and patch monaco-editor@0.57.0 with the official
@@ -649,6 +676,8 @@ reviews or publish events yet. A reviewer uses the opposite slot's model, a fres
 separate message history. Fake reviews require an entirely fake configuration and use scripts
 named for the reviewer, independently of the author scripts.
 
+Amended 2026-10-31 (Docs audit): `OVERSIGHT_REVIEW_MODEL` selects the independent reviewer, default Muse Spark Open; PR3a/PR3b built scheduling (`runtime_review.py`). `make demo` does not enable cross-review; `.env.example` leaves it off.
+
 The reviewer uses `REVIEW_MAX_OUTPUT_TOKENS = 12_288` with explicit `reasoning_effort="low"`
 on Meta and Baseten. This provisional budget leaves room for twenty findings of 1,000 characters
 and reasoning; 32,768 has no documented provider validation. Paid acceptance must measure provider
@@ -673,6 +702,8 @@ duplicates or contradictions; a clean merge does not establish agreement.
 The maintainer accepted package 2 decisions 6a–6c on October 27 at 22:17 ART (UTC−3):
 
 - 6a: the cross-review switch stays false by default; the demo enables it explicitly.
+
+Amended 2026-10-31 (Docs audit): `make demo` follows `.env` and does not enable cross-review; `.env.example` sets OVERSIGHT_CROSS_REVIEW=false. Demo activation needs a separate decision.
 - 6b: parity accounting records an unanswered Meta review attempt as unknown and closes the
   Meta spending brake. Recovery requires stopping the server, checking Meta's total and running
   `ledger settle`; settlement is refused while the server runs. Restart creates a clean workspace
@@ -689,6 +720,8 @@ PR1 already supplies the default-off switch. PR3a carries runtime registration, 
 lifecycle wiring, including explicit demo activation; PR3b carries call scope, accounting, the
 Meta brake and distinct review-ledger failure handling. PR4 carries replay/UI projection and
 recognition of the shared fixture. Contracts remain frozen at 1.4.0.
+
+Amended 2026-10-31 (Docs audit): PR3a/PR3b scheduling is built (`runtime_review.py`); the reviewer is OVERSIGHT_REVIEW_MODEL, default Muse Spark Open. `make demo` follows `.env` without enabling cross-review.
 
 ## Cross-review runtime lifecycle (PR3a)
 
@@ -759,6 +792,8 @@ The active backend profile remains safe-merge-probes-v1. No protected-path evalu
 UI, Revert or delivery manifest is implemented here. Cost per node and exception type are left
 out. These additions identify schema 1.5.0; safe creation, nullable SaveFile.base_hash, zones and
 inventory move to 1.6.0. Delivery A decisions 11–12 remain unchanged as the approval history.
+
+Superseded by 2026-10-31 Item 8 F4b: protected paths join rules authority atomically; `_assessment.py` selects safe-merge-paths-v1, while `_mode.py` RULES_ACTIVATION remains false.
 The tuple check now compares against the byte-exact 1.4.0 baseline, retaining the 1.3.0 baseline
 and negative controls. Baseline snapshots count toward the commit line limit; an indivisible
 snapshot requires the existing Commit-Exception trailer. Pydantic/JSON Schema enforce list bounds
@@ -821,6 +856,8 @@ contract-proposal approval below. The code also shows that dependent starts and 
 fallback exceed the two-agent running-plan validator
 (`contracts/src/oversight_contracts/plans.py:60`); propose that extension before wiring it. These
 questions prevent optional properties from hiding changes to the meaning of a contract.
+
+Amended 2026-10-31 (Docs audit): plans.py:60 has since moved; Plan and validate_dependencies now admit one to six subtasks and dependencies (contracts 1.8.0).
 
 ## 2026-10-28 — Bench criteria and a shared US$20 ceiling
 
@@ -912,6 +949,8 @@ unavailable evidence. Reuse the test-run caps and guarded asynchronous execution
 does not contain filesystem effects, so unsupported side effects remain unprobed. This avoids
 turning an optional evidence producer into a less restricted execution path.
 
+Amended 2026-10-31 (Docs audit): capability.py:116 has since moved; SessionIsolation and check_effect in `workspace/capability.py` own the isolation capability.
+
 ## 2026-10-28 — Exploratory spike is not implementation code
 
 Coordinator ruling: write the behavior probe afresh within this repository. The exploratory spike
@@ -934,6 +973,8 @@ profile, preserving charges, unknowns and outstanding reservations. Main's `tool
 still identifies completion by task/profile; `tools/bench-arms` owns the extension. Never erase or
 reset the ledger or create another output directory as a repetition mechanism. A retry with lost
 accounting would evade the shared cap and make the measurements irreproducible.
+
+Amended 2026-10-31 (9ad1ecf): tools/bench-arms is done; `tools/eval/ledger.py` Ledger.completed uses arm_id and repetition, and the cited line 112 has since moved.
 
 ## 2026-10-28 — Remove completed cross-review and small packages from work
 
@@ -1004,6 +1045,8 @@ Require that explicit tariff before paid bench comparisons: the shared US$20 cei
 enforced with an unpriced arm. Unknown cost is never zero and never debits the Meta credit ledger.
 This makes the budget rule apply to both providers without inventing a price.
 
+Amended 2026-10-31 (Docs audit): Baseten serves Muse Spark Open as reviewer and decider by default (`settings.py` review_model and decision_model); agent slots default to Muse Spark (`slots.py`). Explicit Baseten tariffs still determine known spend.
+
 ## 2026-10-28 — Agents receive graph context as server-built text
 
 Item 16 passes its bounded graph context only as text assembled by the server, never a graph tool
@@ -1029,6 +1072,8 @@ items 1, 2, 4 and 9, the behavior-diff bench and proof 1 must all be on main. Ot
 item 12 down and report the cuts to the maintainer. These proofs focus the freeze on something a
 judge can try and measured supervision, while fixing the reporting rule before results are known.
 
+Amended 2026-10-30 (ffb3210): the cut line is drawn when the checklist reaches main; Sat Oct 31 at 23:00 ART is only the fallback (`docs/additions.md`, “Three proofs”).
+
 ## 2026-10-28 — D2: A thin lead starts agents through the public commands
 
 Move the [lead agent](docs/additions.md#lead-agent) out of Next and place it immediately after
@@ -1037,6 +1082,8 @@ task queue. The lead writes only the plan and subtasks and starts agents through
 using the reserved lead routes and `started_by`. It never merges or reviews and has no information
 hidden from the person. This lets proof 2 start many agents without making the person start each
 one, while preserving the existing authority and evidence boundaries.
+
+Amended 2026-10-30 (The lead requests plans only): the lead never starts agents; the person approves an exact plan revision and the server dispatches it. The built lead is recorded in 2026-10-31 “The lead runs inside one run with fixed limits” (6818b3b).
 
 ## 2026-10-28 — D3: Saved flows fill task text before an agent starts
 
@@ -1069,6 +1116,8 @@ language by extension in the file view and live diff, without language-service w
 (`frontend/src/editor/language.ts`, `FileView.tsx:193`, `LiveDiff.tsx:266`). Files that create no
 graph nodes show a discreet No impact analysis header label. This makes other repository files
 readable without suggesting that Oversight analyzes their impact or adding language services.
+
+Amended 2026-10-31 (Docs audit): TOML uses INI tokens and JSON stays plain text (`frontend/src/editor/language.ts`, `language.test.ts`).
 
 ## 2026-10-28 — D6: Give Spark Open a constrained decision on behavior differences
 
@@ -1110,6 +1159,8 @@ establish reachability or its absence, the card asks; it never starts another ro
 Keep this in Undecided candidates, outside the decided queue. Repeating an unchanged failure
 spends credits and the person's attention for nothing.
 
+Amended 2026-10-31 (Ask instead of repeating an unchanged failure): the guard is built with call edges as its only reach source; executed nodes per test are not recorded on main.
+
 ## 2026-10-28 — D8: Attribute video numbers to the team's build process
 
 The maintainer allows the video's impact beat to use numbers from building Oversight with a
@@ -1132,6 +1183,8 @@ outside the decided queue.
 Until then, measure the third proof, the share of green patches with an unrequested difference,
 on tasks that change functions only, and say so in the write-up. This keeps the measurement within
 what the current probe can compare instead of implying evidence about methods.
+
+Amended 2026-10-31 (Docs audit): the `_behavior.py:79` and `:76-77` references have since moved; `targets` now accepts functions and methods and uses `_behavior_methods.py` method_inputs. The Oct 28 restriction describes its original scope.
 
 ## 2026-10-28 — D10: The D6 probe did not provide decision probabilities
 
@@ -1265,6 +1318,8 @@ A/B are unchanged. DESIGN.md records the tint and node-fill recipe.
 The contract Slot keys one exhaustive typed look map; components, graph layers/styles and field
 emitters read it. Missing slot families fail typecheck. Admission remains two agents until the
 backend's separate front. Overlaps, badges and folds for N agents remain a later graph front.
+
+Amended 2026-10-31 (Docs audit): admission is built as OVERSIGHT_MAX_AGENTS, default 4, from 1 through 6 (`settings.py`, `slots.py`).
 
 The coordinator measured each graphic at >=3:1 and text at >=4.5:1 over dark #101012, #151518,
 #131313 and day #f8f7f3, #fcfbf8, #fbfaf7, #f4f3ef, #eeede8. Letters on graphic fill pass
@@ -1566,6 +1621,8 @@ The creation bundle remains reserved for 1.8.0.
 
 The coordinator approved a built-in category table for the reserved `protected_paths` rule,
 based on the four categories in `docs/additions.md:270`. The maintainer may change its patterns.
+
+Amended 2026-10-31 (Docs audit): the protected-path categories are in `docs/additions.md`, section “8. Merge by rules”; the old line number has moved.
 `changes/_protected_paths.py` records manifests/lockfiles (`pyproject.toml`, `setup.py`, `setup.cfg`,
 `requirements*.txt`, `uv.lock`, `poetry.lock`, `Pipfile`, `Pipfile.lock`) and test configuration
 (`pytest.ini`, `tox.ini`, `noxfile.py`, `.coveragerc`, `conftest.py`) by basename at any depth.
@@ -1588,12 +1645,16 @@ This adds a callable evaluator, not live enforcement: the scheduler still select
 `safe-merge-probes-v1`, both merge predicates reject the paths profile, protected-path grants stay
 refused, and startup capability remains closed. Source capture/loading, settings, profile
 migration, activation and any future waivable-hit semantics require separate work.
+
+Superseded by 2026-10-31 Item 8 F4b: protected paths join rules authority atomically; `_assessment.py` selects safe-merge-paths-v1 and captures proposal paths, while `_mode.py` RULES_ACTIVATION stays false.
 ## 2026-10-29 — Internal object-only preflight for a rules merge's inverse
 
 `changes._revert_preflight.preflight` accepts a server-supplied resolution event (or its stored
 envelope), a `RevertChange` and the target change ID. Store lookup and HTTP remain separate work;
 Revert stays reserved. It revalidates provenance and the recorded assessment, including pass
 observations and grant coverage, and refuses unknown or inconsistent evidence.
+
+Amended 2026-10-31 (Revert admits a server-loaded committed rules resolution; 69aaee8): POST /changes/{id}/revert is live; its UI belongs to line B's front. No rules merge can occur while RULES_ACTIVATION is false.
 
 Classification holds main's lock and the shared Git lease, with one finite deadline covering lock
 waits and guarded asynchronous Git. It captures main's commit H, requires the caller's observed
@@ -1672,6 +1733,8 @@ verbatim task and shared graph-count previews, and down chevrons; their content 
 The diff's disclosures keep their existing boxes. Consolidating the rows and tightening the
 summary-to-list gap keeps the collapsed last row above the dock on first view at both phone sizes,
 without a guessed dock-height padding. Desktop composition and typography remain unchanged.
+
+Amended 2026-10-31 (Phone practice reviews with the panel's evidence): Possibly affected was removed; Recorded task remains a disclosure (`frontend/src/app/challenge/PhoneReview.tsx`).
 
 ## 2026-10-29 — Source profiles keep pytest options apart from targets
 
@@ -2080,6 +2143,8 @@ The maintainer's five settled departures, verbatim:
 - the answered row always wraps, never truncates (at 1280 the After cell may need a scroll);
 - state g's Revert is the item 8 target, built only when item 8 delivers it.
 
+Amended 2026-10-31 (Revert admits a server-loaded committed rules resolution; 69aaee8): the Revert route is live; its UI is line B's front, and rules activation stays closed.
+
 The approved baseline bends Signal's frame dimming to 16% outside the review cone and change,
 including module frames. Grain and top light stay on the header. The sketch's local day syntax
 values must become token-driven in the code step; day syntax tokens already exist, and this step
@@ -2087,6 +2152,8 @@ adds no colors. Mono's narrower prose rule applies only inside review: the agent
 keep their numeric readings. Approval from the review panel starts merge travel like any merge;
 with the agents panel folded, the pulse leaves that agent's letter in the rail. It never moves
 the camera or takes focus from the panel. Revert remains absent until item 8 supplies its command.
+
+Amended 2026-10-31 (Revert admits a server-loaded committed rules resolution; 69aaee8): the route is live; the UI belongs to line B's front. No rules merge can occur while RULES_ACTIVATION is false.
 
 Impeccable 4.5.2 shape ordinarily asks for brief confirmation and stops; this screen's approved
 brief and explicit instruction to write DESIGN.md settle that step. Clarify's preference for
@@ -2454,6 +2521,8 @@ The maintainer accepted seven answers for level 3's messages, pause and resume:
 Reason: the limits bound the context messages add, since every step resends the full history, and memory-only text
 needs no contract change.
 
+Superseded by 2026-10-31 Message text persists; privacy at export (answer 7 only); the message, pause and resume limits remain.
+
 ## 2026-10-30 — No paid H1 pair: the free passes miss its third condition
 
 H1, in proof 2's entry, allows the paid harness-pack pair only after both free passes meet three conditions. On
@@ -2477,6 +2546,8 @@ proposal inventory. Neither receipt is reconstructed when unavailable.
 
 Reason: F4a captures the sources without changing authority. Live enforcement lands atomically in
 F4b; these helpers have no production callers, and F1's activation latch stays closed.
+
+Amended 2026-10-31 (Item 8 F4b: protected paths join rules authority atomically): `changes/_assessment.py` now calls capture_proposal_paths in production; RULES_ACTIVATION remains false.
 
 ## 2026-10-31 — Item 8 F4b: protected paths join rules authority atomically
 
@@ -2590,6 +2661,30 @@ will decide whether to propose content-addressed blobs and zstd for closed segme
 The reserved safe creation bundle (nullable `SaveFile.base_hash`, zones and inventory) moves from
 1.9.0 to 1.11.0, superseding its earlier reservations; 1.10.0 is approved for
 probe-inputs parameter-extension evidence.
+
+Amended 2026-10-31 (Docs audit): versions are assigned next free at landing; the chain above is approval history.
+
+## Contracts 1.12.0 — approved by the maintainer, 2026-10-31
+
+GET /usage serves UsageView live and in a replay. It maps the existing list-price, activity and
+revision-round folds over one committed event inventory. Ledger figures never appear in this view:
+the costs are list-price equivalents, never a bill or the budget ledger. A null figure is unknown;
+its known_* sibling is a lower bound, and zero remains zero.
+
+Item 10 uses the maintainer's 2026-10-31 team rule, shared with team colors: the plan's lead when
+Plan.started_by names one, else the plan, else the agent itself. A plan the person requests is one
+team; two plans of the same lead are one team. additions.md now states this rule. Hour/day periods
+come later as an additive front with a time-zone parameter.
+
+The Limits docstrings now say per round, matching the runtime's revision budgets. A named alias
+for bounded message text keeps generated names stable without changing accepted document shapes.
+proposal.md no longer claims a contract-scope check: recorded maintainer approval accompanies a
+contract change and its first producer, and CI compares regenerated artifacts byte for byte.
+
+The usage view took 1.12.0 at landing, next free after the lead runtime (1.10.0)
+and the parameter-extension evidence (1.11.0). Safe creation takes a later contract version
+assigned at landing after its own approval.
+
 ## 2026-10-31 — Supervision is a pure fold over the committed event prefix
 
 Reason: the maintainer needs reproducible supervision counts and spend for any recorded run
@@ -2675,6 +2770,7 @@ In a replay, "Revert is not available in a replay." takes the button's place.
 Revert acts only on its own pointer click. It stays focusable; Enter and Space send nothing.
 There is no shortcut, palette command or confirmation. Availability does not read the merge mode.
 Outcomes update the current view without opening a tab, moving focus or selecting a node.
+
 ## 2026-10-31 — The lead runs inside one run with fixed limits
 
 The coordination lead reads main through the person's read handlers and only proposes plans.
@@ -2731,6 +2827,8 @@ reason, never payload; they grant no cached evidence, and later valid receipts r
 
 The maintainer's answers were recorded at 13:49:39 ART (2026-10-31T16:49:39Z):
 Q1 reserves the typed confirmation command for E3, contract 1.13.0; E1 changes no contract.
+
+Amended 2026-10-31 (Docs audit): E3's typed confirmation command takes a later contract version, assigned at landing after its own approval.
 Q2, “Un envío, sin reintento”, means one HTTP send, including failure. This explicitly
 excepts the examples phase alone from the usual 429/5xx retry rule. A failed collection
 requires a new human start; coding keeps its existing retries. Q3, “Sí, JSON síncrono”,
@@ -2840,3 +2938,265 @@ with a click/Enter popover for current-revision behavior samples. Facts arriving
 review add it in place without opening it or taking focus. Existing caption-size is 13px, within
 1px of the sketch. The approved exclusions are the moved cone card, the 1280 reframe, and the agent
 card's “Evidence 5 of 6” line. Measured caller words belong to the parallel measured-cone graph front.
+
+## 2026-10-31 — Docs audit: the record follows main
+
+Reason: a docs audit found many docs behind main after several days of changed decisions. The maintainer approved all seven decisions on 2026-10-31 at 18:10:21 ART.
+
+1. Contract versions are assigned next free at landing; docs and comments promise no version number. The lead runtime took 1.10.0 when it landed first (6818b3b); parameter-extension evidence takes the next free version when it lands; safe creation (nullable SaveFile.base_hash, zones, inventory) and item 12's E3 confirmation command take the next free version after their own approval. This supersedes the reservations in the version chain.
+2. The Approve caption ("Approve with a click: it merges into main"), dropped in ff9ddb9 without a decision, is reinstated by line B's design-docs front; Approve stays pointer-only.
+3. PRODUCT.md gains one status line saying what is on today and what is target; the maintainer's text is unchanged.
+4. README's models line describes what is real today; turning cross-review on for the demo is a separate decision.
+5. AGENTS.md is aligned only with decisions already recorded.
+6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
+7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
+
+## 2026-10-31 — Refuse obvious secret files at model tool boundaries
+
+A shared pure basename predicate in workspace enforces the Agent tools rule before the coding
+agent's whole/ranged read_file and edit_file can read a file, and before the lead's read_file
+calls its shared reader. Search excludes secret names before reading any listed file. Refusals
+share one rule message and at most 60 basename characters, without checking whether a file exists.
+Both list_files tools still expose names: a name is not file content.
+
+Names are case-folded; a final .example exempts every pattern, matching the repository's
+committed examples. The .env* rule is literal, including .envrc, and intentionally wider than
+the repository's own .gitignore patterns .env and .env.*. The other patterns are *.pem, *.key
+and SSH identity names id_rsa, id_dsa, id_ecdsa and id_ed25519, followed by the end of the name
+or _, . or -. The identity names live in one constant. This implements the front's requested
+SSH interpretation of id_* so ordinary id_utils.py and id_generator.py remain readable;
+id_rsa_loader.py is refused. The alternative is a literal id_* prefix that would refuse those
+ordinary source files too. Widening the identity names or adopting that alternative remains a
+pending maintainer product decision.
+
+GET /files, PUT /files and Tree stay unchanged: the person may read or edit their own files.
+The lead shares GET /files' reader, so its guard belongs in the tool rather than the route.
+Path validation, contracts, events, prompts and both tool tables stay unchanged.
+
+Residual risks outside this front: run_tests output may expose secrets (up to 4,000 characters);
+the reviewer's git diff may expose one if something outside a tool changes a secret file;
+the person's own PUT /files may write one into change evidence; and secrets with non-obvious
+names remain readable. This is a name policy, not content detection or output redaction.
+## 2026-10-31 — Item 12 E4: inert deterministic criteria and candidate checks
+
+Q3 remains as decided at 13:49:39 ART: v1 criteria call synchronous top-level functions with
+JSON node_id/args/kwargs and compare an exact JSON result. Behavior-only examples are refused;
+TaskExample and every other contract stay unchanged. The pure workspace renderer returns fixed
+ASCII pytest source, its SHA-256 and all ordered pytest ids. Strict parsing rejects duplicate
+keys and non-finite numbers, including overflowing exponents, before canonicalization.
+The canonical rule is json.dumps(value, sort_keys=True, separators=(",", ":"),
+ensure_ascii=True, allow_nan=False); test_render_parity_with_canonical_json pins parity with the
+public oversight.agents.canonical_json without a workspace-to-agents import.
+
+A frozen RequiredCriteria records the path, hash and required test/example ids. ChangeRecord
+adds only criteria: RequiredCriteria | None = None after suite_runs (an E3 overlap outside the
+original plan's file list). Installation is an inert library port for E3: it requires person
+pins and eligible base targets, creates a new file under main-then-agent locks, publishes its
+change.updated as the user, and only then retains the record. No production caller installs it.
+
+verify_run sits at the proposal suite and combined_tests_pass, the existing point shared by
+personal and rules merge paths. An otherwise passed suite becomes error plus an
+example_criteria problems entry when its captured tested tree has an unreadable, missing or
+edited file, or its full retained report cannot prove each required id passed exactly once.
+It emits one server-built tests diagnostic; counters, cases, failed_tests and tested tree stay
+observed. No fabricated case, failed id, extra suite, merge path, event or hidden rules veto is
+added. The normalized run is the run published, retained, returned and judged. No edits were
+needed in _suite_evidence.py, _candidate.py, _approval.py, _transaction.py or _assessment.py.
+The existing tests and combined_tests evidence carry the outcome; no rule, profile, policy
+version or ChangeAssessment changes. RULES_ACTIVATION stays False.
+
+When main has not moved, personal approval still runs no combined suite: its evidence remains
+the verified proposal suite, displayed exactly as an existing failing proposal is displayed.
+With criteria absent, the verifier returns the original run without Git I/O. The file hash
+binds the rendered criteria source in the tested candidate; it does not defend against a
+hostile conftest or module edit, which remain covered only by current test-integrity and
+isolation checks. E2's lifecycle and E3's human confirmation remain separate fronts.
+
+### Review round 1: accepted effects on retained-run readers
+
+An unmet criterion deliberately makes the retained proposal run unverifiable through its
+example_criteria problem, even though its observed cases are preserved. We accept the resulting
+loss of review evidence: _facts.py cannot resolve parametrized integrity identities and reports
+"integrity parameter ids unavailable"; it also adds "suite N: example_criteria: <code>" and
+"suite N: incomplete retained cases", because the published cases_complete is false. _probes.py
+reports "added tests: parameter ids unavailable" for added parametrized tests. _measured.py
+declines to select proposal tests and reports "proposal test selection unavailable", so the
+measured cone is unavailable. These readers keep their existing conservative completeness rules;
+E4 does not certify a report that its required criteria could not verify. The real-harness
+test_proposal_suite_normalized_and_consistent now asserts all four effects for every covered
+normalization code, including preserved observed parameter ids and no measured probe suites.
+## 2026-10-31 — Pure structural shape comparison
+
+The shape producer compares base and head graph snapshots without I/O or approval effects.
+Functions and methods are observed only when added or modified, longer than 80 lines
+(including decorators), and new or growing: AGENTS.md makes size a review signal, never a gate.
+At most 24 observations are returned in deterministic kind/path/node order to bound the review;
+omission and last-good parse files explicitly mark the evidence incomplete.
+
+A new import dependency is observed only between modules already present in base: imports
+to or from a new module are an ordinary part of adding code. A head import component of two
+or more modules is observed once when it contains a new edge, including an expanded old cycle.
+Test nodes are excluded from all three checks because tests are hidden from cones and long
+parametrized tables are normal. Imports reflect the parser's any-scope edges, including inside
+functions and under TYPE_CHECKING; the wording says "imports" because these edges do not prove
+execution at import time. Git-tree evidence identifies the captured source; a complete empty
+result means checked with no observations, not a safety certification. Wiring and duplicate
+logic remain separate fronts.
+## 2026-10-31 — Observe newly duplicated function structure
+
+The shape duplicate producer compares only non-test function and method graph nodes against
+the candidate tree. It hashes the exact AST of the signature and body after removing the
+function's name, decorators, annotations and docstrings, and consistently renaming parameters
+and stored names in first-appearance order (signature parameters first). Nested bindings are
+included, but nested functions are not independent observations. Global and attribute names,
+calls, defaults, literals, operators and control flow otherwise stay in the structure. This
+deliberately separate normalizer has no dependency on the test-integrity detectors: the two
+checks answer different questions.
+
+Four body statements, including nested statements and excluding docstrings, are the minimum:
+smaller wrappers and accessors are too ordinary to justify an observation. Each fingerprint
+group emits at most one fact, anchored on the least changed id, and only if a member is new or
+its fingerprint differs from base. This new-pair rule avoids repeatedly asking about existing
+duplication and ignores formatting or documentation-only changes. At most three peers are
+named; the remaining count excludes the anchor and those peers. Function and fact limits,
+unavailable source and parse failures explicitly make evidence incomplete instead of implying
+that the candidate was fully checked.
+
+Exact structural equality is conservative, but still permits false positives: independent
+implementations can intentionally repeat an algorithm; decorators and annotations can affect
+runtime behavior; and a single binding table across nested scopes does not prove lexical or
+semantic equivalence. These are accepted because the result is a neutral question for the
+person, never a reuse mandate, approval gate or claim that extraction is safe. This front
+only produces evidence; capturing and wiring it into change facts remain separate work.
+## 2026-10-31 — Bounded initial-task context builder, pending its bench
+
+The pure internal builder in `changes/_initial_context.py` takes a graph snapshot,
+whole-tree source text and target node ids, returning text, its estimated tokens and
+explicit omission reasons. It has no caller yet: wiring and adoption wait for A16w's
+bench; B16e can evaluate the builder independently. It adds no agent graph tool.
+
+The global default is 1,500 estimated tokens, using ceil(UTF-8 bytes / 3), without a
+new tokenizer dependency. This conservative estimate charges the introduction, target
+headings, complete entries, separators and omission summary together. Greedy allocation
+tries every later entry even after one fails to fit; a target without a fitting signature
+gets no other sections. The estimate is a budget rule, not measured provider usage.
+
+Across targets sorted by qualified name, path and id, allocation order is signatures,
+exact callers, exact callees, constants used, possible callers, then possible callees.
+Signatures establish the task's subjects before their neighbors; exact relationships and
+source-proven constants precede uncertain relationships. Direct callers and callees each
+share the existing eight-item limit across exact and possible edges, deduplicated with
+exact winning. Output combines exact and possible neighbors with explicit labels.
+
+A module constant is a single uppercase name assigned once in module scope to a value
+accepted by `ast.literal_eval`, including annotated assignments. Imported, rebound,
+unused and lexically shadowed names are excluded: context must describe source evidence,
+not guess values. Python's symbol tables resolve body loads through nested scopes;
+set representations sort their members so hash seeds cannot change the text. Signatures
+are capped at 400 characters and constant representations over 120 characters are
+omitted, with reasons, to keep individual entries bounded without copying source bodies.
+
+## 2026-10-31 — Use words at three problem sites
+
+Problem texts are read by the person; exception class names are not words. In
+`backend/src/oversight/changes/_measured.py`, the fallback is "caller measurement
+unavailable"; timeout stays "caller measurement budget exhausted" and isolation stays
+"isolation unavailable". In `backend/src/oversight/changes/_probes.py`, timeouts say
+"added tests: {phase} timed out" and workspace or operating-system failures say
+"added tests: {phase} unavailable"; the redacted isolation detail suffix stays. In
+`backend/src/oversight/workspace/measured_report.py`, operating-system failures say
+"caller report unavailable" and invalid report contents say "caller report unreadable".
+
+Tech debt and residual risk: type names remain at two sites in
+`backend/src/oversight/changes/_review_cards.py` because the bench classifies them as
+"review unavailable" through a frozen pattern in `tools/eval/detection/reporting.py`;
+changing them invalidates the recorded paid pilots. They also remain at two sites in
+`backend/src/oversight/changes/_proposal.py`, with the same texts as two sites here,
+while open fronts edit that file. A later front words them when the bench fingerprints
+may change.
+## 2026-10-31 — Queued rules attempts follow verified main after settlement
+
+Per-record attempt keys `(revision, head, main, mode_revision)` decide admission; an exact
+key never runs twice. `rules_consumed` remains the revision audit required by reservation
+revalidation, including callers that reserve without scheduler admission. Neither attempts
+nor live rules authority survive restart.
+
+A legitimate move is both announced through `main_changed` and verified by reading actual
+HEAD under the still-held main lock and a Git lease. Preflight suppresses `main_moved` only
+when that HEAD equals the announced commit and differs from the reserved main, neither
+integrity owner is suspect, availability remains confirmed, no person intent/action exists,
+and the reservation is still current after the read. Otherwise the existing terminal path
+runs. Unannounced snapshot/HEAD moves keep their terminal `main_moved` behavior, including
+`evaluate`'s existing branch; neither `revalidate` nor `rules_tree` changes its codes.
+
+The successful queue path sets a private decision-number marker as its final synchronous
+step, without publishing a terminal or retargeting the reservation. `invalidate` clears the
+marker for person takeover, mode disable, close, terminal acknowledgement, resolution and
+new proposals; cancellation clears it too. Only `_decide`'s done callback, after the old task
+and verified recovery finish and `preemption.restore` retires that owner, calls
+`decision_finished`. Its guards require the same unfinished target, ready state, no rules
+owner or person action, unchanged mode/authority, and no close, resolution, rejected delivery
+or suspect state. It clears the marker before checking whether renewal is still eligible.
+
+The replacement is explicitly active, with a new private generation and the live graph's
+main, parked when the latest announced commit has not reached the graph. It carries only
+immutable proposal-source captures with retained receipts for the same revision/base/head;
+latest assessment, spend pin, tasks and terminal state reset. Parked waits are exempt from
+the attempt-key clause so an old snapshot's consumed key cannot invalidate their deadline.
+They can neither evaluate nor admit until graph delivery retargets a new generation. The
+first absolute deadline is never extended: a long queue may renew directly into one EXPIRED
+policy_invalid notice, without any assessment or admission.
+
+Renewal only schedules assessment through the unchanged admission path. Every transaction
+already remeasures its combined candidate, including protected paths, and executes a fresh
+combined suite; spend is sampled from durable truth at every guard. A pending merge's suite
+identifies `tested_tree`; `tested_commit` is None because that tree is not yet HEAD's tree
+(coordinator ruling, 2026-10-31 19:40 ART). Its definitive assessment identifies the new main.
+Every in-flight outcome closes following: merge, conflict, failed suite, F4 veto, integrity
+failure, out-of-band HEAD move or cancellation. The main lock still spans suite, effect and
+recovery, so managed saves and Revert queue behind it.
+
+No new task cancellation is added. F5a's park cancellation remains unchanged: production
+terminal publication completes through ReviewCards.publish -> ctx.whole under the cards
+lock; cards-None scheduler harnesses lack that protection. Queued rules owners are inactive
+waits and main moves never cancel them. F6 person intent wins before renewal and during the
+renewed evaluation, without changing preemption. Revert's landed success/receipt hooks
+announce its verified inverse commit and deliver the graph before queued work renews.
+The activation latch stays closed; no wire contract, event type, public field, route or response
+body changes.
+
+## 2026-10-31 — Secret-file defaults and criteria evidence hardening
+
+The maintainer approved the secret-filter defaults on 2026-10-31: AGENTS.md's id_* means
+id_rsa, id_dsa, id_ecdsa and id_ed25519 with the existing identity-name boundaries, so
+id_utils.py stays readable. Basename examples remain exempt. One shared refusal formatter
+keeps the message byte-for-byte, limits disclosure to 60 basename characters, and never
+checks existence; an ordinary trailing slash still has an empty, non-secret basename.
+
+At 20:05:33 ART on 2026-10-31 the maintainer decided that any directory segment whose
+case-folded name starts with .env also makes the file secret. This name-only check precedes
+the basename exemption, so even an app.example inside .envs is refused. Search already
+filters each repository-relative path before reading it; list_files still exposes names.
+
+Criteria error diagnostics report only the server-controlled code and required-case count.
+Example ids and pytest slugs are model text, so neither belongs in that diagnostic. Required
+example ids remain stored for confirmation. If criteria normalization turns an observed pass
+into an error and its problems contain code=integrity_invalid, the required combined suite
+preserves that refusal code rather than substituting suite_failed. This keeps the same
+needs-you integrity signal as a run without criteria; ordinary suite failures keep their code.
+
+Cancellation during proposal criteria verification publishes the observed suite as an error
+with tree_unreadable before propagating cancellation. A shared normalization helper preserves
+observed cases, and the no-I/O fallback keeps the verifier's ineligible-run early returns.
+Unchecked criteria cannot certify an observed pass. Combined-path cancellation remains owned
+by the existing recovery path.
+
+Criteria installation reads the worktree file under the held locks. An identical generated
+file can complete an interrupted installation without another write; different worktree or
+head bytes, or any base entry, still refuse. The same bytes bind the same hash, so repeated
+file publication is safe; assigning the record's criteria remains the last step.
+
+The input and output character caps stay on canonical ASCII text entering generated source
+and its hash. Non-ASCII expansion can therefore refuse otherwise short raw input. Rebasing
+the caps to raw length would change which examples install and requires a separate product
+decision; this change only documents and tests the existing behavior.

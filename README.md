@@ -3,10 +3,11 @@
 Agents write code faster than anyone can review it. Oversight is how you stop reading code without
 losing control.
 
-Today, in a small web IDE for Python projects, you watch coding agents built on Meta's Muse Spark
-work on a live graph of your repository. Each agent has its own git worktree. The functions an
-agent reads or edits light up in its color, and each change shows its impact cone, the functions
-possibly affected. Nothing reaches main until you approve it.
+Oversight is where a person plans, watches and reviews the work of several coding agents built on
+Meta's Muse Spark, with cost, evidence and the merge decision in one place. Today, in a small web
+IDE for Python projects, the agents work on a live graph of your repository. Each agent has its own
+git worktree. The functions an agent reads or edits light up in its color, and each change shows
+its impact cone, the functions possibly affected. Nothing reaches main until you approve it.
 
 Try [Would you approve it?](https://matidegli.github.io/oversight/): a real recorded run in your browser, no install, works at phone width; choose “Two-change practice”.
 
@@ -25,28 +26,32 @@ below are labeled separately.
 
 ## What works today
 
-- Complete: a live graph of the repository and an impact cone of functions possibly affected.
-- Complete: agents work in their own git worktrees, with reads and edits lit on the graph.
-- Complete: live diff and review with Approve, Reject and Request changes.
-- Complete: two agents working in parallel.
-- Complete: a spend meter and a brake that refuses new runs above 90% of the credit budget.
-- The static replay build is complete: it plays the real two-agent run in `fixtures/events/recorded-demo.jsonl` without a backend; its label, `Recorded run · Oct 27, 2026`, comes from the recording's provenance sidecar.
-- Complete: facts and a summary derived from events for each change (item 1).
-- Complete: an agent harness pack with syntax checks, bounded search and test feedback (item 3).
-- Complete: checks that a new test fails before the change and passes after it (item 6).
-- Complete: cross-review and automatic Request changes (item 7).
-- In progress: behavior diff, comparing old and new functions on the same inputs.
-- In progress: a measured impact cone showing callers with observed result changes.
-- In progress: live overlap between agents, including shared edits and earlier reads.
-- In progress: merge by rules, following main and a one-click Revert.
+- On by default: a live graph of the repository and an impact cone of functions possibly affected.
+- On by default: agents work in their own git worktrees, with reads and edits lit on the graph.
+- On by default: live diff and review with Approve, Reject and Request changes.
+- On by default: four agent slots, configurable up to six (A–F), working in parallel.
+- On by default: a spend meter and a brake that refuses new runs above 90% of the credit budget.
+- The static replay build is on by default and plays the real two-agent run in
+  `fixtures/events/recorded-demo.jsonl` without a backend. Its
+  label comes from the recording's provenance sidecar: `Recorded run · Oct 27, 2026`.
+- On by default: facts and a summary derived from events for each change (item 1).
+- Built, off by default: an opt-in agent harness pack with syntax checks, bounded search and test feedback (item 3).
+- On by default: checks that a new test fails before the change and passes after it (item 6).
+- Built, off by default: opt-in cross-review and automatic Request changes (item 7).
+- Built, off by default: opt-in behavior diff, comparing old and new functions on the same inputs, with graph count chips and sample popovers.
+- Built, off by default: opt-in measured caller evidence in review and measured caller words on the review graph.
+- On by default: live overlap on the graph and agent cards, including shared edits and earlier reads.
+- Built, off by default: backend merge by rules, idle follow-main waits and a live Revert route; rules activation stays closed pending approval, and Revert UI remains in progress.
 - In progress: a change card with three states.
-- In progress: cost and rounds per accepted change.
-- In progress: one plan, server-computed zones and a task queue.
-- In progress: standing grants for later changes within an approved scope.
+- In progress: aggregate cost and rounds UI; archived change totals and event-derived usage measurements are built.
+- In progress: server-computed plan zones and plan UI; plan routes, dependency dispatch and the task queue are built.
+- On by default: standing grant selection, listing and revocation; automatic use stays behind closed rules activation.
+- On by default: a lead runtime that requests plans for the person's approval; it never starts coding agents or merges changes.
 
-Muse Spark through the Meta Model API writes the changes; Muse Spark Open through Baseten
-cross-reviews each change and can only stop it or send it back, never merge it. Nothing reaches
-main without the person's approval.
+Muse Spark through the Meta Model API writes the changes. In the bundled recorded run, agent B
+wrote with Muse Spark Open through Baseten. Cross-review with Muse Spark Open is optional and off
+by default (`OVERSIGHT_CROSS_REVIEW`), and absent from that recording. Nothing reaches main
+without the person's decision while merge by rules stays closed.
 
 ## How it was built
 
@@ -54,7 +59,8 @@ Oversight was built during the hackathon with a hand-run version of its own work
 coding agents, each on its own branch and copy of the repository; a reviewer from a different
 model provider on every change; and a coordinator merging only after the full checks pass.
 
-These figures describe **our build process, not Oversight measurements**. Snapshot: Oct 29, 2026,
+These figures describe **our build process, not Oversight measurements**. This dated snapshot
+is not the current main count: Oct 29, 2026,
 22:38 ART, on main `d768d6d`.
 
 - 187 fronts (one task each) run through the loop; latest acceptance at review round 0: 128, round 1: 40, round 2: 5; median 1 review round per front.
@@ -89,7 +95,6 @@ static build requires the recording and its receipt; UI tests select their own f
 
 ## Next
 
-- Lead agent: queued after item 11; hosted Muse Spark writes the plan and subtask text and starts agents, while the server keeps zones and the queue; the lead never merges.
 - Saved agent flows: after the lead, pick a repository flow with a target and expected checks, review or edit its filled task text, then start the agent.
 - Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
 - A red agent to look for counterexamples to a proposed change.
@@ -132,8 +137,9 @@ function count. Folder groups appear on the map only and are not built either. T
 level, function dots inside module frames, is dropped.
 
 See [Scale and depth in DESIGN.md](DESIGN.md#scale-and-depth) for the approved definition and scope:
-define and sketch now; whether to build is decided with the sketch, never before the Saturday
-checkpoint.
+the map and folder groups follow the Conversation tab, milestone pulses and life layer part 2,
+with an approved sketch first. See the DECISIONS.md entry “2026-10-31 — Map view and folder groups
+follow the later line B work”.
 
 ![Earlier sketch of zoom levels](docs/sketches/mockup-zoom-signal-far.png)
 

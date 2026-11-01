@@ -1,5 +1,9 @@
 # Plan: the change manager, level 1 (front 15)
 
+> Status: done. Level 1 merged in `a891d41`; stage split completed in `5e9ad78`.
+> Checked against main `8b9b589`. The level-1 algorithm and test matrix below are historical;
+> current admission includes guarded decisions, rules, grants and preemption.
+
 Revision 8, front 15b, after its review: each close-out event gets its own two tries, in order,
 and an `error` the store refuses at shutdown is logged (section 4). Revision 7, front 15b, for the
 API plan's section 4: `main_suspect`, `check_main`, and an `aclose`
@@ -17,8 +21,10 @@ starting agents stays in front 16.
 
 ## 1. Facade and callers
 
-`oversight.changes` keeps four exports: `ChangeManager`, `ChangeNotFound`, `Revision` and
-`WrongState`. The 2026-10-27 stage split preserves the facade and behavior:
+The level-1 snapshot kept four exports: `ChangeManager`, `ChangeNotFound`, `Revision` and
+`WrongState`. The public module now has 46 exports (`changes/__init__.py:__all__`, including its appended
+plan/queue exports), and `_manager.py` is 728 lines at `8b9b589`. The table below describes the
+2026-10-27 stage split, not today’s module sizes:
 
 | Private module | Owner or stage |
 | --- | --- |
@@ -30,10 +36,11 @@ starting agents stays in front 16.
 | `_recovery.py` | Git facts and approval recovery |
 | `_delivery.py` | Merge record, close-out, receipts, retries, pending work, cleanup, shutdown and `EVENT_TYPES` |
 | `_files.py`, `_revision.py` | File/read/save/rescan/main checks; Request changes and base-move transactions |
-| `_manager.py` | 282-line admission/forwarding facade, Reject, Stop and dynamic `_request_changes`/`_drain` |
+| `_manager.py` | Admission/forwarding facade (282 lines at the stage split), Reject, Stop and dynamic `_request_changes`/`_drain` |
 
 `_versions.py` and `_diff.py` retain their existing responsibilities. `_policy.py`, `_zones.py`
-and `_beforeafter.py` remain unwired. Helpers never import `_manager`, even under `TYPE_CHECKING`;
+and `_beforeafter.py` were unwired at that stage; policy, zones and added-test probes are now
+used by the runtime (`_assessment.py`, `_plans.py`, `_proposal.py`). Helpers never import `_manager`, even under `TYPE_CHECKING`;
 `changes-no-facade-backedge` enforces this alongside the existing import contracts.
 
 The extraction has four stages: state/support; proposal; approval/merge/recovery; delivery.
@@ -63,8 +70,11 @@ class ChangeManager:                      # satisfies oversight.agents.ChangeSin
     async def file_edited(self, agent_id: AgentId, path: str) -> bool: ...         # ChangeSink
     async def proposed(self, agent_id: AgentId, summary: str | None) -> bool: ...  # ChangeSink
     def run_ended(self, agent_id: AgentId, end: RunEnd | None) -> None: ...
-    def approve(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]: ...
-    def reject(self, change_id: ChangeId, comment: str | None) -> asyncio.Task[None]: ...
+    def approve(self, change_id: ChangeId, comment: str | None, *, revision: int,
+                head_commit: str, answers: list[ReviewCard] | None = None,
+                grant: GrantRequest | None = None) -> asyncio.Task[None]: ...
+    def reject(self, change_id: ChangeId, comment: str | None, *, revision: int,
+               head_commit: str) -> asyncio.Task[None]: ...
     main_suspect: bool                    # read-only: True once a change entered `broken`
     async def check_main(self) -> bool | None: ...  # main clean and not mid-merge; None: git failed
     async def aclose(self) -> None: ...   # drains decisions and close-outs; the store closes after
@@ -226,7 +236,7 @@ sink would read a tree that is no longer the agent's. `run_ended` then makes the
 refuses the swapped root, and reports it. The reducer needs no change: the agent card and review mode (fronts 13, 17) offer Reject
 when the agent is `halted` and its change has no proposal.
 
-## 6. Level 2, kept out but not blocked
+## 6. Level 2, subsequently delivered
 
 - **Main moved** (`pre != base_commit`): the combined tests run in main between step 2's calls; a
   failure is `merge --abort` and `Conflict(kind="tests")`. A head redone on the new base descends
@@ -310,10 +320,9 @@ failing with their change reverted.
 
 About 450 lines of code and 550 of tests, in two commits: live diff and propose, then decisions.
 
-## Open
+## Closed level-1 questions
 
-1. Section 5's runtime change, for front 12's next round; until then these tests call the sink
-   directly, and `ChangeManager`, whose sink methods return `bool`, matches `ChangeSink` only once
-   it lands. Halting departs from 4.5's "proposed as it stands" only when no proposal can be built.
-2. The Reject rule for a `halted` agent without a proposal, for fronts 13 and 17.
-3. No contract change: an empty `graph.delta`, with equal versions or not, is valid.
+The runtime sink returns `bool`; failed proposal construction halts the agent. Reject handles
+an unproposed halted change. Empty graph deltas remain valid. Level-2 Request changes, Stop,
+combined tests and person file edits are built (`b548414`, `dc4d538`, `ac8c718`); see the
+corresponding plans and `changes/_merge.py:combined_tests_pass` for current behavior.

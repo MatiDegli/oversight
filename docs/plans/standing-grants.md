@@ -1,7 +1,13 @@
 # Standing grants: plan
 
+> Status: partly built. Contract and backend merged in `93a3664`; inbox answers, grant choice,
+> list and revoke in `7c25429`. Checked against main `8b9b589`. Live creation still requires
+> rules activation, closed by `changes/_mode.py:RULES_ACTIVATION`. Remaining: protected_path,
+> path/agent scopes and session expiry. The broader design below is historical where marked.
+
 Proposed on 2026-10-29 and approved by the maintainer the same day, with its contract change as
-contracts 1.7.0. Nothing here is built yet, and no contract has changed. The decision is in
+contracts 1.7.0, delivered in `93a3664`. The bounded first implementation and UI are built.
+The decision is in
 DECISIONS.md ("Standing grants: Oversight remembers what the person let go", then its approval
 and version), and the queue entry is in [additions.md](../additions.md#standing-grants).
 Proposed pitch line for PRODUCT.md and the video:
@@ -76,10 +82,11 @@ missing measurements or unresolved removals.
 
 ## Contract change (proposed contracts 1.7.0)
 
-1.7.0 had been reserved for safe creation, nullable `SaveFile.base_hash`, zones and inventory. On
-2026-10-29 the maintainer moved that bundle to 1.8.0, so grants ship first as 1.7.0 and no
-version string names two schemas. On 2026-10-30 the maintainer moved that bundle again to 1.9.0,
-when failed model attempts (E6) and dependency plans (P1–P5) took 1.8.0 (`bb9dc43`).
+Historical proposal heading retained for the review record. Contracts 1.7.0 shipped with grants;
+failed-attempt and dependency-plan contracts shipped as 1.8.0 (`bb9dc43`). Safe creation, nullable
+SaveFile.base_hash, zones and inventory take the next free version after its approval, without a
+promised number. The broad schema options below include capabilities the runtime still refuses
+(`changes/_grants.py:GrantRegistry.validate`); only possible_callers, module/run and run expiry work.
 
 - `GrantReason = Literal["possible_callers", "protected_path"]`; `GrantScope`: `kind`
   (`module`, `path`, `agent`, `run`), `value`, `expires` (`run`, `session`).
@@ -107,14 +114,17 @@ when failed model attempts (E6) and dependency plans (P1–P5) took 1.8.0 (`bb9d
   change it is given from.
 - Events: `grant.created` (`grant_id`, `reason`, `scope`, `change_id`, `revision`,
   `head_commit`, `run_id`, `session_id`, `granted_by: "person"`) and `grant.revoked` (`grant_id`).
-  The creation event's `ts` is when it was given. `grant.expired` (`grant_id`, `reason`:
-  `run_ended` or `session_ended`) records the applicable lifecycle boundary for replay.
-  No session identifier exists in the shipped contracts or backend. For the proposed session
-  expiry, the backend generates a fresh UUID at startup as `session_id`: one server lifetime,
-  shared by its runs, never supplied by a browser or model. The creation event and the immutable
-  authorization capture copy that server-owned id; a restart generates a different one. The
-  smallest version uses only `run_id` and run expiry; the session producer is built with session
-  expiry, not assumed to exist today.
+  The creation event's `ts` is when it was given. The following lifecycle proposal is struck
+  from the adopted plan: ~~`grant.expired` (`grant_id`, `reason`: `run_ended` or `session_ended`)
+  records the applicable lifecycle boundary for replay.~~ There is no grant.expired event in the
+  shipped union (`events.py:ServerEvent`); the frontend filters revoked grants in the current run
+  (`state/grants.ts:selectActiveGrants`) and resets state on run.started.
+
+  Superseded identifier claim: ~~No session identifier exists in the shipped contracts or backend~~.
+  `GrantCreated` and `GrantAuthorization` have a nullable session_id, unused by run-only grants.
+  Unadopted producer proposal: ~~For the proposed session expiry, the backend generates a fresh UUID at startup as `session_id`: one server lifetime, shared by its runs, never supplied by a browser or model. The creation event and the immutable authorization capture copy that server-owned id~~.
+  DECISIONS.md does not adopt that UUID producer. The smallest version uses only `run_id` and run expiry;
+  session expiry requires a separate approved design.
 - `ChangeResolved.grants: list[GrantUse] | None` on rules approvals: `grant_id`, `rule`, and what
   was waived (for `possible_callers`, the caller ids, at most 20, and their measured total count).
   Each `GrantUse.authorization` is an immutable server capture: reason, scope, creation event seq
@@ -134,22 +144,21 @@ when failed model attempts (E6) and dependency plans (P1–P5) took 1.8.0 (`bb9d
   original capture: later expiry or revocation cannot invalidate a historical receipt or
   authorize a new merge.
 - `POST /grants/{grant_id}/revoke`: `not_found` for an unknown id, `wrong_state` once revoked or
-  expired. The active list derives from events and filters expired or revoked grants using the
-  replay event clock and the recorded lifecycle boundaries (run ended or session ended), not
-  the replay host's session. A restart never restores an earlier live session's grants; a
-  recording missing its closing boundary treats remaining grants as inactive at its end.
-  Historical card lines and use counters remain visible after expiry, distinct from active grants.
+  expired. The broader, unbuilt lifecycle design filters expired or revoked grants using the
+  replay event clock and recorded boundaries (run ended or session ended), never the host clock.
+  The shipped selector instead filters current-run grant.created/grant.revoked events; it does
+  not infer run end from agent status. Historical card lines and use counters remain visible
+  after revocation, distinct from active grants (`state/grants.ts:selectGrantUses`). Session-end
+  filtering and a lifecycle boundary event remain unadopted, not implied by this contract.
 
 ## Smallest version that helps proof 2
 
-Backend (Codex, size M): the contract; `possible_callers` only (`protected_path` refused as not
-yet supported); `module` and `run` scopes; run expiry only; grant creation on Approve; rules
-admission through `pending_policy` and definitive authorization through `merges_alone` use the
-grant-aware checks above, including the merge-time re-measure on the candidate tree; revoke.
-Frontend (line B, size M): the "Don't ask again" control on the inbox entry, the grants list with
-Revoke in the existing Settings tab, and the card line. The inbox uses the existing decisions
-chip; both surfaces follow DESIGN.md as located in the shots below. Report: two counters in the
-proof 2 summary.
+Delivered backend (`93a3664`): possible_callers only, module/run scopes, run expiry, creation
+on Approve, grant-aware admission/barriers and revoke. Protected_path, path/agent scopes and
+session expiry remain refused. Delivered UI (`7c25429`): “Don't ask again” on an inbox entry,
+standing-grant list and Revoke in the inbox (`review/DecisionInbox.tsx`, `StandingGrants.tsx`,
+`GrantChoice.tsx`); the historical Settings home below was a sketch proposal, not the mounted home.
+Grant use receipts are shown by the review card. Live rules activation remains closed.
 
 At admission, the candidate re-measure, and every revalidation barrier, re-check that each grant
 used is active and still covers the current wait and scope. Read current server state, never
@@ -163,24 +172,20 @@ expiry is checked there too. A grant created later does not revive the stopped r
 ## Order and what it displaces
 
 1. Done on 2026-10-29: the maintainer approved this plan and the contract change.
-2. The `small_cone` rule and candidate re-measure are already on main. The caller-listing inbox
-   entry remains to be built and approved; the rule landing is not a pending prerequisite.
-3. Contract 1.7.0 and backend in one front: about half a day with review. It shares rules
-   admission with [item 9](../additions.md#9-a-change-card-with-three-states)'s remaining
-   decision-veto wiring into rules admission (the open model can add a wait, never approve), so
-   grants go first and that wiring follows.
-4. Line B's front after the shots below are approved, folded into its card-answers front
-   because both answer inbox entries.
+2. The `small_cone` rule and candidate re-measure are already on main. The caller-listing inbox entry
+   is built (`7c25429`), reading assessments from decisionEvents. No separate assessment/mode
+   state is folded by `state/applyEvidenceEvent.ts`; activation remains closed.
+3. Contract 1.7.0 and bounded backend delivered in `93a3664`; broader scopes/expiry and
+   protected-path grants remain separate work.
+4. Inbox answers and grant controls delivered in `7c25429`. Activation is still closed, so these
+   surfaces do not establish that live grants can be created or authorize rules merges today.
 
-Before the Saturday checkpoint this moves item 9's decision-veto wiring and subsequent review
-follow-ups back by about half a day. Those follow-ups are not enumerated in this repository;
-the coordinator must name their findings and affected additions items before scheduling them.
-This is a proposed capacity allowance, not a verified list of displaced fronts. Nothing on the
-checkpoint list is dropped.
+The original half-day displacement estimate is historical, not a current scheduling commitment.
 
 ## Shots the maintainer approves first
 
-These stay inside DESIGN.md's existing shell: the decisions chip opens the inbox, where the
+Historical sketch requirements (the mounted list is now in the inbox). These stay inside
+DESIGN.md's existing shell: the decisions chip opens the inbox, where the
 person creates a grant; the grants list lives in the Settings tab in the focus panel, alongside
 the standing merge choices. The graph remains visible. No new navigation surface is proposed.
 

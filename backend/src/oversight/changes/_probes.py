@@ -187,7 +187,11 @@ async def probe_added_tests(
             await publish_suite(ctx, rec, error.run, phase=phase, revision=revision)
             raise
         except (TimeoutError, WorkspaceError, OSError) as error:
-            detail = f"added tests: {phase} unavailable ({type(error).__name__})"
+            detail = (
+                f"added tests: {phase} timed out"
+                if isinstance(error, TimeoutError)
+                else f"added tests: {phase} unavailable"
+            )
             if isinstance(error, IsolationUnavailable):
                 detail += ": " + ctx.workspace.redact(str(error))
             problems.append(detail)

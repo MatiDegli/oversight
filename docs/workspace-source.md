@@ -49,7 +49,8 @@ UV_OFFLINE=1 make workspace-graph-boltons
 Export writes a bare `GraphSnapshot` to
 `.runtime/graphs/boltons-d31d821.snapshot.json`, including nodes, edges and parse errors.
 It prints the profile and full hash. It needs neither a server nor a model and creates
-no layout. Line B can pass this file to `frontend/tools/layout.ts --input` later.
+no layout. The saved Boltons layout is already checked in at
+`fixtures/layouts/boltons-d31d821.json`; `frontend/tools/layout.ts --input` can use the exported graph.
 Neither target belongs to `make check`.
 
 For an offline, fake-model **startup check**, after preparation:
@@ -94,7 +95,8 @@ After strengthening the wrong-pin startup fixture to contain an actual different
 `UV_OFFLINE=1 uv run --frozen pytest -n 2 backend/tests/test_workspace_source.py` also
 passes all four app acceptance cases.
 
-Existing size review signals: `app.py` remains 1,031 lines (six added), `workspace/core.py`
+Historical P2-A delivery size review signals (before later runtime additions): `app.py` was
+1,031 lines (six added), `workspace/core.py`
 659 (three added). These contain only composition and target forwarding here; profile
 policy and preparation live in new small modules. Keeping those additions local avoids
 a refactor of shared files during measured-cone integration. No touched function exceeds

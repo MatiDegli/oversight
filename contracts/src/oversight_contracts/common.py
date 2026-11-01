@@ -39,6 +39,8 @@ type PlanId = Annotated[str, StringConstraints(pattern=r"^plan-[1-9]\d*$")]
 
 type NonEmptyText = Annotated[str, StringConstraints(min_length=1)]
 
+type MessageText = Annotated[str, StringConstraints(min_length=1, max_length=4096)]
+
 type MergeMode = Literal["ask_me", "merge_when_safe"]
 
 type RuleId = Literal[

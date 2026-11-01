@@ -8,6 +8,7 @@ from oversight.changes import _delivery as delivery
 from oversight.changes._behavior import probe_behavior, unavailable_behavior
 from oversight.changes._behavior_publish import capture_behavior
 from oversight.changes._diff import count_lines_async, file_status, parse_name_status
+from oversight.changes._example_criteria import unverified_run, verify_run
 from oversight.changes._facts import FactsEvidence, build_change_facts, capture_facts
 from oversight.changes._measured import measure_cone, unavailable_measured
 from oversight.changes._probes import added_cases, probe_added_tests
@@ -432,6 +433,13 @@ async def run_tests(ctx: ChangeContext, rec: ChangeRecord) -> SuiteResult:
         return SuiteResult(
             outcome="error", passed=0, failed=0, skipped=0, duration_ms=0, failed_tests=[]
         )
+    try:
+        run = await verify_run(ctx, rec, run, phase="proposal")
+    except asyncio.CancelledError:
+        await publish_suite(
+            ctx, rec, unverified_run(rec, run), phase="proposal", revision=rec.revision + 1
+        )
+        raise
     execution = await publish_suite(ctx, rec, run, phase="proposal", revision=rec.revision + 1)
     return execution.suite
 

@@ -1,5 +1,8 @@
 # Model execution manifest
 
+> Status: done. Manifest tooling merged in `d8855bd`. Current implementation is
+> `tools/meta_manifest.py`; the commands below describe delivered offline tooling.
+
 After `make record RUN=<id>` (or `make record` for the latest finished run), keep the
 JSONL and its `.provenance.json` receipt together, then run:
 

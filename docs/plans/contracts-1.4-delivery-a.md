@@ -1,5 +1,8 @@
 # Contracts 1.4.0 delivery A review notes
 
+> Status: done. Delivered in `304a96c`; historical review notes for that delivery only.
+> Later producers and routes have landed; see api.md and additions.md for current status.
+
 Delivery A changes the existing decision path and reserves the later level 3 wire shapes.
 It does not enable tree traversal, safe creation, automated reviews, facts producers, queue
 execution, plans, leads or Revert. SaveFile retains its required string base_hash.
@@ -16,7 +19,8 @@ Only the command table in section 4.7 and the exception in section 4.9 change:
   the reserved agent/change views, review, Revert, history, queue, lead and runtime-tree routes.
   The tree row records the required nullable hash, joint cap and 501 reservation.
 - Section 4.9 records the bounded enum/guard exception at 1.4.0 and the later required nullable
-  SaveFile hash at 1.6.0, together with safe creation, zones and inventory. Version strings
+  SaveFile hash together with safe creation, zones and inventory, taking the next free version
+  after its approval. Version strings
   cannot identify multiple schemas.
 
 ## Review signals for size
