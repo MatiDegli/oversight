@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { GraphView, possibleCallers, NodeChips } from "../../graph";
+import { GraphView, possibleCallers, NodeChips, folderGroups } from "../../graph";
 import type { Framing, GraphApi } from "../../graph";
 import { ImpactConeCard, selectConeWords } from "../../review";
 import type { State } from "../../state";
@@ -24,6 +24,11 @@ export function GraphStage({
   arrival?: MergeArrival;
 }) {
   const [detail, setDetail] = useState<"Modules" | "Functions" | "Details">("Modules");
+  const [mapLevel, setMapLevel] = useState<"cards" | "map">("cards");
+  const groups = useMemo(
+    () => folderGroups((state.graph?.nodes ?? []).filter((n) => !n.is_test)),
+    [state.graph],
+  );
   const [zoom, setZoom] = useState(100);
   const open = panelOpen(view);
   // The cone and the change stay lit until the decision; events never open review themselves.
@@ -68,8 +73,14 @@ export function GraphStage({
     [frameKey],
   );
   return (
-    <main className="graph-stage relative min-w-0 flex-1 bg-ground" aria-label="Graph stage">
+    <main
+      className="graph-stage relative min-w-0 flex-1 bg-ground"
+      aria-label="Graph stage"
+      data-map-level={mapLevel}
+    >
       <GraphView
+        map
+        onMapLevel={setMapLevel}
         onZoom={setZoom}
         selectedId={view.selected}
         onNodeTap={onNodeTap}
@@ -115,7 +126,10 @@ export function GraphStage({
               // heading there would sit on top of them: it is a watch-mode overlay.
               !open && (
                 <div className="pointer-events-auto">
-                  <GraphHeading state={state} />
+                  <GraphHeading
+                    state={state}
+                    groups={groups.length >= 2 ? groups.filter((g) => g.panel).length : 0}
+                  />
                 </div>
               )
             )}
@@ -125,6 +139,7 @@ export function GraphStage({
               <DetailControls
                 level={detail}
                 zoom={zoom}
+                map={mapLevel === "map"}
                 onChange={(level) => {
                   setDetail(level);
                   graphApi.current?.detail?.(level);
@@ -137,7 +152,7 @@ export function GraphStage({
         <div data-graph-clear-area ref={startAreaRef} className="min-h-0 flex-1" />
         <div className="flex shrink-0 items-end justify-between gap-(--spacing-lg)">
           <div className="pointer-events-auto min-w-0">
-            <Legend state={state} />
+            <Legend state={state} map={mapLevel === "map"} />
           </div>
           <div className="pointer-events-auto shrink-0">
             <ZoomControls api={graphApi} />

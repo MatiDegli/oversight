@@ -18,7 +18,8 @@ The proof 2 manifest, commands and feature checks landed in `65199d9`/`40a6e8d`.
 reliability events and dependency plans landed in `bb9dc43`, with producers in `06c34a5` and
 `efd592f`. Item 10's hours and dated price table are built (`95e40e5`, `56b5f18`). The lead is
 built (`6818b3b`), but only requests plans; a person still starts a proposed plan. Rules activation
-remains closed, so these deliveries do not by themselves qualify the planned run.
+is open following F10's approval and fake-only evidence; fresh runs still start in Ask me.
+These deliveries and activation checks do not by themselves qualify or report the planned run.
 
 ## Repository and tasks
 

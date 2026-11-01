@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { themes } from "../../theme";
-import { afterlightOf, fadeShare, MergeLife } from "./afterlight";
+import { afterlightOf, fadeShare, mergeArrivalDelay, MergeLife } from "./afterlight";
 import type { FieldLight, FieldMerge } from "./lights";
 
 const look = afterlightOf(themes.dark);
@@ -59,6 +59,18 @@ describe("a merge's pulse and light", () => {
     expect(landed[0]?.progress).toBe(1);
     expect(landed[0]?.opacity).toBeCloseTo(0.5, 10);
     expect(life.pulses(arrival + look.trailFade)).toEqual([]);
+    const custom = { ...look, delay: 125, travel: 875 };
+    expect(mergeArrivalDelay(custom)).toBe(1000);
+    expect(mergeArrivalDelay(custom, true)).toBe(1000);
+    expect(mergeArrivalDelay(custom, false)).toBe(0);
+    for (const pulse of [true, false]) {
+      const timed = new MergeLife(custom);
+      timed.update([{ ...merge("custom"), pulse }], 0, false, false, [had(look.weight)]);
+      expect(timed.lights(pulse ? 46_000 : 45_000)[0]?.weight).toBeCloseTo(
+        look.weight * 0.5 ** 1.6,
+        10,
+      );
+    }
   });
 
   it("comes up as the waiting light goes out, holds that level while the pulse travels, and never exceeds it", () => {

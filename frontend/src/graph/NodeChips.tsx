@@ -55,7 +55,8 @@ function usePlacement(
       const graph = host.getBoundingClientRect();
       for (const group of layer.querySelectorAll<HTMLElement>("[data-chip-node]")) {
         const box = host.oversightGraph?.renderedBox(group.dataset.chipNode ?? "");
-        const visible = !!box && box.w >= group.offsetWidth + 16;
+        const visible =
+          host.oversightGraph?.level() !== "map" && !!box && box.w >= group.offsetWidth + 16;
         place(
           group,
           (box?.x1 ?? 0) + graph.left - origin.left + 12,
