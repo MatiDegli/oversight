@@ -2,6 +2,8 @@ import { ArrowRight } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { State } from "../state";
+// eslint-disable-next-line no-restricted-imports -- Explicit navigation shares the review-owned target identity.
+import { visitParameterEvidence } from "../review/parameterExtensions";
 import { unstableBehaviorSentence } from "./behavior";
 import { selectNodeChips } from "./nodeChip";
 import type { NodeChip } from "./nodeChip";
@@ -149,6 +151,22 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
           </li>
         ))}
       </ol>
+      {chip.extension && (
+        <p className="mt-2 text-muted">
+          {chip.extension.run_count} calls using <code>{chip.extension.parameters.join(", ")}</code>
+          ;{" "}
+          <button
+            type="button"
+            className="cursor-pointer underline underline-offset-2"
+            onClick={() => {
+              if (chip.extension) visitParameterEvidence(chip.extension.target);
+            }}
+          >
+            see review
+          </button>
+          .
+        </p>
+      )}
       {(chip.footer || chip.limitation) && (
         <footer className="mt-2 text-muted">
           {chip.footer && (
@@ -221,7 +239,7 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
             <button
               key={chip.key}
               type="button"
-              className={`h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
+              className={`relative h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[700px]:before:absolute max-[700px]:before:inset-x-0 max-[700px]:before:-inset-y-[12px] max-[700px]:before:content-[''] ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
               aria-label={`${chip.text}, ${chip.label}`}
               aria-expanded={openKey === chip.key}
               aria-controls={
