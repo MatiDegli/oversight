@@ -2,6 +2,7 @@
 // the lit nodes' boxes, and which of four levels its lamp shows after an 8 by 8 ordered dither. The
 // canvas only draws the result, so everything DESIGN.md's "Dot field and rings" says about light is
 // tested here without a GPU. Every number comes from a theme token.
+import type { RingLight } from "./milestones";
 import type { PulseLight } from "./pulseLights";
 import { lightBoxKey } from "./marker";
 import type { FieldLight, FieldMode, LightSource } from "./lights";
@@ -270,6 +271,7 @@ function extent(config: FieldConfig, light: PlacedLight, glow: number, ring: boo
 
 /** The arrays a frame is accumulated in, kept between frames. */
 interface Work extends Accumulated {
+  strongest: Float32Array;
   data: Uint8ClampedArray;
   glow: Uint8ClampedArray;
   /** Per column, for the light being added: the distance to its box, and the offset from its center. */
@@ -296,7 +298,7 @@ function addLight(
   time: number | null,
   work: Work,
 ) {
-  const { sum, red, green, blue, colX, ringX } = work;
+  const { colX, ringX } = work;
   const c0 = Math.max(0, Math.floor(box.x1 / config.cell));
   const c1 = Math.min(cols - 1, Math.floor(box.x2 / config.cell));
   const r0 = Math.max(0, Math.floor(box.y1 / config.cell));
@@ -353,12 +355,50 @@ function addLight(
       }
       if (intensity <= 0) continue;
       const k = row * cols + col;
-      sum[k] = (sum[k] ?? 0) + intensity;
-      red[k] = (red[k] ?? 0) + intensity * lr;
-      green[k] = (green[k] ?? 0) + intensity * lg;
-      blue[k] = (blue[k] ?? 0) + intensity * lb;
+      contribute(work, k, intensity, lr, lg, lb);
     }
   }
+}
+
+/** Hue is the strongest contribution; brightness is the sum of all contributions. */
+function contribute(
+  work: Accumulated,
+  at: number,
+  intensity: number,
+  r: number,
+  g: number,
+  b: number,
+) {
+  work.sum[at] = (work.sum[at] ?? 0) + intensity;
+  if (intensity <= (work.strongest[at] ?? 0)) return;
+  work.strongest[at] = intensity;
+  work.red[at] = intensity * r;
+  work.green[at] = intensity * g;
+  work.blue[at] = intensity * b;
+}
+
+/** Circular gaussian fronts and their trailing side feed the common dither, with no emitter slot. */
+function addRing(config: FieldConfig, cols: number, rows: number, ring: RingLight, work: Work) {
+  const reach = ring.radius + ring.tail + 3 * ring.sigma;
+  const bounds = (center: number, limit: number) =>
+    [
+      Math.max(0, Math.floor((center - reach) / config.cell)),
+      Math.min(limit - 1, Math.floor((center + reach) / config.cell)),
+    ] as const;
+  const [c0, c1] = bounds(ring.x, cols),
+    [r0, r1] = bounds(ring.y, rows);
+  const rgb = parseHex(config.colors[ring.source]);
+  for (let row = r0; row <= r1; row++)
+    for (let col = c0; col <= c1; col++) {
+      const dx = (col + 0.5) * config.cell - ring.x,
+        dy = (row + 0.5) * config.cell - ring.y;
+      const offset = Math.hypot(dx, dy) - ring.radius;
+      const trailing = ring.inward ? offset > 0 : offset < 0;
+      const sigma = trailing ? ring.sigma + ring.tail : ring.sigma;
+      if (Math.abs(offset) > 3 * sigma) continue;
+      const intensity = ring.intensity * Math.exp((-offset * offset) / (2 * sigma * sigma));
+      contribute(work, row * cols + col, intensity, ...rgb);
+    }
 }
 
 /** Adds a point gaussian only within three radii, before the common dither and color ramp. */
@@ -385,10 +425,7 @@ function addPointLight(
       if (squared > reach * reach) continue;
       const intensity = light.intensity * Math.exp(-squared / (2 * radius * radius));
       const at = row * cols + col;
-      work.sum[at] = (work.sum[at] ?? 0) + intensity;
-      work.red[at] = (work.red[at] ?? 0) + intensity * red;
-      work.green[at] = (work.green[at] ?? 0) + intensity * green;
-      work.blue[at] = (work.blue[at] ?? 0) + intensity * blue;
+      contribute(work, at, intensity, red, green, blue);
     }
   }
 }
@@ -414,11 +451,13 @@ export function createLampField() {
     lights: readonly PlacedLight[],
     time: number | null,
     points: readonly PulseLight[] = [],
+    rings: readonly RingLight[] = [],
   ): LampGrid {
     const cols = Math.max(1, Math.ceil(width / config.cell));
     const rows = Math.max(1, Math.ceil(height / config.cell));
     if (cols * rows !== cells) {
       cells = cols * rows;
+      work.strongest = new Float32Array(cells);
       work.sum = new Float32Array(cells);
       work.red = new Float32Array(cells);
       work.green = new Float32Array(cells);
@@ -426,6 +465,7 @@ export function createLampField() {
       work.data = new Uint8ClampedArray(cells * 4);
       work.glow = new Uint8ClampedArray(cells);
     } else {
+      work.strongest.fill(0);
       work.sum.fill(0);
       work.red.fill(0);
       work.green.fill(0);
@@ -453,12 +493,14 @@ export function createLampField() {
     }
     decays = retained;
     for (const light of points) addPointLight(config, cols, rows, light, work);
+    for (const ring of rings) addRing(config, cols, rows, ring, work);
     shadeLamps(config, cols, rows, work, work.data, work.glow);
     return { cols, rows, data: work.data, glow: work.glow };
   };
 }
 
 export interface Accumulated {
+  strongest: Float32Array;
   sum: Float32Array;
   red: Float32Array;
   green: Float32Array;
@@ -491,14 +533,14 @@ function lampColor(
  * matrix cell over its size squared: near the core every lamp is whole, further out the dither
  * leaves a regular pattern of single lamps. Dim levels lean to the deep end of the light's color,
  * a level at `mid` shows it as it is, and the whole level moves `hot` of the way to the ink (the
- * extreme away from lamp-off). The colors of overlapping lights mix by intensity; their
- * intensities add, up to the full light.
+ * extreme away from lamp-off). Each lamp takes the strongest source’s hue (first on a tie);
+ * intensities still add, up to the full light, without mixing the teams’ colors.
  */
 export function shadeLamps(
   config: FieldConfig,
   cols: number,
   rows: number,
-  light: Accumulated,
+  light: Omit<Accumulated, "strongest"> & { strongest?: Float32Array },
   out: Uint8ClampedArray,
   glow: Uint8ClampedArray,
 ) {
@@ -526,9 +568,10 @@ export function shadeLamps(
         continue;
       }
       const share = level / top;
-      const red = (light.red[k] ?? 0) / total;
-      const green = (light.green[k] ?? 0) / total;
-      const blue = (light.blue[k] ?? 0) / total;
+      const hueWeight = light.strongest?.[k] ?? total;
+      const red = (light.red[k] ?? 0) / hueWeight;
+      const green = (light.green[k] ?? 0) / hueWeight;
+      const blue = (light.blue[k] ?? 0) / hueWeight;
       const peak = Math.max(red, green, blue);
       const weaker = deep + (1 - deep) * Math.min(1, share / mid);
       const toInk = share > mid ? ((share - mid) / (1 - mid)) * hot : 0;
@@ -569,6 +612,7 @@ function cachedFalloff(
 function emptyWork(): Work {
   const empty = () => new Float32Array(0);
   return {
+    strongest: empty(),
     sum: empty(),
     red: empty(),
     green: empty(),

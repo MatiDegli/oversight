@@ -203,9 +203,8 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     ).toBeLessThanOrEqual(2);
     await page.clock.runFor(725 - 16);
     expect((await lifeOf(page))?.pulses).toBe(1);
-    // The decision itself settles the graph (the node's pending look goes); from here on, the pulse
-    // and the light must leave the camera and the nodes exactly where they are.
-    const still = [await camera(), await nodeCenters()];
+    // Travel must preserve the camera, focus and node positions; arrival may remove the pending word.
+    let still = [await camera(), await nodeCenters()];
     const mid = await page.evaluate(() => {
       const layer = document.querySelector("[data-field-travel]");
       const head = layer?.querySelector("circle");
@@ -237,6 +236,8 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     expect(
       await page.evaluate(() => document.querySelectorAll("[data-field-travel] g").length),
     ).toBe(0);
+    // Arrival removes the pending word; pin the resulting row geometry for the remaining fade.
+    still = [await camera(), await nodeCenters()];
     const lit = await lightMass(page);
     expect(lit).toBeGreaterThan(waiting * 0.9);
     expect(lit).toBeLessThan(waiting * 1.1);

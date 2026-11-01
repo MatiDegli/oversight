@@ -3,7 +3,8 @@
 // and replay, so nothing here depends on the reader's clock beyond the event times.
 import type { GraphSnapshot } from "@contracts";
 
-import type { State } from "../../state";
+import { parseNeedsYou, type State } from "../../state";
+import type { Milestone } from "./milestones";
 import { agentLook } from "../../theme";
 import type { FieldMerge, FieldModule } from "./lights";
 
@@ -38,6 +39,42 @@ export function selectMerges(state: State): FieldMerge[] {
     });
   }
   return merges.sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/** Milestones keep their event identity and age; a missing change node lights nothing. */
+export function selectMilestones(state: State): Milestone[] {
+  const now = Date.parse(state.clock ?? "");
+  const result: Milestone[] = [];
+  for (const event of state.decisionEvents) {
+    let kind: Milestone["kind"];
+    let changeId: string | null | undefined;
+    if (event.type === "agent.status" && event.payload.state === "ready_for_review") {
+      kind = "ready";
+      changeId = event.payload.change_id;
+    } else if (event.type === "error" && parseNeedsYou(event.payload.message)) {
+      kind = "needs";
+      changeId = event.payload.change_id;
+    } else continue;
+    const change = changeId ? state.changes[changeId] : undefined;
+    const agent = change && state.agents[change.agent_id];
+    const id = change && changeLightNode(change);
+    if (!agent || !id) continue;
+    const age = now - Date.parse(event.ts);
+    result.push({
+      key: `${String(changeId)}:${String(event.seq)}`,
+      kind,
+      slot: agent.slot,
+      source: agentLook[agent.slot].family,
+      id,
+      age: Number.isFinite(age) ? Math.max(0, age) : 0,
+    });
+  }
+  return [
+    ...result,
+    ...selectMerges(state)
+      .filter((merge) => merge.pulse)
+      .map((merge) => ({ ...merge, kind: "merged" as const })),
+  ];
 }
 
 const modulesOf = new WeakMap<GraphSnapshot, FieldModule[]>();

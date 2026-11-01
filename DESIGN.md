@@ -1225,6 +1225,11 @@ leaves plain ground behind the graph: no lamps, no contour lines.
   eight-source budget is unchanged: current foci first, then last reads, with stable
   slot/agent-id order within each group; excess sources are dropped. A decided change's fading
   light is one more source of its agent's color, counted in the same budget.
+  Milestone rings and travelling points feed the lamp accumulator directly, without emitter slots.
+  This replaces the earlier Sources restriction “only each agent's current node ... and its last
+  read node ... emit light” for finite events (milestone decision, Oct 30; clarified Oct 31).
+  Intensities add, but each lamp takes the strongest source's team hue, first source on ties,
+  instead of mixing hues.
 - **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
   contour lines. Neither the LEDs, the lines nor a travelling light may show through those areas.
   So do the text bands: the header of every open module (its first 54px) or class (44px), padded by
@@ -1241,6 +1246,15 @@ leaves plain ground behind the graph: no lamps, no contour lines.
   in both themes.
 - **Working ring:** an expanding ring in the agent's color reports a working agent. It stops
   when the agent stops working. It is a work signal, not a second pool of ambient light.
+- **Milestone rings:** beside the working ring, Ready for review gives one quieter circular ring
+  outward in 700ms. Its radius starts at half the rendered row width and travels 150px with
+  ease-out power 2.4, amplitude `0.9 * (1-p)`, sigma 5px and a 16px trailing side. Needs you gives
+  two inward beats within 700ms, each from 150px beyond that same radius, accelerating with
+  power 1.6; amplitude rises from 0.4 to 1 times 1.2 with power 1.4, a 90ms fade-in, sigma 8px,
+  a 26px trailing side and 160ms afterglow. Every lamp remains a 7px square through the same
+  levels, dither and mask. This replaces the earlier Working ring line “It stops when the agent
+  stops working” as a rule for all rings: working rings still stop with work; milestone rings
+  finish their finite event independently and never loop (milestone decision, Oct 30/31).
 - **Marker:** on each agent.focus, the lettered marker glides to the current node along the edge
   route when one exists, carrying its local light with it. When the agent stops acting the marker
   fades out with its light; the Motion rules set its timing and reduced-motion fallback.
@@ -1257,6 +1271,10 @@ in three states (maintainer, 2026-10-29):
    marker, no breathing, and it never pulses, blinks or grows stronger however long it waits.
    Opening the review or clicking the node does not turn it off (the mode only scales it, as it
    scales every light); closing the entries does.
+   This replaces the earlier Waiting line “no ring ... and it never pulses, blinks or grows
+   stronger however long it waits” for finite events only: the Oct 30 milestone decision,
+   confirmed Oct 31, allows one Needs you event with two inward beats. The waiting light itself
+   stays still between events; readiness also sends its finite event ring, never an idle loop.
 3. **Decided.** Merged (by rules or by the person), approved or rejected: a decision fades only a
    light that exists. The afterlight starts from the light the change had on its node at that
    moment (the waiting level, or a working agent's) and fades out over about 90 seconds (the
@@ -1303,6 +1321,13 @@ At most 12 points enter the common light and color sums before the four-level 8�
 per-level agent-color ramp; only cells within three radii are visited. The LEDs keep their 7px
 square grid and use the drawn lamp masks (overlays and header bands); the SVG is unchanged.
 Points stop at arrival; the SVG trail still fades as before. No new idle animation is scheduled.
+The Oct 30 milestone decision replaces the earlier “and arrives” endpoint above with a shared
+arrival for the travel, card and pending mark, and a finite halo: arrival is exactly the shared 250ms
+travel delay plus 1450ms travel, never a separate card or node timer. The card says “Merging”
+until arrival, then “Merged”; its node keeps its changed word and pending dashed border until
+that instant, when both leave. A 7px band at 40% opacity hugs the node box in the team's token,
+contracting to zero over 550ms on the existing masked travel layer. No merged node word is added.
+The card has no departure glow or extra merged sentence; there is no 300ms hold before the fade.
 Under reduced motion there is no travel or point light: the node light is there at once and fades over the same time.
 
 **What is out of the life layer** (maintainer, 2026-10-29): click waves, a hover flashlight,
@@ -1424,6 +1449,15 @@ including module and class opening. Each motion says what changed:
   agent's card along the graph's edges to its node (about 1.5s, with a short trail that fades
   behind it); the node's light then fades over about 90s, with the soft falloff of every light.
   The pulse never moves the camera or takes focus.
+- **Milestone events:** the Oct 30 decision (clarified Oct 31) replaces immediate removal of
+  merged pending marks in change.resolved above with removal at arrival. Its 700ms rings and
+  550ms node halo are explicit exceptions to the 160–320ms motion range above, on the graph only.
+  Same-team milestones less than 1000ms apart coalesce; a merge replaces the ring with its travel.
+  Only the ring's own team dips: Ready starts 55% lower and recovers over 500ms; Needs you dips
+  44%, then swells 30% on landing and settles through its afterglow. Other teams never dim.
+  A second team's ring on the same node starts 350ms later. At most four milestone effects run
+  at once: discard Ready first, then Merged; never discard Needs you (defer an excess Needs you
+  until capacity is free). None changes camera, selection, tabs or keyboard focus.
 - **View changes:** dimming and highlights ease to their new state after navigation or an event. A
   change of view is a plain crossfade, never a wipe.
 
@@ -1434,6 +1468,10 @@ immediately; the field's current light and the lamp remain still, and the contou
 fade stays, because the maintainer asked for it (2026-10-29): after a merge the light appears at
 once, with no travel, and fades over the same 90s, in coarse steps. No information depends on
 motion.
+The Oct 30 milestone decision extends Reduced motion above: no milestone ring, travel or halo,
+and no arrival wait; card and pending marks change immediately. Merges already present when
+mounted are history, already arrived, and never replay a pulse. Removing an event key forgets
+it, so restarting replay can play that milestone again.
 
 ### Quality floor
 

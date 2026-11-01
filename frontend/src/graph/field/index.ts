@@ -4,6 +4,9 @@ export type { BoxSource } from "./boxSource";
 export type { FieldHost, FieldInput, FieldProbe } from "./controller";
 export type { FieldLight, FieldMerge, FieldMode, FieldModule, FieldScope } from "./lights";
 
-export { selectMerges, selectModules } from "./life";
+export { selectMilestones, selectMerges, selectModules } from "./life";
 export { selectSignalLights } from "./signal";
 export type { LastReads } from "./signal";
+
+export { afterlightOf } from "./afterlight";
+export { mergeArrivalDelay, MilestoneLife } from "./milestones";
