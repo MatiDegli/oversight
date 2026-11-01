@@ -2,6 +2,7 @@
 
 import asyncio
 import errno
+import json
 import os
 import sys
 from pathlib import Path
@@ -335,3 +336,179 @@ async def test_failed_termination_still_reaps_leader_and_retains_handle(tmp_path
     with pytest.raises(OSError, match="termination failed"):
         await server.dispose()
     assert child.returncode is not None and "close" not in jobs.calls
+
+
+@pytest.mark.anyio
+async def test_cold_build_observation_precedes_backend_death_and_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    jobs, child = FakeJobs(), Child()
+    jobs.members = (child.pid, 9876)
+    server = nt.Server(77, tmp_path / "log", jobs.api, cast(Any, child))
+    observed: list[str] = []
+
+    async def start(*a, **kw):
+        return server
+
+    def image(pid):
+        observed.append("image")
+        return "/uv.exe" if pid == 9876 else "/python.exe"
+
+    def kill():
+        assert "image" in observed
+        child.returncode = 1
+        jobs.members = ()  # simulate the server's own lifetime Job, not the driver's fallback
+
+    async def lock(*a):
+        assert jobs.calls[-1] == "close"
+        observed.append("lock")
+
+    async def members(job, api, expected=()):
+        assert not jobs.members
+
+    monkeypatch.setattr(nt, "start_server", start)
+    monkeypatch.setattr(smoke, "wait_for_health", lambda *a: None)
+    monkeypatch.setattr(demo_check, "start_agent", lambda *a: None)
+    monkeypatch.setattr(nt, "process_image", image)
+    monkeypatch.setattr(child, "kill", kill)
+    monkeypatch.setattr(nt, "probe_lock", lock)
+    monkeypatch.setattr(nt, "retain_outer", lambda: 99)
+    monkeypatch.setattr(nt, "wait_members", members)
+    await nt.hard_kill_check(tmp_path / ".runtime", tmp_path, nt.OverallClock())
+    assert "terminate" not in jobs.calls and observed[-1] == "lock"
+    (tmp_path / ".runtime/demo-venv").mkdir(parents=True)
+    with pytest.raises(smoke.SmokeError, match="cold disposable"):
+        await nt.hard_kill_check(tmp_path / ".runtime", tmp_path, nt.OverallClock())
+
+
+def native_console() -> None:
+    if sys.platform != "win32":
+        pytest.skip("requires native Windows Job Objects and console delivery")
+    import ctypes
+
+    if not ctypes.WinDLL("kernel32").GetConsoleWindow():
+        pytest.skip("console proof requires an attached non-elevated PowerShell console")
+
+
+@NATIVE
+@pytest.mark.anyio
+async def test_native_nested_jobs_console_code_and_released_lock(capsys):
+    native_console()
+    # Server lifetime job nests inside per-server and driver jobs. No fallback may pass.
+    await nt.run_checks(runs=1, demo=False)
+    output = capsys.readouterr().out
+    print(output)
+    assert f"code={nt.NT_GRACEFUL_EXITS[0]}" in output
+    assert "NT smoke: run 1: ok" in output
+
+
+@NATIVE
+@pytest.mark.anyio
+async def test_native_driver_death_without_an_external_outer_handle(tmp_path):
+    if sys.platform != "win32":
+        pytest.skip("requires native Windows Job Objects and console delivery")
+    import ctypes
+
+    marker = tmp_path / "members.json"
+    runtime = tmp_path / ".runtime"
+    code = f"""
+import asyncio, json, os, subprocess, sys
+from pathlib import Path
+sys.path.insert(0, {str(smoke.REPO_ROOT / "tools")!r})
+import demo_check, demo_check_nt as nt, smoke
+async def main():
+    outer = nt.retain_outer()
+    port = smoke.free_port()
+    server = await nt.start_server(
+        [sys.executable, '-m', 'oversight', 'serve'],
+        demo_check.server_env(port, Path({str(runtime)!r})), Path({str(tmp_path / "server.log")!r}),
+    )
+    await asyncio.to_thread(smoke.wait_for_health, smoke.base_url(port), 30, server.child)
+    subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(120)'])
+    Path({str(marker)!r}).write_text(json.dumps(nt.JOBS.pids(outer)))
+    await asyncio.sleep(120)
+asyncio.run(main())
+"""
+    driver = await asyncio.create_subprocess_exec(sys.executable, "-c", code)
+    handles = []
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    api.OpenProcess.restype = ctypes.c_void_p
+    api.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    api.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+    api.CloseHandle.argtypes = [ctypes.c_void_p]
+    try:
+        async with asyncio.timeout(40):
+            while not marker.exists():
+                assert driver.returncode is None
+                await asyncio.sleep(nt.POLL)
+        members = set(json.loads(marker.read_text())) - {driver.pid}
+        assert len(members) >= 2  # real backend (including any launcher) and sleeper
+        for pid in members:
+            handle = api.OpenProcess(0x1000, False, pid)  # process only, no outer job handle
+            assert handle
+            handles.append(handle)
+        driver.kill()
+        await asyncio.wait_for(driver.wait(), nt.STOP_DEADLINE)
+        async with asyncio.timeout(nt.STOP_DEADLINE):
+            for handle in handles:
+                while True:
+                    status = ctypes.c_uint32()
+                    assert api.GetExitCodeProcess(handle, ctypes.byref(status))
+                    if status.value != 259:
+                        break
+                    await asyncio.sleep(nt.POLL)
+        await nt.probe_lock(runtime)
+        print(f"NT driver death: descendants={members} exited; lock released; no outer handle")
+    finally:
+        if driver.returncode is None:
+            driver.kill()
+        await asyncio.wait_for(driver.wait(), nt.STOP_DEADLINE)
+        for handle in handles:
+            api.CloseHandle(handle)
+
+
+@NATIVE
+def test_native_readonly_and_locked_directory_cleanup(tmp_path):
+    if sys.platform != "win32":
+        pytest.skip("requires native Windows Job Objects and console delivery")
+    import ctypes
+
+    readonly = tmp_path / "readonly"
+    readonly.mkdir()
+    object_file = readonly / "object"
+    object_file.write_bytes(b"read-only git object")
+    object_file.chmod(0o400)
+    nt.cleanup(readonly)
+    assert not readonly.exists()
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    api.CreateFileW.restype = ctypes.c_void_p
+    api.CreateFileW.argtypes = [
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    ]
+    api.CloseHandle.argtypes = [ctypes.c_void_p]
+    handle = api.CreateFileW(str(locked), 0x80000000, 1, None, 3, 0x02000000, None)
+    assert handle and handle != ctypes.c_void_p(-1).value
+    try:
+        with pytest.raises(OSError):
+            nt.cleanup(locked)
+        assert locked.exists()
+    finally:
+        api.CloseHandle(handle)
+    nt.cleanup(locked)
+
+
+@NATIVE
+@pytest.mark.anyio
+async def test_native_backend_death_during_uv_then_three_clean_starts():
+    native_console()
+    if os.environ.get("OVERSIGHT_NT_FULL_DEMO") != "1":
+        pytest.skip("full demo staged until both W2a and W2b land; set OVERSIGHT_NT_FULL_DEMO=1")
+    await nt.run_checks(hard_kill=True)

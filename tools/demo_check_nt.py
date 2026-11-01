@@ -7,6 +7,8 @@ claim of Windows acceptance. Linux-injected tests exercise policy, not the NT ke
 
 import argparse
 import asyncio
+import contextlib
+import ctypes
 import errno
 import os
 import shutil
@@ -25,6 +27,7 @@ from demo_check_io import (
     OVERALL_MARGIN,
     PER_RUN_DEADLINE,
     RUNS,
+    START_AGENT_DEADLINE,
     START_DEADLINE,
     STOP_DEADLINE,
     OverallClock,
@@ -304,7 +307,7 @@ async def run_once(
     return first
 
 
-async def run_checks(runs: int = RUNS, *, demo: bool = True) -> None:
+async def run_checks(runs: int = RUNS, *, demo: bool = True, hard_kill: bool = False) -> None:
     import demo_check
 
     if demo and not (demo_check.DIST / "index.html").is_file():
@@ -317,6 +320,8 @@ async def run_checks(runs: int = RUNS, *, demo: bool = True) -> None:
     clock = OverallClock(deadline_s=runs * PER_RUN_DEADLINE + OVERALL_MARGIN)
     first: GraphResponse | None = None
     try:
+        if hard_kill:
+            await hard_kill_check(runtime, logs, clock)
         for number in range(1, runs + 1):
             first = await run_once(number, logs, runtime, first, clock, demo=demo)
         clock.set_phase("cleanup")
@@ -328,10 +333,105 @@ async def run_checks(runs: int = RUNS, *, demo: bool = True) -> None:
     print(f"NT check: ok: {runs} clean starts, no credits; logs {logs}")
 
 
+def process_image(pid: int) -> str:
+    """Inspect exact job member images, including launchers; never command-line matching."""
+    if sys.platform != "win32":
+        raise OSError("process image query requires Windows")
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    api.OpenProcess.restype = ctypes.c_void_p
+    api.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32]
+    api.QueryFullProcessImageNameW.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_wchar_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    api.CloseHandle.argtypes = [ctypes.c_void_p]
+    process = api.OpenProcess(0x1000, False, pid)
+    if not process:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        buffer = ctypes.create_unicode_buffer(32768)
+        size = ctypes.c_uint32(len(buffer))
+        if not api.QueryFullProcessImageNameW(process, 0, buffer, ctypes.byref(size)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return buffer.value
+    finally:
+        api.CloseHandle(process)
+
+
+async def hard_kill_check(runtime: Path, logs: Path, clock: OverallClock) -> None:
+    """Kill the backend while a cold uv build is observed inside its retained job."""
+    import demo_check
+
+    if (runtime / "demo-venv").exists():
+        raise smoke.SmokeError("hard-kill proof requires a cold disposable demo venv")
+    port = smoke.free_port()
+    base = smoke.base_url(port)
+    server = await start_server(
+        [sys.executable, "-m", "oversight", *smoke.BACKEND_ARGS],
+        demo_check.server_env(port, runtime),
+        logs / "hard-kill.log",
+    )
+    assert server.child is not None
+    request_task: asyncio.Task[Any] | None = None
+    closed = False
+    try:
+        await settled(
+            asyncio.to_thread(
+                smoke.wait_for_health,
+                base,
+                clock.bounded(START_DEADLINE),
+                server.child,
+            )
+        )
+        clock.set_phase("hard kill: cold uv member")
+        request_task = asyncio.create_task(asyncio.to_thread(demo_check.start_agent, base, clock))
+        end = time.monotonic() + clock.bounded(START_AGENT_DEADLINE)
+        while True:
+            uv_members: list[int] = []
+            for pid in server.jobs.pids(server.job):
+                try:
+                    if Path(process_image(pid)).name.casefold() == "uv.exe":
+                        uv_members.append(pid)
+                except OSError as error:
+                    if getattr(error, "winerror", None) not in {87, 1168}:  # member just exited
+                        raise
+            if uv_members:
+                break
+            if request_task.done():
+                await request_task
+                raise smoke.SmokeError("cold venv finished without observing a uv job member")
+            if time.monotonic() >= end:
+                raise smoke.SmokeError("cold uv member deadline exceeded")
+            await asyncio.sleep(POLL)
+        print(f"NT cold uv members: {uv_members}; killing backend {server.child.pid}", flush=True)
+        server.child.kill()
+        await asyncio.to_thread(server.child.wait, timeout=STOP_DEADLINE)
+        # No terminate_job on the successful proof: backend's lifetime job must kill uv itself.
+        await wait_members(server.job, server.jobs)
+        server.jobs.close(server.job)
+        closed = True
+        await wait_members(retain_outer(), JOBS, (os.getpid(),))
+        await probe_lock(runtime)
+        print("NT backend death: empty retained server job; runtime lock released")
+    finally:
+        try:
+            if not closed:
+                await settled(server.dispose())
+        finally:
+            if request_task is not None:
+                with contextlib.suppress(smoke.SmokeError):
+                    await settled(request_task)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--probe-lock", type=Path, metavar="RUNTIME")
+    parser.add_argument("--hard-kill-check", action="store_true")
     args = parser.parse_args()
+    if args.probe_lock is not None and args.hard_kill_check:
+        parser.error("choose --probe-lock or --hard-kill-check")
     try:
         if sys.platform != "win32":
             raise smoke.SmokeError("this driver requires native Windows")
@@ -339,7 +439,7 @@ def main() -> int:
             asyncio.run(probe_lock(args.probe_lock))
             print("NT lock: released")
         else:
-            asyncio.run(run_checks())
+            asyncio.run(run_checks(hard_kill=args.hard_kill_check))
     except (smoke.SmokeError, OSError, subprocess.SubprocessError) as error:
         print(f"NT check: {error}", file=sys.stderr)
         return 1
