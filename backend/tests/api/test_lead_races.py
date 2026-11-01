@@ -11,9 +11,59 @@ import pytest
 from backend.tests.api.lead_helpers import ThreadModels, idle, replies, send, start_idle
 from live_helpers import DEADLINE_S, error_code, is_type, live_server, two_fakes
 
-from oversight_contracts.events import AgentMessageSent, LeadStatus
+from oversight_contracts.events import AgentMessageSent, LeadReply, LeadStatus
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("action", ["stop", "shutdown"])
+@pytest.mark.parametrize("at_limit", [False, True])
+async def test_terminal_during_reply_publish_skips_idle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, action: str, at_limit: bool
+) -> None:
+    entered, release, closing_entered = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+        original = s.store.publish
+
+        async def publish(payload: Any) -> Any:
+            if isinstance(payload, LeadReply):
+                entered.set()
+                await release.wait()
+            return await original(payload)
+
+        monkeypatch.setattr(s.store, "publish", publish)
+        await s.client.post("/leads", json={"task": "task"})
+        await entered.wait()
+        owned = s.live.leads.leads["agent-1"]
+        # A terminal claim also takes precedence over the final turn's limit.
+        if at_limit:
+            owned.turns = 50
+        if action == "stop":
+            response = await s.client.post("/leads/agent-1/stop", json={"revision": owned.revision})
+            assert response.status_code == 202
+            closing = owned.task
+        else:
+
+            async def close() -> None:
+                closing_entered.set()
+                await s.live.leads.close()
+
+            closing = asyncio.create_task(close())
+            await closing_entered.wait()
+        release.set()
+        assert closing is not None
+        await closing
+        await asyncio.gather(*owned.tasks)
+        committed = replies(s)
+        assert len(committed) == 1
+        state = "stopped" if action == "stop" else "halted"
+        after_reply = [e for e in s.events() if e.seq > committed[0].seq]
+        assert [(e.type, e.payload.state) for e in after_reply] == [("lead.status", state)]
+        assert owned.status.detail == (
+            "Stopped by the person." if action == "stop" else "The server shut down."
+        )
+        response = await s.client.post("/leads/agent-1/message", json={"text": "refused"})
+        assert error_code(response) == (409, "wrong_state")
 
 
 async def test_two_concurrent_messages_have_exactly_one_claim(
