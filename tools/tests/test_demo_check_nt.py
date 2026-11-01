@@ -346,6 +346,7 @@ async def test_cold_build_observation_precedes_backend_death_and_lock(
     jobs, child = FakeJobs(), Child()
     jobs.members = (child.pid, 9876)
     server = nt.Server(77, tmp_path / "log", jobs.api, cast(Any, child))
+    server.log.write_text(nt.BACKEND_MARKER + str(child.pid))
     observed: list[str] = []
 
     async def start(*a, **kw):
@@ -371,7 +372,7 @@ async def test_cold_build_observation_precedes_backend_death_and_lock(
     monkeypatch.setattr(smoke, "wait_for_health", lambda *a: None)
     monkeypatch.setattr(demo_check, "start_agent", lambda *a: None)
     monkeypatch.setattr(nt, "process_image", image)
-    monkeypatch.setattr(child, "kill", kill)
+    monkeypatch.setattr(nt, "kill_backend", lambda pid: kill())
     monkeypatch.setattr(nt, "probe_lock", lock)
     monkeypatch.setattr(nt, "retain_outer", lambda: 99)
     monkeypatch.setattr(nt, "wait_members", members)
@@ -509,9 +510,9 @@ def test_native_readonly_and_locked_directory_cleanup(tmp_path):
 @NATIVE
 @pytest.mark.anyio
 async def test_native_backend_death_during_uv_then_three_clean_starts():
-    native_console()
     if os.environ.get("OVERSIGHT_NT_FULL_DEMO") != "1":
         pytest.skip("full demo staged until both W2a and W2b land; set OVERSIGHT_NT_FULL_DEMO=1")
+    native_console()
     await nt.run_checks(hard_kill=True)
 
 
@@ -534,3 +535,51 @@ def test_fake_environment_overrides_dotenv_and_decisions_refuse_credentials(tmp_
     assert settings.agent_model == settings.agent_model_b == "fake"
     with pytest.raises(DecisionUnavailable):
         configured_decision(settings)  # no invented fake decision profile or provider call
+
+
+@pytest.mark.parametrize("marker", ["", "invalid", "4321\nNT backend pid: 4321", "9999"])
+def test_backend_pid_requires_one_marker_inside_the_retained_job(tmp_path, marker):
+    jobs = FakeJobs()
+    jobs.members = (4321,)
+    log = tmp_path / "log"
+    log.write_text(nt.BACKEND_MARKER + marker if marker else "startup only")
+    with pytest.raises(smoke.SmokeError, match="PID"):
+        nt.backend_pid(nt.Server(77, log, jobs.api))
+    log.write_text(nt.BACKEND_MARKER + "4321")
+    assert nt.backend_pid(nt.Server(77, log, jobs.api)) == 4321
+
+
+def test_cold_bootstrap_records_interpreter_pid_and_keeps_serve_arguments(monkeypatch, capsys):
+    import runpy
+
+    called = []
+    monkeypatch.setattr(sys, "argv", ["-c", "serve"])
+    monkeypatch.setattr(runpy, "run_module", lambda *a, **kw: called.append((a, kw)))
+    exec(nt.BACKEND_BOOTSTRAP, {})
+    assert sys.argv == ["oversight", "serve"]
+    assert called == [(("oversight",), {"run_name": "__main__"})]
+    assert capsys.readouterr().out == nt.BACKEND_MARKER + str(os.getpid()) + "\n"
+
+
+@pytest.mark.parametrize("mode", ["--probe-lock", "--hard-kill-check"])
+def test_cli_retains_outer_before_either_mode(monkeypatch, tmp_path, mode):
+    calls = []
+
+    async def probe(runtime):
+        assert calls == ["outer"] and runtime == tmp_path
+        calls.append("probe")
+
+    async def checks(*, hard_kill):
+        assert calls == ["outer"] and hard_kill is True
+        calls.append("hard-kill")
+
+    monkeypatch.setattr(nt.sys, "platform", "win32")
+    monkeypatch.setattr(
+        nt.sys,
+        "argv",
+        ["demo_check_nt.py", mode] + ([str(tmp_path)] if mode == "--probe-lock" else []),
+    )
+    monkeypatch.setattr(nt, "retain_outer", lambda: calls.append("outer"))
+    monkeypatch.setattr(nt, "probe_lock", probe)
+    monkeypatch.setattr(nt, "run_checks", checks)
+    assert nt.main() == 0 and len(calls) == 2

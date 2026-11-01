@@ -42,6 +42,12 @@ from oversight.workspace import (
 )
 from oversight_contracts.commands import GraphResponse
 
+BACKEND_MARKER = "NT backend pid: "
+BACKEND_BOOTSTRAP = (
+    "import os,runpy,sys;"
+    f"print({BACKEND_MARKER!r}+str(os.getpid()),flush=True);"
+    "sys.argv[0]='oversight';runpy.run_module('oversight',run_name='__main__')"
+)
 CREATE_FLAGS = 0x00000004 | 0x00000200  # CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP
 CTRL_BREAK = 1  # CTRL_BREAK_EVENT; no CREATE_NO_WINDOW and no signal handler in the server.
 NT_GRACEFUL_EXITS = (0xC000013A,)  # Candidate, must be pinned/confirmed by native console proof.
@@ -362,6 +368,28 @@ def process_image(pid: int) -> str:
         api.CloseHandle(process)
 
 
+def backend_pid(server: Server) -> int:
+    """The trusted bootstrap identifies the interpreter behind any virtualenv launcher."""
+    text = server.log.read_text(encoding="utf-8", errors="replace")
+    markers = [
+        line.removeprefix(BACKEND_MARKER)
+        for line in text.splitlines()
+        if line.startswith(BACKEND_MARKER)
+    ]
+    if len(markers) != 1 or not markers[0].isdecimal():
+        raise smoke.SmokeError("missing or ambiguous backend PID evidence")
+    pid = int(markers[0])
+    if pid == os.getpid() or pid not in server.jobs.pids(server.job):
+        raise smoke.SmokeError("backend PID is not a supervised job member")
+    return pid
+
+
+def kill_backend(pid: int) -> None:
+    if sys.platform != "win32":
+        raise smoke.SmokeError("forced backend death requires Windows")
+    os.kill(pid, 15)  # Windows os.kill with SIGTERM uses TerminateProcess, not console delivery.
+
+
 async def hard_kill_check(runtime: Path, logs: Path, clock: OverallClock) -> None:
     """Kill the backend while a cold uv build is observed inside its retained job."""
     import demo_check
@@ -371,7 +399,7 @@ async def hard_kill_check(runtime: Path, logs: Path, clock: OverallClock) -> Non
     port = smoke.free_port()
     base = smoke.base_url(port)
     server = await start_server(
-        [sys.executable, "-m", "oversight", *smoke.BACKEND_ARGS],
+        [sys.executable, "-c", BACKEND_BOOTSTRAP, *smoke.BACKEND_ARGS],
         demo_check.server_env(port, runtime),
         logs / "hard-kill.log",
     )
@@ -407,8 +435,9 @@ async def hard_kill_check(runtime: Path, logs: Path, clock: OverallClock) -> Non
             if time.monotonic() >= end:
                 raise smoke.SmokeError("cold uv member deadline exceeded")
             await asyncio.sleep(POLL)
-        print(f"NT cold uv members: {uv_members}; killing backend {server.child.pid}", flush=True)
-        server.child.kill()
+        pid = backend_pid(server)
+        print(f"NT cold uv members: {uv_members}; killing backend {pid}", flush=True)
+        kill_backend(pid)
         await asyncio.to_thread(server.child.wait, timeout=STOP_DEADLINE)
         # No terminate_job on the successful proof: backend's lifetime job must kill uv itself.
         await wait_members(server.job, server.jobs)
@@ -437,6 +466,7 @@ def main() -> int:
     try:
         if sys.platform != "win32":
             raise smoke.SmokeError("this driver requires native Windows")
+        retain_outer()
         if args.probe_lock is not None:
             asyncio.run(probe_lock(args.probe_lock))
             print("NT lock: released")

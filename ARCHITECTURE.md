@@ -528,6 +528,8 @@ Before scratch deletion, the server Job must be empty, the outer Job contain onl
 and a seek-zero one-byte lock probe succeed. Logs survive cleanup; locked directories fail
 visibly after bounded retries. Hard-kill mode starts cold, observes an exact `uv.exe` Job member,
 kills the backend and requires its lifetime Job to clear descendants and release the lock.
+A trusted bootstrap records the actual interpreter PID and validates Job membership before
+that forced kill, accounting for virtualenv launchers whose PID differs from the backend.
 
 The separate advisory workflow preserves existing CI/dispatch workflows. Its explicit Windows
 typing targets cover landed W1/W2b/W3 sites. Full driver/native three-start/cold-build acceptance
