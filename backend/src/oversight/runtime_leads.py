@@ -21,6 +21,7 @@ from oversight.agents import (
 )
 from oversight.api import ApiError
 from oversight.changes import plan_core, read_queue
+from oversight.runtime_lead_admission import message
 from oversight.runtime_lead_turns import LeadTurn
 from oversight.setup import missing_settings
 from oversight_contracts.commands import LeadCreated as LeadCreated
@@ -49,7 +50,9 @@ class _Lead:
     revision: int = 0
     stopping: bool = False
     entered: bool = False
+    admitting: asyncio.Task[None] | None = None
     initializing: asyncio.Task[None] | None = None
+    tasks: list[asyncio.Task[None]] = field(default_factory=list[asyncio.Task[None]])
     task: asyncio.Task[None] | None = None
 
 
@@ -70,9 +73,7 @@ class LeadService:
             raise ApiError("not_configured", "Server setup is incomplete.", missing=missing)
         if profile.provider == "meta" and (reason := live.brake_reason()) is not None:
             raise ApiError("spend_brake", reason)
-        if any(
-            lead.status.state in {"starting", "working", "idle"} for lead in self.leads.values()
-        ):
+        if any(lead.phase in {"starting", "working", "idle"} for lead in self.leads.values()):
             raise ApiError("wrong_state", "a lead is already active")
         live._count += 1
         agent_id = f"agent-{live._count}"
@@ -95,6 +96,9 @@ class LeadService:
         await live._finish(lead.initializing)
         return LeadCreated(agent_id=agent_id)
 
+    async def message(self, agent_id: str, text: str) -> None:
+        await message(self, agent_id, text)
+
     def _profile(self, model: str | None) -> ModelProfile:
         default = self.live._slot_profiles["A"]
         default = default if default.provider == "fake" else MUSE_SPARK
@@ -112,7 +116,17 @@ class LeadService:
         except Exception as error:
             await self._halt_unexpected(lead, error)
             return
-        lead.task = asyncio.create_task(self._drive(lead, profile))
+        self._launch(lead)
+
+    def _launch(
+        self,
+        lead: _Lead,
+        human: str | None = None,
+        answers_seq: int | None = None,
+    ) -> None:
+        lead.entered = False
+        lead.task = asyncio.create_task(self._drive(lead, lead.profile, human, answers_seq))
+        lead.tasks.append(lead.task)
 
     async def _status(
         self,
@@ -206,7 +220,7 @@ class LeadService:
         lead = self.leads.get(agent_id)
         if lead is None:
             raise ApiError("not_found", f"there is no lead {agent_id!r}")
-        if lead.status.state not in {"starting", "working", "idle"} or lead.stopping:
+        if lead.phase not in {"starting", "working", "idle"} or lead.stopping:
             raise ApiError("wrong_state", "the lead is terminal or already stopping")
         if request.revision != lead.revision:
             raise ApiError(
@@ -214,11 +228,28 @@ class LeadService:
                 f"stale lead revision {request.revision}; the latest is {lead.revision}",
             )
         lead.stopping = True
-        if lead.task is not None and not lead.task.done():
-            if lead.entered:
-                lead.task.cancel()
-        else:
-            lead.task = asyncio.create_task(self._finish_open(lead))
+        previous = lead.task
+        admitting = lead.admitting
+        if (
+            previous is not None
+            and not previous.done()
+            and lead.phase != "idle"
+            and lead.entered
+            and (admitting is None or admitting.done())
+        ):
+            previous.cancel()
+        lead.entered = False
+        lead.task = asyncio.create_task(self._stop_admitting(lead, admitting, previous))
+        lead.tasks.append(lead.task)
+
+    async def _stop_admitting(
+        self,
+        lead: _Lead,
+        admitting: asyncio.Task[None] | None,
+        previous: asyncio.Task[None] | None,
+    ) -> None:
+        await asyncio.gather(*(t for t in (admitting, previous) if t), return_exceptions=True)
+        await self._finish_open(lead)
 
     def _ending(self, lead: _Lead) -> tuple[str, str]:
         return (
@@ -239,7 +270,10 @@ class LeadService:
             lead.initializing for lead in self.leads.values() if lead.initializing is not None
         ]
         await asyncio.gather(*initial, return_exceptions=True)
-        tasks = [lead.task for lead in self.leads.values() if lead.task is not None]
+        admissions = [lead.admitting for lead in self.leads.values() if lead.admitting is not None]
+        await asyncio.gather(*admissions, return_exceptions=True)
+        tasks = {task for lead in self.leads.values() for task in lead.tasks}
+        tasks |= {lead.task for lead in self.leads.values() if lead.task is not None}
         for lead in self.leads.values():
             if lead.task is not None and lead.entered and not lead.task.done():
                 lead.task.cancel()

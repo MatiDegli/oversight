@@ -1,7 +1,6 @@
 """Closed lead tools and bounded scripted coordination, without model transport."""
 
 import json
-from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -9,7 +8,6 @@ import pytest
 from backend.tests.agents.lead_helpers import call, lead, plan, scripted, setup_tools, turn
 
 from oversight.agents import (
-    LEAD_LIMITS,
     LEAD_TOOL_SCHEMAS,
     ModelAPIError,
     ScriptedModel,
@@ -216,40 +214,17 @@ async def test_only_server_proposal_refusals_become_tool_errors() -> None:
 )
 async def test_each_stop_rule_halts_the_lead(case: str, expected: str) -> None:
     tools, _ = setup_tools()
-    limits = LEAD_LIMITS
-    delay = 0.0
     if case == "same":
         turns = [turn(call("graph"))] * 5
     elif case == "failures":
         turns = [turn(*(call(f"unknown-{i}") for i in range(8)))]
-    elif case == "tools":
-        turns = [
-            turn(
-                *(
-                    call("read_file", path="shop/pricing.py", start_line=i, end_line=i)
-                    for i in range(1, 14)
-                )
-            )
-        ]
-    elif case == "models":
-        turns = [
-            t
-            for _ in range(3)
-            for t in [turn(call("graph")), *[dict(text="Continue", usage={})] * 5]
-        ]
-    elif case == "clock":
-        turns, limits, delay = (
-            [turn(call("finish", reply="Ready."))],
-            replace(LEAD_LIMITS, wall_clock_s=0.001),
-            0.05,
-        )
     else:
         turns = [
             turn(
                 *(call("request_plan", **plan()) for _ in range(7)), call("finish", reply="Ready.")
             )
         ]
-    run, _, _ = lead(scripted(turns, delay), tools, limits=limits)
+    run, _, _ = lead(scripted(turns), tools)
     end = await run.run()
     assert (end.state, end.detail) == ("halted", expected)
     assert CALL_SCOPE.get() is None
@@ -319,3 +294,16 @@ def test_the_lead_prompt_and_schemas_move_both_prompt_versions(
         )
     monkeypatch.setattr(_prompts, "LEAD_TOOL_SCHEMAS", [])
     assert all(_prompts.prompt_version(pack) != before[i] for i, pack in enumerate((False, True)))
+
+
+async def test_scripted_thread_retains_exchanges_and_reads_fresh_status() -> None:
+    tools, _ = setup_tools(status=lambda: (10, "Committed status data"))
+    model = ScriptedModel(load_script(FIXTURES / "lead-thread.json"))
+    run, _, _ = lead(model, tools)
+    opening = await run.run()
+    assert opening.reply and opening.reply.through_seq is None
+    following = await run.run("Check again", 8)
+    assert following.reply and following.reply.answers_seq == 8
+    assert following.reply.through_seq == 10
+    assert "I can explain" in str(model.requests[1]) and "Check again" in str(model.requests[1])
+    assert not tools.plan_ids

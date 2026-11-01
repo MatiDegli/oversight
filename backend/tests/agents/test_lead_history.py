@@ -32,3 +32,14 @@ def test_opening_reply_has_no_duplicate_task_and_null_cut_has_no_fake_text() -> 
         {"role": "assistant", "content": "opening reply"},
         {"role": "user", "content": "question"},
     ]
+
+
+def test_oversized_task_keeps_original_and_labels_bounded_model_representation() -> None:
+    from oversight.agents._lead_history import TASK_TRUNCATED
+
+    task = "task " * 6000
+    history = LeadHistory(task)
+    messages = history.messages("new question", reserved=2000)
+    assert history.task == task
+    assert str(messages[0]["content"]).endswith(TASK_TRUNCATED)
+    assert sum(len(str(m["content"])) for m in messages) + 2000 == HISTORY_CHARS

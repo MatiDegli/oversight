@@ -102,8 +102,9 @@ class LeadRun:
         self.seen.clear()
         self.tools.through_seq = None
         self.human, self.answers_seq, self.text = human, answers_seq, None
+        deadline = asyncio.timeout(self.limits.wall_clock_s)
         try:
-            async with asyncio.timeout(self.limits.wall_clock_s) as deadline:
+            async with deadline:
                 token = CALL_SCOPE.set(
                     CallScope(
                         deadline.when(),
@@ -125,6 +126,8 @@ class LeadRun:
                 finally:
                     CALL_SCOPE.reset(token)
         except TimeoutError:
+            if not deadline.expired():
+                raise
             return self._reply("time")
         except ModelAPIError:
             reason = "The model API failed after its retries."
@@ -135,7 +138,7 @@ class LeadRun:
     async def _loop(self, client: ModelClient) -> LeadEnd:
         messages: list[Message] = [
             {"role": "system", "content": LEAD_PROMPT},
-            *self.history.messages(self.human),
+            *self.history.messages(self.human, reserved=len(LEAD_PROMPT)),
         ]
         recovery = ReplyRecovery()
         while True:

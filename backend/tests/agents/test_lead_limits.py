@@ -44,17 +44,18 @@ async def test_each_cut_returns_one_nullable_bounded_reply(cut: str, text: str |
         assert "secret" not in end.reply.text
 
 
-async def test_counters_reset_steps_accumulate_and_tools_do_not_cross_turns() -> None:
+@pytest.mark.parametrize("name", ["graph", "unknown"])
+async def test_counters_reset_steps_accumulate_and_tools_do_not_cross_turns(name: str) -> None:
     tools, _ = setup_tools()
     model = scripted([turn(call("graph"))])
     run, _, _ = lead(model, tools, limits=replace(LEAD_LIMITS, tool_calls=1))
-    for i in range(5):
-        model = scripted([turn(call("graph"))])
+    for i in range(7):
+        model = scripted([turn(call(name))])
         run.make_client = lambda model=model: model
         end = await run.run(None if i == 0 else "question", None if i == 0 else i)
         assert end.state == "idle" and end.reply and end.reply.cut == "tool_calls"
         assert run.steps == i + 1 and run.turn_steps == run.turns == 1
-        assert len(run.seen) == 1 and run.failures == 0
+        assert len(run.seen) == 1 and run.failures == (name == "unknown")
         assert all(m["role"] != "tool" for m in model.requests[0])
 
 
@@ -80,7 +81,11 @@ async def test_terminal_rules_never_reply_even_with_text(kind: str) -> None:
         from oversight.agents import ModelAPIError
 
         model.complete = AsyncMock(side_effect=ModelAPIError("private"))
-    run, _, _ = lead(model, tools)
+    run, _, _ = lead(
+        model,
+        tools,
+        limits=replace(LEAD_LIMITS, model_calls=1, tool_calls=4 if kind == "same" else 6),
+    )
     end = await run.run()
     assert end.state == "halted" and end.reply is None
 
@@ -97,3 +102,35 @@ async def test_reply_horizon_is_maximum_status_read_in_this_turn_only() -> None:
     run.make_client = lambda: scripted([dict(text="No status", usage={})])
     end = await run.run("another question", 10)
     assert end.reply and end.reply.answers_seq == 10 and end.reply.through_seq is None
+
+
+@pytest.mark.parametrize("budget", ["models", "tools"])
+async def test_default_18_model_and_12_tool_limits_are_exact(budget: str) -> None:
+    tools, _ = setup_tools()
+    if budget == "tools":
+        turns = [
+            turn(
+                *(
+                    call("read_file", path="shop/pricing.py", start_line=i, end_line=i)
+                    for i in range(1, 14)
+                )
+            )
+        ]
+    else:
+        turns = [
+            t
+            for i in range(1, 7)
+            for t in [
+                turn(call("read_file", path="shop/pricing.py", start_line=i, end_line=i)),
+                {"text": None, "usage": {}},
+                {"text": " ", "usage": {}},
+            ]
+        ]
+    model = scripted(turns)
+    run, _, _ = lead(model, tools)
+    end = await run.run()
+    assert end.state == "idle" and end.reply and end.reply.text is None
+    if budget == "tools":
+        assert run.steps == 12 and end.reply.cut == "tool_calls"
+    else:
+        assert len(model.requests) == 18 and run.steps == 6 and end.reply.cut == "model_calls"

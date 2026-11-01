@@ -71,6 +71,19 @@ def _rows(events: Iterable[ServerEvent]) -> list[tuple[str, dict[str, Any]]]:
     nodes: dict[str, dict[str, Any]] = {}
     tests: dict[tuple[str, str], dict[str, Any]] = {}
     for event in events:
+        if event.type not in {
+            "agent.status",
+            "lead.status",
+            "plan.updated",
+            "queue.updated",
+            "change.proposed",
+            "change.resolved",
+            "tests.executed",
+            "merge_mode.changed",
+            "graph.snapshot",
+            "graph.delta",
+        }:
+            continue
         p = event.payload.model_dump(mode="json")
         match event.type:
             case "agent.status" | "lead.status":
@@ -81,12 +94,17 @@ def _rows(events: Iterable[ServerEvent]) -> list[tuple[str, dict[str, Any]]]:
                 latest[event.type, p["queued_task_id"]] = p
             case "change.proposed":
                 latest["change", p["change_id"]] = p | {"state": "proposed"}
-                tests[p["change_id"], "proposal"] = p["tests"]
+                tests[p["change_id"], "proposal"] = {
+                    "suite": p["tests"],
+                    "revision": p["revision"],
+                    "tested_commit": p["head_commit"],
+                    "seq": event.seq,
+                }
             case "change.resolved":
                 key = ("change", p["change_id"])
                 latest[key] = latest.get(key, {}) | p | {"state": p["merge"] or p["decision"]}
             case "tests.executed":
-                tests[p["change_id"], p["phase"]] = p["suite"]
+                tests[p["change_id"], p["phase"]] = p | {"seq": event.seq}
             case "merge_mode.changed":
                 latest[event.type, "mode"] = p
             case "graph.snapshot":
@@ -132,7 +150,9 @@ def _render_rows(
             }
         }
         if "impact" in p:
-            row["cone_nodes"] = len(p["impact"]["seeds"]) + len(p["impact"]["entries"])
+            cone = p["impact"]
+            row["cone_nodes"] = len(cone["seeds"]) + len(cone["entries"])
+            row["cone_bounds"] = {k: v for k, v in cone.items() if k not in {"seeds", "entries"}}
         if "subtasks" in p:
             row["subtask_count"] = len(p["subtasks"])
         rows.append((kind, row))
@@ -149,16 +169,14 @@ def _render_rows(
                     },
                 )
             )
-    for (change_id, phase), suite in tests.items():
-        rows.append(
-            (
-                "tests",
-                {"change_id": change_id, "phase": phase}
-                | {k: v for k, v in suite.items() if k != "cases"},
-            )
-        )
+    for (change_id, phase), observed in tests.items():
+        suite = observed["suite"]
+        context = {"change_id": change_id, "phase": phase} | {
+            k: v for k, v in observed.items() if k != "suite"
+        }
+        rows.append(("tests", context | {k: v for k, v in suite.items() if k != "cases"}))
         for case in cast(list[dict[str, Any]], suite.get("cases") or []):
-            rows.append(("test case", {"change_id": change_id, "phase": phase} | case))
+            rows.append(("test case", context | case))
     rows.extend(("graph node", n) for n in nodes.values())
     return rows
 
@@ -172,6 +190,17 @@ def fold_lead_status(events: Iterable[ServerEvent], through_seq: int) -> tuple[i
     if usage.through_seq != through_seq:
         raise ValueError("status requires the complete committed prefix through S")
     entries = [("usage", asdict(usage.run)), *_rows(events)]
+    entries.extend(
+        (
+            "change usage",
+            {
+                "change_id": key,
+                "usage": value.usage.model_dump(mode="json"),
+                "revision_rounds": value.revision_rounds,
+            },
+        )
+        for key, value in usage.by_change.items()
+    )
     return through_seq, serialize_status(through_seq, entries)
 
 

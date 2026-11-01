@@ -263,7 +263,13 @@ def test_nothing_on_the_lead_path_calls_a_decision_or_queue_command() -> None:
         "read_facts",
         "read_cross_review",
     }
-    for relative in ("runtime_leads.py", "agents/_lead.py", "agents/_lead_tools.py"):
+    for relative in (
+        "runtime_leads.py",
+        "runtime_lead_turns.py",
+        "runtime_lead_admission.py",
+        "agents/_lead.py",
+        "agents/_lead_tools.py",
+    ):
         tree = ast.parse((root / relative).read_text())
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute):

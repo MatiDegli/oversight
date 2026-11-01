@@ -803,6 +803,9 @@ class LiveRun:
     async def start_lead(self, request: StartLead) -> LeadCreated:
         return await self.leads.start(request)
 
+    async def lead_message(self, agent_id: str, request: AgentMessage) -> None:
+        await self.leads.message(agent_id, request.text)
+
     def stop_lead(self, agent_id: str, request: StopLead) -> None:
         self.leads.stop(agent_id, request)
 
