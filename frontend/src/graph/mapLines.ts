@@ -154,9 +154,10 @@ export function mapSegments(frame: MapViewport & { calls?: MapCall[]; hover?: Ma
       hover?.kind === "module"
         ? hover.id === source.id || hover.id === target.id
         : hover?.kind === "group" && (source.group === hover.id) !== (target.group === hover.id);
-    if (!shown) return [];
-    const a = source.layout,
-      b = target.layout;
+    const cone = !call.possible && source.inCone === true && target.inCone === true;
+    if (!shown && !cone) return [];
+    const a = (cone ? target : source).layout,
+      b = (cone ? source : target).layout;
     const { start, end } = endPoints(
       { ...a, radius: a.outerRadius },
       { ...b, radius: b.outerRadius },
@@ -167,6 +168,11 @@ export function mapSegments(frame: MapViewport & { calls?: MapCall[]; hover?: Ma
         ? placeChip(start, end, 12 + String(call.count).length * 7, names, circles, placed)
         : undefined;
     if (chip) placed.push(chip.box);
-    return [{ ...call, start, end, chip }];
+    return [{ ...call, cone, start, end, chip }];
   });
+}
+
+/** Seeds and agent marks keep their own signal, without a distance badge. */
+export function distanceBadge(module: import("./mapModel").MapModule) {
+  return module.agents.length ? undefined : module.distance;
 }

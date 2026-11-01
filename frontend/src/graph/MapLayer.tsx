@@ -6,7 +6,7 @@ import { agentLook } from "../theme";
 import type { MapModel } from "./mapModel";
 import { decisionsLabel, testedLabel } from "./mapEvidence";
 import { moduleLayout, panelBox } from "./mapModel";
-import { mapSegments, pointed } from "./mapLines";
+import { distanceBadge, mapSegments, pointed } from "./mapLines";
 import type { MapCall, MapHover } from "./mapLines";
 import type { MapLevel } from "./mapLevel";
 
@@ -54,6 +54,7 @@ const mapStyles = `
   color: var(--module-label);
   line-height: 1.2;
 }
+.map-distance { position: absolute; width: 20px; height: 20px; transform: translate(-50%, -50%); border-radius: 50%; background: var(--ground); color: var(--text); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
 .map-full-name { position: relative; left: 50%; width: max-content; transform: translateX(-50%); overflow: visible; white-space: nowrap; }
 .map-count,
 .map-agent {
@@ -112,9 +113,9 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
             return (
               <g
                 key={`${line.source}>${line.target}`}
-                data-map-line={line.possible ? "possible" : "exact"}
+                data-map-line={line.cone ? "cone" : line.possible ? "possible" : "exact"}
                 style={{
-                  color: `var(--${line.possible ? "edge-possible" : "edge"})`,
+                  color: `var(--${line.cone ? "lit-edge" : line.possible ? "edge-possible" : "edge"})`,
                   opacity: line.possible ? "var(--dim-node)" : 1,
                 }}
               >
@@ -125,7 +126,7 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                   y2={b.y}
                   stroke="currentColor"
                   style={{
-                    strokeWidth: `var(--${line.possible ? "possible-edge-width" : "exact-edge-width"})`,
+                    strokeWidth: `var(--${line.cone ? "lit-edge-width" : line.possible ? "possible-edge-width" : "exact-edge-width"})`,
                   }}
                 />
                 {!line.possible && (
@@ -172,6 +173,7 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                 data-map-group={group.id}
                 className="map-panel absolute"
                 style={{
+                  opacity: group.modules.every((m) => m.inCone === false) ? 0.5 : 1,
                   borderColor:
                     frame.hover?.id === group.id ||
                     group.modules.some((m) => m.id === frame.hover?.id)
@@ -220,6 +222,8 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
               const layout = moduleLayout(module, model, zoom, pan),
                 radius = layout.radius;
               const full = pointed(module.id, group.id, frame.hover);
+              const dim = module.inCone === false && !module.agents.length;
+              const badge = distanceBadge(module);
               return (
                 <div
                   key={module.id}
@@ -237,7 +241,23 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                     className="relative mx-auto"
                     style={{ width: radius * 2, height: radius * 2 }}
                   >
-                    <div data-map-circle className="map-circle absolute inset-0 rounded-full" />
+                    <div
+                      data-map-circle
+                      className="map-circle absolute inset-0 rounded-full"
+                      style={{ opacity: dim ? "var(--dim-node)" : 1 }}
+                    />
+                    {badge !== undefined && (
+                      <div
+                        data-map-distance
+                        className="map-distance"
+                        style={{
+                          left: radius + 0.75 * radius + 4,
+                          top: radius - 0.75 * radius - 4,
+                        }}
+                      >
+                        {badge}
+                      </div>
+                    )}
                     {module.agents.map(({ slot }) => (
                       <div
                         key={slot}
@@ -249,14 +269,19 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                   <div
                     className={`map-name mt-[3px] ${full ? "map-full-name" : "truncate"}`}
                     style={{
-                      background: frame.hover
-                        ? "color-mix(in srgb, var(--card) 85%, transparent)"
-                        : undefined,
+                      visibility: dim && !full ? "hidden" : undefined,
+                      background:
+                        frame.hover || module.inCone !== undefined
+                          ? "color-mix(in srgb, var(--card) 85%, transparent)"
+                          : undefined,
                     }}
                   >
                     {full ? (module.fullName ?? module.name) : module.name}
                   </div>
-                  <div className="map-count">
+                  <div
+                    className="map-count"
+                    style={{ visibility: dim && !full ? "hidden" : undefined }}
+                  >
                     {module.functions
                       ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
                       : "empty"}
