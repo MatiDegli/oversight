@@ -2994,3 +2994,33 @@ measured cone is unavailable. These readers keep their existing conservative com
 E4 does not certify a report that its required criteria could not verify. The real-harness
 test_proposal_suite_normalized_and_consistent now asserts all four effects for every covered
 normalization code, including preserved observed parameter ids and no measured probe suites.
+
+## 2026-10-31 — Host memory may hold new agent starts
+
+Resource admission keeps the person's running-agent cap as the limit. Host memory can only
+hold a new start below that cap; it never offers another slot. `backend/src/oversight/resources.py`
+reads Linux's MemTotal and MemAvailable inline and floors the used percentage, clamped to
+0–100. `backend/src/oversight/settings.py` and `.env.example` expose
+OVERSIGHT_MEMORY_HOLD_PERCENT, an integer from 1 to 100, defaulting to the approved 90.
+
+`backend/src/oversight/app.py` checks memory on new starts after the model, task, setup,
+spending brake and suspect-main checks. Revisions, reviewer calls, resumes, plan calls and
+already running agents keep their existing behavior: this is a courtesy admission hold,
+not a mechanism for interrupting work. It uses the existing temporary wrong_state refusal
+and the existing queue blocked detail, so no contract or error code changes. The sentence
+"Waiting: memory at 90% or more" names the configured threshold rather than the live reading;
+rechecks therefore keep a stable detail and produce no repeated queue events.
+
+`backend/src/oversight/runtime_queue.py` rechecks every five seconds only while a selection
+has seen a memory hold. Once the reading drops, existing blocked-item rechecking and slot
+reservation start the item automatically. Other refusals retain their event-driven waits,
+and cancellation still interrupts the wait at shutdown. An unknown reading never holds:
+missing /proc/meminfo, unreadable data or unsupported hosts must not prevent all work.
+This differs deliberately from the spending brake's fail-closed protection of actual credits.
+
+The fake model is held too: the resource being protected is host memory, regardless of the
+provider. Consequently `make demo-check` can encounter a hold on a host at or above the
+threshold; the message names the cause. Setting 100 effectively turns off the courtesy hold,
+except at a full 100% reading. Tests inject readings so general tests never depend on host load.
+Test-run queue words (such as "2 test runs ahead"), running-agent card words and frontend
+changes are not built here.
