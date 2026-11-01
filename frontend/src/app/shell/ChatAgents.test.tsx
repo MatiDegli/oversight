@@ -1,7 +1,32 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { ChatAgents } from "./ChatAgents";
+import { ChatAgentsFrame } from "./ChatShell";
 import { fold, scenario } from "../chatAgents.fixture";
+import { createInitialState } from "../../state";
+
+it.each([
+  ["empty", 0],
+  ["working", 2],
+  ["proposed", 2],
+  ["review", 2],
+  ["merged", 1],
+] as const)("renders the running header for %s without capture flags", (name, count) => {
+  const html = renderToStaticMarkup(<ChatAgentsFrame state={fold(scenario(name))} />);
+  expect(html).toContain(`<header><h2>Agents</h2><span>${count} of 2 running</span></header>`);
+});
+it("omits the numeric header before metadata and derives the denominator from the run", () => {
+  const initial = renderToStaticMarkup(<ChatAgentsFrame state={createInitialState()} />);
+  expect(initial).toContain("<header><h2>Agents</h2></header>");
+  const state = fold(scenario("working"));
+  if (!state.run) throw new Error("Missing fixture run");
+  const html = renderToStaticMarkup(
+    <ChatAgentsFrame
+      state={{ ...state, run: { ...state.run, slots: state.run.slots.slice(0, 1) } }}
+    />,
+  );
+  expect(html).toContain("<span>1 of 1 running</span>");
+});
 
 it("exposes full identities, selected state and facts in a native button list", () => {
   const onOpenConversation = vi.fn();

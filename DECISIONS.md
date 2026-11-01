@@ -3721,7 +3721,15 @@ intentionally deferred. Twenty captures and twenty full-reference-size compariso
 
 ### C2 reference verification
 
-The five required Impeccable references were re-read in full. Rendered stress at 1280 showed
+The five required Impeccable references were re-read in full:
+
+- `.agents/skills/impeccable/reference/layout.md`
+- `.agents/skills/impeccable/reference/typeset.md`
+- `.agents/skills/impeccable/reference/harden.md`
+- `.agents/skills/impeccable/reference/clarify.md`
+- `.agents/skills/impeccable/reference/audit.md`
+
+Rendered stress at 1280 showed
 unbroken model text clipping, so row content now permits arbitrary-token wrapping. A row's
 accessible description exposes model, full activity, step and optional cost alongside its
 existing full identity and pressed selection. A browser regression covers Arabic/CJK/emoji,
@@ -3732,6 +3740,7 @@ The contrast audit also found team text below 4.5:1 on selected raised rows: dar
 Badge and active-pill tints now compose over the existing panel token, so selecting or hovering
 cannot reduce their text contrast. This changes no palette token or geometry. A rendered-pixel
 regression checks both identity surfaces for every A–F hue in both themes.
+
 ## 2026-11-01 — The native Windows port moves ahead
 
 The maintainer ranked item 20 immediately after the conversational lead and the Chat view,
@@ -3796,3 +3805,21 @@ remain the coordinator's merge prerequisites; activation does not complete proof
 Reason: approval and delivered prerequisites allow explicit rules selection, while live fake
 proof, committed receipts and repeatable clean starts establish the activation path without
 spending provider credits or relaxing any authority condition.
+
+## 2026-11-01 — C2 default coverage includes counts and run boundaries
+
+Header markup is covered without screenshot flags for empty, working, proposed, review and
+merged states, absent metadata and a different slot denominator. Default browser coverage also
+checks incoming status, proposal, conflict and merge events with paused and halted slot holders.
+It verifies that two plans from one lead keep member numbers through slot reuse, then that a
+new run clears rows and restarts lettering at A without selecting it. The handwritten harness
+starts event sequence at 1 for a new run, matching the reducer's existing run boundary contract.
+
+The C2 slice against accepted C1 `05527f47` contains 1492 additions, 8 deletions, 1500 changed lines.
+This exceeds the 350–450 changed-line estimate because the required selector, row, event-shaped
+fixture, browser interaction, stress, contrast and capture proof accounts for most additions.
+The work remains within the authorized agents slice; C3–C6 and L3 remain pending.
+DECISIONS.md has 3825 lines because it retains inherited decision history. No other touched
+file exceeds 500 lines. The inherited Frame function spans 168 lines (79–246) in its 268-line
+file to preserve the persistent shell composition; C2 adds only its authorized State prop.
+No other touched function exceeds 80 lines.

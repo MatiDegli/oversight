@@ -67,9 +67,18 @@ export const chatAgentsTest = {
     );
   },
   deliver(events: ServerEvent[]) {
-    const start = stateStore.getState().state.lastSeq;
+    let seq = stateStore.getState().state.lastSeq;
+    let runId = stateStore.getState().state.run?.run_id;
     flushSync(() => {
-      stateStore.getState().applyEvents(events.map((e, i) => ({ ...e, seq: start + i + 1 })));
+      stateStore.getState().applyEvents(
+        events.map((e) => {
+          if (e.type === "run.started" && e.payload.run_id !== runId) {
+            seq = 0;
+            runId = e.payload.run_id;
+          }
+          return { ...e, seq: ++seq };
+        }),
+      );
     });
   },
   longTeam() {

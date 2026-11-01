@@ -5,7 +5,7 @@ import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
 import type {} from "./chatAgents.browser.fixture";
-import { proposal, resolved, status, step, usage } from "./chatAgents.fixture";
+import { plan, proposal, resolved, seed, status, step, usage } from "./chatAgents.fixture";
 
 let server: ViteDevServer, browser: Browser, html: string, url: string;
 beforeAll(async () => {
@@ -52,6 +52,76 @@ const row = (page: Page, letter: string) =>
   });
 const view = (page: Page, name: string) =>
   page.getByRole("group", { name: "Workspace view" }).getByRole("button", { name, exact: true });
+it("updates the running header as work, review, conflict and merge events arrive", async () => {
+  const page = await open("empty");
+  const count = page.locator(".chat-agents > header > span");
+  try {
+    await check(count).toHaveText("0 of 2 running");
+    await page.evaluate(
+      (events) => window.chatAgentsTest.deliver(events),
+      [status(), status("agent-b", { slot: "B" })],
+    );
+    await check(count).toHaveText("2 of 2 running");
+    await row(page, "A").click();
+    await row(page, "B").focus();
+    await page.evaluate(
+      (events) => window.chatAgentsTest.deliver(events),
+      [
+        status("agent-a", { state: "ready_for_review" }),
+        proposal("agent-a"),
+        status("agent-b", { slot: "B", state: "paused" }),
+      ],
+    );
+    await check(count).toHaveText("2 of 2 running");
+    await page.evaluate(
+      (events) => window.chatAgentsTest.deliver(events),
+      [
+        status("agent-b", { slot: "B", state: "halted" }),
+        proposal("agent-b"),
+        resolved("agent-b", true),
+      ],
+    );
+    await check(count).toHaveText("2 of 2 running");
+    await page.evaluate((events) => window.chatAgentsTest.deliver(events), [resolved("agent-b")]);
+    await check(count).toHaveText("1 of 2 running");
+    await check(row(page, "A")).toHaveAttribute("aria-pressed", "true");
+    await check(row(page, "B")).toBeFocused();
+  } finally {
+    await page.close();
+  }
+});
+it("preserves team members on slot reuse and resets rows and letters for a new run", async () => {
+  const page = await open("empty");
+  try {
+    await page.evaluate(
+      (events) => window.chatAgentsTest.deliver(events),
+      [plan("p", "lead"), status("first", { plan_id: "p", slot: "B" })],
+    );
+    await row(page, "A·1").click();
+    await page.evaluate(
+      (events) => window.chatAgentsTest.deliver(events),
+      [resolved("first"), plan("q", "lead"), status("second", { plan_id: "q", slot: "B" })],
+    );
+    await check(page.locator(".chat-agent-name")).toHaveText(["Agent A·1", "Agent A·2"]);
+    await check(row(page, "A·1")).toHaveAttribute("aria-pressed", "true");
+    await row(page, "A·2").click();
+    await check(page.getByLabel("Agent B conversation", { exact: true })).toBeVisible();
+    const start = seed.find((e) => e.type === "run.started");
+    if (!start) throw new Error("Missing fixture run");
+    await page.evaluate(
+      (events) => window.chatAgentsTest.deliver(events),
+      [{ ...start, payload: { ...start.payload, run_id: "c2-new-run" } }],
+    );
+    await check(page.locator(".chat-agent-row")).toHaveCount(0);
+    await check(page.locator(".chat-agents > header > span")).toHaveText("0 of 2 running");
+    await page.evaluate((events) => window.chatAgentsTest.deliver(events), [status("fresh")]);
+    await check(page.locator(".chat-agent-name")).toHaveText(["Agent A"]);
+    await check(row(page, "A")).toHaveAttribute("aria-pressed", "false");
+    await check(page.locator(".chat-agents > header > span")).toHaveText("1 of 2 running");
+  } finally {
+    await page.close();
+  }
+});
 async function identityContrast(page: Page, agent: Locator) {
   const samples = await agent.evaluate((el) =>
     [".chat-agent-badge", ".chat-agent-pill"].map((selector) => {
