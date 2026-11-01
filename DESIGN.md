@@ -619,10 +619,10 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 
 | Zone | Size at 1920x1080 | Contents |
 | --- | --- | --- |
-| Top bar | 52px high | product, repository, branch, hash; Ctrl K search; decisions chip, spend, history, settings |
+| Top bar | 52px high | product, repository, branch, hash; Ctrl K search; decisions chip, Usage, spend, history, settings |
 | Left rail | 56px wide | Graph, Files, Changes, Agents; terminal toggle and shortcuts at the bottom |
 | Sidebar | 280px wide, collapsible | Files tree or Changes: queue first, then decision history |
-| Focus panel | 880px wide | tabs for file view, live diff, review, conversation, plan and settings |
+| Focus panel | 880px wide | tabs for file view, live diff, review, conversation, plan, settings and Usage |
 | Graph stage | remaining width, at least 560px | the same graph, its heading, legend and controls |
 | Agents panel / rail | 400px / 56px wide | cards and task composer, or letter avatars with state |
 | Bottom dock | 280px high when open | Terminal, Tests, Activity log; later the replay timeline |
@@ -816,6 +816,8 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   decisions chip and the spend total (level 2, the budget in whole dollars when it is round:
   "US$150"). The search box, the history icon and the settings icon join the bar when each feature
   is built, not before.
+- **Usage:** a Timer icon button immediately before Spend opens its person-owned focus tab.
+  It is absent from the static replay until that build has a bundled aggregate response.
 - **Decisions chip:** always visible in the same top-bar position and at the queue-counter height.
   At zero it reads "Nothing needs you" in muted gray, with no lamp or badge. Otherwise it reads
   "Decisions · N", neutral across agents, with N in Mono and tabular figures. One pending change
@@ -829,6 +831,42 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   agent-tint fill, a 1.5px border in the agent's color and the letter in the agent's text color
   (agent-a-text, agent-b-text) at 15px, weight 700. A status
   lamp sits on its top-right corner and a one-word caption under it ("Ready", "Editing").
+
+### Usage tab — built desktop view
+
+Approved packet b-1101a item 1 (2026-11-01, 01:03:27 ART). The premises cite main
+`6ab92e7`; implementation starts on `54dc64d`, preserving stage-times, life-edges and
+nit-sweep-b. The previous focus-zone list, Navigation and level table omitted Usage;
+there was no drawn Usage entry to move. This entry records the built scope without
+changing unrelated statuses.
+
+The neutral focus tab names Usage once and retains the existing close/maximize controls,
+two 56px rails and the persistent graph. Usage retains pan, zoom and selection on opening,
+activation and resizing. The shell supplies 880px at 1920 and 608px at 1280. Its own body
+scrolls above a pinned 46px event-scope footer; padding is 30/32/40px, or 22/28/32px below
+720px panel width. Time and Cost stack with an 18px gap, becoming columns with a 44px
+gap from 760px. The closing sentence uses Next 20/700 with Mono 19/400 figures; headings
+use Next 16/700, labels 15/400, data Mono 14/400 and explanations 13/400.
+
+Agent and Model groupings are eligible; Team joins only for lead/plan teams, Role only
+when a cost row reports a role. The control appears only if two eligible groupings have
+multiple rows. Agent is default, except with at least two eligible teams; refresh retains
+an eligible selection. A single Team row omits the duplicate total. Costs stay with their
+reported author, while null-agent review intervals appear under Reviews. Team rows use
+the response directly. Global totals always use the response globals.
+
+Complete and Missing metrics use neutral icons and words; Incomplete uses failed-text
+and a failed icon. Unknown is —, never zero. A supplied lower bound, including zero,
+reads “At least”; incomplete coverage suppresses exact figures for that family and quotes
+its problems. Ranged calls supply only a lower bound, never an invented upper bound.
+Wholly unpriced rows read “No list price”. Money uses US$, three significant digits below
+one cent and two decimals from one cent; true zero is US$0. Time comes from committed
+intervals, with “still working” and “so far” for open actors, without a ticking clock.
+The dated pricing source explains list-price equivalents separately from the budget ledger.
+
+Static aggregate bundling and the phone Usage layout remain deferred. The Missing proof
+uses recorded-run context over a mocked available backend. At 390px the full IDE retains
+its narrow-window notice, intentionally differing from the phone feasibility sheets.
 
 ### Settings tab
 
@@ -1561,7 +1599,7 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 | --- | --- |
 | 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the decisions chip; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
-| 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
+| 3 | Usage desktop focus tab over GET /usage (built; static/phone deferred); possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
 | Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker, the rest contours and merge travel; plain ground (#070707 in dark) whenever WebGL2 is missing |
 | After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

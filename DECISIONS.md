@@ -3244,3 +3244,29 @@ text and a 1.5px press over 70ms ease-out (instant under reduced motion). The ri
 Panel pseudo-elements use a compensated flex row so static and floating roots keep their
 positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
 light that stays outside its row gap. Monaco and the graph host receive neither control effect.
+
+## 2026-11-01 — Usage read lifecycle, camera and lower bounds
+
+Packet b-1101a item 1 was approved at 01:03:27 ART. Premises refer to main `6ab92e7`;
+implementation starts from `54dc64d`, after contract 1.13.0 and the intervening frontend
+fronts. Usage remains an aggregate of list-price equivalents; the top-bar budget ledger
+keeps its existing meaning and implementation.
+
+Opening Usage loads its local chunk and reads GET /usage. Committed-event sequence
+changes refresh only while mounted. Each effect aborts its predecessor and ignores a
+late settlement; run identity keys the mount and is checked against the response. The
+footer uses the response's own seq. The deferred read has one documented local lint
+exception for fetch, as required by the approved file scope; transport's general boundary
+remains in force. Errors stay inline with Retry, clearing failed data;
+no response from another run is retained and no elapsed reader time becomes activity.
+
+Usage alone requests camera preservation from GraphStage to GraphView. The graph keeps
+its instance and selected node, resizes without framing an empty target, and retains the
+saved watch camera. The initial-panel creation path follows the same exception. Existing
+framing for every other tab and restoration to watch keep their behavior.
+
+The contract offers no ranged-call upper bound. A ranged or otherwise incomplete cost
+therefore displays its supplied known lower bound, including zero, and quotes the response
+problem. Unknown intervals remain unknown; observed time is retained beside unknown work.
+Model time with incomplete interval coverage remains a lower bound, including where a
+model has observed work. No reconciliation claim is made from incomplete figures.
