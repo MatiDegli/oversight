@@ -359,14 +359,13 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Call edge no agent is at (watch) | full strength | quiet-edge, 0.45 opacity, until an agent reads, edits or changes a node it touches, or the person selects one | the demo graph has 47 edges across its frames; stepping back the ones nobody is at lets the others read. Context, like the dimmed nodes of review: the full edge returns on selection |
 | Edge draw order | Modules lines can cross text | faint lines below opaque cards and graph text plates; routed calls above frames and below rows, hovered paths lifted | our lines never cross titles, counts, headers or legend text |
 | Task box keyboard hint | none | "Ctrl+Enter to start" under the box | the hint is how the keyboard starts an agent; a hint belongs next to what it starts |
-| Search, history and settings in the top bar | drawn | left out until each feature is built | a control that looks present and does nothing is worse than no control |
+| Search and history in the top bar | drawn | left out until each feature is built; settings joined with the Settings tab | a control that looks present and does nothing is worse than no control |
 | Input border | `#222222` to `#262626` | control-edge `#62625e`, 3.25:1 on field | quality floor: a control's boundary at 3:1 |
 | Task box fill | varies in the earlier sketches | field, the inset token | one fill for every input |
 | Review facts in v4 | every fact in one row | four decision chips and a provenance caption | the critique ranks facts by harm to the decision; provenance must not compete with tests and reach |
 | Review body order in the brief | comparison summary before diff | diff before "What was compared"; choices start with a closed file row below Details | the approved review baseline preserves room for the decision and code |
 | Review cone context in Signal | module frames at 60% | everything outside the cone and change at 16%, frames included | the approved review baseline lets the cone read alone |
 | Review example at 1280 | Before and After intended to share the first screen | the answered row wraps in full; After may need scrolling | the approved departure keeps the complete answer legible |
-| Review Revert in state g | a Revert button | no Revert until item 8 delivers its command | the approved shot shows a target, not a command available today |
 | Progress row on the phone | not drawn (f and f-b show one change) | "Decision {i} of {n}" above the agent line | the practice holds two recorded decisions |
 | "Recorded task" row on the phone | not drawn | a 44px row after the evidence with the exact task | the recorded tasks run 40–60 words; the short title stays the headline |
 | Cone card on a merged change (g) | drawn | no cone card or cone lights once a change is approved or rejected | the graph's lights go off once a change is decided (graphScope.ts:14–15, pinned by app/review.browser.test.ts:292–293); flagged to the maintainer |
@@ -381,7 +380,8 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Light of a waiting change | not drawn (the sketches show a merge only) | one steady light, dimmer than a working agent's, while the change has an open inbox entry | maintainer, 2026-10-29 clarification: the light belongs to a change, in three states |
 | "merged" chips on nodes | drawn in the rest and merge sketches | not built in this front: the graph shows a merged node in main's neutral look, and the rail card says what merged | the chips are a separate piece of the node look; until then the cards carry it (flagged to the maintainer) |
 | Contour mask | exact rectangles with a soft edge | whole 7px cells, the field's own mask | one mask for lamps and lines; a line ends within 7px of an overlay |
-| Tests scan, rolling numbers, top-edge light, focus glow, button press | drawn | not built in this front | part 2 of the life layer |
+| Tests scan, rolling numbers | drawn | not built | separate life-layer work |
+| Top-edge light, focus glow, button press | drawn | built | panel edge 1px; keyboard glow 6px at 55% text; press 1.5px over 70ms ease-out |
 | Sketch strip and its keys | drawn | not built | mockup only |
 
 ## Colors
@@ -652,7 +652,7 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
   current overlay. In review, R requests changes outside text inputs. The rail opens the shortcuts
   sheet. There is no Approve key, including Ctrl+Enter, and no Approve command in Ctrl K.
 - **Attention:** a proposal updates the queue and agent card, never opens or selects a tab. The
-  status line reports the spending brake. Only a failed command calls for a toast.
+  status line reports the spending brake. A failed command shows an inline line with an X icon and role="alert".
 - **Graph overlays** sit 24px from the graph's edges: heading top left in watch only, cone card top
   left in review, legend bottom left, zoom controls bottom right. With the left panel open and no
   cone (live diff, file view) the top left is empty, as in the live sketch: the graph beside the
@@ -1085,8 +1085,8 @@ never its local color values. No new syntax color is chosen here.
   The shot's sentence is the example: "Tests pass, every changed function is reached by a test,
   and the change stays inside its zone." Note: "Negative quantities now raise ValueError."
   No decision bar; footer
-  "Merged into main <hash>" (the shot uses 4ca5596). Revert appears only when item 8 delivers the
-  revert command; until then the footer has no Revert. The shot's button is a target.
+  "Merged into main <hash>" (the shot uses 4ca5596). Revert sends the person-only Revert command (item
+  8); its states read as the maintainer approved on 2026-10-31 (DECISIONS.md).
 
 **Answers and examples.** The answered row always wraps in full, never truncates: question 14/600,
 example Mono 13 on 19px lines, answer and Change at 14/600; 12px above and below, divider below.
@@ -1288,9 +1288,15 @@ borders that follow the pointer, button flashes, a boot sweep (at most a 0.5s fa
 view-change wipes (a plain crossfade instead). None existed in the product when this was written;
 none is to be added.
 
-**Later in the same front** (target, not yet built): a scan band and one lamp per passing test while
-tests run, numbers that roll digit by digit in tabular mono, a 1px top-edge light on panels, a soft
-glow on keyboard focus beside the focus ring, and buttons that press down 1 to 2px.
+**Built panel and control life:** a 1px top-edge light uses a full-width gradient, transparent
+at both ends and white at 17% from 30% to 70% in dark on the sidebar, focus panel, bottom dock,
+expanded agents panel and agents rail. Day uses white at 90% on the sidebar and both agents
+panels only. Keyboard focus adds a 6px drop-shadow at 55% text beside the unchanged 2px text
+ring and 2px offset. Enabled buttons press down 1.5px with a 70ms ease-out transform transition;
+reduced motion removes the transition. Monaco and the graph host are excluded.
+
+**Later** (target, not yet built): a scan band and one lamp per passing test while tests run,
+and numbers that roll digit by digit in tabular mono.
 
 ### Class and module folding
 

@@ -386,6 +386,7 @@ class ChangeManager:
             if wait is not None:
                 wait.spend_pin = None
             preemption.restore(self._ctx, rec, completed, decision)
+            self._ctx.assessment.decision_finished(rec, decision)
 
         task = self._ctx.spawn(deciding())
         task.add_done_callback(done)
@@ -542,6 +543,10 @@ class ChangeManager:
             return None
         rec.taken = rec.revision
         rec.rules_consumed.add(rec.revision)
+        assert rec.head_commit is not None
+        rec.rules_attempts.add(
+            (rec.revision, rec.head_commit, wait.main_commit, wait.mode.revision)
+        )
         rec.evidence = reservation.evidence
         rec.rules_phase, rec.rules_authorization_started = "queued", False
         rec.rules_task = self._decide(rec, approval.approve_rules(self._ctx, reservation))

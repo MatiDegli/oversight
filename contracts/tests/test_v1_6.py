@@ -216,34 +216,25 @@ async def test_versioned_fixture_validates_input_and_normalized_schema(tmp_path:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def normalize_text_aliases(definitions: dict[str, Any]) -> dict[str, Any]:
-    # Pydantic splits the shared alias when agent.message adds a field-specific maxLength.
-    # Only collapse the two unchanged aliases, after checking their exact constraints.
-    aliases = ("NonEmptyText-Input", "oversight_contracts__common__NonEmptyText__1")
-    text = json.dumps(definitions)
-    for alias in aliases:
-        assert definitions[alias] == {"minLength": 1, "type": "string"}
-        text = text.replace(f"#/$defs/{alias}", "#/$defs/NonEmptyText")
-    normalized = json.loads(text)
-    for alias in aliases:
-        del normalized[alias]
-    normalized["NonEmptyText"] = {"minLength": 1, "type": "string"}
-    assert normalized["oversight_contracts__common__NonEmptyText__2"] == {
-        "minLength": 1,
-        "maxLength": 4096,
-        "type": "string",
-    }
-    return normalized
-
-
-def test_schema_changes_only_slots_and_the_three_approved_attachments() -> None:
+def test_schema_changes_only_approved_attachments() -> None:
     baseline = json.loads((ROOT / "contracts/baselines/1.5.0.schema.json").read_text())["$defs"]
     current = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())["$defs"]
-    current = normalize_text_aliases(current)
+    assert current["NonEmptyText"] == {"minLength": 1, "type": "string"}
+    assert current["MessageText"] == {"minLength": 1, "maxLength": 4096, "type": "string"}
     assert set(current) - set(baseline) == {
         "AgentMessageEvent",
         "AgentMessageSent",
-        "oversight_contracts__common__NonEmptyText__2",
+        "MessageText",
+        "UsageCoverage",
+        "UsageCostRow",
+        "UsageCost",
+        "UsageActor",
+        "UsageHours",
+        "UsageTeam",
+        "UsageView",
+        "StageTime",
+        "SuitePhaseTime",
+        "ChangeStages",
         "DecisionRef",
         "ReviewCardDecisionRef",
         "ChangeDecisionRef",
@@ -286,6 +277,32 @@ def test_schema_changes_only_slots_and_the_three_approved_attachments() -> None:
                 else:
                     updated["properties"][field_name] = definition["properties"][field_name]
             assert updated == definition, name
+            continue
+        if name == "Limits":
+            updated = deepcopy(current[name])
+            descriptions = {
+                "max_steps": (
+                    "Tool calls per round; Request changes starts a new round with the same budget."
+                ),
+                "max_wall_clock_s": "Per round; Request changes starts a new round.",
+            }
+            for field, description in descriptions.items():
+                assert updated["properties"][field]["description"] == description
+                updated["properties"][field]["description"] = definition["properties"][field][
+                    "description"
+                ]
+            assert updated == definition
+            continue
+        if name == "ChangeView":
+            updated = deepcopy(current[name])
+            field = updated["properties"].pop("stages")
+            assert field == {
+                "anyOf": [{"$ref": "#/$defs/ChangeStages"}, {"type": "null"}],
+                "default": None,
+                "description": "Raw time per stage through seq; null for incomplete history.",
+            }
+            updated["required"].remove("stages")
+            assert updated == definition
             continue
         if name == "LeadStatus":
             updated = deepcopy(current[name])

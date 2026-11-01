@@ -30,6 +30,7 @@ from oversight_contracts.plans import PlanZone, SubtaskDraft, validate_dependenc
 from oversight_contracts.policy import ChangeAssessment
 from oversight_contracts.queue import QueueSpec
 from oversight_contracts.review import ChangeFacts, ChangeUsage, CrossReview, ReviewCard
+from oversight_contracts.stages import ChangeStages
 
 
 class StartAgent(ContractModel):
@@ -365,6 +366,8 @@ class ChangeView(ContractModel):
     """Per-change accounting reconstructed through this view's seq, or unavailable."""
     revision_rounds: NonNegativeInt | None = None
     """Confirmed changes_requested resolutions through seq; null for incomplete history."""
+    stages: ChangeStages | None = None
+    """Raw time per stage through seq; null for incomplete history."""
 
 
 class DictateTask(ContractModel):

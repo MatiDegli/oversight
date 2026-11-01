@@ -1,5 +1,9 @@
 # Plan: Request changes, Stop, and the person's edits in review, level 2
 
+> Status: done. Manager merged in `b548414`, HTTP wiring in `dc4d538` and review saves
+> in `9a74244`. Checked against main `8b9b589`.
+> The original phases and test matrix below are historical; current guarded commands are noted here.
+
 Revision 2, plan only, for an independent review before any code. It answers review 1 (one
 blocking, seven should-fix, one nit); each answer is marked R1 to R9 where it lands. Sources:
 AGENTS.md, docs/proposal.md (4.4, 4.5, 4.7, 4.9, 5), `contracts/` 1.1.0, docs/plans/changes.md
@@ -8,7 +12,9 @@ revision 8, `changes/` at 0657c5a (main 352bc85 changed only the frontend), `age
 
 ## 1. Request changes (`changes/_manager.py`)
 
-After the stage split, `_finish_pending` is `_delivery.finish_pending` and `_recover` is `_recovery.recover`.
+After the stage split, `_finish_pending` is `_delivery.finish_pending`, `_recover` is
+`_recovery.recover`, and `_whole` is `ctx.whole` (`changes/_support.py:ChangeContext.whole`,
+used in `_proposal.py` and `_revision.py`). Historical `_whole` references below name that operation.
 
 ```python
 @dataclass(frozen=True)
@@ -16,7 +22,8 @@ class Revision:                  # what the agent resumes with
     comment: str
     note: str | None             # set when the base moved: main merged in, conflicting paths
 REVISABLE = frozenset({"ready", "conflict"}); STOPPABLE = REJECTABLE | {"working"}
-def request_changes(self, change_id, comment: str) -> asyncio.Task[Revision | None]: ...
+def request_changes(self, change_id, comment: str, *, revision: int, head_commit: str,
+                    answers: list[ReviewCard] | None = None) -> asyncio.Task[Revision | None]: ...
 def stop(self, agent_id, run: asyncio.Task[None] | None) -> asyncio.Task[None]: ...
 async def save_for_review(self, agent_id, path, content, base_hash) -> str: ...   # the new hash
 def run_ended(self, agent_id, end: RunEnd | None, *, steps: int) -> None: ...      # `steps` is new
@@ -140,10 +147,10 @@ async def _whole(self, work: Coroutine[Any, Any, T]) -> T: ...
 
 | Route | Body | Success | Errors |
 | --- | --- | --- | --- |
-| `POST /changes/{id}/request-changes` | `RequestChanges {comment}` | 202, empty | `invalid_request` 422 (no or empty comment), `not_found` 404, `wrong_state` 409 |
+| `POST /changes/{id}/request-changes` | `RequestChanges {comment, revision, head_commit, answers?}` | 202, empty | `invalid_request` 422 (no or empty comment), `not_found` 404, `wrong_state` 409 |
 | `POST /agents/{id}/stop` | none | 202, empty | `not_found` 404, `wrong_state` 409 |
 
-- `Commands` gains `request_changes(change_id, comment)` and `stop(agent_id)`, synchronous like
+- `Commands` receives the validated `RequestChanges` body and `stop(agent_id)`, synchronous like
   `approve`, so the flip precedes the 202; both move to `LIVE_ONLY` (501 in replay).
 - **App `request_changes`**: `wrong_state` while main is suspect or the brake refuses new runs;
   `decision = manager.request_changes(...)`; then, with no `await`, `self._decisions[agent] =
@@ -178,7 +185,7 @@ async def _whole(self, work: Coroutine[Any, Any, T]) -> T: ...
 
 ## 6. Contracts v1.1
 
-Enough: `RequestChanges {comment}`, stop with no body, 202, `not_found`/`wrong_state`; `revising`,
+Enough: `RequestChanges {comment, revision, head_commit, answers?}`, stop with no body, 202, `not_found`/`wrong_state`; `revising`,
 `stopped`, a growing `max_steps`; `changes_requested` with `comment`; `reason="stopped"`;
 `author="user"`; `revision`, a per-proposal `base_commit`, `Conflict(kind="tests")`. One proposal,
 not blocking: list `spend_brake` (403) among request-changes' errors in 4.7.
@@ -254,9 +261,11 @@ store took it, the caller has not heard). * marks those shown failing with their
     the snapshot drained, one resolution each, no task alive. Without the snapshot the
     drain's next step raises `RuntimeError` and the second decision never drains.
 
-## Level 3, kept out
+## Run controls delivered after level 2
 
-Pause, resume and messages to a running agent stay 501; a running agent takes only Stop.
+Pause, resume and messages are live HTTP commands returning 202 (`d085748`), backed by run
+controls (`d27875a`). See DECISIONS.md, “Messages, pause and resume: 202 answers, three limits and memory-only text”
+(and its later message-storage amendment), and `api/commands.py:add_command_routes`. Dictation and manual review remain 501.
 
 ## Decided by the maintainer (2026-10-27)
 

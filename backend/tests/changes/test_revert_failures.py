@@ -19,6 +19,7 @@ from oversight.workspace import (
     InverseOutcome,
     ProcessResult,
     apply_inverse,
+    classify_inverse,
     run_process,
 )
 from oversight_contracts.events import ErrorReport, RevertResult
@@ -260,6 +261,14 @@ async def test_revert_repeated_cancel_and_delivery_budget(system, monkeypatch):
     old = ctx.state.snapshot
     calls = []
 
+    normal_timeout = ctx.timeout
+
+    async def normal_classification(ws, **kwargs):
+        # Recovery's real Git verification keeps its normal budget.
+        kwargs["timeout_s"] = normal_timeout
+        return await classify_inverse(ws, **kwargs)
+
+    monkeypatch.setattr(_revert, "classify_inverse", normal_classification)
     success = s.service._success
 
     async def short_delivery(attempt):
@@ -292,6 +301,7 @@ async def test_revert_repeated_cancel_and_delivery_budget(system, monkeypatch):
     with pytest.raises(RevertRefused, match="settlement"):
         await s.service.aclose()
     assert not s.ws.integrity.main_suspect
+    ctx.timeout = normal_timeout
     release.set()
     await s.service.aclose()
     assert ctx.state.snapshot is old  # An outcome acknowledgment cannot invent a delta.

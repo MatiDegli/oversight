@@ -1,13 +1,14 @@
-import type { StartAgent } from "@contracts";
+import type { MergeMode, StartAgent } from "@contracts";
 import type { ReactNode } from "react";
 import type { FileAccess } from "../editor";
-import type { DecisionAction, DecisionAttempt } from "../review";
+import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
 import type { View, ViewAction, FocusTab } from "./view";
 import { panelOpen } from "./view";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
+import type { MergeModeAttempt } from "./shell/SettingsPanel";
 import { FocusPanel } from "./shell/FocusPanel";
 import { GraphStage } from "./shell/GraphStage";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
@@ -15,6 +16,7 @@ import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
+import "./shell/life.css";
 import "./challenge/phone.css";
 import { usePhonePractice } from "./challenge/usePhonePractice";
 import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
@@ -40,8 +42,13 @@ export interface FrameProps {
   onReview?: (changeId: string) => void;
   /** The queue counter's click: review of the next proposed change. */
   onOpenQueue?: () => void;
+  onOpenSettings?: () => void;
+  onSetMergeMode?: (mode: MergeMode) => void;
+  mergeModeAttempt?: MergeModeAttempt;
   /** The person's last decision per change. */
   attempts?: Readonly<Record<string, DecisionAttempt>>;
+  revertAttempts?: Readonly<Record<string, RevertAttempt>>;
+  onRevert?: (changeId: string) => void;
   /** Absent in a recorded run, which sends no commands: review then shows the recorded decision. */
   onDecide?: (changeId: string, action: DecisionAction, comment: string) => void;
   /** What the replay plays, from its source: review and the new-agent box word themselves with it. */
@@ -88,6 +95,7 @@ export function Frame(props: FrameProps) {
       <TopBar
         state={state}
         onOpenQueue={props.onOpenQueue}
+        onOpenSettings={props.onOpenSettings}
         onOpenPalette={shell.openPalette}
         practice={props.practice}
       />

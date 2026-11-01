@@ -189,6 +189,12 @@ it("leaves Ctrl K as Monaco's chord prefix in an editable editor", async () => {
 
 it("Ctrl K opens from read-only Monaco; Escape restores its exact focus without closing the tab", async () => {
   await withPage(async (page) => {
+    await page.route("**/tree?*", (route) =>
+      route.fulfill({
+        status: 501,
+        json: { error: { code: "not_implemented", message: "Replay" } },
+      }),
+    );
     await page.getByRole("button", { name: /^Decisions:/ }).click();
     await page.getByRole("button", { name: /^Review change/ }).click();
     const original = page
@@ -212,6 +218,12 @@ it("Ctrl K opens from read-only Monaco; Escape restores its exact focus without 
 
 it("Escape returns to the review comment with text intact and no decision command or request", async () => {
   await withPage(async (page) => {
+    await page.route("**/tree?*", (route) =>
+      route.fulfill({
+        status: 501,
+        json: { error: { code: "not_implemented", message: "Replay" } },
+      }),
+    );
     const posts: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "POST") posts.push(request.url());
@@ -305,6 +317,12 @@ it("commands toggle sidebar and dock, maximize, restore, rescan once and close t
 
 it("events never open a palette or move focus, and updating results never chooses one", async () => {
   await withPage(async (page) => {
+    await page.route("**/tree?*", (route) =>
+      route.fulfill({
+        status: 501,
+        json: { error: { code: "not_implemented", message: "Replay" } },
+      }),
+    );
     await clickUntouched(page);
     const trigger = page.getByRole("button", {
       name: "Find a function, file or command",

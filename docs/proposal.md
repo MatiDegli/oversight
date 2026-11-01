@@ -589,6 +589,7 @@ the single error format.
 | `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
 | `GET /changes/{id}` | none | 200 `ChangeView` | `not_found` |
 | `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | 200 `HistoryPage` | `invalid_request`, `too_large` |
+| `GET /usage` | none | 200 `UsageView`; the committed log, live or in a replay | |
 | `POST /queue` | `EnqueueTask {agent?, plan_id?, plan_revision?}`; exactly one task or exact plan | 201 `QueuedTask` | `invalid_request`, `not_found`, `wrong_state` |
 | `GET /queue`, `GET /queue/{id}` | none | 200 `QueueSnapshot` / `QueuedTask` | `not_found` for an unknown item |
 | `POST /queue/{id}/cancel` | `QueueRevision {revision}` | 202 | `not_found`, `wrong_state` |

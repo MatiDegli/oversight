@@ -87,9 +87,15 @@ it.each(["d2", "c", "merged"] as const)("shows approved words for %s at 1920", a
         el.scrollTop = 0;
       });
     }
-    expect(await panel.textContent()).not.toMatch(
+    expect(
+      (await panel.textContent())?.replace("Revert is not available in a replay.", ""),
+    ).not.toMatch(
       /\bprobe|invocations|unmatched|static cone bounds|said versus did|equivalence|\bAvailable\b/i,
     );
+    if (name === "merged")
+      expect(
+        await panel.getByText("Revert is not available in a replay.", { exact: true }).count(),
+      ).toBe(1);
     if (process.env.REVIEW_WORDS_SHOTS === "1") {
       const directory = fileURLToPath(new URL("../../../.shots/review-words/", import.meta.url));
       await mkdir(directory, { recursive: true });

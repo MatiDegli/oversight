@@ -59,6 +59,10 @@ async def test_wait_that_must_not_follow_stays_put(h: Harness, clock, guard):
         record.person_intent = cast(PersonIntent, object())
     elif guard == "consumed":
         record.rules_consumed.add(record.revision)
+        consumed = h.manager._ctx.assessment.waits[record.change_id]
+        record.rules_attempts.add(
+            (record.revision, consumed.target.head, consumed.main_commit, consumed.mode.revision)
+        )
     elif guard == "resolution":
         record.resolution = ChangeResolved(
             change_id=record.change_id,

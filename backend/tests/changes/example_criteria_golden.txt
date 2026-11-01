@@ -1,0 +1,17 @@
+# Oversight confirmed JSON examples.
+import importlib
+import json
+
+
+def test_example_01_a_________import____os__():
+    module = importlib.import_module('shop.mod')
+    function = getattr(module, 'value')
+    result = function(*json.loads('["\'\\n\\"\\"\\"\\\\\\u00e9__import__(\'os\')"]'), **json.loads('{}'))
+    assert json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False) == '{"a":[true,null,1.0],"z":"\\u00e9\\n\'\\\\"}'
+
+
+def test_example_02_case():
+    module = importlib.import_module('shop.mod')
+    function = getattr(module, 'value')
+    result = function(*json.loads('[]'), **json.loads('{}'))
+    assert json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False) == '1'
