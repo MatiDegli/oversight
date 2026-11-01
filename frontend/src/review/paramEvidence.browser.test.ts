@@ -83,6 +83,8 @@ it.each([1920, 1280, 390])(
       for (const name of parameterStates) {
         if (width === 390 && name !== "partial" && name !== "mixed") continue;
         await mounted(width, theme, name, async (page) => {
+          if (await page.locator(".review-diff-viewport:not([hidden])").count())
+            await check(page.locator(".monaco-diff-editor")).toBeVisible({ timeout: 30000 });
           if (["rejected", "values", "mixed"].includes(name))
             await samples(page).locator("summary").click();
           if (name === "mixed" && width > 700) await chip(page).click();
