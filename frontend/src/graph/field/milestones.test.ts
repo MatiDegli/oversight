@@ -1,8 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { themes } from "../../theme";
 import { MilestoneLife, milestoneRing, type Milestone } from "./milestones";
-import { createLampField, fieldConfig, parseHex, placeLights } from "./model";
-import { afterlightOf } from "./afterlight";
+import { createLampField, fieldConfig } from "./model";
+import { MergeLife as AfterlightLife, afterlightOf } from "./afterlight";
 import { MergeLife } from "./milestones";
 const theme = themes.dark;
 const box = { x1: 140, y1: 140, x2: 280, y2: 182 };
@@ -118,29 +118,6 @@ describe("milestone rings", () => {
     const at = (23 * grid.cols + 40) * 4;
     expect(grid.data[at + 3]).toBeGreaterThan(0); // just beyond the row's right edge, first frame
   });
-  it("gives two resting teams a clean edge with unchanged additive brightness", () => {
-    const lamps = createLampField();
-    const lights = placeLights(
-      theme,
-      [
-        { id: "node", source: "agent-a", weight: 1, pulses: false },
-        { id: "other", source: "agent-b", weight: 1, pulses: false },
-      ],
-      new Map([...boxes, ["other", { ...box, x1: 300, x2: 440 }]]),
-    );
-    const grid = lamps(fieldConfig(theme, "watch"), 600, 400, lights, null);
-    for (const [col, source] of [
-      [24, "agent-a"],
-      [52, "agent-b"],
-    ] as const) {
-      const at = (23 * grid.cols + col) * 4;
-      const rgb = parseHex(theme[source]);
-      expect(grid.data[at + 3]).toBe(255);
-      rgb.forEach((v, i) => {
-        expect(grid.data[at + i]).toBeCloseTo(v + (255 - v) * 0.2, 0);
-      });
-    }
-  });
   it("starts the halo exactly at shared arrival and omits it under reduced motion and history", () => {
     const merge = { ...event(), pulse: true };
     const life = new MergeLife(afterlightOf(theme));
@@ -185,4 +162,24 @@ it("finishes motion without restarting its travel or halo when motion returns", 
   expect(life.pulses(1500)).toEqual([]);
   expect(life.halos(2700, 550)).toEqual([]);
   expect(life.lights(1500)).toHaveLength(1);
+});
+
+it("prunes finished merge runners even while their keys remain in state", () => {
+  const look = afterlightOf(theme);
+  const life = new MergeLife(look);
+  const merge = { ...event("merge", "merged"), pulse: true };
+  life.update([merge], 1000, false, false);
+  const pulses = vi.spyOn(AfterlightLife.prototype, "pulses");
+  try {
+    const end = 1000 + look.delay + look.travel + look.duration;
+    expect(life.pulses(end)).toEqual([]);
+    expect(pulses).not.toHaveBeenCalled();
+    life.update([merge], end, false, false);
+    expect(life.active(end)).toBe(false);
+    life.update([], end, false, false);
+    life.update([merge], end, false, false);
+    expect(life.pulses(end + look.delay + 1)).toHaveLength(1);
+  } finally {
+    pulses.mockRestore();
+  }
 });

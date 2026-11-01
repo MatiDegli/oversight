@@ -5,6 +5,7 @@ import type { Browser, Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import type { FieldProbe, GraphProbe } from "../graph";
+import { moveCamera } from "../../shots/compositor-motion";
 import { launchBrowser } from "../browserLaunch.support";
 const out = fileURLToPath(new URL("../../../.shots/milestone-pulses/", import.meta.url));
 let server: ViteDevServer, browser: Browser, url: string;
@@ -302,3 +303,31 @@ it.runIf(process.env.MILESTONE_SHOTS === "1")(
   },
   240_000,
 );
+
+it("waits for the lazy field probe before capturing camera motion", async () => {
+  await scene(
+    "dark",
+    1920,
+    1080,
+    async (page) => {
+      await page.evaluate(() => {
+        const host = document.querySelector<HTMLCanvasElement & { oversightField?: FieldProbe }>(
+          ".graph-stage > canvas, .graph-stage canvas[aria-hidden]",
+        );
+        if (!host?.oversightField) throw new Error("Missing field probe");
+        const field = host.oversightField;
+        delete host.oversightField;
+        setTimeout(() => {
+          host.oversightField = field;
+        }, 150);
+        Reflect.set(window, "overlayFrame", requestAnimationFrame.bind(window));
+        Reflect.set(window, "overlayClock", () => undefined);
+      });
+      const result = await moveCamera(page);
+      expect(result.frames).toBe(180);
+      expect(result.fieldDraws).toBeGreaterThanOrEqual(100);
+    },
+    false,
+    false,
+  );
+}, 60_000);

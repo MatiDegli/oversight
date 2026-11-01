@@ -1,5 +1,6 @@
-// Reference loop from bb059a5; the four two-team cases opt into the approved strongest hue.
-// Only this test keeps the old addLight loop; the surrounding
+// Adapted reference from bb059a5, not frozen: its accumulation now supports strongest-source hue.
+// The four two-team cases opt into rule (a); the others keep the original additive reference.
+// Only this test keeps the old addLight geometry loop; the surrounding
 // pipeline stays here too, so byte comparisons include accumulation and clipping; the shading is the product's own.
 import { describe, expect, it } from "vitest";
 
@@ -8,7 +9,7 @@ import { createLampField, falloff, fieldConfig, shadeLamps } from "./model";
 import type { Box, FieldConfig, LampGrid, PlacedLight } from "./model";
 import { breathing, ringIntensity, ringRadiusAt } from "./motion";
 
-/** Each light's own smooth cut, the sketch's `smoothstep(0.08, 0.22, I)`, in the frozen reference. */
+/** Each light's own smooth cut, the sketch's `smoothstep(0.08, 0.22, I)`, in the reference. */
 function cut(config: FieldConfig, intensity: number): number {
   const t = Math.min(
     1,
@@ -265,7 +266,7 @@ function assertSame(
 }
 
 describe.each(["watch", "live-diff", "file", "review"] as const)(
-  "%s grid matches bb059a5 byte for byte",
+  "%s grid matches the bb059a5 reference with rule (a) for two-team cases",
   (mode) => {
     const config = fieldConfig(themes.dark, mode);
     it("glow only", () => {
@@ -364,3 +365,25 @@ it.skipIf(process.env.FIELD_BENCH !== "1")(
   },
   30_000,
 );
+
+it.each([
+  ["glow", 73, [90, 27, 12, 85], [90, 26, 12, 85]],
+  ["ring", 84, [133, 69, 71, 170], [172, 62, 22, 170]],
+  ["overlap", 81, [87, 27, 14, 85], [90, 26, 12, 85]],
+  ["still", 73, [90, 27, 12, 85], [90, 26, 12, 85]],
+] as const)("pins the old and rule (a) %s RGBA at row 36", (kind, col, old, next) => {
+  const config = fieldConfig(themes.dark, "watch");
+  const lights = fixedLights.map((light) =>
+    kind === "glow"
+      ? { ...light, pulses: false }
+      : kind === "ring"
+        ? { ...light, weight: 0, pulses: true }
+        : light,
+  );
+  const time = kind === "still" ? null : 2;
+  const before = createLegacyLampField()(config, 1920, 1080, lights, time);
+  const after = createLampField()(config, 1920, 1080, lights, time);
+  const at = (36 * before.cols + col) * 4;
+  expect([...before.data.slice(at, at + 4)]).toEqual(old);
+  expect([...after.data.slice(at, at + 4)]).toEqual(next);
+});

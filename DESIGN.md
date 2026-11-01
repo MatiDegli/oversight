@@ -1299,7 +1299,8 @@ At most 12 points enter the common light and color sums before the four-level 8�
 per-level agent-color ramp; only cells within three radii are visited. The LEDs keep their 7px
 square grid and use the drawn lamp masks (overlays and header bands); the SVG is unchanged.
 Points stop at arrival; the SVG trail still fades as before. No new idle animation is scheduled.
-The Oct 30 milestone decision extends Merge travel above: arrival is exactly the shared 250ms
+The Oct 30 milestone decision replaces the earlier “and arrives” endpoint above with a shared
+arrival for the travel, card and pending mark, and a finite halo: arrival is exactly the shared 250ms
 travel delay plus 1450ms travel, never a separate card or node timer. The card says “Merging”
 until arrival, then “Merged”; its node keeps its changed word and pending dashed border until
 that instant, when both leave. A 7px band at 40% opacity hugs the node box in the team's token,

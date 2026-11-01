@@ -186,6 +186,16 @@ export class MergeLife {
   private readonly running = new Map<string, ArrivalRun>();
   private readonly seen = new Set<string>();
   constructor(private look: Afterlight) {}
+  private prune(now: number) {
+    for (const [key, run] of this.running)
+      if (
+        now >=
+        run.start +
+          mergeArrivalDelay(this.look, run.pulse) +
+          Math.max(this.look.duration, this.look.trailFade)
+      )
+        this.running.delete(key);
+  }
   setLook(look: Afterlight) {
     this.look = look;
     for (const run of this.running.values()) run.life.setLook(look);
@@ -217,6 +227,7 @@ export class MergeLife {
     before: readonly FieldLight[] = [],
     starts?: ReadonlyMap<string, number>,
   ) {
+    this.prune(now);
     const keys = new Set(merges.map((merge) => merge.key));
     for (const key of this.seen)
       if (!keys.has(key)) {
@@ -264,6 +275,7 @@ export class MergeLife {
     }
   }
   halos(now: number, duration: number): Halo[] {
+    this.prune(now);
     return [...this.running.values()].flatMap((run) => {
       const age = now - run.start - mergeArrivalDelay(this.look, run.pulse);
       return run.pulse && age >= 0 && age < duration
@@ -272,15 +284,19 @@ export class MergeLife {
     });
   }
   pulses(now: number) {
+    this.prune(now);
     return [...this.running.values()].flatMap((run) => run.life.pulses(now - run.start));
   }
   lights(now: number) {
+    this.prune(now);
     return [...this.running.values()].flatMap((run) => run.life.lights(now - run.start));
   }
   travelling(now: number) {
+    this.prune(now);
     return [...this.running.values()].some((run) => run.life.travelling(now - run.start));
   }
   active(now: number) {
+    this.prune(now);
     return [...this.running.values()].some((run) => run.life.active(now - run.start));
   }
 }

@@ -370,7 +370,7 @@ function contribute(
   b: number,
 ) {
   work.sum[at] = (work.sum[at] ?? 0) + intensity;
-  if (!work.strongest || intensity <= (work.strongest[at] ?? 0)) return;
+  if (intensity <= (work.strongest[at] ?? 0)) return;
   work.strongest[at] = intensity;
   work.red[at] = intensity * r;
   work.green[at] = intensity * g;
@@ -500,7 +500,7 @@ export function createLampField() {
 }
 
 export interface Accumulated {
-  strongest?: Float32Array;
+  strongest: Float32Array;
   sum: Float32Array;
   red: Float32Array;
   green: Float32Array;
@@ -540,7 +540,7 @@ export function shadeLamps(
   config: FieldConfig,
   cols: number,
   rows: number,
-  light: Accumulated,
+  light: Omit<Accumulated, "strongest"> & { strongest?: Float32Array },
   out: Uint8ClampedArray,
   glow: Uint8ClampedArray,
 ) {

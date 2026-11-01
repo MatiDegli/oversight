@@ -369,9 +369,7 @@ class FieldRuntime implements FieldController {
   private drawPulses(now: number, width: number, height: number) {
     const pulses = this.reducedMotion
       ? []
-      : this.life
-          .pulses(now)
-          .filter((pulse) => !this.input.milestones || this.milestones.visible(pulse.key, now));
+      : this.life.pulses(now).filter((pulse) => this.mergeAccepted(pulse.key, now));
     const paths = new Map<string, XY[]>();
     if (pulses.length > 0) {
       const origin = this.canvas.getBoundingClientRect();
@@ -408,13 +406,21 @@ class FieldRuntime implements FieldController {
         ? []
         : this.life
             .halos(now, this.theme["merge-halo-duration"])
-            .filter((halo) => !this.input.milestones || this.milestones.accepted(halo.key)),
+            .filter((halo) => this.mergeAccepted(halo.key)),
       this.source.boxes((this.input.merges ?? []).map((merge) => merge.id)),
       this.masks,
       width,
       height,
     );
     return pulseLights(pulses, paths, this.theme);
+  }
+
+  private mergeAccepted(key: string, now?: number) {
+    if (this.input.mergeStarts) return Number.isFinite(this.input.mergeStarts.get(key));
+    return (
+      !this.input.milestones ||
+      (now === undefined ? this.milestones.accepted(key) : this.milestones.visible(key, now))
+    );
   }
 
   private slowInterval() {
