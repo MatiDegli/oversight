@@ -85,11 +85,33 @@ async function lifeEnabled(page: Page, enabled: boolean) {
   }, enabled);
 }
 
+async function lightTop(page: Page, selector: string) {
+  const session = await page.context().newCDPSession(page);
+  try {
+    const { root } = await session.send("DOM.getDocument");
+    const { nodeId } = await session.send("DOM.querySelector", { nodeId: root.nodeId, selector });
+    const { node } = await session.send("DOM.describeNode", { nodeId });
+    const light = node.pseudoElements?.find((pseudo) => pseudo.pseudoType === "before");
+    if (!light) throw new Error(`Missing light for ${selector}`);
+    const { model } = await session.send("DOM.getBoxModel", {
+      backendNodeId: light.backendNodeId,
+    });
+    return model.border[1];
+  } finally {
+    await session.detach();
+  }
+}
+
 async function edges(page: Page, theme: string) {
-  const roots = page.locator(
-    ".shell-sidebar, .focus-panel, .bottom-dock, .agents-expanded, .agents-rail",
-  );
-  for (const root of await roots.all()) {
+  for (const selector of [
+    ".shell-sidebar",
+    ".focus-panel",
+    ".bottom-dock",
+    ".agents-expanded",
+    ".agents-rail",
+  ]) {
+    const root = page.locator(selector);
+    if ((await root.count()) === 0) continue;
     const seen = await root.evaluate((element) => {
       const style = getComputedStyle(element, "::before");
       const reference = document.createElement("span");
@@ -100,6 +122,8 @@ async function edges(page: Page, theme: string) {
       reference.remove();
       return {
         absentInDay: element.matches(".focus-panel, .bottom-dock"),
+        dock: element.matches(".bottom-dock"),
+        top: element.getBoundingClientRect().top,
         height: style.height,
         width: style.width,
         inner: element.clientWidth,
@@ -115,12 +139,35 @@ async function edges(page: Page, theme: string) {
       expect(seen).toMatchObject({ height: "1px", pointer: "none", z: "3", content: '""' });
       expect(Number.parseFloat(seen.width)).toBe(seen.inner);
       expect(seen.background).toBe(seen.expected);
+      // The dock's existing 1px top border precedes its in-flow light.
+      expect(await lightTop(page, selector)).toBe(seen.top + (seen.dock ? 1 : 0));
     }
   }
 }
 
 async function masks(page: Page) {
   return page.evaluate(() => window.lifeMasks());
+}
+
+async function activeTransformSelector(page: Page) {
+  const selectors = await page.evaluate(() => {
+    const style = document.querySelector<HTMLStyleElement>(
+      'style[data-vite-dev-id$="/shell/life.css"]',
+    );
+    if (!style?.sheet) throw new Error("Missing life stylesheet");
+    return Array.from(style.sheet.cssRules)
+      .filter(
+        (rule): rule is CSSStyleRule =>
+          rule instanceof CSSStyleRule &&
+          rule.selectorText.includes(":active") &&
+          rule.style.transform !== "",
+      )
+      .map((rule) => rule.selectorText);
+  });
+  expect(selectors).toHaveLength(1);
+  const selector = selectors[0];
+  if (!selector) throw new Error("Missing active transform rule");
+  return selector;
 }
 
 async function keyboardFocus(page: Page, target: Locator) {
@@ -279,6 +326,9 @@ it.each([
       );
       await page.mouse.move(700, 55);
       await page.mouse.up();
+      // Inspect the transform rule independently of Chromium's transient :active state.
+      const pressSelector = (await activeTransformSelector(page)).replaceAll(":active", "");
+      expect(await button.evaluate((e, selector) => e.matches(selector), pressSelector)).toBe(true);
       for (const aria of [false, true]) {
         await chip.evaluate((e: HTMLButtonElement, aria) => {
           e.disabled = !aria;
@@ -288,6 +338,9 @@ it.each([
         if (!bounds) throw new Error("Missing chip");
         await page.mouse.move(bounds.x + 5, bounds.y + 5);
         await page.mouse.down();
+        expect(await chip.evaluate((e, selector) => e.matches(selector), pressSelector)).toBe(
+          false,
+        );
         expect(await chip.evaluate((e) => getComputedStyle(e).transform)).toBe("none");
         expect(await chip.boundingBox()).toEqual(bounds);
         await page.mouse.up();

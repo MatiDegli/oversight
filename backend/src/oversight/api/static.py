@@ -12,6 +12,8 @@ method on a real one its 405, never `index.html`. No compression is added anywhe
 reaches the browser as it is written.
 """
 
+import ntpath
+import sys
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
@@ -66,9 +68,28 @@ class _UiRoute(Route):
         return super().matches(scope)
 
 
+def _safe_nt_relative(relative: str) -> bool:
+    """Reject Windows path syntax before any filesystem access, including SPA fallback."""
+    if not relative or "\\" in relative or ":" in relative or ntpath.splitdrive(relative)[0]:
+        return False
+    for part in relative.split("/"):
+        if part in ("", ".", "..") or part.endswith((".", " ")):
+            return False
+        if any(ord(char) < 32 or char in '<>"|?*' for char in part):
+            return False
+        stem = part.partition(".")[0].rstrip(" ").upper()
+        if stem in {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"} or (
+            len(stem) == 4 and stem[:3] in {"COM", "LPT"} and stem[3] in "123456789¹²³"
+        ):
+            return False
+    return True
+
+
 def _file_under(root: Path, relative: str) -> Path | None:
     """The file `relative` names inside `root`, or `None`: missing, a directory, or a path that
     leaves `root` (`..`, or a link out of it)."""
+    if sys.platform == "win32" and not _safe_nt_relative(relative):
+        return None
     try:
         target = (root / relative).resolve()
     # A NUL byte is ValueError; a loop of links is OSError, and RuntimeError on Python 3.12.
@@ -97,10 +118,14 @@ def add_static(app: FastAPI, dist: Path) -> bool:
 
     def serve(request: Request) -> Response:
         relative = request.path_params["path"]
+        if sys.platform == "win32" and relative and not _safe_nt_relative(relative):
+            return error_response("not_found", "no such resource")
         target = _file_under(root, relative or INDEX)
         if target is not None:
             return _respond(target, root)
         looks_like_file = relative.partition("/")[0] == ASSETS or "." in relative.rpartition("/")[2]
+        if sys.platform == "win32" and relative.partition("/")[0].casefold() == ASSETS:
+            looks_like_file = True
         index = _file_under(root, INDEX)
         if looks_like_file or index is None:
             return error_response("not_found", "no such resource")

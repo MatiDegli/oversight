@@ -41,17 +41,18 @@ below are labeled separately.
 - Built, off by default: opt-in behavior diff, comparing old and new functions on the same inputs, with graph count chips and sample popovers.
 - Built, off by default: opt-in measured caller evidence in review and measured caller words on the review graph.
 - On by default: live overlap on the graph and agent cards, including shared edits and earlier reads.
-- Built, off by default: backend merge by rules, idle follow-main waits and a live Revert route; rules activation stays closed pending approval, and Revert UI remains in progress.
+- Available by explicit selection: merge by rules, idle and queued follow-main, and person-triggered Revert in review. Every fresh run starts in Ask me; rules require isolation C, independent cross-review and all nine guards.
 - In progress: a change card with three states.
 - In progress: aggregate cost and rounds UI; archived change totals and event-derived usage measurements are built.
 - In progress: server-computed plan zones and plan UI; plan routes, dependency dispatch and the task queue are built.
-- On by default: standing grant selection, listing and revocation; automatic use stays behind closed rules activation.
+- On by default: standing grant selection, listing and revocation; automatic use requires explicitly selected rules mode and current grant/evidence checks.
 - On by default: a lead runtime that requests plans for the person's approval; it never starts coding agents or merges changes.
 
 Muse Spark through the Meta Model API writes the changes. In the bundled recorded run, agent B
 wrote with Muse Spark Open through Baseten. Cross-review with Muse Spark Open is optional and off
-by default (`OVERSIGHT_CROSS_REVIEW`), and absent from that recording. Nothing reaches main
-without the person's decision while merge by rules stays closed.
+by default (`OVERSIGHT_CROSS_REVIEW`), and absent from that recording. A change reaches main only
+with the person's approval or by meeting rules they set. `make record-rules` generates a separate
+fake-only activation fixture; `make rules-check` proves three clean starts without spending credits.
 
 ## How it was built
 

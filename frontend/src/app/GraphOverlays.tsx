@@ -15,7 +15,7 @@ const surface = "frosted graph-text-shield border border-border";
 const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
 
 /** The repository's name, what is drawn of it and how many agents are at work. */
-export function GraphHeading({ state }: { state: State }) {
+export function GraphHeading({ state, groups = 0 }: { state: State; groups?: number }) {
   const { repo, modules, functions, working } = selectGraphSummary(state);
   if (repo === null) return null;
   const count = (value: number, one: string, many: string) =>
@@ -26,6 +26,7 @@ export function GraphHeading({ state }: { state: State }) {
         {repo}
       </h2>
       <p className="flex flex-wrap gap-x-3.5 text-sm text-muted">
+        {groups > 0 && <span>{count(groups, "group", "groups")}</span>}
         <span>{count(modules, "module", "modules")}</span>
         <span>{count(functions, "function", "functions")}</span>
         <span>{count(working, "agent working", "agents working")}</span>
@@ -40,9 +41,28 @@ export function GraphHeading({ state }: { state: State }) {
  * an agent is editing or has changed, an outline for one that main does not have yet. (The sketch
  * draws editing solid; DESIGN.md's departures table has the dashed border.)
  */
-export function Legend({ state }: { state: State }) {
+export function Legend({ state, map = false }: { state: State; map?: boolean }) {
   const slots = state.run?.slots ?? [];
   if (!state.run) return null;
+  if (map)
+    return (
+      <ul
+        aria-label="Legend"
+        className={`flex flex-wrap items-center gap-x-4.5 gap-y-1.5 rounded-module px-3.5 py-2.5 text-sm text-muted ${surface}`}
+      >
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="map-circle size-3 rounded-full" />A module, with its
+          function count
+        </li>
+        <li className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="size-3.5 rounded-full border-2 border-dashed border-muted"
+          />
+          A ring: an agent works inside
+        </li>
+      </ul>
+    );
   return (
     <ul
       aria-label="Legend"
@@ -118,10 +138,12 @@ export function ZoomControls({ api }: { api: RefObject<GraphApi | null> }) {
 export function DetailControls({
   level,
   zoom,
+  map = false,
   onChange,
 }: {
   level: "Modules" | "Functions" | "Details";
   zoom: number;
+  map?: boolean;
   onChange: (level: "Modules" | "Functions" | "Details") => void;
 }) {
   return (
@@ -147,7 +169,7 @@ export function DetailControls({
         aria-label="Zoom percentage"
         className="flex min-w-16 items-center justify-center border-l border-border px-3 font-mono text-muted"
       >
-        {zoom}%
+        {zoom}%{map && <span className="ml-1 font-sans font-semibold text-text"> · Map</span>}
       </output>
     </div>
   );

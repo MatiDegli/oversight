@@ -1,4 +1,4 @@
-"""Real runtime scheduling, fake authors/reviewers, and the still-closed activation latch."""
+"""Real runtime scheduling, fake authors/reviewers, and protected-path authority."""
 
 import asyncio
 import json
@@ -10,13 +10,10 @@ from live_helpers import DEADLINE_S, two_fakes
 
 from oversight.agents import LedgerError, LedgerFile, ScriptedModel, parse_script, review_candidate
 from oversight.app import TEMPLATE, LiveRun
-from oversight.changes import WrongState
 from oversight.changes._assessment import AssessmentWait
-from oversight.changes._mode import RULES_ACTIVATION
 from oversight.changes._policy import assess
 from oversight.events import parse_needs_you
 from oversight_contracts.commands import SetMergeMode, StartAgent
-from oversight_contracts.policy import MergeModeState
 
 from .test_cross_review_lifecycle import events, until
 
@@ -119,11 +116,8 @@ async def running_paths(tmp_path, path, reviewer, *, armed=True, status="modifie
         await live.startup()
         try:
             assert live._manager is not None
-            with pytest.raises(WrongState, match="Rules mode is closed"):
-                await live.set_merge_mode(SetMergeMode(mode="merge_when_safe", revision=0))
             if armed:
-                # Simulate an armed proposal without opening or replacing the real latch.
-                live._manager._ctx.mode._state = MergeModeState(mode="merge_when_safe", revision=1)
+                await live.set_merge_mode(SetMergeMode(mode="merge_when_safe", revision=0))
             yield live
         finally:
             reviewer.release.set()
@@ -194,17 +188,14 @@ async def test_model_claimed_path_waiver_has_no_authority(tmp_path):
         assert not any(e.type in {"grant.created", "change.resolved"} for e in events(live))
 
 
-async def test_clean_proposal_reaches_closed_latch_without_merge(tmp_path):
-    assert not RULES_ACTIVATION
+async def test_clean_proposal_reaches_explicitly_closed_build(tmp_path, monkeypatch):
     reviewer = CleanReviewer()
     async with running_paths(tmp_path, "notes.txt", reviewer) as live:
+        monkeypatch.setattr("oversight.changes._mode.RULES_ACTIVATION", False)
         assert live._manager is not None
         await live.start(StartAgent(task="Edit the file", slot="A"))
-        reviewed = await until(live, "change.reviewed")
+        await until(live, "change.reviewed")
         await asyncio.gather(*list(live._runs.values()), *list(live._reviews.values()))
-        # Feed the existing explicit external-receipt port, without changing runtime review.
-        receipt = next(e for e in live.store._events if e.seq == reviewed.seq)
-        live._manager.rules_received(receipt)
         w = live._manager._ctx.assessment.waits["change-1"]
         assert w.task is not None
         await asyncio.gather(w.task, return_exceptions=True)
@@ -215,23 +206,23 @@ async def test_clean_proposal_reaches_closed_latch_without_merge(tmp_path):
             if r.rule != "combined_tests" and r.result != "pass"
         ] == []
         notes = [parse_needs_you(e.payload.message) for e in events(live) if e.type == "error"]
-        assert any(n and "Rules mode is closed" in n.reason for n in notes)
+        assert any(n and "Rules authority is unavailable in this build" in n.reason for n in notes)
         assert w.terminal_seq is not None
         assert live._manager._agents["agent-1"].state == "ready"
         assert not any(e.type == "change.resolved" for e in events(live))
 
 
-async def test_real_proposal_author_uses_profile_id_and_cannot_review_itself(tmp_path):
+async def test_real_proposal_author_uses_profile_id_and_cannot_review_itself(tmp_path, monkeypatch):
+    # Retain a ready target for inspecting a forged same-model review after real selection.
     reviewer = CleanReviewer()
     async with running_paths(tmp_path, "notes.txt", reviewer) as live:
+        monkeypatch.setattr("oversight.changes._mode.RULES_ACTIVATION", False)
         assert live._manager is not None
         await live.start(StartAgent(task="Edit the file", slot="A"))
         reviewed = await until(live, "change.reviewed")
         await asyncio.gather(*list(live._runs.values()), *list(live._reviews.values()))
         scheduler = live._manager._ctx.assessment
         w = scheduler.waits["change-1"]
-        receipt = next(e for e in live.store._events if e.seq == reviewed.seq)
-        live._manager.rules_received(receipt)
         inputs = scheduler.inputs(w)
         author = live._agents["agent-1"].profile
         assert w.rec.model_id == author.id and inputs.author == author

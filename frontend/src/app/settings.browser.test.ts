@@ -8,7 +8,7 @@ import { launchBrowser } from "../browserLaunch.support";
 let browser: Browser;
 const servers: ViteDevServer[] = [];
 const entries: { url: string; html: string }[] = [];
-const refusal = "Rules mode is closed until Revert, protected paths and follow-main land";
+const refusal = "Cross-review is off";
 beforeAll(async () => {
   for (const mode of ["development", "replay"]) {
     const server = await createServer({

@@ -19,7 +19,6 @@ from test_rules_transaction import configure_transaction, execute
 from test_rules_transaction import reserved as rules_reserved
 
 from oversight.agents import canonical_json
-from oversight.changes import _mode
 from oversight.changes._example_criteria import (
     RequiredCriteria,
     eligible_target,
@@ -103,7 +102,6 @@ def test_render_deterministic_and_hostile_safe() -> None:
         [],
     ]
     assert first.cases[1][1] == f"{first.path}::test_example_02_case"
-    assert not _mode.RULES_ACTIVATION
 
 
 @pytest.mark.anyio
@@ -487,7 +485,6 @@ async def test_no_combined_tests_with_criteria_when_main_unmoved(h: Harness, mon
 async def test_combined_rules_path(h: Harness, reserved, monkeypatch, met: bool) -> None:
     from test_policy_profiles import policy_inputs
 
-    assert not _mode.RULES_ACTIVATION
     configure_transaction(h, monkeypatch)
     rec = h.manager._ctx.state.changes["change-1"]
     # Existing real observed test: criteria do not require E2/E3 or a new proposal phase.
@@ -511,5 +508,4 @@ async def test_combined_rules_path(h: Harness, reserved, monkeypatch, met: bool)
         assert combined.suite.outcome == "error" and terminal_code(h) == "suite_failed"
         assert await h.main_head() == pre and not h.payloads(ChangeResolved)
         assert _combined_tests(replace(policy_inputs(), suite=combined.suite)).result != "pass"
-    assert not _mode.RULES_ACTIVATION
     await assert_main_clean(h)
