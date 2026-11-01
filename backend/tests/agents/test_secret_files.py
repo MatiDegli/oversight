@@ -133,7 +133,9 @@ async def test_refusal_is_bounded_and_does_not_disclose_existence_or_absolute_pa
 
 
 @pytest.mark.parametrize("path", [*CANARIES, "/absolute/private/.env", "../.env", ".env.missing"])
-async def test_lead_refuses_before_read_and_still_reads_public_files(path: str) -> None:
+async def test_lead_refuses_before_read_and_still_reads_public_files(
+    path: str, refusal: str | None = None
+) -> None:
     read = AsyncMock(
         return_value=FileContent(
             path="README.md", content=PUBLIC["README.md"], hash="h", agent_id=None
@@ -163,7 +165,7 @@ async def test_lead_refuses_before_read_and_still_reads_public_files(path: str) 
     for arguments in (dict(path=path), dict(path=path, start_line=1, end_line=1)):
         outcome = await tools.call("read_file", json.dumps(arguments))
         assert not outcome.ok
-        assert outcome.content == SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1][:60]
+        assert outcome.content == (refusal or SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1][:60])
         assert len(outcome.content) < 200
     read.assert_not_awaited()
     listed = await tools.call("list_files", "{}")
@@ -188,6 +190,8 @@ async def test_lead_refuses_before_read_and_still_reads_public_files(path: str) 
         "GIT~1",
         "plain:stream",
         "plain.",
+        "CON/x.py",
+        ".GIT",
     ],
 )
 async def test_nt_worker_and_lead_zero_content_io(secret_tools, monkeypatch, path):
@@ -202,10 +206,27 @@ async def test_nt_worker_and_lead_zero_content_io(secret_tools, monkeypatch, pat
     monkeypatch.setattr(tree, "read_range", ranged)
     monkeypatch.setattr(tree, "write_text", write)
     assert secret_paths.is_secret_path(path)
+    ambiguous = path in {
+        ".env::$DATA",
+        ".env.",
+        ".env /x",
+        "GIT~1",
+        "plain:stream",
+        "plain.",
+        "CON/x.py",
+        ".GIT",
+    }
+    refusal = (
+        f"invalid path {path!r}: ambiguous Windows segment"
+        if ambiguous
+        else SECRET_FILE_REFUSAL + path.rsplit("/", 1)[-1]
+    )
     for arguments in (dict(path=path), dict(path=path, start_line=1, end_line=1)):
-        assert not (await call(tools, "read_file", **arguments)).ok
-    assert not (await call(tools, "edit_file", path=path, old_text="x", new_text="y")).ok
-    await test_lead_refuses_before_read_and_still_reads_public_files(path)
+        outcome = await call(tools, "read_file", **arguments)
+        assert not outcome.ok and outcome.content == "Error: " + refusal
+    outcome = await call(tools, "edit_file", path=path, old_text="x", new_text="y")
+    assert not outcome.ok and outcome.content == "Error: " + refusal
+    await test_lead_refuses_before_read_and_still_reads_public_files(path, refusal)
     read.assert_not_awaited()
     ranged.assert_not_awaited()
     write.assert_not_awaited()

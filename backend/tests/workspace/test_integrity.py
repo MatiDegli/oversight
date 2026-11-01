@@ -407,6 +407,23 @@ async def test_nt_metadata_bounded_and_no_follow(tmp_path, monkeypatch):
         assert not gitdir_matches(value, expected)
 
 
+@pytest.mark.parametrize(
+    ("reported_size", "reason"),
+    [(5, "invalid merge metadata"), (0, "oversized merge metadata")],
+)
+async def test_nt_metadata_preserves_refusal_reason(tmp_path, monkeypatch, reported_size, reason):
+    from types import SimpleNamespace
+
+    target = tmp_path / "index"
+    target.write_bytes(b"12345")
+    monkeypatch.setattr(integrity, "sys", SimpleNamespace(platform="win32"))
+    # Isolate the metadata bounds from open_nt's already-tested identity checks.
+    monkeypatch.setattr(integrity, "open_nt", lambda path: path.open("rb"))
+    monkeypatch.setattr(os, "fstat", lambda fd: SimpleNamespace(st_size=reported_size))
+    with pytest.raises(IntegrityError, match=f"reason={reason}:"):
+        integrity._plain_bytes(target, 4, time.monotonic() + 5)
+
+
 @pytest.mark.parametrize("name", [".git.", ".git ", "GIT~1", "CON", ".g\u0131tmodules"])
 async def test_nt_ambiguous_scan_entries(workspace, monkeypatch, name):
     from types import SimpleNamespace

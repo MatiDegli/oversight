@@ -290,6 +290,8 @@ def _plain_bytes(path: Path, limit: int, deadline: float) -> bytes:
                 data = handle.read(limit + 1)
             if len(data) > limit:
                 raise IntegrityError("oversized merge metadata", path.name)
+        except IntegrityError:
+            raise
         except (OSError, WorkspaceError) as error:
             raise IntegrityError("unreadable merge metadata", path.name) from error
         remaining(deadline)
