@@ -4,6 +4,7 @@ import { useStore } from "zustand";
 
 import type { FileSaved, MergeMode } from "@contracts";
 
+import type { ReplayPlayer } from "../transport";
 import type { FileDraft } from "../editor";
 import { DecisionContext } from "../review";
 import { sendDecision, revertView } from "../review";
@@ -33,6 +34,7 @@ import {
 import type { View } from "./view";
 
 export function App() {
+  const [replay, setReplay] = useState<ReplayPlayer | null>(null);
   const [retry, setRetry] = useState(0);
   const [connection, setConnection] = useState<"connecting" | "connected" | "lost">("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export function App() {
   // A stable session owns settlement; its getters read these refs only in handlers and effects.
   // The factory stores these getters and never reads either ref during render.
   // eslint-disable-next-line react-hooks/refs
-  const [files] = useState(() =>
+  const [files, setFiles] = useState(() =>
     commands
       ? createFileSession(
           commands,
@@ -62,6 +64,10 @@ export function App() {
         )
       : createRecordedFiles(() => stateStore.getState().state),
   );
+  const onReplayCommit = useCallback((reconcile: (view: View) => View) => {
+    setView(reconcile);
+    setFiles(createRecordedFiles(() => stateStore.getState().state));
+  }, []);
   const state = useStore(stateStore, (store) => store.state);
   const stopSession = useRef(() => {});
   const practice = usePractice(
@@ -87,6 +93,7 @@ export function App() {
       () => {
         setConnection("connected");
       },
+      setReplay,
     );
     stopSession.current = stop;
     return stop;
@@ -256,6 +263,8 @@ export function App() {
       <FilesProvider state={state} loadTree={commands?.getTree} openFile={onOpenFile}>
         <Frame
           state={state}
+          replay={replay}
+          onReplayCommit={onReplayCommit}
           practice={practice}
           files={files}
           view={view}

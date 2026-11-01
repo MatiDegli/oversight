@@ -3,7 +3,7 @@ import type { KeyboardEvent, PointerEvent } from "react";
 import { Check, Pause, Play, RotateCcw, X } from "lucide-react";
 import { stateStore } from "../../state";
 import { agentSlotStyle } from "../../theme";
-import type { ReplayPlayer } from "../../transport/replayPlayer";
+import type { ReplayPlayer } from "../../transport";
 import type { View } from "../view";
 import { reconcileReplayView, replayMarks, replayTime } from "./model";
 import "./replay.css";
@@ -49,7 +49,7 @@ export default function ReplayBar({
     event.preventDefault();
     player.seek(target);
   };
-  const percent = (offset: number) => `${duration ? (offset / duration) * 100 : 0}%`;
+  const percent = (offset: number) => `${String(duration ? (offset / duration) * 100 : 0)}%`;
   return (
     <section className="replay-bar" aria-label="Replay controls">
       <button
@@ -133,17 +133,23 @@ export default function ReplayBar({
             style={{ left: percent(item.offset), ...agentSlotStyle(item.slot) }}
             aria-label={`${item.title}, ${replayTime(item.offset)}`}
             aria-describedby={tooltip?.id === item.id ? "replay-tooltip" : undefined}
-            onClick={() => player.seek(item.offset)}
+            onClick={() => {
+              player.seek(item.offset);
+            }}
             onMouseEnter={() => {
               setHovered(item.id);
               setDismissed(false);
             }}
-            onMouseLeave={() => setHovered(null)}
+            onMouseLeave={() => {
+              setHovered(null);
+            }}
             onFocus={() => {
               setFocused(item.id);
               setDismissed(false);
             }}
-            onBlur={() => setFocused(null)}
+            onBlur={() => {
+              setFocused(null);
+            }}
             onKeyDown={(event) => {
               if (event.key === "Escape") {
                 event.preventDefault();
@@ -198,7 +204,13 @@ export default function ReplayBar({
       </div>
       <div className="replay-speed" aria-label="Playback speed">
         {([1, 2, 4] as const).map((rate) => (
-          <button key={rate} aria-pressed={speed === rate} onClick={() => player.setSpeed(rate)}>
+          <button
+            key={rate}
+            aria-pressed={speed === rate}
+            onClick={() => {
+              player.setSpeed(rate);
+            }}
+          >
             {rate}×
           </button>
         ))}

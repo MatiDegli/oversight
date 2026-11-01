@@ -14,7 +14,7 @@ export interface ReplayMark {
   hash?: string;
 }
 export const replayTime = (ms: number) =>
-  `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
+  `${String(Math.floor(ms / 60000))}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 
 /** Include future milestones; one start groups the first status of each recorded agent. */
 export function replayMarks(

@@ -1,5 +1,8 @@
 import type { MergeMode, StartAgent } from "@contracts";
+import { lazy, Suspense } from "react";
 import type { ReactNode } from "react";
+import type { ReplayPlayer } from "../transport";
+const ReplayBar = lazy(() => import("./replay/ReplayBar"));
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
@@ -21,6 +24,8 @@ import "./challenge/phone.css";
 import { usePhonePractice } from "./challenge/usePhonePractice";
 import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
 export interface FrameProps {
+  replay?: ReplayPlayer | null;
+  onReplayCommit?: (reconcile: (view: View) => View) => void;
   practice?: { active: boolean; open: () => void; content: ReactNode; focus: FocusTab };
   state: State;
   view: View;
@@ -138,6 +143,11 @@ export function Frame(props: FrameProps) {
             />
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
+          {props.replay && props.onReplayCommit && !props.practice?.active && (
+            <Suspense fallback={<div className="hidden h-[44px] shrink-0 min-[1280px]:block" />}>
+              <ReplayBar player={props.replay} onCommit={props.onReplayCommit} />
+            </Suspense>
+          )}
         </div>
         {open && !task.expanded ? (
           <AgentsRail state={state} />

@@ -48,7 +48,9 @@ export function createReplayPlayer({
   let anchor = performance.now();
   const publish = (next: Partial<ReplaySnapshot>) => {
     snapshot = { ...snapshot, ...next };
-    listeners.forEach((listener) => listener());
+    listeners.forEach((listener) => {
+      listener();
+    });
   };
   const cancel = () => {
     generation++;
@@ -103,7 +105,7 @@ export function createReplayPlayer({
     const response = "url" in source ? await request(source.url, { signal: abort.signal }) : null;
     if (response && !response.ok)
       throw new Error(`Replay log request failed: ${String(response.status)}`);
-    const text = "text" in source ? source.text : await response!.text();
+    const text = "text" in source ? source.text : response ? await response.text() : "";
     if (abort.signal.aborted) return;
     const events = text
       .split(/\r?\n/)
@@ -128,7 +130,9 @@ export function createReplayPlayer({
       };
     },
     seek,
-    restart: () => seek(0, "playing"),
+    restart: () => {
+      seek(0, "playing");
+    },
     play: () => {
       if (abort.signal.aborted || snapshot.status === "playing") return;
       if (snapshot.status === "ended") {
