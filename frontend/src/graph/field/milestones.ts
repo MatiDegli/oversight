@@ -1,10 +1,16 @@
 // One finite event on the existing lamp field, independent of the eight persistent emitters.
 import type { LightSource, FieldMerge } from "./lights";
 import type { PulseLight } from "./pulseLights";
-import { afterlightOf, mergeArrivalDelay } from "./afterlight";
+import { afterlightOf, MergeLife as AfterlightLife, type Afterlight } from "./afterlight";
+import type { FieldLight } from "./lights";
 import type { Box } from "./model";
 import type { getActiveTheme } from "../../theme";
 type Theme = ReturnType<typeof getActiveTheme>;
+/** Shared arrival rule for field, card and pending marks. */
+export const mergeArrivalDelay = (look: Afterlight, pulse = true) =>
+  pulse ? look.delay + look.travel : 0;
+export type Halo = { key: string; merge: FieldMerge; progress: number };
+
 export interface Milestone extends Omit<FieldMerge, "pulse"> {
   kind: "ready" | "needs" | "merged";
 }
@@ -77,7 +83,11 @@ export class MilestoneLife {
           run.event.source === event.source &&
           Math.abs(start - run.start) < this.theme["milestone-coalesce"],
       );
-      if (same.some((run) => priority[run.event.kind] >= priority[event.kind])) continue;
+      if (
+        event.kind !== "merged" &&
+        same.some((run) => priority[run.event.kind] >= priority[event.kind])
+      )
+        continue;
       for (const run of same) this.runs.delete(run.event.key);
       const duration =
         event.kind === "merged"
@@ -121,6 +131,9 @@ export class MilestoneLife {
   finishMotion() {
     this.runs.clear();
   }
+  accepted(key: string) {
+    return this.runs.has(key);
+  }
   visible(key: string, now: number) {
     const run = this.runs.get(key);
     return !!run && now >= run.start && now < run.end;
@@ -157,5 +170,117 @@ export class MilestoneLife {
   }
   active(now: number) {
     return [...this.runs.values()].some((run) => now < run.end);
+  }
+}
+
+// Keep the r6 afterlight untouched: each merge runs it on the shared arrival clock.
+interface ArrivalRun {
+  merge: FieldMerge;
+  start: number;
+  level: number;
+  hadLight: boolean;
+  pulse: boolean;
+  life: AfterlightLife;
+}
+export class MergeLife {
+  private readonly running = new Map<string, ArrivalRun>();
+  private readonly seen = new Set<string>();
+  constructor(private look: Afterlight) {}
+  setLook(look: Afterlight) {
+    this.look = look;
+    for (const run of this.running.values()) run.life.setLook(look);
+  }
+  private install(run: ArrivalRun, jump: boolean) {
+    run.life = new AfterlightLife(this.look);
+    run.life.update(
+      [{ ...run.merge, age: 0, pulse: run.pulse }],
+      0,
+      jump,
+      false,
+      run.hadLight || !run.pulse
+        ? [
+            {
+              id: run.merge.id,
+              source: run.merge.source,
+              weight: run.level,
+              pulses: false,
+            },
+          ]
+        : [],
+    );
+  }
+  update(
+    merges: readonly FieldMerge[],
+    now: number,
+    jump: boolean,
+    history: boolean,
+    before: readonly FieldLight[] = [],
+    starts?: ReadonlyMap<string, number>,
+  ) {
+    const keys = new Set(merges.map((merge) => merge.key));
+    for (const key of this.seen)
+      if (!keys.has(key)) {
+        this.seen.delete(key);
+        this.running.delete(key);
+      }
+    for (const merge of merges) {
+      const start = starts?.get(merge.key);
+      const existing = this.running.get(merge.key);
+      if (this.seen.has(merge.key)) {
+        if (existing && start !== undefined) {
+          if (Number.isFinite(start)) existing.start = start;
+          else if (existing.pulse) {
+            existing.pulse = false;
+            this.install(existing, true);
+          }
+        }
+        continue;
+      }
+      this.seen.add(merge.key);
+      if (history) continue;
+      const had = Math.max(
+        0,
+        ...before
+          .filter((light) => light.id === merge.id && light.source === merge.source)
+          .map((light) => light.weight),
+      );
+      if (had <= 0 && !merge.pulse) continue;
+      const run: ArrivalRun = {
+        merge,
+        start: start !== undefined && Number.isFinite(start) ? start : now - Math.max(0, merge.age),
+        level: had > 0 ? had : this.look.weight,
+        hadLight: had > 0,
+        pulse: merge.pulse && !jump && start !== -Infinity,
+        life: new AfterlightLife(this.look),
+      };
+      this.install(run, jump || start === -Infinity);
+      this.running.set(merge.key, run);
+    }
+  }
+  finishMotion() {
+    for (const run of this.running.values()) {
+      run.pulse = false;
+      this.install(run, true);
+    }
+  }
+  halos(now: number, duration: number): Halo[] {
+    return [...this.running.values()].flatMap((run) => {
+      const age = now - run.start - mergeArrivalDelay(this.look, run.pulse);
+      return run.pulse && age >= 0 && age < duration
+        ? [{ key: run.merge.key, merge: run.merge, progress: age / duration }]
+        : [];
+    });
+  }
+  pulses(now: number) {
+    return [...this.running.values()].flatMap((run) => run.life.pulses(now - run.start));
+  }
+  lights(now: number) {
+    return [...this.running.values()].flatMap((run) => run.life.lights(now - run.start));
+  }
+  travelling(now: number) {
+    return [...this.running.values()].some((run) => run.life.travelling(now - run.start));
+  }
+  active(now: number) {
+    return [...this.running.values()].some((run) => run.life.active(now - run.start));
   }
 }

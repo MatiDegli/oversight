@@ -1,15 +1,32 @@
 // One presentation clock shared by the field, card and pending marks; never reducer state.
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
-import { afterlightOf, mergeArrivalDelay, selectMerges } from "../graph";
+import {
+  afterlightOf,
+  mergeArrivalDelay,
+  selectMerges,
+  selectMilestones,
+  MilestoneLife,
+} from "../graph";
 import type { State } from "../state";
 import { getActiveTheme } from "../theme";
 type Starts = ReadonlyMap<string, number>;
-export function mergeArrivals(state: State, base: Starts, now: number, history = false) {
+const sameMap = <T>(a: ReadonlyMap<string, T>, b: ReadonlyMap<string, T>) =>
+  a.size === b.size && [...a].every(([key, value]) => b.get(key) === value);
+export function mergeArrivals(
+  state: State,
+  base: Starts,
+  now: number,
+  history = false,
+  accepted: (key: string) => boolean = () => true,
+) {
   const starts = new Map<string, number>();
   for (const merge of selectMerges(state))
     if (merge.pulse)
-      starts.set(merge.key, base.get(merge.key) ?? (history ? -Infinity : now - merge.age));
-  return starts;
+      starts.set(
+        merge.key,
+        history || !accepted(merge.key) ? -Infinity : (base.get(merge.key) ?? now - merge.age),
+      );
+  return sameMap(starts, base) ? base : starts;
 }
 export function mergingChanges(starts: Starts, now: number, reduced: boolean) {
   const delay = mergeArrivalDelay(afterlightOf(getActiveTheme()));
@@ -31,8 +48,9 @@ function presentation(
       labels.set(change.change_id, merging.includes(change.change_id) ? "Merging" : "Merged");
   return { starts, merging, labels };
 }
-class ArrivalClock {
+export class ArrivalClock {
   private starts: Starts;
+  private milestones = new MilestoneLife(getActiveTheme());
   private immediate = new Set<string>();
   private listeners = new Set<() => void>();
   private timer?: ReturnType<typeof setTimeout>;
@@ -40,6 +58,7 @@ class ArrivalClock {
   private reduced =
     typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
   constructor(private state: State) {
+    this.milestones.update(selectMilestones(state), 0, this.reduced, true);
     this.starts = mergeArrivals(state, new Map(), 0, true);
     this.snapshot = presentation(state, this.starts, 0, this.reduced);
   }
@@ -52,14 +71,21 @@ class ArrivalClock {
   };
   update(state: State, reduced = this.reduced) {
     const now = performance.now();
-    this.starts = mergeArrivals(state, this.starts, now);
+    this.milestones.setLook(getActiveTheme());
+    this.milestones.update(selectMilestones(state), now, reduced, false);
+    this.starts = mergeArrivals(state, this.starts, now, false, (key) =>
+      this.milestones.accepted(key),
+    );
     const ids = new Set([...this.starts.keys()].map((key) => key.slice(0, key.lastIndexOf(":"))));
     this.immediate = new Set([...this.immediate].filter((id) => ids.has(id)));
     if (reduced) for (const id of ids) this.immediate.add(id);
     this.state = state;
     this.reduced = reduced;
-    this.snapshot = presentation(state, this.starts, now, reduced, this.immediate);
-    for (const listener of this.listeners) listener();
+    const next = presentation(state, this.starts, now, reduced, this.immediate);
+    if (next.starts !== this.snapshot.starts || !sameMap(next.labels, this.snapshot.labels)) {
+      this.snapshot = next;
+      for (const listener of this.listeners) listener();
+    }
     clearTimeout(this.timer);
     const delay = mergeArrivalDelay(afterlightOf(getActiveTheme()));
     const pending = [...this.starts.values()]

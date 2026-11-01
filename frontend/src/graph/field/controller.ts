@@ -6,8 +6,8 @@
 import { getActiveTheme } from "../../theme";
 import type { XY } from "../orthogonal";
 
-import { MilestoneLife, type Milestone } from "./milestones";
-import { afterlightOf, MergeLife } from "./afterlight";
+import { MilestoneLife, MergeLife, type Milestone } from "./milestones";
+import { afterlightOf } from "./afterlight";
 import type { Afterlight } from "./afterlight";
 import type { BoxSource } from "./boxSource";
 import { createLampField, fieldConfig, parseHex, placeLights, signalConfig } from "./model";
@@ -404,7 +404,11 @@ class FieldRuntime implements FieldController {
     }
     this.travelLayer.draw(pulses, paths, this.masks, width, height, this.afterlight);
     this.travelLayer.halos(
-      this.reducedMotion ? [] : this.life.halos(now, this.theme["merge-halo-duration"]),
+      this.reducedMotion
+        ? []
+        : this.life
+            .halos(now, this.theme["merge-halo-duration"])
+            .filter((halo) => !this.input.milestones || this.milestones.accepted(halo.key)),
       this.source.boxes((this.input.merges ?? []).map((merge) => merge.id)),
       this.masks,
       width,

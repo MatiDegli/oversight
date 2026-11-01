@@ -5,7 +5,8 @@
 import { getActiveTheme } from "../../theme";
 import type { XY } from "../orthogonal";
 
-import type { Halo, Afterlight, Pulse } from "./afterlight";
+import type { Afterlight, Pulse } from "./afterlight";
+import type { Halo } from "./milestones";
 import { easeOut } from "./afterlight";
 import { along } from "./marker";
 import { unmaskedPath } from "./mask";

@@ -26,6 +26,20 @@ function show() { stateStore.setState({ state }); flushSync(() => root.render(Re
 window.milestones = {
   probes() { return { graph: graph().oversightGraph, field: graph().parentElement.querySelector('canvas').oversightField }; },
   mount() { state = events.filter(e => e.seq <= 20).reduce(applyEvent, createInitialState()); show(); },
+  crowd() {
+    for (const [i, slot] of ['B', 'C', 'D', 'E'].entries()) {
+      const id = 'crowd-' + slot;
+      const original = state.changes['change-1'];
+      state = { ...state, agents: { ...state.agents, [id]: { ...state.agents['agent-1'], agent_id: id, slot, change_id: id } },
+        changes: { ...state.changes, [id]: { ...original, change_id: id, agent_id: id, resolution: null,
+          graph: { ...original.graph, nodes_modified: ['crowd-node-' + slot] } } },
+        decisionEvents: [...state.decisionEvents, { seq: 30 + i, ts: state.clock, type: 'error', payload: {
+          source: 'git', agent_id: id, change_id: id, fatal: false,
+          message: 'Needs you — revision=1; head=abc; code=main_moved; reason=Main moved'
+        }}] };
+    }
+    show();
+  },
   send(kind, overlap = false) {
     if (overlap) {
       const agent = { ...state.agents['agent-1'], agent_id: 'agent-2', slot: 'B', state: 'ready_for_review', change_id: 'change-2' };
@@ -37,7 +51,7 @@ window.milestones = {
       source: 'git', agent_id: 'agent-1', change_id: 'change-1', fatal: false,
       message: 'Needs you — revision=1; head=' + state.changes['change-1'].proposal.head_commit + '; code=main_moved; reason=Main moved'
     }});
-    if (kind === 'merged') state = applyEvent(state, events.find(e => e.seq === 21));
+    if (kind === 'merged') state = applyEvent(state, { ...events.find(e => e.seq === 21), seq: state.lastSeq + 1, ts: state.clock });
     show();
   }
 };
@@ -47,6 +61,7 @@ declare global {
     milestones: {
       mount(): void;
       send(kind: string, overlap?: boolean): void;
+      crowd(): void;
       probes(): { graph?: GraphProbe; field?: FieldProbe };
     };
   }
@@ -101,8 +116,8 @@ async function scene(
     }, theme);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => {
-      const { graph } = window.milestones.probes();
-      return (graph?.nodeCenters().length ?? 0) > 0 && graph?.animating() === false;
+      const { graph, field } = window.milestones.probes();
+      return !!field && (graph?.nodeCenters().length ?? 0) > 0 && graph?.animating() === false;
     });
     await page.getByRole("button", { name: "Zoom out", exact: true }).click();
     if (held) await page.clock.runFor(300);
@@ -158,6 +173,39 @@ it("holds the pending node and Merging card until arrival, then draws the masked
     expect(await pill(page, "Merged")).toBe(1);
     expect(await page.locator("[data-merge-halo]").count()).toBe(1);
     expect(await page.locator("[data-field-travel]").getAttribute("clip-path")).toContain("url(");
+  });
+}, 60_000);
+it("keeps travel and arrival together when Merged replaces Needs you", async () => {
+  await scene("dark", 1920, 1080, async (page) => {
+    await page.evaluate(() => {
+      window.milestones.send("needs");
+    });
+    await page.clock.runFor(200);
+    await page.evaluate(() => {
+      window.milestones.send("merged");
+    });
+    await page.clock.runFor(500);
+    expect(await pill(page, "Merging")).toBe(1);
+    expect(await page.locator("[data-field-travel] g path[d]").count()).toBeGreaterThan(0);
+    await page.clock.runFor(1216);
+    expect(await pill(page, "Merged")).toBe(1);
+    expect(await page.locator("[data-merge-halo]").count()).toBe(1);
+  });
+}, 60_000);
+it("drops travel, the Merging label and the halo together at the pulse cap", async () => {
+  await scene("dark", 1920, 1080, async (page) => {
+    await page.evaluate(() => {
+      window.milestones.send("merged");
+    });
+    expect(await pill(page, "Merging")).toBe(1);
+    await page.evaluate(() => {
+      window.milestones.crowd();
+    });
+    expect(await pill(page, "Merged")).toBe(1);
+    await page.clock.runFor(500);
+    expect(await page.locator("[data-field-travel] g path[d]").count()).toBe(0);
+    await page.clock.runFor(1216);
+    expect(await page.locator("[data-merge-halo]").count()).toBe(0);
   });
 }, 60_000);
 it.runIf(process.env.MILESTONE_SHOTS === "1")(

@@ -22,4 +22,4 @@ export { selectGraphBehavior } from "./behavior";
 export type { GraphBehaviorEntry } from "./behavior";
 export { NodeChips } from "./NodeChips";
 
-export { afterlightOf, mergeArrivalDelay } from "./field";
+export { afterlightOf, mergeArrivalDelay, MilestoneLife } from "./field";

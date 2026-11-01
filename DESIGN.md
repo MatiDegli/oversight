@@ -1200,8 +1200,10 @@ lines (the fallback that existed before the contours).
   slot/agent-id order within each group; excess sources are dropped. A decided change's fading
   light is one more source of its agent's color, counted in the same budget.
   Milestone rings and travelling points feed the lamp accumulator directly, without emitter slots.
-  This extends Sources above (milestone decision, Oct 30; clarified Oct 31): intensities add, but
-  each lamp takes the strongest source's team hue, first source on ties, instead of mixing hues.
+  This replaces the earlier Sources restriction “only each agent's current node ... and its last
+  read node ... emit light” for finite events (milestone decision, Oct 30; clarified Oct 31).
+  Intensities add, but each lamp takes the strongest source's team hue, first source on ties,
+  instead of mixing hues.
 - **Mask:** the title, legend, zoom controls and every overlay mask the field, including the
   contour lines. Neither the LEDs, the lines nor a travelling light may show through those areas.
   So do the text bands: the header of every open module (its first 54px) or class (44px), padded by
@@ -1225,7 +1227,9 @@ lines (the fallback that existed before the contours).
   two inward beats within 700ms, each from 150px beyond that same radius, accelerating with
   power 1.6; amplitude rises from 0.4 to 1 times 1.2 with power 1.4, a 90ms fade-in, sigma 8px,
   a 26px trailing side and 160ms afterglow. Every lamp remains a 7px square through the same
-  levels, dither and mask. These finite event rings extend Working ring above; they never loop.
+  levels, dither and mask. This replaces the earlier Working ring line “It stops when the agent
+  stops working” as a rule for all rings: working rings still stop with work; milestone rings
+  finish their finite event independently and never loop (milestone decision, Oct 30/31).
 - **Marker:** on each agent.focus, the lettered marker glides to the current node along the edge
   route when one exists, carrying its local light with it. When the agent stops acting the marker
   fades out with its light; the Motion rules set its timing and reduced-motion fallback.
@@ -1242,7 +1246,8 @@ in three states (maintainer, 2026-10-29):
    marker, no breathing, and it never pulses, blinks or grows stronger however long it waits.
    Opening the review or clicking the node does not turn it off (the mode only scales it, as it
    scales every light); closing the entries does.
-   Exception to “never pulses, blinks or grows stronger” above: the Oct 30 milestone decision,
+   This replaces the earlier Waiting line “no ring ... and it never pulses, blinks or grows
+   stronger however long it waits” for finite events only: the Oct 30 milestone decision,
    confirmed Oct 31, allows one Needs you event with two inward beats. The waiting light itself
    stays still between events; readiness also sends its finite event ring, never an idle loop.
 3. **Decided.** Merged (by rules or by the person), approved or rejected: a decision fades only a

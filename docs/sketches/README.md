@@ -23,7 +23,6 @@ These records stay: browser tests read images here, and decision history cites t
 | [rest-rm.png](life/rest-rm.png) | Resting graph under reduced motion | Built | Life layer; product is the reference. |
 | [merge-mid.png](life/merge-mid.png) | Merge light travelling across the graph | Built | Life layer; product is the reference. |
 | [life-v2.webm](life/life-v2.webm) | Contour drift and merge light at 10× speed | Built | Life layer; product is the reference. |
-
 | [ready-mid.png](milestone-pulses/ready-mid.png) | Ready for review mid-pulse, dark, 1920×1080 | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
 | [needs-mid.png](milestone-pulses/needs-mid.png) | Needs you mid-pulse, dark, 1920×1080 | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |
 | [merged-mid.png](milestone-pulses/merged-mid.png) | Merge travel mid-way, dark, 1920×1080 | Built | `frontend/milestone-pulses`; circular rings and two Needs you beats supersede the sketch. |

@@ -110,10 +110,15 @@ export function graphElements(
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const edges = new Map(state.graph?.edges.map((edge) => [edge.id, edge]));
   const nodeMarks = selectNodeMarks(state);
+  const addedNodeSlots = new Map<string, string[]>();
   for (const id of merging) {
     const change = state.changes[id];
     const slot = change && state.agents[change.agent_id]?.slot;
     if (!change || !slot || change.resolution?.merge !== "merged") continue;
+    for (const node of change.graph.nodes_added) {
+      if (!nodes.has(node.id)) nodes.set(node.id, node);
+      addedNodeSlots.set(node.id, [...(addedNodeSlots.get(node.id) ?? []), `pending-new-${slot}`]);
+    }
     for (const nodeId of [
       ...change.graph.nodes_modified,
       ...change.graph.nodes_added.map((node) => node.id),
@@ -126,7 +131,6 @@ export function graphElements(
       };
     }
   }
-  const addedNodeSlots = new Map<string, string[]>();
   const addedEdgeSlots = new Map<string, string[]>();
   for (const change of selectPendingChanges(state)) {
     const slot = state.agents[change.agent_id]?.slot;

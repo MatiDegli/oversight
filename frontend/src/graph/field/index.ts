@@ -8,4 +8,5 @@ export { selectMilestones, selectMerges, selectModules } from "./life";
 export { selectSignalLights } from "./signal";
 export type { LastReads } from "./signal";
 
-export { afterlightOf, mergeArrivalDelay } from "./afterlight";
+export { afterlightOf } from "./afterlight";
+export { mergeArrivalDelay, MilestoneLife } from "./milestones";

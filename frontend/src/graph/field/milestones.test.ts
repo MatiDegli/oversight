@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { themes } from "../../theme";
 import { MilestoneLife, milestoneRing, type Milestone } from "./milestones";
 import { createLampField, fieldConfig, parseHex, placeLights } from "./model";
-import { afterlightOf, MergeLife } from "./afterlight";
+import { afterlightOf } from "./afterlight";
+import { MergeLife } from "./milestones";
 const theme = themes.dark;
 const box = { x1: 140, y1: 140, x2: 280, y2: 182 };
 const boxes = new Map([["node", box]]);
@@ -40,6 +41,27 @@ describe("milestone rings", () => {
     expect(life.visible("3", 1300)).toBe(true);
     life.update([event("3", "merged"), event("4")], 2300, false, false);
     expect(life.rings(2300, boxes)).toHaveLength(1);
+  });
+  it("lets Merged replace Needs you from the same team within one second", () => {
+    const needs = event("needs", "needs");
+    const merged = event("merged", "merged");
+    const life = start([needs]);
+    life.update([needs, merged], 1200, false, false);
+    expect(life.rings(1200, boxes)).toEqual([]);
+    expect(life.visible(merged.key, 1200)).toBe(true);
+  });
+  it("keeps Merged when three Needs you events evict Ready", () => {
+    const events = [
+      event("ready"),
+      event("merged", "merged", "agent-b", "b"),
+      event("c", "needs", "agent-c", "c"),
+      event("d", "needs", "agent-d", "d"),
+      event("e", "needs", "agent-e", "e"),
+    ];
+    const life = start(events);
+    expect(life.visible("ready", 1000)).toBe(false);
+    expect(life.visible("merged", 1000)).toBe(true);
+    expect(events.filter((e) => life.visible(e.key, 1000))).toHaveLength(4);
   });
   it("offsets a second team's ring on the same node by 350 ms", () => {
     const life = start([event(), event("2", "needs", "agent-b")]);
@@ -137,4 +159,30 @@ describe("milestone rings", () => {
       expect(still.pulses(1000)).toEqual([]);
     }
   });
+});
+
+it("cancels a dropped merge's travel and halo together, keeping its afterlight", () => {
+  const merge = { ...event("merge", "merged"), pulse: true };
+  const life = new MergeLife(afterlightOf(theme));
+  life.update([merge], 1000, false, false, [], new Map([[merge.key, 1000]]));
+  expect(life.pulses(1500)).toHaveLength(1);
+  life.update([merge], 1500, false, false, [], new Map([[merge.key, -Infinity]]));
+  expect(life.pulses(1500)).toEqual([]);
+  expect(life.halos(2700, 550)).toEqual([]);
+  expect(life.lights(1500)).toHaveLength(1);
+  const dropped = new MergeLife(afterlightOf(theme));
+  dropped.update([merge], 1000, false, false, [], new Map([[merge.key, -Infinity]]));
+  expect(dropped.pulses(1500)).toEqual([]);
+  expect(dropped.halos(2700, 550)).toEqual([]);
+  expect(dropped.lights(1000)[0]?.weight).toBe(theme["waiting-light-weight"]);
+});
+it("finishes motion without restarting its travel or halo when motion returns", () => {
+  const merge = { ...event("merge", "merged"), pulse: true };
+  const life = new MergeLife(afterlightOf(theme));
+  life.update([merge], 1000, false, false);
+  life.finishMotion();
+  life.update([merge], 1500, false, false);
+  expect(life.pulses(1500)).toEqual([]);
+  expect(life.halos(2700, 550)).toEqual([]);
+  expect(life.lights(1500)).toHaveLength(1);
 });
