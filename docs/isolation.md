@@ -155,13 +155,14 @@ Required isolation is passed by `changes/_probes.py:_run`, `_merge.py:combined_t
 suite execution and retain unknown facts with an unavailable diagnostic. Required refuses before
 suite capture or execution; it never falls back. `changes/_mode.py:start_capability` and
 `_revert_port.py:RevertPort.revert` consult rules_available before admitting rules or Revert.
-Rules activation is still closed by `RULES_ACTIVATION = False`; wired capability checks do not
-mean automatic merges are enabled.
+Rules activation is open (`RULES_ACTIVATION = True`). Each fresh run starts in Ask me; explicit
+rules selection still requires this session's C and all other start conditions. Later evidence
+and transaction guards remain mandatory; clean rules merges offer person-only Revert.
 
 A session born without C never enables C later, rules, their probes or Revert. Ask me needs
 no acceptance step: startup emits a log warning and an existing nonfatal `error` event from
 `tests`, explaining that tests retain network access and rules/probes/Revert stay disabled.
-Settings presentation belongs to the later UI wiring. A session born with C never selects the
+Settings shows the server's refusal verbatim. A session born with C never selects the
 open runner, including after invalidation. Only failed isolation effect/entry/cleanup evidence
 invalidates C; ordinary suite failures, timeouts and artifact vetoes do not. Git metadata
 changes use C2b's rules_suspended latch, without invalidating C after verified restoration.
@@ -176,3 +177,21 @@ it does not establish or upgrade a running server's capability.
 The maintainer accepted the filesystem residual: C removes the network; it does not isolate
 the filesystem; it closes known Git routes and vetoes what it cannot attest. Read-only mounts
 are outside this package. C3 changes no contracts.
+
+### W1 native Windows startup boundary (2026-11-01)
+
+W1 introduces an injectable stdlib Windows seam: seek-zero byte locking, suspended launch into
+kill-on-close Jobs, descendant cleanup before return, and a process-lifetime server Job whose
+handle is retained until process teardown. A nested-job probe precedes reset. Unknown cleanup
+refuses evidence while the existing suite plumbing retains partial reports. Windows retains
+OPEN_NOTICE: no network isolation, rules, Revert, behavior or measured evidence.
+
+Startup requires short, private, local nonsynced NTFS placements; rejects known sync roots,
+reparse/offline/recall ancestors, UNC/device/ADS/alias inputs, SUBST and mapped/network drives;
+and warns outside USERPROFILE. Checks do not establish a filesystem sandbox or harden inherited
+ACLs. Demo-only acceptance covers destination races and inherited ACLs; it does not authorize
+own-repository use. An unregistered sync client is not reliably discoverable from filesystem
+attributes: the operator must choose nonsynced folders. Linux-injected checks are not native
+proof. Non-elevated Windows acceptance of Jobs, nested jobs, Ctrl+C shutdown logging, Defender
+sharing/retries, Git localization and three restarts remains required. W2a and W2b must land
+before native tree/files, agent read/edit/run_tests, proposal or Approve acceptance.

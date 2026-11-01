@@ -25,7 +25,10 @@ import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
 const OversightStage = lazy(() =>
-  import("./shell/OversightStage").then((module) => ({ default: module.OversightStage })),
+  import("./shell/OversightStage").then(async (module) => {
+    await module.fieldReady;
+    return { default: module.OversightStage };
+  }),
 );
 const ReplayBar = lazy(() => import("./replay/ReplayBar"));
 

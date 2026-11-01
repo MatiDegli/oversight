@@ -1,0 +1,14 @@
+{
+  "task": "Review the proposal independently.",
+  "turn_delay_s": 0,
+  "turns": [
+    {
+      "text": "The review evidence is unavailable.",
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "cached_tokens": 0
+      }
+    }
+  ]
+}

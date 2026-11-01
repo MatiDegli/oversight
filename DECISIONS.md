@@ -2952,6 +2952,44 @@ Reason: a docs audit found many docs behind main after several days of changed d
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
 
+## 2026-10-31 — Map view and folder groups
+
+The maintainer approved the map sketch and dispatch of `frontend/map-rest`. This replaces the
+order in “Map view and folder groups follow the later line B work”: build after the review panel
+rework and the Conversation tab, before milestone pulses if ready before the cut line.
+
+- Enter below 11/17 (64.7%); leave above 11/16 (68.75%), the unchanged start camera's readability
+  floor. Hysteresis avoids flicker; explicit moves choose their target level, holding it through
+  animation. Fit compares against enter and frames panel cells and header strips on the map.
+- Folders precede named groups because their source is visible. Use the first splitting level;
+  tests form their own group, single-module folders and root files have no panel, flat repositories
+  have no groups. A flat folder over twelve modules accepts names through the optional grouping
+  seam. The service, caption and Edit are later work, not an invented API in this front.
+- Packing is fixed and deterministic, never model-placed: nine cells per column, 446×220px for
+  this snapshot, growing open cells, count/label order with tests last, 340px sideways and 460px
+  stacked ground. Panels share top edges within a row; no L-shaped frames. This deliberately
+  moves grouped cards while preserving the flat demo's positions.
+- Equal circles keep function counts in words rather than size. Quiet rectangular card panels
+  have a header strip with name and module count; header agent rings, decisions and tested-by
+  evidence are later work. There are no lines at rest; hover and cone lines come later.
+- Dashed module rings mean only pending changes, per agent. Reads never earn a ring; editing
+  and pending node counts are stated in the agent line. Difference chips hide on the map.
+- Tests remain hidden until drawn by an explicitly approved change. Their grouping rule has
+  unit evidence only. Start camera, review framing, folding and card edge styles remain unchanged.
+- Product measurements replace the sketch estimate in DESIGN's Scale and depth. The existing
+  1280px shell gives the demo a 45.62% card Fit; the module-count gate below keeps it on cards.
+- DESIGN and this approved sketch govern the refinement when Impeccable's general advice
+  would change identity, spacing, typography or motion. The dot field stays unchanged; captures
+  show lamps masked by invisible card boxes, reserved for a separate front.
+- The map exists only with at least 24 module nodes currently shown, after filtering tests.
+  Below that, every zoom and Fit stays on cards and the readout has no “· Map”. The map is for
+  repositories too big for cards, and the demo must look the same in every take at every width.
+  The demo has 12 modules, six drawn with tests hidden; Boltons d31d821 has 66, 34 drawn.
+  Thresholds 11/17 and 11/16, the minimum zoom 0.2, packing and Boltons' map frames stay unchanged.
+- Keep the sketch's 340px sideways and 460px stacked ground. With a one-line 37px header,
+  stacked panel edges have at least 48px at the drawn zooms and down to 0.2 (49px there).
+  Narrow headers wrapping below the drawn zooms may reduce it to the 26px floor at 0.2;
+  panels never touch or overlap. This preserves the approved packing values.
 ## 2026-10-31 — Progress pieces, part 1: activity blocks and notices
 
 The maintainer approved progress sketch round 2 at 2026-10-31T15:19:19Z. Progress lives as
@@ -3672,3 +3710,67 @@ C5 proof exercises production App Settings/tab dispatch in live and replay, usin
 hand-written retained evidence and fixture-only Chat initialization. Targeted
 regressions retain focus, draft, graph camera and scroll ownership. Comparisons
 judge only C5: C2/C3 bodies, C4 composition and C1 TaskBox controls stay outside it.
+## 2026-11-01 — The native Windows port moves ahead
+
+The maintainer ranked item 20 immediately after the conversational lead and the Chat view,
+ahead of the other displaced fronts, and approved the new workspace modules `_platform.py`
+(W1) and `source_nt.py` (a later front). This supersedes the earlier after-Tauri Windows order.
+W1 is the cohesive startup/process-lifetime front, split into three independently checked
+commits. It adds no Windows isolation, own-repository permission or contracts.
+
+Windows keeps OPEN_NOTICE and open network mode; rules, Revert, behavior and measured evidence
+remain unavailable. W1 alone does not enable native tree/files, agent tools, proposals or Approve:
+W2a and W2b are both required. Native Jobs, console delivery, Defender sharing behavior and Git
+localization still require non-elevated Windows acceptance. Destination races and inherited ACLs
+are accepted only for our disposable demo, never for the person's own repository.
+
+## 2026-11-01 — Item 8 F10: rules activation opens after approval
+
+The maintainer approved activation in chat at 2026-11-01T17:07:29Z (14:07:29 ART).
+The activation front rechecked main `697775b`: F1–F9 and PRODUCT.md's merge-authority
+sentence were present. `changes/_mode.py:RULES_ACTIVATION` is now true. There is no setting
+or environment switch. Every fresh run still starts in Ask me, revision zero; selecting
+Merge alone when safe requires the existing CAS and a committed merge_mode.changed receipt.
+
+This supersedes the activation-status qualification in the 2026-10-30 decision
+"Item 8: a closed activation latch, and rules mode refuses without cross-review".
+Its code-only latch, refusal order, cross-review requirement and remaining answers stand.
+All earlier dated statements that activation remains closed, that every merge still requires
+a separate personal decision, or that Settings must present the preactivation refusal are
+historical and superseded for activation status by this entry. This includes the protected-path,
+Revert, person-preemption, idle/queued follow-main and grant delivery entries. Their safety
+conditions and dated delivery records remain unchanged.
+
+Selection still refuses unavailable/revoked C, suspended rules authority, suspect main,
+cross-review off, an unconfigured reviewer or any offered author sharing its model.
+Spend and protected paths remain later evidence/transaction guards, alongside the other
+seven rules. No wire contract, policy profile, route, status code, grant scope or transaction
+guard changed. Revert remains person-only: empty 202 on admission, result through events.
+
+A fake-only HTTP/SSE proof first reproduced a missing committed review receipt in the rules
+scheduler. Runtime review now forwards only the StoredEvent returned by successful publication
+to the existing rules_received port. No assessment or review evidence is synthesized.
+Dedicated zero-delay fake author/reviewer scripts include usage on every turn. For the second,
+protected-path proposal, the harness switches only its scratch reviewer script to an unavailable
+verdict after the first review has settled; ordinary review parsing emits current-target Needs you.
+The protected-path and invalid-spend matrix separately proves those guards prevent merging.
+
+`fixtures/events/scripted-rules.jsonl` and its fake provenance contain the rules merge at seq 33,
+person Revert at seq 36 and unavailable-review Needs you at seq 59. All nine merge rules have
+committed passing evidence, including the combined suite. The recorder uses explicit Settings,
+a positive scratch budget and the durable ledger, exports only its own shut-down scratch store
+with fake_fixture=True, and validates the unchanged event contracts and exact-byte provenance.
+This is scripted fake evidence, not a paid or real-provider recording; the published real demo
+recording and public read-only replay are unchanged.
+
+`make rules-check` shares demo-check's parent-death, graceful shutdown, descendant and runtime-lock
+checks. Three consecutive starts on this host passed with real C: start 1, merge/Revert/Needs you
+and cleanup passed; start 2, the same passed; start 3, the same passed. All three initial graph
+versions and commits matched over one scratch runtime. Missing host C fails with its reason.
+Playwright uses this exact recording and the shared reducer/replay holds to check reasons,
+Revert, Needs you and unavailable replay commands. Full repository gates and independent review
+remain the coordinator's merge prerequisites; activation does not complete proof 2 or item 9.
+
+Reason: approval and delivered prerequisites allow explicit rules selection, while live fake
+proof, committed receipts and repeatable clean starts establish the activation path without
+spending provider credits or relaxing any authority condition.

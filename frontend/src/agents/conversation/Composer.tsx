@@ -1,7 +1,11 @@
-import { Pause, Play, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
+import { useStore } from "zustand";
+import { stateStore } from "../../state";
 import { commandFailure } from "../../transport";
+import { PauseControl } from "../PauseControl";
 import { StopControl } from "../StopControl";
+import { beginSend, clearSentDraft, draftKey, draftStore, finishSend, setDraft } from "./drafts";
 import type { ConversationHeader } from "./selectConversation";
 import { focusRing } from "./rows";
 
@@ -23,41 +27,46 @@ export function Composer({
   onStop,
   actionAccessory,
 }: { header: ConversationHeader } & ConversationControls) {
-  const [text, setText] = useState("");
-  const [pending, setPending] = useState(false);
-  const [controlPending, setControlPending] = useState(false);
-  const sending = useRef(false);
+  const runId = useStore(stateStore, ({ state }) => state.run?.run_id ?? null);
+  const key = draftKey(runId, header.agentId);
+  const text = useStore(draftStore, (drafts) => drafts[key]?.text ?? "");
+  const pending = useStore(draftStore, (drafts) => drafts[key]?.pending ?? false);
   const [failure, setFailure] = useState<string | null>(null);
+  const failedControl = useRef(false);
+  const [controlKey, setControlKey] = useState(0);
   const captionId = useId();
   const active = ["working", "revising", "paused"].includes(header.state);
   const replay = !onSend && !onPause && !onResume && !onStop;
-  async function send() {
-    if (!onSend || !active || !text.trim() || sending.current) return;
-    sending.current = true;
-    setPending(true);
-    setFailure(null);
-    try {
-      await onSend(text);
-      setText("");
-    } catch (error) {
-      setFailure(commandFailure("Send", error));
-    } finally {
-      sending.current = false;
-      setPending(false);
+  function clearControlFailure() {
+    if (failedControl.current) {
+      failedControl.current = false;
+      // Reset only a rejected control, preserving successful pause requests.
+      setControlKey((current) => current + 1);
     }
   }
-  async function control() {
-    const callback = header.state === "paused" ? onResume : onPause;
-    if (!callback || controlPending || !active) return;
-    setControlPending(true);
+  async function send() {
+    if (!onSend || !active || !text.trim() || !beginSend(key)) return;
     setFailure(null);
+    clearControlFailure();
     try {
-      await callback();
+      await onSend(text);
+      clearSentDraft(key, text);
     } catch (error) {
-      setFailure(commandFailure(header.state === "paused" ? "Resume" : "Pause", error));
+      clearControlFailure();
+      setFailure(commandFailure("Send", error));
     } finally {
-      setControlPending(false);
+      finishSend(key);
     }
+  }
+  function control(command: (() => Promise<unknown>) | undefined) {
+    setFailure(null);
+    failedControl.current = false;
+    const result = command?.() ?? Promise.resolve();
+    void result.catch(() => {
+      failedControl.current = true;
+      setFailure(null);
+    });
+    return result;
   }
   if (replay) {
     const caption = "Recorded run: messages, pause and stop are off.";
@@ -84,7 +93,7 @@ export function Composer({
           readOnly={pending || !active}
           value={text}
           onChange={(event) => {
-            setText(event.target.value);
+            setDraft(key, event.target.value);
           }}
           className={`block h-16 w-full resize-none rounded-[10px] border border-control-edge bg-field px-3 py-[10px] text-[15px] text-text placeholder:text-faint aria-disabled:text-faint ${focusRing}`}
         />
@@ -96,21 +105,13 @@ export function Composer({
       )}
       <div className="composer-actions mt-[10px] flex flex-wrap items-start gap-2">
         {active && (paused ? onResume : onPause) && (
-          <button
-            type="button"
-            className={button}
-            aria-disabled={controlPending}
-            onClick={() => {
-              void control();
-            }}
-          >
-            {paused ? (
-              <Play aria-hidden="true" className="size-4" />
-            ) : (
-              <Pause aria-hidden="true" className="size-4" />
-            )}
-            {paused ? "Resume" : "Pause"}
-          </button>
+          <PauseControl
+            key={controlKey}
+            agentId={header.agentId}
+            state={header.state}
+            onPause={() => control(onPause)}
+            onResume={() => control(onResume)}
+          />
         )}
         {active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
         {actionAccessory}

@@ -478,3 +478,27 @@ export function frameCamera(
   moveCamera(cy, camera, reduceMotion);
   return camera;
 }
+
+/** Frame the panel cells and screen-sized header strips, iterating their zoom-dependent bounds. */
+export function fitPanelCamera(
+  cy: Core,
+  boxes: (zoom: number) => FrameNode[],
+  reduceMotion: boolean,
+  area?: Box,
+  initialZoom = 1,
+): Framing | null {
+  let zoom = initialZoom;
+  let target: Framing | null = null;
+  for (let i = 0; i < 8; i += 1) {
+    target = frameBox(boxes(zoom), { width: cy.width(), height: cy.height() }, Infinity, {
+      padding: PADDING,
+      minZoom: cy.minZoom(),
+      maxZoom: cy.maxZoom(),
+      area,
+    });
+    if (!target) return null;
+    zoom = target.zoom;
+  }
+  if (target) moveCamera(cy, target, reduceMotion);
+  return target;
+}
