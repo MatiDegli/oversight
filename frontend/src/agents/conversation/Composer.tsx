@@ -1,11 +1,11 @@
 import { TriangleAlert } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { useStore } from "zustand";
 import { stateStore } from "../../state";
 import { commandFailure } from "../../transport";
 import { PauseControl } from "../PauseControl";
 import { StopControl } from "../StopControl";
-import { clearSentDraft, draftKey, draftStore, setDraft } from "./drafts";
+import { beginSend, clearSentDraft, draftKey, draftStore, finishSend, setDraft } from "./drafts";
 import type { ConversationHeader } from "./selectConversation";
 import { focusRing } from "./rows";
 
@@ -27,17 +27,14 @@ export function Composer({
 }: { header: ConversationHeader } & ConversationControls) {
   const runId = useStore(stateStore, ({ state }) => state.run?.run_id ?? null);
   const key = draftKey(runId, header.agentId);
-  const text = useStore(draftStore, (drafts) => drafts[key] ?? "");
-  const [pending, setPending] = useState(false);
-  const sending = useRef(false);
+  const text = useStore(draftStore, (drafts) => drafts[key]?.text ?? "");
+  const pending = useStore(draftStore, (drafts) => drafts[key]?.pending ?? false);
   const [failure, setFailure] = useState<string | null>(null);
   const captionId = useId();
   const active = ["working", "revising", "paused"].includes(header.state);
   const replay = !onSend && !onPause && !onResume && !onStop;
   async function send() {
-    if (!onSend || !active || !text.trim() || sending.current) return;
-    sending.current = true;
-    setPending(true);
+    if (!onSend || !active || !text.trim() || !beginSend(key)) return;
     setFailure(null);
     try {
       await onSend(text);
@@ -45,8 +42,7 @@ export function Composer({
     } catch (error) {
       setFailure(commandFailure("Send", error));
     } finally {
-      sending.current = false;
-      setPending(false);
+      finishSend(key);
     }
   }
   if (replay)
@@ -82,8 +78,14 @@ export function Composer({
           <PauseControl
             agentId={header.agentId}
             state={header.state}
-            onPause={() => onPause?.() ?? Promise.resolve()}
-            onResume={() => onResume?.() ?? Promise.resolve()}
+            onPause={() => {
+              setFailure(null);
+              return onPause?.() ?? Promise.resolve();
+            }}
+            onResume={() => {
+              setFailure(null);
+              return onResume?.() ?? Promise.resolve();
+            }}
           />
         )}
         {active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}

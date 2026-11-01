@@ -45,18 +45,18 @@ vi.mock("zustand", async (original) => {
 import { ConversationPanel } from "./ConversationPanel";
 import { Composer } from "./Composer";
 import { sketchState } from "./fixture";
-import { selectConversation } from "./selectConversation";
+import { selectConversation, type ConversationHeader } from "./selectConversation";
 import { TimelineEntry } from "./rows";
 
 beforeEach(() => {
   draftStore.setState({}, true);
 });
 
-function mountComposer(agentId = "agent-1") {
+function mountComposer(agentId = "agent-1", state: ConversationHeader["state"] = "working") {
   const conversation = selectConversation(sketchState, "agent-1", []);
   if (!conversation) throw new Error("Missing fixture");
   const props = {
-    header: { ...conversation.header, agentId, state: "working" as const },
+    header: { ...conversation.header, agentId, state },
     onSend: vi.fn().mockResolvedValue(undefined),
     onPause: vi.fn().mockResolvedValue(undefined),
     onResume: vi.fn().mockResolvedValue(undefined),
@@ -80,10 +80,28 @@ function mountComposer(agentId = "agent-1") {
 
 type Interactive = {
   children?: ReactNode;
+  "aria-label"?: string;
+  "aria-hidden"?: boolean | "true" | "false";
   value?: string;
   onClick?: () => void;
   onChange?: (event: { target: { value: string } }) => void;
 };
+
+// These controls use aria-label or text with aria-hidden icons; no labelledby references.
+function accessibleName(tree: ReactNode): string {
+  return Children.toArray(tree)
+    .map((child) => {
+      if (typeof child === "string" || typeof child === "number" || typeof child === "bigint")
+        return String(child);
+      if (!isValidElement<Interactive>(child)) return "";
+      if (child.props["aria-hidden"] === true || child.props["aria-hidden"] === "true") return "";
+      return child.props["aria-label"] ?? accessibleName(child.props.children);
+    })
+    .join("");
+}
+
+class MissingElement extends Error {}
+
 function find(
   tree: ReactNode,
   type: string | typeof PauseControl,
@@ -91,22 +109,54 @@ function find(
 ): ReactElement<Interactive> {
   for (const child of Children.toArray(tree)) {
     if (!isValidElement<Interactive>(child)) continue;
-    if (child.type === type && (!text || child.props.children === text)) return child;
+    if (child.type === type && (!text || accessibleName(child) === text)) return child;
     if (child.props.children) {
       try {
         return find(child.props.children, type, text);
-      } catch {
+      } catch (error) {
+        if (!(error instanceof MissingElement)) throw error;
         /* Continue with siblings. */
       }
     }
   }
-  throw new Error(`Missing ${String(type)}`);
+  throw new MissingElement(`Missing ${String(type)}`);
 }
+
+it("finds controls by accessible name, ignoring hidden icons and honoring labels", () => {
+  const tree = (
+    <div>
+      <span>Other content</span>
+      <button>
+        <span aria-hidden="true">Icon</span>Pause
+      </button>
+      <button aria-label="Resume">Continue</button>
+    </div>
+  );
+  expect(accessibleName(find(tree, "button", "Pause"))).toBe("Pause");
+  expect(accessibleName(find(tree, "button", "Resume"))).toBe("Resume");
+});
+
+it("does not hide a rendering error as a missing element", () => {
+  const tree = (
+    <div>
+      <span>{{ invalid: true } as unknown as ReactNode}</span>
+      <button>Send</button>
+    </div>
+  );
+  expect(() => find(tree, "button", "Send")).toThrow(/Objects are not valid as a React child/);
+});
+
+it.each([
+  ["working", "Pause"],
+  ["paused", "Resume"],
+] as const)("exposes the exact accessible name %s / %s at rest", (state, name) => {
+  const view = mountComposer("agent-1", state);
+  expect(accessibleName(find(view.render(true), "button", name))).toBe(name);
+});
 
 it("uses the shared pause states and preserves no-argument command callbacks", async () => {
   const view = mountComposer();
-  expect(renderToStaticMarkup(view.render(true))).toContain("Pause</button>");
-  find(view.render(true), "button").props.onClick?.();
+  find(view.render(true), "button", "Pause").props.onClick?.();
   await Promise.resolve();
   expect(view.props.onPause).toHaveBeenCalledExactlyOnceWith();
   expect(renderToStaticMarkup(view.render(true))).toContain("Pausing after this step");
@@ -121,6 +171,22 @@ it("shows a shared pause failure and permits retry", async () => {
   expect(html).toContain('role="alert"');
   expect(html).toContain("Pause did not reach the server. Check the connection and try again.");
   expect(html).toContain('aria-disabled="false"');
+});
+
+it.each([
+  ["working", "Pause", "onPause"],
+  ["paused", "Resume", "onResume"],
+] as const)("clears a Send failure when %s / %s is used", async (state, name, callback) => {
+  const view = mountComposer("agent-1", state);
+  view.props.onSend.mockRejectedValueOnce(new Error("offline"));
+  find(view.render(), "textarea").props.onChange?.({ target: { value: "Read pricing.py" } });
+  find(view.render(), "button", "Send").props.onClick?.();
+  await Promise.resolve();
+  expect(renderToStaticMarkup(view.render())).toContain("Send did not reach the server.");
+  find(view.render(true), "button", name).props.onClick?.();
+  await Promise.resolve();
+  expect(view.props[callback]).toHaveBeenCalledExactlyOnceWith();
+  expect(renderToStaticMarkup(view.render())).not.toContain('role="alert"');
 });
 
 it("restores a draft after remount only for the same agent", () => {
@@ -142,6 +208,46 @@ it.each([true, false])("clears the draft only when sending succeeds: %s", async 
     success ? "" : "Read pricing.py",
   );
 });
+
+it.each([true, false])(
+  "blocks a duplicate Send after remount until settlement: %s",
+  async (success) => {
+    const view = mountComposer();
+    const text = "Read pricing.py";
+    let settle!: () => void;
+    view.props.onSend.mockImplementationOnce(
+      () =>
+        new Promise((resolve, reject) => {
+          settle = () => {
+            if (success) resolve(undefined);
+            else reject(new Error("offline"));
+          };
+        }),
+    );
+    find(view.render(), "textarea").props.onChange?.({ target: { value: text } });
+    const staleButton = find(view.render(), "button", "Send");
+    staleButton.props.onClick?.();
+    const remounted = mountComposer();
+    remounted.props.onSend = view.props.onSend;
+    const tree = remounted.render();
+    find(tree, "button", "Send").props.onClick?.();
+    staleButton.props.onClick?.();
+    const calls = view.props.onSend.mock.calls.length;
+    settle();
+    await Promise.resolve();
+    expect(calls).toBe(1);
+    expect(find(tree, "button", "Send").props).toHaveProperty("aria-disabled", true);
+    expect(find(tree, "textarea").props).toHaveProperty("readOnly", true);
+    expect(find(remounted.render(), "textarea").props.value).toBe(success ? "" : text);
+    expect(find(remounted.render(), "textarea").props).toHaveProperty("readOnly", false);
+    if (!success) {
+      find(remounted.render(), "button", "Send").props.onClick?.();
+      await Promise.resolve();
+      expect(view.props.onSend).toHaveBeenCalledTimes(2);
+      expect(find(remounted.render(), "textarea").props.value).toBe("");
+    }
+  },
+);
 
 it("keeps multilingual drafts intact and blocks repeated sends while pending", async () => {
   const view = mountComposer();
