@@ -104,7 +104,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 14 | Node card explained by examples | Queued — caller evidence `1c50382`; node example view absent at `8b9b589` | Yes |
 | 15 | Shape guard | Queued — contract reserved `649ff0d`; no structural comparison producer on main `8b9b589` | Yes |
 | 16 | Bounded one-hop context for initial tasks | Queued — initial slice absent at `8b9b589`, waits for bench; revision callers/siblings `ee92691` | No |
-| 19 | [Opening the person's own repository](../AGENTS.md#opening-my-own-repository) | Decided 2026-10-31, after the cut line; plan first, with the double review | Plan decides |
+| 19 | [Opening the person's own repository](own-repository.md) | Decided 2026-10-31, after the cut line; plan first, with the double review | Plan decides |
 | 20 | Minimal native Windows port | Decided 2026-10-31, after 19: per-OS layer, mode without isolation | No |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay `a0a4624`, challenge
@@ -126,8 +126,8 @@ These retain useful ideas from the old inventory without approving a front or ch
 None of the candidates below is queued. Delivered and retired ideas are recorded separately;
 new candidate work waits for the maintainer’s order.
 
-- Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on AGENTS.md's
-  out-of-scope list; lifting it needs the maintainer's decision. Goal: safety without slowing
+- Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on the
+  out-of-scope list in docs/proposal.md, section 5; lifting it needs the maintainer's decision. Goal: safety without slowing
   agents. The sandbox bounds side effects, not what an agent does in its task; normal work runs
   with no prompts.
 
@@ -643,7 +643,7 @@ gate or learned risk score.
 Give the agent a fixed-order slice of target signatures, direct callers/callees and module constants,
 about 1,500 tokens at most, explicitly listing omissions. Adopt only after the bench shows fewer
 steps and tokens with tasks still solved. The server builds this context as text, never a graph tool
-for agents, following AGENTS.md and the existing Request changes context. No contract addition is needed.
+for agents, following PRODUCT.md's graph-for-the-person rule and the existing Request changes context. No contract addition is needed.
 
 Revision callers/siblings already work (`ee92691`, `backend/src/oversight/changes/_neighbors.py`,
 `backend/src/oversight/changes/_revision.py`). Reuse ordering/uncertainty labels, add callees/constants
