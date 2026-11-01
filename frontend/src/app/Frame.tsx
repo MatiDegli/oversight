@@ -96,6 +96,8 @@ export function Frame(props: FrameProps) {
     >
       <TopBar
         state={state}
+        layout={shell.layout}
+        onLayout={shell.setLayout}
         onOpenQueue={props.onOpenQueue}
         onOpenSettings={props.onOpenSettings}
         onOpenPalette={shell.openPalette}

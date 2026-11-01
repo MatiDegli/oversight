@@ -1,8 +1,10 @@
-import { Folder, GitBranch, Search, Settings } from "lucide-react";
+import { Folder, GitBranch, MessagesSquare, Network, Search, Settings } from "lucide-react";
 
 import { selectDecisionInboxCount } from "../state";
 import type { State } from "../state";
 import { SpendMeter } from "./SpendMeter";
+import type { ShellLayout } from "./shell/useShell";
+import "./shell/chatShell.css";
 import "./palette/palette.css";
 
 const focusRing =
@@ -19,7 +21,11 @@ export function TopBar({
   onOpenPalette,
   onOpenSettings,
   practice,
+  layout = "Oversight",
+  onLayout,
 }: {
+  layout?: ShellLayout;
+  onLayout?: (layout: ShellLayout) => void;
   practice?: { active: boolean; open: () => void };
   state: State;
   onOpenQueue?: () => void;
@@ -29,7 +35,7 @@ export function TopBar({
   const ready = selectDecisionInboxCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
   return (
-    <header className="flex h-(--top-bar-height) shrink-0 items-center gap-3.5 border-b border-divider bg-shell px-4.5">
+    <header className="shell-top-bar flex h-(--top-bar-height) shrink-0 items-center gap-3.5 border-b border-divider bg-shell px-4.5">
       <span className="text-(length:--brand-size) font-bold">Oversight</span>
       {state.run && (
         <>
@@ -49,6 +55,24 @@ export function TopBar({
             )}
           </p>
         </>
+      )}
+      {onLayout && (
+        <div role="group" aria-label="Workspace view" className="view-switch">
+          {(["Chat", "Oversight"] as const).map((choice) => {
+            const Icon = choice === "Chat" ? MessagesSquare : Network;
+            return (
+              <button
+                type="button"
+                key={choice}
+                aria-pressed={layout === choice}
+                onClick={() => onLayout(choice)}
+              >
+                <Icon aria-hidden="true" size={15} />
+                {choice}
+              </button>
+            );
+          })}
+        </div>
       )}
       {onOpenPalette && (
         <button

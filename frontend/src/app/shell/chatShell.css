@@ -1,0 +1,43 @@
+.view-switch {
+  display: flex;
+  flex-shrink: 0;
+  height: 34px;
+  border: 1px solid var(--control-edge);
+  border-radius: 9px;
+  padding: 2px;
+  gap: 2px;
+}
+.view-switch button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-inline: 12px;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.view-switch button[aria-pressed="true"],
+.view-switch button:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.view-switch button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.shell-top-bar .palette-trigger {
+  min-width: 140px;
+  margin-left: 24px;
+}
+@media (max-width: 1500px) {
+  .view-switch button {
+    padding-inline: 10px;
+  }
+  .shell-top-bar {
+    gap: 10px;
+  }
+  .shell-top-bar .palette-trigger {
+    margin-left: 8px;
+  }
+}
