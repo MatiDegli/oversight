@@ -3083,3 +3083,53 @@ changing them invalidates the recorded paid pilots. They also remain at two site
 `backend/src/oversight/changes/_proposal.py`, with the same texts as two sites here,
 while open fronts edit that file. A later front words them when the bench fingerprints
 may change.
+## 2026-10-31 — Queued rules attempts follow verified main after settlement
+
+Per-record attempt keys `(revision, head, main, mode_revision)` decide admission; an exact
+key never runs twice. `rules_consumed` remains the revision audit required by reservation
+revalidation, including callers that reserve without scheduler admission. Neither attempts
+nor live rules authority survive restart.
+
+A legitimate move is both announced through `main_changed` and verified by reading actual
+HEAD under the still-held main lock and a Git lease. Preflight suppresses `main_moved` only
+when that HEAD equals the announced commit and differs from the reserved main, neither
+integrity owner is suspect, availability remains confirmed, no person intent/action exists,
+and the reservation is still current after the read. Otherwise the existing terminal path
+runs. Unannounced snapshot/HEAD moves keep their terminal `main_moved` behavior, including
+`evaluate`'s existing branch; neither `revalidate` nor `rules_tree` changes its codes.
+
+The successful queue path sets a private decision-number marker as its final synchronous
+step, without publishing a terminal or retargeting the reservation. `invalidate` clears the
+marker for person takeover, mode disable, close, terminal acknowledgement, resolution and
+new proposals; cancellation clears it too. Only `_decide`'s done callback, after the old task
+and verified recovery finish and `preemption.restore` retires that owner, calls
+`decision_finished`. Its guards require the same unfinished target, ready state, no rules
+owner or person action, unchanged mode/authority, and no close, resolution, rejected delivery
+or suspect state. It clears the marker before checking whether renewal is still eligible.
+
+The replacement is explicitly active, with a new private generation and the live graph's
+main, parked when the latest announced commit has not reached the graph. It carries only
+immutable proposal-source captures with retained receipts for the same revision/base/head;
+latest assessment, spend pin, tasks and terminal state reset. Parked waits are exempt from
+the attempt-key clause so an old snapshot's consumed key cannot invalidate their deadline.
+They can neither evaluate nor admit until graph delivery retargets a new generation. The
+first absolute deadline is never extended: a long queue may renew directly into one EXPIRED
+policy_invalid notice, without any assessment or admission.
+
+Renewal only schedules assessment through the unchanged admission path. Every transaction
+already remeasures its combined candidate, including protected paths, and executes a fresh
+combined suite; spend is sampled from durable truth at every guard. A pending merge's suite
+identifies `tested_tree`; `tested_commit` is None because that tree is not yet HEAD's tree
+(coordinator ruling, 2026-10-31 19:40 ART). Its definitive assessment identifies the new main.
+Every in-flight outcome closes following: merge, conflict, failed suite, F4 veto, integrity
+failure, out-of-band HEAD move or cancellation. The main lock still spans suite, effect and
+recovery, so managed saves and Revert queue behind it.
+
+No new task cancellation is added. F5a's park cancellation remains unchanged: production
+terminal publication completes through ReviewCards.publish -> ctx.whole under the cards
+lock; cards-None scheduler harnesses lack that protection. Queued rules owners are inactive
+waits and main moves never cancel them. F6 person intent wins before renewal and during the
+renewed evaluation, without changing preemption. Revert's landed success/receipt hooks
+announce its verified inverse commit and deliver the graph before queued work renews.
+The activation latch stays closed; no wire contract, event type, public field, route or response
+body changes.

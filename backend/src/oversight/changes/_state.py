@@ -102,6 +102,11 @@ class ChangeRecord:
     revision: int = 0
     proposal_mode: MergeModeState | None = None
     rules_consumed: set[int] = field(default_factory=set[int])
+    rules_attempts: set[tuple[int, str, str, int]] = field(
+        default_factory=set[tuple[int, str, str, int]]
+    )
+    """The exact revision/head/main/mode keys tried; rules_consumed remains audit history."""
+    follow_pending: int | None = None
     head_commit: str | None = None
     """The head of the last revision the store took."""
     proposed_now: bool = False
