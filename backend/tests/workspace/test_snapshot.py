@@ -273,6 +273,7 @@ def test_nt_metadata_budgets(tmp_path, monkeypatch, failure):
     path.write_bytes(b"12345")
     monkeypatch.setattr(module, "MAX_FILE", 4)
     monkeypatch.setattr(module, "MAX_INDEX", 6)
+    # Five seconds suffices for the five-byte setup read; the timeout case expires it below.
     deadline = time.monotonic() + 5
     if failure == "index":
         entry = read_entry(path, Budget(deadline))
