@@ -281,6 +281,8 @@ async def test_unavailable_or_cancelled_review_keeps_path_wait(tmp_path, review)
         await reviewer.entered.wait()
         await asyncio.gather(*list(live._reviews.values()), return_exceptions=True)
         w = live._manager._ctx.assessment.waits["change-1"]
+        assert w.task is not None
+        await w.task
         assert w.latest is not None
         assert any(r.rule == "protected_paths" and r.result == "fail" for r in w.latest.rules)
         assert live._manager._agents["agent-1"].state == "ready"
