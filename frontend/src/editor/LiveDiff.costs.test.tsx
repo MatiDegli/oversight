@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 
 import { AgentCard, selectAgentCard } from "../agents";
-import { ChangeFactsRow, ReviewPanel } from "../review";
+import { ChangeFactsRow, loadReviewPanel } from "../review";
 import { applyEvent, createInitialState, costText } from "../state";
 
 vi.mock("../state", async (importOriginal) => ({
@@ -13,6 +13,8 @@ vi.mock("../state", async (importOriginal) => ({
   costText: vi.fn(() => "Shared cost wording"),
 }));
 vi.mock("./monaco", () => ({ monaco: { editor: {} } }));
+
+const { ReviewPanel } = await loadReviewPanel();
 
 const events = readFileSync(
   new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),

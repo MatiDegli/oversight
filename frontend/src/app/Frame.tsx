@@ -8,7 +8,7 @@ import { panelOpen } from "./view";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
-import type { MergeModeAttempt } from "./shell/SettingsPanel";
+import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { FocusPanel } from "./shell/FocusPanel";
 import { GraphStage } from "./shell/GraphStage";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";

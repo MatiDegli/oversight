@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it, vi } from "vitest";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
+import { beforeAll, expect, it, vi } from "vitest";
 import { PhonePractice } from "./PhonePractice";
 import { diffPreview, PhoneReview } from "./PhoneReview";
 import { PhoneDiff } from "./PhoneDiff";
@@ -17,6 +17,25 @@ const actions = {
   onRestart: vi.fn(),
   onExit: vi.fn(),
 };
+it("omits the busy attribute from the idle Start practice button", () => {
+  const html = renderToStaticMarkup(
+    <PhonePractice {...actions} practice={practice} attempt={freshAttempt()} />,
+  );
+  expect(html).not.toContain("aria-busy");
+  expect(html).toContain("Start practice");
+});
+// Settle the lazy evidence before synchronous markup assertions, keeping every assertion intact.
+beforeAll(async () => {
+  const stream = await renderToReadableStream(
+    <PhonePractice
+      {...actions}
+      practice={practice}
+      attempt={{ ...freshAttempt(), started: true }}
+    />,
+  );
+  await stream.allReady;
+  await new Response(stream).text();
+});
 it.each([false, true])("lists per-agent impact counts without zeros (merged: %s)", (merged) => {
   const html = renderToStaticMarkup(<PhoneGraph practice={practice} merged={merged} />);
   expect(html).toContain('class="pp-graph-foot">A: 9 possibly affected, B: none</p>');
