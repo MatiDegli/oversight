@@ -155,13 +155,14 @@ Required isolation is passed by `changes/_probes.py:_run`, `_merge.py:combined_t
 suite execution and retain unknown facts with an unavailable diagnostic. Required refuses before
 suite capture or execution; it never falls back. `changes/_mode.py:start_capability` and
 `_revert_port.py:RevertPort.revert` consult rules_available before admitting rules or Revert.
-Rules activation is still closed by `RULES_ACTIVATION = False`; wired capability checks do not
-mean automatic merges are enabled.
+Rules activation is open (`RULES_ACTIVATION = True`). Each fresh run starts in Ask me; explicit
+rules selection still requires this session's C and all other start conditions. Later evidence
+and transaction guards remain mandatory; clean rules merges offer person-only Revert.
 
 A session born without C never enables C later, rules, their probes or Revert. Ask me needs
 no acceptance step: startup emits a log warning and an existing nonfatal `error` event from
 `tests`, explaining that tests retain network access and rules/probes/Revert stay disabled.
-Settings presentation belongs to the later UI wiring. A session born with C never selects the
+Settings shows the server's refusal verbatim. A session born with C never selects the
 open runner, including after invalidation. Only failed isolation effect/entry/cleanup evidence
 invalidates C; ordinary suite failures, timeouts and artifact vetoes do not. Git metadata
 changes use C2b's rules_suspended latch, without invalidating C after verified restoration.
