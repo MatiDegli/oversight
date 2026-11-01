@@ -3,7 +3,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
 
-from oversight.agents import AgentTask, RunEnd
+from oversight.agents import AgentTask, RunEnd, task_examples
 from oversight.changes import _delivery as delivery
 from oversight.changes._behavior import probe_behavior, unavailable_behavior
 from oversight.changes._behavior_publish import capture_behavior
@@ -271,6 +271,7 @@ async def proposal(
         agent_id=rec.agent_id,
         revision=rec.revision + 1,
         task=rec.task.task,
+        examples=task_examples(rec.task.examples),
         summary=summary,
         base_commit=rec.base_commit,
         head_commit=head,

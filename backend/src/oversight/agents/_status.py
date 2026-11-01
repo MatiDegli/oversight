@@ -1,7 +1,12 @@
 """Pure server-owned coding-agent provenance checks."""
 
+import json
+from collections.abc import Sequence
+
+from oversight.agents._examples_validate import canonical_json
 from oversight_contracts.decisions import DecisionRef
 from oversight_contracts.events import AgentStatus
+from oversight_contracts.examples import TaskExample
 from oversight_contracts.plans import PlanZone
 
 
@@ -34,3 +39,39 @@ def validate_agent_status(
         raise ValueError("agent status answering differs from server registration")
     if not base_commit:
         raise ValueError("live coding-agent status requires its recorded base")
+
+
+def validate_task_examples(
+    examples: Sequence[TaskExample], source_task: str
+) -> tuple[TaskExample, ...]:
+    """Keep task construction small; only detached human pins for this original task survive."""
+    if len(examples) > 5 or any(
+        example.pin is None
+        or example.pin.confirmed_by != "person"
+        or example.pin.source_task != source_task
+        for example in examples
+    ):
+        raise ValueError("AgentTask requires at most five examples confirmed by this task's person")
+    return tuple(example.model_copy(deep=True) for example in examples)
+
+
+def task_examples(examples: Sequence[TaskExample]) -> list[TaskExample] | None:
+    """Detach event contents from the retained task; empty tasks keep their original wire form."""
+    return [example.model_copy(deep=True) for example in examples] if examples else None
+
+
+def done_when_text(examples: Sequence[TaskExample]) -> str:
+    """One deterministic model instruction block, without executable criteria or test ids."""
+    if not examples:
+        return ""
+    lines = ["Done when: the person confirmed these exact results."]
+    for example in examples:
+        lines.extend(
+            (
+                f"Example {example.example_id}",
+                f"Inputs: {example.inputs}",
+                f"Expected output: {canonical_json(json.loads(example.expected_output or 'null'))}",
+                f"Note: {example.note or ''}",
+            )
+        )
+    return "\n".join(lines)

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -21,6 +22,7 @@ from oversight.changes import (
     queued,
     refusal_state,
 )
+from oversight.resources import is_hold
 from oversight_contracts.commands import AgentCreated, EnqueueTask, QueueRevision, StartAgent
 from oversight_contracts.events import ModelProfile
 from oversight_contracts.plans import Plan, PlanZone
@@ -28,6 +30,8 @@ from oversight_contracts.queue import QueuedTask
 
 if TYPE_CHECKING:
     from oversight.app import LiveRun
+
+MEMORY_RECHECK_S = 5.0
 
 
 @dataclass(frozen=True)
@@ -50,6 +54,7 @@ class Dispatcher:
         self._outcomes: list[tuple[str, Literal["merged", "rejected"]]] = []
         self._task: asyncio.Task[None] | None = None
         self._closed = False
+        self._held: bool = False
         self._count = 0
 
     def start(self) -> None:
@@ -145,6 +150,8 @@ class Dispatcher:
     async def _refused(
         self, item: QueuedTask, error: ApiError, *, launch_failed: bool = False
     ) -> None:
+        if is_hold(error.message):
+            self._held = True
         if item.plan_id is None and error.code == "slot_busy":
             return
         state = refusal_state(item, error.code, launch_failed=launch_failed)
@@ -196,6 +203,7 @@ class Dispatcher:
                 self.live._slots[admission.task.slot] = None
 
     async def _select(self) -> tuple[QueuedTask, list[tuple[int | None, Admission]]] | None:
+        self._held = False
         while self._outcomes:
             agent_id, outcome = self._outcomes[0]
             await self.live._finish(self._settle(agent_id, outcome))
@@ -287,11 +295,15 @@ class Dispatcher:
             self._release_reservations(remaining)
             self.launching.discard(item.queued_task_id)
 
+    async def _wait(self) -> None:
+        with suppress(TimeoutError):
+            await asyncio.wait_for(self.wake.wait(), MEMORY_RECHECK_S if self._held else None)
+        self.wake.clear()
+
     async def _run(self) -> None:
         try:
             while not self._closed:
-                await self.wake.wait()
-                self.wake.clear()
+                await self._wait()
                 while not self._closed:
                     async with self.queue_lock:
                         selected = await self._select()
