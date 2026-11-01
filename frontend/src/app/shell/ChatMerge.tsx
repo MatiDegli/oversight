@@ -89,11 +89,9 @@ export function ChatMergeReceipt({
             {resolution.merge_commit && (
               <span className="chat-merge-commit">
                 Merged into main{" "}
-                <span
-                  title={resolution.merge_commit}
-                  aria-label={`Commit ${resolution.merge_commit}`}
-                >
-                  {resolution.merge_commit.slice(0, 7)}
+                <span title={resolution.merge_commit}>
+                  <span aria-hidden="true">{resolution.merge_commit.slice(0, 7)}</span>
+                  <span className="sr-only">Commit {resolution.merge_commit}</span>
                 </span>
               </span>
             )}

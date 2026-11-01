@@ -208,6 +208,10 @@ it("keeps the receipt readable when matching review evidence is unavailable", as
   const { page } = await open();
   try {
     await receipt(page).getByRole("button", { name: "Open its review" }).waitFor();
+    const commit = receipt(page).locator(".chat-merge-commit > span");
+    const fullCommit = await commit.getAttribute("title");
+    if (!fullCommit) throw new Error("Missing full merge commit");
+    expect(await receipt(page).ariaSnapshot()).toContain(`Merged into main Commit ${fullCommit}`);
     await page.evaluate(() => {
       window.chatMergeTest.removeProposal();
     });
