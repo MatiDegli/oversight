@@ -1,5 +1,6 @@
 import { TaskBox, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
+import { ChatAgents } from "./ChatAgents";
 import { slotUsage } from "../../agents/taskBox";
 import type { ReactNode } from "react";
 
@@ -22,10 +23,16 @@ export function ChatAgentsFrame({ state, children, ...selection }: ChatAgentsFra
     >
       <header>
         <h2>Agents</h2>
-        {count && <span>{count.held} of {count.total} running</span>}
+        {count && (
+          <span>
+            {count.held} of {count.total} running
+          </span>
+        )}
       </header>
       <div className="chat-side-body">
+        {/* Reserved first structural position for L3’s lead; empty in C2. */}
         {typeof children === "function" ? children(selection) : children}
+        <ChatAgents state={state} {...selection} />
       </div>
     </aside>
   );

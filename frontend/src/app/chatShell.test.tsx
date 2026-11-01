@@ -6,7 +6,7 @@ import { ChatAgentsFrame, ChatWorkFrame } from "./shell/ChatShell";
 import { through } from "./replay.fixture";
 import { initialView } from "./view";
 
-it("offers empty extension slots without inventing inactivity or compact agents", () => {
+it("fills agents while retaining the empty work extension slot", () => {
   const html = renderToStaticMarkup(
     <>
       <ChatAgentsFrame state={through(2)} selectedAgentId="agent-1" onOpenConversation={vi.fn()} />
@@ -16,8 +16,9 @@ it("offers empty extension slots without inventing inactivity or compact agents"
   expect(html).toContain('aria-label="Agents"');
   expect(html).toContain('data-selected-agent="agent-1"');
   expect(html).toContain('aria-label="Where they work"');
-  expect(html.match(/class="chat-side-body"><\/div>/g)).toHaveLength(2);
-  expect(html).not.toMatch(/Nobody|No agents|New task|article|avatar/);
+  expect(html.match(/class="chat-side-body"><\/div>/g)).toHaveLength(1);
+  expect(html).toContain("No agents yet. Each task you start gets its own letter and color.");
+  expect(html).not.toMatch(/Nobody|New task|article|avatar/);
 });
 it("initializes Chat only through the fixture context, with the real replay TaskBox", () => {
   const html = renderToStaticMarkup(
@@ -74,7 +75,11 @@ it("passes the selected agent and conversation callback to the C2 body slot", ()
   const onOpenConversation = vi.fn();
   const body = vi.fn(() => null);
   renderToStaticMarkup(
-    <ChatAgentsFrame state={through(2)} selectedAgentId="agent-1" onOpenConversation={onOpenConversation}>
+    <ChatAgentsFrame
+      state={through(2)}
+      selectedAgentId="agent-1"
+      onOpenConversation={onOpenConversation}
+    >
       {body}
     </ChatAgentsFrame>,
   );
