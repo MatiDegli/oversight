@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { expect as check, type Browser, type Page } from "@playwright/test";
+import { expect as check, type Browser, type Locator, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
@@ -52,6 +52,88 @@ const row = (page: Page, letter: string) =>
   });
 const view = (page: Page, name: string) =>
   page.getByRole("group", { name: "Workspace view" }).getByRole("button", { name, exact: true });
+async function identityContrast(page: Page, agent: Locator) {
+  const samples = await agent.evaluate((el) =>
+    [".chat-agent-badge", ".chat-agent-pill"].map((selector) => {
+      const target = el.querySelector(selector);
+      if (!target) throw new Error("Missing identity text");
+      const rect = target.getBoundingClientRect();
+      return {
+        color: getComputedStyle(target).color,
+        x: rect.x + (selector.endsWith("badge") ? 18 : 5),
+        y: rect.y + (selector.endsWith("badge") ? 5 : rect.height / 2),
+      };
+    }),
+  );
+  const png = (await page.screenshot()).toString("base64");
+  return page.evaluate(
+    async ({ png, samples }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${png}`;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.width;
+      canvas.height = image.height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Missing contrast canvas");
+      const luminance = (rgba: Uint8ClampedArray) =>
+        [0.2126, 0.7152, 0.0722].reduce((sum, weight, index) => {
+          const value = (rgba[index] ?? 0) / 255;
+          return (
+            sum + weight * (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4)
+          );
+        }, 0);
+      return samples.map(({ x, y, color }) => {
+        context.drawImage(image, 0, 0);
+        const background = luminance(context.getImageData(Math.round(x), Math.round(y), 1, 1).data);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const foreground = luminance(context.getImageData(0, 0, 1, 1).data);
+        return (
+          (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05)
+        );
+      });
+    },
+    { png, samples },
+  );
+}
+it("keeps every team badge and active pill above AA contrast on selected rows in both themes", async () => {
+  const page = await open("working", 1280);
+  const readings: { theme: string; letter: string; ratios: number[] }[] = [];
+  try {
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      ["C", "D", "E", "F"].map((letter) => status(`contrast-${letter}`)),
+    );
+    for (const theme of ["dark", "day"]) {
+      await page.evaluate((theme) => {
+        document.documentElement.dataset.theme = theme;
+      }, theme);
+      for (const letter of ["A", "B", "C", "D", "E", "F"]) {
+        const agent = row(page, letter);
+        await agent.click();
+        await check(agent).toHaveAttribute("aria-pressed", "true");
+        const ratios = await identityContrast(page, agent);
+        readings.push({ theme, letter, ratios });
+        for (const ratio of ratios) {
+          expect(ratio, `${theme} Agent ${letter}`).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+    if (process.env.CHAT_AGENTS_SHOTS === "1") {
+      const directory = new URL("../../../.shots/chat-agents/", import.meta.url);
+      await mkdir(fileURLToPath(directory), { recursive: true });
+      await writeFile(
+        new URL("identity-contrast.json", directory),
+        JSON.stringify(readings, null, 2),
+      );
+    }
+  } finally {
+    await page.close();
+  }
+});
 it("activates A/B conversations and command targets, with focus separate from selection", async () => {
   const page = await open();
   try {
