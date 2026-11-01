@@ -5,10 +5,13 @@ import { getActiveTheme } from "../theme";
 import { fitPanelCamera, frameCamera, prefersReducedMotion, startCamera, zoomBy } from "./camera";
 import type { Camera } from "./camera";
 import type { GraphElement } from "./elements";
+import { packFallback } from "./fallbackLayout";
+import { FIT_PADDING } from "./geometry";
 import type { GraphViewProps } from "./GraphView";
 import type { MapFrame } from "./MapLayer";
 import { MAP_MIN_MODULES, nextLevel, targetLevel } from "./mapLevel";
 import { mapModel, panelBox } from "./mapModel";
+import { settle } from "./updateGraph";
 
 /** Measure only after GraphView's font gate; fitting and drawing then share header bounds. */
 function measureHeaders(model: MapFrame["model"]) {
@@ -64,7 +67,6 @@ function createMapController(
     latest.current.onMapLevel?.(level);
     frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() } };
     cy.autoungrabify(level === "map");
-    cy.autounselectify(level === "map");
     cy.boxSelectionEnabled(false);
     if (level === "map") {
       for (const node of cy.nodes().filter((n) => !n.pannable())) {
@@ -201,14 +203,26 @@ let fallbackLayout: Promise<void> | undefined;
 let fallbackReady = false;
 const failedLayouts = new WeakSet<Core>();
 
+/** Replace only this graph's provisional layout, once, after a successful solver retry. */
+function recoverLayout(cy: Core) {
+  if (cy.destroyed() || !failedLayouts.delete(cy)) return;
+  const options = { name: "fcose", animate: false, fit: true, padding: FIT_PADDING };
+  cy.layout(options).run();
+  packFallback(cy, getActiveTheme());
+  settle(cy);
+}
+
 /** Presets need no solver download. Wait for fcose only before a graph's first unplaced nodes. */
 export function prepareGraphLayout(
   cy: Core,
   elements: readonly GraphElement[],
   retry: (fallback?: GraphElement[]) => void,
 ) {
+  if (fallbackReady) {
+    recoverLayout(cy);
+    return true;
+  }
   if (
-    fallbackReady ||
     (cy.nodes().nonempty() && !failedLayouts.has(cy)) ||
     elements.some((e) => e.position !== undefined)
   )
@@ -220,21 +234,28 @@ export function prepareGraphLayout(
   });
   void fallbackLayout.then(
     () => {
-      failedLayouts.delete(cy);
-      if (!cy.destroyed()) retry();
+      if (!cy.destroyed()) {
+        retry();
+        recoverLayout(cy);
+      }
     },
     () => {
       fallbackLayout = undefined;
       failedLayouts.add(cy);
       // Draw a provisional grid without mutating the cached snapshot or caching the rejection.
       // A later sync retries the solver even though this graph now has visible nodes.
-      if (!cy.destroyed())
+      if (!cy.destroyed()) {
+        let root = 0;
         retry(
-          elements.map((e, i) => ({
-            ...e,
-            position: { x: (i % 9) * 446, y: Math.floor(i / 9) * 220 },
-          })),
+          elements.map((e) => {
+            if (e.group !== "nodes" || e.data.parent) return e;
+            const i = root++;
+            return { ...e, position: { x: (i % 9) * 446, y: Math.floor(i / 9) * 220 } };
+          }),
         );
+        packFallback(cy, getActiveTheme());
+        settle(cy);
+      }
     },
   );
   return false;

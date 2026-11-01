@@ -2,10 +2,11 @@
 import type { GraphNode, GraphSnapshot, ServerEvent } from "@contracts";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { useSyncExternalStore } from "react";
+import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import { Frame } from "./Frame";
 import { initialView } from "./view";
+import type { View } from "./view";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import demo from "../../../fixtures/graph/demo-repo.json";
 import demoPositions from "../../../fixtures/layouts/demo-repo.json";
@@ -156,12 +157,19 @@ function mapEvents(graph: GraphSnapshot, name: string): ServerEvent[] {
   return events;
 }
 let root: Root | undefined;
+let selectNode: (id: string | null) => void;
 function Harness() {
   const state = useSyncExternalStore(stateStore.subscribe, () => stateStore.getState().state);
+  const [view, setView] = useState<View>(initialView);
+  useLayoutEffect(() => {
+    selectNode = (selected) => {
+      setView((current) => ({ ...current, selected }));
+    };
+  }, []);
   return (
     <Frame
       state={state}
-      view={initialView}
+      view={view}
       onNodeTap={() => undefined}
       canOpenChange={() => false}
       onOpenChange={() => undefined}
@@ -192,6 +200,11 @@ export function mapTick() {
     stateStore.setState({ state: { ...state, clock: "2026-10-31T21:52:00Z" } });
   });
 }
+export function mapSelect(id: string | null) {
+  flushSync(() => {
+    selectNode(id);
+  });
+}
 declare global {
   interface Window {
     mapTest: {
@@ -199,6 +212,7 @@ declare global {
       sized: typeof mountMapSize;
       demo: typeof mountMapDemo;
       tick: typeof mapTick;
+      select: typeof mapSelect;
     };
   }
 }

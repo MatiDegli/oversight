@@ -29,7 +29,7 @@ function elements(): GraphElement[] {
     }),
   );
 }
-it("carries named folder labels into panel headers without the folder prefix", () => {
+it("uses folder ids as panel labels without adding label data to graph elements", () => {
   const nodes = Array.from({ length: 14 }, (_, i) => ({
     id: String(i),
     path: i < 13 ? `lib/${String(i)}.py` : "docs/conf.py",
@@ -42,10 +42,7 @@ it("carries named folder labels into panel headers without the folder prefix", (
     start_line: 1,
     end_line: 1,
   }));
-  const groups = folderGroups(
-    nodes,
-    new Map([["lib", [{ label: "Text", moduleIds: ["0", "1"] }]]]),
-  );
+  const groups = folderGroups(nodes);
   const drawn = groups.flatMap((group) =>
     group.moduleIds.map((id, i) => ({
       group: "nodes" as const,
@@ -53,7 +50,6 @@ it("carries named folder labels into panel headers without the folder prefix", (
         id,
         kind: "module" as const,
         group: group.id,
-        groupLabel: group.label,
         title: `${id}.py`,
       },
       position: { x: i * 500, y: 0 },
@@ -61,12 +57,11 @@ it("carries named folder labels into panel headers without the folder prefix", (
     })),
   );
   const model = mapModel(drawn, themes.dark);
-  expect(model.groups.find((group) => group.id === "lib/Text")?.label).toBe("Text");
+  expect(model.groups.find((group) => group.id === "lib")?.label).toBe("lib");
   const markup = renderToStaticMarkup(
     MapLayer({ frame: { model, level: "map", zoom: 0.3, pan: { x: 0, y: 0 } } }),
   );
-  expect(markup).toContain(">Text<");
-  expect(markup).not.toContain(">lib/Text<");
+  expect(markup).toContain(">lib<");
 });
 it("keeps circles equal, counts functions, and shows pending marks per slot only", () => {
   const nodes = elements();
@@ -121,7 +116,7 @@ it("assigns groups only to drawn modules and keeps tests hidden", () => {
     },
   };
   const drawn = graphElements(state);
-  expect(drawn.find((element) => element.data.id === "lib/a.py")?.data.groupLabel).toBe("lib");
+  for (const element of drawn) expect(element.data).not.toHaveProperty("groupLabel");
   expect(drawn.map((e) => [e.data.id, e.data.group])).toEqual([
     ["lib/a.py", "lib"],
     ["lib/b.py", "lib"],

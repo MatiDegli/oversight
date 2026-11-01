@@ -17,7 +17,6 @@ export interface GraphElement {
     id: string;
     kind: GraphNode["kind"] | GraphEdge["kind"];
     group?: string;
-    groupLabel?: string;
     label?: string;
     callCount?: number;
     exactCount?: number;
@@ -226,9 +225,7 @@ export function graphElements(
       data: {
         id: node.id,
         kind: node.kind,
-        ...(groups.has(node.id)
-          ? { group: groups.get(node.id)?.id, groupLabel: groups.get(node.id)?.label }
-          : {}),
+        ...(groups.has(node.id) ? { group: groups.get(node.id)?.id } : {}),
         ...(distance !== undefined ? { distance } : {}),
         ...(word ? { measured: word } : {}),
         label: node.name,

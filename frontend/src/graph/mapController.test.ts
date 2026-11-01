@@ -51,6 +51,23 @@ it("draws nodes after a rejected solver load and retries on the next sync", asyn
     data: { id: `module-${String(i)}`, kind: "module", title: `module-${String(i)}` },
     classes: "module",
   }));
+  nodes.push(
+    {
+      group: "nodes",
+      data: { id: "row", kind: "function", parent: "module-0" },
+      classes: "function",
+    },
+    {
+      group: "nodes",
+      data: { id: "row-2", kind: "function", parent: "module-0" },
+      classes: "function",
+    },
+    {
+      group: "edges",
+      data: { id: "call", kind: "calls", source: "row", target: "module-1" },
+      classes: "calls",
+    },
+  );
   try {
     const draw = vi.fn((fallback?: GraphElement[]) => {
       if (fallback) updateGraph(cy, fallback);
@@ -59,18 +76,27 @@ it("draws nodes after a rejected solver load and retries on the next sync", asyn
     await vi.waitFor(() => {
       expect(draw).toHaveBeenCalledOnce();
     });
-    expect(cy.nodes()).toHaveLength(2);
-    expect(new Set(cy.nodes().map((n) => JSON.stringify(n.position()))).size).toBe(2);
+    expect(cy.nodes()).toHaveLength(4);
+    expect(new Set(cy.nodes(":orphan").map((n) => JSON.stringify(n.position()))).size).toBe(2);
+    const fallback = draw.mock.calls[0]?.[0];
+    expect(fallback?.filter((e) => e.position).map((e) => e.data.id)).toEqual([
+      "module-0",
+      "module-1",
+    ]);
     expect(nodes.every((node) => node.position === undefined)).toBe(true);
     vi.doMock("cytoscape-fcose", () => vi.importActual("cytoscape-fcose"));
+    const provisional = cy.nodes().map((node) => ({ ...node.position() }));
+    const layout = vi.spyOn(cy, "layout");
     const retry = vi.fn();
     expect(prepare(cy, nodes, retry)).toBe(false);
     await vi.waitFor(() => {
       expect(retry).toHaveBeenCalledOnce();
     });
+    expect(layout).toHaveBeenCalledWith(expect.objectContaining({ name: "fcose" }));
+    expect(cy.nodes().map((node) => node.position())).not.toEqual(provisional);
+    const count = layout.mock.calls.length;
     expect(prepare(cy, nodes, retry)).toBe(true);
-    const layout = { name: "fcose", animate: false };
-    expect(() => cy.layout(layout).run()).not.toThrow();
+    expect(layout).toHaveBeenCalledTimes(count);
   } finally {
     cy.destroy();
     vi.doUnmock("cytoscape-fcose");

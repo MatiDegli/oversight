@@ -21,7 +21,7 @@ beforeAll(async () => {
   });
   html = await server.transformIndexHtml(
     "/",
-    '<html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { mountMap, mountMapSize, mountMapDemo, mapTick } from "/src/app/map.browser.fixture.tsx"; window.mapTest = { mount: mountMap, sized: mountMapSize, demo: mountMapDemo, tick: mapTick };</script></body></html>',
+    '<html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { mountMap, mountMapSize, mountMapDemo, mapTick, mapSelect } from "/src/app/map.browser.fixture.tsx"; window.mapTest = { mount: mountMap, sized: mountMapSize, demo: mountMapDemo, tick: mapTick, select: mapSelect };</script></body></html>',
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
@@ -219,6 +219,40 @@ it("uses hysteresis in both directions and preserves focus and camera on events"
     expect(await level(page)).toBe("cards");
   }, null);
 });
+it.each(["synthetic", ...(boltons ? ["boltons"] : [])])(
+  "keeps selection current on %s cards after a map visit without a store event",
+  async (kind) => {
+    await withMap(
+      async (page) => {
+        const ids = await page.evaluate(() =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.nodeCenters(".module")
+            .map((node) => node.id),
+        );
+        if (!ids || ids.length < 2) throw new Error("Missing modules");
+        const selected = () =>
+          page.evaluate(() =>
+            document
+              .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+              ?.oversightGraph?.nodeCenters(":selected")
+              .map((node) => node.id),
+          );
+        for (const id of [ids[0], ids[1], null]) {
+          await zoomTo(page, 0.3);
+          expect(await level(page)).toBe("map");
+          await page.evaluate((id) => {
+            window.mapTest.select(id ?? null);
+          }, id);
+          await zoomTo(page, 0.7);
+          expect(await level(page)).toBe("cards");
+          expect(await selected()).toEqual(id === null ? [] : [id]);
+        }
+      },
+      kind === "boltons" ? boltons : null,
+    );
+  },
+);
 it("preserves the routing omissions notice after visiting the map", async () => {
   await withMap(async (page) => {
     await zoomTo(page, 0.7);
@@ -474,10 +508,11 @@ async function captureCrossfade(page: Page, suffix: string) {
   );
   expect(opacity[0]).toBeCloseTo(0.5, 2);
   expect(opacity[1]).toBeCloseTo(0.5, 2);
-  await page.screenshot({ path: `${shots}cross${suffix}`, animations: "allow" });
+  if (process.env.MAP_SHOTS === "1")
+    await page.screenshot({ path: `${shots}cross${suffix}`, animations: "allow" });
 }
 
-describe.skipIf(process.env.MAP_SHOTS !== "1" || !boltons)("approved map captures", () => {
+describe.skipIf(!boltons)("approved map states and optional captures", () => {
   for (const [width, height] of [
     [1920, 1080],
     [1280, 800],
@@ -490,13 +525,23 @@ describe.skipIf(process.env.MAP_SHOTS !== "1" || !boltons)("approved map capture
             await page.getByRole("button", { name: "Fit the graph to the view" }).click();
             await ready(page);
             await zoomTo(page, width === 1280 ? 0.2 : 0.3);
-            await page.screenshot({ path: `${shots}map${suffix}` });
+            expect(await level(page)).toBe("map");
+            await check(page.getByLabel("Zoom percentage")).toContainText("Map");
+            await check(page.getByRole("img", { name: "Repository graph" })).toHaveCSS(
+              "opacity",
+              "0",
+            );
+            await check(page.locator(".map-layer")).toContainText("Agent A · 1 changed");
+            await check(page.locator(".map-layer")).toContainText("Agent B · editing");
+            if (process.env.MAP_SHOTS === "1")
+              await page.screenshot({ path: `${shots}map${suffix}` });
             await page.getByRole("button", { name: "Modules", exact: true }).click();
             await ready(page);
             await page.getByRole("button", { name: "Fit the graph to the view" }).click();
             await ready(page);
             await assertPanels(page);
-            await page.screenshot({ path: `${shots}fit-notests${suffix}` });
+            if (process.env.MAP_SHOTS === "1")
+              await page.screenshot({ path: `${shots}fit-notests${suffix}` });
             const fit = await page.evaluate(() => ({
               zoom: document
                 .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
@@ -523,10 +568,11 @@ describe.skipIf(process.env.MAP_SHOTS !== "1" || !boltons)("approved map capture
                 );
               })(),
             }));
-            await writeFile(
-              `${shots}fit-${String(width)}-${theme}.json`,
-              JSON.stringify(fit, null, 2),
-            );
+            if (process.env.MAP_SHOTS === "1")
+              await writeFile(
+                `${shots}fit-${String(width)}-${theme}.json`,
+                JSON.stringify(fit, null, 2),
+              );
             await captureCrossfade(page, suffix);
             await page.emulateMedia({ reducedMotion: "reduce" });
             await page.evaluate(() => {
@@ -537,7 +583,8 @@ describe.skipIf(process.env.MAP_SHOTS !== "1" || !boltons)("approved map capture
             await ready(page);
             await page.getByRole("button", { name: "Modules", exact: true }).click();
             await ready(page);
-            await page.screenshot({ path: `${shots}demo${suffix}` });
+            if (process.env.MAP_SHOTS === "1")
+              await page.screenshot({ path: `${shots}demo${suffix}` });
             expect(await level(page)).toBe("cards");
             await check(page.getByLabel("Zoom percentage")).not.toContainText("Map");
           },
