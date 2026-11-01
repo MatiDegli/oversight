@@ -229,3 +229,109 @@ def test_import_preserves_linux_reexports_and_verdict():
     assert demo_check.GRACEFUL_EXITS == (0, -15)
     assert demo_check.check_level2.__module__ == "demo_check_phases"
     assert demo_check.start_agent.__module__ == "demo_check_phases"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("fail", [False, True])
+async def test_three_runs_share_runtime_and_use_the_full_driver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail: bool
+):
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    outer_checks: list[int] = []
+    runtimes: list[Path] = []
+    phases: list[str] = []
+    first = object()
+
+    async def start(argv, env, log):
+        assert argv[-1] == "serve" and env["META_API_KEY"] == ""
+        assert env["BASETEN_API_KEY"] == "" and env["OVERSIGHT_CROSS_REVIEW"] == "false"
+        assert env["OVERSIGHT_WORKSPACE_SOURCE"] == ""
+        assert env["OVERSIGHT_AGENT_MODEL_B"] == env["OVERSIGHT_AGENT_MODEL"] == "fake"
+        runtimes.append(Path(env["OVERSIGHT_RUNTIME_DIR"]))
+        jobs = FakeJobs()
+        log.write_text("Application shutdown complete")
+        return nt.Server(77, log, jobs.api, cast(Any, Child()))
+
+    async def stop(self, *args):
+        phases.append("stop")
+
+    def decide(base, previous, clock, number, runtime):
+        assert previous is (None if number == 1 else first)
+        phases.append("full level2")
+        if fail:
+            raise smoke.SmokeError("phase failed")
+        return first
+
+    async def lock(runtime):
+        assert phases[-1] == "stop"
+        phases.append("lock")
+
+    async def members(job, jobs, expected=()):
+        assert expected == (os.getpid(),)
+        outer_checks.append(job)
+
+    monkeypatch.setenv("META_API_KEY", "environment-value")
+    monkeypatch.setenv("BASETEN_API_KEY", "environment-value")
+    monkeypatch.setenv("OVERSIGHT_WORKSPACE_SOURCE", "unwanted-source")
+    monkeypatch.setenv("OVERSIGHT_CROSS_REVIEW", "true")
+    monkeypatch.setattr(nt, "retain_outer", lambda: 99)
+    monkeypatch.setattr(nt, "evidence_dir", lambda: logs)
+    monkeypatch.setattr(nt, "start_server", start)
+    monkeypatch.setattr(nt.Server, "stop", stop)
+    monkeypatch.setattr(nt, "wait_members", members)
+    monkeypatch.setattr(nt, "probe_lock", lock)
+    monkeypatch.setattr(demo_check, "serve_and_decide", decide)
+    monkeypatch.setattr(smoke, "wait_for_health", lambda *a: None)
+    monkeypatch.setattr(Path, "is_file", lambda self: True)
+    cleaned: list[Path] = []
+    monkeypatch.setattr(nt, "cleanup", cleaned.append)
+    if fail:
+        with pytest.raises(smoke.SmokeError, match="phase failed"):
+            await nt.run_checks()
+        assert phases == ["full level2", "stop"] and not cleaned
+    else:
+        await nt.run_checks()
+        assert phases == ["full level2", "stop", "lock"] * 3
+        assert len(set(runtimes)) == 1 and outer_checks == [99] * 4
+        assert cleaned == [runtimes[0].parent]
+    # The injected cleanup deliberately kept scratch for inspection; remove it now.
+    nt.shutil.rmtree(runtimes[0].parent)
+
+
+def test_cleanup_exhaustion_is_visible_and_readonly_is_removed(tmp_path, monkeypatch):
+    directory = tmp_path / "readonly"
+    directory.mkdir()
+    file = directory / "object"
+    file.write_text("git object")
+    file.chmod(0o400)
+    nt.cleanup(directory)
+    assert not directory.exists()
+    calls = []
+
+    class Locked(PermissionError):
+        winerror = 32
+
+    def locked(*a, **kw):
+        calls.append(1)
+        raise Locked("locked directory")
+
+    monkeypatch.setattr(nt.shutil, "rmtree", locked)
+    monkeypatch.setattr(nt.time, "sleep", lambda delay: None)
+    with pytest.raises(PermissionError, match="locked directory"):
+        nt.cleanup(tmp_path)
+    assert len(calls) == 7
+
+
+@pytest.mark.anyio
+async def test_failed_termination_still_reaps_leader_and_retains_handle(tmp_path):
+    jobs, child = FakeJobs(), Child()
+
+    def broken(job):
+        raise OSError("termination failed")
+
+    api = nt.Jobs(terminate=broken, close=jobs.close)
+    server = nt.Server(77, tmp_path / "log", api, cast(Any, child))
+    with pytest.raises(OSError, match="termination failed"):
+        await server.dispose()
+    assert child.returncode is not None and "close" not in jobs.calls

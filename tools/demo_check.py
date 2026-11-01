@@ -241,6 +241,8 @@ def server_env(port: int, runtime_dir: Path) -> dict[str, str]:
         "OVERSIGHT_FAKE_SCRIPT": SCRIPTS["A"],
         "OVERSIGHT_FAKE_SCRIPT_B": SCRIPTS["B"],
         "OVERSIGHT_BUDGET_USD": str(BUDGET_USD),
+        "OVERSIGHT_CROSS_REVIEW": "false",
+        "OVERSIGHT_WORKSPACE_SOURCE": "",
     }
 
 

@@ -232,3 +232,21 @@ def test_a_backend_that_dies_is_reported(tmp_path: Path) -> None:
             smoke.wait_for_health("http://127.0.0.1:1", deadline_seconds=5, child=child)
     finally:
         smoke.stop_child(child)
+
+
+def test_nt_smoke_selects_shared_supervision_without_changing_posix_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import demo_check_nt as nt
+
+    called: list[tuple[int, bool]] = []
+
+    async def checks(runs: int, *, demo: bool) -> None:
+        called.append((runs, demo))
+
+    monkeypatch.setattr(nt, "run_checks", checks)
+    monkeypatch.setattr(smoke.sys, "platform", "win32")
+    smoke.run_smoke()
+    assert called == [(1, False)]
+    env = smoke.child_env(8000, tmp_path)
+    assert "META_API_KEY" not in env and "BASETEN_API_KEY" not in env

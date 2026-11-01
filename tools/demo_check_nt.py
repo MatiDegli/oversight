@@ -5,6 +5,7 @@ Native console exit evidence is required: the candidate SIGBREAK status below is
 claim of Windows acceptance. Linux-injected tests exercise policy, not the NT kernel.
 """
 
+import argparse
 import asyncio
 import errno
 import os
@@ -12,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import tempfile
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -19,7 +21,14 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import smoke
-from demo_check_io import STOP_DEADLINE
+from demo_check_io import (
+    OVERALL_MARGIN,
+    PER_RUN_DEADLINE,
+    RUNS,
+    START_DEADLINE,
+    STOP_DEADLINE,
+    OverallClock,
+)
 from oversight.workspace import (
     assign_job,
     close_job,
@@ -28,6 +37,7 @@ from oversight.workspace import (
     resume_suspended,
     terminate_job,
 )
+from oversight_contracts.commands import GraphResponse
 
 CREATE_FLAGS = 0x00000004 | 0x00000200  # CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP
 CTRL_BREAK = 1  # CTRL_BREAK_EVENT; no CREATE_NO_WINDOW and no signal handler in the server.
@@ -231,3 +241,112 @@ def cleanup(scratch: Path) -> None:
             if getattr(error, "winerror", None) not in {5, 32, 33} or delay is None:
                 raise
             time.sleep(delay)
+
+
+def evidence_dir() -> Path:
+    parent = os.environ.get("OVERSIGHT_NT_EVIDENCE_DIR")
+    if parent:
+        Path(parent).mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix="oversight-nt-evidence-", dir=parent))
+
+
+async def run_once(
+    number: int,
+    scratch: Path,
+    runtime: Path,
+    first: GraphResponse | None,
+    clock: OverallClock,
+    *,
+    demo: bool = True,
+) -> GraphResponse | None:
+    import demo_check
+
+    port = smoke.free_port()
+    base = smoke.base_url(port)
+    log = scratch / f"server-{number}.log"
+    server = await start_server(
+        [sys.executable, "-m", "oversight", *smoke.BACKEND_ARGS],
+        demo_check.server_env(port, runtime),
+        log,
+    )
+    assert server.child is not None
+    try:
+        clock.set_phase(f"run {number}: wait for /health")
+        await settled(
+            asyncio.to_thread(
+                smoke.wait_for_health,
+                base,
+                clock.bounded(START_DEADLINE),
+                server.child,
+            )
+        )
+        if demo:
+            first = await settled(
+                asyncio.to_thread(
+                    demo_check.serve_and_decide,
+                    base,
+                    first,
+                    clock,
+                    number,
+                    runtime,
+                )
+            )
+        else:
+            await settled(
+                asyncio.to_thread(smoke.wait_for_graph, base, clock.bounded(START_DEADLINE))
+            )
+    finally:
+        await settled(server.stop(max(0, min(STOP_DEADLINE, clock.remaining()))))
+    await wait_members(retain_outer(), JOBS, (os.getpid(),))
+    await probe_lock(runtime)
+    clock.check()
+    print(f"NT {'demo-check' if demo else 'smoke'}: run {number}: ok")
+    return first
+
+
+async def run_checks(runs: int = RUNS, *, demo: bool = True) -> None:
+    import demo_check
+
+    if demo and not (demo_check.DIST / "index.html").is_file():
+        raise smoke.SmokeError("build frontend/dist first with pnpm -C frontend build")
+    outer = retain_outer()
+    scratch = Path(tempfile.mkdtemp(prefix="oversight-nt-"))
+    runtime = (await asyncio.to_thread(scratch.resolve)) / ".runtime"
+    logs = evidence_dir()
+    print(f"NT evidence: {logs}; runtime: {runtime}", flush=True)
+    clock = OverallClock(deadline_s=runs * PER_RUN_DEADLINE + OVERALL_MARGIN)
+    first: GraphResponse | None = None
+    try:
+        for number in range(1, runs + 1):
+            first = await run_once(number, logs, runtime, first, clock, demo=demo)
+        clock.set_phase("cleanup")
+        await wait_members(outer, JOBS, (os.getpid(),))
+        await asyncio.to_thread(cleanup, scratch)
+    except BaseException:
+        print(f"NT failure: retained runtime {runtime} and logs {logs}", file=sys.stderr)
+        raise
+    print(f"NT check: ok: {runs} clean starts, no credits; logs {logs}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--probe-lock", type=Path, metavar="RUNTIME")
+    args = parser.parse_args()
+    try:
+        if sys.platform != "win32":
+            raise smoke.SmokeError("this driver requires native Windows")
+        if args.probe_lock is not None:
+            asyncio.run(probe_lock(args.probe_lock))
+            print("NT lock: released")
+        else:
+            asyncio.run(run_checks())
+    except (smoke.SmokeError, OSError, subprocess.SubprocessError) as error:
+        print(f"NT check: {error}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

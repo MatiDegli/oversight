@@ -226,6 +226,8 @@ def test_the_server_gets_no_provider_key_even_one_set_in_the_environment(
     assert env["OVERSIGHT_FAKE_SCRIPT"] == phases.SCRIPTS["A"]
     assert env["OVERSIGHT_FAKE_SCRIPT_B"] == phases.SCRIPTS["B"]
     assert float(env["OVERSIGHT_BUDGET_USD"]) == phases.BUDGET_USD
+    assert env["OVERSIGHT_CROSS_REVIEW"] == "false"
+    assert env["OVERSIGHT_WORKSPACE_SOURCE"] == ""
 
 
 def sample(kind: str, seq: int, **payload: Any) -> dict[str, Any]:
