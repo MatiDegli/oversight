@@ -3,9 +3,11 @@
 import configparser
 import os
 import re
+import stat
+import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from oversight.workspace.integrity import GitIdentity, IntegrityError
 from oversight.workspace.metadata_io import (
@@ -14,6 +16,7 @@ from oversight.workspace.metadata_io import (
     collect,
     directory,
     make_directory,
+    nt_guard,
     remove_directory,
     replace_file,
 )
@@ -45,8 +48,18 @@ class IntegrityState:
             )
 
 
-def _anchor(path: Path, deadline: float) -> tuple[int, int]:
+def _anchor(path: Path, deadline: float, *, file: bool = False) -> tuple[int, int]:
+    if sys.platform == "win32":
+        info = nt_guard(path, deadline)
+        if not (
+            stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+            if file
+            else stat.S_ISDIR(info.st_mode)
+        ):
+            raise IntegrityError("invalid Git snapshot anchor", str(path))
+        return info.st_dev, info.st_ino
     with directory(path, deadline) as fd:
+        assert isinstance(fd, int)
         info = os.fstat(fd)
         return info.st_dev, info.st_ino
 
@@ -72,7 +85,7 @@ def _unquote(value: str) -> str:
     return "".join(result)
 
 
-def _hooks_paths(config: bytes, root: Path) -> tuple[Path, ...]:
+def _hooks_paths(config: bytes, root: Path, *, runtime: Path | None = None) -> tuple[Path, ...]:
     """Read only simple local Git config, never ask Git to expand an include or a path.
 
     Server-created configs have no includes. Unknown/include syntax cannot be snapshotted
@@ -94,6 +107,18 @@ def _hooks_paths(config: bytes, root: Path) -> tuple[Path, ...]:
                 value = _unquote(value)
             if not value or value.startswith("~") or "\0" in value:
                 raise IntegrityError("unsupported Git hooksPath", "config")
+            if value == "/dev/null":
+                continue
+            if sys.platform == "win32":
+                if (
+                    runtime is None
+                    or value.endswith(("/", "\\"))
+                    or any(part in {".", ".."} for part in value.replace("\\", "/").split("/"))
+                    or PureWindowsPath(value) != PureWindowsPath(runtime / "server.lock/hooks")
+                ):
+                    raise IntegrityError("unsupported NT Git hooksPath", "config")
+                # Git's exact pinned child is below a held-open regular file. Never probe it.
+                continue
             path = Path(os.path.abspath(root / value))
             if path != Path("/dev/null"):
                 paths.append(path)
@@ -101,7 +126,12 @@ def _hooks_paths(config: bytes, root: Path) -> tuple[Path, ...]:
 
 
 def _is_ref(path: Path, common: Path) -> bool:
-    return path.name in {
+    name = path.name
+    if sys.platform == "win32":
+        name = name.upper()
+        if name == "PACKED-REFS":
+            name = "packed-refs"
+    return name in {
         "HEAD",
         "ORIG_HEAD",
         "MERGE_HEAD",
@@ -123,7 +153,7 @@ def _sanitize_ref(path: Path, entry: Entry | None, common: Path) -> None:
     data = entry.data
     if data is None:
         raise IntegrityError("non-file ref for restoration", str(path))
-    if path.name == "packed-refs":
+    if (path.name.casefold() if sys.platform == "win32" else path.name) == "packed-refs":
         valid = all(
             row.startswith(b"#")
             or re.fullmatch(rb"\^[0-9a-f]{40}(?:[0-9a-f]{24})?", row)
@@ -162,6 +192,7 @@ class MetadataSnapshot:
     anchors: dict[Path, tuple[int, int]]
     entries: dict[Path, Entry]
     skip: frozenset[Path]
+    sentinel: Path | None = None
 
     @classmethod
     def take(cls, identity: GitIdentity, deadline: float) -> "MetadataSnapshot":
@@ -177,26 +208,37 @@ class MetadataSnapshot:
         for path in roots:
             collect(path, budget, entries, skip=skip)
         for path, entry in tuple(entries.items()):
-            if path.name in {"config", "config.worktree"} and entry.data is not None:
+            name = path.name.upper() if sys.platform == "win32" else path.name
+            configs = (
+                {"CONFIG", "CONFIG.WORKTREE"}
+                if sys.platform == "win32"
+                else {"config", "config.worktree"}
+            )
+            if name in configs and entry.data is not None:
                 for root in {identity.root, common.parent}:
-                    for hooks in _hooks_paths(entry.data, root):
+                    for hooks in _hooks_paths(entry.data, root, runtime=common.parent.parent):
                         if hooks not in roots and not hooks.is_relative_to(common):
                             roots.append(hooks)
                             collect(hooks, budget, entries, skip=skip)
         protected = {common, identity.directory, identity.root, common / "objects"}
+        sentinel: Path | None = None
         anchors = {path: _anchor(path, deadline) for path in protected}
-        snapshot = cls(identity, tuple(roots), anchors, entries, skip)
+        if sys.platform == "win32":
+            sentinel = common.parent.parent / "server.lock"
+            anchors[sentinel] = _anchor(sentinel, deadline, file=True)
+        snapshot = cls(identity, tuple(roots), anchors, entries, skip, sentinel)
         snapshot._no_locks(entries)
         return snapshot
 
     def _no_locks(self, entries: dict[Path, Entry]) -> None:
         for path in entries:
-            if path.name.endswith(".lock"):
+            name = path.name.casefold() if sys.platform == "win32" else path.name
+            if name.endswith(".lock"):
                 raise IntegrityError("unknown Git metadata lock", str(path))
 
     def _read(self, deadline: float) -> dict[Path, Entry]:
         for path, token in self.anchors.items():
-            if _anchor(path, deadline) != token:
+            if _anchor(path, deadline, file=path == self.sentinel) != token:
                 raise IntegrityError("Git admin directory identity changed", str(path))
         entries: dict[Path, Entry] = {}
         budget = Budget(deadline)
@@ -225,7 +267,8 @@ class MetadataSnapshot:
             cas = _is_ref(path, self.identity.common)
             if cas:
                 _sanitize_ref(path, wanted, self.identity.common)
-            replace_file(path, actual, wanted, deadline, cas=cas or path.name == "index")
+            name = path.name.casefold() if sys.platform == "win32" else path.name
+            replace_file(path, actual, wanted, deadline, cas=cas or name == "index")
         for path in sorted(observed, key=lambda p: len(p.parts), reverse=True):
             if path not in self.entries and observed[path].data is None:
                 remove_directory(path, deadline)
