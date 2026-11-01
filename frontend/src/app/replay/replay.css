@@ -197,6 +197,7 @@
   gap: 8px;
 }
 .replay-tooltip strong {
+  min-width: 0;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
@@ -259,6 +260,7 @@
   border: 1px solid var(--slot-graphic);
 }
 .replay-tooltip time {
+  flex-shrink: 0;
   margin-left: 10px;
 }
 .replay-tooltip p {

@@ -204,6 +204,81 @@ test("real App controls preserve prefixes, navigation, files and session ownersh
   expect({ backend, errors }).toEqual({ backend: [], errors: [] });
 });
 
+test.describe("replay hardening", () => {
+  test.use({ hasTouch: true, viewport: { width: 1280, height: 800 } });
+  test("touch interruptions recover and long tooltip text stays inside the strip", async ({
+    page,
+    context,
+  }) => {
+    await start(page);
+    await seek(page, 8);
+    const box = await slider(page).boundingBox();
+    if (!box) throw new Error("No slider");
+    const client = await context.newCDPSession(page);
+    const first = { x: box.x + box.width * 0.4, y: box.y + 8, id: 1 };
+    const second = { ...first, x: box.x + box.width * 0.8, id: 2 };
+    const seq = await page.locator("#root").getAttribute("data-seq");
+    const unchanged = async () => {
+      await expect(page.locator("#root")).toHaveAttribute("data-seq", seq ?? "");
+      await expect(page.locator(".replay-ghost")).toHaveCount(0);
+    };
+    await page.mouse.move(5, 5);
+    await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [first] });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [first, second],
+    });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [first, { ...second, x: second.x + 10 }],
+    });
+    const ghost = await page.locator(".replay-ghost").boundingBox();
+    expect(ghost?.x).toBeCloseTo(first.x, 0);
+    await client.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+    await unchanged();
+    for (const interruption of ["capture", "window"]) {
+      await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [first] });
+      await slider(page).evaluate((element, reason) => {
+        if (reason === "window") window.dispatchEvent(new Event("blur"));
+        else {
+          // Release the actual captured pointer, rather than synthesizing lostpointercapture.
+          for (let id = 1; id < 20; id++)
+            if (element.hasPointerCapture(id)) element.releasePointerCapture(id);
+        }
+      }, interruption);
+      await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await unchanged();
+    }
+    await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [first] });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ ...first, x: box.x + box.width + 20 }],
+    });
+    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await prefix(page, 20178);
+    await page.touchscreen.tap(first.x, first.y);
+    await prefix(page, 20178 * 0.4);
+    await expect(row(page)).toContainText("Paused");
+    const mark = row(page).getByRole("button", { name: "Agent A · Merged, 0:18", exact: true });
+    await mark.focus();
+    const tooltip = page.getByRole("tooltip");
+    await expect(tooltip).toBeVisible();
+    // Exercise text expansion without replacing the recording or its prefix.
+    await tooltip.locator("strong").evaluate((title) => {
+      title.textContent = "長い名前🙂مرحبا".repeat(20);
+    });
+    const bounds = await tooltip.evaluate((element) => {
+      const strip = element.parentElement?.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      return {
+        inside: !!strip && rect.left >= strip.left && rect.right <= strip.right,
+        wraps: element.scrollWidth <= element.clientWidth,
+      };
+    });
+    expect(bounds).toEqual({ inside: true, wraps: true });
+  });
+});
+
 if (shots)
   for (const width of [1920, 1280])
     for (const theme of ["dark", "day"]) {

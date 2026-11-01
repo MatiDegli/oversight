@@ -174,7 +174,7 @@ export default function ReplayBar({
             id="replay-tooltip"
             className="replay-tooltip"
             style={{
-              left: `clamp(0px, calc(${percent(tooltip.offset)} - 140px), max(0px, 100% - 300px))`,
+              left: `clamp(0px, calc(${percent(tooltip.offset)} - 140px), max(0px, 100% - 330px))`,
               ...agentSlotStyle(tooltip.slot),
             }}
           >
