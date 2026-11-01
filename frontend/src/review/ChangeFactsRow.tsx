@@ -17,6 +17,7 @@ import {
 import type { ReactNode } from "react";
 
 import { DataWords, selectAgentCard } from "../agents";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
 import { liveImpact, possibleCallers } from "../graph/impact";
 import { costText } from "../state";
 import type { State } from "../state";

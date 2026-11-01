@@ -1,5 +1,6 @@
 import { stateStore } from "../state";
 import { startAppTransport } from "../transport";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
 import { afterFirstGraphDraw } from "../graph/firstDraw";
 import { prefetchEditorWhenIdle } from "../editor";
 

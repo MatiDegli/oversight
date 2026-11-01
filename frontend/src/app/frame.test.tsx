@@ -103,6 +103,8 @@ describe("the frame over the level 1 fixture", () => {
   });
   it("lays out watch mode: top bar, view rail, graph and the agents panel with one card", () => {
     const markup = render(14);
+    expect(markup).toContain('role="group" aria-label="Workspace view"');
+    expect(markup).toMatch(/aria-pressed="true"[^>]*>.*Oversight/);
     for (const text of ["Oversight", "demo-repo", "main", ">8cbf753<", "Agent A"])
       expect(markup).toContain(text);
     expect(tag(markup, "Views")).toContain("w-(--left-rail-width)");

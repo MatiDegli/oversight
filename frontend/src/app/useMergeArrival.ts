@@ -1,7 +1,10 @@
 // One presentation clock shared by the field, card and pending marks; never reducer state.
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
 import { afterlightOf } from "../graph/field/afterlight";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
 import { mergeArrivalDelay, MilestoneLife } from "../graph/field/milestones";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
 import { selectMerges, selectMilestones } from "../graph/field/life";
 import type { State } from "../state";
 import { getActiveTheme } from "../theme";
