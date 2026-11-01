@@ -346,9 +346,9 @@ source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScrip
 TypeScript and json-schema-to-typescript. `make check-contracts` compares both generated
 outputs byte for byte, including in CI.
 
-The 24 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
+The 25 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
 `agent.status`, `agent.step`, `agent.message`, `agent.focus`, `change.updated`, `change.proposed`,
-`change.resolved`, `usage.tick` and `error`.
+`change.resolved`, `lead.reply`, `usage.tick` and `error`.
 The complete `ServerEvent` union is in `contracts/src/oversight_contracts/events.py`.
 Every envelope has `seq`, `ts`, `type` and `payload`.
 `run.started` includes the run id, exact model, prompt version and limits.
@@ -363,7 +363,18 @@ merge result (`merged` or `conflict`). Never one event per token: model text is 
 every few hundred milliseconds and SQLite writes are batched.
 Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
 gap recovery and `GET /graph` reading the snapshot and its seq together.
-`agent.message` records accepted human text, masked before storage and withheld by default in exports.
+`agent.message` records accepted human text to a coding agent or lead, masked before storage.
+Contracts 1.15.0 declares `lead.reply {agent_id, answers_seq, text, through_seq, cut}` for L2.
+`answers_seq` is null for the opening task, or names an earlier `agent.message` to the same lead.
+`through_seq` is null or a nonnegative horizon strictly below the reply's seq, with no target-type
+requirement. Non-null reply text is nonblank and at most 4,096 characters, masked before storage
+like messages. `cut` is `tool_calls`, `model_calls`, `time`, `spend_brake` or null. Null text requires
+a cut in ordinary/live validation; publication validation also accepts withheld text with null
+cut under the existing message-text receipt. Both event types withhold text by default on export;
+explicit inclusion authorization includes the stored masked text. No new wire receipt fields exist.
+`LeadStatus.state` gains `idle` between turns; `done` remains accepted for historical logs.
+L1 accepts replies as no-ops: only envelope sequence/clock bookkeeping advances, with no messages,
+decisions, activity or accounting observations and no thread UI. Idle adds no control behavior.
 
 Live routes implement, for example, `POST /agents`, `POST /agents/{agent_id}/stop`,
 `POST /agents/{agent_id}/message`, `POST /agents/{agent_id}/pause`,
@@ -380,7 +391,15 @@ The complete route registrations are in `api/commands.py` and `api/routes.py` un
 | `GET /agents/{agent_id}` | 200 latest committed coding `AgentStatus`; 404 `not_found` otherwise. |
 | `GET /changes/{change_id}` | 200 archived `ChangeView` at one committed seq, with usage and confirmed revision rounds (null when unavailable); 404 `not_found` otherwise. |
 
-Message, Pause and Resume accept only human HTTP commands and answer an empty 202.
+L1 also declares `POST /leads/{agent_id}/message` with the existing `AgentMessage` body:
+empty 202 on acceptance, 409 `wrong_state` unless idle, and 501 in replay. It has no installed
+handler in L1. L2 implements admission and publishes the existing `agent.message` with the lead
+id as recipient, plus `lead.reply` production; L3 presents the Chat thread. The approved thread
+belongs to one run and is lost on server restart; restart already stops the lead. Persistence
+is a later design step.
+
+The installed coding-agent Message, Pause and Resume routes accept only human HTTP commands
+and answer an empty 202.
 The manager's public eligibility check admits only working changes; the drive also refuses
 controls once proposal or halt finalization begins. Preparation/decisions, review, conflicts,
 broken and closed changes return 409 `wrong_state`; unknown agents return 404 `not_found`.
@@ -405,7 +424,7 @@ worktree, so review decisions and review writes remain refused. The wait holds n
 decisions retain main-then-worktree lock order. Stop closes the control and cancels the wait,
 then follows the existing discard path: stopped status before the rejected resolution.
 
-`GET /impact`, merge-mode, plan, queue, history and lead routes are implemented.
+`GET /impact`, merge-mode, plan, queue, history and existing lead start/read/stop routes are implemented.
 `GET /tree?agent=` traverses the selected workspace and returns its file inventory.
 Only the `NOT_BUILT` routes in `api/commands.py` remain unconditional 501 responses:
 `POST /dictation` and `POST /changes/{change_id}/review`.
