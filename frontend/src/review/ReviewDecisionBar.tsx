@@ -82,6 +82,7 @@ export function ReviewDecisionBar({
   unavailable?: boolean;
 }) {
   const approvalReason = useId();
+  const [keyboardTried, setKeyboardTried] = useState(false);
   const values = cards.map((card) => cardAnswer(card, answers));
   const no = cards.find((_card, i) => values[i] === "no");
   const prefill = no?.example
@@ -109,10 +110,12 @@ export function ReviewDecisionBar({
       </section>
     );
   }
-  const hasCaption = locked || unavailable || (!recorded && view.kind !== "conflict");
   const pending = view.kind === "pending";
   const revising = view.kind === "revising";
   const approvable = view.kind === "open" && onDecide !== undefined && !blocked && !locked;
+  const pointerCaption = keyboardTried && approvable;
+  const hasCaption =
+    pointerCaption || locked || unavailable || (!recorded && view.kind !== "conflict");
   const requestable =
     (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined && !blocked;
   const rejectable = (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined;
@@ -155,7 +158,11 @@ export function ReviewDecisionBar({
           aria-describedby={hasCaption ? approvalReason : undefined}
           onClick={(event) => {
             // Keyboard and scripted clicks have detail 0; only a pointer can merge.
-            if (event.detail === 0) return;
+            if (event.detail === 0) {
+              setKeyboardTried(true);
+              return;
+            }
+            setKeyboardTried(false);
             onDecide?.(changeId, "approve", comment);
           }}
           className={primary}
@@ -194,11 +201,13 @@ export function ReviewDecisionBar({
           id={approvalReason}
           className="review-decision-caption mt-2 text-[13px] leading-[18px] text-muted"
         >
-          {locked
-            ? approvalLockedCaption
-            : unavailable
-              ? "The check is still unavailable. You decide whether to continue without it."
-              : "If main moved since the agent started, the tests run again on the combined result before the merge."}
+          {pointerCaption
+            ? "Approve with a click: it merges into main"
+            : locked
+              ? approvalLockedCaption
+              : unavailable
+                ? "The check is still unavailable. You decide whether to continue without it."
+                : "If main moved since the agent started, the tests run again on the combined result before the merge."}
         </p>
       )}
       {revising &&

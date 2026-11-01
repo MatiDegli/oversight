@@ -2951,6 +2951,28 @@ Reason: a docs audit found many docs behind main after several days of changed d
 6. The contract scope check (tools/check_contract_scope) is struck from docs/proposal.md: it never existed, and the approved practice is that each contract change rides in its front with the maintainer's recorded approval.
 7. Design docs follow what is built and approved (review dim 60%, Alt+W, overlay blur as M8); Stop leaves the live diff in the docs, since it lives on the agent card.
 
+
+## 2026-10-31 — Human confirmation of examples and task carry
+
+The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
+and 1–5 examples. Before any await, guards match agent/run, the ready_for_review offer seq and base. Confirm selects unchanged offered examples of one meaning,
+allowing subsets with unique ids. Edit requires bounded finite JSON inputs and exact outputs for allowed synchronous top-level functions; the server pins copies
+to the original task. The contract number is assigned at landing.
+
+E2 owns POST /agents/{id}/examples and dispatch because its runtime owns Commands, pending evidence and the fresh run. E3 provides the handler and manager
+transition without wiring or model calls. Prose, model replies, answering links and later statuses confer no confirmation authority.
+
+R1: no AgentMessageSent; the command has no text, and the pinned status is durable evidence. R2: refuse client pins. R3: refuse behavior-only and mixed
+replacements (Q3). R4: person=False confirms criteria without acting on code. R5: the manager and fresh run may each emit an identical starting status.
+
+Admission requires an unproposed, review-ready revision zero, no head or examples, the same base, trusted main and an open manager. One ctx.whole
+publish/bookkeeping step records starting before replacing the task and returning to working. Publish failure preserves the phase; cancellation waits for
+settlement. A digest of normalized action and ordered examples makes identical retries return the current task without another event while its record exists.
+Different confirmations and competing decisions in flight fail; Reject and Stop retain their cancellation paths.
+
+AgentTask retains original text, detached confirmed examples and prior_steps. The Done when block has exact results without test ids. Statuses and proposals
+carry examples through revisions and review saves; budgets include prior steps. Empty examples remain null. E2 must fill the runtime-owned halt-for-ledger
+status gap in app.py:962-983, deliberately untouched here.
 ## 2026-10-31 — Refuse obvious secret files at model tool boundaries
 
 A shared pure basename predicate in workspace enforces the Agent tools rule before the coding
@@ -3270,3 +3292,124 @@ therefore displays its supplied known lower bound, including zero, and quotes th
 problem. Unknown intervals remain unknown; observed time is retained beside unknown work.
 Model time with incomplete interval coverage remains a lower bound, including where a
 model has observed work. No reconciliation claim is made from incomplete figures.
+## 2026-10-31 — Time per stage for each change
+
+Packet A 1031d, item 2, was approved at 2026-10-31T18:25:03Z under the maintainer's
+delegation to the coordinator: "Candidate 2 contract (`ChangeView.stages`, module
+stages.py): APPROVED, text exactly as in packet.md, except one typing-only spelling
+ruled 2026-11-01 00:33Z: `test_phases` uses `default_factory=list[SuitePhaseTime]`
+(the repo's pattern, commands.py:171, review.py:264) so Pyright passes; the generated
+schema must not change." The approved on-screen names are
+"Agent work", "Automatic checks", "Waiting for your decision", and "Test runs";
+their eventual view is a separate front. The contract takes the next free minor at landing.
+
+The read model derives its definitions from the committed log alone, with no new event
+or producer change. Agent work counts the author's starting, working and revising
+intervals for this change. Waiting includes reading time: the refusal to call elapsed
+proposal-to-resolution time review time remains. There is no total, score, ranking,
+ratio, percentage or comparison between agents; test runs overlap the other stages,
+so stages are never added together.
+
+F2: Each proposal opens a revision window ending at its first matching resolution, the
+next proposal or the inventory horizon, with replaced revisions retained and unpaired
+resolutions adding nothing.
+F3: Checks end at the last facts, review or assessment receipt of that revision inside
+its window, remaining open until the first receipt when the window is open, while a
+closed window without receipts has no checks interval and waiting starts at proposal.
+F4: A replaced or null-decider wait is unknown and never inferred, only a person's
+recorded decision counts a resolved wait, and only their approval subtracts the last
+combined run of that revision inside the window once, with an excessive subtraction
+remaining unknown, and on a person's approval a negative combined suite duration
+leaves the wait unknown.
+F5: Test runs count only recorded tests.executed suite durations and their phases,
+never their mirrors in proposals, steps or conflicts, and a negative duration is an
+unknown interval with its known phase milliseconds omitted and its run still counted.
+
+Known limit: the approve click publishes no event; until a merge-queue event exists,
+waiting for an approval ends at the receipt less the combined test run, so a merge that
+waited behind another adds that wait. Raw integer milliseconds use the last committed
+event's timestamp, including for open intervals, with unknown intervals preserving
+known lower bounds and bounded, sequence-ordered diagnostics. `stages` is null on an
+incomplete prefix; older recordings and clients without the optional field remain valid.
+
+## Opt-in pruning of superseded file reads (2026-11-01)
+
+Repeated file reads accumulate in retained agent history, including across Request changes.
+`OVERSIGHT_HISTORY_PRUNE_TOKENS` enables deterministic read stubs at an integer threshold of
+at least 8,000; unset or empty keeps pruning off and preserves existing prompt-version hashes.
+The UTF-8 byte length of messages and tool schemas serialized as JSON, divided by four, is a
+trigger estimate only: provider usage and unknown usage accounting are unchanged.
+
+After message delivery and before a model call, a batch starts at the threshold and replaces
+the newest eligible results first until the estimate reaches 75% or candidates are exhausted.
+It re-arms after growth of 25% of the threshold from the preceding batch's ending estimate,
+including a batch with no eligible result; this state survives revision. Only older `read_file`
+results covered by a later read of the same raw path qualify. A later whole-file result covers
+any earlier read; a later range must contain every earlier numbered row with identical text.
+Returned rows and the range note determine coverage, never requested range arguments. Errors,
+skipped results and existing stubs supply no coverage. Empty reads remain unchanged.
+
+The one-line stub is `[Lines A-B of PATH: a later read of this path covers these lines.]`.
+It must strictly shorten both result text and the JSON estimate. Every user message, system
+prompt, assistant message, non-read result, uncovered read and the last six individual tool calls
+are retained. Calls/results retain their local positional pairing, identifiers and order.
+The stub template, threshold, low-water fraction, re-arm fraction and protected-call count
+participate in the enabled prompt version. Live tool outcomes, edit checks, stop rules, events,
+contracts and replay do not change. This ships off by default with scripted measurements only;
+enabling it by default requires a separate maintainer-approved paid A/B. Bounded history with
+a visible handoff and fresh revision context remain separate candidates.
+
+Proposed replacement for the maintainer in `AGENTS.md` (the file is unchanged):
+
+> read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the retained history. With history pruning explicitly enabled, covered older read_file results may become shorter stubs; every user message is retained.
+
+## 2026-10-31 — Host memory may hold new agent starts
+
+Resource admission keeps the person's running-agent cap as the limit. Host memory can only
+hold a new start below that cap; it never offers another slot. `backend/src/oversight/resources.py`
+reads Linux's MemTotal and MemAvailable inline and floors the used percentage, clamped to
+0–100. `backend/src/oversight/settings.py` and `.env.example` expose
+OVERSIGHT_MEMORY_HOLD_PERCENT, an integer from 1 to 100, defaulting to the approved 90.
+
+`backend/src/oversight/app.py` checks memory on new starts after the model, task, setup,
+spending brake and suspect-main checks. Revisions, reviewer calls, resumes, plan calls and
+already running agents keep their existing behavior: this is a courtesy admission hold,
+not a mechanism for interrupting work. It uses the existing temporary wrong_state refusal
+and the existing queue blocked detail, so no contract or error code changes. The sentence
+"Waiting: memory at 90% or more" names the configured threshold rather than the live reading;
+rechecks therefore keep a stable detail and produce no repeated queue events.
+
+`backend/src/oversight/runtime_queue.py` rechecks every five seconds only while a selection
+has seen a memory hold. Once the reading drops, existing blocked-item rechecking and slot
+reservation start the item automatically. Other refusals retain their event-driven waits,
+and cancellation still interrupts the wait at shutdown. An unknown reading never holds:
+missing /proc/meminfo, unreadable data or unsupported hosts must not prevent all work.
+This differs deliberately from the spending brake's fail-closed protection of actual credits.
+
+The fake model is held too: the resource being protected is host memory, regardless of the
+provider. Consequently `make demo-check` can encounter a hold on a host at or above the
+threshold; the message names the cause. Setting 100 effectively turns off the courtesy hold,
+except at a full 100% reading. Tests inject readings so general tests never depend on host load.
+Test-run queue words (such as "2 test runs ahead"), running-agent card words and frontend
+changes are not built here.
+
+## 2026-11-01 — AGENTS.md keeps the rules every repository agent needs
+
+The maintainer approved the compact AGENTS.md in chat on 2026-11-01. It keeps only the
+rules for every agent working in this repository. The file is loaded into every agent's
+context on every call; module detail and history belong to the document that owns them.
+
+- ARCHITECTURE.md owns module detail, runtime workspace, events and commands, graph and
+  impact rules, agent tools, pending changes and conflicts, robustness and coverage badges.
+- DESIGN.md owns the UI and look, including the design skill's restrictions; PRODUCT.md
+  already describes what the product is and whom its graph serves.
+- docs/own-repository.md owns opening the person's repository, the minimal native Windows
+  port and the later platform work.
+- docs/proposal.md, section 5, owns the scope levels, their completion criterion, the order
+  after level 2 and the out-of-scope list with its bounded Revert exception. Section 7 keeps
+  the public-before-submission requirement. Existing proposal, decision and daily records keep the
+  proposal approval, day-1 delivery and level-closure history.
+
+Moved rules keep AGENTS.md's authority and change only with the maintainer's approval.
+DESIGN.md's and PRODUCT.md's precedence statements still name AGENTS.md for the rules it
+keeps. This relocation changes no behavior, test logic or contract.

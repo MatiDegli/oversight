@@ -104,7 +104,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 14 | Node card explained by examples | Queued — caller evidence `1c50382`; node example view absent at `8b9b589` | Yes |
 | 15 | Shape guard | Queued — contract reserved `649ff0d`; no structural comparison producer on main `8b9b589` | Yes |
 | 16 | Bounded one-hop context for initial tasks | Queued — initial slice absent at `8b9b589`, waits for bench; revision callers/siblings `ee92691` | No |
-| 19 | [Opening the person's own repository](../AGENTS.md#opening-my-own-repository) | Decided 2026-10-31, after the cut line; plan first, with the double review | Plan decides |
+| 19 | [Opening the person's own repository](own-repository.md) | Decided 2026-10-31, after the cut line; plan first, with the double review | Plan decides |
 | 20 | Minimal native Windows port | Decided 2026-10-31, after 19: per-OS layer, mode without isolation | No |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay `a0a4624`, challenge
@@ -126,8 +126,8 @@ These retain useful ideas from the old inventory without approving a front or ch
 None of the candidates below is queued. Delivered and retired ideas are recorded separately;
 new candidate work waits for the maintainer’s order.
 
-- Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on AGENTS.md's
-  out-of-scope list; lifting it needs the maintainer's decision. Goal: safety without slowing
+- Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on the
+  out-of-scope list in docs/proposal.md, section 5; lifting it needs the maintainer's decision. Goal: safety without slowing
   agents. The sandbox bounds side effects, not what an agent does in its task; normal work runs
   with no prompts.
 
@@ -172,6 +172,9 @@ new candidate work waits for the maintainer’s order.
 - Resume a halted agent in the same conversation and worktree remains a candidate; the live
   Resume command only releases a pending or active pause (`agents/_control.py:RunControl`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
+- Covered older `read_file` results can now become deterministic stubs with
+  `OVERSIGHT_HISTORY_PRUNE_TOKENS` explicitly set; bounded history with a visible handoff remains a
+  separate candidate.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
 - A dependency guard for package existence, license and vulnerability evidence.
 - Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line, drawn
@@ -202,6 +205,28 @@ new candidate work waits for the maintainer’s order.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.
+- Native candidates from the maintainer (2026-11-01), none queued.
+  - Standing instructions and lessons from reviews: see Repository memory's refinements below,
+    extending the Lead agent and Next's "Text rules attached to areas of the repository".
+  - Retrospective: building on item 1's facts from events, a failed run, merge conflict, rejection
+    or stop for no progress gets a cause from Oversight's own events and a proposed prevention:
+    a lesson from Repository memory, a task-text change or a standing-grant change. The person
+    confirms any prevention; nothing applies on its own.
+  - Spend pace projection: on top of item 10's budget pace, the spend meter states "at this pace,
+    credits last until X", from recorded spend only. With unknown usage, the projection is
+    unavailable, never guessed.
+  - Fixed context weight per agent: extending item 10's cost breakdowns, show what each agent
+    resends on every model call (instructions, tool definitions, task and the repository's agent
+    instructions), in tokens per call. A change that grows the repository's AGENTS.md or CLAUDE.md
+    shows the added cost per call across running agents. Unknown usage stays unknown.
+  - Where each change's time goes: extend the 2026-10-29 "Time per stage" candidate above with
+    waits on locks and queues (the git lock, test slots and model retries) as their own stage,
+    separating waiting on the machine from waiting on the person.
+  - Docs and comments that name a symbol: alongside item 4's impact cone, list Markdown files,
+    docstrings and comments that mention a changed function or class by name as "possible"
+    references, with the reason "mentioned in docs". Deterministic text matching on names flags
+    documentation that may have gone stale. These are not call edges and do not change call-edge
+    exactness; present them as possibly affected, never as a complete list.
 
 ## Next
 
@@ -640,7 +665,7 @@ gate or learned risk score.
 Give the agent a fixed-order slice of target signatures, direct callers/callees and module constants,
 about 1,500 tokens at most, explicitly listing omissions. Adopt only after the bench shows fewer
 steps and tokens with tasks still solved. The server builds this context as text, never a graph tool
-for agents, following AGENTS.md and the existing Request changes context. No contract addition is needed.
+for agents, following PRODUCT.md's graph-for-the-person rule and the existing Request changes context. No contract addition is needed.
 
 Revision callers/siblings already work (`ee92691`, `backend/src/oversight/changes/_neighbors.py`,
 `backend/src/oversight/changes/_revision.py`). Reuse ordering/uncertainty labels, add callees/constants
@@ -740,6 +765,25 @@ counts once the person confirms it. Text an agent read in the repository never b
 own. Pins live in Oversight's state with provenance (who confirmed it, from which task) and show in
 the graph through item 13's Pinned lens. When the person gives the same answer three times,
 Oversight offers to save it as a pin; the offer is deterministic, with no model.
+
+Refinements proposed on 2026-11-01, also not queued:
+
+- Standing instructions: a session-level source in the Lead agent's thread. With one click, the
+  person pins a message as a standing instruction; it stays in the lead's context whatever the
+  thread retains. A list shows these instructions with their message provenance, and only the
+  person removes one by unpinning it. Promoting one to a repository pin or to the repository's
+  AGENTS.md stays the person's choice.
+- Lessons from reviews: "Oversight learns from your reviews". Beyond the existing "same answer
+  three times" offer, a Request changes comment with a generalizable reason (for example "never
+  do X in this module") gets a chip offering to save it as a lesson anchored to the module or
+  nodes it concerns, with the change and comment as provenance. This refines Next's "Text rules
+  attached to areas of the repository"; exporting reviewed revisions/comments as decision pairs
+  remains the separate candidate above. Item 13's Pinned lens gives the node a subtle mark with
+  no new color. Later tasks touching those nodes receive the lesson within a per-task token
+  budget. Substantial changes to the anchored code flag the lesson for the person's review.
+  A lesson adds task context, never permission: see No's "Autonomy learned from approval history".
+  Whether a minimal version comes before the freeze is the maintainer's decision; until then,
+  the measurement gate below applies.
 
 Before committing to build text pins, after the freeze and only if budget remains after proof 2:
 about 10 hand-written rules for Boltons and their index go into the task text through saved flows,
