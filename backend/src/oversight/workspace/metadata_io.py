@@ -2,20 +2,25 @@
 
 import os
 import stat
+import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
+from oversight.workspace._platform import import_flags
 from oversight.workspace.integrity import IntegrityError, remaining
+
+if sys.platform != "win32":
+    from uuid import uuid4
 
 MAX_FILE = 4 * 1024 * 1024
 MAX_INDEX = 64 * 1024 * 1024
 MAX_TOTAL = 128 * 1024 * 1024
 MAX_ENTRIES = 16384
-DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-READ = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+DIRECTORY, READ, _ = import_flags(
+    nt=sys.platform == "win32", binary=getattr(os, "O_BINARY", 0) if sys.platform == "win32" else 0
+)
 
 
 @dataclass(frozen=True)
@@ -143,6 +148,8 @@ def replace_file(
     No existing lock is removed, including on failure. Only our own temporary inode is cleaned.
     The caller sanitizes ref names and desired ref contents before requesting CAS.
     """
+    if sys.platform == "win32":
+        raise IntegrityError("NT metadata I/O requires W2", ".git")
     with directory(path.parent, deadline) as fd:
         name = path.name + ".lock" if cas else f".oversight-{uuid4().hex}"
         temp = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=fd)
@@ -171,6 +178,8 @@ def replace_file(
 
 
 def make_directory(path: Path, mode: int, deadline: float) -> None:
+    if sys.platform == "win32":
+        raise IntegrityError("NT metadata I/O requires W2", ".git")
     with directory(path.parent, deadline) as fd:
         os.mkdir(path.name, mode, dir_fd=fd)
     with directory(path, deadline) as fd:

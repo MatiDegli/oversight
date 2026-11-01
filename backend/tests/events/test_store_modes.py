@@ -50,3 +50,14 @@ async def test_refusing_existing_store_still_tightens_its_modes(tmp_path: Path) 
     with pytest.raises(FileExistsError):
         await EventStore(path, "run-20261027-140312").start()
     assert mode(path.parent) == 0o700 and mode(path) == 0o600
+
+
+def test_connect_without_fchmod(tmp_path, monkeypatch):
+    import os
+
+    monkeypatch.delattr(os, "fchmod")
+    connection = _connect(tmp_path / "runs" / "run.sqlite")
+    try:
+        assert connection.execute("PRAGMA journal_mode").fetchone() == ("wal",)
+    finally:
+        connection.close()

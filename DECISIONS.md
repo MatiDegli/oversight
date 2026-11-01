@@ -3650,3 +3650,17 @@ crosses this change.
 
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
+
+## 2026-11-01 — The native Windows port moves ahead
+
+The maintainer ranked item 20 immediately after the conversational lead and the Chat view,
+ahead of the other displaced fronts, and approved the new workspace modules `_platform.py`
+(W1) and `source_nt.py` (a later front). This supersedes the earlier after-Tauri Windows order.
+W1 is the cohesive startup/process-lifetime front, split into three independently checked
+commits. It adds no Windows isolation, own-repository permission or contracts.
+
+Windows keeps OPEN_NOTICE and open network mode; rules, Revert, behavior and measured evidence
+remain unavailable. W1 alone does not enable native tree/files, agent tools, proposals or Approve:
+W2a and W2b are both required. Native Jobs, console delivery, Defender sharing behavior and Git
+localization still require non-elevated Windows acceptance. Destination races and inherited ACLs
+are accepted only for our disposable demo, never for the person's own repository.

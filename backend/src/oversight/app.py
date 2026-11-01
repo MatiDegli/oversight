@@ -10,6 +10,7 @@ the store, the lock.
 import asyncio
 import contextlib
 import logging
+import sys
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -92,6 +93,7 @@ from oversight.workspace import (
     WorkspaceError,
     configure_suite,
     list_tree,
+    preflight_placement,
     select_source,
     valid_agent_id,
     validate_source,
@@ -1120,6 +1122,9 @@ def create_app(
     and the fake model its slot's script. `reviewer` supplies the separate review call transport;
     PR3a does not install a production transport before PR3b accounting is available."""
     settings = settings or Settings.load()
+    if sys.platform == "win32":
+        preflight_placement(REPO_ROOT)
+        preflight_placement(settings.runtime_dir)
     app = (
         _live_app(settings, client_factory, reviewer)
         if replay is None
