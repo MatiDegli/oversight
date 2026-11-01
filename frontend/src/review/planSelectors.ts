@@ -1,5 +1,6 @@
-import type { Plan, PlanSubtask } from "@contracts";
+import type { Plan, PlanSubtask, QueuedTask } from "@contracts";
 import type { State } from "../state";
+import type { PlanAttempt } from "./DecisionContext";
 
 type Evidence<T extends "plan.updated" | "queue.updated"> = Extract<
   State["decisionEvents"][number],
@@ -62,4 +63,29 @@ export function dependencyWords(task: PlanSubtask) {
   if (!numbers.length) return "Starts first";
   const last = numbers.pop() ?? "";
   return `Starts after ${numbers.length ? `${numbers.join(", ")} and ${last} merge` : `${last} merges`}`;
+}
+
+/** An accepted HTTP response does not settle a command: only its resulting evidence does. */
+export function planAttemptPending(
+  state: State,
+  plan: Plan,
+  queue: QueuedTask | undefined,
+  attempt?: PlanAttempt,
+) {
+  if (attempt?.run !== state.run || attempt.planId !== plan.plan_id || attempt.phase !== "pending")
+    return false;
+  if (attempt.action === "cancel") {
+    const cancelled =
+      queue ??
+      (attempt.queueId ? selectPlanEvidence(state).queue.get(attempt.queueId)?.payload : undefined);
+    return (
+      !!plan.queued_task_id ||
+      cancelled?.state !== "cancelled" ||
+      cancelled.revision <= (attempt.queueRevision ?? 0)
+    );
+  }
+  if (plan.revision <= attempt.revision) return true;
+  return attempt.action === "reject"
+    ? plan.state !== "rejected"
+    : !plan.queued_task_id && plan.state === "proposed";
 }
