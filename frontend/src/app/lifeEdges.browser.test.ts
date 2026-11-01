@@ -123,6 +123,27 @@ async function masks(page: Page) {
   return page.evaluate(() => window.lifeMasks());
 }
 
+async function activeTransformSelector(page: Page) {
+  const selectors = await page.evaluate(() => {
+    const style = document.querySelector<HTMLStyleElement>(
+      'style[data-vite-dev-id$="/shell/life.css"]',
+    );
+    if (!style?.sheet) throw new Error("Missing life stylesheet");
+    return Array.from(style.sheet.cssRules)
+      .filter(
+        (rule): rule is CSSStyleRule =>
+          rule instanceof CSSStyleRule &&
+          rule.selectorText.includes(":active") &&
+          rule.style.transform !== "",
+      )
+      .map((rule) => rule.selectorText);
+  });
+  expect(selectors).toHaveLength(1);
+  const selector = selectors[0];
+  if (!selector) throw new Error("Missing active transform rule");
+  return selector;
+}
+
 async function keyboardFocus(page: Page, target: Locator) {
   // Real Tab navigation establishes :focus-visible even after a pointer interaction.
   for (let i = 0; i < 60; i++) {
@@ -279,6 +300,9 @@ it.each([
       );
       await page.mouse.move(700, 55);
       await page.mouse.up();
+      // Inspect the transform rule independently of Chromium's transient :active state.
+      const pressSelector = (await activeTransformSelector(page)).replaceAll(":active", "");
+      expect(await button.evaluate((e, selector) => e.matches(selector), pressSelector)).toBe(true);
       for (const aria of [false, true]) {
         await chip.evaluate((e: HTMLButtonElement, aria) => {
           e.disabled = !aria;
@@ -288,6 +312,9 @@ it.each([
         if (!bounds) throw new Error("Missing chip");
         await page.mouse.move(bounds.x + 5, bounds.y + 5);
         await page.mouse.down();
+        expect(await chip.evaluate((e, selector) => e.matches(selector), pressSelector)).toBe(
+          false,
+        );
         expect(await chip.evaluate((e) => getComputedStyle(e).transform)).toBe("none");
         expect(await chip.boundingBox()).toEqual(bounds);
         await page.mouse.up();
