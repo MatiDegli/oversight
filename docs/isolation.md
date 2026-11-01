@@ -195,3 +195,23 @@ attributes: the operator must choose nonsynced folders. Linux-injected checks ar
 proof. Non-elevated Windows acceptance of Jobs, nested jobs, Ctrl+C shutdown logging, Defender
 sharing/retries, Git localization and three restarts remains required. W2a and W2b must land
 before native tree/files, agent read/edit/run_tests, proposal or Approve acceptance.
+
+### W3 advisory Windows supervision (2026-11-01)
+
+W3 adds console-attached tool supervision through W1's public Job primitives, plus retained
+logs and one-byte runtime-lock probes. Outer driver and per-server kill-on-close Jobs cover
+launcher and Git descendants even if their console groups differ. Empty-job evidence precedes
+scratch removal; forced termination cannot certify graceful shutdown. The native driver-death
+proof holds process handles only, never an external handle to the driver's outer Job.
+
+Linux-injected tests establish ordering, failure cleanup, cancellation, polling and verdict
+policy. They establish no Windows kernel or console acceptance. Actual SIGBREAK code/log,
+nested Jobs, cold uv/backend death, driver death, read-only and locked-directory cleanup remain
+native checks. The candidate `0xC000013A` status is unverified until the console test passes;
+console/environment skips must remain visible. Full driver acceptance also awaits W2a + W2b.
+
+Windows still has OPEN_NOTICE, open network mode and no filesystem sandbox or memory cap;
+`tools/memwatch.py` returns zero without `/proc`. Demo-only destination-race/inherited-ACL
+acceptance above is unchanged. W3 grants no own-repository permission. W4 qualification and
+complete two-machine/six-run evidence remain pending. Advisory failures are not swallowed;
+30-minute workflow and three-minute smoke bounds supplement the driver's phase/overall clocks.

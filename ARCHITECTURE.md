@@ -504,3 +504,32 @@ replay still bundles the real recording and stays read-only.
 `changes/_reviewfacts` remains a private unwired core. The `_zones` and `_partition` algorithms
 also remain outside live plan production; the public partition export does not wire a producer.
 Future contract versions take the next free version at landing.
+
+## W3 Windows tool supervision
+
+`tools/demo_check_nt.py` is a stdlib tools script using only the public workspace Job facade.
+It retains a non-inherited outer KILL_ON_JOB_CLOSE handle, assigned to the driver itself until
+process teardown. Console servers inherit membership, start suspended with
+CREATE_NEW_PROCESS_GROUP (without CREATE_NO_WINDOW), enter a per-server Job before resume,
+and then create their own nested lifetime Job. Incompatible ancestors refuse execution.
+Assignment/resume failures kill and reap the suspended leader; handles outlive waits and
+cancellation. No command-line substring search identifies descendants.
+
+The driver reuses `demo_check.serve_and_decide`: built UI, bounded HTTP/SSE and the entire level 2
+flow, including current test evidence, A/B overlap, editable review, Request changes, Stop,
+Approve and main-file graph deltas. Three runs share one disposable runtime. Native smoke uses
+the same launch, console shutdown and cleanup. Both explicitly blank credential variables to
+override `.env`, force fake A/B, disable cross-review and clear the workspace source. Decision
+configuration has no fake selector; absent credentials refuse calls.
+
+CTRL_BREAK must produce shutdown logging and bounded leader completion, then asynchronous
+empty-job polling. A timeout/fallback terminates the Job and fails the graceful verdict.
+Before scratch deletion, the server Job must be empty, the outer Job contain only the driver,
+and a seek-zero one-byte lock probe succeed. Logs survive cleanup; locked directories fail
+visibly after bounded retries. Hard-kill mode starts cold, observes an exact `uv.exe` Job member,
+kills the backend and requires its lifetime Job to clear descendants and release the lock.
+
+The separate advisory workflow preserves existing CI/dispatch workflows. Its explicit Windows
+typing targets cover landed W1/W2b/W3 sites. Full driver/native three-start/cold-build acceptance
+is staged until W2a and W2b; own-source fixtures and six-run/two-machine proof await W4. Kernel,
+console status, Defender and filesystem behavior remain native proof, not Linux-injected proof.

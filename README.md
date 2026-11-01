@@ -125,7 +125,8 @@ static build requires the recording and its receipt; UI tests select their own f
   in its own directory that touches no product code: a Windows window showing the current UI,
   starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
   translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
-- After the Tauri shell: native Windows and macOS backend ports, after the hackathon.
+- Native Windows demo backend: W1/W2b/W3 implemented; W2a and native acceptance pending (see below).
+  Broader Windows and macOS backend ports remain after the Tauri shell.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
@@ -155,3 +156,63 @@ See [docs/additions.md](docs/additions.md) for the queue and candidates.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Native Windows advisory checks
+
+W1 startup/lifetime, W2b metadata/tree I/O and W3 tools are implemented; native acceptance is
+pending. W2a must also land before file/agent/merge acceptance or the full demo driver is enabled
+in CI. The separate `windows advisory` workflow is unrequired; failures still fail its job.
+Its logs distinguish injected tests, native tests and skipped proofs. Linux/WSL remains the
+verified development path. Windows runs open mode with OPEN_NOTICE: no network isolation,
+rules, Revert, behavior or measured evidence, and no memory cap (`memwatch` needs `/proc`).
+
+Use non-elevated PowerShell, Python 3.12, Git, uv, pnpm and Node 24, in a short, private,
+nonsynced local NTFS clone. Keep Defender enabled without exclusions. For the staged smoke:
+
+```powershell
+git clone -c core.autocrlf=false <origin-url> "$HOME\src\oversight"
+cd "$HOME\src\oversight"
+uv sync --frozen
+pnpm -C frontend install --frozen-lockfile
+pnpm -C frontend build
+uv run --frozen python tools/smoke.py
+uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_platform_windows.py -rs -s
+uv run --frozen pytest -o timeout_method=thread tools/tests/test_demo_check_nt.py -rs -s
+```
+
+Retain Windows/CPython/Git/tool versions, event-loop type, console exit codes, logs and all skip
+reasons. `OVERSIGHT_NT_EVIDENCE_DIR` optionally selects the parent for retained tool logs. A
+missing console or skipped native test is not acceptance. The candidate SIGBREAK exit status
+`0xC000013A` must be confirmed by the console test; timeout or forced cleanup cannot pass its
+graceful verdict. There is no added Uvicorn handler (pinned 0.54.0).
+
+After **both W2a and W2b** land, use the live server for manual UI/health/graph/SSE proof:
+
+```powershell
+$env:META_API_KEY=""; $env:BASETEN_API_KEY=""; $env:OVERSIGHT_CROSS_REVIEW="false"
+$env:OVERSIGHT_WORKSPACE_SOURCE=""; $env:OVERSIGHT_AGENT_MODEL="fake"
+$env:OVERSIGHT_FAKE_SCRIPT="fixtures/fake-model/document-apply-coupon.json"
+uv run --frozen python -m oversight serve
+# Ctrl+C must log Application shutdown complete, then:
+uv run --frozen python tools/demo_check_nt.py --probe-lock .runtime
+# Stop serve before running the disposable checks:
+uv run --frozen python tools/demo_check_nt.py
+uv run --frozen python tools/demo_check_nt.py --hard-kill-check
+$env:OVERSIGHT_NT_FULL_DEMO="1"
+uv run --frozen pytest -o timeout_method=thread tools/tests/test_demo_check_nt.py -rs -s
+```
+
+Verify OPEN_NOTICE and malicious-static-path 404s, then the docstring task in `shop/pricing.py`:
+read/edit/tests/proposal/Approve must produce merged + graph.delta. Retain initial/merge commits,
+the `.git` pointer, empty worktrees, raw bytes/hash and
+`git -C .runtime/workspace ls-files --eol shop/pricing.py` showing `i/lf w/lf`. Restart over
+read-only objects. On a junction pointing only at a disposable canary, files must refuse access,
+tree/graph omit it, restart unlink it and outside hashes remain unchanged. Check replay API/SSE
+separately with `uv run --frozen python -m oversight replay fixtures/events/handwritten-level1.jsonl
+--allow-fake-provider`; UI proof uses live serve. No model credits are used.
+
+No Windows make/bash/reload or native browser suite is supplied. Arbitrary own-repository paths,
+native own-source COPY/qualification and the complete two-machine six-run release proof await W4.
+Before making Windows required, measure complete installs/build/tests/six runs, use
+`ceil(1.5 × slowest green duration)` for the timeout and remove PR path filters so even a
+documentation-only PR produces a successful check. The initial advisory bound is 30 minutes.

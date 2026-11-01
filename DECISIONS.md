@@ -3715,3 +3715,27 @@ remain the coordinator's merge prerequisites; activation does not complete proof
 Reason: approval and delivered prerequisites allow explicit rules selection, while live fake
 proof, committed receipts and repeatable clean starts establish the activation path without
 spending provider credits or relaxing any authority condition.
+
+## 2026-11-01 — W3 console supervision and staged Windows advisory CI
+
+The reviewed W3 scope adds only `tools/demo_check_nt.py` as implementation, using W1's public
+Job facade and preserving Linux supervision and exact graceful exit codes. The tool owns an
+outer process-lifetime kill-on-close Job and assigns console-attached suspended servers to
+per-server Jobs before resume. Retained handles and empty-job/lock evidence guard cleanup;
+CTRL_BREAK requires logging and bounded completion, and fallback is failure. Uvicorn 0.54.0
+gets no new signal handler. `0xC000013A` is a conservative candidate exit status, not an observed
+NT fact: console proof must confirm or correct it before native acceptance.
+
+Three disposable demo starts reuse all existing level 2 checks and one runtime. Hard-kill proof
+observes uv during a cold build before backend death; independent native driver-death proof
+retains no external outer-job handle. Fake A/B, empty source, blank credential overrides and
+cross-review=false prevent credit use, including decision calls (missing credentials refuse).
+Checkout attributes add LF without renormalization, template-byte changes or external attributes.
+
+The new least-privilege Windows workflow is advisory, not required and not continue-on-error.
+W1/W2b-supported checks land now; full driver/cold-build proof awaits both W2a and W2b. Native
+own-source fixtures/qualification and the complete two-machine six-run release proof await W4.
+A skipped proof is not acceptance. Windows retains open mode and no memory cap. Destination
+races and inherited ACLs remain accepted for the disposable demo only, never own repositories.
+Before required status, measure complete installs/build/tests/six runs, set the timeout to
+ceil(1.5 × slowest green duration), and remove PR path filters. No required-status change here.
