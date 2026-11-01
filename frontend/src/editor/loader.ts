@@ -1,4 +1,4 @@
-import { whenFirstGraphDrawn } from "../graph";
+import { whenFirstGraphDrawn } from "../graph/firstDraw";
 
 let pending: Promise<typeof import("./implementation")> | undefined;
 export type EditorImplementation = typeof import("./implementation");

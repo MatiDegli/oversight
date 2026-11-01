@@ -1,12 +1,8 @@
 // One presentation clock shared by the field, card and pending marks; never reducer state.
 import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
-import {
-  afterlightOf,
-  mergeArrivalDelay,
-  selectMerges,
-  selectMilestones,
-  MilestoneLife,
-} from "../graph";
+import { afterlightOf } from "../graph/field/afterlight";
+import { mergeArrivalDelay, MilestoneLife } from "../graph/field/milestones";
+import { selectMerges, selectMilestones } from "../graph/field/life";
 import type { State } from "../state";
 import { getActiveTheme } from "../theme";
 type Starts = ReadonlyMap<string, number>;

@@ -21,6 +21,7 @@ export function isEditableMonaco(target: EventTarget | null): boolean {
 
 export function useShell(open: boolean, onClose: () => void) {
   const [layout, setLayout] = useState(useContext(InitialShellLayout));
+  const [oversightVisited, setOversightVisited] = useState(layout === "Oversight");
   const [layoutRevision, setLayoutRevision] = useState(0);
   useEffect(() => {
     const resized = () => {
@@ -102,7 +103,11 @@ export function useShell(open: boolean, onClose: () => void) {
   }, [open, onClose, shortcuts, palette]);
   return {
     layout,
-    setLayout,
+    setLayout: (choice: ShellLayout) => {
+      setLayout(choice);
+      if (choice === "Oversight") setOversightVisited(true);
+    },
+    oversightVisited,
     layoutRevision,
     sidebar,
     dock,

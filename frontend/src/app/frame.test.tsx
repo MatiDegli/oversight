@@ -30,6 +30,18 @@ function render(seq: number, view: View = initialView, props: Partial<FrameProps
 
 // Settle the real lazy review before checking its fully loaded static markup.
 beforeAll(async () => {
+  const graph = await renderToReadableStream(
+    <Frame
+      state={through(14)}
+      view={initialView}
+      onNodeTap={vi.fn()}
+      canOpenChange={() => false}
+      onOpenChange={vi.fn()}
+      onClosePanel={vi.fn()}
+    />,
+  );
+  await graph.allReady;
+  await new Response(graph).text();
   const state = through(20);
   const abort = new AbortController();
   const stream = await renderToReadableStream(

@@ -1,6 +1,6 @@
 import { stateStore } from "../state";
 import { startAppTransport } from "../transport";
-import { afterFirstGraphDraw } from "../graph";
+import { afterFirstGraphDraw } from "../graph/firstDraw";
 import { prefetchEditorWhenIdle } from "../editor";
 
 /** The shell owns the transport lifetime and exposes the applied cursor to screenshot clients. */

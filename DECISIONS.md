@@ -3457,3 +3457,28 @@ The maintainer excepted 700ms rings and the 550ms halo from the 160–320ms rang
 Waiting's “never pulses”. Card glow, an extra merged sentence and a 300ms node-light hold are excluded
 for good; a merged node word stays held. Evidence: dark/day pulses, overlap, arrival, 1280×800 and 720p
 frames, software-GL costs, and the coordinator's Windows real-GPU timing.
+
+## 2026-11-01 — C1 builds the shared Chat frame, with deferred graph startup
+
+The maintainer approved chat-r1 at 14:18:07 ART, packet b-1101c item 1. C1 is built:
+the shared switch changes local layout, initially Oversight, without remounting App, its
+session, FilesProvider or the active conversation. The existing conversation adapter and
+Composer keep selection, drafts and pending commands through a layout round trip.
+
+Both graph stages live behind one module-level dynamic boundary. A Chat-initialized fixture
+requests neither graph rendering nor field implementation until explicit Oversight entry;
+production still starts in Oversight. First-draw, impact, routing and merge-arrival helpers
+use leaf imports so they cannot pull that boundary forward. The graph remains mounted,
+hidden and inert in Chat after first entry, preserving its camera and instance. Its local
+loading/error frame leaves the switch available; transport remains independent of drawing,
+and editor loading retains its first-draw gate. No prefetch of the graph boundary is added.
+
+Chat uses outer columns 56/280/remaining/300 px, changing the sides to 260/260 at 1500 px.
+The conversation cap is 880 px including gutters; its timeline scrolls separately from the
+Composer. The existing shell's 24 px status line and theme roles win over sketch literals.
+Intentional screenshot differences: C2/C3 bodies remain empty, C5's merge chip is absent,
+and TaskBox keeps its existing slot buttons/model facts and replay capabilities rather
+than the sketch-only picker, counts or explanatory cards. Built conversation rows and
+recorded-source wording remain authoritative. C2–C6 and L3 remain pending; C6 owns any
+default change after the Nov 2, 23:00 ART gate. DESIGN's proposed addition is held under
+`.shots/chat-shell/design-md.md` until the coordinator releases that document's lane.

@@ -7,7 +7,7 @@ const gate = vi.hoisted(() => {
   });
   return { promise, draw, evaluated: vi.fn() };
 });
-vi.mock("../graph", () => ({ whenFirstGraphDrawn: () => gate.promise }));
+vi.mock("../graph/firstDraw", () => ({ whenFirstGraphDrawn: () => gate.promise }));
 vi.mock("./implementation", () => {
   gate.evaluated();
   return { FileView: "file" };

@@ -1,6 +1,6 @@
 import type { GraphNode, ImpactCone } from "@contracts";
 import type { ConeWord } from "./coneWords";
-import { routingOmissionText } from "../graph";
+import { routingOmissionText } from "../graph/RoutingOmissions";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";

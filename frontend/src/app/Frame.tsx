@@ -1,5 +1,5 @@
 import type { MergeMode, StartAgent } from "@contracts";
-import type { ReactNode } from "react";
+import { lazy, type ReactNode } from "react";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
@@ -11,7 +11,7 @@ import { AgentsPanel, AgentsRail } from "./shell/Agents";
 import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { ChatEmpty, ChatShell } from "./shell/ChatShell";
 import { FocusPanel } from "./shell/FocusPanel";
-import { GraphStage } from "./shell/GraphStage";
+import { LazyPanel } from "./shell/LazyPanel";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
 import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
@@ -21,7 +21,9 @@ import "./shell/life.css";
 import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
-import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
+const OversightStage = lazy(() =>
+  import("./shell/OversightStage").then((module) => ({ default: module.OversightStage })),
+);
 export interface FrameProps {
   practice?: { active: boolean; open: () => void; content: ReactNode; focus: FocusTab };
   state: State;
@@ -70,7 +72,6 @@ export function Frame(props: FrameProps) {
   const phone = usePhonePractice(props.practice?.active ?? false);
   // Availability stays fixed throughout a replay session, so entry, exit and resizing
   // keep the same graph owner. Only the practice composition knows about stacked overlays.
-  const Stage = props.practice ? PracticeGraphStage : GraphStage;
   const view =
     phone && props.practice
       ? {
@@ -163,14 +164,28 @@ export function Frame(props: FrameProps) {
               hidden={shell.layout === "Chat"}
               inert={shell.layout === "Chat"}
             >
-              <Stage
-                arrival={arrival}
-                state={state}
-                view={view}
-                onNodeTap={phone ? () => undefined : props.onNodeTap}
-                {...(props.practice ? { stacked: phone } : {})}
-                layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
-              />
+              {shell.oversightVisited && (
+                <LazyPanel
+                  frame={
+                    <section
+                      className="graph-stage flex-1 bg-ground p-6 text-muted"
+                      aria-label="Graph stage"
+                    >
+                      <p role="status">Loading repository graph…</p>
+                    </section>
+                  }
+                >
+                  <OversightStage
+                    practice={Boolean(props.practice)}
+                    stacked={phone}
+                    arrival={arrival}
+                    state={state}
+                    view={view}
+                    onNodeTap={phone ? () => undefined : props.onNodeTap}
+                    layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
+                  />
+                </LazyPanel>
+              )}
             </div>
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}

@@ -17,7 +17,7 @@ import {
 import type { ReactNode } from "react";
 
 import { DataWords, selectAgentCard } from "../agents";
-import { liveImpact, possibleCallers } from "../graph";
+import { liveImpact, possibleCallers } from "../graph/impact";
 import { costText } from "../state";
 import type { State } from "../state";
 import { impactSummary, possibleCallersText } from "./ImpactCone";

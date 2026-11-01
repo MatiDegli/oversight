@@ -1,7 +1,7 @@
 import { selectDecisionInbox } from "../state";
 import type { ChangeState, DecisionInboxEntry, State } from "../state";
 import type { ChangeFacts, LeadStatus } from "@contracts";
-import { possibleCallerNodes } from "../graph";
+import { possibleCallerNodes } from "../graph/impact";
 import { factsForRevision } from "./factsForRevision";
 
 export function selectPossibleCallersWait(state: State, changeId: string) {
