@@ -3795,3 +3795,13 @@ keys and decision controls in both layouts. Desktop reserves 880px for review; a
 breakpoint real tabs hide and inert either mounted content. Chat-scoped CSS hides the where
 column during review. Normal review scrolling and the built diff/evidence order take precedence
 over the sketch's clipped body. Existing Oversight geometry and its default remain authoritative.
+
+## 2026-11-01 — C4 graph navigation belongs to a click
+
+See on graph captures run/change/revision/head and a fresh framing key, dispatches the existing
+review tab and selects Oversight in that click. No event subscription or lazy completion can
+select a layout or focus a control. Hidden Chat navigation keeps a frozen graph view; an abandoned
+explicit frame uses the existing camera-preserving navigation state while hidden. Replaced runs
+or candidates invalidate the target. The retained stage still awaits optional field preparation,
+and GraphStage/GraphView retain all graph-data, geometry and cone framing responsibilities.
+Frame adds only the hook next to useShell, the FocusPanel callback and the graph-view prop.
