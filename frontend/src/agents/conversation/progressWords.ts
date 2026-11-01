@@ -28,9 +28,9 @@ export function budgetWords(mark: BudgetMark, budget: Budget, unknown: boolean) 
     ? mark.budget_usd > 0
       ? Math.floor((mark.spent_usd / mark.budget_usd) * 100)
       : null
-    : (budget.warn_at[mark.brake === "warn_50" ? 0 : 1] ?? 0) * 100;
+    : Math.round((budget.warn_at[mark.brake === "warn_50" ? 0 : 1] ?? 0) * 100);
   return {
     lead: percent === null ? "Budget" : `Budget at ${String(percent)}%`,
-    detail: `${unknown ? "" : `${formatUsd(mark.spent_usd)} of ${formatBudget(mark.budget_usd)} · `}${blocked ? "new Meta runs are refused" : `new Meta runs stop at ${String(budget.block_at * 100)}%`}`,
+    detail: `${unknown ? "" : `${formatUsd(mark.spent_usd)} of ${formatBudget(mark.budget_usd)} · `}${blocked ? "new Meta runs are refused" : `new Meta runs stop at ${String(Math.round(budget.block_at * 100))}%`}`,
   };
 }

@@ -60,3 +60,19 @@ it("omits a blocked percentage without a positive budget denominator", () => {
     }
   }
 });
+
+it.each([
+  ["warn_50", 29],
+  ["warn_80", 57],
+] as const)("rounds configured %s and stop thresholds to whole percentages", (brake, percent) => {
+  const state = progressState("limits");
+  const budget = state.run?.budget,
+    mark = state.budgetMarks[0];
+  if (!budget || !mark) throw new Error("Missing budget");
+  expect(
+    budgetWords({ ...mark, brake }, { ...budget, warn_at: [0.29, 0.57], block_at: 0.58 }, true),
+  ).toEqual({
+    lead: `Budget at ${String(percent)}%`,
+    detail: "new Meta runs stop at 58%",
+  });
+});

@@ -146,14 +146,15 @@ it("discloses structured test results and opens the change diff", async () => {
 it("pins new entries only at the bottom and never moves focus", async () => {
   const page = await pageFor();
   try {
+    const list = timeline(page);
+    const distance = () =>
+      list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
+    expect(await distance()).toBeLessThanOrEqual(2);
     await page.getByRole("button", { name: /^Round 1 ·/ }).click();
     await timeline(page).evaluate((node) => {
       node.scrollTop = node.scrollHeight;
       node.dispatchEvent(new Event("scroll"));
     });
-    const list = timeline(page);
-    const distance = () =>
-      list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight);
     expect(await distance()).toBeLessThanOrEqual(2);
     await box(page).focus();
     await page.evaluate(() => {
@@ -181,12 +182,15 @@ it.each(["disclosure", "resize"] as const)(
   async (change) => {
     const page = await pageFor();
     try {
+      const list = timeline(page);
+      expect(
+        await list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight),
+      ).toBeLessThanOrEqual(2);
       await page.getByRole("button", { name: /^Round 1 ·/ }).click();
       await timeline(page).evaluate((node) => {
         node.scrollTop = node.scrollHeight;
         node.dispatchEvent(new Event("scroll"));
       });
-      const list = timeline(page);
       const before = await list.evaluate((node) => node.scrollTop);
       expect(
         await list.evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight),
