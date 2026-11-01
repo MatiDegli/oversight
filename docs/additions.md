@@ -108,8 +108,8 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 5 | Live overlap between agents | Partial — shared edits and change-lifetime reads `1e51e51`, graph overlap `e4cec56`; edit-inside-another-cone review fact remains absent | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
 | 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; manual review route still 501 | No |
-| 8 | Merge by rules, follow main and Revert (package 1) | Partial — start capability `1824a46`, Revert route `69aaee8`, person preemption `a2aaa6a`, idle follow-main F5a `769d0c7`, protected-path authority `1b1ed44`; activation closed (RULES_ACTIVATION = False); F5b and Revert UI remain | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
-| 9 | A change card with three states | Partial — producer `3786310`, witnesses `3068b81`, answer guards `2efd586`, projection `f4ab346`, mounted inbox/answers/grants `7c25429`, lead-plan display `bf9fb04`; rules-resolution rendering built, live activation closed; no dedicated assessment/mode/Revert state fold | Yes |
+| 8 | Merge by rules, follow main and Revert (package 1) | Partial — start capability `1824a46`, Revert route `69aaee8`, person preemption `a2aaa6a`, idle follow-main F5a `769d0c7`, protected-path authority `1b1ed44`; F5b, Settings and Revert UI delivered; F10 opens activation with fake-only HTTP/SSE evidence, recorded replay and three clean starts; every fresh run starts in Ask me | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
+| 9 | A change card with three states | Partial — producer `3786310`, witnesses `3068b81`, answer guards `2efd586`, projection `f4ab346`, mounted inbox/answers/grants `7c25429`, lead-plan display `bf9fb04`; rules-resolution rendering built, activation open; mode state folded, assessment/Revert retained in decisionEvents for selectors | Yes |
 | 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived totals `bf36052`, agent-hours `95e40e5`, dated prices `56b5f18`; team/period grouping and aggregate UI remain | Yes — stored aggregates; event-derived totals need none |
 | 11 | One plan, server-computed zones and task queue (package 6) | Partial — standalone queue `c820fbf`, dependency contracts `bb9dc43`, plan service/routes and internal dependency dispatch `efd592f`, metered single-subtask generation `f907e41`; partition core `deb7148` remains unwired; lead-plan inbox display `bf9fb04` built, plan edit/start UI remains | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
 | — | [Lead agent](#lead-agent) | Runtime on main `6818b3b` — lead routes and metered plan proposals; requests plans only, without starting agents or merging | No — lead routes and `started_by` reserved |
@@ -118,7 +118,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 13 | Pinned examples and graph lenses | Queued — pin contract reserved `649ff0d`; no pins or lens control on main `8b9b589` | Yes |
 | 17 | Run rule (package 5) | Backend on main — assertion findings `aa4e658`, removed/skipped checks `071844e`; review rendering remains | Yes — run-rule finding kind for removed, skipped, deleted checks |
 | 18 | Remaining packages 11–14 | Partial — run controls `d27875a`, HTTP `d085748`, Pause/Resume card `74bb81d`, mounted conversation/composer `bc6c659`; dictation still 501, replay timeline remains; 11 `ee92691` and 12 `c1c19c6` complete | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
-| — | [Standing grants](#standing-grants) | Backend `93a3664` and inbox grant UI `7c25429` on main — run-local possible_callers, module/run scope and revoke; activation closed; broader scopes, protected-path grants and session expiry remain | Contracts 1.7.0 approved and delivered; creation, nullable SaveFile hash, zones and inventory take the next free version after its approval |
+| — | [Standing grants](#standing-grants) | Backend `93a3664` and inbox grant UI `7c25429` on main — run-local possible_callers, module/run scope and revoke; activation open by explicit selection; broader scopes, protected-path grants and session expiry remain | Contracts 1.7.0 approved and delivered; creation, nullable SaveFile hash, zones and inventory take the next free version after its approval |
 
 ### Only if time remains
 
@@ -445,17 +445,20 @@ evidence, recorded reasons and clean one-click Revert. The server retests a move
 or conflicts become Needs you. Models can add reasons to wait, never waive a deterministic rule.
 
 `PRODUCT.md`'s success sentence, set by the maintainer on 2026-10-30, names the person's approval or a rule
-they set as the authority for every merge; rules mode stays closed by default until its remaining pieces land.
+they set as the authority for every merge. Activation is open following approval on 2026-11-01;
+every fresh run still starts in Ask me and rules require explicit selection and all guards.
 
 Main has policy profiles, the P2b-1 scheduler (`9f70622`), reservation (`5dac67c`), merge
 transaction (`73b4f65`) and final barriers (`7aec7d5`). Isolated start capability is connected
-(`1824a46`, `changes/_mode.py:start_capability`), but `RULES_ACTIVATION = False` keeps rules closed.
+(`1824a46`, `changes/_mode.py:start_capability`); F10 sets `RULES_ACTIVATION = True`.
 GET and PUT /merge-mode, Revert (`69aaee8`) and bounded history (`0e5305a`) are live
 (`api/commands.py:add_command_routes`, `api/routes.py`). Person preemption (`a2aaa6a`), idle
-follow-main F5a (`769d0c7`) and protected-path authority (`1b1ed44`) are built. Remaining:
-activation, queued/in-flight follow-main F5b and Revert UI; the frontend command client has no
-Revert method and `applyEvidenceEvent` does not fold revert.resolved. C3 landed in `19443e8`;
-rules and probes require it.
+follow-main F5a (`769d0c7`), protected-path authority (`1b1ed44`), queued/in-flight following
+F5b, Settings and Revert UI are built. Revert outcomes remain in decisionEvents for selectors;
+merge-mode events fold into state. F10 adds committed review-receipt delivery, fake-only activation
+scenarios, a separate rules recording and Playwright coverage. Three consecutive host-C starts
+passed merge, person Revert, Needs you and lifecycle checks. C3 landed in `19443e8`; rules and
+probes still require it. This does not complete unrelated item 9 or proof 2 work.
 Human approval already retests moved bases
 (`backend/src/oversight/changes/_merge.py`), and revision can merge main into the retained branch.
 Reuse those paths; rules must test the combined result even when base has not moved.
@@ -523,11 +526,10 @@ Reuse target-aware notes (`frontend/src/review/CrossReviewNote.tsx`). The constr
 client (`15dcff4`), review-card producer (`3786310`), asked-for summary (`abc281d`) and persisted
 answer guards (`2efd586`) are on main; grouped witnesses followed in `3068b81`. The live review
 card/inbox controls and rules-resolution rendering are built (`state/applyChangeEvent.ts:applyResolution`,
-`review/inboxSelectors.ts:selectChangeCard`, `review/ReviewBody.tsx`). Live rules merges still wait
-for activation. `state/applyEvidenceEvent.ts:applyEvidenceEvent` has no dedicated state fold for
-change.assessed, merge_mode.changed or revert.resolved, but `applyEvent` retains assessment and
-Revert events in decisionEvents for selectors. These projections support recorded evidence
-without enabling live rules authority. Optional questions and persisted answers
+`review/inboxSelectors.ts:selectChangeCard`, `review/ReviewBody.tsx`). Rules activation is open by explicit selection.
+`state/applyEvidenceEvent.ts:applyEvidenceEvent` folds merge_mode.changed; `applyEvent` retains
+assessment and Revert events in decisionEvents for selectors. These projections support live
+and recorded evidence; activation does not complete the remaining item 9 work. Optional questions and persisted answers
 were reserved in `649ff0d`. Yes never converts an unavailable check to passing evidence.
 
 ### 10. Cost and rounds per accepted change
@@ -748,8 +750,8 @@ remembers what you let go."
 Contracts 1.7.0 and the first backend landed in `93a3664`: possible_callers only, module/run scope,
 run expiry, Approve creation and POST /grants/{id}/revoke. Grant checks are wired into reservation
 and every transaction barrier. Creation requires a current rules-mode wait
-(`backend/src/oversight/changes/_grants.py`), so closed rules activation still prevents live
-creation/use. The frontend folds grant.created/grant.revoked in
+(`backend/src/oversight/changes/_grants.py`). Activation is open, so creation/use can proceed
+only after explicit rules selection and the existing target, scope and transaction checks. The frontend folds grant.created/grant.revoked in
 `state/applyEvent.ts:applyEvent`; `review/StandingGrants.tsx` and `review/GrantChoice.tsx` supply
 the list, creation choice and revoke (`7c25429`). Broader path/agent scopes, session expiry and
 protected-path grants remain.

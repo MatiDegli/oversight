@@ -12,7 +12,7 @@ PNPM := $(NO_KEYS) pnpm -C frontend
 
 .PHONY: help install frontend-deps setup dev check check-ci check-fast check-python lint-python check-frontend \
 	lint-frontend contracts check-contracts check-contract-tuples check-secrets demo-repo-check replay shots smoke layout \
-	test-browser demo demo-setup-check demo-check e2e record record-level2 manifest notices check-notices audit \
+	test-browser demo demo-setup-check demo-check e2e record record-level2 record-rules rules-check manifest notices check-notices audit \
 	workspace-fetch-boltons workspace-graph-boltons
 
 workspace-fetch-boltons: ## explicitly fetch the pinned Boltons checkout (network); never run by check
@@ -129,6 +129,13 @@ test-browser: ## fake-only launcher/proxy integration and Chromium tests; 1200 s
 record-level2: ## regenerate the level 2 replay fixture from the HTTP backend and fake scripts
 	$(UV) python tools/record_level2.py
 	$(UV) python tools/validate_recording.py --fake-fixture fixtures/events/scripted-level2.jsonl > /dev/null
+
+record-rules: ## record rules merge, person Revert and Needs you using fake models only
+	UV_OFFLINE=1 timeout --kill-after=10 300 $(UV) python tools/record_rules.py --record
+	UV_OFFLINE=1 $(UV) python tools/validate_recording.py --fake-fixture fixtures/events/scripted-rules.jsonl > /dev/null
+
+rules-check: ## three clean starts with rules, real host isolation and lifecycle checks
+	UV_OFFLINE=1 timeout --kill-after=10 900 $(UV) python tools/record_rules.py
 
 # e2e: two Playwright tests over the static replay build (vite build --mode replay, served by vite
 # preview) and the level 1 / scripted level 2 logs: both levels' definitions of done, with no
