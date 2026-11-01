@@ -173,6 +173,7 @@ class ChangeRecord:
     review_ready: bool = False
     """The author run ended ready_for_review; a request clears it before resumption."""
     examples_digest: str | None = None
+    """Confirmed command's digest, based on normalized action and ordered examples."""
     review_task: asyncio.Task[Any] | None = None
     card_generation: int = 0
     card_task: asyncio.Task[None] | None = None
