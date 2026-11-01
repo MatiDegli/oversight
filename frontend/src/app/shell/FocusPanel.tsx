@@ -238,7 +238,13 @@ function ConversationFocus({
                   <ChatMergeReceipt
                     resolution={entry.resolution}
                     ts={entry.ts}
-                    onReview={action && onTabAction ? () => onTabAction(action) : undefined}
+                    onReview={
+                      action && onTabAction
+                        ? () => {
+                            onTabAction(action);
+                          }
+                        : undefined
+                    }
                   />
                 );
               }

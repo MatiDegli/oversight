@@ -104,3 +104,7 @@
   font-size: 13px;
   overflow-wrap: anywhere;
 }
+/* More specific than C1's action-button heights at both viewport heights. */
+.chat-shell .composer-actions .chat-merge-chip {
+  height: 30px;
+}

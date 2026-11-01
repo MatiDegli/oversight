@@ -3667,3 +3667,8 @@ matching retained proposal/resolution identity, revision and envelope position p
 the current review evidence. Missing evidence or dispatcher leaves a readable
 unavailable explanation. Shared pending-change guards remain unchanged; Chat stays
 selected and FocusPanel loads its existing ReviewPanel and tab history.
+
+C5 proof exercises production App Settings/tab dispatch in live and replay, using
+hand-written retained evidence and fixture-only Chat initialization. Targeted
+regressions retain focus, draft, graph camera and scroll ownership. Comparisons
+judge only C5: C2/C3 bodies, C4 composition and C1 TaskBox controls stay outside it.

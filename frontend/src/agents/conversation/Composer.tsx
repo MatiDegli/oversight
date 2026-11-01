@@ -59,13 +59,19 @@ export function Composer({
       setControlPending(false);
     }
   }
-  if (replay)
-    return (
-      <div className="conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted">
-        <p>Recorded run: messages, pause and stop are off.</p>
-        {actionAccessory && <div className="composer-actions flex">{actionAccessory}</div>}
+  if (replay) {
+    const caption = "Recorded run: messages, pause and stop are off.";
+    const replayClass =
+      "conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted";
+    return actionAccessory ? (
+      <div className={replayClass}>
+        <p>{caption}</p>
+        <div className="composer-actions flex">{actionAccessory}</div>
       </div>
+    ) : (
+      <p className={replayClass}>{caption}</p>
     );
+  }
   const paused = header.state === "paused";
   return (
     <div className="conversation-composer shrink-0 border-t border-divider p-[14px]">
