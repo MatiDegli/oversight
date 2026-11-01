@@ -5,8 +5,9 @@ import type { MapController } from "./mapController";
 import { agentLook } from "../theme";
 import type { MapModel } from "./mapModel";
 import { decisionsLabel, testedLabel } from "./mapEvidence";
-import { panelBox } from "./mapModel";
-import type { MapHover } from "./mapLines";
+import { moduleLayout, panelBox } from "./mapModel";
+import { mapSegments, pointed } from "./mapLines";
+import type { MapCall, MapHover } from "./mapLines";
 import type { MapLevel } from "./mapLevel";
 
 const mapStyles = `
@@ -53,6 +54,7 @@ const mapStyles = `
   color: var(--module-label);
   line-height: 1.2;
 }
+.map-full-name { position: relative; left: 50%; width: max-content; transform: translateX(-50%); overflow: visible; white-space: nowrap; }
 .map-count,
 .map-agent {
   font-size: 12px;
@@ -86,12 +88,13 @@ export interface MapFrame {
   pan: { x: number; y: number };
   level: MapLevel;
   hover?: MapHover;
+  calls?: MapCall[];
 }
 
 /** Screen-sized type and circles, world-sized cells. This layer never accepts input. */
 export function MapLayer({ frame }: { frame: MapFrame }) {
   const { model, zoom, pan, level } = frame;
-  const radius = Math.max(5, Math.min(9, Math.round(model.cellHeight * zoom * 0.1)));
+  const segments = mapSegments(frame);
   return (
     <div
       aria-hidden="true"
@@ -99,6 +102,67 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
       style={{ opacity: level === "map" ? 1 : 0 }}
     >
       <style>{mapStyles}</style>
+      {!!segments.length && (
+        <svg className="absolute inset-0 size-full" style={{ zIndex: 1 }}>
+          {segments.map((line) => {
+            const { start: a, end: b } = line;
+            const angle = Math.atan2(b.y - a.y, b.x - a.x),
+              ux = Math.cos(angle),
+              uy = Math.sin(angle);
+            return (
+              <g
+                key={`${line.source}>${line.target}`}
+                data-map-line={line.possible ? "possible" : "exact"}
+                style={{
+                  color: `var(--${line.possible ? "edge-possible" : "edge"})`,
+                  opacity: line.possible ? "var(--dim-node)" : 1,
+                }}
+              >
+                <line
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke="currentColor"
+                  style={{
+                    strokeWidth: `var(--${line.possible ? "possible-edge-width" : "exact-edge-width"})`,
+                  }}
+                />
+                {!line.possible && (
+                  <polygon
+                    fill="currentColor"
+                    points={`${String(b.x)},${String(b.y)} ${String(b.x - 7 * ux + 3 * uy)},${String(b.y - 7 * uy - 3 * ux)} ${String(b.x - 7 * ux - 3 * uy)},${String(b.y - 7 * uy + 3 * ux)}`}
+                  />
+                )}
+                {line.chip && (
+                  <g data-map-call-chip>
+                    <rect
+                      x={line.chip.x - (line.chip.box.x2 - line.chip.box.x1 - 4) / 2}
+                      y={line.chip.y - 8}
+                      width={line.chip.box.x2 - line.chip.box.x1 - 4}
+                      height={16}
+                      rx={8}
+                      fill="var(--ground)"
+                      stroke="var(--border)"
+                    />
+                    <text
+                      x={line.chip.x}
+                      y={line.chip.y}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill="var(--text)"
+                      fontSize={10}
+                      fontWeight={600}
+                    >
+                      ×{line.count}
+                    </text>
+                  </g>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      )}
       {model.groups.map((group) => {
         const box = panelBox(group, zoom, model.groups);
         return (
@@ -108,6 +172,11 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                 data-map-group={group.id}
                 className="map-panel absolute"
                 style={{
+                  borderColor:
+                    frame.hover?.id === group.id ||
+                    group.modules.some((m) => m.id === frame.hover?.id)
+                      ? "var(--edge)"
+                      : undefined,
                   left: box.x1 * zoom + pan.x,
                   top: box.y1 * zoom + pan.y,
                   width: (box.x2 - box.x1) * zoom,
@@ -147,40 +216,59 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                 </div>
               </div>
             )}
-            {group.modules.map((module) => (
-              <div
-                key={module.id}
-                className="absolute text-center"
-                style={{
-                  left: module.x * zoom + pan.x,
-                  top: module.y * zoom + pan.y,
-                  width: model.cellWidth * zoom - 10,
-                  transform: "translate(-50%, -50%)",
-                }}
-              >
-                <div className="relative mx-auto" style={{ width: radius * 2, height: radius * 2 }}>
-                  <div data-map-circle className="map-circle absolute inset-0 rounded-full" />
-                  {module.agents.map(({ slot }) => (
-                    <div
-                      key={slot}
-                      className={`absolute rounded-full border-2 border-dashed ${agentLook[slot].border}`}
-                      style={{ inset: -5 }}
-                    />
+            {group.modules.map((module) => {
+              const layout = moduleLayout(module, model, zoom, pan),
+                radius = layout.radius;
+              const full = pointed(module.id, group.id, frame.hover);
+              return (
+                <div
+                  key={module.id}
+                  data-map-module={module.id}
+                  className="absolute text-center"
+                  style={{
+                    zIndex: 2,
+                    left: layout.x,
+                    top: layout.y1,
+                    width: model.cellWidth * zoom - 10,
+                    transform: "translateX(-50%)",
+                  }}
+                >
+                  <div
+                    className="relative mx-auto"
+                    style={{ width: radius * 2, height: radius * 2 }}
+                  >
+                    <div data-map-circle className="map-circle absolute inset-0 rounded-full" />
+                    {module.agents.map(({ slot }) => (
+                      <div
+                        key={slot}
+                        className={`absolute rounded-full border-2 border-dashed ${agentLook[slot].border}`}
+                        style={{ inset: -5 }}
+                      />
+                    ))}
+                  </div>
+                  <div
+                    className={`map-name mt-[3px] ${full ? "map-full-name" : "truncate"}`}
+                    style={{
+                      background: frame.hover
+                        ? "color-mix(in srgb, var(--card) 85%, transparent)"
+                        : undefined,
+                    }}
+                  >
+                    {full ? (module.fullName ?? module.name) : module.name}
+                  </div>
+                  <div className="map-count">
+                    {module.functions
+                      ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
+                      : "empty"}
+                  </div>
+                  {module.agents.map(({ slot, text }) => (
+                    <div key={slot} className={`map-agent ${agentLook[slot].textClass}`}>
+                      {text}
+                    </div>
                   ))}
                 </div>
-                <div className="map-name mt-[3px] truncate">{module.name}</div>
-                <div className="map-count">
-                  {module.functions
-                    ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
-                    : "empty"}
-                </div>
-                {module.agents.map(({ slot, text }) => (
-                  <div key={slot} className={`map-agent ${agentLook[slot].textClass}`}>
-                    {text}
-                  </div>
-                ))}
-              </div>
-            ))}
+              );
+            })}
           </div>
         );
       })}

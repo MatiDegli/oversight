@@ -12,7 +12,7 @@ import { FIT_PADDING } from "./geometry";
 import type { GraphViewProps } from "./GraphView";
 import type { MapFrame } from "./MapLayer";
 import { MAP_MIN_MODULES, nextLevel, targetLevel } from "./mapLevel";
-import { mapHit } from "./mapLines";
+import { mapCalls, mapHit } from "./mapLines";
 import type { MapHover } from "./mapLines";
 import { mapModel, panelBox } from "./mapModel";
 import { settle } from "./updateGraph";
@@ -76,6 +76,7 @@ function createMapController(
   let cy: Core | undefined;
   let model: MapFrame["model"] = { groups: [], cellWidth: 446, cellHeight: 220 };
   let level: MapFrame["level"] = "cards";
+  let calls: MapFrame["calls"];
   let hover: MapHover | undefined;
   let pointerFrame = 0;
   let pointer: { x: number; y: number } | undefined;
@@ -114,7 +115,7 @@ function createMapController(
     host.current?.setAttribute("data-map-level", level);
     latest.current.onMapLevel?.(level);
     if (level !== "map") hover = undefined;
-    frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() }, hover };
+    frame = { model, level, zoom: cy.zoom(), pan: { ...cy.pan() }, calls, hover };
     cy.autoungrabify(level === "map");
     cy.boxSelectionEnabled(false);
     if (level === "map") {
@@ -200,6 +201,7 @@ function createMapController(
         stateStore.getState().state,
         latest.current.cone ?? latest.current.liveCone,
       );
+      calls = mapCalls(elements);
       measureHeaders(model);
       publish();
     },
