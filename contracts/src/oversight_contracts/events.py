@@ -1,8 +1,8 @@
 # pyright: reportUnknownMemberType=false
 # Pydantic leaves ValidationInfo.context untyped; keep the approved authority validator literal.
-"""The envelope, the eleven event payloads and the ServerEvent union (docs/proposal.md, 4.4 to 4.6).
+"""The envelope, event payloads and ServerEvent union (docs/proposal.md, 4.4 to 4.6).
 
-Every event carries seq, ts, type and payload. No event carries an absolute path or model text.
+Every event carries seq, ts, type and payload. Lead replies carry bounded, masked model text.
 """
 
 from typing import Annotated, Literal, Self
@@ -211,6 +211,7 @@ class AgentMessageSent(ContractModel):
     """
 
     agent_id: AgentId
+    """The recipient: a coding agent or coordination lead."""
     text: MessageText | None = None
     """As stored: runs shaped like a credential are masked as `[redacted]` before the event is written.
     Null only in an export for publication that withheld it."""  # noqa: E501
@@ -515,14 +516,29 @@ class LeadStatus(ContractModel):
     """The coordination task."""
     model: NonEmptyText
     """The offered model profile."""
-    state: Literal["starting", "working", "halted", "stopped", "done"]
-    """The lead's lifecycle state."""
+    state: Literal["starting", "working", "idle", "halted", "stopped", "done"]
+    """Idle waits between turns; done is retained for historical log compatibility."""
     step: NonNegativeInt
     """Completed public-command tool calls."""
     detail: str | None
     """The lifecycle explanation."""
     requested_plan_id: PlanId | None = None
     """The plan this revision's step requested, or null."""
+
+
+class LeadReply(ContractModel):
+    """One lead turn's reply; L2 produces it and L3 presents the thread."""
+
+    agent_id: AgentId
+    """The lead replying."""
+    answers_seq: PositiveInt | None
+    """An earlier agent.message to this lead; null answers the opening task."""
+    text: Annotated[str, Field(min_length=1, max_length=4096, pattern=r"\S")] | None
+    """Nonblank text, masked before storage like messages; null with a cut or withheld export."""
+    through_seq: PositiveInt | None
+    """The observed horizon, strictly lower than this reply's envelope seq, or null."""
+    cut: Literal["tool_calls", "model_calls", "time", "spend_brake"] | None
+    """The turn limit that cut the reply short, or null."""
 
 
 class RevertResult(ContractModel):
@@ -720,6 +736,13 @@ class LeadStatusEvent(EventBase):
     """The complete event payload."""
 
 
+class LeadReplyEvent(EventBase):
+    """The lead.reply envelope."""
+
+    type: Literal["lead.reply"]
+    payload: LeadReply
+
+
 class ModelAttemptFailedEvent(EventBase):
     """The server-owned model.attempt_failed envelope."""
 
@@ -750,6 +773,7 @@ type ServerEvent = Annotated[
     | RevertResolvedEvent
     | QueueUpdatedEvent
     | LeadStatusEvent
+    | LeadReplyEvent
     | GrantCreatedEvent
     | GrantRevokedEvent,
     Field(discriminator="type"),

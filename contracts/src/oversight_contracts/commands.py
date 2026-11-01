@@ -77,7 +77,11 @@ class AgentCreated(ContractModel):
 
 
 class AgentMessage(ContractModel):
-    """`POST /agents/{id}/message`, level 3: answers 501 until then."""
+    """Human text for `POST /agents/{id}/message` or `POST /leads/{agent_id}/message`.
+
+    The lead route is declared for L2: empty 202 on acceptance, 409 wrong_state unless idle,
+    and 501 in replay. L2 publishes agent.message with the lead as recipient.
+    """
 
     text: NonEmptyText
 

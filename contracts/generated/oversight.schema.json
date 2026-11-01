@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.14.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.15.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -135,7 +135,7 @@
     },
     "AgentMessage": {
       "additionalProperties": false,
-      "description": "`POST /agents/{id}/message`, level 3: answers 501 until then.",
+      "description": "Human text for `POST /agents/{id}/message` or `POST /leads/{agent_id}/message`.\n\nThe lead route is declared for L2: empty 202 on acceptance, 409 wrong_state unless idle,\nand 501 in replay. L2 publishes agent.message with the lead as recipient.",
       "properties": {
         "text": {
           "$ref": "#/$defs/NonEmptyText"
@@ -3502,6 +3502,108 @@
       "title": "LeadPlanDecisionRef",
       "type": "object"
     },
+    "LeadReply": {
+      "additionalProperties": false,
+      "description": "One lead turn's reply; L2 produces it and L3 presents the thread.",
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "answers_seq": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "An earlier agent.message to this lead; null answers the opening task."
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Nonblank text, masked before storage like messages; null with a cut or withheld export."
+        },
+        "through_seq": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The observed horizon, strictly lower than this reply's envelope seq, or null."
+        },
+        "cut": {
+          "anyOf": [
+            {
+              "enum": [
+                "tool_calls",
+                "model_calls",
+                "time",
+                "spend_brake"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The turn limit that cut the reply short, or null."
+        }
+      },
+      "required": [
+        "agent_id",
+        "answers_seq",
+        "text",
+        "through_seq",
+        "cut"
+      ],
+      "title": "LeadReply",
+      "type": "object"
+    },
+    "LeadReplyEvent": {
+      "additionalProperties": false,
+      "description": "The lead.reply envelope.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "lead.reply",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/LeadReply"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "LeadReplyEvent",
+      "type": "object"
+    },
     "LeadStatus": {
       "additionalProperties": false,
       "description": "The server-owned coordination lead state.",
@@ -3521,10 +3623,11 @@
           "$ref": "#/$defs/NonEmptyText"
         },
         "state": {
-          "description": "The lead's lifecycle state.",
+          "description": "Idle waits between turns; done is retained for historical log compatibility.",
           "enum": [
             "starting",
             "working",
+            "idle",
             "halted",
             "stopped",
             "done"
@@ -5731,6 +5834,7 @@
           "grant.revoked": "#/$defs/GrantRevokedEvent",
           "graph.delta": "#/$defs/GraphDeltaEvent",
           "graph.snapshot": "#/$defs/GraphSnapshotEvent",
+          "lead.reply": "#/$defs/LeadReplyEvent",
           "lead.status": "#/$defs/LeadStatusEvent",
           "merge_mode.changed": "#/$defs/MergeModeChangedEvent",
           "model.attempt_failed": "#/$defs/ModelAttemptFailedEvent",
@@ -5809,6 +5913,9 @@
         },
         {
           "$ref": "#/$defs/LeadStatusEvent"
+        },
+        {
+          "$ref": "#/$defs/LeadReplyEvent"
         },
         {
           "$ref": "#/$defs/GrantCreatedEvent"

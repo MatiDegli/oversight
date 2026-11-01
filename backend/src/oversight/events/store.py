@@ -32,6 +32,7 @@ from oversight_contracts.events import (
     ChangeResolved,
     ChangeUpdated,
     ErrorReport,
+    LeadReply,
     LeadStatus,
     ModelAttemptFailed,
     RevertResult,
@@ -73,6 +74,7 @@ type EventPayload = (
     | RevertResult
     | QueuedTask
     | LeadStatus
+    | LeadReply
     | GrantCreated
     | GrantRevoked
 )
@@ -100,6 +102,7 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     RevertResult: "revert.resolved",
     QueuedTask: "queue.updated",
     LeadStatus: "lead.status",
+    LeadReply: "lead.reply",
     GrantCreated: "grant.created",
     GrantRevoked: "grant.revoked",
 }
