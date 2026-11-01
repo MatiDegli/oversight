@@ -25,6 +25,8 @@ export function applyEvent(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
+    case "lead.reply":
+      return next;
     case "agent.message":
       return {
         ...next,

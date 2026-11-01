@@ -62,6 +62,17 @@ def validate_references(event: ServerEvent, prior: Mapping[int, ServerEvent]) ->
             for item in cast(list[Any], value):
                 walk(item)
 
+    if event.type == "lead.reply":
+        reply = event.payload
+        if reply.answers_seq is not None:
+            if reply.answers_seq >= event.seq:
+                raise ValueError("answers_seq must be earlier than the reply")
+            source = referenced(reply.answers_seq, "agent.message")
+            assert source.type == "agent.message"
+            if source.payload.agent_id != reply.agent_id:
+                raise ValueError("answers_seq must address the same lead")
+        if reply.through_seq is not None and reply.through_seq >= event.seq:
+            raise ValueError("through_seq must be lower than the reply seq")
     walk(event.payload.model_dump(mode="json"))
     if event.type == "change.resolved":
         for use in event.payload.grants or ():
