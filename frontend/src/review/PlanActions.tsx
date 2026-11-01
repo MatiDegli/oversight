@@ -26,8 +26,12 @@ export default function PlanActions({
   const wave = firstWaveSize(plan);
   const waiting =
     queue?.detail ??
-    (queue?.state === "queued" && slots
-      ? `Needs ${String(wave)} free ${wave === 1 ? "slot" : "slots"}; ${String(slots.held)} of ${String(slots.total)} slots are held.`
+    (queue?.state === "queued" && slots && slots.held > 0
+      ? slots.held === 1
+        ? "Waits for the running agent to finish."
+        : wave === 1
+          ? `Waits for one of the ${String(slots.held)} running agents to finish.`
+          : `Waits for ${String(wave)} of the ${String(slots.held)} running agents to finish.`
       : queue?.state === "queued"
         ? "Waiting for slot evidence."
         : null);

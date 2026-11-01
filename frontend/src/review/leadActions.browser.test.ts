@@ -330,8 +330,8 @@ it.each([
       await expect(groupHeading).toHaveCSS("text-transform", "uppercase");
       const waitingLine = queued
         .locator(".plan-explanation")
-        .filter({ hasText: "Needs 2 free slots; 2 of 2 slots are held." });
-      await expect(waitingLine).toHaveText("Needs 2 free slots; 2 of 2 slots are held.");
+        .filter({ hasText: "Waits for 2 of the 2 running agents to finish." });
+      await expect(waitingLine).toHaveText("Waits for 2 of the 2 running agents to finish.");
       await expect(waitingLine.locator('svg.lucide-clock[aria-hidden="true"]')).toHaveCount(1);
       await reachable(page);
       await capture(page, "queued", width, theme);
@@ -358,7 +358,7 @@ it.each([
         ]);
       });
       await expect(queued).toContainText("Blocked");
-      await expect(queued).not.toContainText("Needs 2 free slots");
+      await expect(queued).not.toContainText("Waits for");
       await queued.getByRole("button", { name: "Take out of the queue" }).click();
       await expect(queued.getByRole("status")).toContainText("queue cancellation evidence");
       expect(requests.at(-1)).toEqual({

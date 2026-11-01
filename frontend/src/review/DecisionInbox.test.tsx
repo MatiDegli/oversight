@@ -262,12 +262,32 @@ it.each(["starting", "failed"] as const)(
   },
 );
 
-it.each(["queued", "blocked"] as const)(
-  "uses slot-derived waiting copy only for queued evidence: %s",
-  (status) => {
+it.each([
+  [1, 1, "queued", null, "Waits for the running agent to finish."],
+  [1, 2, "queued", null, "Waits for one of the 2 running agents to finish."],
+  [2, 2, "queued", null, "Waits for 2 of the 2 running agents to finish."],
+  [1, 2, "blocked", null, null],
+  [
+    2,
+    2,
+    "queued",
+    "Waiting for the spending brake to clear",
+    "Waiting for the spending brake to clear",
+  ],
+  [1, null, "queued", null, "Waiting for slot evidence."],
+  [1, 0, "queued", null, "Waiting for slot evidence."],
+] as const)(
+  "uses observed waiting copy for wave=%s, held=%s, state=%s, detail=%s",
+  (wave, held, status, detail, words) => {
     const event = leadEvents[7];
     if (event?.type !== "plan.updated") throw new Error("Missing plan");
-    const plan = { ...event.payload, queued_task_id: "queue-test" };
+    const task = event.payload.subtasks?.[0];
+    if (!task) throw new Error("Missing subtask");
+    const plan = {
+      ...event.payload,
+      queued_task_id: "queue-test",
+      subtasks: Array.from({ length: wave }, () => ({ ...task, depends_on: [] })),
+    };
     const next = applyEvent(leadState, {
       seq: 9,
       ts: event.ts,
@@ -280,21 +300,21 @@ it.each(["queued", "blocked"] as const)(
         plan_revision: plan.revision,
         agent: null,
         agent_ids: [],
-        detail: null,
+        detail,
         started_by: null,
       },
     });
     const html = renderToStaticMarkup(
-      <PlanActions state={next} plan={plan} slots={{ held: 2, total: 2 }} />,
+      <PlanActions state={next} plan={plan} slots={held === null ? null : { held, total: 2 }} />,
     );
     if (status === "queued") {
-      expect(html).toContain("Needs 1 free slot; 2 of 2 slots are held.");
       expect(html).toMatch(
-        /<p class="plan-explanation"><svg[^>]*class="lucide lucide-clock"[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Needs 1 free slot/s,
+        /<p class="plan-explanation"><svg[^>]*class="lucide lucide-clock"[^>]*aria-hidden="true"[^>]*>.*?<\/svg>/s,
       );
+      expect(html).toContain(`</svg>${words}</p>`);
     } else {
       expect(html).toContain("Blocked");
-      expect(html).not.toContain("Needs 1 free slot");
+      expect(html).not.toContain("Waits for");
       expect(html).not.toContain("Waiting for slot evidence");
     }
   },
