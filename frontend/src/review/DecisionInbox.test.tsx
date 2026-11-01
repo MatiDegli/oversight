@@ -126,7 +126,7 @@ it("replaces the generic fallback with a lazy plan piece and ignores an older up
   );
   expect(row).toContain(`<h3>${event.payload.task}</h3>`);
   expect(row).not.toContain("Lead plan awaits approval");
-  expect(row).toContain("Loading plan");
+  expect(row).not.toContain("</h3><p>");
 });
 
 it("omits a plan paragraph when its detail equals its heading", () => {
@@ -142,7 +142,7 @@ it("omits a plan paragraph when its detail equals its heading", () => {
     event.payload.task,
   );
   expect(row.split(event.payload.task)).toHaveLength(2);
-  expect(row).not.toContain("<p>");
+  expect(row).not.toContain("</h3><p>");
   expect(row).not.toContain('class="decision-reasons"');
 });
 

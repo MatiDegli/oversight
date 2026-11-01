@@ -1,6 +1,7 @@
+import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
-import type { Browser } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, it } from "vitest";
@@ -18,12 +19,83 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await launchBrowser();
+  browser = await launchBrowser({
+    webGL: process.env.LEAD_ACTIONS_SHOTS === "1",
+    softwareRendering: true,
+  });
 }, 60_000);
 afterAll(async () => {
   await browser.close();
   await server.close();
 });
+
+async function reachable(page: Page) {
+  for (const action of await page.locator(".plan-controls button").all()) {
+    await action.scrollIntoViewIfNeeded();
+    await expect(action).toBeInViewport();
+    const box = await action.boundingBox(),
+      scroll = await page.locator(".inbox-entries").boundingBox();
+    if (!box || !scroll) throw new Error("Missing action bounds");
+    expect(box.y).toBeGreaterThanOrEqual(scroll.y);
+    expect(box.y + box.height).toBeLessThanOrEqual(scroll.y + scroll.height);
+  }
+}
+async function capture(page: Page, state: "plans" | "queued", width: number, theme: string) {
+  if (process.env.LEAD_ACTIONS_SHOTS !== "1") return;
+  await page.evaluate(() => document.fonts.ready);
+  // Capture-only scrolling exposes the reference subject; normal access is proved by reachable.
+  await page.locator(".inbox-entries").evaluate(
+    (scroll, { state, width }) => {
+      const subject =
+        state === "queued"
+          ? scroll.querySelector(".plan-group")
+          : [...scroll.querySelectorAll("article")].find((row) =>
+              row.textContent.includes("Reject bad quantities in the cart"),
+            );
+      scroll.scrollTop = subject
+        ? subject.getBoundingClientRect().top -
+          scroll.getBoundingClientRect().top +
+          scroll.scrollTop -
+          (width === 1280 ? (state === "queued" ? 0 : 60) : 100)
+        : 0;
+    },
+    { state, width },
+  );
+  const metrics = await page
+    .locator(".plan-content")
+    .first()
+    .evaluate((content) => {
+      const style = (selector: string) => {
+        const element = content.querySelector(selector);
+        if (!element) throw new Error(`Missing ${selector}`);
+        return getComputedStyle(element);
+      };
+      return {
+        focus: document.querySelector(".focus-panel")?.getBoundingClientRect().width,
+        gutter: getComputedStyle(content.closest("article") as HTMLElement).paddingInline,
+        circle: style(".plan-circle").width,
+        subtaskGap: style("li").columnGap,
+        actionHeight: style("button").height,
+        actionGap: style(".plan-controls").columnGap,
+        taskSize: style("li p").fontSize,
+        taskLine: style("li p").lineHeight,
+      };
+    });
+  console.log("Lead actions measurements", { state, width, theme, ...metrics });
+  expect(metrics).toEqual({
+    focus: width === 1920 ? 880 : 608,
+    gutter: "22px",
+    circle: "20px",
+    subtaskGap: "12px",
+    actionHeight: "34px",
+    actionGap: "8px",
+    taskSize: "14px",
+    taskLine: "19.6px",
+  });
+  const directory = fileURLToPath(new URL("../../../.shots/lead-actions/", import.meta.url));
+  await mkdir(directory, { recursive: true });
+  await page.screenshot({ path: `${directory}${state}-${String(width)}-${theme}.png` });
+}
 
 it.each([
   [1920, 1080, "dark"],
@@ -44,10 +116,14 @@ it.each([
     page.on("pageerror", (e) => errors.push(e.message));
     page.on("request", (r) => loaded.push(r.url()));
     try {
-      await page.route("**/", (r) => r.fulfill({ contentType: "text/html", body: html }));
-      await page.route("**/events?*", (r) =>
-        r.fulfill({ contentType: "text/event-stream", body: ": connected\n\n" }),
+      await page.route("**/", (r) =>
+        r.fulfill({
+          contentType: "text/html",
+          body: html.replace("<html>", `<html data-theme="${theme}">`),
+        }),
       );
+      // Hold the real SSE request idle; only fixture evidence advances this run.
+      await page.route("**/events?*", () => undefined);
       await page.route(/\/(plans|queue)\/[^/]+\/(start|reject|cancel)$/, async (route) => {
         const path = new URL(route.request().url()).pathname;
         requests.push({ path, body: route.request().postDataJSON() });
@@ -109,10 +185,13 @@ it.each([
           };
         });
       const unchanged = await camera();
+      await reachable(page);
       await cart.getByRole("button", { name: "Reject plan" }).click();
       const comment = cart.getByLabel("Comment, saved with the plan (optional)");
       await comment.fill("Do this after the order work.");
       await comment.press("Control+Enter");
+      await reachable(page);
+      await capture(page, "plans", width, theme);
       expect(requests).toHaveLength(0);
       await cart.getByRole("button", { name: "Keep plan" }).click();
       expect(requests).toHaveLength(0);
@@ -174,6 +253,8 @@ it.each([
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
       await expect(queued.locator("li")).toHaveCount(4);
       await expect(queued).toContainText("Needs 2 free slots; 2 of 2 slots are held.");
+      await reachable(page);
+      await capture(page, "queued", width, theme);
       await page.evaluate(() => {
         window.leadActions.update(
           { revision: 2, queued_task_id: "queue-orders" },
