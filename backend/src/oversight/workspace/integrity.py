@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.workspace._platform import executable, is_link_like
 from oversight.workspace.errors import WorkspaceError
+from oversight.workspace.files import gitdir_matches, nt_ambiguous, nt_plain_parents, open_nt
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import ProcessResult, Spawn
 
@@ -62,6 +63,9 @@ class GitIdentity:
     def verify_root_entry(self) -> None:
         """The walk exemption requires the registered kind and exact linked-tree pointer."""
         entry = self.root / ".git"
+        if sys.platform == "win32":
+            self._verify_nt(registration=False)
+            return
         try:
             mode = entry.lstat().st_mode
             valid = (
@@ -76,6 +80,9 @@ class GitIdentity:
 
     def verify_registration(self) -> None:
         """Check the newly server-created checkout once; never discover pins from its pointer."""
+        if sys.platform == "win32":
+            self._verify_nt(registration=True)
+            return
         try:
             if self.directory == self.common:
                 valid = self.directory.is_dir()
@@ -87,6 +94,24 @@ class GitIdentity:
             if not valid or os.path.realpath(self.directory) != str(self.directory):
                 raise IntegrityError("unexpected Git registration", ".git")
         except (OSError, UnicodeError, SizeLimitError) as error:
+            raise IntegrityError("unreadable Git registration", ".git") from error
+
+    def _verify_nt(self, *, registration: bool) -> None:
+        try:
+            nt_plain_parents(self.root)
+            nt_plain_parents(self.directory)
+            nt_plain_parents(self.common)
+            if self.directory == self.common:
+                nt_plain_parents(self.root / ".git")
+                return
+            pointer = _plain_bytes(self.root / ".git", 4096, time.monotonic() + 5).decode("utf-8")
+            valid = gitdir_matches(pointer, self.directory, pointer=True)
+            if registration:
+                named = _plain_bytes(self.directory / "gitdir", 4096, time.monotonic() + 5)
+                valid = valid and gitdir_matches(named.decode("utf-8"), self.root / ".git")
+            if not valid:
+                raise IntegrityError("unexpected Git registration", ".git")
+        except (OSError, WorkspaceError, UnicodeError) as error:
             raise IntegrityError("unreadable Git registration", ".git") from error
 
     def pins(self) -> dict[str, str]:
@@ -106,6 +131,8 @@ def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: boo
     """
     root = identity.root
     try:
+        if sys.platform == "win32":
+            nt_plain_parents(root)
         if not stat.S_ISDIR(root.lstat().st_mode) or os.path.realpath(root) != str(root):
             raise IntegrityError("linked Git scan root", ".")
     except OSError as error:
@@ -115,16 +142,29 @@ def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: boo
         remaining(deadline)
         directory = pending.pop()
         try:
+            if sys.platform == "win32":
+                nt_plain_parents(directory)
             with os.scandir(directory) as entries:
                 for entry in entries:
                     remaining(deadline)
                     path = Path(entry.path)
                     relative = path.relative_to(root).as_posix()
-                    if entry.name.casefold() == ".git":
-                        if path != root / ".git" or is_link_like(entry):
+                    if entry.name.casefold() == ".git" or (
+                        sys.platform == "win32" and entry.name.upper() == ".GIT"
+                    ):
+                        if (
+                            path != root / ".git"
+                            or is_link_like(entry)
+                            or (
+                                sys.platform == "win32"
+                                and (entry.name != ".git" or is_link_like(entry, nt=True))
+                            )
+                        ):
                             raise IntegrityError("nested or linked Git entry", relative)
                         continue
-                    if sys.platform == "win32" and is_link_like(entry):
+                    if sys.platform == "win32" and nt_ambiguous(entry.name):
+                        raise IntegrityError("ambiguous Windows entry", relative)
+                    if sys.platform == "win32" and is_link_like(entry, nt=True):
                         continue
                     if entry.is_dir(follow_symlinks=False):
                         pending.append(path)
@@ -200,25 +240,37 @@ def veto_index(output: str) -> None:
             raise IntegrityError("invalid Git index query", ".", code="git_failed")
         if fields[0] == "160000":
             raise IntegrityError("Git links are forbidden", path)
-        if any(part.casefold() == ".gitmodules" for part in path.split("/")):
+        if any(
+            part.casefold() == ".gitmodules"
+            or (sys.platform == "win32" and part.upper() == ".GITMODULES")
+            for part in path.split("/")
+        ):
             raise IntegrityError("Git modules are forbidden", path)
 
 
 def veto_gitmodules(root: Path, deadline: float) -> None:
     """Also reject untracked/ignored .gitmodules, before add can stage it."""
+    if sys.platform == "win32":
+        nt_plain_parents(root)
     pending = [root]
     while pending:
         remaining(deadline)
         directory = pending.pop()
         try:
+            if sys.platform == "win32":
+                nt_plain_parents(directory)
             with os.scandir(directory) as entries:
                 for entry in entries:
                     remaining(deadline)
                     path = Path(entry.path)
-                    if entry.name.casefold() == ".gitmodules":
+                    if entry.name.casefold() == ".gitmodules" or (
+                        sys.platform == "win32" and entry.name.upper() == ".GITMODULES"
+                    ):
                         raise IntegrityError(
                             "Git modules are forbidden", str(path.relative_to(root))
                         )
+                    if sys.platform == "win32" and is_link_like(entry, nt=True):
+                        continue
                     if entry.name.casefold() != ".git" and entry.is_dir(follow_symlinks=False):
                         pending.append(path)
         except OSError as error:
@@ -230,7 +282,20 @@ def veto_gitmodules(root: Path, deadline: float) -> None:
 def _plain_bytes(path: Path, limit: int, deadline: float) -> bytes:
     """Read bounded regular metadata without following the final symlink or opening a FIFO."""
     if sys.platform == "win32":
-        raise IntegrityError("NT merge metadata I/O requires W2", path.name)
+        remaining(deadline)
+        try:
+            with open_nt(path) as handle:
+                if os.fstat(handle.fileno()).st_size > limit:
+                    raise IntegrityError("invalid merge metadata", path.name)
+                data = handle.read(limit + 1)
+            if len(data) > limit:
+                raise IntegrityError("oversized merge metadata", path.name)
+        except IntegrityError:
+            raise
+        except (OSError, WorkspaceError) as error:
+            raise IntegrityError("unreadable merge metadata", path.name) from error
+        remaining(deadline)
+        return data
     remaining(deadline)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)

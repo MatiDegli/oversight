@@ -99,3 +99,18 @@ def test_range_boundary_and_growth_after_stat(tmp_path, monkeypatch) -> None:
     with pytest.raises(WorkspaceError, match=r"growing.txt exceeds the 8192-byte size limit"):
         read_range(tmp_path, target.name, 1, 1, 4)
     assert calls == 2
+
+
+def test_nt_boundaries_and_ranged_bytes(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace import files
+
+    monkeypatch.setattr(files, "sys", SimpleNamespace(platform="win32"))
+    for extra in (0, 1):
+        # Each original POSIX assertion is exercised through the NT boundary as well.
+        target = tmp_path / "a.txt"
+        target.unlink(missing_ok=True)
+        test_file_and_replacement_byte_boundary(tmp_path, extra)
+    test_streamed_range_preserves_line_rules_and_hash_with_split_utf8(tmp_path)
+    test_range_boundary_and_growth_after_stat(tmp_path, monkeypatch)

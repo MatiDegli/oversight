@@ -1,9 +1,11 @@
 """Pure protected-path matching; no list loading, filesystem expansion or authority."""
 
+import sys
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from re import match
 
+from oversight.workspace import InvalidPath, split_relative
 from oversight_contracts.common import FileStatus
 from oversight_contracts.events import ChangeProposed, FileStat
 from oversight_contracts.policy import EvidenceRef
@@ -101,6 +103,14 @@ class ProtectedPathCheck:
 
 def _valid_path(path: object) -> bool:
     # Lexical validation only, including deleted files: never resolve or open a path.
+    if sys.platform == "win32":
+        if not isinstance(path, str):
+            return False
+        try:
+            split_relative(path, nt=True)
+            return True
+        except InvalidPath:
+            return False
     return (
         isinstance(path, str)
         and bool(path)
@@ -117,6 +127,21 @@ def _known_status(status: object) -> bool:
 
 
 def _matches(path: str, snapshot: ProtectedPathSnapshot) -> tuple[ProtectedPathMatch, ...]:
+    if sys.platform == "win32":
+        if snapshot.paths is not None:
+            for explicit in snapshot.paths:
+                if explicit.casefold() == path.casefold():
+                    return (ProtectedPathMatch(path=path, category="explicit", pattern=explicit),)
+            return ()
+        return tuple(
+            ProtectedPathMatch(path=path, category=category, pattern=pattern)
+            for category, patterns, basename in BUILTIN_CATEGORIES
+            for pattern in patterns
+            if fnmatchcase(
+                (path.rsplit("/", 1)[-1] if basename else path).casefold(), pattern.casefold()
+            )
+            or (pattern.endswith("/**") and path.casefold() == pattern[:-3].casefold())
+        )
     if snapshot.paths is not None:
         return (
             (ProtectedPathMatch(path=path, category="explicit", pattern=path),)

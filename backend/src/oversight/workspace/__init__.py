@@ -35,7 +35,13 @@ from oversight.workspace.errors import (
     WorkspaceError,
 )
 from oversight.workspace.example_criteria import RenderedCriteria, parse_cases, render_examples
-from oversight.workspace.files import FileRead, check_content, content_hash, valid_agent_id
+from oversight.workspace.files import (
+    FileRead,
+    check_content,
+    content_hash,
+    split_relative,
+    valid_agent_id,
+)
 from oversight.workspace.integrity import (
     IntegrityError,
     MergeGuard,
@@ -151,6 +157,7 @@ __all__ = [
     "run_process",
     "secret_refusal",
     "select_source",
+    "split_relative",
     "terminate_job",
     "unlink_retry",
     "valid_agent_id",

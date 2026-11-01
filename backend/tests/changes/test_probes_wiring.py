@@ -31,6 +31,36 @@ def assert_clean(h: Harness) -> None:
 
 
 @pytest.mark.anyio
+async def test_nt_wiring_emits_unavailable_without_probe_work(h: Harness, monkeypatch) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from oversight.changes import _probes
+
+    await h.open(1)
+    await add_test(h, "def test_added():\n    assert True\n")
+    checkout, discovery, run = AsyncMock(), AsyncMock(), AsyncMock()
+    monkeypatch.setattr(_probes, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(_probes, "base_probe_checkout", checkout)
+    monkeypatch.setattr(_probes, "added_cases", discovery)
+    monkeypatch.setattr(_probes, "_run", run)
+    before = len(h.workspace.calls)
+    assert await h.finish(1)
+    facts = h.payloads(ChangeFacts)[-1]
+    assert not facts.added_tests
+    for phase in ("base_probe", "head_probe"):
+        assert f"{phase} unavailable: native Windows isolation is unavailable" in facts.problems
+    assert not any(e.phase.endswith("_probe") for e in h.payloads(SuiteExecution))
+    assert not any(
+        c.args[0] in {"checkout", "restore"} or "--detach" in c.args
+        for c in h.workspace.calls[before:]
+    )
+    for spy in (checkout, discovery, run):
+        spy.assert_not_called()
+    assert_clean(h)
+
+
+@pytest.mark.anyio
 async def test_probes_overlay_tests_only_on_recorded_base_and_repeat_each_revision(
     h: Harness,
 ) -> None:

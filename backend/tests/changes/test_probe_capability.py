@@ -53,3 +53,44 @@ async def test_probes_skip_unknown_without_c(h: Harness, monkeypatch):
     )
     assert not any(e.phase.endswith("_probe") for e in h.payloads(SuiteExecution))
     assert calls == ["required", "required"]
+
+
+@pytest.mark.anyio
+async def test_nt_probe_unavailable_before_any_checkout(h, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.changes import _probes
+
+    await h.open(1)
+    await add_test(h, "def test_added():\n    assert True\n")
+    checkout, run, discovery = AsyncMock(), AsyncMock(), AsyncMock()
+    monkeypatch.setattr(_probes, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(_probes, "base_probe_checkout", checkout)
+    monkeypatch.setattr(_probes, "_run", run)
+    monkeypatch.setattr(_probes, "added_cases", discovery)
+    before = len(h.workspace.calls)
+    assert await h.finish(1)
+    facts = h.payloads(ChangeFacts)[-1]
+    assert not facts.added_tests
+    assert any("base_probe unavailable: native Windows" in p for p in facts.problems)
+    assert not any(e.phase.endswith("_probe") for e in h.payloads(SuiteExecution))
+    assert not any(
+        c.args[0] in {"restore", "checkout"} or "--detach" in c.args
+        for c in h.workspace.calls[before:]
+    )
+    assert not list(h.workspace.tmp_dir.glob("base-probe-*"))
+    for spy in (checkout, run, discovery):
+        spy.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_nt_missing_probe_root_is_invalid_path(h: Harness, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace import InvalidPath, probes
+
+    root = h.workspace.tmp_dir / ("base-probe-" + "a" * 32)
+    tree = probes._ProbeTree(h.workspace, root, "agent-1", "", "base")
+    monkeypatch.setattr(probes, "sys", SimpleNamespace(platform="win32"))
+    with pytest.raises(InvalidPath, match=r"^probe checkout path is missing or linked$"):
+        tree.verify_root()

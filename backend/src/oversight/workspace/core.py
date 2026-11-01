@@ -321,6 +321,26 @@ class Workspace:
 
     def redact(self, text: str) -> str:
         """Remove the runtime directory's location from text that may reach an event."""
+        if sys.platform == "win32":
+            slash = str(self._root).replace("\\", "/")
+            back = slash.replace("/", "\\")
+            variants = (
+                ("file:///" + slash.lstrip("/"), "/"),
+                (back.replace("\\", "\\\\"), "\\\\"),
+                (back, "\\"),
+                (slash, "/"),
+            )
+            for prefix, separator in variants:
+                root, sep = re.escape(prefix), re.escape(separator)
+                text = re.sub(
+                    rf"{root}{sep}(?:workspace|worktrees{sep}agent-[1-9][0-9]*)(?:{sep}|(?![\w-]))",
+                    "",
+                    text,
+                    flags=re.IGNORECASE,
+                )
+                text = re.sub(root + sep, ".runtime/", text, flags=re.IGNORECASE)
+                text = re.sub(root, ".runtime", text, flags=re.IGNORECASE)
+            return text
         root = re.escape(str(self._root))
         text = re.sub(rf"{root}/(?:workspace|worktrees/agent-[1-9][0-9]*)(?:/|(?![\w-]))", "", text)
         return text.replace(f"{self._root}/", ".runtime/").replace(str(self._root), ".runtime")
