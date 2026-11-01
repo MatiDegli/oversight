@@ -4,7 +4,14 @@ import type { RefObject } from "react";
 import { stateStore } from "../state";
 import { decisionsLabel, mapEvidence, testedLabel } from "./mapEvidence";
 import { getActiveTheme } from "../theme";
-import { fitPanelCamera, frameCamera, prefersReducedMotion, startCamera, zoomBy } from "./camera";
+import {
+  centerMapCards,
+  fitPanelCamera,
+  frameCamera,
+  prefersReducedMotion,
+  startCamera,
+  zoomBy,
+} from "./camera";
 import type { Camera } from "./camera";
 import type { GraphElement } from "./elements";
 import { packFallback } from "./fallbackLayout";
@@ -80,6 +87,17 @@ function createMapController(
   let hover: MapHover | undefined;
   let pointerFrame = 0;
   let pointer: { x: number; y: number } | undefined;
+  let clickApi:
+    | {
+        folding: { toggle: (id: string) => boolean };
+        sync: () => void;
+        geometry: () => Parameters<typeof frameCamera>[3];
+      }
+    | undefined;
+  let down: { x: number; y: number } | undefined,
+    dragged = false;
+  const surface = (event: MouseEvent) =>
+    host.current?.contains(event.target as Node) || event.target === host.current?.parentElement;
   const active = () => latest.current.map && level === "map";
   const setHover = (hit?: MapHover) => {
     if (hover?.kind === hit?.kind && hover?.id === hit?.id) return;
@@ -94,6 +112,15 @@ function createMapController(
   const pointermove = (event: PointerEvent) => {
     if (!active()) return;
     pointer = point(event);
+    if (down && pointer && cy) {
+      const dx = pointer.x - down.x,
+        dy = pointer.y - down.y;
+      if (Math.hypot(dx, dy) > 3 || dragged) {
+        dragged = true;
+        cy.panBy({ x: dx, y: dy });
+        down = pointer;
+      }
+    }
     if (pointerFrame) return;
     pointerFrame = requestAnimationFrame(() => {
       pointerFrame = 0;
@@ -106,6 +133,45 @@ function createMapController(
     pointerFrame = 0;
     pointer = undefined;
     setHover();
+  };
+  const mousedown = (event: MouseEvent) => {
+    if (!active() || !surface(event) || event.button !== 0) return;
+    event.preventDefault();
+    // Cytoscape explicitly blurs on mousedown; own the map gesture before it reaches its canvas.
+    event.stopPropagation();
+    down = point(event);
+    dragged = false;
+  };
+  const mouseup = () => {
+    down = undefined;
+  };
+  const click = (event: MouseEvent) => {
+    if (!active() || !cy || !surface(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (dragged) return;
+    const p = point(event),
+      hit = p && mapHit(p, frame);
+    if (!hit || !clickApi) return;
+    const graph = cy,
+      api = clickApi;
+    if (hit.kind === "module" && graph.getElementById(hit.id).hasClass("folded")) {
+      api.folding.toggle(hit.id);
+      api.sync();
+    }
+    const ids =
+      hit.kind === "module"
+        ? [hit.id]
+        : (model.groups.find((g) => g.id === hit.id)?.modules.map((m) => m.id) ?? []);
+    explicit(() =>
+      centerMapCards(
+        graph,
+        ids,
+        prefersReducedMotion(),
+        api.geometry()?.area,
+        hit.kind === "module",
+      ),
+    );
   };
   const pannable = new Set<string>();
   const shownModules = () => cy?.nodes(".module").length ?? 0;
@@ -166,6 +232,12 @@ function createMapController(
       publish();
     }
   };
+  const explicit = <T>(move: () => T): T => {
+    if (!latest.current.map) return move();
+    const target = move();
+    hold((target as Camera | null | undefined)?.zoom ?? cy?.zoom() ?? 1);
+    return target;
+  };
   return {
     getFrame: () => frame,
     level: () => level,
@@ -178,12 +250,18 @@ function createMapController(
     attach(graph: Core) {
       cy = graph;
       const stage = host.current?.parentElement;
+      stage?.addEventListener("mousedown", mousedown, true);
+      stage?.addEventListener("click", click, true);
+      window.addEventListener("mouseup", mouseup);
       stage?.addEventListener("pointermove", pointermove);
       stage?.addEventListener("pointerleave", pointerleave);
       cy.on("viewport", viewport);
       cy.on("scrollzoom pinchzoom", navigate);
       host.current?.parentElement?.addEventListener("wheel", wheel, { passive: false });
       return () => {
+        stage?.removeEventListener("mousedown", mousedown, true);
+        stage?.removeEventListener("click", click, true);
+        window.removeEventListener("mouseup", mouseup);
         stage?.removeEventListener("pointermove", pointermove);
         stage?.removeEventListener("pointerleave", pointerleave);
         cancelAnimationFrame(pointerFrame);
@@ -205,12 +283,7 @@ function createMapController(
       measureHeaders(model);
       publish();
     },
-    explicit<T>(move: () => T): T {
-      if (!latest.current.map) return move();
-      const target = move();
-      hold((target as Camera | null | undefined)?.zoom ?? cy?.zoom() ?? 1);
-      return target;
-    },
+    explicit,
     zoom(graph: Core, factor: number) {
       if (latest.current.map) {
         level = nextLevel(level, graph.zoom() * factor, shownModules());
@@ -227,10 +300,14 @@ function createMapController(
       });
     },
     api(
-      folding: { detail: (level: "Modules" | "Functions" | "Details") => void },
+      folding: {
+        detail: (level: "Modules" | "Functions" | "Details") => void;
+        toggle: (id: string) => boolean;
+      },
       sync: () => void,
       geometry: () => Parameters<typeof frameCamera>[3],
     ) {
+      clickApi = { folding, sync, geometry };
       return {
         fit: () => {
           this.fit(geometry());

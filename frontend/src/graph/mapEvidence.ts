@@ -51,7 +51,9 @@ export function mapEvidence(
     group.decisions = Object.values(state.changes).filter(
       (c) =>
         (c.status === "ready_for_review" || c.status === "conflict") &&
-        [...c.graph.nodes_added, ...c.graph.nodes_modified, ...c.graph.nodes_removed].some(belongs),
+        [...c.graph.nodes_added, ...c.graph.nodes_modified, ...c.graph.nodes_removed].some((node) =>
+          belongs(typeof node === "string" ? node : node.id),
+        ),
     ).length;
     group.tested =
       state.graph?.edges.filter(
