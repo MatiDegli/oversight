@@ -3037,3 +3037,30 @@ runtime behavior; and a single binding table across nested scopes does not prove
 semantic equivalence. These are accepted because the result is a neutral question for the
 person, never a reuse mandate, approval gate or claim that extraction is safe. This front
 only produces evidence; capturing and wiring it into change facts remain separate work.
+## 2026-10-31 — Bounded initial-task context builder, pending its bench
+
+The pure internal builder in `changes/_initial_context.py` takes a graph snapshot,
+whole-tree source text and target node ids, returning text, its estimated tokens and
+explicit omission reasons. It has no caller yet: wiring and adoption wait for A16w's
+bench; B16e can evaluate the builder independently. It adds no agent graph tool.
+
+The global default is 1,500 estimated tokens, using ceil(UTF-8 bytes / 3), without a
+new tokenizer dependency. This conservative estimate charges the introduction, target
+headings, complete entries, separators and omission summary together. Greedy allocation
+tries every later entry even after one fails to fit; a target without a fitting signature
+gets no other sections. The estimate is a budget rule, not measured provider usage.
+
+Across targets sorted by qualified name, path and id, allocation order is signatures,
+exact callers, exact callees, constants used, possible callers, then possible callees.
+Signatures establish the task's subjects before their neighbors; exact relationships and
+source-proven constants precede uncertain relationships. Direct callers and callees each
+share the existing eight-item limit across exact and possible edges, deduplicated with
+exact winning. Output combines exact and possible neighbors with explicit labels.
+
+A module constant is a single uppercase name assigned once in module scope to a value
+accepted by `ast.literal_eval`, including annotated assignments. Imported, rebound,
+unused and lexically shadowed names are excluded: context must describe source evidence,
+not guess values. Python's symbol tables resolve body loads through nested scopes;
+set representations sort their members so hash seeds cannot change the text. Signatures
+are capped at 400 characters and constant representations over 120 characters are
+omitted, with reasons, to keep individual entries bounded without copying source bodies.
