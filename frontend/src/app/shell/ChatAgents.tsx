@@ -1,7 +1,8 @@
 import type { KeyboardEvent } from "react";
 import type { State } from "../../state";
+// eslint-disable-next-line no-restricted-imports -- C2 owns this Chat-only leaf; the shared agents barrel is outside this slice.
 import { selectChatAgents } from "../../agents/chatAgentSelectors";
-import { agentLook, agentSlotStyle } from "../../theme/agentLook";
+import { agentLook, agentSlotStyle } from "../../theme";
 import type { ChatAgentSelection } from "./ChatShell";
 import "./chatAgents.css";
 
@@ -38,18 +39,22 @@ export function ChatAgents({
         return (
           <li key={row.id}>
             <Row
+              role={onOpenConversation ? undefined : "group"}
               className="chat-agent-row"
               style={agentSlotStyle(row.hue)}
               data-selected={selectedAgentId === row.id}
               data-ended={row.done}
+              data-review={row.ready}
               {...(onOpenConversation
                 ? {
                     type: "button" as const,
                     "aria-pressed": selectedAgentId === row.id,
-                    onClick: () => onOpenConversation(row.id),
+                    onClick: () => {
+                      onOpenConversation(row.id);
+                    },
                   }
                 : {})}
-              aria-label={`Agent ${row.letter}: ${row.task}. ${row.label}`}
+              aria-label={`Agent ${row.letter}: ${row.task}. ${row.label}. ${row.id}`}
             >
               <span className={`chat-agent-badge ${agentLook[row.hue].tint}`} aria-hidden="true">
                 {row.letter}

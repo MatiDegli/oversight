@@ -1,7 +1,7 @@
 import { TaskBox, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
 import { ChatAgents } from "./ChatAgents";
-import { slotUsage } from "../../agents/taskBox";
+import { slotUsage } from "../../agents";
 import type { ReactNode } from "react";
 
 export interface ChatAgentSelection {

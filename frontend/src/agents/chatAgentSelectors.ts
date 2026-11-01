@@ -1,7 +1,6 @@
 import type { AgentStatus, Plan, Slot } from "@contracts";
 import type { State } from "../state";
-import { costText } from "../state/spend";
-import { matchesNeedsYou } from "../state/needsYou";
+import { costText, matchesNeedsYou } from "../state";
 import { selectAgentCard } from "./selectors";
 export { slotUsage as chatAgentCount } from "./taskBox";
 
@@ -19,8 +18,7 @@ const labels: Record<AgentStatus["state"], string> = {
 type Identity = { team: string; hue: Slot; letter: string; order: number; member: number };
 
 /** Reconstruct identities from the run-local prefix, independent of slots and render order. */
-function teamIdentities(state: State): Map<string, Identity> {
-  const events = [...state.decisionEvents].sort((a, b) => a.seq - b.seq);
+function teamOrigins(events: State["decisionEvents"]) {
   const plans = new Map<string, Plan>();
   const origins = new Map<string, AgentStatus>();
   for (const event of events) {
@@ -43,6 +41,12 @@ function teamIdentities(state: State): Map<string, Identity> {
       );
     }
   }
+  return { plans, origins };
+}
+
+function teamIdentities(state: State): Map<string, Identity> {
+  const events = [...state.decisionEvents].sort((a, b) => a.seq - b.seq);
+  const { plans, origins } = teamOrigins(events);
   const identities = new Map<string, Identity>();
   const teams = new Map<
     string,
@@ -52,7 +56,8 @@ function teamIdentities(state: State): Map<string, Identity> {
   const changes = new Map<string, boolean>();
   for (const event of events) {
     if (event.type === "agent.status" && !identities.has(event.payload.agent_id)) {
-      const agent = origins.get(event.payload.agent_id)!;
+      const agent = origins.get(event.payload.agent_id);
+      if (!agent) continue;
       const lead =
         agent.started_by ?? (agent.plan_id ? plans.get(agent.plan_id)?.started_by : null);
       const key = lead
@@ -67,7 +72,7 @@ function teamIdentities(state: State): Map<string, Identity> {
         );
         const available = hues.filter((hue) => !occupied.has(hue));
         const hue = (available.length ? available : hues).reduce((a, b) =>
-          idle.get(a)! <= idle.get(b)! ? a : b,
+          (idle.get(a) ?? 0) <= (idle.get(b) ?? 0) ? a : b,
         );
         team = { hue, order: event.seq, members: 0, active: new Set() };
         teams.set(key, team);
@@ -95,7 +100,8 @@ function teamIdentities(state: State): Map<string, Identity> {
     const id = event.payload.agent_id,
       identity = identities.get(id);
     if (!identity) continue;
-    const team = teams.get(identity.team)!;
+    const team = teams.get(identity.team);
+    if (!team) continue;
     const status = event.type === "agent.status" ? event.payload : undefined;
     const held =
       changes.get(event.payload.change_id) ??
@@ -123,7 +129,7 @@ export function selectChatAgents(state: State) {
           : undefined;
       const label =
         agent.state === "working"
-          ? !card.steps.length && state.focus[id]
+          ? card.activityLabel !== "Waiting" && !card.steps.length && state.focus[id]
             ? state.focus[id].mode === "edit"
               ? "Editing"
               : "Reading"
@@ -146,6 +152,7 @@ export function selectChatAgents(state: State) {
           model: card.modelLabel,
           label,
           activity,
+          ready: card.readyForReview,
           done: agent.state === "done" || agent.state === "stopped",
           step: Math.min(card.step, card.maxSteps),
           maxSteps: card.maxSteps,
