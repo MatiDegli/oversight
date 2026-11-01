@@ -144,6 +144,18 @@ it.each([1280, 1920])("excludes the phone rows and their styles at %ipx", async 
     await page.getByRole("button", { name: "Start practice", exact: true }).click();
     await check(page.locator(".practice-panel")).toBeVisible();
     await check(page.locator(".phone-practice, .pp-decision-row")).toHaveCount(0);
+    // Exercise the desktop media guard even when another surface already loaded these styles.
+    await page.addScriptTag({
+      type: "module",
+      content: 'import "/src/app/challenge/phoneRows.css";',
+    });
+    await page.waitForFunction(
+      () =>
+        !!document.querySelector<HTMLStyleElement>('style[data-vite-dev-id$="/phoneRows.css"]')
+          ?.sheet,
+    );
+    await check(page.locator(".practice-panel")).toBeVisible();
+    await check(page.locator(".phone-practice, .pp-decision-row")).toHaveCount(0);
     const rules = await page.evaluate(() => {
       const sheet = document.querySelector<HTMLStyleElement>(
         'style[data-vite-dev-id$="/phoneRows.css"]',
@@ -340,6 +352,7 @@ it.each([
 it("limits evidence sizing to the phone media query", async () => {
   await visit(0, "/", async (page) => {
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    await check(page.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
     const sizing = await page.evaluate(() => {
       const sheet = document.querySelector<HTMLStyleElement>(
         'style[data-vite-dev-id$="/recordedEvidence.css"]',

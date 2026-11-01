@@ -10,6 +10,8 @@ export const dayColors = {
   raised: "#e4e2dc",
   "page-raised": "#efeee9",
   text: "#1c1c1a",
+  "edge-light": { color: "#ffffff", alpha: 0.9 },
+  "focus-glow": { color: "#1c1c1a", alpha: 0.55 },
   "text-hover": "#000000",
   muted: "#56554f",
   faint: "#67665f",

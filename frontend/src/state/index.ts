@@ -31,3 +31,5 @@ export type {
 export { selectActiveGrants, selectGrantUses, grantReasons, grantScopeWords } from "./grants";
 export { selectOverlap } from "./overlap";
 export type { Overlap, OverlapEntry } from "./overlap";
+
+export { selectMergeMode } from "./mergeMode";

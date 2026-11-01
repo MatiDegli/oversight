@@ -290,7 +290,7 @@ class ImpactCone:
     tests_reaching: int              # test functions whose exact calls reach a seed, at any depth
 ```
 
-The graph rules are AGENTS.md's, including its rules on nested scopes and imports, which differ from
+The graph rules are ARCHITECTURE.md's (Graph rules), including nested scopes and imports, which differ from
 the plan's. Four points it leaves open, settled here:
 
 - **Containment is `parent_id`.** There are no `contains` edges: Cytoscape draws containment as
@@ -589,6 +589,7 @@ the single error format.
 | `POST /changes/{id}/revert` | `RevertChange {resolution_seq, merge_commit, main_commit}` | 202 | `not_found`, `wrong_state` |
 | `GET /changes/{id}` | none | 200 `ChangeView` | `not_found` |
 | `GET /history?after_seq=&limit=&through_seq=` | none; defaults 0, 50, null; limit 1–100 | 200 `HistoryPage` | `invalid_request`, `too_large` |
+| `GET /usage` | none | 200 `UsageView`; the committed log, live or in a replay | |
 | `POST /queue` | `EnqueueTask {agent?, plan_id?, plan_revision?}`; exactly one task or exact plan | 201 `QueuedTask` | `invalid_request`, `not_found`, `wrong_state` |
 | `GET /queue`, `GET /queue/{id}` | none | 200 `QueueSnapshot` / `QueuedTask` | `not_found` for an unknown item |
 | `POST /queue/{id}/cancel` | `QueueRevision {revision}` | 202 | `not_found`, `wrong_state` |
@@ -621,6 +622,7 @@ the single error format.
   is not wired yet; these fields do not establish confirmation authority. Standalone starts
   ignore zone; plan dispatch carries its server-owned zone. answering links an inbox decision.
   Approve may carry a standing grant, and the three decision commands may carry review-card answers.
+  ConfirmExamples is the only confirmation channel; its route and dispatch remain unwired until the runtime phase.
 - Every error is `ErrorResponse {error: {code, message}}`. The codes are `not_found`,
   `wrong_state`, `slot_busy`, `not_configured`, `spend_brake`, `invalid_path`, `stale_file`,
   `not_implemented`, `invalid_request`, `internal`, `forbidden` and `too_large`. They map to 404, 409, 409, 503, 403, 422,
@@ -707,6 +709,8 @@ the single error format.
 
 ## 5. Modules in order
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
 Each front is one worktree, one branch and one PR; it is done when its command passes on the merged
 result. The days in this section are the original build plan, not current deadlines.
 Level 2 closed on Oct 27 (DECISIONS.md, “Level 2 closed on Tue Oct 27”). The owners are roles;
@@ -741,20 +745,55 @@ and the graph core's golden test needs the demo repo.
 The level 1 change manager stays small: with one agent, main never moves before an approval.
 Testing the combined result, conflicts, Request changes and user edits come at level 2.
 
+**Level 1 (by Thu Oct 29)** includes the graph, Monaco, one Muse agent in its worktree,
+watch mode with live node highlighting and the agent card (status and steps), a read-only
+live diff panel, the "Ready for review" pill, review with Approve and Reject and a graph update.
+
 **Level 2 (Friday to Sunday)**, extending the same modules:
 
-- the second agent, on Baseten if the probe passed;
-- the cone in the UI, highlighted and listed, with what was omitted;
+- two agents in parallel with their colors (agent B on Muse Spark Open through Baseten if
+  tool calling works, otherwise Muse Spark), by Sun Nov 1;
+- the cone in the UI, highlighted in review and listed in the panel, with what was omitted;
 - pending changes drawn dashed in the agent's color;
 - Request changes and the `revising` state;
 - tests on the combined result when main moved;
-- the editable new side, and file-view edits on main;
+- the editable new side in review, and file-view edits on main that update the graph;
 - the spend meter and the brake;
-- stop and discard;
+- stop and discard from the agent card;
 - a robustness pass;
 - the two-agent demo, three times in a row.
 
 **Level 3** starts only if levels 1 and 2 are solid on Monday, November 2.
+
+Its items are cone overlap alerts, replay timeline, "Earlier today" history, messages to a
+running agent, pause and resume, starting an agent from a function, agent cursors with names
+in the editor, "no tests" badges, usage panel, dictating tasks with Muse Voice Transcribe,
+agent B running locally on the person's GPU (Muse Glimmer, Meta's other open model, is a
+candidate if it is smaller than Muse Spark Open), "possible" call edges drawn thinner and
+grey, and inheritance edges.
+
+After level 2, once the cut line is drawn and only if time remains, opening the person's
+own repository keeps its place. After the hackathon, the Tauri shell comes first, with
+the backend inside WSL; the native Windows and macOS backend ports follow it, including
+item 20's minimal native Windows port. The full rules, including the per-OS layer and
+the later Windows isolation, are in
+[Opening the person's own repository](own-repository.md).
+
+A level is done when its demo runs three times in a row from a clean start, with one command
+and no manual fixes.
+
+### Out of scope for these 9 days
+
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+A persistent incremental engine, more languages, runtime traces beyond the bounded
+test-call recorder of the measured cone, embeddings, a filesystem sandbox (next: bubblewrap
+on Linux), undo, and a worktree pool.
+After the hackathon, each starting as a plan: the repository's git hooks run as evidence
+on a proposal; repositories without Python open in Chat, with Oversight showing the Files
+tree with presence instead of the graph; and native isolation for Windows and macOS.
+One bounded exception to undo, in level 3: a one-click Revert of a merge made by rules,
+only while it applies without conflict; otherwise the change goes to "needs you".
 
 ## 6. Code rules
 
@@ -815,6 +854,11 @@ Details: <path, for anything longer than about 2,500 characters>
 
 ## 7. Development flow
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+The repository goes public before submission, and judges must be able to see what was built
+during the hackathon. AGENTS.md keeps the README and daily DEVLOG requirements.
+
 **Roles.** The coordinator sets the routing and the effort per task, and keeps them with machine
 details outside this repository.
 
@@ -839,17 +883,22 @@ details outside this repository.
 1. The worker hands back in the fixed format.
 2. The coordinator reruns the decisive claims (`make check`, the front's command) on the branch.
 3. A reviewer from the other provider checks correctness against the brief and the contracts, and
-   ranks each finding BLOCKING, SHOULD-FIX or NIT, with its file and line.
+   ranks each finding BLOCKING, SHOULD-FIX, DEFERRED or NIT, with its file and line.
 4. Each BLOCKING or SHOULD-FIX finding goes back to its front as a fix round, to a fresh agent; the
    coordinator never commits fixes on a worker's branch. A NIT does not block: it goes to the state
    record as a follow-up. A re-review covers the fix's changes and the findings still open.
    A SHOULD-FIX states a concrete failure scenario; wording, style and consistency between documents
-   are NITs. For frontend views and docs, a SHOULD-FIX off the demo path (what the level's demo
-   shows or runs) also becomes a follow-up front, opened at the merge; security, authority,
-   lifecycle, gates and contracts keep the full rule (added 2026-10-26, the maintainer).
+   are NITs. On any front (backend, frontend, docs or tooling), the reviewer may rank a SHOULD-FIX
+   as DEFERRED only if it is off the demo path (what the level's demo shows or runs) and outside
+   security, authority, lifecycle, gates, contracts and the event log. The reviewer decides, never
+   the coordinator, and the finding states why it is harmless before submission. A BLOCKING
+   finding is never deferred; the coordinator never overrides the reviewer's verdict. A DEFERRED
+   finding does not block the merge: it becomes residual risk, listed under "Residual risk" in
+   the merge message, and goes to the state record as a follow-up (added 2026-10-26 for frontend
+   views and docs, extended to every front on 2026-11-01, the maintainer).
 5. The coordinator approves the merge once the checks pass on the merged result and the review has
-   no open BLOCKING finding and no open SHOULD-FIX that step 4 does not turn into a follow-up; its
-   own changes also require review by another provider.
+   no open BLOCKING or SHOULD-FIX finding; a DEFERRED finding is not open and does not block the
+   merge. The coordinator's own changes also require review by another provider.
 
 The maintainer makes the critical decisions: contracts v1 and any later contract change, spending
 Meta credits, scope and level cuts, the demo script, a new top-level directory or backend module,
@@ -916,7 +965,7 @@ Left out, because they cost more than they return in nine days:
 | `make help` | list the targets |
 | `make install` | install the Python and Node dependencies from the lockfiles |
 | `make frontend-deps` | bring frontend/node_modules up to the frozen lockfile, from the local store only |
-| `make setup` | install the dependencies and the git hooks: pre-commit, commit-msg and pre-push |
+| `make setup` | install the dependencies and the git hooks: pre-commit (gitleaks and ruff), commit-msg and pre-push |
 | `make dev` | FastAPI with reload and the Vite dev server, one origin through Vite's proxy |
 | `make record` | bundle a finished run (RUN=&lt;id&gt;, or the latest run) into fixtures/events/recorded-demo.jsonl; reads a finished run and spends no credits |
 | `make manifest` | summarize recorded model execution from LOG (OUT=prefix, EXPECT_B=model, REAL=1); no API calls |

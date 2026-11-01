@@ -6,6 +6,7 @@ import { cardAnswer, cardKey } from "./AnswerChoices";
 import type { DecisionView } from "./decisions";
 import type { ReviewPanelProps } from "./ReviewPanel";
 import "./inbox.css";
+import { approvalLocked, approvalLockedCaption } from "./answers";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
@@ -56,10 +57,6 @@ const primary = `${button} bg-text text-page hover:bg-text-hover disabled:bg-pag
 const destructive = `${button} text-failed-text hover:bg-raised disabled:hover:bg-transparent`;
 const bar = "review-decision-bar shrink-0 border-t border-divider bg-page";
 
-export const approvalLockedCaption = "Approve opens when every answer is Yes.";
-export const approvalLocked = (cards: ReviewCard[], answers: Answers) =>
-  cards.some((card) => cardAnswer(card, answers) !== "yes");
-
 export function ReviewDecisionBar({
   changeId,
   view,
@@ -82,6 +79,7 @@ export function ReviewDecisionBar({
   unavailable?: boolean;
 }) {
   const approvalReason = useId();
+  const [keyboardTried, setKeyboardTried] = useState(false);
   const values = cards.map((card) => cardAnswer(card, answers));
   const no = cards.find((_card, i) => values[i] === "no");
   const prefill = no?.example
@@ -109,10 +107,12 @@ export function ReviewDecisionBar({
       </section>
     );
   }
-  const hasCaption = locked || unavailable || (!recorded && view.kind !== "conflict");
   const pending = view.kind === "pending";
   const revising = view.kind === "revising";
   const approvable = view.kind === "open" && onDecide !== undefined && !blocked && !locked;
+  const pointerCaption = keyboardTried && approvable;
+  const hasCaption =
+    pointerCaption || locked || unavailable || (!recorded && view.kind !== "conflict");
   const requestable =
     (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined && !blocked;
   const rejectable = (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined;
@@ -155,7 +155,11 @@ export function ReviewDecisionBar({
           aria-describedby={hasCaption ? approvalReason : undefined}
           onClick={(event) => {
             // Keyboard and scripted clicks have detail 0; only a pointer can merge.
-            if (event.detail === 0) return;
+            if (event.detail === 0) {
+              setKeyboardTried(true);
+              return;
+            }
+            setKeyboardTried(false);
             onDecide?.(changeId, "approve", comment);
           }}
           className={primary}
@@ -194,11 +198,13 @@ export function ReviewDecisionBar({
           id={approvalReason}
           className="review-decision-caption mt-2 text-[13px] leading-[18px] text-muted"
         >
-          {locked
-            ? approvalLockedCaption
-            : unavailable
-              ? "The check is still unavailable. You decide whether to continue without it."
-              : "If main moved since the agent started, the tests run again on the combined result before the merge."}
+          {pointerCaption
+            ? "Approve with a click: it merges into main"
+            : locked
+              ? approvalLockedCaption
+              : unavailable
+                ? "The check is still unavailable. You decide whether to continue without it."
+                : "If main moved since the agent started, the tests run again on the combined result before the merge."}
         </p>
       )}
       {revising &&

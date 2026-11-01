@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from oversight.changes._example_criteria import RequiredCriteria
     from oversight.changes._measured import MeasuredEvidence
     from oversight.changes._preemption import PersonIntent
     from oversight.changes._review_port import ReviewCapture
@@ -101,6 +102,11 @@ class ChangeRecord:
     revision: int = 0
     proposal_mode: MergeModeState | None = None
     rules_consumed: set[int] = field(default_factory=set[int])
+    rules_attempts: set[tuple[int, str, str, int]] = field(
+        default_factory=set[tuple[int, str, str, int]]
+    )
+    """The exact revision/head/main/mode keys tried; rules_consumed remains audit history."""
+    follow_pending: int | None = None
     head_commit: str | None = None
     """The head of the last revision the store took."""
     proposed_now: bool = False
@@ -127,6 +133,8 @@ class ChangeRecord:
     executions: dict[int, SuiteExecution] = field(default_factory=dict[int, SuiteExecution])
     summary_usage: dict[int, RoleUsage] = field(default_factory=dict[int, RoleUsage])
     suite_runs: dict[int, SuiteRun] = field(default_factory=dict[int, SuiteRun])
+    criteria: RequiredCriteria | None = None
+    """Confirmed required examples; absent until explicit person confirmation."""
     behavior_diffs: dict[int, BehaviorDiff] = field(default_factory=dict[int, BehaviorDiff])
     """Private per-revision computation; public facts capture an independent explicit projection."""
     measured_cones: dict[int, MeasuredEvidence] = field(
@@ -164,6 +172,8 @@ class ChangeRecord:
     """Permanent per change, including all future re-proposals."""
     review_ready: bool = False
     """The author run ended ready_for_review; a request clears it before resumption."""
+    examples_digest: str | None = None
+    """Confirmed command's digest, based on normalized action and ordered examples."""
     review_task: asyncio.Task[Any] | None = None
     card_generation: int = 0
     card_task: asyncio.Task[None] | None = None

@@ -79,6 +79,22 @@ describe("change-lifetime observed reads", () => {
       expect(state.changeReads["change-1"]).toContain(priceId);
     },
   );
+  it("preserves the reads reference unless a resolution removes an existing entry", () => {
+    const state = focus(readMoment(), [priceId], "read", "agent-1");
+    expect(resolve(state, "changes_requested").changeReads).toBe(state.changeReads);
+    expect(resolve(state, "approved", true).changeReads).toBe(state.changeReads);
+    const withoutEntry = {
+      ...state,
+      changeReads: { "change-2": state.changeReads["change-2"] ?? [] },
+    };
+    for (const decision of ["approved", "rejected"] as const)
+      expect(resolve(withoutEntry, decision).changeReads).toBe(withoutEntry.changeReads);
+    const approved = resolve(state, "approved");
+    expect(approved.changeReads).not.toBe(state.changeReads);
+    expect(approved.changeReads["change-1"]).toBeUndefined();
+    expect(approved.changeReads["change-2"]).toBe(state.changeReads["change-2"]);
+    expect(state.changeReads["change-1"]).toContain(priceId);
+  });
   it("starts empty for a new change id and resets reads on run.started", () => {
     let state = readMoment();
     const agent = required(state.agents["agent-2"]);

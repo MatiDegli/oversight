@@ -3,30 +3,44 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 
 const hooks = vi.hoisted(() => ({
-  count: 0,
+  slots: [] as unknown[],
+  index: 0,
   effects: [] as (() => (() => void) | undefined)[],
 }));
 vi.mock("react", async (original) => ({
   ...(await original<typeof import("react")>()),
-  useState: () => [
-    hooks.count,
-    (count: number) => {
-      hooks.count = count;
-    },
-  ],
+  useState: <T,>(initial: T | (() => T)) => {
+    const index = hooks.index++;
+    if (!(index in hooks.slots))
+      hooks.slots[index] = typeof initial === "function" ? (initial as () => T)() : initial;
+    return [
+      hooks.slots[index] as T,
+      (value: T | ((previous: T) => T)) => {
+        hooks.slots[index] =
+          typeof value === "function"
+            ? (value as (previous: T) => T)(hooks.slots[index] as T)
+            : value;
+      },
+    ];
+  },
   useEffect: (effect: () => (() => void) | undefined) => hooks.effects.push(effect),
 }));
 vi.mock("../editor", () => ({ EditorDiff: () => null }));
 
 import { ImpactConeCard } from "../review";
-import { RoutingOmissions } from "./RoutingOmissions";
+import { RoutingOmissions as RoutingOmissionsComponent } from "./RoutingOmissions";
 
 afterEach(() => {
-  hooks.count = 0;
+  hooks.slots.length = 0;
+  hooks.index = 0;
   hooks.effects.length = 0;
 });
 
 it("retains the last count as a prop across cone card unmount and remount, without another event", () => {
+  function RoutingOmissions(props: Parameters<typeof RoutingOmissionsComponent>[0]) {
+    hooks.index = 0;
+    return RoutingOmissionsComponent(props);
+  }
   const host = new EventTarget();
   const hostRef = { current: host as HTMLDivElement };
   let count = 0;

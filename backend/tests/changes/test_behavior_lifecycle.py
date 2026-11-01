@@ -181,10 +181,12 @@ async def test_probe_deadline_and_cancel_clean_checkouts_and_real_process(
     async with asyncio.timeout(10):
         await started.wait()
         for _ in range(300):
-            if pid_file.exists():
+            if pid_file.exists() and (pid_text := pid_file.read_text().strip()):
                 break
             await asyncio.sleep(0.01)
-        pid = int(pid_file.read_text())
+        else:
+            pytest.fail("Worker did not write non-empty PID text")
+        pid = int(pid_text)
         if cancel:
             task.cancel()
             with pytest.raises(asyncio.CancelledError):

@@ -307,6 +307,7 @@ async def test_cancel_or_shared_timeout_cleans_checkout_and_keeps_incomplete_evi
 @pytest.mark.anyio
 async def test_published_measurements_reject_forged_projection_revision_and_execution(h):
     from oversight.changes._facts import FactsEvidence, build_change_facts, validate_change_facts
+    from oversight.changes._shape_facts import ShapeCapture
     from oversight.changes._summary_capture import capture_summary
 
     await h.workspace.check_isolation()
@@ -327,6 +328,11 @@ async def test_published_measurements_reject_forged_projection_revision_and_exec
         measured=rec.measured_cones[target.revision],
         impact=impact,
         reach=facts.reach,
+        shape=ShapeCapture(
+            tuple(facts.shape) if facts.shape is not None else None,
+            facts.shape_complete,
+            tuple(problem for problem in facts.problems if problem.startswith("shape:")),
+        ),
     )
     validate_change_facts(facts, captured)
     assert facts.summary == build_change_facts(replace(captured, measured=None)).summary

@@ -33,8 +33,9 @@ export function applyEvidenceEvent(state: State, next: State, event: Event): Sta
           ],
         },
       };
-    case "change.assessed":
     case "merge_mode.changed":
+      return { ...next, mergeMode: event.payload };
+    case "change.assessed":
     case "plan.updated":
     case "revert.resolved":
     case "queue.updated":

@@ -18,6 +18,7 @@ from oversight.changes._behavior_inputs import (
     module_name,
 )
 from oversight.changes._behavior_objects import display, invocation_values, method_arguments
+from oversight.changes._behavior_reasons import NOT_PROBED_REASONS
 from oversight.changes._behavior_sources import Sources
 from oversight.changes._review_identity import bound_inputs, canonical
 from oversight.changes._shortcuts_common import Source, is_test_file, walk_local
@@ -340,7 +341,9 @@ def method_inputs(
         )
     except (ValueError, TypeError, SyntaxError, RecursionError) as error:
         return BehaviorInputs(
-            reason=str(error) if isinstance(error, ValueError) else "unsupported signature"
+            reason=text
+            if isinstance(error, ValueError) and (text := str(error)) in NOT_PROBED_REASONS
+            else "unsupported signature"
         )
 
 

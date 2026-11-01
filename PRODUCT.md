@@ -29,6 +29,11 @@ change may affect. A change reaches main only with your approval or by meeting r
 review then shows the rules and grants that let it in, and Revert undoes it in one step when it
 applies cleanly.
 
+Status on main, 2026-10-31: the behavior diff and the measured callers are built and opt-in, off by default;
+merge by rules and its Revert exist in the backend but stay closed until their activation is approved, so today
+every change reaches main through the person's decision. Where this file describes those in the present tense,
+it describes the target.
+
 ## Positioning
 
 Agents write code faster than anyone can review it. Oversight is how you stop reading code without
@@ -58,7 +63,7 @@ the agents' lights, the diff) is where this happens, not the pitch.
 - Agents use only Meta models: Muse Spark through the Meta Model API, and Muse Spark Open through
   Baseten. Their tools are fixed (list, read, search, edit, run tests, finish); no shell.
 - The impact cone is bounded and always presented as "possibly affected", never as complete.
-- Scope is set by levels in AGENTS.md; level 3 items and day mode are cut if time runs short.
+- Scope is set by levels in docs/proposal.md, section 5; level 3 items and day mode are cut if time runs short.
 - Terminology: agent A and agent B, change, pending change, impact cone, watch, review, live diff,
   file view, approve, request changes, reject.
 

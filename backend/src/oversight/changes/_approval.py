@@ -1,6 +1,7 @@
 import asyncio
 
 from oversight.changes import _delivery as delivery
+from oversight.changes import _follow as follow
 from oversight.changes import _merge as merge
 from oversight.changes import _proposal as proposal
 from oversight.changes import _recovery as recovery
@@ -48,12 +49,15 @@ async def approve_rules(ctx: ChangeContext, reservation: rules.RulesReservation)
                 return
             failure = failure or rules.revalidate(ctx, reservation)
             if failure:
+                if failure[0] == "main_moved" and await follow.queue(ctx, reservation):
+                    return
                 await rules.terminal(ctx, reservation, *failure)
                 return
             reason = await ctx.ports.rules_transaction(rec, evidence)
             if reason:
                 await rules.terminal(ctx, reservation, "policy_invalid", reason)
     except asyncio.CancelledError:
+        rec.follow_pending = None
         await rules.terminal(ctx, reservation, "cancelled", "Rules approval was cancelled.")
         raise
     except RulesFailure as error:

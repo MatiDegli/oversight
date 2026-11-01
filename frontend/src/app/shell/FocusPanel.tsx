@@ -1,12 +1,32 @@
 import { agentSlotStyle } from "../../theme";
-import { Maximize2, Minimize2, X } from "lucide-react";
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { Maximize2, Minimize2, Settings, X } from "lucide-react";
+import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
-import { ConversationPanel, selectConversation } from "../../agents";
-import { ReviewPanel, DecisionInbox } from "../../review";
+import { selectConversation, loadConversationPanel } from "../../agents";
+import {
+  ReviewFrame,
+  InboxFrame,
+  ConversationFrame,
+  FileFrame,
+  SettingsFrame,
+} from "./PanelFallbacks";
+import { LazyPanel } from "./LazyPanel";
+
+import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
 import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
+
+const SettingsPanel = lazy(() =>
+  import("./SettingsPanel").then((m) => ({ default: m.SettingsPanel })),
+);
+const ReviewPanel = lazy(() => loadReviewPanel().then((m) => ({ default: m.ReviewPanel })));
+const DecisionInbox = lazy(() => loadDecisionInbox().then((m) => ({ default: m.DecisionInbox })));
+const ConversationPanel = lazy(() =>
+  loadConversationPanel().then((m) => ({
+    default: m.ConversationPanel,
+  })),
+);
 
 export function FocusPanel(
   props: FrameProps & {
@@ -52,17 +72,19 @@ export function FocusPanel(
             const title =
               tab.id === "inbox"
                 ? "Decisions"
-                : tab.id === "practice"
-                  ? "Two-change practice"
-                  : tab.conversation
-                    ? slot
-                      ? `Agent ${slot} · conversation`
-                      : "Conversation"
-                    : tab.review
-                      ? `Review · ${tab.review}`
-                      : tab.diff
-                        ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
-                        : (tab.file?.path.split("/").at(-1) ?? "File");
+                : tab.id === "settings"
+                  ? "Settings"
+                  : tab.id === "practice"
+                    ? "Two-change practice"
+                    : tab.conversation
+                      ? slot
+                        ? `Agent ${slot} · conversation`
+                        : "Conversation"
+                      : tab.review
+                        ? `Review · ${tab.review}`
+                        : tab.diff
+                          ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
+                          : (tab.file?.path.split("/").at(-1) ?? "File");
             return (
               <div
                 key={tab.id}
@@ -79,6 +101,9 @@ export function FocusPanel(
                   className={`min-w-0 truncate px-3 py-2 ${focusRing}`}
                 >
                   {slot && <span className="mr-2 font-bold">{slot}</span>}
+                  {tab.id === "settings" && (
+                    <Settings aria-hidden="true" className="mr-2 inline size-3.5" />
+                  )}
                   {title}
                   {tab.review && (
                     <span className="ml-2 text-faint">
@@ -109,27 +134,53 @@ export function FocusPanel(
         </button>
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
-        {view.activeTab === "inbox" ? (
-          <DecisionInbox state={state} onReview={props.onReview} />
+        {view.activeTab === "settings" ? (
+          <LazyPanel key="settings" frame={<SettingsFrame />}>
+            <SettingsPanel
+              state={state}
+              attempt={props.mergeModeAttempt}
+              onSetMergeMode={props.onSetMergeMode}
+            />
+          </LazyPanel>
+        ) : view.activeTab === "inbox" ? (
+          <LazyPanel key="inbox" frame={<InboxFrame state={state} />}>
+            <DecisionInbox state={state} onReview={props.onReview} />
+          </LazyPanel>
         ) : view.activeTab === "practice" && props.practice?.active ? (
           props.practice.content
         ) : agentId ? (
           <ConversationFocus {...props} agentId={agentId} />
         ) : view.review !== null ? (
-          <ReviewPanel
-            key={view.review}
-            state={state}
-            changeId={view.review}
-            attempt={props.attempts?.[view.review]}
-            files={props.files?.readOnly ? undefined : props.files}
-            onDecide={props.onDecide}
-            replayOf={props.replayOf}
-            onClose={onClosePanel}
-          />
+          <LazyPanel
+            key={`review:${view.review}`}
+            frame={<ReviewFrame state={state} changeId={view.review} onClose={onClosePanel} />}
+          >
+            <ReviewPanel
+              key={view.review}
+              state={state}
+              changeId={view.review}
+              attempt={props.attempts?.[view.review]}
+              revertAttempt={props.revertAttempts?.[view.review]}
+              onRevert={props.onRevert}
+              files={props.files?.readOnly ? undefined : props.files}
+              onDecide={props.onDecide}
+              replayOf={props.replayOf}
+              onClose={onClosePanel}
+            />
+          </LazyPanel>
         ) : view.diff ? (
           <LivePanel state={state} view={view} onClose={onClosePanel} />
         ) : view.file && props.files ? (
           <FileView
+            loadingFallback={
+              <FileFrame
+                target={view.file}
+                files={props.files}
+                commit={state.graph?.commit ?? ""}
+                onClose={onClosePanel}
+                startAgentAction={props.startAgentAction}
+              />
+            }
             target={view.file}
             startAgentAction={props.startAgentAction}
             files={props.files}
@@ -156,13 +207,15 @@ function ConversationFocus({
   if (!conversation)
     return <p className="px-3 py-2 text-muted">This agent is not in the current run.</p>;
   return (
-    <ConversationPanel
-      conversation={conversation}
-      onSend={onMessageAgent ? (text) => onMessageAgent(agentId, text) : undefined}
-      onPause={onPauseAgent ? () => onPauseAgent(agentId) : undefined}
-      onResume={onResumeAgent ? () => onResumeAgent(agentId) : undefined}
-      onStop={onStopAgent}
-      onOpenDiff={canOpenChange(conversation.header.changeId) ? onOpenChange : undefined}
-    />
+    <LazyPanel key={agentId} frame={<ConversationFrame header={conversation.header} />}>
+      <ConversationPanel
+        conversation={conversation}
+        onSend={onMessageAgent ? (text) => onMessageAgent(agentId, text) : undefined}
+        onPause={onPauseAgent ? () => onPauseAgent(agentId) : undefined}
+        onResume={onResumeAgent ? () => onResumeAgent(agentId) : undefined}
+        onStop={onStopAgent}
+        onOpenDiff={canOpenChange(conversation.header.changeId) ? onOpenChange : undefined}
+      />
+    </LazyPanel>
   );
 }

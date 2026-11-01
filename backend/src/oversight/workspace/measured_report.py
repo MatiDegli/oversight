@@ -208,7 +208,11 @@ def read_calls(path: Path, targets: Sequence[CallTarget]) -> CallReport:
         if any(values != set(range(1, len(values) + 1)) for values in ordinals.values()):
             raise ValueError("missing invocation ordinal")
     except (OSError, ValueError, TypeError, KeyError, RecursionError) as error:
-        problems.append(f"caller report unavailable ({type(error).__name__})")
+        problems.append(
+            "caller report unavailable"
+            if isinstance(error, OSError)
+            else "caller report unreadable"
+        )
     if not ended:
         problems.append("caller report incomplete")
     return CallReport(tuple(calls), not problems, tuple(dict.fromkeys(problems))[:16])

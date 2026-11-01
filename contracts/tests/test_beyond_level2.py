@@ -452,7 +452,7 @@ async def test_every_recorded_event_validates_against_the_regenerated_schema(
     from oversight_contracts import CONTRACT_VERSION
 
     schema = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())
-    assert CONTRACT_VERSION == "1.11.0" and CONTRACT_VERSION in schema["$comment"]
+    assert CONTRACT_VERSION == "1.14.0" and CONTRACT_VERSION in schema["$comment"]
     records = []
     for path in await recorded_event_paths(ROOT):
         for line in path.read_text().splitlines():

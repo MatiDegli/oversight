@@ -76,3 +76,15 @@ def test_e3_version_reservation_is_superseded_without_rewriting_history() -> Non
         "E3's typed confirmation command takes a later contract version, "
         "assigned at landing after its own approval."
     ) in entry
+
+
+def test_usage_version_records_landing_order_without_reserving_creation() -> None:
+    decisions = (ROOT / "DECISIONS.md").read_text()
+    entry = decisions.split("## Contracts 1.12.0 —", 1)[1].split("\n## ", 1)[0]
+    assert (
+        "The usage view took 1.12.0 at landing, next free after the lead runtime (1.10.0) "
+        "and the parameter-extension evidence (1.11.0)."
+    ) in " ".join(entry.split())
+    assert (
+        "Safe creation takes a later contract version assigned at landing after its own approval."
+    ) in " ".join(entry.split())

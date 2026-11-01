@@ -74,6 +74,7 @@ from oversight.events import (
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.redaction import Redactor
+from oversight.resources import hold_reason, memory_used
 from oversight.runtime_accounting import write_tick
 from oversight.runtime_decisions import RuntimeDecisions
 from oversight.runtime_leads import LeadCreated, LeadService, StartLead, StopLead
@@ -351,7 +352,7 @@ class LiveRun:
                 merge_mode=MergeModeState(),
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
-                prompt_version=prompt_version(settings.harness_pack),
+                prompt_version=prompt_version(settings.harness_pack, settings.history_prune_tokens),
                 workspace=self._source.provenance if self._source else TEMPLATE.name,
                 base_commit=base,
                 models=list({profile.id: profile for profile in profiles}.values()),
@@ -729,15 +730,20 @@ class LiveRun:
         if _metered(profile) and (reason := self.brake_reason()) is not None:
             raise ApiError("spend_brake", reason)
 
+    def _memory_hold(self) -> str | None:
+        return hold_reason(memory_used(), self._settings.memory_hold_percent)
+
     def _check_start(self, slot: Slot, request: StartAgent, manager: ChangeManager) -> ModelProfile:
         """What a start on `slot` needs, in order, each on that slot's profile: the model, the
-        task, setup, the brake (for a metered profile only), and main."""
+        task, setup, the brake (for a metered profile only), main, and memory."""
         profile = self._profile_for(slot, request.model)
         if not request.task.strip():
             raise ApiError("invalid_request", "the task is empty")
         self._check_spending(slot, profile)
         if manager.main_suspect:
             raise ApiError("wrong_state", MAIN_SUSPECT)
+        if reason := self._memory_hold():
+            raise ApiError("wrong_state", reason)
         return profile
 
     def _taken(self) -> str:

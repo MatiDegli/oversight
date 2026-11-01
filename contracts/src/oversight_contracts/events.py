@@ -22,6 +22,7 @@ from oversight_contracts.common import (
     ChangeId,
     ContractModel,
     FileStatus,
+    MessageText,
     NodeId,
     NonEmptyText,
     PlanId,
@@ -63,11 +64,11 @@ class SlotInfo(ContractModel):
 
 class Limits(ContractModel):
     max_steps: int
-    """Tool calls per task."""
+    """Tool calls per round; Request changes starts a new round with the same budget."""
     max_output_tokens: int
     """Per model call."""
     max_wall_clock_s: int
-    """Per task."""
+    """Per round; Request changes starts a new round."""
     test_timeout_s: int
     cone_max_depth: int
     cone_max_nodes: int
@@ -210,7 +211,7 @@ class AgentMessageSent(ContractModel):
     """
 
     agent_id: AgentId
-    text: NonEmptyText | None = Field(default=None, max_length=4096)
+    text: MessageText | None = None
     """As stored: runs shaped like a credential are masked as `[redacted]` before the event is written.
     Null only in an export for publication that withheld it."""  # noqa: E501
 
