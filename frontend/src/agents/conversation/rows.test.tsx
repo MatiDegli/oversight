@@ -63,12 +63,15 @@ function mountComposer(agentId = "agent-1", state: ConversationHeader["state"] =
   };
   const values: unknown[] = [],
     pauseValues: unknown[] = [];
+  let pauseKey: ReactElement["key"];
   function render(pause = false) {
     hooks.active = { values, cursor: 0 };
     try {
       const tree = Composer(props);
       if (!pause) return tree;
       const control = find(tree, PauseControl) as ReactElement<Parameters<typeof PauseControl>[0]>;
+      if (control.key !== pauseKey) pauseValues.length = 0;
+      pauseKey = control.key;
       hooks.active = { values: pauseValues, cursor: 0 };
       return PauseControl(control.props);
     } finally {
@@ -171,7 +174,76 @@ it("shows a shared pause failure and permits retry", async () => {
   expect(html).toContain('role="alert"');
   expect(html).toContain("Pause did not reach the server. Check the connection and try again.");
   expect(html).toContain('aria-disabled="false"');
+  find(view.render(true), "button", "Pause").props.onClick?.();
+  await vi.waitFor(() => {
+    expect(renderToStaticMarkup(view.render(true))).toContain("Pausing after this step");
+  });
+  find(view.render(), "textarea").props.onChange?.({ target: { value: "Read pricing.py" } });
+  find(view.render(), "button", "Send").props.onClick?.();
+  expect(renderToStaticMarkup(view.render(true))).toContain("Pausing after this step");
 });
+
+it.each([
+  ["working", "Pause", "onPause"],
+  ["paused", "Resume", "onResume"],
+] as const)("clears a rejected %s / %s before Send fails", async (state, name, callback) => {
+  const view = mountComposer("agent-1", state);
+  view.props[callback].mockRejectedValueOnce(new Error("offline"));
+  find(view.render(true), "button", name).props.onClick?.();
+  await vi.waitFor(() => {
+    expect(renderToStaticMarkup(view.render(true))).toContain(`${name} did not reach the server.`);
+  });
+  view.props.onSend.mockRejectedValueOnce(new Error("offline"));
+  find(view.render(), "textarea").props.onChange?.({ target: { value: "Read pricing.py" } });
+  find(view.render(), "button", "Send").props.onClick?.();
+  expect(renderToStaticMarkup(view.render(true))).not.toContain('role="alert"');
+  await vi.waitFor(() => {
+    expect(renderToStaticMarkup(view.render())).toContain("Send did not reach the server.");
+  });
+  expect(renderToStaticMarkup(view.render(true))).not.toContain('role="alert"');
+  find(view.render(true), "button", name).props.onClick?.();
+  await vi.waitFor(() => {
+    expect(view.props[callback]).toHaveBeenCalledTimes(2);
+    expect(renderToStaticMarkup(view.render())).not.toContain('role="alert"');
+  });
+});
+
+it.each([true, false])(
+  "keeps only one alert when concurrent requests fail, Pause first: %s",
+  async (pauseFirst) => {
+    const view = mountComposer();
+    let failPause!: () => void, failSend!: () => void;
+    view.props.onPause.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          failPause = () => {
+            reject(new Error("offline"));
+          };
+        }),
+    );
+    view.props.onSend.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          failSend = () => {
+            reject(new Error("offline"));
+          };
+        }),
+    );
+    find(view.render(true), "button", "Pause").props.onClick?.();
+    find(view.render(), "textarea").props.onChange?.({ target: { value: "Read pricing.py" } });
+    find(view.render(), "button", "Send").props.onClick?.();
+    (pauseFirst ? failPause : failSend)();
+    await vi.waitFor(() => {
+      expect(renderToStaticMarkup(view.render(pauseFirst))).toContain('role="alert"');
+    });
+    (pauseFirst ? failSend : failPause)();
+    await vi.waitFor(() => {
+      const html = renderToStaticMarkup(view.render()) + renderToStaticMarkup(view.render(true));
+      expect(html).toContain(`${pauseFirst ? "Send" : "Pause"} did not reach the server.`);
+      expect(html.match(/role="alert"/g)).toHaveLength(1);
+    });
+  },
+);
 
 it.each([
   ["working", "Pause", "onPause"],

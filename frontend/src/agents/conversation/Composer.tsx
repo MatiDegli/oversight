@@ -1,5 +1,5 @@
 import { TriangleAlert } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useStore } from "zustand";
 import { stateStore } from "../../state";
 import { commandFailure } from "../../transport";
@@ -30,20 +30,41 @@ export function Composer({
   const text = useStore(draftStore, (drafts) => drafts[key]?.text ?? "");
   const pending = useStore(draftStore, (drafts) => drafts[key]?.pending ?? false);
   const [failure, setFailure] = useState<string | null>(null);
+  const failedControl = useRef(false);
+  const [controlKey, setControlKey] = useState(0);
   const captionId = useId();
   const active = ["working", "revising", "paused"].includes(header.state);
   const replay = !onSend && !onPause && !onResume && !onStop;
+  function clearControlFailure() {
+    if (failedControl.current) {
+      failedControl.current = false;
+      // Reset only a rejected control, preserving successful pause requests.
+      setControlKey((current) => current + 1);
+    }
+  }
   async function send() {
     if (!onSend || !active || !text.trim() || !beginSend(key)) return;
     setFailure(null);
+    clearControlFailure();
     try {
       await onSend(text);
       clearSentDraft(key, text);
     } catch (error) {
+      clearControlFailure();
       setFailure(commandFailure("Send", error));
     } finally {
       finishSend(key);
     }
+  }
+  function control(command: (() => Promise<unknown>) | undefined) {
+    setFailure(null);
+    failedControl.current = false;
+    const result = command?.() ?? Promise.resolve();
+    void result.catch(() => {
+      failedControl.current = true;
+      setFailure(null);
+    });
+    return result;
   }
   if (replay)
     return (
@@ -76,16 +97,11 @@ export function Composer({
       <div className="mt-[10px] flex flex-wrap items-start gap-2">
         {active && (paused ? onResume : onPause) && (
           <PauseControl
+            key={controlKey}
             agentId={header.agentId}
             state={header.state}
-            onPause={() => {
-              setFailure(null);
-              return onPause?.() ?? Promise.resolve();
-            }}
-            onResume={() => {
-              setFailure(null);
-              return onResume?.() ?? Promise.resolve();
-            }}
+            onPause={() => control(onPause)}
+            onResume={() => control(onResume)}
           />
         )}
         {active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
