@@ -5,10 +5,10 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tools.eval.proof2.runner import load_tasks
-
 from oversight.events import fold_supervision, read_jsonl
 from oversight_contracts.events import ChangeProposedEvent, ServerEvent
+
+from ..runner import load_tasks  # noqa: TID252 - Keep runner imports relative, as in the CLI.
 
 type Result = dict[str, object]
 type RevisionKey = tuple[str, int]

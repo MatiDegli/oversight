@@ -164,6 +164,22 @@ def test_lazy_import(monkeypatch, command):
     assert cli.main() == 0
 
 
+def test_inputs_uses_relative_runner_import(monkeypatch):
+    import builtins
+    import importlib
+
+    from tools.eval.proof2.report import inputs
+
+    original = builtins.__import__
+
+    def guarded(name, *args, **kwargs):
+        assert name != "tools.eval.proof2.runner"
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded)
+    importlib.reload(inputs)
+
+
 def test_correctness_and_selections(tmp_path, capsys):
     rows = report(tmp_path, capsys)
     revisions = [r for r in rows if r["record"] == "revision"]
@@ -231,6 +247,10 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
         ("change-3", "agent-3", None, 0, 0, "stopped", None, None, None),
     ]
     arms = [r for r in rows if r["record"] == "arm"]
+    for arm in arms:
+        assert arm["changes"] == 3
+        assert arm["questions"] == {"status": "not_built"}
+        assert arm["questions_not_needed"] == {"status": "not_built"}
     assert [
         (
             a["arm"],
@@ -567,7 +587,9 @@ def test_spend_returns_new_records(tmp_path):
     inputs = load_inputs(*files(tmp_path))
     _, changes, arms = build_arms(inputs)
     original_changes, original_arms = deepcopy(changes), deepcopy(arms)
+    original_seqs = [event.seq for event in inputs.events]
     enriched_changes, enriched_arms = add_spend(inputs, changes, arms)
+    assert [event.seq for event in inputs.events] == original_seqs
     assert changes == original_changes
     assert arms == original_arms
     assert all(new is not old for new, old in zip(enriched_changes, changes, strict=True))
