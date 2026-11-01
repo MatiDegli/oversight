@@ -63,3 +63,23 @@ it("caps observed steps at the real run limit, matches the Waiting pill and show
   expect(paused).toContain("Paused");
   expect(paused).not.toContain("animate-spin");
 });
+
+it("shows the live header only after the last person message in an open round", async () => {
+  const state = progressState("working");
+  const data = selectConversation(state, "agent-1", [
+    { seq: 23.5, ts: state.clock ?? "", text: "Check the quantity too." },
+    { seq: 24.5, ts: state.clock ?? "", text: "Keep the error clear." },
+  ]);
+  if (!data) throw new Error("Missing conversation");
+  expect(data.entries.filter((entry) => entry.kind === "activity")).toHaveLength(3);
+  for (const paused of [false, true]) {
+    for (const entry of data.entries) {
+      if (entry.kind === "activity") entry.round.paused = paused;
+    }
+    const text = (await markup(data)).replace(/<[^>]*>/g, "");
+    const header = `${paused ? "Paused" : "Working"}3 min 20 s`;
+    expect(text.split(header)).toHaveLength(2);
+    expect(text.indexOf(header)).toBeGreaterThan(text.indexOf("Keep the error clear."));
+    expect(text).toContain("Check the quantity too.");
+  }
+});

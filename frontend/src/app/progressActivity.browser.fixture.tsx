@@ -2,7 +2,13 @@ import { useLayoutEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { applyEvent, stateStore, type State } from "../state";
-import { progressEvents, progressMoments, progressState, type ProgressMoment } from "../agents";
+// eslint-disable-next-line no-restricted-imports -- Test-only fixture, excluded from the product barrel.
+import {
+  progressEvents,
+  progressMoments,
+  progressState,
+  type ProgressMoment,
+} from "../agents/conversation/progressFixture";
 import { Frame } from "./Frame";
 import {
   openChange,

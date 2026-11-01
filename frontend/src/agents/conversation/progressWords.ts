@@ -25,10 +25,12 @@ export function timeWords(ms: number, bound: number) {
 export function budgetWords(mark: BudgetMark, budget: Budget, unknown: boolean) {
   const blocked = mark.brake === "blocked";
   const percent = blocked
-    ? Math.floor((mark.spent_usd / mark.budget_usd) * 100)
+    ? mark.budget_usd > 0
+      ? Math.floor((mark.spent_usd / mark.budget_usd) * 100)
+      : null
     : (budget.warn_at[mark.brake === "warn_50" ? 0 : 1] ?? 0) * 100;
   return {
-    lead: `Budget at ${String(percent)}%`,
+    lead: percent === null ? "Budget" : `Budget at ${String(percent)}%`,
     detail: `${unknown ? "" : `${formatUsd(mark.spent_usd)} of ${formatBudget(mark.budget_usd)} · `}${blocked ? "new Meta runs are refused" : `new Meta runs stop at ${String(budget.block_at * 100)}%`}`,
   };
 }

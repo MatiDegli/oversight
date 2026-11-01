@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useRef } from "react";
+import { Component, lazy, Suspense, useLayoutEffect, useRef } from "react";
 import { agentLook } from "../../theme";
 import { costText } from "../../state";
 import { labels } from "../AgentCard";
@@ -21,13 +21,49 @@ async function loadRenderers() {
     TimelineEntry: rows.TimelineEntry,
   };
 }
-const DeferredPanel = lazy(() =>
-  loadRenderers().then((renderers) => ({
-    default: function LoadedPanel(props: ConversationPanelProps) {
-      return <Panel {...props} renderers={renderers} />;
-    },
-  })),
-);
+const deferPanel = () =>
+  lazy(() =>
+    loadRenderers().then((renderers) => ({
+      default: function LoadedPanel(props: ConversationPanelProps) {
+        return <Panel {...props} renderers={renderers} />;
+      },
+    })),
+  );
+const DeferredPanel = deferPanel();
+
+/** Keep a renderer failure inside its tab; retry with a fresh React lazy cache. */
+class ConversationBoundary extends Component<ConversationPanelProps> {
+  override state = { failed: false, View: DeferredPanel };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  override render() {
+    const { View } = this.state;
+    return this.state.failed ? (
+      <section
+        aria-label={`Agent ${this.props.conversation.header.slot} conversation`}
+        className="h-full w-full bg-page p-4 text-sm text-muted"
+      >
+        <p>
+          <span>The conversation could not load.</span>{" "}
+          <button
+            type="button"
+            className="rounded-control underline focus-visible:outline-2 focus-visible:outline-text"
+            onClick={() => {
+              this.setState({ failed: false, View: deferPanel() });
+            }}
+          >
+            Retry
+          </button>
+        </p>
+      </section>
+    ) : (
+      <Suspense fallback={null}>
+        <View {...this.props} />
+      </Suspense>
+    );
+  }
+}
 
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation;
@@ -85,6 +121,7 @@ function Panel({
 }: ConversationPanelProps & { renderers: Awaited<ReturnType<typeof loadRenderers>> }) {
   const { ActivityBlock, BudgetNotice, Notices, Composer, TimelineEntry } = renderers;
   const { header, entries } = conversation;
+  const lastActivity = entries.findLast((entry) => entry.kind === "activity");
   const list = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -134,6 +171,7 @@ function Panel({
                   slot={header.slot}
                   changeId={header.changeId}
                   onOpenDiff={onOpenDiff}
+                  showHeader={entry === lastActivity}
                 />
               ) : entry.kind === "budget" ? (
                 <BudgetNotice mark={entry.mark} progress={conversation.progress} />
@@ -152,9 +190,5 @@ function Panel({
 
 /** Conversation UI loads only when its focus tab is opened. */
 export function ConversationPanel(props: ConversationPanelProps) {
-  return (
-    <Suspense fallback={null}>
-      <DeferredPanel {...props} />
-    </Suspense>
-  );
+  return <ConversationBoundary {...props} />;
 }

@@ -18,6 +18,3 @@ export type {
   ConversationMessage,
 } from "./conversation/selectConversation";
 export type { ConversationControls } from "./conversation/Composer";
-
-export { progressEvents, progressMoments, progressState } from "./conversation/progressFixture";
-export type { ProgressMoment } from "./conversation/progressFixture";

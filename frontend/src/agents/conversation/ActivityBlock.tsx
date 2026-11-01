@@ -40,11 +40,13 @@ export function ActivityBlock({
   slot,
   changeId,
   onOpenDiff,
+  showHeader = true,
 }: {
   entry: Extract<ConversationEntry, { kind: "activity" | "round" }>;
   slot: Slot;
   changeId: string;
   onOpenDiff?: (id: string) => void;
+  showHeader?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const { round } = entry;
@@ -54,7 +56,7 @@ export function ActivityBlock({
 
   return (
     <div className="my-[9px] mr-[22px] ml-[56px]">
-      {!ended && (
+      {!ended && showHeader && (
         <div className="mb-[9px] flex min-h-6 items-center gap-[10px] text-[14px] text-muted">
           <LoaderCircle
             aria-hidden="true"

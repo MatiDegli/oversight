@@ -104,6 +104,40 @@ it("loads conversation renderers only when its tab opens", async () => {
     await page.close();
   }
 });
+it("contains a failed conversation import and retries without losing the graph", async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  let attempts = 0;
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.route("**/ActivityBlock.tsx", (route) => {
+      attempts += 1;
+      return attempts === 1 ? route.abort("failed") : route.continue();
+    });
+    await page.goto(url);
+    await page.waitForFunction(() => !!window.progressTest);
+    await page.evaluate(() => {
+      window.progressTest.mount("working");
+    });
+    const graph = page.getByRole("img", { name: "Repository graph", exact: true });
+    await check(graph).toBeVisible();
+    await page
+      .getByRole("article", { name: "Agent A", exact: true })
+      .getByRole("button", { name: "Conversation", exact: true })
+      .click();
+    await check(
+      panel(page).getByText("The conversation could not load.", { exact: true }),
+    ).toBeVisible();
+    await check(graph).toBeVisible();
+    await check(page.getByRole("group", { name: /^Agent A:/ })).toBeVisible();
+    await panel(page).getByRole("button", { name: "Retry", exact: true }).click();
+    await check(panel(page).getByText("Working", { exact: true })).toBeVisible();
+    await check(panel(page).getByRole("list", { name: "Conversation timeline" })).toBeVisible();
+    expect(attempts).toBe(2);
+    await check(graph).toBeVisible();
+  } finally {
+    await page.close();
+  }
+});
 it("folds calls and rounds with keyboard buttons, keeps newest last and preserves focus on events", async () => {
   const page = await open();
   try {

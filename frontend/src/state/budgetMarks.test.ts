@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
-import { progressEvents } from "../agents";
+// eslint-disable-next-line no-restricted-imports -- Test-only fixture, excluded from the product barrel.
+import { progressEvents } from "../agents/conversation/progressFixture";
 import { applyEvent } from "./applyEvent";
 import { createInitialState } from "./types";
 
@@ -38,4 +40,9 @@ it("retains one immutable mark per rise, ignores ok and falls, and clears on run
   expect(
     applyEvent(state, { ...run, seq: 1, payload: { ...run.payload, run_id: "next" } }).budgetMarks,
   ).toEqual([]);
+});
+
+it("keeps the hand-written progress fixture out of the production barrel", () => {
+  const barrel = readFileSync(new URL("../agents/index.ts", import.meta.url), "utf8");
+  expect(barrel).not.toMatch(/from\s+["'].*progressFixture["']/);
 });
