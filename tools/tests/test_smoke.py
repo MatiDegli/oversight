@@ -250,3 +250,58 @@ def test_nt_smoke_selects_shared_supervision_without_changing_posix_environment(
     assert called == [(1, False)]
     env = smoke.child_env(8000, tmp_path)
     assert "META_API_KEY" not in env and "BASETEN_API_KEY" not in env
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failure", ["", "health", "graph"])
+async def test_nt_smoke_always_stops_with_logs_and_safe_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+):
+    import demo_check_nt as nt
+
+    calls = []
+
+    class Server:
+        child = object()
+
+        async def stop(self, deadline_s):
+            assert 0 < deadline_s <= nt.STOP_DEADLINE
+            calls.append("stop")
+
+    async def start(argv, env, log):
+        assert argv[-1] == "serve" and log == tmp_path / "server-1.log"
+        assert env["META_API_KEY"] == env["BASETEN_API_KEY"] == ""
+        assert env["OVERSIGHT_AGENT_MODEL"] == env["OVERSIGHT_AGENT_MODEL_B"] == "fake"
+        assert env["OVERSIGHT_CROSS_REVIEW"] == "false" and env["OVERSIGHT_WORKSPACE_SOURCE"] == ""
+        return Server()
+
+    def phase(name):
+        def check(*a):
+            calls.append(name)
+            if failure == name:
+                raise smoke.SmokeError(name)
+
+        return check
+
+    async def empty(*a):
+        calls.append("empty")
+
+    async def lock(*a):
+        assert calls[-1] == "empty"
+        calls.append("lock")
+
+    monkeypatch.setattr(nt, "start_server", start)
+    monkeypatch.setattr(nt, "retain_outer", lambda: 77)
+    monkeypatch.setattr(nt, "wait_members", empty)
+    monkeypatch.setattr(nt, "probe_lock", lock)
+    monkeypatch.setattr(smoke, "wait_for_health", phase("health"))
+    monkeypatch.setattr(smoke, "wait_for_graph", phase("graph"))
+    if failure:
+        with pytest.raises(smoke.SmokeError, match=failure):
+            await nt.run_once(
+                1, tmp_path, tmp_path / ".runtime", None, nt.OverallClock(), demo=False
+            )
+        assert calls[-1] == "stop" and "empty" not in calls
+    else:
+        await nt.run_once(1, tmp_path, tmp_path / ".runtime", None, nt.OverallClock(), demo=False)
+        assert calls == ["health", "graph", "stop", "empty", "lock"]

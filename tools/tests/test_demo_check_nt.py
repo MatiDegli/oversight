@@ -146,6 +146,7 @@ async def test_empty_job_poll_yields_and_times_out_without_closing() -> None:
         (nt.NT_GRACEFUL_EXITS[0], False, 1),
         (None, True, 0),
         (nt.NT_GRACEFUL_EXITS[0], True, 1),
+        (nt.NT_GRACEFUL_EXITS[0], True, 0),
     ],
 )
 async def test_shutdown_verdict(tmp_path: Path, code: int | None, log: bool, deadline_s: float):
@@ -159,7 +160,7 @@ async def test_shutdown_verdict(tmp_path: Path, code: int | None, log: bool, dea
         sent.append((pid, event))
         child.returncode = code
 
-    if code == nt.NT_GRACEFUL_EXITS[0] and log:
+    if code == nt.NT_GRACEFUL_EXITS[0] and log and deadline_s > 0:
         await server.stop(deadline_s, send)
         assert "terminate" not in jobs.calls
     else:
@@ -512,3 +513,24 @@ async def test_native_backend_death_during_uv_then_three_clean_starts():
     if os.environ.get("OVERSIGHT_NT_FULL_DEMO") != "1":
         pytest.skip("full demo staged until both W2a and W2b land; set OVERSIGHT_NT_FULL_DEMO=1")
     await nt.run_checks(hard_kill=True)
+
+
+def test_fake_environment_overrides_dotenv_and_decisions_refuse_credentials(tmp_path, monkeypatch):
+    from oversight.agents import DecisionUnavailable
+    from oversight.decision_config import configured_decision
+    from oversight.settings import Settings
+
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "META_API_KEY=dotenv-value\nBASETEN_API_KEY=dotenv-value\n"
+        "OVERSIGHT_CROSS_REVIEW=true\nOVERSIGHT_WORKSPACE_SOURCE=unwanted-source\n"
+        "OVERSIGHT_AGENT_MODEL=muse-spark\nOVERSIGHT_AGENT_MODEL_B=muse-spark-open\n"
+    )
+    for key, value in demo_check.server_env(8000, tmp_path / ".runtime").items():
+        monkeypatch.setenv(key, value)
+    settings = Settings.load(env_file)
+    assert settings.meta_api_key is settings.baseten_api_key is None
+    assert settings.cross_review is False and settings.workspace_source == ""
+    assert settings.agent_model == settings.agent_model_b == "fake"
+    with pytest.raises(DecisionUnavailable):
+        configured_decision(settings)  # no invented fake decision profile or provider call

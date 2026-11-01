@@ -144,6 +144,8 @@ class Server:
                 if time.monotonic() >= end:
                     raise smoke.SmokeError("CTRL_BREAK leader deadline exceeded")
                 await asyncio.sleep(POLL)
+            if time.monotonic() > end:
+                raise smoke.SmokeError("CTRL_BREAK leader completion observed after deadline")
             await wait_members(self.job, self.jobs, deadline_s=deadline_s)
             text = self.log.read_text(encoding="utf-8", errors="replace")
             code = self.child.returncode
@@ -326,7 +328,7 @@ async def run_checks(runs: int = RUNS, *, demo: bool = True, hard_kill: bool = F
             first = await run_once(number, logs, runtime, first, clock, demo=demo)
         clock.set_phase("cleanup")
         await wait_members(outer, JOBS, (os.getpid(),))
-        await asyncio.to_thread(cleanup, scratch)
+        await settled(asyncio.to_thread(cleanup, scratch))
     except BaseException:
         print(f"NT failure: retained runtime {runtime} and logs {logs}", file=sys.stderr)
         raise

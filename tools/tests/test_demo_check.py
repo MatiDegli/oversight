@@ -195,7 +195,7 @@ def test_an_expiry_before_the_stop_is_named_for_the_phase_it_expired_in(
         base: str, first: Any, clock: demo_check.OverallClock, run: int, runtime_dir: Path
     ) -> Any:
         clock.phase = "run 1: wait for graph.delta"
-        time.sleep(0.06)
+        clock.started -= clock.deadline_s + 1
         return object()
 
     monkeypatch.setattr(demo_check, "serve_and_decide", decide)
@@ -204,7 +204,7 @@ def test_an_expiry_before_the_stop_is_named_for_the_phase_it_expired_in(
             smoke.SmokeError, match=r"overall deadline .* during run 1: wait for graph\.delta"
         ):
             demo_check.run_once(
-                1, tmp_path, tmp_path / ".runtime", None, demo_check.OverallClock(deadline_s=0.05)
+                1, tmp_path, tmp_path / ".runtime", None, demo_check.OverallClock(deadline_s=30)
             )
         for _ in range(100):
             if server.poll() is not None:
