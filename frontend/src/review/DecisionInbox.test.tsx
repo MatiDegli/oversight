@@ -171,13 +171,46 @@ it("lists a second distinct reason once, excluding the heading and paragraph", (
 });
 
 it("ships the inbox headline before any lazy plan and removes the obsolete hero count", () => {
-  const inbox = readFileSync(new URL("./inbox.css", import.meta.url), "utf8");
+  const inbox = renderToStaticMarkup(<DecisionInbox state={leadState} />);
   const lazy = readFileSync(new URL("./planActions.css", import.meta.url), "utf8");
   expect(inbox).toMatch(
     /\.decisions-inbox \.inbox-heading h2\s*\{[^}]*font-size: 20px;[^}]*font-weight: 700;[^}]*line-height: 1\.3;/,
   );
   expect(inbox).not.toContain(".inbox-count");
   expect(lazy).not.toContain(".inbox-heading");
+});
+
+it("attributes the plan only to its author while tracking remains pending", () => {
+  const event = leadEvents[7];
+  if (event?.type !== "plan.updated") throw new Error("Missing plan");
+  const html = renderToStaticMarkup(
+    <PlanActions state={leadState} plan={event.payload} slots={null} />,
+  );
+  expect(html).toContain("Drafted by the lead</span>");
+  expect(html).not.toContain("tracked by Oversight");
+});
+
+it("gives failed plans without detail a readable neutral explanation", () => {
+  const event = leadEvents[7];
+  if (event?.type !== "plan.updated") throw new Error("Missing plan");
+  const html = renderToStaticMarkup(
+    <PlanActions
+      state={leadState}
+      plan={{ ...event.payload, state: "failed", detail: null }}
+      slots={null}
+    />,
+  );
+  expect(html).toMatch(/<blockquote>.*?<\/svg>No detail recorded<\/blockquote>/s);
+});
+
+it("documents the visible plan groups using the Group type", () => {
+  const design = readFileSync(new URL("../../../DESIGN.md", import.meta.url), "utf8")
+    .split("### Lead plan actions — first slice built")[1]
+    ?.split("### Settings tab")[0];
+  expect(design).toContain("Queued, waiting for slots");
+  expect(design).toContain("Ended without running");
+  expect(design).toContain("Group type");
+  expect(design).not.toContain("Queued plans");
 });
 
 it("keeps additional plan reasons while omitting only duplicate or generic fallback copy", () => {

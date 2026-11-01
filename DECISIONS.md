@@ -3258,3 +3258,12 @@ first evidence, so unlinking restores their original age. The sketch omits dispa
 retain failed requested lead plans read-only with the server's detail, outside decision counts.
 Only proposed-plan Queue/Reject and undispatched queue cancellation are built here; Edit,
 lead lifecycle and the reserved Plan tab's tracking remain follow-up fronts.
+
+## 2026-11-01 — Lead plan actions keep their eager layout within scope
+
+The lead-actions allowed paths exclude `inbox.css`, so restore it byte for byte to `54dc64d`.
+Keep the headline and surrounding plan-row/group layout in DecisionInbox's eager style element,
+including the loading fallback's plan-content marker. Only the plan piece and controls need
+the lazy stylesheet; their arrival must not change row gutters, titles or group labels.
+Reject opens with focus in the comment; Keep returns it to the original Reject control.
+The caption attributes drafting to the lead only: post-dispatch tracking remains pending.

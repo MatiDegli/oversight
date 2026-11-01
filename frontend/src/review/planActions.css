@@ -1,15 +1,3 @@
-.inbox-row:has(.plan-content) {
-  padding: 12px 22px;
-  position: relative;
-}
-.inbox-row:has(.plan-content) > h3 {
-  font-size: 15px;
-  font-weight: 600;
-}
-.plan-content {
-  margin-top: 8px;
-  color: var(--text);
-}
 .plan-piece {
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -157,11 +145,6 @@
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
-.plan-group > h3 {
-  padding: 12px 22px 0;
-  color: var(--muted);
-}
-
 .inbox-row:has(.plan-content) time {
   font-family: var(--code-font);
 }

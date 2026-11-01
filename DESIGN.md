@@ -836,10 +836,12 @@ Premises: main `6ab92e7`, applied to the moved code on `54dc64d`; approved sketc
 b-1101a item 3 (2026-11-01, 01:03:27 ART). Decisions lazily loads proposed plan pieces:
 numbered subtasks, dependency conditions and a derived first-wave explanation. Queue plan
 uses the displayed plan revision; Reject plan opens an optional labeled comment with Reject
-plan and Keep plan. Linked proposed plans move below decisions into Queued plans and stop
-counting. Observed queued/blocked items offer Take out of the queue with their own revision;
-dispatching withholds those actions. Failed lead plans retain their quoted detail under Ended
-without running. Replay reads these pieces with source-aware words and no mutation controls.
+plan and Keep plan. Linked proposed plans move below decisions into Queued, waiting for slots
+and stop counting. Observed queued/blocked items offer Take out of the queue with their own
+revision; dispatching withholds those actions. Failed lead plans retain their quoted detail
+under Ended without running. Both labels use the Group type (600, 11.5px, 0.08em tracking,
+uppercase styling), with readable sentence case in the DOM. Replay reads these pieces with
+source-aware words and no mutation controls.
 
 Plan rows use 12px vertical / 22px horizontal padding; the piece begins 8px below its title,
 with a solid 1px border, 12px radius, card-to-card-end fill and top-highlight. Its header uses

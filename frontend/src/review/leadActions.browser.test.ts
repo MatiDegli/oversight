@@ -214,7 +214,15 @@ it.each([
       await expect(inbox.locator("article").first()).toContainText("Inventory.reserve");
       expect(loaded.some((u) => u.includes("/PlanActions.tsx"))).toBe(true);
       const camera = () =>
-        page.evaluate(() => {
+        page.evaluate(async () => {
+          // Let panel layout effects and ResizeObserver finish before reading the camera.
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                resolve();
+              });
+            });
+          });
           const host = document.querySelector('[aria-label="Repository graph"]') as HTMLElement & {
             oversightGraph: { pan(): unknown; zoom(): number; positions(): unknown };
           };
@@ -225,17 +233,37 @@ it.each([
           };
         });
       const unchanged = await camera();
+      let closedCamera = unchanged;
+      const closeForEvent = async () => {
+        await page.getByRole("button", { name: "Close tab Decisions" }).click();
+        await chip.focus();
+        await expect(inbox).toHaveCount(0);
+        closedCamera = await camera();
+      };
+      const checkClosedAndReopen = async () => {
+        await expect(inbox).toHaveCount(0);
+        await expect(chip).toBeFocused();
+        expect(await camera()).toEqual(closedCamera);
+        await chip.click();
+      };
       await reachable(page);
-      await cart.getByRole("button", { name: "Reject plan" }).click();
+      await cart.getByRole("button", { name: "Reject plan" }).focus();
+      await page.keyboard.press("Enter");
       const comment = cart.getByLabel("Comment, saved with the plan (optional)");
+      await expect(comment).toBeFocused();
       await comment.fill("Do this after the order work.");
       await comment.press("Control+Enter");
       await reachable(page);
       await capture(page, "plans", width, theme);
       expect(requests).toHaveLength(0);
-      await cart.getByRole("button", { name: "Keep plan" }).click();
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Tab");
+      await expect(cart.getByRole("button", { name: "Keep plan" })).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(cart.getByRole("button", { name: "Reject plan" })).toBeFocused();
       expect(requests).toHaveLength(0);
-      await cart.getByRole("button", { name: "Reject plan" }).click();
+      await page.keyboard.press("Space");
+      await expect(comment).toBeFocused();
       await expect(comment).toHaveValue("Do this after the order work.");
       await cart.getByRole("button", { name: "Reject plan" }).click();
       await expect(cart.getByRole("alert")).toHaveText("The plan revision differs");
@@ -278,6 +306,7 @@ it.each([
       await expect(orders.getByRole("status")).toContainText("queue evidence");
       expect(requests.at(-1)).toEqual({ path: "/plans/plan-orders/start", body: { revision: 1 } });
       await expect(chip).toHaveAccessibleName("Decisions: 3 pending. Open decisions inbox");
+      await closeForEvent();
       await page.evaluate(() => {
         const a = window.leadActions;
         a.update(
@@ -291,6 +320,7 @@ it.each([
       });
       const queued = inbox.getByRole("region", { name: "Queued, waiting for slots" });
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
+      await checkClosedAndReopen();
       await expect(queued.locator("li")).toHaveCount(4);
       const groupHeading = queued.getByRole("heading", { name: "Queued, waiting for slots" });
       await expect(groupHeading).toHaveText("Queued, waiting for slots");
@@ -336,6 +366,7 @@ it.each([
         body: { revision: 9 },
       });
       expect(requests).toHaveLength(4);
+      await closeForEvent();
       await page.evaluate(() => {
         window.leadActions.emit([
           {
@@ -347,6 +378,7 @@ it.each([
         ]);
       });
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
+      await checkClosedAndReopen();
       await page.evaluate(() => {
         window.leadActions.update({ revision: 3, queued_task_id: null });
       });
@@ -362,12 +394,14 @@ it.each([
       await expect(queued.getByRole("button")).toHaveCount(0);
       await expect(queued.locator(".plan-piece li")).toHaveCount(3);
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
+      await closeForEvent();
       await page.evaluate(() => {
         window.leadActions.update(
           { revision: 5, state: "failed", detail: "The dispatch could not start" },
           { revision: 12, state: "failed", detail: "The dispatch could not start" },
         );
       });
+      await checkClosedAndReopen();
       const failed = inbox.getByRole("region", { name: "Ended without running" });
       const failedHeading = failed.getByRole("heading", { name: "Ended without running" });
       await expect(failedHeading).toHaveCSS("font-size", "11.5px");
@@ -412,6 +446,14 @@ it.each([
 it("keeps plan pieces readable through App's replay path without mutation requests", async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   const sent: string[] = [];
+  let releaseChunk = () => {};
+  const chunkGate = new Promise<void>((resolve) => {
+    releaseChunk = resolve;
+  });
+  await page.route("**/src/review/PlanActions.tsx*", async (route) => {
+    await chunkGate;
+    await route.continue();
+  });
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: replayHtml }));
   await page.route(/\/(plans|queue)\/[^/]+\/(start|reject|cancel)$/, (route) => {
     sent.push(new URL(route.request().url()).pathname);
@@ -421,7 +463,39 @@ it("keeps plan pieces readable through App's replay path without mutation reques
     await page.goto(replayUrl);
     await page.getByRole("button", { name: /^Decisions:/ }).click();
     const inbox = page.getByRole("region", { name: "Decisions inbox" });
+    await expect(inbox.getByText("Loading plan…")).toHaveCount(2);
+    const cart = inbox.locator("article").filter({ hasText: "Reject bad quantities in the cart" });
+    const rowLayout = async () => ({
+      padding: await cart.evaluate((row) => getComputedStyle(row).padding),
+      title: await cart.locator("h3").evaluate((title) => ({
+        size: getComputedStyle(title).fontSize,
+        weight: getComputedStyle(title).fontWeight,
+      })),
+    });
+    const eagerLayout = await rowLayout();
+    expect(eagerLayout).toEqual({ padding: "12px 22px", title: { size: "15px", weight: "600" } });
+    await page.evaluate(() => {
+      const a = window.leadActions;
+      a.update({ revision: 2, queued_task_id: a.queueItem.queued_task_id }, {});
+    });
+    const group = inbox.getByRole("heading", { name: "Queued, waiting for slots" });
+    const groupLayout = () =>
+      group.evaluate((heading) => ({
+        padding: getComputedStyle(heading).padding,
+        color: getComputedStyle(heading).color,
+      }));
+    const eagerGroup = await groupLayout();
+    expect(eagerGroup.padding).toBe("12px 22px 0px");
+    expect(eagerGroup.color).toBe(
+      await inbox
+        .locator(".decision-muted")
+        .first()
+        .evaluate((p) => getComputedStyle(p).color),
+    );
+    releaseChunk();
     await expect(inbox.locator(".plan-piece li")).toHaveCount(5);
+    expect(await rowLayout()).toEqual(eagerLayout);
+    expect(await groupLayout()).toEqual(eagerGroup);
     await expect(inbox.getByText(/^Replay of a hand-written demo fixture:/).first()).toBeVisible();
     await expect(
       inbox.getByRole("button", { name: /Queue plan|Reject plan|Take out/ }),
@@ -436,6 +510,7 @@ it("keeps plan pieces readable through App's replay path without mutation reques
     await expect(inbox.locator(".plan-piece li")).toHaveCount(5);
     expect(sent).toEqual([]);
   } finally {
+    releaseChunk();
     await page.close();
   }
 });

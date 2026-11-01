@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Clock, X } from "lucide-react";
 import type { Plan, QueuedTask } from "@contracts";
 import type { State } from "../state";
@@ -49,7 +49,7 @@ export default function PlanActions({
         <div className="plan-piece">
           <header>
             <strong>Plan</strong>
-            <span>Drafted by the lead, tracked by Oversight</span>
+            <span>Drafted by the lead</span>
             <span className="plan-count">{plan.subtasks.length} subtasks</span>
           </header>
           <ol>
@@ -71,7 +71,7 @@ export default function PlanActions({
       {plan.state === "failed" ? (
         <blockquote>
           <X size={14} aria-hidden="true" />
-          {plan.detail}
+          {plan.detail ?? "No detail recorded"}
         </blockquote>
       ) : (
         <>
@@ -100,6 +100,16 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
   const { planActions } = useDecisions();
   const [rejecting, setRejecting] = useState(false);
   const [comment, setComment] = useState("");
+  const commentInput = useRef<HTMLInputElement>(null);
+  const rejectButton = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (rejecting) commentInput.current?.focus();
+    else if (returnFocus.current) {
+      rejectButton.current?.focus();
+      returnFocus.current = false;
+    }
+  }, [rejecting]);
   const label = useId();
   const attempt = planActions?.attempts[plan.plan_id];
   const pending = planAttemptPending(state, plan, queue, attempt);
@@ -123,6 +133,7 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
             <>
               <label htmlFor={label}>Comment, saved with the plan (optional)</label>
               <input
+                ref={commentInput}
                 id={label}
                 value={comment}
                 disabled={pending}
@@ -142,6 +153,7 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
                 disabled={pending}
                 className="plan-outlined"
                 onClick={() => {
+                  returnFocus.current = true;
                   setRejecting(false);
                 }}
               >
@@ -164,6 +176,7 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
                 </button>
               )}
               <button
+                ref={rejectButton}
                 className="plan-reject"
                 disabled={pending}
                 onClick={() => {
