@@ -3273,3 +3273,15 @@ each gap by speed before applying the two-second cap and supports speed zero. Th
 caps each gap first, forming one stable axis for every rate; its ready promise means loaded and
 validated, while legacy ready still means the entire log finished. Keeping both avoids changing
 backend-like timing or the tested immediate replay API.
+
+## 2026-11-01 — Public recording guard follows the deferred player
+
+The replay controls also updated `frontend/shots/public-recording.test.ts`, outside the
+front's original item 1 file list, because the controlled player adds a dynamic chunk.
+The old `assert.equal(chunks.length, 1)` fails on the entry plus the separately emitted
+`replayPlayer` chunk: the build necessarily has at least two JavaScript chunks. It was
+replaced with exactly one entry, a separate player chunk, a dynamic import from that entry
+and no static import of the player. The guard still imports the emitted entry and verifies
+the exact recording bytes, provenance hash, label and run identity, and still refuses a
+missing recording or receipt. Writing and importing the emitted ES modules replaces the
+single-chunk data URL, which cannot resolve relative chunk imports.

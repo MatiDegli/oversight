@@ -244,6 +244,67 @@ test("real App controls preserve prefixes, navigation, files and session ownersh
   expect({ backend, errors }).toEqual({ backend: [], errors: [] });
 });
 
+test("1280px controls keep target sizes, keyboard rings and tooltip clearance", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await start(page);
+  await page.evaluate(() => document.fonts.ready);
+  const sizes = await row(page).evaluate((root) => {
+    const rect = (selector: string) => {
+      const element = root.querySelector(selector);
+      if (!element) throw new Error(`Missing ${selector}`);
+      return element.getBoundingClientRect();
+    };
+    const marks = [...root.querySelectorAll(".replay-mark")].map((element) =>
+      element.getBoundingClientRect(),
+    );
+    return {
+      row: root.getBoundingClientRect().width,
+      height: root.getBoundingClientRect().height,
+      control: rect(".replay-button").height,
+      strip: rect(".replay-strip").width,
+      targets: marks.map((mark) => [mark.width, mark.height]),
+      spacing: Math.min(...marks.slice(1).map((mark, i) => mark.x - (marks[i]?.x ?? 0))),
+      speeds: [...root.querySelectorAll(".replay-speed button")].map(
+        (element) => element.getBoundingClientRect().width,
+      ),
+      time: rect(".replay-time").width,
+    };
+  });
+  expect(sizes).toMatchObject({ row: 824, height: 44, control: 34, strip: 446 });
+  expect(sizes.targets).toEqual(Array.from({ length: 5 }, () => [24, 24]));
+  expect(sizes.speeds).toEqual([36, 36, 36]);
+  expect(sizes.time).toBeGreaterThanOrEqual(100);
+  expect(Math.abs(sizes.spacing - 27)).toBeLessThanOrEqual(1);
+  expect(sizes.spacing).toBeGreaterThanOrEqual(24);
+  for (const target of [
+    row(page).getByRole("button", { name: "Play", exact: true }),
+    slider(page),
+    row(page).locator(".replay-mark").first(),
+    row(page).getByRole("button", { name: "1×", exact: true }),
+  ]) {
+    // Leave and return with real keyboard traversal to exercise :focus-visible.
+    await target.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(target).toBeFocused();
+    expect(
+      await target.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.outlineWidth, style.outlineOffset, style.outlineStyle];
+      }),
+    ).toEqual(["2px", "2px", "solid"]);
+  }
+  await row(page)
+    .getByRole("button", { name: "Agent A · Ready for review, 0:16", exact: true })
+    .hover();
+  await expect(page.getByRole("tooltip")).toBeVisible();
+  const tooltip = await page.getByRole("tooltip").boundingBox();
+  const bar = await row(page).boundingBox();
+  if (!tooltip || !bar) throw new Error("Missing tooltip or row bounds");
+  expect(Math.abs(bar.y - (tooltip.y + tooltip.height) - 8)).toBeLessThanOrEqual(1);
+});
+
 test.describe("replay hardening", () => {
   test.use({ hasTouch: true, viewport: { width: 1280, height: 800 } });
   test("touch interruptions recover and long tooltip text stays inside the strip", async ({
