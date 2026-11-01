@@ -65,7 +65,9 @@ export function TopBar({
                 type="button"
                 key={choice}
                 aria-pressed={layout === choice}
-                onClick={() => onLayout(choice)}
+                onClick={() => {
+                  onLayout(choice);
+                }}
               >
                 <Icon aria-hidden="true" size={15} />
                 {choice}

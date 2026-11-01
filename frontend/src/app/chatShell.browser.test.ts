@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
@@ -83,6 +84,9 @@ it("keeps the default, selected tab, draft, commands, graph identity and camera"
     const textarea = await message(page).elementHandle();
     const host = await graph(page).elementHandle();
     await page.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await page.waitForFunction(() => window.chatShellTest.contexts() > 0);
+    const contexts = await page.evaluate(() => window.chatShellTest.contexts());
+    const canvases = await graph(page).locator("canvas").elementHandles();
     const camera = await graph(page).evaluate((el: GraphProbeHost) => ({
       zoom: el.oversightGraph?.zoom(),
       pan: el.oversightGraph?.pan(),
@@ -118,6 +122,9 @@ it("keeps the default, selected tab, draft, commands, graph identity and camera"
         pan: el.oversightGraph?.pan(),
       })),
     ).toEqual(camera);
+    expect(await page.evaluate(() => window.chatShellTest.contexts())).toBe(contexts);
+    expect(await graph(page).locator("canvas").count()).toBe(canvases.length);
+    for (const canvas of canvases) expect(await canvas.evaluate((el) => el.isConnected)).toBe(true);
     await viewButton(page, "Chat").click();
     await page.getByRole("button", { name: "Send", exact: true }).click();
     expect(await page.evaluate(() => window.chatShellTest.calls())).toContainEqual({
@@ -150,6 +157,7 @@ it("Chat-first requests no graph or field implementation until explicit entry", 
         /GraphView|DotField|cytoscape|\/field\/controller|OversightStage/.test(path),
       );
     expect(implementation()).toEqual([]);
+    expect(await page.evaluate(() => window.chatShellTest.contexts())).toBe(0);
     await check(graph(page)).toHaveCount(0);
     await viewButton(page, "Oversight").click();
     await drawn(page);
@@ -209,10 +217,17 @@ it.each(["late", "failed"])(
   },
 );
 it("real App retains one session while events apply and a command targets the same agent", async () => {
-  const page = await open({ app: true });
+  const page = await open({ app: true }, 1280);
   try {
     await drawn(page);
     const first = streams;
+    for (const control of await page.locator(".shell-top-bar button").all()) {
+      const box = await control.boundingBox();
+      expect(box && box.x >= 0 && box.x + box.width <= 1280).toBe(true);
+    }
+    await check(
+      page.locator(".shell-top-bar").getByText("demo-repo", { exact: true }),
+    ).toBeVisible();
     const navigations: string[] = [],
       commands: string[] = [];
     page.on("framenavigated", (frame) => navigations.push(frame.url()));
@@ -282,6 +297,90 @@ it("conversation completion never focuses the Composer", async () => {
     await check(viewButton(page, "Chat")).toBeFocused();
   } finally {
     release();
+    await page.close();
+  }
+});
+
+const shots = fileURLToPath(new URL("../../../.shots/chat-shell/", import.meta.url));
+it.each(
+  [1920, 1280].flatMap((width) =>
+    ["dark", "day"].flatMap((theme) =>
+      ["empty", "working"].map((state) => ({ width, theme, state })),
+    ),
+  ),
+)("measures and optionally captures $state-$width-$theme", async ({ width, theme, state }) => {
+  const page = await open({ initial: "Chat", working: state === "working" }, width, theme);
+  try {
+    if (state === "working") await check(message(page)).toBeVisible();
+    else await check(page.getByRole("textbox", { name: "Task for the new agent" })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const measured = await page.evaluate(() => {
+      const box = (selector: string) => {
+        const el = document.querySelector(selector);
+        if (!el) return null;
+        const { x, y, width, height } = el.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      const entries = document.querySelector('.conversation-entries [role="listitem"] > div');
+      return {
+        columns: [".left-rail", ".chat-agents", ".shell-center", ".chat-work"].map(
+          (s) => box(s)?.width,
+        ),
+        cap: box(".conversation-entries")?.width,
+        gutter: entries ? parseFloat(getComputedStyle(entries).paddingLeft) : null,
+        switch: box(".view-switch")?.height,
+        textarea: box(".conversation-composer textarea"),
+        actions: box(".composer-actions"),
+        empty: box(".chat-empty > div")?.width,
+        sideHeaders: [box(".chat-agents > header")?.height, box(".chat-work > header")?.height],
+        status: box(".status-line")?.height,
+      };
+    });
+    expect(measured.columns).toEqual(width === 1920 ? [56, 280, 1284, 300] : [56, 260, 704, 260]);
+    expect(measured.switch).toBe(34);
+    expect(measured.sideHeaders).toEqual([56, 56]);
+    expect(measured.status).toBe(24);
+    await check(page.locator(".chat-side-body > *")).toHaveCount(0);
+    await check(page.locator(".chat-shell article, .chat-shell .file-agent-mark")).toHaveCount(0);
+    await check(
+      page.getByText(/^(Proposed change|Merged by rules|See on graph|New task)$/),
+    ).toHaveCount(0);
+    if (state === "working") {
+      expect(measured.cap).toBe(width === 1920 ? 880 : 704);
+      expect(measured.gutter).toBe(width === 1920 ? 24 : 20);
+      expect(measured.textarea?.height).toBe(width === 1920 ? 64 : 46);
+      expect(measured.textarea?.width).toBe(width === 1920 ? 832 : 664);
+      expect(measured.actions?.height).toBe(width === 1920 ? 38 : 34);
+      for (const button of await page.locator(".composer-actions button").all()) {
+        const bounds = await button.boundingBox();
+        expect(bounds && bounds.y + bounds.height <= (width === 1920 ? 1056 : 776)).toBe(true);
+      }
+    } else expect(measured.empty).toBe(width === 1920 ? 780 : 656);
+    if (process.env.CHAT_SHELL_SHOTS === "1") {
+      await mkdir(shots, { recursive: true });
+      const name = `${state}-${String(width)}-${theme}`;
+      await page.screenshot({ path: `${shots}${name}.png`, animations: "disabled" });
+      await writeFile(`${shots}${name}.json`, JSON.stringify(measured, null, 2));
+    }
+    if (state === "working") {
+      await page.evaluate(() => {
+        window.chatShellTest.messages(40);
+      });
+      const timeline = page.getByRole("list", { name: "Conversation timeline" });
+      expect(await timeline.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+      await timeline.focus();
+      await timeline.evaluate((el) => {
+        el.scrollTop = 0;
+        el.dispatchEvent(new Event("scroll", { bubbles: true }));
+      });
+      await page.evaluate(() => {
+        window.chatShellTest.messages(1);
+      });
+      await check(timeline).toBeFocused();
+      await check(timeline).toHaveJSProperty("scrollTop", 0);
+      await check(page.getByRole("button", { name: "Send", exact: true })).toBeVisible();
+    }
+  } finally {
     await page.close();
   }
 });

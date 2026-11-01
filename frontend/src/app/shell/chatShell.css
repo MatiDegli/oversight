@@ -26,6 +26,9 @@
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
+.shell-top-bar > p {
+  flex-shrink: 0;
+}
 .shell-top-bar .palette-trigger {
   min-width: 140px;
   margin-left: 24px;

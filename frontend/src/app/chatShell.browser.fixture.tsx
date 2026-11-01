@@ -1,3 +1,4 @@
+import type { ServerEvent } from "@contracts";
 import { useLayoutEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
@@ -10,6 +11,14 @@ import { Frame } from "./Frame";
 import { InitialShellLayout, type ShellLayout } from "./shell/useShell";
 import { closePanel, conversationTab, tabbedView, viewReducer, type View } from "./view";
 
+let webglRequests = 0;
+// eslint-disable-next-line @typescript-eslint/unbound-method -- The proxy forwards the original canvas receiver.
+HTMLCanvasElement.prototype.getContext = new Proxy(HTMLCanvasElement.prototype.getContext, {
+  apply(target, canvas, args: unknown[]) {
+    if (args[0] === "webgl2" || args[0] === "webgl") webglRequests++;
+    return Reflect.apply(target, canvas, args) as RenderingContext | null;
+  },
+});
 const events = log.trim().split("\n").map(parseEvent);
 let root: Root | undefined;
 let navigation: View;
@@ -101,9 +110,23 @@ export const chatShellTest = {
         .applyEvents(events.filter((e) => e.seq > state.lastSeq && e.seq <= end));
     });
   },
+  messages(count: number) {
+    const state = stateStore.getState().state;
+    flushSync(() => {
+      stateStore.getState().applyEvents(
+        Array.from({ length: count }, (_, i): ServerEvent => ({
+          seq: state.lastSeq + i + 1,
+          ts: state.clock ?? "2026-10-27T18:53:00Z",
+          type: "agent.message",
+          payload: { agent_id: "agent-1", text: "Fixture message for independent scrolling." },
+        })),
+      );
+    });
+  },
   view: () => navigation,
   calls: () => calls,
   seq: () => stateStore.getState().state.lastSeq,
+  contexts: () => webglRequests,
 };
 Object.assign(window, { chatShellTest });
 declare global {
