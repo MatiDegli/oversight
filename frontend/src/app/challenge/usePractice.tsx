@@ -1,14 +1,19 @@
-import { useMemo, useState } from "react";
+import { lazy, useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { freezePractice } from "./session";
 import { replayRecording } from "../../transport";
 import type { ChosenReplaySource } from "../../transport";
 import { viewReducer } from "../view";
 import type { View, FocusTab } from "../view";
-import { answerOnce, complete, freshAttempt, PracticePanel } from "./PracticePanel";
-import type { Attempt } from "./PracticePanel";
+import { answerOnce, complete, freshAttempt } from "./attempt";
+import type { Attempt } from "./attempt";
 
+import { PracticeFrame } from "../shell/PanelFallbacks";
+import { LazyPanel } from "../shell/LazyPanel";
 import { availablePractice } from "./availability";
+const PracticePanel = lazy(() =>
+  import("./PracticePanel").then((m) => ({ default: m.PracticePanel })),
+);
 
 export function usePractice(
   setView: Dispatch<SetStateAction<View>>,
@@ -41,6 +46,12 @@ export function usePractice(
   function show(index: number) {
     setView((view) => viewReducer(view, { type: "open", tab: focus(index) }));
   }
+  function exit() {
+    setActive(false);
+    setAttempt(freshAttempt());
+    setView((view) => viewReducer(view, { type: "watch" }));
+    restart();
+  }
   return {
     active,
     focus: focus(attempt.index),
@@ -52,41 +63,38 @@ export function usePractice(
       show(attempt.index);
     },
     content: (
-      <PracticePanel
-        practice={bound}
-        attempt={attempt}
-        onStart={() => {
-          setAttempt((current) => ({ ...current, started: true }));
-        }}
-        onAnswer={(answer) => {
-          setAttempt((current) => {
-            const item = bound.cases[current.index];
-            return item ? answerOnce(current, item.changeId, answer) : current;
-          });
-        }}
-        onNext={() => {
-          if (bound.cases[0] && attempt.answers[bound.cases[0].changeId]) {
-            setAttempt((current) => ({ ...current, index: 1 }));
-            show(1);
-          }
-        }}
-        onReveal={() => {
-          if (complete(bound, attempt)) setAttempt((current) => ({ ...current, revealed: true }));
-        }}
-        onFinish={() => {
-          setAttempt((current) => ({ ...current, finished: true }));
-        }}
-        onRestart={() => {
-          setAttempt(freshAttempt());
-          show(0);
-        }}
-        onExit={() => {
-          setActive(false);
-          setAttempt(freshAttempt());
-          setView((view) => viewReducer(view, { type: "watch" }));
-          restart();
-        }}
-      />
+      <LazyPanel frame={<PracticeFrame attempt={attempt} onExit={exit} />}>
+        <PracticePanel
+          practice={bound}
+          attempt={attempt}
+          onStart={() => {
+            setAttempt((current) => ({ ...current, started: true }));
+          }}
+          onAnswer={(answer) => {
+            setAttempt((current) => {
+              const item = bound.cases[current.index];
+              return item ? answerOnce(current, item.changeId, answer) : current;
+            });
+          }}
+          onNext={() => {
+            if (bound.cases[0] && attempt.answers[bound.cases[0].changeId]) {
+              setAttempt((current) => ({ ...current, index: 1 }));
+              show(1);
+            }
+          }}
+          onReveal={() => {
+            if (complete(bound, attempt)) setAttempt((current) => ({ ...current, revealed: true }));
+          }}
+          onFinish={() => {
+            setAttempt((current) => ({ ...current, finished: true }));
+          }}
+          onRestart={() => {
+            setAttempt(freshAttempt());
+            show(0);
+          }}
+          onExit={exit}
+        />
+      </LazyPanel>
     ),
   };
 }

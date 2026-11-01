@@ -50,7 +50,10 @@ export function deferEditor<Props extends object>(
   filePanel = false,
 ) {
   const Deferred = lazy(() => loadEditor().then((module) => ({ default: select(module) })));
-  return function DeferredEditor(props: Props) {
+  return function DeferredEditor({
+    loadingFallback,
+    ...props
+  }: Props & { loadingFallback?: ReactNode }) {
     // Fix the identity for this mount: a cold open must not remount when the cache fills.
     const [View] = useState(() => {
       const loaded = loadedEditor();
@@ -58,8 +61,10 @@ export function deferEditor<Props extends object>(
     });
     return (
       <EditorBoundary filePanel={filePanel}>
-        <Suspense fallback={<EditorFallback failed={false} filePanel={filePanel} />}>
-          <View {...props} />
+        <Suspense
+          fallback={loadingFallback ?? <EditorFallback failed={false} filePanel={filePanel} />}
+        >
+          <View {...(props as Props)} />
         </Suspense>
       </EditorBoundary>
     );

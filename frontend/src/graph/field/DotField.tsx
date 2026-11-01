@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 import type { BoxSource } from "./boxSource";
-import { createFieldController } from "./controller";
 import type { FieldController, FieldHost, FieldInput } from "./controller";
 
 export interface DotFieldProps extends FieldInput {
@@ -15,30 +14,47 @@ export interface DotFieldProps extends FieldInput {
  * screen that light up around the nodes in `lights`. It never takes the pointer, the focus or a
  * place in the reading order, and without WebGL it draws nothing.
  */
-export function DotField({ source, mode, lights, merges, modules }: DotFieldProps) {
+export function DotField({
+  source,
+  mode,
+  lights,
+  merges,
+  modules,
+  milestones,
+  mergeStarts,
+}: DotFieldProps) {
   const canvas = useRef<FieldHost>(null);
   const controller = useRef<FieldController | null>(null);
-  const input = useRef<FieldInput>({ mode, lights, merges, modules });
+  const input = useRef<FieldInput>({ mode, lights, merges, modules, milestones, mergeStarts });
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
-    const created = createFieldController(element, source.current);
-    created.update(input.current);
-    controller.current = created;
-    const resize = new ResizeObserver(() => {
-      created.redraw();
+    // Load the field separately so the graph and controls stay within the startup budget.
+    const initial = input.current;
+    let cancelled = false;
+    let resize: ResizeObserver | undefined;
+    void import("./controller").then(({ createFieldController }) => {
+      if (cancelled) return;
+      const created = createFieldController(element, source.current);
+      created.update(initial);
+      created.update(input.current);
+      controller.current = created;
+      resize = new ResizeObserver(() => {
+        created.redraw();
+      });
+      resize.observe(element);
     });
-    resize.observe(element);
     return () => {
-      resize.disconnect();
-      created.dispose();
+      cancelled = true;
+      resize?.disconnect();
+      controller.current?.dispose();
       controller.current = null;
     };
   }, [source]);
   useEffect(() => {
-    input.current = { mode, lights, merges, modules };
+    input.current = { mode, lights, merges, modules, milestones, mergeStarts };
     controller.current?.update(input.current);
-  }, [mode, lights, merges, modules]);
+  }, [mode, lights, merges, modules, milestones, mergeStarts]);
   return (
     <canvas
       ref={canvas}

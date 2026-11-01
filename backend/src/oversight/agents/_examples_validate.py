@@ -200,3 +200,34 @@ def validate_examples(arguments: str, allowed: Sequence[ExampleTarget]) -> list[
         return [_flatten(case, meanings, {t.node_id: t for t in allowed}) for case in reply.cases]
     except ValidationError as error:
         raise ExamplesInvalid("invalid_schema", str(error)) from error
+
+
+def validate_person_examples(
+    examples: Sequence[TaskExample], targets: Sequence[ExampleTarget]
+) -> list[TaskExample]:
+    """Validate exact JSON oracles with E1's bounds and target rules, retaining human ids/notes."""
+    if not 1 <= len(examples) <= 5:
+        raise ExamplesInvalid("case_count", "Expected one to five examples")
+    seen: set[str] = set()
+    normalized: list[TaskExample] = []
+    allowed = {target.node_id: target for target in targets}
+    for example in examples:
+        if example.pin is not None:
+            raise ExamplesInvalid("person_supplied_pin", "Only the server builds confirmation pins")
+        if example.example_id in seen:
+            raise ExamplesInvalid("duplicate_example_id", "Example ids must be unique")
+        seen.add(example.example_id)
+        if example.expected_behavior is not None or example.expected_output is None:
+            raise ExamplesInvalid("behavior_only", "Only an exact JSON expected_output is allowed")
+        _bounded(example.expected_output, EXAMPLE_OUTPUT_CHARS, "expected_output")
+        # Reuse the model oracle's limits, strict JSON parser and synchronous target check.
+        case = _Case(
+            example_id=example.example_id,
+            meaning="person",
+            inputs=example.inputs,
+            expected_output=cast(JsonValue, _load(example.expected_output)),
+            note=example.note or "",
+        )
+        result = _flatten(case, {"person": "Confirmed replacement"}, allowed)
+        normalized.append(result.model_copy(update={"note": example.note}, deep=True))
+    return normalized

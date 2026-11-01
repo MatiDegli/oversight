@@ -116,13 +116,15 @@ static build requires the recording and its receipt; UI tests select their own f
 - After the hackathon, as a plan first: run the repository's git hooks as evidence, not inside
   commits: in the isolated runner on the proposal, shown on the card as passed or failed, with any
   formatter edits appearing in the diff. Agent commits keep hooks disabled.
-- After the hackathon, as a plan first: repositories without Python open without a graph; agents,
-  worktrees, diff, review, cross-review, merge and tests still work. Needs a per-repository test
-  command with JUnit output and a center view without the graph (sketch first).
-- After the hackathon, after the native Windows port: a Tauri shell, starting with one bounded spike
+- After the hackathon, as a plan first: repositories without Python open in Chat; Oversight shows
+  the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
+  merge and tests still work. Needs a per-repository test command with JUnit output and an approved
+  sketch first.
+- After the hackathon: a Tauri shell, starting with one bounded spike
   in its own directory that touches no product code: a Windows window showing the current UI,
   starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
   translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
+- After the Tauri shell: native Windows and macOS backend ports, after the hackathon.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 

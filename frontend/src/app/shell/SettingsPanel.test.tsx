@@ -2,7 +2,8 @@ import { Children, isValidElement, type ReactNode, type ReactElement } from "rea
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { createInitialState } from "../../state";
-import { SettingsPanel, mergeModePending } from "./SettingsPanel";
+import { SettingsPanel } from "./SettingsPanel";
+import { mergeModePending } from "./mergeModeAttempt";
 
 const state = { ...createInitialState(), mergeMode: { mode: "ask_me", revision: 0 } as const };
 function buttons(node: ReactNode): ReactElement<Record<string, unknown>>[] {

@@ -127,12 +127,14 @@ def make_run(
     max_wall_clock_s: int = 120,
     ledger: UsageLedger | None = None,
     harness_pack: bool = False,
+    history_prune_tokens: int | None = None,
 ) -> AgentRun:
     workspace, worktree = tree
     configure_suite(workspace, harness_pack=harness_pack)
     return AgentRun(
         AgentTask("agent-1", "change-1", "A", task, limits(max_steps, max_wall_clock_s)),
         harness_pack=harness_pack,
+        history_prune_tokens=history_prune_tokens,
         model=model,
         workspace=workspace,
         tree=worktree,

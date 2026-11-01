@@ -4,7 +4,7 @@ import logging
 import os
 from typing import Literal
 
-from oversight.agents import validate_agent_status
+from oversight.agents import task_examples, validate_agent_status
 from oversight.changes._resolution_validation import validate_resolution_evidence
 from oversight.changes._state import (
     CLOSE_OUT_ATTEMPTS,
@@ -110,9 +110,10 @@ def status(ctx: ChangeContext, rec: ChangeRecord, state: Literal["done", "stoppe
         base_commit=rec.base_commit,
         state=state,
         step=rec.steps,
-        max_steps=task.limits.max_steps * (rec.requests + 1),
+        max_steps=task.prior_steps + task.limits.max_steps * (rec.requests + 1),
         detail=STOPPED if state == "stopped" else None,
         answering=task.answering,
+        examples=task_examples(task.examples),
     )
 
     validate_agent_status(payload, base_commit=rec.base_commit, answering=task.answering)

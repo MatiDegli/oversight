@@ -370,7 +370,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
     await expect(page.locator("#root")).toHaveAttribute("data-seq", String(events.length));
     await page.getByRole("button", { name: "Close review" }).click();
     await expect(review).toHaveCount(0);
-    await expect(card.getByText("Done", { exact: true })).toBeVisible();
+    await expect(card.getByText("Merged", { exact: true })).toBeVisible();
     await expect(stepList.getByRole("listitem")).toHaveCount(steps.length);
   });
 

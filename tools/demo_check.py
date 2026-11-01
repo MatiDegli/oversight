@@ -1,7 +1,8 @@
 """`make demo-check`: the demo's one-command path, three times in a row, from a clean start.
 
-AGENTS.md: a level is done when its demo runs three times in a row from a clean start, with one
-command and no manual fixes. `make demo` builds the frontend and runs `python -m oversight serve`,
+docs/proposal.md, section 5: a level is done when its demo runs three times in a row from a clean
+start, with one command and no manual fixes. `make demo` builds the frontend and runs
+`python -m oversight serve`,
 FastAPI serving the build. This check builds once (the Makefile does, before it), then runs that
 server three times on the scripted fake model, so it spends no credits and needs no key: the
 provider keys are blanked in the child's environment, which also hides any value in .env.

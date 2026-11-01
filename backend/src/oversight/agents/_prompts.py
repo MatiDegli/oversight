@@ -62,8 +62,25 @@ queue, approve or reject anything. Call finish once your plans are requested. Do
 agents."""
 
 
-def prompt_version(harness_pack: bool = False) -> str:
+HISTORY_STUB = "[Lines {first}-{last} of {path}: a later read of this path covers these lines.]"
+HISTORY_LOW_WATER = 0.75
+HISTORY_REARM = 0.25
+HISTORY_PROTECTED_CALLS = 6
+
+
+def prompt_version(harness_pack: bool = False, history_prune_tokens: int | None = None) -> str:
     """A hash of the selected system, revision, plan and lead prompts, and both tool tables."""
+    policy = ""
+    if history_prune_tokens is not None:
+        policy = json.dumps(
+            [
+                HISTORY_STUB,
+                history_prune_tokens,
+                HISTORY_LOW_WATER,
+                HISTORY_REARM,
+                HISTORY_PROTECTED_CALLS,
+            ]
+        )
     return (
         "agent-v1-"
         + hashlib.sha256(
@@ -74,6 +91,7 @@ def prompt_version(harness_pack: bool = False) -> str:
                 + LEAD_PROMPT
                 + json.dumps(TOOL_SCHEMAS, sort_keys=True)
                 + json.dumps(LEAD_TOOL_SCHEMAS, sort_keys=True)
+                + policy
             ).encode()
         ).hexdigest()[:12]
     )

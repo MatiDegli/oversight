@@ -1,0 +1,76 @@
+name: verify
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - run: make check-ci
+      - run: make smoke
+      - name: Report network isolation probe
+        run: |
+          uv run --frozen python -m oversight isolation-probe > /tmp/isolation-probe.json
+          uv run --frozen python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          verdict = json.loads(Path("/tmp/isolation-probe.json").read_text())
+          status = verdict["status"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Network isolation probe: **{status}**\n\n")
+              summary.write("```json\n" + json.dumps(verdict, indent=2) + "\n```\n")
+          if status not in {"confirmed", "unavailable"}:
+              raise SystemExit(1)
+          PY
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Scan HEAD history
+        run: gitleaks git --config .gitleaks.toml --redact --verbose --log-opts="HEAD" .
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"

@@ -1,3 +1,4 @@
+import type { ReplayPlayer } from "../transport";
 import { stateStore } from "../state";
 import { startAppTransport } from "../transport";
 import { afterFirstGraphDraw } from "../graph";
@@ -8,6 +9,7 @@ export function startAppSession(
   root: Pick<HTMLElement, "dataset"> | null,
   onError: (error: unknown) => void,
   onOpen?: () => void,
+  onReplay?: (player: ReplayPlayer) => void,
 ) {
   let active = true;
   let cancelPrefetch: () => void = () => undefined;
@@ -42,9 +44,16 @@ export function startAppSession(
       };
     },
   };
-  const transport = startAppTransport(guarded, report, () => {
-    if (active) onOpen?.();
-  });
+  const transport = startAppTransport(
+    guarded,
+    report,
+    () => {
+      if (active) onOpen?.();
+    },
+    (player) => {
+      if (active) onReplay?.(player);
+    },
+  );
   void transport.ready.catch(report);
   return () => {
     active = false;

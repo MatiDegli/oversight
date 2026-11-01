@@ -4,7 +4,7 @@ import ast
 import asyncio
 import inspect
 from dataclasses import replace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from changes_helpers import EDIT, Harness, queued_callbacks_ran
@@ -464,6 +464,47 @@ async def test_lost_take_consumes_nothing(h: Harness, armed, monkeypatch):
     await settled(h)
     assert not armed[1] and not rec(h).rules_consumed
     assert rec(h).state == "ready" and rec(h).evidence is None
+
+
+async def test_missing_head_after_capture_preserves_ownership(h: Harness, armed, monkeypatch):
+    h.manager._ctx.ports.rules_admission = lambda record, assessment: None
+    h.manager.run_ended("agent-1", None)
+    await settled(h)
+    record = rec(h)
+    before = (
+        record.state,
+        record.decision,
+        record.fallback,
+        record.taken,
+        set(record.rules_consumed),
+        set(record.rules_attempts),
+        record.evidence,
+    )
+    capture = _rules.capture
+
+    def lose_head(*args):
+        reservation = capture(*args)
+        record.head_commit = None
+        return reservation
+
+    capture_spy = Mock(side_effect=lose_head)
+    take = Mock(wraps=h.manager._take)
+    monkeypatch.setattr(_rules, "capture", capture_spy)
+    monkeypatch.setattr(h.manager, "_take", take)
+    with pytest.raises(AssertionError):
+        h.manager._admit_rules(record, latest(h))
+    capture_spy.assert_called_once()
+    take.assert_not_called()
+    assert (
+        record.state,
+        record.decision,
+        record.fallback,
+        record.taken,
+        record.rules_consumed,
+        record.rules_attempts,
+        record.evidence,
+    ) == before
+    assert record.rules_task is None and not armed[1]
 
 
 async def test_new_revision_gets_its_own_attempt(h: Harness, armed):

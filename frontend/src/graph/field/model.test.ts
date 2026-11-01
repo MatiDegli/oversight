@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { themes } from "../../theme";
 import type { FieldLight, FieldMode } from "./lights";
@@ -166,6 +166,7 @@ describe("the lamps", () => {
     const cells = cols * rows;
     const thin = (intensity: number) => {
       const accumulated: Accumulated = {
+        strongest: new Float32Array(cells).fill(intensity),
         sum: new Float32Array(cells).fill(intensity),
         red: new Float32Array(cells).fill(intensity * 255),
         green: new Float32Array(cells).fill(intensity * 92),
@@ -215,7 +216,7 @@ describe("the lamps", () => {
     expect(held).toBeLessThan(strong);
   });
 
-  it("mix the colors of overlapping lights by intensity", () => {
+  it("uses the strongest source hue while overlapping intensities add", () => {
     const grid = lamps(
       config,
       600,
@@ -223,12 +224,10 @@ describe("the lamps", () => {
       [light(BOX, { weight: 1 }), light(BOX, { weight: 0.5, color: BLUE })],
       null,
     );
-    // Inside the box the intensities are 0.92 and 0.46: together past full, so a whole lamp, in
-    // the mix of the two colors weighted by those intensities (two thirds orange, one third blue),
-    // with its hot core a fifth of the way to white.
+    // 0.92 + 0.46 still makes a whole lamp; hue is now orange, never their mixture.
     const [r, g, b] = color(grid, 24, 24);
     expect(level(grid, 24, 24)).toBe(3);
-    const mixed = [(255 * 2 + 79) / 3, (92 * 2 + 125) / 3, (31 * 2 + 255) / 3];
+    const mixed: number[] = [...ORANGE];
     const hot = (channel: number) => channel + (255 - channel) * 0.2;
     expect(r).toBeCloseTo(hot(mixed[0] ?? 0), 0);
     expect(g).toBeCloseTo(hot(mixed[1] ?? 0), 0);
@@ -239,6 +238,7 @@ describe("the lamps", () => {
     // One cell at the matrix's first value (0), so a level is the floor of three times the light.
     const shade = (rgb: Rgb, intensity: number, cfg: FieldConfig = config) => {
       const accumulated: Accumulated = {
+        strongest: Float32Array.of(intensity),
         sum: Float32Array.of(intensity),
         red: Float32Array.of(intensity * rgb[0]),
         green: Float32Array.of(intensity * rgb[1]),
@@ -472,5 +472,26 @@ it("invalidates cached falloff after zoom, box movement, profile and viewport ch
     expect([...cached(changed, width, height, placed, 2).data]).toEqual([
       ...createLampField()(changed, width, height, placed, 2).data,
     ]);
+  }
+});
+
+it("requires strongest-source storage on an accumulator", () => {
+  expectTypeOf<Accumulated["strongest"]>().toEqualTypeOf<Float32Array>();
+});
+
+it("gives two resting teams a clean edge with unchanged additive brightness", () => {
+  const grid = createLampField()(
+    config,
+    600,
+    400,
+    [light(BOX), light({ ...BOX, x1: 300, x2: 440 }, { color: BLUE })],
+    null,
+  );
+  for (const [col, rgb] of [
+    [24, ORANGE],
+    [52, BLUE],
+  ] as const) {
+    expect(level(grid, col, 23)).toBe(3);
+    expect(color(grid, col, 23)).toEqual(rgb.map((v) => Math.round(v + (255 - v) * 0.2)));
   }
 });

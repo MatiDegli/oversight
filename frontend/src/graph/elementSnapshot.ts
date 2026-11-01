@@ -18,6 +18,7 @@ export function elementSnapshot() {
       props.litIds,
       cone,
       props.measured,
+      props.merging,
       preserveReads,
       theme,
       JSON.stringify(nodeGeometry(theme)),
@@ -30,6 +31,7 @@ export function elementSnapshot() {
         cone,
         preserveReads,
         props.cone ? props.measured : null,
+        props.merging,
       );
       previous = inputs;
     }

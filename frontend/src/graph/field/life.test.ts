@@ -4,7 +4,7 @@ import type { GraphSnapshot, ServerEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
 
 import { applyEvent, createInitialState } from "../../state";
-import { selectMerges, selectModules } from "./life";
+import { selectMilestones, selectMerges, selectModules } from "./life";
 
 const events = readFileSync(
   new URL("../../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
@@ -137,4 +137,30 @@ describe("modules", () => {
     expect(selectModules(g)).toBe(selectModules(g));
     expect(selectModules(null)).toEqual([]);
   });
+});
+
+it("selects ready and parsed Needs you events, omits missing nodes and computes event age", () => {
+  const state = through(20);
+  expect(selectMilestones(state)).toMatchObject([
+    { key: "change-1:20", kind: "ready", age: 0, slot: "A", id: "shop.pricing:compute_price" },
+  ]);
+  const needs: ServerEvent = {
+    seq: 21,
+    ts: "2026-10-27T14:03:28.585Z",
+    type: "error",
+    payload: {
+      agent_id: "agent-1",
+      change_id: "change-1",
+      message: "Needs you — revision=1; head=abc; code=main_moved; reason=Main moved",
+      source: "git",
+      fatal: false,
+    },
+  };
+  const next = applyEvent(state, needs);
+  expect(selectMilestones(next).map(({ kind, age }) => ({ kind, age }))).toEqual([
+    { kind: "ready", age: 1000 },
+    { kind: "needs", age: 0 },
+  ]);
+  expect(selectMilestones({ ...next, changes: {} })).toEqual([]);
+  expect(selectMilestones({ ...next, clock: null }).every((event) => event.age === 0)).toBe(true);
 });

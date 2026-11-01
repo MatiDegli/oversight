@@ -5,7 +5,7 @@ import type { GraphProbeHost } from "../src/graph";
 import { themes } from "../src/theme";
 import { engaged, installHolds, release } from "./holds";
 import { holds } from "./level2-log";
-import { interceptCommands, tapNode } from "./level2-support";
+import { interceptCommands, removeRoutes, tapNode } from "./level2-support";
 import {
   editorAssets,
   expectNoEditorBeforeGraph,
@@ -37,6 +37,8 @@ const test = baseTest.extend({
     }
   },
 });
+
+test.afterEach(async ({ page }) => removeRoutes(page));
 
 async function expectPython(panel: Locator) {
   // Read the painted keyword's color, rather than merely checking a language id or token class.

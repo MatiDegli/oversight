@@ -8,6 +8,7 @@ import leadPlans from "../../../fixtures/events/handwritten-lead-plans.jsonl?raw
 import { applyEvent, createInitialState } from "../state";
 import { parseEvent } from "../transport";
 import { DecisionInbox } from "./DecisionInbox";
+import { InboxHeading } from "./InboxHeader";
 import PlanActions from "./PlanActions";
 
 const state = log.trim().split("\n").map(parseEvent).reduce(applyEvent, createInitialState());
@@ -171,12 +172,14 @@ it("lists a second distinct reason once, excluding the heading and paragraph", (
 });
 
 it("ships the inbox headline before any lazy plan and removes the obsolete hero count", () => {
-  const inbox = renderToStaticMarkup(<DecisionInbox state={leadState} />);
   const lazy = readFileSync(new URL("./planActions.css", import.meta.url), "utf8");
-  expect(inbox).toMatch(
-    /\.decisions-inbox \.inbox-heading h2\s*\{[^}]*font-size: 20px;[^}]*font-weight: 700;[^}]*line-height: 1\.3;/,
-  );
-  expect(inbox).not.toContain(".inbox-count");
+  for (const inbox of [
+    renderToStaticMarkup(<DecisionInbox state={leadState} />),
+    renderToStaticMarkup(<InboxHeading count={3} agents={1} steps={3} minutes={0} />),
+  ]) {
+    expect(inbox).toContain('<h2 style="font-size:20px;font-weight:700;line-height:1.3">');
+    expect(inbox).not.toContain('class="inbox-count"');
+  }
   expect(lazy).not.toContain(".inbox-heading");
 });
 

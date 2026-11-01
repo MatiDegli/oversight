@@ -30,6 +30,7 @@ from oversight_contracts.plans import PlanZone, SubtaskDraft, validate_dependenc
 from oversight_contracts.policy import ChangeAssessment
 from oversight_contracts.queue import QueueSpec
 from oversight_contracts.review import ChangeFacts, ChangeUsage, CrossReview, ReviewCard
+from oversight_contracts.stages import ChangeStages
 
 
 class StartAgent(ContractModel):
@@ -50,6 +51,21 @@ class StartAgent(ContractModel):
     """The originating inbox entry, copied unchanged into every status for this task; null when
     unlinked or absent from older recordings. Producer-side validation verifies the reference.
     """
+
+
+class ConfirmExamples(ContractModel):
+    """Typed human confirmation for `POST /agents/{id}/examples`."""
+
+    run_id: RunId
+    """Guards against confirming examples from another run."""
+    evidence_seq: PositiveInt
+    """Guards the ready_for_review status carrying the examples the person saw."""
+    base_commit: NonEmptyText
+    """Guards against confirming examples on a different task base."""
+    action: Literal["confirm", "edit"]
+    """Guards whether the person selects offered examples or supplies replacements."""
+    examples: list[TaskExample] = Field(min_length=1, max_length=5)
+    """Guards the bounded, unpinned examples; only the server records confirmation."""
 
 
 class AgentCreated(ContractModel):
@@ -350,6 +366,8 @@ class ChangeView(ContractModel):
     """Per-change accounting reconstructed through this view's seq, or unavailable."""
     revision_rounds: NonNegativeInt | None = None
     """Confirmed changes_requested resolutions through seq; null for incomplete history."""
+    stages: ChangeStages | None = None
+    """Raw time per stage through seq; null for incomplete history."""
 
 
 class DictateTask(ContractModel):

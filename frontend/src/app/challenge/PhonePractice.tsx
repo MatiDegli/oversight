@@ -1,14 +1,26 @@
 import { impactText } from "./evidenceCopy";
+import { useEffect, useRef, useTransition } from "react";
 import { ArrowRight, Check, Info, LockKeyhole, Play, X, ArrowLeftRight } from "lucide-react";
 import "./phoneGraph.css";
 import { AgentLetter, AgentLine, PhoneGraph } from "./PhoneGraph";
 import { caseSlot, nodeName } from "./phoneEvidence";
 import { PhoneDecision } from "./PhoneDecision";
+import { preparePhoneReview } from "./PhoneReview";
+import { LazyPanel } from "../shell/LazyPanel";
+import { PracticeFrame } from "../shell/PanelFallbacks";
 import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import { score } from "./PracticePanel";
 import type { PanelProps } from "./PracticePanel";
 
 function Introduction({ practice, onStart }: PanelProps) {
+  const [pending, startTransition] = useTransition();
+  const active = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
   return (
     <>
       <main className="pp-main pp-intro">
@@ -36,7 +48,18 @@ function Introduction({ practice, onStart }: PanelProps) {
         <p className="pp-edition">This edition has no planted bugs.</p>
       </main>
       <footer className="pp-dock">
-        <button className="pp-button pp-primary" onClick={onStart}>
+        <button
+          className="pp-button pp-primary"
+          aria-label="Start practice"
+          aria-busy={pending || undefined}
+          disabled={pending}
+          onClick={() => {
+            startTransition(async () => {
+              await preparePhoneReview();
+              if (active.current) onStart();
+            });
+          }}
+        >
           Start practice
           <ArrowRight size={18} />
         </button>
@@ -173,7 +196,7 @@ export function PhonePractice(props: PanelProps) {
   const decision = attempt.started && !attempt.revealed;
   const entry = decision ? practice.cases[attempt.index] : undefined;
   // The recording stays frozen at the decision cut. Only this bounded illustration shows merges.
-  return (
+  const content = (
     <section className="phone-practice" aria-label="Two-change practice">
       <header className="pp-chrome">
         <div className="pp-topbar">
@@ -203,5 +226,8 @@ export function PhonePractice(props: PanelProps) {
         />
       )}
     </section>
+  );
+  return (
+    <LazyPanel frame={<PracticeFrame attempt={attempt} onExit={onExit} />}>{content}</LazyPanel>
   );
 }

@@ -1249,6 +1249,60 @@ export interface ReviewFinding {
    */
   node_id: NodeId | null;
 }
+/**
+ * Raw elapsed time per stage for one change: never a score, ranking, rate or review time.
+ *
+ * waiting_for_person runs from the end of a revision's automatic checks to the person's
+ * decision receipt, less the combined test run approval starts; it includes reading. A
+ * revision decided by rules, cross-review or the lead adds nothing; an unrecorded decider
+ * makes that interval unknown. test_runs overlaps the other stages.
+ */
+export interface ChangeStages {
+  agent_work: StageTime;
+  checks: StageTime;
+  waiting_for_person: StageTime;
+  test_runs: StageTime;
+  /**
+   * One entry per phase that ran, in the order above.
+   */
+  test_phases: SuitePhaseTime[];
+  /**
+   * Why an interval is unknown, with the seq that shows it.
+   */
+  problems: NonEmptyText[];
+}
+/**
+ * One stage's elapsed time through the view's seq. Stages are never added together.
+ */
+export interface StageTime {
+  /**
+   * The stage's total; null when any of its intervals is unknown.
+   */
+  ms: number | null;
+  /**
+   * The sum of known intervals; a lower bound when ms is null.
+   */
+  known_ms: number;
+  /**
+   * Intervals counted, known or not.
+   */
+  intervals: number;
+  /**
+   * Still running at the view's seq; the open interval ends at that event's ts.
+   */
+  open: boolean;
+}
+/**
+ * Recorded suite time for one phase. Not "TestPhaseTime", which pytest would try to collect.
+ */
+export interface SuitePhaseTime {
+  phase: "agent" | "proposal" | "combined" | "base_probe" | "head_probe";
+  /**
+   * The sum of the phase's recorded duration_ms.
+   */
+  ms: number;
+  runs: number;
+}
 export interface ChangeUpdated {
   change_id: ChangeId;
   agent_id: AgentId;
@@ -1372,6 +1426,62 @@ export interface ChangeView {
    * Confirmed changes_requested resolutions through seq; null for incomplete history.
    */
   revision_rounds: number | null;
+  /**
+   * Raw time per stage through seq; null for incomplete history.
+   */
+  stages: ChangeStages | null;
+}
+/**
+ * Typed human confirmation for `POST /agents/{id}/examples`.
+ */
+export interface ConfirmExamples {
+  run_id: RunId;
+  /**
+   * Guards the ready_for_review status carrying the examples the person saw.
+   */
+  evidence_seq: number;
+  base_commit: NonEmptyText;
+  /**
+   * Guards whether the person selects offered examples or supplies replacements.
+   */
+  action: "confirm" | "edit";
+  /**
+   * Guards the bounded, unpinned examples; only the server records confirmation.
+   */
+  examples: TaskExample1[];
+}
+/**
+ * An example supplied with a task before editing begins.
+ */
+export interface TaskExample1 {
+  example_id: NonEmptyText;
+  inputs: NonEmptyText;
+  /**
+   * Expected rendered output; the empty string is a valid expectation.
+   */
+  expected_output?: string | null;
+  /**
+   * Expected behavior when output alone does not describe the example.
+   */
+  expected_behavior?: NonEmptyText | null;
+  /**
+   * An optional free-text explanation.
+   */
+  note?: string | null;
+  /**
+   * Human confirmation and originating task; null means unconfirmed.
+   */
+  pin?: ExamplePin1 | null;
+}
+/**
+ * Human confirmation of the containing task example.
+ */
+export interface ExamplePin1 {
+  source_task: NonEmptyText;
+  /**
+   * The existing single-user human principal; the server verifies confirmation.
+   */
+  confirmed_by?: "person";
 }
 /**
  * Request a proposed split without starting coding agents.
@@ -1474,16 +1584,6 @@ export interface ErrorReportEvent {
  */
 export interface ErrorResponse {
   error: ErrorDetail;
-}
-/**
- * Human confirmation of the containing task example.
- */
-export interface ExamplePin1 {
-  source_task: NonEmptyText;
-  /**
-   * The existing single-user human principal; the server verifies confirmation.
-   */
-  confirmed_by?: "person";
 }
 /**
  * 200 from `GET /files?path=&agent=`.
@@ -2224,29 +2324,6 @@ export interface StartAgent {
   answering?: DecisionRef | null;
 }
 /**
- * An example supplied with a task before editing begins.
- */
-export interface TaskExample1 {
-  example_id: NonEmptyText;
-  inputs: NonEmptyText;
-  /**
-   * Expected rendered output; the empty string is a valid expectation.
-   */
-  expected_output?: string | null;
-  /**
-   * Expected behavior when output alone does not describe the example.
-   */
-  expected_behavior?: NonEmptyText | null;
-  /**
-   * An optional free-text explanation.
-   */
-  note?: string | null;
-  /**
-   * Human confirmation and originating task; null means unconfirmed.
-   */
-  pin?: ExamplePin1 | null;
-}
-/**
  * Request a coordination lead.
  */
 export interface StartLead {
@@ -2503,4 +2580,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.12.0";
+export const CONTRACT_VERSION = "1.14.0";

@@ -1,4 +1,4 @@
-import { selectMerges, selectModules, selectSignalLights } from "../graph";
+import { selectMilestones, selectMerges, selectModules, selectSignalLights } from "../graph";
 import type { FieldInput, FieldScope } from "../graph";
 import type { State } from "../state";
 import { litNodeIds } from "./view";
@@ -29,5 +29,6 @@ export const fieldInput = (state: State, view: View): FieldInput => ({
   mode: fieldScope(state, view).mode,
   lights: selectSignalLights(state, state.lastReads),
   merges: selectMerges(state),
+  milestones: selectMilestones(state),
   modules: selectModules(state.graph),
 });

@@ -2,6 +2,7 @@
 
 import ast
 import random
+import symtable
 from pathlib import Path
 from textwrap import dedent
 
@@ -166,6 +167,41 @@ def test_constant_loads_respect_nested_scopes() -> None:
     assert "HIDDEN =" not in result.text and "SHADOW =" not in result.text
 
 
+@pytest.mark.parametrize(
+    "source,retained",
+    [
+        (
+            "def target():\n    global RATE\n    RATE = 3\n    return RATE\n",
+            False,
+        ),
+        (
+            "def target():\n"
+            "    def nested():\n"
+            "        global RATE\n"
+            "        RATE = 3\n"
+            "        return RATE\n"
+            "    return RATE, nested\n",
+            False,
+        ),
+        (
+            "def target():\n"
+            "    def nested():\n"
+            "        global RATE\n"
+            "        return RATE\n"
+            "    return RATE, nested\n",
+            True,
+        ),
+    ],
+    ids=["direct-assignment", "nested-assignment", "read-only"],
+)
+def test_global_assignments_exclude_module_constants(source: str, retained: bool) -> None:
+    files = {"mod.py": "RATE = 2\n" + source}
+    result = initial_context(graph(files), files, ["mod:target"])
+    assert "def target()" in result.text
+    assert ("Constants: RATE = 2" in result.text) == retained
+    assert result.omitted == ()
+
+
 def test_constant_representations_and_module_rebindings() -> None:
     files = {
         "mod.py": dedent("""\
@@ -208,6 +244,16 @@ def test_unavailable_source_skips_every_section(source: str | None) -> None:
     snapshot = graph(files)
     supplied = {} if source is None else {"mod.py": source}
     assert initial_context(snapshot, supplied, ["mod:target"]) == InitialContext(
+        "", 0, ("target mod:target: source unavailable",)
+    )
+
+
+def test_nonmatching_symbol_table_makes_source_unavailable(monkeypatch) -> None:
+    files = {"mod.py": "def target(): pass\ndef caller(): target()"}
+    snapshot = graph(files)
+    unrelated = symtable.symtable("def other(): pass", "mod.py", "exec")
+    monkeypatch.setattr(symtable, "symtable", lambda *args: unrelated)
+    assert initial_context(snapshot, files, ["mod:target"]) == InitialContext(
         "", 0, ("target mod:target: source unavailable",)
     )
 

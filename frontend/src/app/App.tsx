@@ -4,6 +4,7 @@ import { useStore } from "zustand";
 
 import type { FileSaved, MergeMode, Plan, QueuedTask } from "@contracts";
 
+import type { ReplayPlayer } from "../transport";
 import type { FileDraft } from "../editor";
 import { DecisionContext } from "../review";
 import { sendDecision, revertView } from "../review";
@@ -14,7 +15,7 @@ import { createFileSession } from "./files";
 import { createRecordedFiles } from "./recordedFiles";
 import { FilesProvider } from "./FilesContext";
 import { useEscapeCloses } from "./escape";
-import { mergeModePending, type MergeModeAttempt } from "./shell/SettingsPanel";
+import { mergeModePending, type MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { Frame } from "./Frame";
 import { usePractice } from "./challenge/usePractice";
 import { startAppSession } from "./session";
@@ -37,6 +38,7 @@ type PlanAttempt = PlanCapability["attempts"][string];
 type PlanAction = Parameters<PlanCapability["send"]>[1];
 
 export function App() {
+  const [replay, setReplay] = useState<ReplayPlayer | null>(null);
   const [retry, setRetry] = useState(0);
   const [connection, setConnection] = useState<"connecting" | "connected" | "lost">("connecting");
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +60,7 @@ export function App() {
   const inFlightSaves = useRef(new Map<string, Promise<FileSaved>>());
   // A stable session owns settlement; its getters read these refs only in handlers and effects.
   // The factory stores these getters and never reads either ref during render.
-  const [files] = useState(() =>
+  const [files, setFiles] = useState(() =>
     commands
       ? createFileSession(
           commands,
@@ -67,6 +69,10 @@ export function App() {
         )
       : createRecordedFiles(() => stateStore.getState().state),
   );
+  const onReplayCommit = useCallback((reconcile: (view: View) => View) => {
+    setView(reconcile);
+    setFiles(createRecordedFiles(() => stateStore.getState().state));
+  }, []);
   const state = useStore(stateStore, (store) => store.state);
   const stopSession = useRef(() => {});
   const practice = usePractice(
@@ -81,7 +87,7 @@ export function App() {
     replaySource,
   );
   useEffect(() => {
-    const stop = startAppSession(
+    const stopTransport = startAppSession(
       document.getElementById("root"),
       (failure) => {
         setConnection(failure === null ? "connected" : "lost");
@@ -92,7 +98,12 @@ export function App() {
       () => {
         setConnection("connected");
       },
+      setReplay,
     );
+    const stop = () => {
+      stopTransport();
+      setReplay(null);
+    };
     stopSession.current = stop;
     return stop;
   }, [retry]);
@@ -319,6 +330,8 @@ export function App() {
       <FilesProvider state={state} loadTree={commands?.getTree} openFile={onOpenFile}>
         <Frame
           state={state}
+          replay={replay}
+          onReplayCommit={onReplayCommit}
           practice={practice}
           files={files}
           view={view}

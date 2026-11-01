@@ -1,4 +1,5 @@
-export { ReviewPanel } from "./ReviewPanel";
+import "./inbox.css";
+
 export { revertView } from "./revert";
 export type { RevertAttempt } from "./revert";
 export { ImpactConeCard } from "./ImpactCone";
@@ -7,14 +8,16 @@ export { decisionView, failureMessage, sendDecision, startAttempt } from "./deci
 export type { DecisionAction, DecisionAttempt, DecisionClient, DecisionView } from "./decisions";
 export { ChangeFactsRow } from "./ChangeFactsRow";
 
-export { DecisionInbox } from "./DecisionInbox";
-
 export { DecisionContext } from "./DecisionContext";
 export { useAnswers } from "./answers";
-export { BehaviorDiff } from "./BehaviorDiff";
-export { MeasuredCallers } from "./MeasuredCallers";
 
 export { selectConeWords } from "./coneWords";
-export { ReviewBody } from "./ReviewBody";
-export { candidateKey, currentCards } from "./answers";
-export { approvalLocked, approvalLockedCaption } from "./ReviewDecisionBar";
+export { candidateKey, currentCards, approvalLocked, approvalLockedCaption } from "./answers";
+
+// Keep optional focus contents out of the eager public surface.
+export const loadReviewPanel = () => import("./ReviewPanel");
+export const loadDecisionInbox = () => import("./DecisionInbox");
+export const loadReviewBody = () => import("./ReviewBody");
+export { ReviewHeader } from "./ReviewHeader";
+export { InboxHeading, InboxViews } from "./InboxHeader";
+export { selectInboxSummary, selectChangeCard } from "./inboxSelectors";

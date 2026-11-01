@@ -21,11 +21,13 @@ export function ReviewHeader({
   changeId,
   status,
   onClose,
+  inert,
 }: {
   state: State;
   changeId: string;
   status?: string;
   onClose?: () => void;
+  inert?: boolean;
 }) {
   const change = state.changes[changeId];
   const card = change ? selectAgentCard(state, change.agent_id) : undefined;
@@ -33,7 +35,7 @@ export function ReviewHeader({
   const base = change?.proposal?.base_commit || agent?.base_commit;
   const task = change?.proposal?.task ?? agent?.task ?? "Change";
   return (
-    <header className="review-header" style={agentSlotStyle(agent?.slot)}>
+    <header inert={inert} className="review-header" style={agentSlotStyle(agent?.slot)}>
       <div className="flex items-center gap-3">
         {agent && (
           <span role="img" aria-label={`Agent ${agent.slot}`} className="review-header-badge">

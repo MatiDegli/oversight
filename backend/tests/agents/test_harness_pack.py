@@ -156,20 +156,34 @@ async def test_pack_prompt_has_one_evidence_path_and_stop(small_tree: Opened) ->
     assert _prompts.prompt_version(True) != "agent-v1-6972184812a7"
 
 
-async def test_startup_exports_the_selected_prompt_version(tmp_path: Path) -> None:
+@pytest.mark.parametrize("history_prune_tokens", [None, 8000])
+async def test_startup_exports_the_selected_prompt_version(
+    tmp_path: Path, history_prune_tokens: int | None
+) -> None:
     from live_helpers import live_settings
 
     from oversight.app import LiveRun
+    from oversight_contracts.commands import StartAgent
 
     for enabled in (False, True):
-        live = LiveRun(live_settings(tmp_path / str(enabled), harness_pack=enabled))
+        live = LiveRun(
+            live_settings(
+                tmp_path / str(enabled),
+                harness_pack=enabled,
+                history_prune_tokens=history_prune_tokens,
+            )
+        )
         await live.startup()
         try:
             stream = live.store.subscribe()
             started = await anext(stream)
             version = json.loads(started.envelope)["payload"]["prompt_version"]
-            assert version == _prompts.prompt_version(enabled)
-            assert (version == "agent-v1-6972184812a7") is (not enabled)
+            assert version == _prompts.prompt_version(enabled, history_prune_tokens)
+            assert (version == "agent-v1-6972184812a7") is (
+                not enabled and history_prune_tokens is None
+            )
+            agent = await live.start(StartAgent(task="Do the task."))
+            assert live._kept[agent.agent_id].prompt_version == version
         finally:
             await live.shutdown()
 
@@ -234,3 +248,55 @@ def test_setting_defaults_off_and_environment_overrides_env_file(
     assert Settings.load(env_file).harness_pack is True
     monkeypatch.setenv("OVERSIGHT_HARNESS_PACK", "false")
     assert Settings.load(env_file).harness_pack is False
+
+
+@pytest.mark.parametrize("raw,expected", [(None, None), ("", None), ("8000", 8000)])
+def test_history_setting_loading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw: str | None, expected: int | None
+) -> None:
+    monkeypatch.delenv("OVERSIGHT_HISTORY_PRUNE_TOKENS", raising=False)
+    env_file = tmp_path / "history.env"
+    assert Settings.load(env_file).history_prune_tokens is None
+    env_file.write_text("OVERSIGHT_HISTORY_PRUNE_TOKENS=9000\n")
+    assert Settings.load(env_file).history_prune_tokens == 9000
+    if raw is None:
+        env_file.unlink()
+    else:
+        monkeypatch.setenv("OVERSIGHT_HISTORY_PRUNE_TOKENS", raw)
+    assert Settings.load(env_file).history_prune_tokens == expected
+    assert Settings(history_prune_tokens=expected).history_prune_tokens == expected
+
+
+@pytest.mark.parametrize("raw", ["7999", "eight thousand", "8000.0", "-1"])
+def test_history_setting_rejects_invalid_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw: str
+) -> None:
+    monkeypatch.setenv("OVERSIGHT_HISTORY_PRUNE_TOKENS", raw)
+    with pytest.raises(ValueError):
+        Settings.load(tmp_path / "missing.env")
+
+
+@pytest.mark.parametrize("value", [7999, "8000", 8000.0, True, "", -1])
+def test_history_setting_rejects_invalid_direct_construction(value: object) -> None:
+    with pytest.raises(ValueError, match="OVERSIGHT_HISTORY_PRUNE_TOKENS"):
+        Settings(history_prune_tokens=value)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "name,value",
+    [
+        ("HISTORY_STUB", "different stub"),
+        ("HISTORY_LOW_WATER", 0.5),
+        ("HISTORY_REARM", 0.5),
+        ("HISTORY_PROTECTED_CALLS", 7),
+    ],
+)
+def test_history_policy_inputs_change_only_enabled_hash(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: object
+) -> None:
+    baseline = _prompts.prompt_version()
+    enabled = _prompts.prompt_version(history_prune_tokens=8000)
+    assert enabled != _prompts.prompt_version(history_prune_tokens=9000)
+    monkeypatch.setattr(_prompts, name, value)
+    assert _prompts.prompt_version() == baseline
+    assert _prompts.prompt_version(history_prune_tokens=8000) != enabled

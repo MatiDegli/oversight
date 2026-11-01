@@ -7,7 +7,12 @@ from oversight.agents._control import RunControl
 from oversight.agents._crossreview import ConeEntry
 from oversight.agents._crossreview import Inputs as ReviewInputs
 from oversight.agents._crossreview import TestResult as ReviewTests
-from oversight.agents._examples_validate import ExampleTarget, canonical_json
+from oversight.agents._examples_validate import (
+    ExamplesInvalid,
+    ExampleTarget,
+    canonical_json,
+    validate_person_examples,
+)
 from oversight.agents._lead import (
     BRAKE_DETAIL,
     LEAD_LIMITS,
@@ -22,7 +27,7 @@ from oversight.agents._lifecycle import TaskClients, close_model
 from oversight.agents._plan_call import run_plan_call
 from oversight.agents._prompts import prompt_version, system_prompt
 from oversight.agents._review_call import run_review_call
-from oversight.agents._status import validate_agent_status
+from oversight.agents._status import done_when_text, task_examples, validate_agent_status
 from oversight.agents.answering import (
     CHECKS_UNAVAILABLE_CODES,
     UNAVAILABLE_PRODUCERS,
@@ -134,6 +139,7 @@ __all__ = [
     "DecisionSelected",
     "DecisionUnavailable",
     "ExampleTarget",
+    "ExamplesInvalid",
     "ExamplesNotConfigured",
     "ExamplesOutcome",
     "LeadEnd",
@@ -169,6 +175,7 @@ __all__ = [
     "canonical_json",
     "classify_difference",
     "close_model",
+    "done_when_text",
     "example_context",
     "examples_client",
     "load_script",
@@ -179,7 +186,9 @@ __all__ = [
     "run_plan_call",
     "run_review_call",
     "system_prompt",
+    "task_examples",
     "validate_agent_status",
     "validate_answering",
+    "validate_person_examples",
     "validate_usage_tick",
 ]

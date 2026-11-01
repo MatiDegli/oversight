@@ -9,6 +9,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent))
 
 
+@pytest.fixture(autouse=True)
+def no_host_memory_hold(monkeypatch: pytest.MonkeyPatch) -> None:
+    """General tests never depend on host load; memory admission tests inject their readings."""
+    monkeypatch.setattr("oversight.app.memory_used", lambda: None)
+
+
 @pytest.fixture
 def baseten_verified(monkeypatch: pytest.MonkeyPatch) -> None:
     """Muse Spark Open may run agents, whether or not the Baseten probe's branch is merged: the

@@ -49,6 +49,8 @@ class Settings:
     baseten_api_key: str | None = field(default=None, repr=False)
     max_agents: int = 4
     """OVERSIGHT_MAX_AGENTS: offer the first N letters from A, from 1 through 6."""
+    memory_hold_percent: int = 90
+    """OVERSIGHT_MEMORY_HOLD_PERCENT: hold new starts at this host-memory percentage."""
     agent_model: str = "muse-spark"
     """The profile agents run on: `muse-spark` (Meta), `muse-spark-open` (Baseten), `fake` or
     `fake-b` (scripted models requiring a slot script). OVERSIGHT_AGENT_MODEL."""
@@ -96,6 +98,8 @@ class Settings:
     """OVERSIGHT_MEASURED_CONE: opt-in pytest caller evidence, independent of direct probes."""
     harness_pack: bool = False
     """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
+    history_prune_tokens: int | None = None
+    """OVERSIGHT_HISTORY_PRUNE_TOKENS: opt-in covered-read pruning; minimum 8,000."""
     reviewer_fake_script: Path | None = None
     """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
     reviewer_fake_b_script: Path | None = None
@@ -125,8 +129,14 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if self.history_prune_tokens is not None and (
+            type(self.history_prune_tokens) is not int or self.history_prune_tokens < 8000
+        ):
+            raise ValueError("OVERSIGHT_HISTORY_PRUNE_TOKENS must be an integer of at least 8000")
         if type(self.max_agents) is not int or not 1 <= self.max_agents <= 6:
             raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
+        if type(self.memory_hold_percent) is not int or not 1 <= self.memory_hold_percent <= 100:
+            raise ValueError("OVERSIGHT_MEMORY_HOLD_PERCENT must be an integer from 1 to 100")
         if (
             type(self.review_card_classifications) is not int
             or self.review_card_classifications < 0
@@ -153,6 +163,7 @@ class Settings:
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
             max_agents=resolve_max_agents(merged),
+            memory_hold_percent=resolve_memory_hold_percent(merged),
             agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
             fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
@@ -178,6 +189,11 @@ class Settings:
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
             harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
+            history_prune_tokens=(
+                int(merged["OVERSIGHT_HISTORY_PRUNE_TOKENS"])
+                if merged.get("OVERSIGHT_HISTORY_PRUNE_TOKENS")
+                else None
+            ),
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
@@ -247,4 +263,12 @@ def resolve_max_agents(values: Mapping[str, str]) -> int:
     # Check the bounded value before int(): oversized input must name this variable too.
     if raw not in ("1", "2", "3", "4", "5", "6"):
         raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
+    return int(raw)
+
+
+def resolve_memory_hold_percent(values: Mapping[str, str]) -> int:
+    """Absent means 90; reject malformed or oversized values before converting to int."""
+    raw = values.get("OVERSIGHT_MEMORY_HOLD_PERCENT", "90").lstrip("0")
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 3 or not 1 <= int(raw) <= 100:
+        raise ValueError("OVERSIGHT_MEMORY_HOLD_PERCENT must be an integer from 1 to 100")
     return int(raw)

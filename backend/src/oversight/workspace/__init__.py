@@ -4,6 +4,7 @@ Other modules import only what this file exports; everything else here is intern
 imports only `oversight_contracts`, shared byte limits and the standard library.
 """
 
+from oversight.workspace._behavior_values import MAX_RANGE_ITEMS
 from oversight.workspace.behavior_run import (
     PER_CALL_TIMEOUT_S,
     BehaviorObservation,
@@ -67,6 +68,7 @@ from oversight.workspace.tree import TREE_TIMEOUT_S, list_tree
 
 __all__ = [
     "BOLTONS",
+    "MAX_RANGE_ITEMS",
     "MAX_TESTS",
     "MAX_XML_BYTES",
     "OPEN_NOTICE",

@@ -22,6 +22,14 @@ export async function installMotionClock(page: Page) {
 
 /** The identical 180-frame drag pans the real graph and redraws its field under the cone. */
 export async function moveCamera(page: Page) {
+  await page.waitForFunction(
+    () =>
+      !!document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')?.oversightGraph &&
+      !!document.querySelector<FieldHost>(".graph-stage > canvas, .graph-stage canvas[aria-hidden]")
+        ?.oversightField,
+    undefined,
+    { timeout: 15_000 },
+  );
   return page.evaluate(async () => {
     const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
     const graph = host?.oversightGraph;

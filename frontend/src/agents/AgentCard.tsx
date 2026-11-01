@@ -121,6 +121,7 @@ function Summary({ data }: { data: AgentCardDetail }) {
 
 export interface AgentCardProps {
   data: AgentCardDetail;
+  mergeLabel?: "Merging" | "Merged";
   onOpenDiff?: (changeId: string) => void;
   onReview?: (changeId: string) => void;
   onConversation?: (agentId: string) => void;
@@ -131,6 +132,7 @@ export interface AgentCardProps {
 
 export function AgentCard({
   data,
+  mergeLabel,
   onOpenDiff,
   onReview,
   onConversation,
@@ -169,7 +171,7 @@ export function AgentCard({
       style={agentSlotStyle(agent.slot)}
       className={`agent-card min-w-0 shrink-0 rounded-card border bg-card p-3.5 text-text ${border} ${focusRing}`}
     >
-      <CardHeader data={data} />
+      <CardHeader data={data} mergeLabel={mergeLabel} />
       <p title={agent.task} className="mt-3 truncate text-(length:--body-size)">
         {agent.task}
       </p>
@@ -303,7 +305,13 @@ export function StepHistory({ data }: { data: AgentCardDetail }) {
   );
 }
 
-function CardHeader({ data }: { data: AgentCardDetail }) {
+function CardHeader({
+  data,
+  mergeLabel,
+}: {
+  data: AgentCardDetail;
+  mergeLabel?: "Merging" | "Merged";
+}) {
   const { agent, modelLabel, readyForReview } = data;
   const own = look[agent.slot];
   const lamp = readyForReview
@@ -323,7 +331,7 @@ function CardHeader({ data }: { data: AgentCardDetail }) {
         role={readyForReview ? "status" : undefined}
         className={`ml-auto rounded-full shrink-0 p-(--status-pill-padding) text-(length:--label-size) font-semibold ${own.tint}`}
       >
-        {agent.state === "working" ? data.activityLabel : labels[agent.state]}
+        {mergeLabel ?? (agent.state === "working" ? data.activityLabel : labels[agent.state])}
       </span>
     </header>
   );

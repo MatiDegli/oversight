@@ -10,6 +10,7 @@ MAX_DEPTH = 6
 MAX_ITEMS = 32
 MAX_NODES = 128
 MAX_TEXT = 512
+MAX_RANGE_ITEMS = 10_000
 
 
 def class_name(value: object) -> str:
@@ -152,7 +153,7 @@ def range_value(data: Any) -> range:
         raise RangeArgumentError("range step is zero")
     result = range(*data[1:])
     try:
-        if len(result) <= 10_000:
+        if len(result) <= MAX_RANGE_ITEMS:
             return result
     except OverflowError:
         pass

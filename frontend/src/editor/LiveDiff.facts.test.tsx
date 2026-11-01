@@ -4,7 +4,8 @@ import type { ServerEvent } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { ImpactConeCard, ReviewPanel } from "../review";
+import { ImpactConeCard } from "../review";
+import { loadReviewPanel } from "../review";
 import { applyEvent, createInitialState, selectLiveDiff, stateStore } from "../state";
 import type { State, StateStore } from "../state";
 import { LiveDiff } from "./LiveDiff";
@@ -14,6 +15,8 @@ vi.mock("zustand", () => ({
   useStore: (store: { getState: () => StateStore }, selector: (value: StateStore) => unknown) =>
     selector(store.getState()),
 }));
+const { ReviewPanel } = await loadReviewPanel();
+
 const events = readFileSync(
   new URL("../../../fixtures/events/handwritten-level1.jsonl", import.meta.url),
   "utf8",

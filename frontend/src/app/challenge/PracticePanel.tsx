@@ -2,31 +2,18 @@ import { impactText, omittedText, sentenceList } from "./evidenceCopy";
 import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import type { EvidencePractice as Practice } from "./caseEvidence";
 import { usePhonePractice } from "./usePhonePractice";
-import { PhonePractice } from "./PhonePractice";
+import { lazy } from "react";
+import { LazyPanel } from "../shell/LazyPanel";
+import { PracticeFrame } from "../shell/PanelFallbacks";
+import { complete, score } from "./attempt";
+import type { Answer, Attempt } from "./attempt";
 
-export type Answer = "Approve" | "Reject";
-export type Attempt = {
-  index: number;
-  started: boolean;
-  revealed: boolean;
-  finished?: boolean;
-  answers: Partial<Record<string, Answer>>;
-};
-export const freshAttempt = (): Attempt => ({
-  index: 0,
-  started: false,
-  revealed: false,
-  answers: {},
-});
-export function answerOnce(attempt: Attempt, id: string, answer: Answer): Attempt {
-  return attempt.answers[id]
-    ? attempt
-    : { ...attempt, answers: { ...attempt.answers, [id]: answer } };
-}
-export const complete = (practice: Practice, attempt: Attempt) =>
-  practice.cases.every((item) => attempt.answers[item.changeId]);
-export const score = (practice: Practice, attempt: Attempt) =>
-  practice.cases.filter((item) => attempt.answers[item.changeId] === item.reference).length;
+const PhonePractice = lazy(() =>
+  import("./PhonePractice").then((m) => ({ default: m.PhonePractice })),
+);
+
+export { answerOnce, complete, freshAttempt, score } from "./attempt";
+export type { Answer, Attempt } from "./attempt";
 const control =
   "rounded-control border border-control-edge px-4 py-2 text-sm enabled:hover:bg-raised disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 const primary =
@@ -170,7 +157,12 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
 
 export function PracticePanel(props: PanelProps) {
   const phone = usePhonePractice(true);
-  if (phone) return <PhonePractice {...props} />;
+  if (phone)
+    return (
+      <LazyPanel frame={<PracticeFrame attempt={props.attempt} onExit={props.onExit} />}>
+        <PhonePractice {...props} />
+      </LazyPanel>
+    );
   const { attempt, onStart, onExit } = props;
   return (
     <section

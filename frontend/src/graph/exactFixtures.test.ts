@@ -48,7 +48,7 @@ it("documents every opaque graph plate that masks lines behind text", () => {
   const design = readFileSync(new URL("DESIGN.md", root), "utf8");
   const elevation = design.split("## Elevation & Depth")[1]?.split("### Named Rules")[0];
   expect(elevation?.replace(/\s+/g, " ")).toContain(opaquePlates);
-  expect(elevation).toMatch(/other graph overlays[\s\S]*90 to 94%/i);
+  expect(elevation).toMatch(/Other graph overlays use the 96% overlay-fill with no blur/);
 });
 
 it("records the same complete opaque graph plate rule in the exact-call decision", () => {

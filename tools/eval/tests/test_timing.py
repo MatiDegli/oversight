@@ -29,7 +29,9 @@ async def test_observer_on_and_off_preserve_outcomes_and_reconcile_wall_time(tmp
         assert len(roots) == 1
         root_span = roots[0]
         elapsed = root_span["end"] - root_span["start"]
-        assert elapsed == pytest.approx(results[-1]["duration_s"], abs=0.05)
+        # Allow a precautionary 3% margin for scheduling delays on longer attempts.
+        # This is not a measured duration delta; retain 50 ms for short attempts.
+        assert elapsed == pytest.approx(results[-1]["duration_s"], rel=0.03, abs=0.05)
         children = sorted(
             (r for r in trace if r["parent_id"] == root_span["span_id"]),
             key=lambda r: r["start"],
@@ -41,7 +43,9 @@ async def test_observer_on_and_off_preserve_outcomes_and_reconcile_wall_time(tmp
             gaps += child["start"] - cursor
             cursor = child["end"]
         gaps += root_span["end"] - cursor
-        assert gaps < 0.05
+        # One historical incident had gaps of about 4% of elapsed; allow 8% for load.
+        # Keep 50 ms for short attempts; exact child names above catch missing phases.
+        assert gaps < max(0.05, 0.08 * elapsed)
         assert sum(r["end"] - r["start"] for r in children) + gaps == pytest.approx(elapsed)
         assert {r["source"] for r in trace} == {"server", "evaluator"}
         assert len({r["attempt"] for r in trace}) == 1

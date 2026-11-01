@@ -4,8 +4,7 @@ import ast
 
 from oversight.changes._behavior_aliases import shadowed, syntax
 from oversight.changes._shortcuts_common import Source, is_test_file
-
-MAX_RANGE_ITEMS = 10_000
+from oversight.workspace import MAX_RANGE_ITEMS
 
 
 def builtin_call(source: Source, call: ast.Call, name: str) -> bool:

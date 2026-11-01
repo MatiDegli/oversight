@@ -1,4 +1,4 @@
-"""Nodes, ids, ranges, own source and the span index (AGENTS.md, "Graph rules")."""
+"""Nodes, ids, ranges, own source and the span index (ARCHITECTURE.md, "Graph rules")."""
 
 from pathlib import Path
 

@@ -1,6 +1,6 @@
 """Name-only secret-file policy for tools that expose file contents to models."""
 
-# Maintainer decision (2026-10-31): narrow AGENTS.md's id_* to SSH identity names
+# Maintainer decision (2026-10-31): narrow ARCHITECTURE.md's id_* to SSH identity names
 # so id_utils.py stays readable. See DECISIONS.md,
 # “Refuse obvious secret files at model tool boundaries”.
 SSH_IDENTITY_NAMES = ("id_rsa", "id_dsa", "id_ecdsa", "id_ed25519")

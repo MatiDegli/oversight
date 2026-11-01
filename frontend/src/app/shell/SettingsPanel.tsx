@@ -1,22 +1,9 @@
 import type { MergeMode } from "@contracts";
 import { X } from "lucide-react";
 import { selectMergeMode, type State } from "../../state";
+import { mergeModePending, type MergeModeAttempt } from "./mergeModeAttempt";
+import { SettingsFrame } from "./SettingsFrame";
 import { focusRing } from "./shared";
-
-/** Kept by App so leaving the tab neither loses a refusal nor admits another request. */
-export type MergeModeAttempt = {
-  run: State["run"];
-  revision: number;
-} & ({ phase: "pending"; responseRevision?: number } | { phase: "failed"; message: string });
-
-export function mergeModePending(state: State, attempt?: MergeModeAttempt): boolean {
-  return (
-    attempt?.run === state.run &&
-    attempt.phase === "pending" &&
-    (attempt.responseRevision === undefined ||
-      (selectMergeMode(state)?.revision ?? -1) < attempt.responseRevision)
-  );
-}
 
 const choices: readonly [MergeMode, string, string][] = [
   ["ask_me", "Ask me", "Every change waits for your decision."],
@@ -45,14 +32,7 @@ export function SettingsPanel({
       ? attempt.message
       : null;
   return (
-    <section
-      aria-labelledby="merge-mode-heading"
-      className="@container min-h-0 w-full min-w-0 overflow-y-auto p-8"
-    >
-      <h2 id="merge-mode-heading" className="text-(length:--title-size) font-bold">
-        Merge mode
-      </h2>
-      <p className="mt-1 text-sm text-muted">Who lets a finished change into main.</p>
+    <SettingsFrame>
       <div className="mt-4 grid grid-cols-1 gap-3 @sm:grid-cols-2">
         {choices.map(([mode, title, body]) => {
           const marked = current?.mode === mode;
@@ -95,6 +75,6 @@ export function SettingsPanel({
           Setting the merge mode is not available in a replay.
         </p>
       )}
-    </section>
+    </SettingsFrame>
   );
 }

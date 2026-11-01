@@ -5,6 +5,11 @@ import type { GraphProbeHost } from "../src/graph";
 
 import { events, firstUpdate, hash } from "./level2-log";
 
+export async function removeRoutes(page: Page) {
+  // Pending route callbacks can still read locators while the page closes after a test.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+}
+
 export async function interceptCommands(page: Page) {
   const sent: { path: string; method: string; body: unknown }[] = [];
   const unexpected: string[] = [];

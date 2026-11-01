@@ -1,11 +1,18 @@
 import type { ChangeProposed, Slot } from "@contracts";
 import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import { lazy, useState } from "react";
 import type { ReactNode } from "react";
 import type { State } from "../../state";
-import { ChangeFactsRow, ReviewBody } from "../../review";
+import { ChangeFactsRow, loadReviewBody } from "../../review";
 import { AgentLine } from "./PhoneGraph";
 import { Disclosure } from "./PhoneDiff";
+
+const ReviewBody = lazy(() => loadReviewBody().then((m) => ({ default: m.ReviewBody })));
+let preparedBody: Awaited<ReturnType<typeof loadReviewBody>>["ReviewBody"] | undefined;
+
+export async function preparePhoneReview() {
+  preparedBody = (await loadReviewBody()).ReviewBody;
+}
 
 export function diffPreview(proposal: ChangeProposed) {
   if (proposal.files.length === 0)
@@ -32,12 +39,14 @@ export function PhoneReview({
   const change = state.changes[changeId];
   const proposal = change?.proposal;
   if (!proposal) return null;
+  // A lazy component still suspends on its first render after an import was preloaded.
+  const Body = preparedBody ?? ReviewBody;
   return (
     <>
       <AgentLine state={state} changeId={changeId} slot={slot} />
       <h1>{title}</h1>
       <ChangeFactsRow state={state} changeId={changeId} shortReach />
-      <ReviewBody
+      <Body
         state={state}
         changeId={changeId}
         showCrossReview
