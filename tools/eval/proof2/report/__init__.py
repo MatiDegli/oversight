@@ -5,6 +5,7 @@ from pathlib import Path
 
 from oversight.events import LIST_PRICES
 
+from .arms import build_arms
 from .inputs import load_inputs
 from .output import write_lines
 
@@ -27,4 +28,5 @@ def write_report(log: Path, results: Path, out: Path | None = None) -> None:
         price_source=LIST_PRICES.source_url,
         price_retrieved=LIST_PRICES.retrieved,
     )
-    write_lines([meta], out)
+    revisions, changes, arms = build_arms(inputs)
+    write_lines([meta, *revisions, *changes, *arms], out)
