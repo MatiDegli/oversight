@@ -830,7 +830,11 @@ async def test_cli_deterministic_bytes(tmp_path):
 
     async def invoke(*extra):
         process = await asyncio.create_subprocess_exec(
-            *command, *extra, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *command,
+            *extra,
+            cwd=Path(__file__).resolve().parents[3],  # noqa: ASYNC240 - Static test location.
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         try:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
