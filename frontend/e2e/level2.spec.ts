@@ -24,7 +24,16 @@ import {
   reviewEdit,
   revised,
 } from "./level2-log";
-import { appearance, append, interceptCommands, settledFrame, tapNode } from "./level2-support";
+import {
+  appearance,
+  append,
+  interceptCommands,
+  removeRoutes,
+  settledFrame,
+  tapNode,
+} from "./level2-support";
+
+test.afterEach(async ({ page }) => removeRoutes(page));
 
 test("level 2 over replay: parallel agents, impact, revisions, edits, spend, stop and discard", async ({
   page,
