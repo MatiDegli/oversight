@@ -59,12 +59,16 @@ def protect(history: list[Message], count: int = 6) -> None:
 
 
 def prune(history: list[Message]) -> None:
+    snapshot = deepcopy(history)
     before = estimate_tokens(history, TOOL_SCHEMAS)
     pruner = HistoryPruner(1)
     pruner.prune(history, TOOL_SCHEMAS)
     after = estimate_tokens(history, TOOL_SCHEMAS)
     assert pruner.last_batch_tokens == after
-    assert after <= before
+    if any(a.get("content") != b.get("content") for a, b in zip(snapshot, history, strict=True)):
+        assert after < before
+    else:
+        assert after == before
 
 
 @pytest.mark.parametrize(
@@ -170,6 +174,15 @@ def test_parallel_calls_local_pairing_and_individual_protection() -> None:
     assert len(history) == len(snapshot)
 
 
+def test_seventh_most_recent_covered_read_is_pruned() -> None:
+    history: list[Message] = []
+    old = add(history, rows())
+    add(history, rows(1, 20))
+    protect(history, 5)
+    prune(history)
+    assert old["content"] == "[Lines 1-10 of x.py: a later read of this path covers these lines.]"
+
+
 def test_threshold_low_water_newest_first_and_rearm(monkeypatch: pytest.MonkeyPatch) -> None:
     history: list[Message] = []
     large = rows(text="x" * 1000)
@@ -225,7 +238,7 @@ async def test_real_read_formats_include_cut_row_and_oversized_range(
     from oversight.agents import tools as module
 
     workspace, tree = small_tree
-    # Force the ordinary range path and the over-file-limit range path on the same file.
+    # Exercise a cut row in long.txt, then the over-file-limit range path in big.txt.
     await tree.write_text("long.txt", "x" * 500 + "\n" + "y\n" * 100, expected_hash=None)
     toolbox = Toolbox(workspace, tree, test_timeout_s=60)
     monkeypatch.setattr(module, "MAX_READ_CHARS", 200)
@@ -234,11 +247,18 @@ async def test_real_read_formats_include_cut_row_and_oversized_range(
     later = await toolbox.call("read_file", '{"path":"long.txt","end_line":1}')
     assert "line 1 cut" in first.content
     history: list[Message] = []
-    old = add(history, first.content)
-    add(history, later.content)
+    old = add(history, first.content, path="long.txt")
+    add(history, later.content, path="long.txt")
     protect(history)
     prune(history)
     assert old["content"] == first.content  # A complete row differs from its cut prefix.
+    whole = await toolbox.call("read_file", '{"path":"long.txt"}')
+    add(history, whole.content, path="long.txt")
+    protect(history)
+    prune(history)
+    assert (
+        old["content"] == "[Lines 1-1 of long.txt: a later read of this path covers these lines.]"
+    )
     (tree.root / "big.txt").write_text("z" * 100 + "\n" * 1 + "x\n" * 600_000)
     ranged = await toolbox.call("read_file", '{"path":"big.txt","start_line":1,"end_line":3}')
     assert ranged.ok and "read more with start_line" in ranged.content

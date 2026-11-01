@@ -3294,7 +3294,8 @@ closed window without receipts has no checks interval and waiting starts at prop
 F4: A replaced or null-decider wait is unknown and never inferred, only a person's
 recorded decision counts a resolved wait, and only their approval subtracts the last
 combined run of that revision inside the window once, with an excessive subtraction
-remaining unknown.
+remaining unknown, and on a person's approval a negative combined suite duration
+leaves the wait unknown.
 F5: Test runs count only recorded tests.executed suite durations and their phases,
 never their mirrors in proposals, steps or conflicts, and a negative duration is an
 unknown interval with its known phase milliseconds omitted and its run still counted.

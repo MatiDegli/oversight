@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from backend.tests.agents.test_review_call import completion
+from completion_helpers import completion
 from decision_helpers import observed_target
 from live_helpers import DEADLINE_S, meta_settings
 from openai.types.chat import ChatCompletion

@@ -16,7 +16,7 @@ def parse_meminfo(text: str) -> int | None:
         total, available = values["MemTotal"], values["MemAvailable"]
     except (ValueError, IndexError, KeyError):
         return None
-    if total <= 0:
+    if total <= 0 or available < 0:
         return None
     return max(0, min(100, (total - available) * 100 // total))
 

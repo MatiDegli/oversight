@@ -172,7 +172,9 @@ new candidate work waits for the maintainer’s order.
 - Resume a halted agent in the same conversation and worktree remains a candidate; the live
   Resume command only releases a pending or active pause (`agents/_control.py:RunControl`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
-- Covered older `read_file` results can now become deterministic stubs with `OVERSIGHT_HISTORY_PRUNE_TOKENS` explicitly set; bounded history with a visible handoff remains a separate candidate.
+- Covered older `read_file` results can now become deterministic stubs with
+  `OVERSIGHT_HISTORY_PRUNE_TOKENS` explicitly set; bounded history with a visible handoff remains a
+  separate candidate.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
 - A dependency guard for package existence, license and vulnerability evidence.
 - Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line, drawn
