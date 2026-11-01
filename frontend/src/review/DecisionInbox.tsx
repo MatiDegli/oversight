@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Inbox } from "lucide-react";
 import type { Plan } from "@contracts";
 import type { DecisionInboxEntry, State } from "../state";
@@ -9,6 +9,13 @@ import { Example } from "./AnswerChoices";
 import { selectChangeCard, selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
 import { factsForRevision } from "./factsForRevision";
 import { GrantChoice } from "./GrantChoice";
+import { selectPlanEvidence, selectRetainedPlans } from "./planSelectors";
+const PlanActions = lazy(() => import("./PlanActions"));
+const planPiece = (state: State, plan: Plan) => (
+  <Suspense fallback={<p className="decision-muted">Loading plan…</p>}>
+    <PlanActions key={`${state.run?.run_id ?? ""}:${plan.plan_id}`} state={state} plan={plan} />
+  </Suspense>
+);
 import "./inbox.css";
 
 function InboxRow({
@@ -39,11 +46,11 @@ function InboxRow({
             change?.proposal?.task ??
             "Decision needs you"));
   const paragraph = plan
-    ? (plan.detail ?? "Lead plan awaits approval")
+    ? (plan.detail ?? (plan.subtasks ? null : "Lead plan awaits approval"))
     : (change?.proposal?.summary ?? entry.decisions[0]?.reason);
   const reasons = [
     ...new Set(entry.decisions.filter((d) => d.kind !== "change").map((d) => d.reason)),
-  ].filter((reason) => reason !== heading && reason !== paragraph);
+  ].filter((reason) => !plan && reason !== heading && reason !== paragraph);
   const example =
     question?.example.source === "review_card"
       ? question.example.value
@@ -66,6 +73,7 @@ function InboxRow({
           ))}
         </ul>
       )}
+      {plan?.subtasks && planPiece(state, plan)}
       {example && <Example row={example} slot={slot ?? undefined} />}
       <InboxAnswer state={state} entry={entry} />
       {change && onReview && (
@@ -149,13 +157,8 @@ export function DecisionInbox({
   const entries = selectDecisionInbox(state);
   const grants = selectActiveGrants(state);
   const { agents, steps, minutes } = selectInboxSummary(state);
-  const plans = new Map<string, Plan>();
-  for (const event of state.decisionEvents) {
-    if (event.type !== "plan.updated") continue;
-    const previous = plans.get(event.payload.plan_id);
-    if (!previous || previous.revision <= event.payload.revision)
-      plans.set(event.payload.plan_id, event.payload);
-  }
+  const { plans } = selectPlanEvidence(state);
+  const retained = selectRetainedPlans(state);
   return (
     <section aria-label="Decisions inbox" className="decisions-inbox">
       <nav aria-label="Inbox views" className="inbox-views">
@@ -183,7 +186,6 @@ export function DecisionInbox({
       ) : (
         <>
           <header className="inbox-heading">
-            <span className="inbox-count">{entries.length}</span>
             <div>
               <h2>{entries.length ? "Decisions waiting for you" : "No decisions waiting"}</h2>
               <p className="decision-muted">
@@ -205,12 +207,12 @@ export function DecisionInbox({
                     key={entry.id}
                     state={state}
                     entry={entry}
-                    plan={lead?.planId ? plans.get(lead.planId) : undefined}
+                    plan={lead?.planId ? plans.get(lead.planId)?.payload : undefined}
                     onReview={onReview}
                   />
                 );
               })
-            ) : (
+            ) : retained.queued.length || retained.failed.length ? null : (
               <div className="inbox-empty">
                 <Inbox aria-hidden="true" size={28} />
                 <h3>You can keep watching</h3>
@@ -219,6 +221,27 @@ export function DecisionInbox({
                   agent cards keep showing the run.
                 </p>
               </div>
+            )}
+            {(["queued", "failed"] as const).map(
+              (group) =>
+                retained[group].length > 0 && (
+                  <section
+                    className="plan-group"
+                    aria-label={group === "queued" ? "Queued plans" : "Ended without running"}
+                    key={group}
+                  >
+                    <h3>{group === "queued" ? "Queued plans" : "Ended without running"}</h3>
+                    {retained[group].map(({ payload: plan, ts }) => (
+                      <article className="inbox-row" key={plan.plan_id}>
+                        <div className="decision-heading">
+                          <span className="decision-muted">Decision · {eventTime(ts)}</span>
+                        </div>
+                        <h3>{plan.task}</h3>
+                        {planPiece(state, plan)}
+                      </article>
+                    ))}
+                  </section>
+                ),
             )}
           </div>
           <footer className="inbox-footnote">
