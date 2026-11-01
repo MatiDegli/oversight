@@ -85,6 +85,7 @@ export function GraphStage({
         selectedId={view.selected}
         onNodeTap={onNodeTap}
         panelOpen={open}
+        preserveCamera={view.activeTab === "usage"}
         litIds={litIds}
         frameIds={frameIds}
         cone={cone}

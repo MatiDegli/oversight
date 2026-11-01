@@ -48,6 +48,8 @@ export interface GraphViewProps extends MapOptions {
    * camera moves (to the nodes in `frameIds` on open, back to the saved watch camera on close).
    */
   panelOpen?: boolean;
+  /** Usage resizes the viewport while retaining the person's current camera. */
+  preserveCamera?: boolean;
   /**
    * The change's nodes, framed with the cone while keeping names and state words legible.
    * Read only when the panel target changes; incoming events move nothing. Empty falls back to the
@@ -85,6 +87,7 @@ export function GraphView({
   selectedId = null,
   onNodeTap,
   panelOpen = false,
+  preserveCamera = false,
   litIds = null,
   frameIds = null,
   cone = null,
@@ -128,6 +131,7 @@ export function GraphView({
       selectedId,
       onNodeTap,
       panelOpen,
+      preserveCamera,
       litIds,
       frameIds,
       cone,
@@ -149,6 +153,7 @@ export function GraphView({
     selectedId,
     onNodeTap,
     panelOpen,
+    preserveCamera,
     litIds,
     frameIds,
     cone,
@@ -173,6 +178,14 @@ export function GraphView({
     const cy = graph.current;
     if (cy) {
       if (!wasOpen && panelOpen) watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+      if (preserveCamera) {
+        cy.stop();
+        cy.resize();
+        targetFrame.current = null;
+        reportViewport.current?.();
+        observeCard.current?.();
+        return;
+      }
       const { frameIds: framed, selectedId: selected } = latest.current;
       const focus = framed?.length ? framed : selected ? [selected] : [];
       const framing = mapControl.frame(cy, panelOpen ? focus : [], {
@@ -185,7 +198,7 @@ export function GraphView({
       observeCard.current?.();
       if (!panelOpen) watchCamera.current = undefined;
     }
-  }, [panelOpen, frameKey, mapControl]);
+  }, [panelOpen, frameKey, mapControl, preserveCamera]);
   useEffect(() => {
     const host = container.current;
     if (!host) return;
@@ -315,6 +328,10 @@ export function GraphView({
       const mountedWithPanel = latest.current.panelOpen;
       const frameInitialPanel = () => {
         watchCamera.current = { zoom: cy.zoom(), pan: { ...cy.pan() } };
+        if (latest.current.preserveCamera) {
+          cy.resize();
+          return;
+        }
         const framing = mapControl.frame(cy, latest.current.frameIds ?? [], {
           coneIds: openingCone(latest.current),
           ...panelGeometry(host, latest.current),

@@ -87,7 +87,7 @@ def record_run(
                 lines: list[str] = []
                 for line in text.splitlines():
                     row = json.loads(line)
-                    if row["type"] == "agent.message":
+                    if row["type"] in {"agent.message", "lead.reply"}:
                         row["payload"]["text"] = None
                         line = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
                     lines.append(line)
