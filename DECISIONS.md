@@ -399,6 +399,7 @@ Ours wins in every case below.
   authority, lifecycle, gates and contracts keep the full rule. Reason: on day one the design
   document took four review rounds over consistency details while the critical path waited, and a
   finished graph view waited on styles it could adopt later. Recorded in docs/proposal.md, section 7.
+  Extended to every front on 2026-11-01 (entry below).
 
 ## Model API
 
@@ -3422,3 +3423,19 @@ docs/own-repository.md and docs/proposal.md, and AGENTS.md's "always visible" fo
 
 Reason: the lead becomes the person's first conversation, and the Tauri shell needs no native
 port because its backend runs inside WSL.
+## 2026-11-01 — Deferred SHOULD-FIX findings on every front
+
+The maintainer approved this extension in chat on 2026-11-01. It extends the 2026-10-26 review
+tiers rule for frontend views and docs to every front (backend, frontend, docs and tooling),
+and adds the event log to the areas that keep the full rule.
+
+- The reviewer may rank a SHOULD-FIX as DEFERRED only if it is off the demo path (what the level's
+  demo shows or runs) and outside security, authority, lifecycle, gates, contracts and the event
+  log. The finding states why it is harmless before submission. The reviewer decides, never the
+  coordinator; a BLOCKING finding is never deferred, and the coordinator never overrides the
+  reviewer's verdict.
+- A DEFERRED finding does not block the merge. It becomes residual risk, listed under "Residual
+  risk" in the merge message, and goes to the state record as a follow-up.
+
+Reason: findings that are not really problematic are documented as residual risk and merged
+anyway, for pace before the freeze.
