@@ -4,6 +4,18 @@ import type { RefObject } from "react";
 import type { BoxSource } from "./boxSource";
 import type { FieldController, FieldHost, FieldInput } from "./controller";
 
+let createController: typeof import("./controller").createFieldController | undefined;
+let preparation: Promise<void> | undefined;
+
+/** The stage awaits optional code before mounting; standalone fields handle failure too. */
+export function prepareDotField(): Promise<void> {
+  return (preparation ??= import("./controller")
+    .then((module) => {
+      createController = module.createFieldController;
+    })
+    .catch(() => undefined));
+}
+
 export interface DotFieldProps extends FieldInput {
   /** Where the lit nodes are drawn, and when that may change: the graph's side of the field. */
   source: RefObject<BoxSource>;
@@ -29,23 +41,26 @@ export function DotField({
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
-    // Load the field separately so the graph and controls stay within the startup budget.
+    const host = element;
     const initial = input.current;
     let cancelled = false;
     let resize: ResizeObserver | undefined;
-    void import("./controller")
-      .then(({ createFieldController }) => {
-        if (cancelled) return;
-        const created = createFieldController(element, source.current);
-        created.update(initial);
-        created.update(input.current);
-        controller.current = created;
-        resize = new ResizeObserver(() => {
-          created.redraw();
-        });
-        resize.observe(element);
-      })
-      .catch(() => undefined);
+    function mount() {
+      if (cancelled || !createController) return;
+      const created = createController(host, source.current);
+      created.update(initial);
+      created.update(input.current);
+      controller.current = created;
+      resize = new ResizeObserver(() => {
+        created.redraw();
+      });
+      resize.observe(host);
+    }
+    if (createController) mount();
+    else
+      void prepareDotField()
+        .then(mount)
+        .catch(() => undefined);
     return () => {
       cancelled = true;
       resize?.disconnect();
