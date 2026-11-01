@@ -199,6 +199,33 @@ it("scrolls the list independently and wraps team identities at 1280 without cli
     await page.close();
   }
 });
+it("keeps long model text and multilingual tasks readable with accessible activity and cost", async () => {
+  const page = await open("working", 1280);
+  try {
+    const model = "LongModel".repeat(20),
+      task = "مرحبا 世界 🧪 ".repeat(20),
+      detail = "Wait for the provider to recover. ".repeat(10);
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      [status("agent-a", { model, task, detail, state: "halted" }), usage("agent-a", null)],
+    );
+    const a = row(page, "A");
+    await check(a).toHaveAccessibleName(`Agent A: ${task}. Halted. agent-a`);
+    await check(a).toHaveAccessibleDescription(`${model}; ${detail}; Step 4 of 30; Cost unknown`);
+    const modelText = a.locator(".chat-agent-model");
+    expect(await modelText.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(await a.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.emulateMedia({ forcedColors: "active" });
+    await a.press("Home");
+    await check(a).toBeFocused();
+    expect(await a.evaluate((el) => getComputedStyle(el).outlineWidth)).toBe("2px");
+    await check(a).toHaveAttribute("aria-pressed", "true");
+  } finally {
+    await page.close();
+  }
+});
 for (const name of ["empty", "working", "proposed", "review", "merged"])
   for (const width of [1920, 1280])
     for (const theme of ["dark", "day"]) {
