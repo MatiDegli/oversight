@@ -20,7 +20,8 @@ from oversight_contracts.policy import MergeModeState
 pytestmark = pytest.mark.anyio
 
 
-async def test_live_mode_snapshot_closed_latch_stale_and_noop(tmp_path: Path):
+async def test_live_mode_snapshot_closed_latch_stale_and_noop(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("oversight.changes._mode.RULES_ACTIVATION", False)
     settings = live_settings(tmp_path, cross_review=True)
     async with live_server(settings) as server:
         assert server.live._manager is not None
@@ -43,7 +44,10 @@ async def test_live_mode_snapshot_closed_latch_stale_and_noop(tmp_path: Path):
             if status == 409:
                 assert error_code(response) == (409, "wrong_state")
             if mode == "merge_when_safe":
-                assert "Rules mode is closed" in response.json()["error"]["message"]
+                assert (
+                    "Rules authority is unavailable in this build"
+                    in response.json()["error"]["message"]
+                )
             assert not controller._disables and not controller.authority_suspended()
         assert server.events() == before
     async with live_server(settings) as restarted:

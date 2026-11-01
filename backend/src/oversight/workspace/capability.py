@@ -93,6 +93,10 @@ class SessionIsolation:
     async def check(self) -> IsolationCapability:
         async with self._lock:
             if not self._checked:
+                if sys.platform == "win32":
+                    self._reason = "network isolation C is unavailable on Windows (Linux-only)"
+                    self._checked = True
+                    return self.capability
                 try:
                     await self.verify_effect()
                 except (OSError, TimeoutError) as error:

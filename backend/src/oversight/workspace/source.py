@@ -1,9 +1,12 @@
 """Server-owned workspace profiles. Selection and startup validation never fetch a source."""
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from oversight.workspace._platform import executable, preflight_placement
+from oversight.workspace.locks import offload
 from oversight.workspace.runner import Spawn, run_process
 
 FETCH_HINT = "Run make workspace-fetch-boltons to prepare the pinned source."
@@ -65,14 +68,25 @@ async def validate_source(
 ) -> Path:
     """Verify a real, clean pinned checkout before any runtime reset or graph export."""
     root = profile.checkout(runtime_root)
+    if sys.platform == "win32":
+        await offload(lambda: preflight_placement(root))
+        await offload(lambda: preflight_placement(root / ".git"))
     if root.resolve() != root or not (root / ".git").is_dir() or (root / ".git").is_symlink():
         raise ValueError(f"{profile.name}: missing or unsafe checkout at {root}. {FETCH_HINT}")
+    binary = "git"
+    if sys.platform == "win32":
+        binary = await offload(lambda: executable("git"))
     try:
-        head = await spawn(["git", "rev-parse", "HEAD"], cwd=root, timeout_s=30, env=SOURCE_GIT_ENV)
+        head = await spawn(
+            [binary, "rev-parse", "HEAD"],
+            cwd=root,
+            timeout_s=30,
+            env=SOURCE_GIT_ENV,
+        )
         if head.returncode != 0 or head.timed_out or head.stdout.strip() != profile.commit:
             raise ValueError(f"{profile.name}: checkout must be at {profile.commit}. {FETCH_HINT}")
         status = await spawn(
-            ["git", "status", "--porcelain", "--untracked-files=all"],
+            [binary, "status", "--porcelain", "--untracked-files=all"],
             cwd=root,
             timeout_s=30,
             env=SOURCE_GIT_ENV,

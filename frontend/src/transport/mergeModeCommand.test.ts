@@ -14,7 +14,7 @@ it("sends one PUT with the observed mode revision", async () => {
   });
 });
 it.each([
-  [409, "Rules mode is closed until Revert, protected paths and follow-main land"],
+  [409, "Cross-review is off"],
   [501, "Setting the merge mode is not available in a replay"],
 ])("keeps the %i server refusal in CommandError", async (status, message) => {
   const request = vi

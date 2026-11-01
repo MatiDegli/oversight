@@ -3,6 +3,7 @@ import type { Point } from "@contracts";
 import type { GraphElement } from "./elements";
 import { nodeGeometry } from "./geometry";
 import type { GeometryTokens } from "./geometry";
+import { applyGroupPack } from "./groupPack";
 import { packColumns } from "./packColumns";
 
 interface Box {
@@ -89,6 +90,7 @@ export function foldPositions(
     for (const root of column) removed += place(root, -removed);
   }
   if (foldedModules.size) boundColumns(roots, children, full, heights, positions, g, maxHeight);
+  applyGroupPack(roots, children, full, heights, positions, theme);
   return { positions, visible };
 }
 

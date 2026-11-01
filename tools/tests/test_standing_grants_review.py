@@ -89,6 +89,10 @@ def test_queue_names_remaining_inbox_work_instead_of_landed_rule() -> None:
     assert "already on main" in order
     assert "caller-listing inbox entry" in order
     assert "remains" in order
+    assert (
+        "broader grant support remains separate work: path/agent scopes, session expiry and "
+        "protected-path grants" in order
+    )
     assert "running now" not in order
 
 

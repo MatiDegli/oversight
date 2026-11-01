@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import stat
+import sys
 import time
 from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from oversight.workspace.core import Tree, Workspace
 
 from oversight.limits import SizeLimitError, bounded_text
+from oversight.workspace._platform import executable, is_link_like
 from oversight.workspace.errors import WorkspaceError
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import ProcessResult, Spawn
@@ -119,8 +121,10 @@ def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: boo
                     path = Path(entry.path)
                     relative = path.relative_to(root).as_posix()
                     if entry.name.casefold() == ".git":
-                        if path != root / ".git" or entry.is_symlink():
+                        if path != root / ".git" or is_link_like(entry):
                             raise IntegrityError("nested or linked Git entry", relative)
+                        continue
+                    if sys.platform == "win32" and is_link_like(entry):
                         continue
                     if entry.is_dir(follow_symlinks=False):
                         pending.append(path)
@@ -169,8 +173,11 @@ async def guarded_git(
             scan = partial(scan_nested_git, scan_identity, deadline)
             await offload(partial(scan, initializing=True) if args[0] == "init" else scan)
         submodules = ("--ignore-submodules=all",) if args[0] in {"status", "diff"} else ()
+        binary = "git"
+        if sys.platform == "win32":
+            binary = await offload(lambda: executable("git"))
         result = await spawn(
-            ["git", *flags, args[0], *submodules, *args[1:]],
+            [binary, *flags, args[0], *submodules, *args[1:]],
             cwd=identity.root,
             timeout_s=remaining(deadline),
             env=env,
@@ -222,6 +229,8 @@ def veto_gitmodules(root: Path, deadline: float) -> None:
 
 def _plain_bytes(path: Path, limit: int, deadline: float) -> bytes:
     """Read bounded regular metadata without following the final symlink or opening a FIFO."""
+    if sys.platform == "win32":
+        raise IntegrityError("NT merge metadata I/O requires W2", path.name)
     remaining(deadline)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)

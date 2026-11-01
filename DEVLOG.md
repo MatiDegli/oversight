@@ -51,3 +51,7 @@ One line per day, in Argentina time (ART).
   the review graph, review/phone evidence and model-retry status; observed agent-hours, dated
   list prices and supervision folds; bounded examples selection; unchanged-failure revision guards,
   shutdown draining and test splits; recorded the decision to open my own repository, plan first.
+- **2026-11-01:** Opened item 8 F10 rules activation after maintainer approval, retaining Ask me
+  startup and all guards; forwarded committed runtime review receipts; added fake-only HTTP/SSE
+  merge, person Revert and Needs you evidence, a separate validated rules recording, replay
+  coverage and three consecutive clean-start rules scenarios with real host isolation C.

@@ -110,6 +110,126 @@ async function shot(page: Page, name: string, suffix: string) {
     await check(page.locator(".monaco-diff-editor")).toBeVisible();
   await page.screenshot({ path: `${directory}${name}-${suffix}.png` });
 }
+async function exerciseRevertRetry(
+  page: Page,
+  suffix: string,
+  requests: unknown[],
+  release: () => void,
+) {
+  await page.evaluate(() => {
+    window.revertHarness.merge();
+  });
+  await check(revert(page)).toBeVisible();
+  await check(page.locator(".review-merged")).toHaveText("Merged into main 4ca5596");
+  await shot(page, "revert-ready", suffix);
+  await revert(page).focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Space");
+  await revert(page).dispatchEvent("click", { detail: 0 });
+  expect(requests).toHaveLength(0);
+  const body = {
+    resolution_seq: 20,
+    merge_commit: "4ca5596e0d1b2c3a4f5e6d7c8b9a0f1e2d3c4b5a",
+    main_commit: "ac712fde4410527789b142c4be06895ad18cbd12",
+  };
+  await revert(page).click();
+  await check(revert(page)).toBeDisabled();
+  await check(page.getByText("Reverting: waiting for the result.", { exact: true })).toHaveCount(1);
+  await revert(page).dispatchEvent("click", { detail: 1 });
+  await check(revert(page)).toBeFocused();
+  await shot(page, "revert-pending", suffix);
+  expect(requests).toEqual([body]);
+  release();
+  await check(page.getByRole("alert").filter({ hasText: refusal })).toHaveText(refusal);
+  await check(revert(page)).toBeFocused();
+  await shot(page, "revert-refused", suffix);
+  // Attempts survive leaving review and returning to the same tab.
+  await page.getByRole("button", { name: /Open decisions inbox/ }).click();
+  await page.getByRole("tab", { name: /Review · change-1/ }).click();
+  await check(page.getByRole("alert").filter({ hasText: refusal })).toHaveText(refusal);
+}
+
+async function exerciseRevertOutcomes(page: Page, suffix: string, requests: unknown[]) {
+  await revert(page).click();
+  await check(revert(page)).toBeDisabled();
+  const before = await page.evaluate(() => ({
+    count: window.revertHarness.inboxCount(),
+    tabs: document.querySelectorAll('[role="tab"]').length,
+  }));
+  await page.evaluate(() => {
+    const active = document.activeElement;
+    window.revertHarness.outcome("needs_you");
+    if (document.activeElement !== active) throw new Error("Focus moved");
+  });
+  await check(revert(page)).toBeEnabled();
+  await check(revert(page)).toBeFocused();
+  await check(page.getByText("Main moved", { exact: true })).toHaveCount(1);
+  expect(await page.evaluate(() => window.revertHarness.inboxCount())).toBe(before.count + 1);
+  expect(await page.getByRole("tab").count()).toBe(before.tabs);
+  await shot(page, "revert-needs-you", suffix);
+  await page.getByRole("button", { name: /Open decisions inbox/ }).click();
+  await check(page.getByRole("heading", { name: "Main moved", exact: true })).toBeVisible();
+  await shot(page, "revert-needs-you-inbox", suffix);
+  await page.getByRole("tab", { name: /Review · change-1/ }).click();
+  await revert(page).click();
+  await page.evaluate(() => {
+    window.revertHarness.outcome("reverted");
+  });
+  await check(revert(page)).toHaveCount(0);
+  await check(page.getByText("Reverted in main ba324d1", { exact: true })).toHaveCount(1);
+  await check(page.locator(".review-merged")).toHaveText("Merged into main 4ca5596");
+  expect(requests).toHaveLength(3);
+  await shot(page, "revert-reverted", suffix);
+}
+
+async function exerciseLiveRevert(width: number, height: number, theme: string) {
+  const page = await open(false, width, height, theme);
+  const suffix = `${String(width)}x${String(height)}-${theme}`;
+  const requests: unknown[] = [];
+  let release: (() => void) | undefined;
+  await page.route("**/changes/*/revert", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      await route.fulfill({
+        status: 409,
+        json: { error: { code: "wrong_state", message: refusal } },
+      });
+    } else await route.fulfill({ status: 202 });
+  });
+  try {
+    await exerciseRevertRetry(page, suffix, requests, () => release?.());
+    await exerciseRevertOutcomes(page, suffix, requests);
+  } finally {
+    await page.close();
+  }
+}
+
+async function exerciseReplayRevert(width: number, height: number, theme: string) {
+  const suffix = `${String(width)}x${String(height)}-${theme}`;
+  const replay = await open(true, width, height, theme);
+  const sent: string[] = [];
+  replay.on("request", (request) => {
+    if (request.url().endsWith("/revert")) sent.push(request.method());
+  });
+  try {
+    await replay.evaluate(() => {
+      window.revertHarness.merge();
+    });
+    await check(
+      replay.getByText("Revert is not available in a replay.", { exact: true }),
+    ).toHaveCount(1);
+    await check(revert(replay)).toHaveCount(0);
+    expect(sent).toEqual([]);
+    await shot(replay, "revert-replay", suffix);
+  } finally {
+    await replay.close();
+  }
+}
+
 it.each([
   [1920, 1080],
   [1280, 800],
@@ -117,108 +237,8 @@ it.each([
   "exercises and captures Revert at %ix%i in both themes",
   async function exerciseRevertStates(width, height) {
     for (const theme of ["dark", "day"]) {
-      const page = await open(false, width, height, theme);
-      const suffix = `${String(width)}x${String(height)}-${theme}`;
-      const requests: unknown[] = [];
-      let release: (() => void) | undefined;
-      await page.route("**/changes/*/revert", async (route) => {
-        expect(route.request().method()).toBe("POST");
-        requests.push(route.request().postDataJSON());
-        if (requests.length === 1) {
-          await new Promise<void>((resolve) => {
-            release = resolve;
-          });
-          await route.fulfill({
-            status: 409,
-            json: { error: { code: "wrong_state", message: refusal } },
-          });
-        } else await route.fulfill({ status: 202 });
-      });
-      try {
-        await page.evaluate(() => {
-          window.revertHarness.merge();
-        });
-        await check(revert(page)).toBeVisible();
-        await check(page.locator(".review-merged")).toHaveText("Merged into main 4ca5596");
-        await shot(page, "revert-ready", suffix);
-        await revert(page).focus();
-        await page.keyboard.press("Enter");
-        await page.keyboard.press("Space");
-        await revert(page).dispatchEvent("click", { detail: 0 });
-        expect(requests).toHaveLength(0);
-        const body = {
-          resolution_seq: 20,
-          merge_commit: "4ca5596e0d1b2c3a4f5e6d7c8b9a0f1e2d3c4b5a",
-          main_commit: "ac712fde4410527789b142c4be06895ad18cbd12",
-        };
-        await revert(page).click();
-        await check(revert(page)).toBeDisabled();
-        await check(
-          page.getByText("Reverting: waiting for the result.", { exact: true }),
-        ).toHaveCount(1);
-        await revert(page).dispatchEvent("click", { detail: 1 });
-        await check(revert(page)).toBeFocused();
-        await shot(page, "revert-pending", suffix);
-        expect(requests).toEqual([body]);
-        release?.();
-        await check(page.getByRole("alert").filter({ hasText: refusal })).toHaveText(refusal);
-        await check(revert(page)).toBeFocused();
-        await shot(page, "revert-refused", suffix);
-        // Attempts survive leaving review and returning to the same tab.
-        await page.getByRole("button", { name: /Open decisions inbox/ }).click();
-        await page.getByRole("tab", { name: /Review · change-1/ }).click();
-        await check(page.getByRole("alert").filter({ hasText: refusal })).toHaveText(refusal);
-        await revert(page).click();
-        await check(revert(page)).toBeDisabled();
-        const before = await page.evaluate(() => ({
-          count: window.revertHarness.inboxCount(),
-          tabs: document.querySelectorAll('[role="tab"]').length,
-        }));
-        await page.evaluate(() => {
-          const active = document.activeElement;
-          window.revertHarness.outcome("needs_you");
-          if (document.activeElement !== active) throw new Error("Focus moved");
-        });
-        await check(revert(page)).toBeEnabled();
-        await check(revert(page)).toBeFocused();
-        await check(page.getByText("Main moved", { exact: true })).toHaveCount(1);
-        expect(await page.evaluate(() => window.revertHarness.inboxCount())).toBe(before.count + 1);
-        expect(await page.getByRole("tab").count()).toBe(before.tabs);
-        await shot(page, "revert-needs-you", suffix);
-        await page.getByRole("button", { name: /Open decisions inbox/ }).click();
-        await check(page.getByRole("heading", { name: "Main moved", exact: true })).toBeVisible();
-        await shot(page, "revert-needs-you-inbox", suffix);
-        await page.getByRole("tab", { name: /Review · change-1/ }).click();
-        await revert(page).click();
-        await page.evaluate(() => {
-          window.revertHarness.outcome("reverted");
-        });
-        await check(revert(page)).toHaveCount(0);
-        await check(page.getByText("Reverted in main ba324d1", { exact: true })).toHaveCount(1);
-        await check(page.locator(".review-merged")).toHaveText("Merged into main 4ca5596");
-        expect(requests).toHaveLength(3);
-        await shot(page, "revert-reverted", suffix);
-      } finally {
-        await page.close();
-      }
-      const replay = await open(true, width, height, theme);
-      const sent: string[] = [];
-      replay.on("request", (request) => {
-        if (request.url().endsWith("/revert")) sent.push(request.method());
-      });
-      try {
-        await replay.evaluate(() => {
-          window.revertHarness.merge();
-        });
-        await check(
-          replay.getByText("Revert is not available in a replay.", { exact: true }),
-        ).toHaveCount(1);
-        await check(revert(replay)).toHaveCount(0);
-        expect(sent).toEqual([]);
-        await shot(replay, "revert-replay", suffix);
-      } finally {
-        await replay.close();
-      }
+      await exerciseLiveRevert(width, height, theme);
+      await exerciseReplayRevert(width, height, theme);
     }
   },
   60_000,

@@ -10,11 +10,24 @@ import asyncio
 import contextlib
 import os
 import signal
+import sys
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+from oversight.workspace._platform import (
+    NT_CREATE_FLAGS,
+    NT_KILL_CODE,
+    assign_job,
+    close_job,
+    create_kill_job,
+    job_pids,
+    resume_suspended,
+    terminate_job,
+    terminate_suspended,
+)
 
 TERM_GRACE_S = 2.0
 """How long a group gets after SIGTERM before SIGKILL."""
@@ -122,10 +135,27 @@ def child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
         "LC_ALL": "C.UTF-8",
         "TZ": "UTC",
     }
+    if sys.platform == "win32":
+        base |= {
+            key: os.environ[key]
+            for key in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT")
+            if key in os.environ
+        }
+        base |= dict(extra or {})
+        base["PYTHONUTF8"] = "1"
+        if home := (extra or {}).get("HOME"):
+            base |= dict.fromkeys(("TEMP", "TMP", "USERPROFILE"), home)
+        return {
+            key: value
+            for key, value in base.items()
+            if key.casefold() not in {"meta_api_key", "baseten_api_key"}
+        }
     return base | dict(extra or {})
 
 
 def _killpg(pgid: int, sig: signal.Signals) -> None:
+    if sys.platform == "win32":
+        raise OSError("POSIX process groups are unavailable on Windows")
     # The group may already be gone, even after a normal exit: cleanup is idempotent.
     with contextlib.suppress(ProcessLookupError):
         os.killpg(pgid, sig)
@@ -145,6 +175,8 @@ async def _reap(
     terminate: bool,
 ) -> None:
     """End the group and bound every wait. Pipes are closed even if a descendant holds them."""
+    if sys.platform == "win32":
+        raise OSError("POSIX reaping is unavailable on Windows")
     if terminate:
         _killpg(pgid, signal.SIGTERM)
         await wait_done(collector.exited, TERM_GRACE_S)
@@ -152,6 +184,105 @@ async def _reap(
     if await wait_done(collector.exited, KILL_WAIT_S):
         await wait_done(collector.closed, PIPE_DRAIN_S)
     transport.close()
+
+
+async def _reap_nt(
+    transport: asyncio.SubprocessTransport,
+    collector: ProcessCollector,
+    job: int,
+    *,
+    launch_failed: bool = False,
+) -> None:
+    """Refuse evidence unless both the leader and every job member are gone before return."""
+    try:
+        if launch_failed:
+            try:
+                handle = getattr(transport.get_extra_info("subprocess"), "_handle", None)
+                terminate_suspended(
+                    transport.get_pid(), process_handle=int(handle) if handle else None
+                )
+            finally:
+                terminate_job(job)
+        else:
+            terminate_job(job)
+        deadline = time.monotonic() + KILL_WAIT_S
+        while not collector.exited.done() or job_pids(job):
+            if time.monotonic() >= deadline:
+                raise OSError("Windows job cleanup did not complete before its deadline")
+            await asyncio.sleep(0.01)
+        if not await wait_done(collector.closed, PIPE_DRAIN_S):
+            raise OSError("Windows job pipes did not drain")
+    finally:
+        # Closing the job is the final kill fallback even when termination/querying failed.
+        try:
+            close_job(job)
+        finally:
+            with contextlib.suppress(asyncio.CancelledError):
+                await wait_done(collector.exited, KILL_WAIT_S)
+            transport.close()
+
+
+async def _execute_nt(
+    argv: Sequence[str],
+    cwd: Path,
+    timeout_s: float,
+    env: Mapping[str, str] | None,
+    cap: int,
+    abort: asyncio.Event,
+) -> ProcessResult:
+    started = time.monotonic()
+    collector = ProcessCollector(cap)
+    job = create_kill_job()
+    try:
+        transport, _ = await asyncio.get_running_loop().subprocess_exec(
+            lambda: collector,
+            *argv,
+            cwd=cwd,
+            env=child_env(env),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            creationflags=NT_CREATE_FLAGS,
+        )
+    except BaseException:
+        close_job(job)
+        raise
+    try:
+        assign_job(job, transport.get_pid())
+        resume_suspended(transport.get_pid())
+    except BaseException:
+        await _reap_nt(transport, collector, job, launch_failed=True)
+        raise
+    watcher = asyncio.ensure_future(abort.wait())
+    try:
+        finished, _ = await asyncio.wait(
+            {collector.exited, watcher}, timeout=timeout_s, return_when=asyncio.FIRST_COMPLETED
+        )
+    finally:
+        watcher.cancel()
+    stopped = abort.is_set() or not finished or not collector.exited.done()
+    natural_code = transport.get_returncode() if not stopped else None
+    await _reap_nt(transport, collector, job)
+    return ProcessResult(
+        natural_code if natural_code is not None else NT_KILL_CODE,
+        collector.stdout.text(),
+        collector.stderr.text(),
+        not finished,
+        collector.truncated,
+        round((time.monotonic() - started) * 1000),
+    )
+
+
+async def probe_job_support(runtime: Path) -> None:
+    """Before reset, prove that inherited ancestor jobs permit the per-run nested job."""
+    result = await run_process(
+        [sys.executable, "-I", "-S", "-c", "pass"],
+        cwd=runtime,
+        timeout_s=5,
+        env={"HOME": str(runtime)},
+    )
+    if result.returncode != 0 or result.timed_out:
+        raise OSError("ancestor Windows job is incompatible with suspended nested jobs")
 
 
 async def _execute(
@@ -162,6 +293,8 @@ async def _execute(
     cap: int,
     abort: asyncio.Event,
 ) -> ProcessResult:
+    if sys.platform == "win32":
+        return await _execute_nt(argv, cwd, timeout_s, env, cap, abort)
     started = time.monotonic()
     collector = ProcessCollector(cap)
     transport, _ = await asyncio.get_running_loop().subprocess_exec(
@@ -221,4 +354,6 @@ async def run_process(
     except asyncio.CancelledError:
         abort.set()
         await settle_cleanup(task)
+        if sys.platform == "win32":
+            task.result()  # Cleanup failures refuse evidence, including during cancellation.
         raise

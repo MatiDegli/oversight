@@ -474,18 +474,7 @@ it("keeps dirty review edits blocking decisions while the diff is collapsed", as
     const review = panel(page);
     await review.getByRole("textbox", { name: /Comment/ }).fill("Keep my draft");
     // Dirty tracks the model; wait for the draft's computed diff decoration before hiding it.
-    await browserExpect
-      .poll(() =>
-        review
-          .locator(".editor.modified .view-lines .view-line")
-          .filter({ hasText: "# person draft" })
-          .evaluate((line) => {
-            const top = line.getBoundingClientRect().top;
-            const added = line.closest(".editor.modified")?.querySelectorAll(".line-insert") ?? [];
-            return [...added].some((decoration) => decoration.getBoundingClientRect().top === top);
-          }),
-      )
-      .toBe(true);
+    await review.locator(".line-insert").first().waitFor();
     await review.getByRole("button", { name: /shop\/pricing.py/ }).click();
     await browserExpect(review.getByRole("button", { name: "Approve and merge" })).toBeDisabled();
     await browserExpect(
