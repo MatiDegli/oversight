@@ -87,6 +87,9 @@ async def test_import_between_existing_modules(h: Harness) -> None:
     [fact] = facts.shape
     assert fact.kind == "import_added"
     assert fact.message == "`shop` now imports `shop.mod`."
+    assert [(ref.git_object, ref.path) for ref in fact.evidence] == [
+        (facts.candidate_tree, "shop/__init__.py")
+    ]
 
 
 async def test_two_new_identical_functions(h: Harness) -> None:
@@ -96,6 +99,7 @@ async def test_two_new_identical_functions(h: Harness) -> None:
     [fact] = facts.shape
     assert fact.kind == "duplicate_logic"
     assert fact.message == "`a` has the same logic as `b` (shop/mod.py)."
+    assert [(ref.git_object, ref.path) for ref in fact.evidence] == [(facts.candidate_tree, PATH)]
 
 
 async def test_successful_producers_keep_size_then_duplicate_order(h: Harness) -> None:
