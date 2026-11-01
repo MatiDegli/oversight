@@ -49,6 +49,10 @@ class _Strip(ast.NodeTransformer):
         node.type_comment = None
         return node
 
+    def visit_TypeVar(self, node: ast.TypeVar) -> ast.AST:
+        node.bound = None
+        return node
+
     def visit_AnnAssign(self, node: ast.AnnAssign) -> ast.AST | None:
         if node.value is None:
             return None
@@ -72,6 +76,8 @@ def _binding(node: ast.AST) -> str | None:
         return node.name or None
     if isinstance(node, ast.arg):
         return node.arg
+    if isinstance(node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
+        return node.name
     if isinstance(node, ast.alias):
         return node.asname or node.name.split(".")[0]
     if isinstance(node, ast.ExceptHandler | ast.MatchAs | ast.MatchStar):
@@ -89,7 +95,9 @@ class _Bindings(ast.NodeVisitor):
         name = _binding(node)
         if name is not None and name not in self.names:
             self.names[name] = f"_{len(self.names)}"
-        super().generic_visit(node)
+        for child in ast.iter_child_nodes(node):
+            if not isinstance(node, ast.ClassDef) or child not in node.type_params:
+                self.visit(child)
 
     def visit_arguments(self, node: ast.arguments) -> None:
         for arg in _parameters(node):
@@ -108,6 +116,8 @@ class _Rename(ast.NodeTransformer):
             node.id = self.names.get(node.id, node.id)
         elif isinstance(node, ast.arg):
             node.arg = self.names[node.arg]
+        elif isinstance(node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
+            node.name = self.names.get(node.name, node.name)
         elif isinstance(node, ast.alias):
             node.asname = self.names[_binding(node) or ""]
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
@@ -118,6 +128,13 @@ class _Rename(ast.NodeTransformer):
         elif isinstance(node, ast.MatchMapping) and node.rest is not None:
             node.rest = self.names[node.rest]
         return super().generic_visit(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> ast.AST:
+        # Preserve class-level parameters while normalizing its other fields.
+        parameters, node.type_params = node.type_params, []
+        self.generic_visit(node)
+        node.type_params = parameters
+        return node
 
 
 def _fingerprint(source: _Function) -> str | None:
