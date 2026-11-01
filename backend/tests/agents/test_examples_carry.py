@@ -47,6 +47,24 @@ def test_agent_task_refusals(kind: str) -> None:
         )
 
 
+@pytest.mark.parametrize("output", [None, "not JSON", "", "NaN", "1e999"])
+def test_agent_task_rejects_unusable_output(output: str | None) -> None:
+    example = TaskExample.model_validate(
+        EXAMPLE.model_dump()
+        | {"expected_output": output, "expected_behavior": "Return the exact result."}
+    )
+    with pytest.raises(ValueError):
+        replace(task(), examples=(example,))
+
+
+@pytest.mark.parametrize("output", ["null", '""'])
+def test_agent_task_keeps_json_null_and_empty_string(output: str) -> None:
+    example = TaskExample.model_validate(EXAMPLE.model_dump() | {"expected_output": output})
+    retained = replace(task(), examples=(example,))
+    assert retained.examples[0].expected_output == output
+    assert f"Expected output: {output}\n" in done_when_text(retained.examples)
+
+
 def test_done_when_text_and_copies() -> None:
     retained = task()
     assert done_when_text(retained.examples) == (

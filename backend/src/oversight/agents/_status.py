@@ -52,6 +52,10 @@ def validate_task_examples(
         for example in examples
     ):
         raise ValueError("AgentTask requires at most five examples confirmed by this task's person")
+    for example in examples:
+        if example.expected_output is None:
+            raise ValueError("AgentTask requires JSON expected output")
+        canonical_json(json.loads(example.expected_output))
     return tuple(example.model_copy(deep=True) for example in examples)
 
 
