@@ -2924,18 +2924,3 @@ The earlier "of 30" departure was reverted by the maintainer at 2026-10-31T16:55
 uses run.limits.max_steps and min(step, bound), retaining the largest observed step. There are no
 line counts on edit calls because agent.step has none; retries preserve Revising as the card does.
 Accepted person messages stay between activity segments of the same round; they never fold away.
-
-### Conversation renderer loading — coordinator ruling pending
-
-The startup-JavaScript gate required keeping ActivityBlock, Notices, Composer and rows out
-of the initial replay import graph. ConversationPanel therefore splits its timeline into
-Panel, loads these four renderers together with React.lazy, and mounts the full timeline
-only after they resolve so the first layout preserves bottom anchoring. The panel uses
-w-full inside its focus tab. This exceeds the original header/pill/entry-only edit scope;
-the coordinator must rule on this lazy split and the asynchronous Composer, rather than
-treating the startup gate's closure as scope approval.
-
-A local error boundary now contains failed renderer imports, preserving the graph and
-other panels. A plain “The conversation could not load.” line offers Retry, which creates
-a fresh lazy component and calls the imports again. Normal startup still defers renderers
-until the Conversation tab opens; the browser regression covers failure and recovery.

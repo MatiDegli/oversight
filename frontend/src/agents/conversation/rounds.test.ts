@@ -11,6 +11,29 @@ const events = scripted.trim().split("\n").map(parseEvent);
 const state = events.reduce(applyEvent, createInitialState());
 const duration = (start: number, end: number) =>
   Date.parse(events[end - 1]?.ts ?? "") - Date.parse(events[start - 1]?.ts ?? "");
+it("keeps progress fixture summaries, proposal files and nodes aligned with each task", () => {
+  const events = progressEvents();
+  expect(events.find((event) => event.seq === 12)).toMatchObject({
+    type: "agent.step",
+    payload: { tool: "list_files", summary: "Listed project files" },
+  });
+  const proposals = events.filter((event) => event.type === "change.proposed");
+  expect(proposals).toHaveLength(2);
+  for (const event of proposals) {
+    const inventory = event.payload.agent_id === "agent-2";
+    expect(event.payload.summary).toBe(
+      inventory
+        ? "Inventory.reserve rejects a non-positive quantity."
+        : "compute_price rejects a negative price or quantity.",
+    );
+    expect(event.payload.files.map((file) => file.path)).toEqual([
+      inventory ? "shop/inventory.py" : "shop/pricing.py",
+    ]);
+    const node = inventory ? "shop.inventory:Inventory.reserve" : "shop.pricing:compute_price";
+    expect(event.payload.graph.nodes_modified).toContain(node);
+    expect(event.payload.impact.seeds).toContain(node);
+  }
+});
 it("ends only opened rounds, keeps revisions and excludes the wait for the maintainer", () => {
   const rounds = selectRounds(state, "agent-2");
   expect(rounds).toHaveLength(2);

@@ -1,8 +1,40 @@
-import { renderToReadableStream } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { ConversationPanel } from "./ConversationPanel";
+import { ActivityBlock } from "./ActivityBlock";
 import { progressState } from "./progressFixture";
 import { selectConversation, type Conversation } from "./selectConversation";
+
+it("renders the header, timeline, notices and composer synchronously", () => {
+  const conversation = selectConversation(progressState("retry"), "agent-1", []);
+  if (!conversation) throw new Error("Missing conversation");
+  const html = renderToStaticMarkup(
+    <ConversationPanel conversation={conversation} onSend={() => Promise.resolve()} />,
+  );
+  expect(html).toContain('aria-label="Agent A conversation"');
+  expect(html).toContain('aria-label="Conversation timeline"');
+  expect(html).toContain("compute_price rejects a negative price or quantity");
+  expect(html).toContain("Edited pricing.py");
+  expect(html).toContain("Waiting for model");
+  expect(html).toContain("<textarea");
+});
+
+it("renders a single call without a hidden fold row or an extra divider", () => {
+  const conversation = selectConversation(progressState("working"), "agent-1", []);
+  const activity = conversation?.entries.find((entry) => entry.kind === "activity");
+  if (activity?.kind !== "activity" || !activity.round.steps[0]) {
+    throw new Error("Missing activity");
+  }
+  const entry = {
+    ...activity,
+    round: { ...activity.round, steps: [activity.round.steps[0]] },
+  };
+  const html = renderToStaticMarkup(<ActivityBlock entry={entry} slot="A" changeId="change-1" />);
+  expect(html).toContain("read_file");
+  expect(html).not.toContain("earlier call");
+  expect(html).not.toContain("aria-expanded");
+  expect(html).not.toContain('hidden=""');
+});
 
 async function markup(conversation: Conversation) {
   const stream = await renderToReadableStream(<ConversationPanel conversation={conversation} />);

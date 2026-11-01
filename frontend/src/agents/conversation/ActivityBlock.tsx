@@ -73,37 +73,39 @@ export function ActivityBlock({
             : "overflow-hidden rounded-[12px] border border-border bg-card [&>div+div]:border-t [&>div+div]:border-divider"
         }
       >
-        <div key="toggle" hidden={!ended && earlier.length === 0}>
-          <FoldToggle
-            open={open}
-            ended={ended}
-            onToggle={() => {
-              setOpen(!open);
-            }}
-            label={
-              ended ? (
-                <>
-                  Round <span className="font-mono">{round.number}</span> · {round.outcome}
-                </>
-              ) : (
-                <>
-                  <span className="font-mono">{earlier.length}</span> earlier{" "}
-                  {earlier.length === 1 ? "call" : "calls"}
-                </>
-              )
-            }
-            aside={
-              ended ? (
-                <>
-                  {round.steps.length} {round.steps.length === 1 ? "call" : "calls"} ·{" "}
-                  {elapsed(round.elapsedMs)}
-                </>
-              ) : (
-                <>{toolTime(earlier.reduce((sum, e) => sum + e.step.duration_ms, 0))} in tools</>
-              )
-            }
-          />
-        </div>
+        {(ended || earlier.length > 0) && (
+          <div key="toggle">
+            <FoldToggle
+              open={open}
+              ended={ended}
+              onToggle={() => {
+                setOpen(!open);
+              }}
+              label={
+                ended ? (
+                  <>
+                    Round <span className="font-mono">{round.number}</span> · {round.outcome}
+                  </>
+                ) : (
+                  <>
+                    <span className="font-mono">{earlier.length}</span> earlier{" "}
+                    {earlier.length === 1 ? "call" : "calls"}
+                  </>
+                )
+              }
+              aside={
+                ended ? (
+                  <>
+                    {round.steps.length} {round.steps.length === 1 ? "call" : "calls"} ·{" "}
+                    {elapsed(round.elapsedMs)}
+                  </>
+                ) : (
+                  <>{toolTime(earlier.reduce((sum, e) => sum + e.step.duration_ms, 0))} in tools</>
+                )
+              }
+            />
+          </div>
+        )}
         {(ended ? (open ? entry.children : []) : open ? round.steps : newest ? [newest] : []).map(
           (child) => (
             <div key={child.seq}>

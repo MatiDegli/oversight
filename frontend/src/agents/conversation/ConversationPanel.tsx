@@ -1,69 +1,12 @@
-import { Component, lazy, Suspense, useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { agentLook } from "../../theme";
 import { costText } from "../../state";
 import { labels } from "../AgentCard";
-import type { ConversationControls } from "./Composer";
+import { Composer, type ConversationControls } from "./Composer";
+import { ActivityBlock } from "./ActivityBlock";
+import { BudgetNotice, Notices } from "./Notices";
+import { TimelineEntry } from "./rows";
 import type { Conversation, ConversationHeader } from "./selectConversation";
-
-// Mount the timeline after all renderers load, so its first layout anchors the full content.
-async function loadRenderers() {
-  const [activity, notices, composer, rows] = await Promise.all([
-    import("./ActivityBlock"),
-    import("./Notices"),
-    import("./Composer"),
-    import("./rows"),
-  ]);
-  return {
-    ActivityBlock: activity.ActivityBlock,
-    BudgetNotice: notices.BudgetNotice,
-    Notices: notices.Notices,
-    Composer: composer.Composer,
-    TimelineEntry: rows.TimelineEntry,
-  };
-}
-const deferPanel = () =>
-  lazy(() =>
-    loadRenderers().then((renderers) => ({
-      default: function LoadedPanel(props: ConversationPanelProps) {
-        return <Panel {...props} renderers={renderers} />;
-      },
-    })),
-  );
-const DeferredPanel = deferPanel();
-
-/** Keep a renderer failure inside its tab; retry with a fresh React lazy cache. */
-class ConversationBoundary extends Component<ConversationPanelProps> {
-  override state = { failed: false, View: DeferredPanel };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  override render() {
-    const { View } = this.state;
-    return this.state.failed ? (
-      <section
-        aria-label={`Agent ${this.props.conversation.header.slot} conversation`}
-        className="h-full w-full bg-page p-4 text-sm text-muted"
-      >
-        <p>
-          <span>The conversation could not load.</span>{" "}
-          <button
-            type="button"
-            className="rounded-control underline focus-visible:outline-2 focus-visible:outline-text"
-            onClick={() => {
-              this.setState({ failed: false, View: deferPanel() });
-            }}
-          >
-            Retry
-          </button>
-        </p>
-      </section>
-    ) : (
-      <Suspense fallback={null}>
-        <View {...this.props} />
-      </Suspense>
-    );
-  }
-}
 
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation;
@@ -113,13 +56,11 @@ function Header({ header }: { header: ConversationHeader }) {
 }
 
 /** The timeline owns scrolling; event arrivals never move keyboard focus. */
-function Panel({
+export function ConversationPanel({
   conversation,
   onOpenDiff,
-  renderers,
   ...controls
-}: ConversationPanelProps & { renderers: Awaited<ReturnType<typeof loadRenderers>> }) {
-  const { ActivityBlock, BudgetNotice, Notices, Composer, TimelineEntry } = renderers;
+}: ConversationPanelProps) {
   const { header, entries } = conversation;
   const lastActivity = entries.findLast((entry) => entry.kind === "activity");
   const list = useRef<HTMLDivElement>(null);
@@ -145,7 +86,7 @@ function Panel({
   return (
     <section
       aria-label={`Agent ${header.slot} conversation`}
-      className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
+      className="flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
     >
       <Header header={header} />
       <div
@@ -186,9 +127,4 @@ function Panel({
       <Composer key={header.agentId} header={header} {...controls} />
     </section>
   );
-}
-
-/** Conversation UI loads only when its focus tab is opened. */
-export function ConversationPanel(props: ConversationPanelProps) {
-  return <ConversationBoundary {...props} />;
 }
