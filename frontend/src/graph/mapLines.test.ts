@@ -183,6 +183,14 @@ it("wraps measured strip items to 37/60/83px and preserves legacy heights", () =
   expect(g.y - panelBox(g, 1).y1).toBe(37);
   expect((g.y - panelBox(g, 0.4).y1) * 0.4).toBe(60);
 });
+it("reserves both panel borders when measured header items barely fit", () => {
+  const g = required(fixture().model.groups[0]);
+  g.width = 300;
+  g.headerItemWidths = [140, 137];
+  expect(headerLines(g, 1)).toBe(2);
+  g.headerItemWidths = [140, 136];
+  expect(headerLines(g, 1)).toBe(1);
+});
 
 function required<T>(value: T | undefined | null): T {
   if (value === undefined || value === null) throw new Error("Missing fixture value");

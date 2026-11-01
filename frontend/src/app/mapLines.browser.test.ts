@@ -287,6 +287,46 @@ it("keeps the demo on cards without map lines, badges or click behavior", async 
     await page.close();
   }
 });
+it("fits header rows at wrapping boundaries using the rendered borders and type weights", async () => {
+  const page = await setup();
+  try {
+    for (const group of ["library", "tools"]) {
+      if (group === "tools") {
+        await page.evaluate(() => {
+          window.mapLinesTest.review();
+        });
+        await ready(page);
+      }
+      const zoom = (await camera(page)).zoom ?? 1;
+      const target = await page.locator(`[data-map-group="${group}"]`).evaluate((panel, zoom) => {
+        const header = panel.querySelector(".map-header");
+        if (!header) throw new Error("Missing header");
+        const items = [...header.children];
+        const content = items.reduce((sum, item) => sum + item.getBoundingClientRect().width, 0);
+        const worldWidth = (panel.getBoundingClientRect().width - 12) / zoom;
+        // One pixel short of a full row after padding and both panel borders.
+        return (content + (items.length - 1) * 10 + 26 - 12 - 1) / worldWidth;
+      }, zoom);
+      await zoomTo(page, target);
+      const headers = await page.locator(".map-header").evaluateAll((elements) =>
+        elements.map((header) => ({
+          height: header.getBoundingClientRect().height,
+          rows: new Set(
+            [...header.children].map((item) => {
+              const box = item.getBoundingClientRect();
+              return Math.round(box.y + box.height / 2);
+            }),
+          ).size,
+        })),
+      );
+      const rows = Math.max(...headers.map((header) => header.rows));
+      expect(rows).toBeGreaterThan(1);
+      for (const header of headers) expect(header.height).toBeCloseTo(37 + 23 * (rows - 1), 1);
+    }
+  } finally {
+    await page.close();
+  }
+});
 for (const width of [1920, 1280])
   for (const theme of ["dark", "day"]) {
     it(`captures evidence at ${String(width)} in ${theme}`, async () => {

@@ -170,7 +170,8 @@ export function headerLines(group: MapGroup, zoom: number) {
     return group.headerLines ?? (group.width * zoom + 12 < (group.headerWidth ?? 180) ? 2 : 1);
   let lines = 1,
     used = 0;
-  const width = group.width * zoom - 12;
+  // The panel adds 12px outside the ground, then loses 24px padding and 2px border.
+  const width = group.width * zoom - 14;
   for (const item of group.headerItemWidths) {
     if (used && used + 10 + item > width) {
       lines++;

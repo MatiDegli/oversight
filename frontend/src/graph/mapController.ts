@@ -40,10 +40,17 @@ function measureHeaders(model: MapFrame["model"]) {
     const decision = decisionsLabel(group.decisions ?? 0);
     if (decision) widths.push(context.measureText(decision).width + 31);
     context.font = `400 13px ${font}`;
-    const tested = group.coneCount
-      ? `${String(group.coneCount)} of ${String(group.coneTotal)} in ${group.label}`
-      : testedLabel(group.tested ?? 0, group.id === "tests");
-    if (tested) widths.push(context.measureText(tested).width);
+    if (group.coneCount) {
+      const suffix = context.measureText(` in ${group.label}`).width;
+      context.font = `600 13px ${font}`;
+      widths.push(
+        context.measureText(`${String(group.coneCount)} of ${String(group.coneTotal)}`).width +
+          suffix,
+      );
+    } else {
+      const tested = testedLabel(group.tested ?? 0, group.id === "tests");
+      if (tested) widths.push(context.measureText(tested).width);
+    }
     group.headerItemWidths = widths;
     for (const module of group.modules) {
       context.font = `600 13px ${font}`;
