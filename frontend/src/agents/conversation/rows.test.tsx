@@ -22,7 +22,13 @@ vi.mock("react", async (original) => {
         },
       ];
     },
-    useRef: <T,>(value: T) => (hooks.active ? { current: value } : react.useRef(value)),
+    useRef: <T,>(value: T) => {
+      if (!hooks.active) return react.useRef(value);
+      const { values } = hooks.active;
+      const index = hooks.active.cursor++;
+      if (!(index in values)) values[index] = { current: value };
+      return values[index] as { current: T };
+    },
     useId: () => (hooks.active ? "caption" : react.useId()),
   };
 });
@@ -135,6 +141,34 @@ it.each([true, false])("clears the draft only when sending succeeds: %s", async 
   expect(find(mountComposer().render(), "textarea").props.value).toBe(
     success ? "" : "Read pricing.py",
   );
+});
+
+it("keeps multilingual drafts intact and blocks repeated sends while pending", async () => {
+  const view = mountComposer();
+  const text = "راجع السعر 👩🏽‍💻\n检查价格 — café\n".repeat(100);
+  let rejectSend!: (error: Error) => void;
+  view.props.onSend.mockImplementationOnce(
+    () =>
+      new Promise((_, reject) => {
+        rejectSend = reject;
+      }),
+  );
+  find(view.render(), "textarea").props.onChange?.({ target: { value: text } });
+  find(view.render(), "button", "Send").props.onClick?.();
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const tree = view.render();
+    expect(renderToStaticMarkup(tree)).toContain('readOnly=""');
+    expect(find(tree, "button", "Send").props).toHaveProperty("aria-disabled", true);
+    find(tree, "button", "Send").props.onClick?.();
+  }
+  expect(view.props.onSend).toHaveBeenCalledExactlyOnceWith(text);
+  rejectSend(new Error("offline"));
+  await Promise.resolve();
+  expect(renderToStaticMarkup(view.render())).toContain(
+    "Send did not reach the server. Check the connection and try again.",
+  );
+  expect(find(mountComposer().render(), "textarea").props.value).toBe(text);
+  expect(find(view.render(), "button", "Send").props).toHaveProperty("aria-disabled", false);
 });
 
 it("keeps a positive cost below half a cent visible in the header chip", () => {
