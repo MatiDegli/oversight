@@ -106,6 +106,10 @@
 .chat-change-chips li {
   gap: 7px;
 }
+.chat-change-chips svg {
+  width: 14px;
+  height: 14px;
+}
 .chat-change-comparison {
   padding: 12px 16px 13px;
   border-top: 1px solid var(--divider);

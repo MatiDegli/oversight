@@ -1,0 +1,244 @@
+function required<T>(value: T | null | undefined): T {
+  if (value == null) throw new Error("Missing fixture evidence");
+  return value;
+}
+import { renderToStaticMarkup as html } from "react-dom/server";
+import { expect, it } from "vitest";
+import type { ServerEvent } from "@contracts";
+import { applyEvent, createInitialState } from "../state";
+import { chatReviewState } from "./chatReview.browser.fixture";
+import { changeCost, selectChatChange } from "./chatReviewSelectors";
+import { graphReviewAction } from "./chatReviewNavigation";
+import { ChatChangeCard } from "./shell/ChatChangeCard";
+// eslint-disable-next-line no-restricted-imports -- Exercise only the optional timeline seam.
+import { ConversationPanel } from "../agents/conversation/ConversationPanel";
+// eslint-disable-next-line no-restricted-imports -- Preserve the built order and current entry identity.
+import { selectConversation } from "../agents/conversation/selectConversation";
+import { openReview, tabbedView } from "./view";
+import { resolvedReviewAction } from "./shell/ChatMerge";
+
+const model = () => selectChatChange(chatReviewState(), "change-1");
+it("joins the exact retained proposal position, facts and assessment", () => {
+  const state = chatReviewState(),
+    card = model();
+  expect(card?.seq).toBe(62);
+  expect(card?.facts?.head_commit).toBe(card?.proposal.head_commit);
+  expect(card?.callers.measured).toBe(3);
+  expect(card?.examples[0]?.name).toBe("Cart.quote_add");
+  expect(card?.callers.same).toHaveLength(1);
+  expect(selectChatChange(state, "change-1", 56)).toBeNull();
+  required(state.changes["change-1"]).proposalEvent = { seq: 56 };
+  expect(selectChatChange(state, "change-1")).toBeNull();
+});
+it.each(["revision", "head_commit"] as const)(
+  "does not borrow stale %s facts or assessments",
+  (field) => {
+    const state = chatReviewState();
+    const proposal = required(required(state.changes["change-1"]).proposal);
+    if (field === "revision") proposal.revision++;
+    else proposal.head_commit = "replacement";
+    // Retain a new exact envelope and position, just as another round does.
+    const next = applyEvent(state, {
+      seq: state.lastSeq + 1,
+      ts: required(state.clock),
+      type: "change.proposed",
+      payload: { ...proposal },
+    });
+    const card = selectChatChange(next, "change-1");
+    expect(card?.facts).toBeUndefined();
+    expect(card?.passes).toBe(0);
+    expect(card?.callers.measured).toBe(0);
+    expect(card?.examples).toEqual([]);
+    expect(card?.waiting).toBe(true);
+  },
+);
+it("keeps six results, failures and unknown without counting additional rules", () => {
+  const state = chatReviewState();
+  const assessment = state.decisionEvents.findLast((e) => e.type === "change.assessed");
+  if (assessment?.type !== "change.assessed") throw new Error("Missing assessment");
+  required(assessment.payload.rules[0]).result = "fail";
+  assessment.payload.rules.push({
+    rule: "protected_paths",
+    result: "pass",
+    observed: null,
+    threshold: {},
+    evidence: [],
+  });
+  const card = selectChatChange(state, "change-1");
+  expect(card?.rules).toHaveLength(6);
+  expect(card?.passes).toBe(4);
+  expect(card?.rules.map((r) => r.result)).toEqual([
+    "fail",
+    "pass",
+    "pass",
+    "pass",
+    "pass",
+    "unknown",
+  ]);
+  assessment.payload.rules = [];
+  expect(selectChatChange(state, "change-1")?.rules.every((r) => r.result === "unknown")).toBe(
+    true,
+  );
+});
+it("keeps unavailable and unstable evidence honest without repeating stable examples", () => {
+  const state = chatReviewState();
+  expect(selectChatChange(state, "change-1")?.partial).toEqual([]);
+  const facts = required(state.changeFacts["change-1"]?.at(-1));
+  const caller = required(facts.measured_cone?.[0]);
+  required(caller.rows[0]).unstable = true;
+  const card = selectChatChange(state, "change-1");
+  expect(card?.examples).toEqual([]);
+  expect(card?.partial[0]?.line).toContain("results varied");
+  facts.measured_cone = null;
+  expect(selectChatChange(state, "change-1")?.callers.measured).toBe(0);
+  state.usageTicks = [];
+  const output = html(
+    <ChatChangeCard state={state} changeId="change-1" seq={62} reviewing={false} />,
+  );
+  expect(output).toContain("Unknown");
+  expect(output).not.toContain("US$0.00");
+});
+it("sums exact change costs across roles and agents; preserves missing and null", () => {
+  let state = chatReviewState();
+  const tick = required(state.usageTicks.at(-1));
+  state.usageTicks = [];
+  expect(changeCost(state, "change-1")).toBeNull();
+  for (const [change_id, agent_id, role, cost_usd] of [
+    ["change-1", "agent-1", "agent", 0.01],
+    ["change-1", "reviewer", "review", 0.02],
+    [null, "agent-1", "lead", 8],
+    ["change-2", "agent-1", "plan", 9],
+  ] as const)
+    state = applyEvent(state, {
+      seq: state.lastSeq + 1,
+      ts: required(state.clock),
+      type: "usage.tick",
+      payload: { ...tick, change_id, agent_id, role, cost_usd },
+    });
+  expect(changeCost(state, "change-1")).toBeCloseTo(0.03);
+  const nullCost: ServerEvent = {
+    seq: state.lastSeq + 1,
+    ts: required(state.clock),
+    type: "usage.tick",
+    payload: { ...tick, cost_usd: null },
+  };
+  const gap = applyEvent(state, { ...nullCost, seq: state.lastSeq + 2 });
+  expect(gap.gap).toBe(true);
+  expect(gap.usageTicks).toEqual(state.usageTicks);
+  state = applyEvent(state, nullCost);
+  state = applyEvent(state, {
+    ...nullCost,
+    seq: state.lastSeq + 1,
+    payload: { ...tick, cost_usd: 0 },
+  });
+  expect(changeCost(state, "change-1")).toBeNull();
+  const reset = applyEvent(state, {
+    seq: 1,
+    ts: required(state.clock),
+    type: "run.started",
+    payload: { ...required(state.run), run_id: "new-run" },
+  });
+  expect(reset.usageTicks).toEqual([]);
+  expect(createInitialState().usageTicks).toEqual([]);
+});
+it("only an exact final resolution settles this candidate; conflict keeps waiting", () => {
+  const state = chatReviewState(),
+    p = required(required(state.changes["change-1"]).proposal);
+  const resolved: Extract<ServerEvent, { type: "change.resolved" }> = {
+    seq: 67,
+    ts: required(state.clock),
+    type: "change.resolved",
+    payload: {
+      change_id: p.change_id,
+      agent_id: p.agent_id,
+      revision: p.revision,
+      head_commit: p.head_commit,
+      decision: "approved",
+      merge: "merged",
+      merge_commit: "merged",
+      reason: null,
+      comment: null,
+      conflict: null,
+      decided_by: "rules",
+      review_seq: null,
+      requested_by: null,
+      reasons: [],
+      assessment: null,
+      grants: [],
+      answers: [],
+    },
+  };
+  expect(
+    selectChatChange(
+      applyEvent(state, { ...resolved, payload: { ...resolved.payload, revision: 0 } }),
+      p.change_id,
+    )?.waiting,
+  ).toBe(true);
+  expect(
+    selectChatChange(
+      applyEvent(state, { ...resolved, payload: { ...resolved.payload, head_commit: "old" } }),
+      p.change_id,
+    )?.waiting,
+  ).toBe(true);
+  const merged = applyEvent(state, resolved);
+  expect(
+    selectChatChange(
+      applyEvent(state, {
+        ...resolved,
+        payload: {
+          ...resolved.payload,
+          merge: "conflict",
+          merge_commit: null,
+          conflict: { kind: "merge", paths: ["shop/pricing.py"], tests: null },
+        },
+      }),
+      p.change_id,
+    )?.waiting,
+  ).toBe(true);
+  expect(selectChatChange(merged, p.change_id)?.waiting).toBe(false);
+  expect(openReview(merged, tabbedView, p.change_id)).toBeNull();
+  const action = resolvedReviewAction(merged, tabbedView, {
+    seq: 67,
+    kind: "resolution",
+    ts: resolved.ts,
+    resolution: resolved.payload,
+    round: 1,
+  });
+  expect(action?.type).toBe("open");
+  if (action?.type === "open") expect(action.tab.frameIds).toEqual([]);
+  const intent = { runId: required(state.run).run_id, proposal: p, key: "explicit-click-1" };
+  expect(graphReviewAction(merged, intent)?.type).toBe("open");
+  expect(graphReviewAction(merged, { ...intent, runId: "replaced" })).toBeNull();
+  expect(
+    graphReviewAction(merged, { ...intent, proposal: { ...p, head_commit: "old" } }),
+  ).toBeNull();
+});
+it("replaces only the current entry, keeping ordinary rows, note attribution and unknown words", () => {
+  const state = chatReviewState(),
+    conversation = required(selectConversation(state, "agent-1", []));
+  conversation.entries.push({
+    kind: "proposed",
+    seq: 1,
+    ts: required(state.clock),
+    summary: "Historical finish note",
+  });
+  const output = html(
+    <ConversationPanel
+      conversation={conversation}
+      renderProposed={(entry) =>
+        selectChatChange(state, "change-1", entry.seq) ? (
+          <ChatChangeCard state={state} changeId="change-1" seq={entry.seq} reviewing={false} />
+        ) : null
+      }
+    />,
+  );
+  expect(output.match(/aria-label="Proposed change"/g)).toHaveLength(1);
+  expect(output).toContain("Historical finish note");
+  expect(output).toContain("Agent A says");
+  expect(output).toContain("Review is unavailable for this candidate.");
+  expect(output).toContain("Six recorded rule results");
+  expect(output.indexOf("Finished the change")).toBeLessThan(output.indexOf("Evidence 5 of 6"));
+  expect(html(<ChatChangeCard state={state} changeId="change-1" seq={62} reviewing />)).toContain(
+    "Reviewing in the panel",
+  );
+});

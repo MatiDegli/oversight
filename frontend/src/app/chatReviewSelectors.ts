@@ -84,7 +84,9 @@ export function selectChatChange(state: State, changeId: string, seq?: number) {
       ...caller,
       example: smallestExample(caller.evidence?.rows ?? []),
     })),
-    partial: partialLines(state, changeId),
+    partial: partialLines(state, changeId).filter(
+      (item) => !callers.differing.some((caller) => caller.nodeId === item.nodeId),
+    ),
     rules,
     passes: rules.filter((r) => r.result === "pass").length,
     waiting: !settled,

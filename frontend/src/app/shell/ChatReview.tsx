@@ -19,6 +19,8 @@ export function ChatReview({
 }) {
   const id = useId();
   const review = props.view.review;
+  const [threadVisited, setThreadVisited] = useState(chat || !review);
+  if (chat && !threadVisited) setThreadVisited(true);
   const [selection, setSelection] = useState({ review, tab: "review" });
   if (selection.review !== review) setSelection({ review, tab: "review" });
   const [narrow, setNarrow] = useState(
@@ -36,6 +38,13 @@ export function ChatReview({
   }, []);
   const tabs = Boolean(chat && review && narrow);
   const slot = agentId ? props.state.agents[agentId]?.slot : undefined;
+  const change = review ? props.state.changes[review] : undefined;
+  const reviewState =
+    change?.resolution?.merge === "merged"
+      ? "merged"
+      : change?.status === "ready_for_review"
+        ? "ready"
+        : (change?.status.replaceAll("_", " ") ?? "unavailable");
   const hideConversation =
     !agentId || (review !== null && (!chat || (tabs && selection.tab !== "conversation")));
   const hideReview = review === null || (tabs && selection.tab !== "review");
@@ -72,7 +81,9 @@ export function ChatReview({
                 document.getElementById(`${id}-${next}-tab`)?.focus();
               }}
             >
-              {tab === "conversation" ? `Agent ${slot ?? "?"} · conversation` : "Review · ready"}
+              {tab === "conversation"
+                ? `Agent ${slot ?? "?"} · conversation`
+                : `Review · ${reviewState}`}
             </button>
           ))}
         </div>
@@ -85,7 +96,7 @@ export function ChatReview({
         hidden={hideConversation}
         inert={hideConversation}
       >
-        {conversation}
+        {threadVisited ? conversation : null}
       </div>
       <div
         id={`${id}-review`}

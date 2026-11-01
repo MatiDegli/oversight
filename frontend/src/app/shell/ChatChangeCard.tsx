@@ -109,16 +109,22 @@ export function ChatChangeCard({
                   )}
                 </div>
               ))}
-              {callers.same.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
+              <p>
+                {callers.same.join(" ")} <GraphLink onClick={onGraph} />
+              </p>
               {card.partial.map(({ nodeId, line }) => (
                 <p key={nodeId}>{line}</p>
               ))}
-              <p>
+              <p
+                className={
+                  proposal.impact.omitted_by_depth || proposal.impact.omitted_by_limit
+                    ? undefined
+                    : "sr-only"
+                }
+              >
                 {proposal.impact.entries.length} possibly affected · depth bound{" "}
                 {proposal.impact.max_depth}; {proposal.impact.omitted_by_depth} omitted by depth,{" "}
-                {proposal.impact.omitted_by_limit} by limit. <GraphLink onClick={onGraph} />
+                {proposal.impact.omitted_by_limit} by limit.
               </p>
             </section>
             <div className="chat-change-evidence">
