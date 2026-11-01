@@ -2,7 +2,6 @@
 `make demo-check`; these pin the parts that decide its verdict."""
 
 import contextlib
-import fcntl
 import http.server
 import json
 import os
@@ -19,6 +18,9 @@ from typing import Any, cast
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+if sys.platform != "win32":
+    import fcntl
 
 import demo_check
 import demo_check_phases as phases
@@ -134,7 +136,10 @@ def test_an_event_that_is_not_the_contract_fails() -> None:
             stream.close()
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Linux flock lock proof")
 def test_the_runtime_lock_is_free_unless_someone_holds_it(tmp_path: Path) -> None:
+    if sys.platform == "win32":
+        pytest.skip("Linux flock lock proof")
     descriptor = os.open(tmp_path / "server.lock", os.O_RDWR | os.O_CREAT, 0o600)
     try:
         fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)

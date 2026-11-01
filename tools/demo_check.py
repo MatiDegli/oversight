@@ -41,7 +41,6 @@ timeout, plus that parent-death signal, promises that no process is left behind.
 
 import contextlib
 import ctypes
-import fcntl
 import os
 import signal
 import subprocess
@@ -108,6 +107,9 @@ from demo_check_phases import BUDGET_USD, SCRIPTS, check_level2
 from demo_check_phases import graph_of as graph_of
 from demo_check_phases import start_agent as start_agent
 from oversight_contracts.commands import GraphResponse
+
+if sys.platform != "win32":
+    import fcntl
 
 REPO_ROOT = smoke.REPO_ROOT
 DIST = REPO_ROOT / "frontend" / "dist"
@@ -213,6 +215,8 @@ def stragglers(session: int, reaper: int | None = None) -> set[int]:
 
 def lock_is_free(runtime_dir: Path) -> bool:
     """True when nobody holds the runtime lock: taking it works, and is let go at once."""
+    if sys.platform == "win32":
+        raise smoke.SmokeError("use demo_check_nt.py for Windows lock checks")
     try:
         descriptor = os.open(runtime_dir / "server.lock", os.O_RDWR)
     except OSError as error:
@@ -361,6 +365,8 @@ def run_once(
 
 
 def _kill(pid: int) -> None:
+    if sys.platform == "win32":
+        raise smoke.SmokeError("use demo_check_nt.py for Windows supervision")
     with contextlib.suppress(ProcessLookupError):
         os.kill(pid, signal.SIGKILL)
 
