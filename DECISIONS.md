@@ -2758,7 +2758,7 @@ mode is activated, the live Merge alone when safe choice presents that refusal.
 
 ## 2026-10-31 — Revert in the merged review footer
 
-Approved in packet B: "Todo como recomendás", at
+Approved by the maintainer: "Todo como recomendás", at
 2026-10-31T15:47:21Z (12:47:21 ART).
 
 The merged review footer offers Revert for a rules merge with its recorded resolution and
@@ -2990,6 +2990,7 @@ rework and the Conversation tab, before milestone pulses if ready before the cut
   stacked panel edges have at least 48px at the drawn zooms and down to 0.2 (49px there).
   Narrow headers wrapping below the drawn zooms may reduce it to the 26px floor at 0.2;
   panels never touch or overlap. This preserves the approved packing values.
+
 ## 2026-10-31 — Progress pieces, part 1: activity blocks and notices
 
 The maintainer approved progress sketch round 2 at 2026-10-31T15:19:19Z. Progress lives as
@@ -3016,6 +3017,7 @@ The earlier "of 30" departure was reverted by the maintainer at 2026-10-31T16:55
 uses run.limits.max_steps and min(step, bound), retaining the largest observed step. There are no
 line counts on edit calls because agent.step has none; retries preserve Revising as the card does.
 Accepted person messages stay between activity segments of the same round; they never fold away.
+
 ## 2026-10-31 — Human confirmation of examples and task carry
 
 The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
