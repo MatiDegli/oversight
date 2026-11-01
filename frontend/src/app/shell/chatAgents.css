@@ -75,6 +75,7 @@ button.chat-agent-row:hover {
 }
 .chat-agent-content {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 .chat-agent-heading {
   display: flex;

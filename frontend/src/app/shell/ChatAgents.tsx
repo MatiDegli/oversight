@@ -55,6 +55,14 @@ export function ChatAgents({
                   }
                 : {})}
               aria-label={`Agent ${row.letter}: ${row.task}. ${row.label}. ${row.id}`}
+              aria-description={[
+                row.model,
+                row.activity,
+                `Step ${String(row.step)} of ${String(row.maxSteps)}`,
+                row.cost,
+              ]
+                .filter((value) => value !== undefined)
+                .join("; ")}
             >
               <span className={`chat-agent-badge ${agentLook[row.hue].tint}`} aria-hidden="true">
                 {row.letter}
