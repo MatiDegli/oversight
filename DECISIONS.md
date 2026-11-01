@@ -3654,3 +3654,9 @@ Oversight supplies none. Both chips navigate through the existing `onOpenSetting
 callback to the single Merge mode section. Only retained mode evidence labels the
 chip (run metadata is the fallback); missing evidence reads unknown. Replay keeps
 its explanations and command guards; opening Settings grants no command capability.
+
+C5 renders a rules-merge receipt at the projected resolution entry only for an
+approved, merged, rules-authored decision. Other resolutions keep their existing
+renderer. The caption, rule/grant explanation, commit and timestamp belong to that
+immutable envelope; later mode events update only the chips. Missing assessment
+adds no historical claims. No event, retained projection or timeline is added.

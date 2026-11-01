@@ -35,3 +35,72 @@
 .chat-empty div:has(> .chat-merge-accessory) {
   gap: 8px;
 }
+.chat-merge-receipt {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  column-gap: 12px;
+  margin: 6px 0 4px 38px;
+  padding: 12px 16px;
+  border: 1px solid var(--divider);
+  border-radius: 12px;
+  background: var(--inset);
+  color: var(--text);
+}
+.chat-merge-state {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--added-tint);
+  color: var(--passed);
+}
+.chat-merge-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+}
+.chat-merge-title strong {
+  font-size: 15px;
+  font-weight: 700;
+}
+.chat-merge-title span {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.chat-merge-reasons {
+  margin-top: 3px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.chat-merge-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.chat-merge-links button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chat-merge-links button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.chat-merge-commit {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}

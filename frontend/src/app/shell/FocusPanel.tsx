@@ -16,7 +16,7 @@ import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
 import { UsageMount } from "../usage/UsageMount";
 import { LivePanel } from "./LivePanel";
-import { ChatMergeChip } from "./ChatMerge";
+import { ChatMergeChip, ChatMergeReceipt, isRulesMerge } from "./ChatMerge";
 import { focusRing } from "./shared";
 
 const SettingsPanel = lazy(() =>
@@ -227,6 +227,14 @@ function ConversationFocus({
     <LazyPanel key={agentId} frame={<ConversationFrame header={conversation.header} />}>
       <ConversationPanel
         conversation={conversation}
+        renderResolution={
+          chat
+            ? (entry) =>
+                isRulesMerge(entry.resolution) ? (
+                  <ChatMergeReceipt resolution={entry.resolution} ts={entry.ts} />
+                ) : null
+            : undefined
+        }
         actionAccessory={
           chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
         }
