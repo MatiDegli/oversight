@@ -10,6 +10,7 @@ from .inputs import load_inputs
 from .measures import measures
 from .output import write_lines
 from .spend import add_spend
+from .timing import add_timing
 
 __all__ = ["write_report"]
 
@@ -32,4 +33,5 @@ def write_report(log: Path, results: Path, out: Path | None = None) -> None:
     )
     revisions, changes, arms = build_arms(inputs)
     add_spend(inputs, changes, arms)
-    write_lines([meta, *revisions, *changes, *measures(inputs, revisions), *arms], out)
+    run = add_timing(inputs, revisions, changes, arms)
+    write_lines([meta, *revisions, *changes, *measures(inputs, revisions), *arms, run], out)

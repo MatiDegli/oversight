@@ -481,3 +481,105 @@ def test_last_merge_and_problem(tmp_path, capsys):
     arm = next(r for r in rows if r.get("arm") == "with_oversight")
     assert arm["correct"] == {"count": 1, "n": 3}
     assert arm["problems"] == ["multiple merged resolutions for change-1"]
+
+
+def test_timing(tmp_path, capsys):
+    rows = report(tmp_path, capsys)
+    assert [r["wall_ms"] for r in rows if r["record"] == "change"] == [
+        {"without_oversight": 60000, "with_oversight": 140000},
+        {"without_oversight": 40000, "with_oversight": 80000},
+        {"without_oversight": None, "with_oversight": None},
+    ]
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [40000, 110000]
+    assert next(r for r in rows if r["record"] == "run") == dict(
+        record="run",
+        agent_ms=188000,
+        known_agent_ms=188000,
+        agent_hours=0.052222,
+        active_ms=128000,
+        known_active_ms=128000,
+        parallelism=1.46875,
+        coverage="complete",
+        problems=[],
+        parallelism_over_time={"status": "not_built"},
+    )
+
+
+def test_plan_activity_unknown(tmp_path, capsys):
+    events = renumber([*scenario(), event("usage.tick", 142, role="plan", change_id=None)])
+    rows = report(tmp_path, capsys, events)
+    assert next(r for r in rows if r["record"] == "run") == dict(
+        record="run",
+        agent_ms=None,
+        known_agent_ms=188000,
+        agent_hours=None,
+        active_ms=None,
+        known_active_ms=128000,
+        parallelism=None,
+        coverage="missing_metrics",
+        problems=["plan calls have no activity interval"],
+        parallelism_over_time={"status": "not_built"},
+    )
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [40000, 110000]
+
+
+def test_negative_wall_and_correct_mean(tmp_path, capsys):
+    events = renumber(
+        [
+            event("usage.tick", 100),
+            event("change.proposed", 60),
+            event("change.resolved", 80),
+            event("change.proposed", 90, change=2, head_commit="h2"),
+            event("change.resolved", 100, change=2),
+        ]
+    )
+    results = [receipts()[3], {**receipts()[1], "result": {"exit_code": 0}}]
+    rows = report(tmp_path, capsys, events, results)
+    assert [r["wall_ms"] for r in rows if r["record"] == "change"] == [
+        {"without_oversight": None, "with_oversight": None},
+        {"without_oversight": 0, "with_oversight": 10000},
+    ]
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [0, 10000]
+
+
+def test_unselected_and_no_correct_timing(tmp_path, capsys):
+    rows = report(tmp_path, capsys, results=[])
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [None, None]
+    rows = report(tmp_path, capsys, [], [])
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [None, None]
+
+
+def test_wall_uses_selected_endpoints(tmp_path, capsys):
+    events = renumber([*scenario(), event("change.resolved", 142)])
+    rows = report(tmp_path, capsys, events)
+    change = next(r for r in rows if r["record"] == "change")
+    assert change["wall_ms"] == {"without_oversight": 60000, "with_oversight": 142000}
+    events = scenario()
+    proposal = events[12]
+    assert proposal.type == "change.proposed"
+    events[12] = proposal.model_copy(
+        update={
+            "payload": proposal.payload.model_copy(
+                update={"tests": proposal.payload.tests.model_copy(update={"outcome": "failed"})}
+            )
+        }
+    )
+    rows = report(tmp_path, capsys, events)
+    change = next(r for r in rows if r["record"] == "change")
+    assert change["wall_ms"] == {"without_oversight": 120000, "with_oversight": 140000}
+
+
+def test_wall_mean_floors_milliseconds(tmp_path, capsys):
+    events = renumber(
+        [
+            event("agent.status", state="working"),
+            event("agent.status", change=2, state="working"),
+            event("change.proposed", 1),
+            event("change.proposed", 2, change=2, head_commit="h2").model_copy(
+                update={"ts": "2026-10-31T12:00:02.001Z"}
+            ),
+        ]
+    )
+    results = [{**receipts()[1], "result": {"exit_code": 0}}, receipts()[3]]
+    rows = report(tmp_path, capsys, events, results)
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [1500, None]
