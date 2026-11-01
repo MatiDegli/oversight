@@ -208,9 +208,13 @@ class Dispatcher:
             agent_id, outcome = self._outcomes[0]
             await self.live._finish(self._settle(agent_id, outcome))
             self._outcomes.pop(0)
+        slot_busy = False
         for item in queue_candidates(self.items.values(), self.live.plans.plans):
             if self._closed:
                 return None
+            # After a busy slot, only refresh memory holds; later work cannot overtake.
+            if slot_busy and (item.state != "blocked" or not is_hold(item.detail or "")):
+                continue
             if item.state == "blocked":
                 manager = self.live._manager
                 assert manager is not None
@@ -223,12 +227,14 @@ class Dispatcher:
                         continue
                 item = queue_transition(item, "queued")
                 await self._save(item)
+            if slot_busy:
+                continue
             try:
                 admissions = self._reserve(item)
             except ApiError as error:
                 await self._refused(item, error)
                 if error.code == "slot_busy":
-                    return None
+                    slot_busy = True
                 continue
             if admissions:
                 self.launching.add(item.queued_task_id)
