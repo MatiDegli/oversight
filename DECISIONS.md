@@ -3011,3 +3011,39 @@ functions and under TYPE_CHECKING; the wording says "imports" because these edge
 execution at import time. Git-tree evidence identifies the captured source; a complete empty
 result means checked with no observations, not a safety certification. Wiring and duplicate
 logic remain separate fronts.
+
+## 2026-10-31 — Time per stage for each change
+
+Packet A 1031d, item 2, was approved at 2026-10-31T18:25:03Z under the maintainer's
+delegation to the coordinator: "Candidate 2 contract (`ChangeView.stages`, module
+stages.py): APPROVED, text exactly as in packet.md." The approved on-screen names are
+"Agent work", "Automatic checks", "Waiting for your decision", and "Test runs";
+their eventual view is a separate front. The contract takes the next free minor at landing.
+
+The read model derives its definitions from the committed log alone, with no new event
+or producer change. Agent work counts the author's starting, working and revising
+intervals for this change. Waiting includes reading time: the refusal to call elapsed
+proposal-to-resolution time review time remains. There is no total, score, ranking,
+ratio, percentage or comparison between agents; test runs overlap the other stages,
+so stages are never added together.
+
+F2: Each proposal opens a revision window ending at its first matching resolution, the
+next proposal or the inventory horizon, with replaced revisions retained and unpaired
+resolutions adding nothing.
+F3: Checks end at the last facts, review or assessment receipt of that revision inside
+its window, remaining open until the first receipt when the window is open, while a
+closed window without receipts has no checks interval and waiting starts at proposal.
+F4: A replaced or null-decider wait is unknown and never inferred, only a person's
+recorded decision counts a resolved wait, and only their approval subtracts the last
+combined run of that revision inside the window once, with an excessive subtraction
+remaining unknown.
+F5: Test runs count only recorded tests.executed suite durations and their phases,
+never their mirrors in proposals, steps or conflicts, and a negative duration is an
+unknown interval with its known phase milliseconds omitted and its run still counted.
+
+Known limit: the approve click publishes no event; until a merge-queue event exists,
+waiting for an approval ends at the receipt less the combined test run, so a merge that
+waited behind another adds that wait. Raw integer milliseconds use the last committed
+event's timestamp, including for open intervals, with unknown intervals preserving
+known lower bounds and bounded, sequence-ordered diagnostics. `stages` is null on an
+incomplete prefix; older recordings and clients without the optional field remain valid.
