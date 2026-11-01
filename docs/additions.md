@@ -120,6 +120,9 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 18 | Remaining packages 11–14 | Partial — run controls `d27875a`, HTTP `d085748`, Pause/Resume card `74bb81d`, mounted conversation/composer `bc6c659`; dictation still 501, replay timeline remains; 11 `ee92691` and 12 `c1c19c6` complete | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
 | — | [Standing grants](#standing-grants) | Backend `93a3664` and inbox grant UI `7c25429` on main — run-local possible_callers, module/run scope and revoke; activation closed; broader scopes, protected-path grants and session expiry remain | Contracts 1.7.0 approved and delivered; creation, nullable SaveFile hash, zones and inventory take the next free version after its approval |
 
+- [Scale and depth](../DESIGN.md#scale-and-depth): Approved map and folder groups, queued before
+  milestone pulses if ready before the cut line. Built scope and remaining interactions are in DESIGN.
+
 ### Only if time remains
 
 | # | Item | State and commit or branch | In contracts proposal |
@@ -222,7 +225,6 @@ new candidate work waits for the maintainer’s order.
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
 - Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
-- [Scale and depth](../DESIGN.md#scale-and-depth): The map view and folder groups are left out of the current level. They come after the Conversation tab, milestone pulses and life layer part 2, built only from a sketch the maintainer approves (maintainer, 2026-10-31).
 - A local model in slot B and named editor cursors. The Tauri shell is decided: see Next.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built

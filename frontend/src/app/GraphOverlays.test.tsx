@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { createInitialState } from "../state";
-import { GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
+import { DetailControls, GraphHeading, Legend, ZoomControls } from "./GraphOverlays";
 import { through } from "./replay.fixture";
 
 describe("the graph heading", () => {
@@ -96,4 +96,22 @@ describe("the zoom controls", () => {
     // The buttons call through the ref at click time, so a graph created later still answers.
     expect(() => renderToStaticMarkup(<ZoomControls api={{ current: null }} />)).not.toThrow();
   });
+});
+
+it("uses the approved map count, readout and legend copy", () => {
+  expect(renderToStaticMarkup(<GraphHeading state={through(4)} groups={2} />)).toContain(
+    ">2 groups<",
+  );
+  const legend = renderToStaticMarkup(<Legend state={through(4)} map />);
+  expect(legend).toContain("A module, with its function count");
+  expect(legend).toContain("A ring: an agent works inside");
+  expect(legend).not.toContain("Possible call");
+  expect(legend).not.toContain("Agent A");
+  const readout = renderToStaticMarkup(
+    <DetailControls level="Modules" zoom={64} map onChange={() => undefined} />,
+  );
+  expect(readout).toContain('aria-label="Zoom percentage"');
+  expect(readout).toContain("64%");
+  expect(readout).toContain(" · Map");
+  expect(readout).toContain("font-semibold text-text");
 });

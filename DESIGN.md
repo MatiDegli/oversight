@@ -1467,46 +1467,77 @@ on every animation frame during the drag, never only on drop.
 This definition sits beside graph structure and folding because depth controls how much unfolds,
 while scale controls how it is drawn. It refines [Layout](#layout)'s **Opening a change** readability
 floor, **The preset's arrangement** and fit behavior, together with the folding rules above.
-The Modules / Functions / Details depth control is built. Target, not built yet: the map view
-and folder groups below.
+The Modules / Functions / Details depth control, folder packing and map at rest are built.
+Group-header signals, hover, cone lines and clicks below remain targets, not built yet.
+The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
 
 1. **Two axes.** Depth is the Modules / Functions / Details control: how much unfolds. Scale is
    the zoom: how it is drawn. Apply the floor in Layout's **Opening a change** rule to module
-   titles, measuring the `frame-title-size` token (17px) times the zoom. The graph enters the map
-   automatically below that floor: below 64.7% (11/17). It leaves above a slightly larger title
-   size, fixed by the sketch, so it does not flicker at the edge. The fit button lands on cards
-   when the fitted zoom stays at or above the leave threshold, otherwise on the map. The zoom
-   readout shows "Map" beside the percentage. There is no fourth button.
-2. **Nothing moves.** Each module becomes a circle at the center of its block, using the space
-   already reserved by Layout's **The preset's arrangement**. The circle's area is proportional
-   to its function count. Changing level is a crossfade; under reduced motion, a cut.
+   titles, measuring the `frame-title-size` token (17px) times the zoom. With at least 24 module
+   nodes currently drawn, after the tests filter, the graph enters the map automatically below
+   that floor: below 64.7% (11/17). It leaves above 68.75% (11/16), the unchanged start camera's
+   floor, so it does not flicker at the edge; between them, keep the current level. Smaller
+   graphs stay on cards at every zoom and Fit. Explicit camera moves choose from their target
+   zoom and suspend hysteresis until the move ends, so landing exactly at 68.75% keeps cards.
+   The fit button and Modules compare the card fit against **enter**: at or above it they land
+   on cards; below it they frame the map's panel boxes, including header strips, in the clear
+   area. The zoom readout shows "NN% · Map" on the map, with no "· Map" on cards. There is no
+   fourth button. Minimum zoom remains 20%.
+2. **Equal circles.** Each module becomes an equal circle on a regular grid, with "N functions"
+   or "empty" below it. Cards keep their places only within a group's packing. The map uses
+   the all-folded packing even when cards are open; opening a card grows its cell and shifts
+   the cells below it. Changing level is a 240ms crossfade with the transition tokens; under
+   reduced motion, a cut.
 3. **Folder groups, on the map only.** A group is the first folder level that splits the
-   repository into at least two groups; tests are their own group. A group with fewer than two
-   modules draws no frame; a flat repository draws no frames. Never computed clusters. Cards
-   stay as today. A continuous frame needs each folder's modules placed together: that changes
-   the preset layout and also moves card positions. The sketch shows this, and it is part of
-   the build decision.
-4. **Group summary.** Name and module count; a ring in the color of each team working inside
+   drawn modules into at least two groups; tests are their own group, unit-tested only because
+   tests remain hidden in the product. A group with fewer than two modules draws no frame;
+   its module reads as its path, such as "docs/conf.py". Root files draw no panel; a flat
+   repository draws no groups. Folders come first. In a flat folder over about 12 modules,
+   accept named groups from A's grouping service when present. Only the optional named-group
+   seam is built; the caption "Groups by Oversight, from names and docstrings · Edit", editing
+   and fetching remain targets. Placement is fixed and deterministic; the model never places
+   anything. No L-shaped frames. A continuous frame needs each folder's modules placed together:
+   the built packing changes the preset layout and also moves card positions. Pack nine cells
+   per column, widest card plus 120px gutter (446px here), header plus 150px (220px here);
+   order modules by box x, box y, then id. Order groups by count descending, then label, tests
+   last; pack left to right or stack within the tallest group's band. Ground stays 340px sideways
+   and 460px stacked: with one-line headers it is at least 48px at the drawn zooms and down to
+   20% (49px there); where narrow headers wrap below the drawn zooms it may fall to 26px at 20%,
+   without touching or overlap. Panels in a row share their top edge.
+4. **Group summary.** Name and module count are built in a wrapping header strip, with 8px/12px
+   padding and a divider, on a quiet panel: card surface at 60%, node border, 12px radius and
+   top highlight. Targets, not built yet: a ring in the color of each team working inside
    (color means a team, per the separate team-color decision); pending decisions, neutral; how
-   much of the cone reaches it, for example "3 of 9 in billing".
-5. **Lines.** The call-visibility rules
-   ([DESIGN.md "Call visibility"](#graph-nodes-and-their-states-signature-component)): exact links
-   at today's weight; possible links that survive the built-in name filter, drawn as faint lines.
-   Nothing invented. With few lines, the LED field and the contours carry the texture.
-6. **Names.** Constant size on screen. Group names always shown; module names where they fit,
-   first those an agent touches, the cone reaches or the selection holds, then by size; the rest
-   on hover.
-7. **Interaction.** Clicking a group zooms to frame it, and the cards come back. Clicking a circle
-   brings that module to 100%.
-8. **Scope.** Map view and folder groups follow milestone pulses and life layer part 2, built
-   only from an approved sketch.
-   This definition stays for a later level. Sketch first, with real data from Boltons and the demo,
-   and the proof 2 repository if it changes. The proof 2 repository, Boltons `d31d821`, has 66 modules by top
-   folder in [its preset](fixtures/layouts/boltons-d31d821.json): boltons 30, tests 32, misc 3,
-   docs 1. Under the folder rule it shows one large library group, tests and misc; docs, with one
-   module, draws no frame. Its fit lands right at the threshold: 65% without tests, lower with
-   them. The sketch shows Boltons fitted with and without tests and says which level each lands
-   on.
+   much of the cone reaches it, for example "3 of 9 in billing"; and "tested by N calls".
+   These belong to `frontend/map-lines`. A module's dashed agent ring is built only for that
+   agent's pending change, never a read; below its count, "Agent A · N changed" or
+   "Agent B · editing" names the state and agent.
+5. **Lines.** No call lines, counts or edge labels at rest. Targets in `frontend/map-lines`:
+   cone lines from the changed module to the modules it possibly affects, and the pointed
+   module's incoming and outgoing exact calls with counts plus faint possible calls, following
+   the call-visibility rules
+   ([DESIGN.md "Call visibility"](#graph-nodes-and-their-states-signature-component)).
+   Nothing invented. With no lines at rest, the LED field and the contours carry the texture.
+6. **Names.** Constant size on screen. Group names always shown; module names are 13px/600 in
+   module-label, centered under the circles, ellipsized at the cell width minus 10px; counts
+   are 12px muted. Circle radius is clamp(round(screen cell height × 0.1), 5, 9)px. All colors
+   use theme tokens. Target, not built yet: prioritize names an agent touches, the cone reaches
+   or the selection holds, then by size; the rest on hover.
+7. **Interaction.** Target, not built yet: clicking a group zooms to frame it, and the cards
+   come back. Clicking a circle brings that module to 100%. The built map at rest takes no
+   taps, drags or user selection; difference chips are hidden. No event changes level, moves
+   the camera, opens a panel, selects a node or takes focus. Hover and the cone remain targets.
+8. **Scope.** Built after the review panel rework and the Conversation tab; if ready before
+   the cut line, the map launches before milestone pulses. Folder packing, map layer, Fit,
+   crossfade, pending module rings and overlays follow the approved sketch linked above.
+   The proof 2 repository, Boltons `d31d821`, has 66 modules by top folder in
+   [its preset](fixtures/layouts/boltons-d31d821.json): boltons 30, tests 32, misc 3, docs 1.
+   With tests hidden, the product shows boltons and misc panels; docs, with one module, draws
+   no frame. Measured in the product at 1920×1080, card Fit is **43.33%**, landing on the map at
+   **37.93%**; at 1280×800, card Fit is **26.74%**, map **21.41%**. These replace the old 65%
+   estimate; the sketch's shell has different available space. At 1280×800 the current shell's
+   demo card Fit is **45.62%**, below enter; its six drawn modules keep it on cards under the
+   24-module rule, at every width and in every take.
 
 ### Motion
 
