@@ -51,7 +51,7 @@ DESIGN.md (every visual rule), DECISIONS.md (each decision with its reason; it w
 - An agent's status comes from its tool calls, never from its text. Runs without progress stop.
 
 ## UI invariants
-- One graph, always visible; the panels change with what the person does. Never steal focus.
+- One graph, always visible in the Oversight view; Chat loads it on the first switch. The panels change with what the person does. Never steal focus.
 - Approve has no keyboard shortcut, not even Ctrl+Enter.
 - A dashed node border means only a pending change, in its agent's color.
 - Color is an agent or a state, never alone and never amber; every color comes from a theme token.

@@ -3388,3 +3388,37 @@ context on every call; module detail and history belong to the document that own
 Moved rules keep AGENTS.md's authority and change only with the maintainer's approval.
 DESIGN.md's and PRODUCT.md's precedence statements still name AGENTS.md for the rules it
 keeps. This relocation changes no behavior, test logic or contract.
+
+## 2026-11-01 — Two views of one shell, and the Tauri shell before the native ports
+
+The maintainer approved this direction in chat on 2026-11-01. Chat is **Not built**;
+implementation follows an approved sketch round.
+
+- One shell has two views. Chat lists agents on the left, the run's lead first and the agents
+  it queued under it; the selected agent's conversation is in the center, with a narrow
+  "Where they work" panel on the right. Oversight keeps its existing shell unchanged: graph,
+  Files and conversations as tabs. The top-bar "Chat | Oversight" switch changes layout only:
+  both views share one client state, switching never reloads, and the graph loads on the first
+  switch to Oversight.
+- The lead is Chat's first conversation. The lead's thread itself is step 1 of the lead plan,
+  waiting on its own contract approval.
+- Both views share review, merge mode and approve rules. Chat opens the same review panel and
+  merge-mode setting, with impact as text and "See on graph" to switch to Oversight with the
+  cone framed.
+- Chat becomes the default only if its screenshots pass review by Mon Nov 2, 2026, 23:00 ART;
+  otherwise Oversight stays the default and Chat sits behind the switch.
+- Chat adds no events, contracts or endpoints. "Where they work" and presence marks in the
+  Files tree read the existing `agent.focus` event and `change.proposed.files`.
+- No new graph or map work before the freeze.
+- After the hackathon, the Tauri shell comes first, with the backend inside WSL; native
+  Windows and macOS backend ports follow it. Item 20, the minimal native Windows port, moves
+  out of "Only if time remains" to after the hackathon and after Tauri. Item 19, opening the
+  person's own repository, keeps its place.
+- After the hackathon, as a plan first, repositories without Python open in Chat. Oversight
+  shows the Files tree with presence instead of the graph.
+
+This supersedes the old platform order in ARCHITECTURE.md, README.md, docs/additions.md,
+docs/own-repository.md and docs/proposal.md, and AGENTS.md's "always visible" for the Chat view.
+
+Reason: the lead becomes the person's first conversation, and the Tauri shell needs no native
+port because its backend runs inside WSL.
