@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ContextType, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useStore } from "zustand";
 
@@ -6,8 +6,6 @@ import type { FileSaved, MergeMode, Plan, QueuedTask } from "@contracts";
 
 import type { FileDraft } from "../editor";
 import { DecisionContext } from "../review";
-import type { PlanAction, PlanAttempt } from "../review/DecisionContext";
-import { planAttemptPending, selectPlanQueue, selectPlanEvidence } from "../review/planSelectors";
 import { sendDecision, revertView } from "../review";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import { selectMergeMode, stateStore } from "../state";
@@ -34,6 +32,10 @@ import {
 } from "./view";
 import type { View } from "./view";
 
+type PlanCapability = NonNullable<ContextType<typeof DecisionContext>["planActions"]>;
+type PlanAttempt = PlanCapability["attempts"][string];
+type PlanAction = Parameters<PlanCapability["send"]>[1];
+
 export function App() {
   const [retry, setRetry] = useState(0);
   const [connection, setConnection] = useState<"connecting" | "connected" | "lost">("connecting");
@@ -56,7 +58,6 @@ export function App() {
   const inFlightSaves = useRef(new Map<string, Promise<FileSaved>>());
   // A stable session owns settlement; its getters read these refs only in handlers and effects.
   // The factory stores these getters and never reads either ref during render.
-  // eslint-disable-next-line react-hooks/refs
   const [files] = useState(() =>
     commands
       ? createFileSession(
@@ -226,11 +227,7 @@ export function App() {
   );
   const onPlanAction = async (plan: Plan, action: PlanAction, queue?: QueuedTask, comment = "") => {
     const key = `${state.run?.run_id ?? ""}:${plan.plan_id}`;
-    if (
-      !commands ||
-      sendingPlans.current.has(key) ||
-      planAttemptPending(state, plan, queue, planAttempts[plan.plan_id])
-    )
+    if (!commands || state.run !== stateStore.getState().state.run || sendingPlans.current.has(key))
       return;
     sendingPlans.current.add(key);
     const attempt: PlanAttempt = {
@@ -254,32 +251,26 @@ export function App() {
         await commands.cancelQueue(queue.queued_task_id, { revision: queue.revision });
     } catch (error) {
       const current = stateStore.getState().state;
-      const latest = selectPlanEvidence(current).plans.get(plan.plan_id);
-      if (
-        current.run === attempt.run &&
-        latest?.type === "plan.updated" &&
-        planAttemptPending(
-          current,
-          latest.payload,
-          selectPlanQueue(current, latest.payload)?.payload,
-          attempt,
-        )
-      )
-        setPlanAttempts((all) => ({
-          ...all,
-          [plan.plan_id]: {
-            ...attempt,
-            phase: "failed",
-            message: commandFailure(
-              action === "cancel"
-                ? "Taking the plan out of the queue"
-                : action === "reject"
-                  ? "Reject plan"
-                  : "Queue plan",
-              error,
-            ),
-          },
-        }));
+      if (current.run === attempt.run)
+        setPlanAttempts((all) =>
+          all[plan.plan_id] !== attempt
+            ? all
+            : {
+                ...all,
+                [plan.plan_id]: {
+                  ...attempt,
+                  phase: "failed",
+                  message: commandFailure(
+                    action === "cancel"
+                      ? "Taking the plan out of the queue"
+                      : action === "reject"
+                        ? "Reject plan"
+                        : "Queue plan",
+                    error,
+                  ),
+                },
+              },
+        );
     } finally {
       sendingPlans.current.delete(key);
     }

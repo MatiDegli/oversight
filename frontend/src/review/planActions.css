@@ -1,5 +1,6 @@
 .inbox-row:has(.plan-content) {
   padding: 12px 22px;
+  position: relative;
 }
 .inbox-row:has(.plan-content) > h3 {
   font-size: 15px;
@@ -93,7 +94,9 @@
   align-items: center;
   gap: 6px;
   width: fit-content;
-  margin: 0 0 8px auto;
+  position: absolute;
+  top: 12px;
+  right: 22px;
   padding: 3px 10px;
   border-radius: 12px;
   background: var(--raised);
@@ -163,4 +166,8 @@
   padding: 12px 22px 0;
   font-size: 13px;
   color: var(--muted);
+}
+
+.inbox-row:has(.plan-content) time {
+  font-family: var(--code-font);
 }

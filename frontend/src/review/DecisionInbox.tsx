@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 import { Inbox } from "lucide-react";
+import { slotUsage } from "../agents";
 import type { Plan } from "@contracts";
 import type { DecisionInboxEntry, State } from "../state";
 import { selectDecisionInbox, selectActiveGrants } from "../state";
@@ -10,13 +11,19 @@ import { selectChangeCard, selectInboxSummary, selectPossibleCallersWait } from 
 import { factsForRevision } from "./factsForRevision";
 import { GrantChoice } from "./GrantChoice";
 import { selectPlanEvidence, selectRetainedPlans } from "./planSelectors";
+import "./inbox.css";
+
 const PlanActions = lazy(() => import("./PlanActions"));
 const planPiece = (state: State, plan: Plan) => (
   <Suspense fallback={<p className="decision-muted">Loading plan…</p>}>
-    <PlanActions key={`${state.run?.run_id ?? ""}:${plan.plan_id}`} state={state} plan={plan} />
+    <PlanActions
+      key={`${state.run?.run_id ?? ""}:${plan.plan_id}`}
+      state={state}
+      plan={plan}
+      slots={slotUsage(state)}
+    />
   </Suspense>
 );
-import "./inbox.css";
 
 function InboxRow({
   state,
@@ -60,7 +67,7 @@ function InboxRow({
     <article className="inbox-row">
       <div className="decision-heading">
         <span className="decision-muted">
-          {slot ? `Agent ${slot}` : "Decision"} · {eventTime(entry.ts)}
+          {slot ? `Agent ${slot}` : "Decision"} · <time>{eventTime(entry.ts)}</time>
         </span>
         <span className="decision-muted">{entry.age}</span>
       </div>
@@ -234,9 +241,14 @@ export function DecisionInbox({
                     {retained[group].map(({ payload: plan, ts }) => (
                       <article className="inbox-row" key={plan.plan_id}>
                         <div className="decision-heading">
-                          <span className="decision-muted">Decision · {eventTime(ts)}</span>
+                          <span className="decision-muted">
+                            Decision · <time>{eventTime(ts)}</time>
+                          </span>
                         </div>
                         <h3>{plan.task}</h3>
+                        {group === "queued" && plan.detail && plan.detail !== plan.task && (
+                          <p>{plan.detail}</p>
+                        )}
                         {planPiece(state, plan)}
                       </article>
                     ))}

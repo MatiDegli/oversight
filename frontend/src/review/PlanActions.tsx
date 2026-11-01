@@ -2,7 +2,6 @@ import { useId, useState } from "react";
 import { Clock, X } from "lucide-react";
 import type { Plan, QueuedTask } from "@contracts";
 import type { State } from "../state";
-import { slotUsage } from "../agents/taskBox";
 import { replayDecisionWords, useDecisions } from "./DecisionContext";
 import {
   dependencyWords,
@@ -13,11 +12,18 @@ import {
 } from "./planSelectors";
 import "./planActions.css";
 
-export default function PlanActions({ state, plan }: { state: State; plan: Plan }) {
+export default function PlanActions({
+  state,
+  plan,
+  slots,
+}: {
+  state: State;
+  plan: Plan;
+  slots: { held: number; total: number } | null;
+}) {
   const { planActions, replayOf } = useDecisions();
   const queue = selectPlanQueue(state, plan)?.payload;
   const wave = firstWaveSize(plan);
-  const slots = slotUsage(state);
   const waiting =
     queue?.detail ??
     (slots
@@ -27,8 +33,14 @@ export default function PlanActions({ state, plan }: { state: State; plan: Plan 
     <div className="plan-content">
       {plan.queued_task_id && (
         <p className="plan-status">
-          <Clock size={13} aria-hidden="true" />
-          {queue ? queue.state[0]?.toUpperCase() + queue.state.slice(1) : "Queue link recorded"}
+          {queue?.state === "failed" ? (
+            <X size={13} aria-hidden="true" />
+          ) : (
+            <Clock size={13} aria-hidden="true" />
+          )}
+          {queue
+            ? queue.state.charAt(0).toUpperCase() + queue.state.slice(1)
+            : "Queue link recorded"}
         </p>
       )}
       {plan.subtasks && (
@@ -36,10 +48,10 @@ export default function PlanActions({ state, plan }: { state: State; plan: Plan 
           <header>
             <strong>Plan</strong>
             <span>Drafted by the lead, tracked by Oversight</span>
-            <span className="plan-count">{plan.subtasks?.length} subtasks</span>
+            <span className="plan-count">{plan.subtasks.length} subtasks</span>
           </header>
           <ol>
-            {plan.subtasks?.map((task, index) => (
+            {plan.subtasks.map((task, index) => (
               <li key={index}>
                 <span className="plan-circle" aria-hidden="true" />
                 <div>
@@ -63,7 +75,9 @@ export default function PlanActions({ state, plan }: { state: State; plan: Plan 
         <>
           <p className="plan-explanation">
             {plan.queued_task_id
-              ? waiting
+              ? queue?.state === "queued" || queue?.state === "blocked"
+                ? waiting
+                : queue?.detail
               : `${String(wave)} ${wave === 1 ? "subtask starts" : "subtasks start"} first${wave < (plan.subtasks?.length ?? 0) ? "; the rest start after a prerequisite merges" : ""}.`}
           </p>
           {planActions ? (
@@ -85,7 +99,11 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
   const attempt = planActions?.attempts[plan.plan_id];
   const pending = planAttemptPending(state, plan, queue, attempt);
   const failure =
-    attempt?.run === state.run && attempt.phase === "failed" ? attempt.message : undefined;
+    attempt?.run === state.run &&
+    attempt.phase === "failed" &&
+    planAttemptPending(state, plan, queue, { ...attempt, phase: "pending" })
+      ? attempt.message
+      : undefined;
   const undispatched =
     plan.state === "proposed" &&
     (!plan.queued_task_id || queue?.state === "queued" || queue?.state === "blocked");
@@ -103,7 +121,9 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
                 id={label}
                 value={comment}
                 disabled={pending}
-                onChange={(event) => setComment(event.target.value)}
+                onChange={(event) => {
+                  setComment(event.target.value);
+                }}
               />
               <button
                 className="plan-reject plan-outlined"
@@ -116,7 +136,9 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
               <button
                 disabled={pending}
                 className="plan-outlined"
-                onClick={() => setRejecting(false)}
+                onClick={() => {
+                  setRejecting(false);
+                }}
               >
                 Keep plan
               </button>
@@ -136,7 +158,13 @@ function PlanControls({ state, plan, queue }: { state: State; plan: Plan; queue?
                   Queue plan
                 </button>
               )}
-              <button className="plan-reject" disabled={pending} onClick={() => setRejecting(true)}>
+              <button
+                className="plan-reject"
+                disabled={pending}
+                onClick={() => {
+                  setRejecting(true);
+                }}
+              >
                 <X size={14} aria-hidden="true" />
                 Reject plan
               </button>

@@ -111,7 +111,7 @@ it.each(["plan-1", "plan-2", "plan-3"])("renders %s's task and detail once", (pl
   expect(row).not.toContain('class="decision-reasons"');
 });
 
-it("keeps the fallback for a plan without detail and ignores an older plan update", () => {
+it("replaces the generic fallback with a lazy plan piece and ignores an older update", () => {
   const event = leadEvents[7];
   if (event?.type !== "plan.updated") throw new Error("Missing plan");
   const updated = applyEvent(leadState, {
@@ -125,8 +125,8 @@ it("keeps the fallback for a plan without detail and ignores an older plan updat
     event.payload.task,
   );
   expect(row).toContain(`<h3>${event.payload.task}</h3>`);
-  expect(row).toContain("<p>Lead plan awaits approval</p>");
-  expect(row.split("Lead plan awaits approval")).toHaveLength(2);
+  expect(row).not.toContain("Lead plan awaits approval");
+  expect(row).toContain("Loading plan");
 });
 
 it("omits a plan paragraph when its detail equals its heading", () => {
