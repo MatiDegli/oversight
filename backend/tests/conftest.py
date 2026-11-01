@@ -1,5 +1,5 @@
-"""Expose shared helpers in importlib mode, including agent helpers imported by API tests
-when the agent test directory itself is not collected."""
+"""pytest's importlib mode adds no test folder to sys.path, so this file adds this one, for the
+live server helpers the API, end-to-end and app tests share."""
 
 import sys
 from pathlib import Path
@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent))
-sys.path.insert(0, str(Path(__file__).parent / "agents"))
 
 
 @pytest.fixture(autouse=True)
