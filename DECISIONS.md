@@ -3636,3 +3636,13 @@ crosses this change.
 
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
+
+### C1 round 1 — Loading surfaces and field readiness
+
+The coordinator's Nov 1 review reproduced a cold-stage race: the graph hosts were absent
+while the stage loaded, then Cytoscape could become ready before the nested field import.
+The loading frame now retains empty, busy graph/field hosts without creating contexts or
+probes. The field controller loads inside the same Oversight boundary and initializes on
+mount, before the graph's asynchronous font/draw preparation completes. Chat-first still
+loads no rendering implementation. Startup accounting includes the controller in both bases.
+File-tab task entry is hidden in Chat because its destination is the Oversight agents panel.

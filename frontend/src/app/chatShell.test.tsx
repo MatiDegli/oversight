@@ -38,3 +38,45 @@ it("initializes Chat only through the fixture context, with the real replay Task
   expect(html).not.toContain("Loading repository graph");
   expect(html).not.toContain('aria-label="Repository graph"');
 });
+
+it.each(["Chat", "Oversight"] as const)(
+  "offers the file task action only in Oversight (%s)",
+  (layout) => {
+    const html = renderToStaticMarkup(
+      <InitialShellLayout value={layout}>
+        <Frame
+          state={through(14)}
+          view={{
+            ...initialView,
+            selected: "shop.pricing:compute_price",
+            file: { path: "shop/pricing.py", agentId: null, startLine: 14, endLine: 21 },
+          }}
+          files={{
+            drafts: new Map(),
+            inFlightSaves: new Map(),
+            saved: new Map(),
+            readFile: vi.fn(),
+            saveFile: vi.fn(),
+          }}
+          onNodeTap={vi.fn()}
+          canOpenChange={() => false}
+          onOpenChange={vi.fn()}
+          onClosePanel={vi.fn()}
+          onStartAgent={vi.fn()}
+        />
+      </InitialShellLayout>,
+    );
+    expect(html.includes("Start an agent here")).toBe(layout === "Oversight");
+  },
+);
+
+it("passes the selected agent and conversation callback to the C2 body slot", () => {
+  const onOpenConversation = vi.fn();
+  const body = vi.fn(() => null);
+  renderToStaticMarkup(
+    <ChatAgentsFrame selectedAgentId="agent-1" onOpenConversation={onOpenConversation}>
+      {body}
+    </ChatAgentsFrame>,
+  );
+  expect(body).toHaveBeenCalledWith({ selectedAgentId: "agent-1", onOpenConversation });
+});

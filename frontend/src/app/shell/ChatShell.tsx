@@ -1,23 +1,27 @@
 import { TaskBox, type TaskBoxProps } from "../../agents";
 import type { ReactNode } from "react";
 
-export interface ChatAgentsFrameProps {
+export interface ChatAgentSelection {
   selectedAgentId?: string;
   onOpenConversation?: (agentId: string) => void;
-  children?: ReactNode;
+}
+export interface ChatAgentsFrameProps extends ChatAgentSelection {
+  children?: ReactNode | ((selection: ChatAgentSelection) => ReactNode);
 }
 /** C2 owns the body, selection and lead position; C1 supplies only its frame. */
-export function ChatAgentsFrame({ selectedAgentId, children }: ChatAgentsFrameProps) {
+export function ChatAgentsFrame({ children, ...selection }: ChatAgentsFrameProps) {
   return (
     <aside
       aria-label="Agents"
       className="chat-agents chat-side"
-      data-selected-agent={selectedAgentId}
+      data-selected-agent={selection.selectedAgentId}
     >
       <header>
         <h2>Agents</h2>
       </header>
-      <div className="chat-side-body">{children}</div>
+      <div className="chat-side-body">
+        {typeof children === "function" ? children(selection) : children}
+      </div>
     </aside>
   );
 }
@@ -40,7 +44,8 @@ export function ChatShell({
   agents,
   children,
   ...selection
-}: ChatAgentsFrameProps & {
+}: ChatAgentSelection & {
+  children: ReactNode;
   active: boolean;
   rail: ReactNode;
   sidebar: ReactNode;

@@ -18,6 +18,7 @@ import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
+import "./shell/chatShell.css";
 import "./shell/life.css";
 import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
@@ -88,8 +89,12 @@ export function Frame(props: FrameProps) {
         }
       : props.view;
   const open = panelOpen(view);
-  const task = useFunctionTask(state, view, props.onStartAgent !== undefined);
   const shell = useShell(open, onClosePanel);
+  const task = useFunctionTask(
+    state,
+    view,
+    props.onStartAgent !== undefined && shell.layout === "Oversight",
+  );
   const layoutKey =
     shell.sidebar === null &&
     !shell.dock &&
@@ -172,16 +177,7 @@ export function Frame(props: FrameProps) {
               inert={shell.layout === "Chat"}
             >
               {shell.oversightVisited && (
-                <LazyPanel
-                  frame={
-                    <section
-                      className="graph-stage flex-1 bg-ground p-6 text-muted"
-                      aria-label="Graph stage"
-                    >
-                      <p role="status">Loading repository graph…</p>
-                    </section>
-                  }
-                >
+                <LazyPanel frame={<GraphLoadingFrame />}>
                   <OversightStage
                     practice={Boolean(props.practice)}
                     stacked={phone}
@@ -242,5 +238,27 @@ export function Frame(props: FrameProps) {
         />
       )}
     </div>
+  );
+}
+
+/** Keep the graph/field host anatomy available while the rendering module loads.
+ * These are empty, busy surfaces: no probes or rendering contexts are fabricated.
+ */
+function GraphLoadingFrame({ children }: { children?: ReactNode }) {
+  return (
+    <section className="graph-stage relative flex-1 bg-ground" aria-label="Graph stage">
+      <div className="relative h-full w-full">
+        <canvas aria-hidden="true" className="pointer-events-none absolute inset-0 size-full" />
+        <div
+          role="img"
+          aria-label="Repository graph"
+          aria-busy="true"
+          className="relative h-full w-full"
+        />
+      </div>
+      <div className="absolute inset-0 p-6 text-muted">
+        {children ?? <p role="status">Loading repository graph…</p>}
+      </div>
+    </section>
   );
 }

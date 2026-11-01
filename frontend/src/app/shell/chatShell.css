@@ -17,9 +17,11 @@
   font-size: 14px;
   font-weight: 600;
 }
-.view-switch button[aria-pressed="true"],
-.view-switch button:hover {
+.view-switch button[aria-pressed="true"] {
   background: var(--raised);
+  color: var(--text);
+}
+.view-switch button:hover {
   color: var(--text);
 }
 .view-switch button:focus-visible {
