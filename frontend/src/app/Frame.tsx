@@ -1,6 +1,5 @@
 import type { MergeMode, StartAgent } from "@contracts";
-import { lazy, Suspense } from "react";
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
@@ -11,19 +10,25 @@ import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
 import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
+import { ChatEmpty, ChatShell } from "./shell/ChatShell";
 import { FocusPanel } from "./shell/FocusPanel";
-import { GraphStage } from "./shell/GraphStage";
+import { LazyPanel } from "./shell/LazyPanel";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
 import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
+import "./shell/chatShell.css";
 import "./shell/life.css";
 import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
-import { PracticeGraphStage } from "./challenge/PracticeGraphStage";
-
+const OversightStage = lazy(() =>
+  import("./shell/OversightStage").then(async (module) => {
+    await module.fieldReady;
+    return { default: module.OversightStage };
+  }),
+);
 const ReplayBar = lazy(() => import("./replay/ReplayBar"));
 
 export interface FrameProps {
@@ -77,7 +82,6 @@ export function Frame(props: FrameProps) {
   const phone = usePhonePractice(props.practice?.active ?? false);
   // Availability stays fixed throughout a replay session, so entry, exit and resizing
   // keep the same graph owner. Only the practice composition knows about stacked overlays.
-  const Stage = props.practice ? PracticeGraphStage : GraphStage;
   const view =
     phone && props.practice
       ? {
@@ -88,8 +92,12 @@ export function Frame(props: FrameProps) {
         }
       : props.view;
   const open = panelOpen(view);
-  const task = useFunctionTask(state, view, props.onStartAgent !== undefined);
   const shell = useShell(open, onClosePanel);
+  const task = useFunctionTask(
+    state,
+    view,
+    props.onStartAgent !== undefined && shell.layout === "Oversight",
+  );
   const layoutKey =
     shell.sidebar === null &&
     !shell.dock &&
@@ -104,50 +112,87 @@ export function Frame(props: FrameProps) {
     >
       <TopBar
         state={state}
+        layout={shell.layout}
+        onLayout={shell.setLayout}
         onOpenQueue={props.onOpenQueue}
         onOpenSettings={props.onOpenSettings}
         onOpenUsage={props.onOpenUsage}
         onOpenPalette={shell.openPalette}
         practice={props.practice}
       />
-      <div className="shell-workspace">
-        <LeftRail
-          watching={!open}
-          sidebar={shell.sidebar}
-          onSidebar={shell.openSidebar}
-          onWatch={onClosePanel}
-          onShortcuts={() => {
-            shell.setShortcuts(true);
-          }}
-        />
-        {shell.sidebar && (
-          <Sidebar
-            section={shell.sidebar}
-            onClose={() => {
-              shell.openSidebar(shell.sidebar);
+      <ChatShell
+        active={shell.layout === "Chat"}
+        selectedAgentId={view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation}
+        onOpenConversation={props.onOpenConversation}
+        rail={
+          <LeftRail
+            watching={!open}
+            sidebar={shell.sidebar}
+            onSidebar={shell.openSidebar}
+            onWatch={onClosePanel}
+            onShortcuts={() => {
+              shell.setShortcuts(true);
             }}
           />
-        )}
+        }
+        sidebar={
+          shell.sidebar && (
+            <Sidebar
+              section={shell.sidebar}
+              onClose={() => {
+                shell.openSidebar(shell.sidebar);
+              }}
+            />
+          )
+        }
+        agents={
+          open && !task.expanded ? (
+            <AgentsRail state={state} />
+          ) : (
+            <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
+          )
+        }
+      >
         <div className={`shell-center ${shell.maximized && open ? "is-maximized" : ""}`}>
           <div className="shell-stage">
             {open && (
               <FocusPanel
                 {...props}
                 view={view}
+                chat={shell.layout === "Chat"}
                 practiceOnly={phone}
                 startAgentAction={task.action}
                 maximized={shell.maximized}
                 onMaximize={shell.toggleMaximize}
               />
             )}
-            <Stage
-              arrival={arrival}
-              state={state}
-              view={view}
-              onNodeTap={phone ? () => undefined : props.onNodeTap}
-              {...(props.practice ? { stacked: phone } : {})}
-              layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
-            />
+            {shell.layout === "Chat" && !open && (
+              <ChatEmpty
+                state={state}
+                onStart={props.onStartAgent}
+                replayOf={props.replayOf}
+                inputRef={task.inputRef}
+              />
+            )}
+            <div
+              className="oversight-stage"
+              hidden={shell.layout === "Chat"}
+              inert={shell.layout === "Chat"}
+            >
+              {shell.oversightVisited && (
+                <LazyPanel frame={<GraphLoadingFrame />}>
+                  <OversightStage
+                    practice={Boolean(props.practice)}
+                    stacked={phone}
+                    arrival={arrival}
+                    state={state}
+                    view={view}
+                    onNodeTap={phone ? () => undefined : props.onNodeTap}
+                    layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
+                  />
+                </LazyPanel>
+              )}
+            </div>
           </div>
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
           {props.replay && props.onReplayCommit && !props.practice?.active && (
@@ -160,12 +205,7 @@ export function Frame(props: FrameProps) {
             </Suspense>
           )}
         </div>
-        {open && !task.expanded ? (
-          <AgentsRail state={state} />
-        ) : (
-          <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
-        )}
-      </div>
+      </ChatShell>
       <StatusLine {...props} dock={shell.dock} onToggleDock={shell.toggleDock} />
       <p className="narrow-notice" role="status">
         This window is too narrow. Widen it to at least 1280 px.
@@ -201,5 +241,27 @@ export function Frame(props: FrameProps) {
         />
       )}
     </div>
+  );
+}
+
+/** Keep the graph/field host anatomy available while the rendering module loads.
+ * These are empty, busy surfaces: no probes or rendering contexts are fabricated.
+ */
+function GraphLoadingFrame({ children }: { children?: ReactNode }) {
+  return (
+    <section className="graph-stage relative flex-1 bg-ground" aria-label="Graph stage">
+      <div className="relative h-full w-full">
+        <canvas aria-hidden="true" className="pointer-events-none absolute inset-0 size-full" />
+        <div
+          role="img"
+          aria-label="Repository graph"
+          aria-busy="true"
+          className="relative h-full w-full"
+        />
+      </div>
+      <div className="absolute inset-0 p-6 text-muted">
+        {children ?? <p role="status">Loading repository graph…</p>}
+      </div>
+    </section>
   );
 }

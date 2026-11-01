@@ -3587,6 +3587,30 @@ Waiting's “never pulses”. Card glow, an extra merged sentence and a 300ms no
 for good; a merged node word stays held. Evidence: dark/day pulses, overlap, arrival, 1280×800 and 720p
 frames, software-GL costs, and the coordinator's Windows real-GPU timing.
 
+## 2026-11-01 — C1 builds the shared Chat frame, with deferred graph startup
+
+The maintainer approved chat-r1 at 14:18:07 ART, packet b-1101c item 1. C1 is built:
+the shared switch changes local layout, initially Oversight, without remounting App, its
+session, FilesProvider or the active conversation. The existing conversation adapter and
+Composer keep selection, drafts and pending commands through a layout round trip.
+
+Both graph stages live behind one module-level dynamic boundary. A Chat-initialized fixture
+requests neither graph rendering nor field implementation until explicit Oversight entry;
+production still starts in Oversight. First-draw, impact, routing and merge-arrival helpers
+use leaf imports so they cannot pull that boundary forward. The graph remains mounted,
+hidden and inert in Chat after first entry, preserving its camera and instance. Its local
+loading/error frame leaves the switch available; transport remains independent of drawing,
+and editor loading retains its first-draw gate. No prefetch of the graph boundary is added.
+
+Chat uses outer columns 56/280/remaining/300 px, changing the sides to 260/260 at 1500 px.
+The conversation cap is 880 px including gutters; its timeline scrolls separately from the
+Composer. The existing shell's 24 px status line and theme roles win over sketch literals.
+Intentional screenshot differences: C2/C3 bodies remain empty, C5's merge chip is absent,
+and TaskBox keeps its existing slot buttons/model facts and replay capabilities rather
+than the sketch-only picker, counts or explanatory cards. Built conversation rows and
+recorded-source wording remain authoritative. C2–C6 and L3 remain pending; C6 owns any
+default change after the Nov 2, 23:00 ART gate. DESIGN's proposed addition is held under
+`.shots/chat-shell/design-md.md` until the coordinator releases that document's lane.
 ## 2026-11-01 — Displaced fronts may start before the freeze
 The maintainer allowed the fronts the Chat plan had moved past the freeze to start before it, each when a writer slot
 is free and behind the Chat and lead fronts: lead actions slices 2 and 4, item 10 (team and period grouping), the
@@ -3651,6 +3675,15 @@ crosses this change.
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
 
+### C1 round 1 — Loading surfaces and field readiness
+
+The coordinator's Nov 1 review reproduced a cold-stage race: the graph hosts were absent
+while the stage loaded, then Cytoscape could become ready before the nested field import.
+The loading frame now retains empty, busy graph/field hosts without creating contexts or
+probes. The field controller loads inside the same Oversight boundary and initializes on
+mount, before the graph's asynchronous font/draw preparation completes. Chat-first still
+loads no rendering implementation. Startup accounting includes the controller in both bases.
+File-tab task entry is hidden in Chat because its destination is the Oversight agents panel.
 ## 2026-11-01 — The native Windows port moves ahead
 
 The maintainer ranked item 20 immediately after the conversational lead and the Chat view,

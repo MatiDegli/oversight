@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, expect, it, vi } from "vitest";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeAll, expect, it, vi } from "vitest";
 
 import { replaySource } from "../transport";
 import { App } from "./App";
@@ -15,6 +15,23 @@ vi.mock("../transport", async (importOriginal) => ({
   },
 }));
 vi.mock("../editor/monaco", () => ({ monaco: { editor: {} } }));
+// Resolve the real lazy stage before the synchronous composition assertions.
+beforeAll(async () => {
+  const stream = await renderToReadableStream(
+    <Frame
+      state={through(2)}
+      view={initialView}
+      onNodeTap={vi.fn()}
+      canOpenChange={() => false}
+      onOpenChange={vi.fn()}
+      onClosePanel={vi.fn()}
+    />,
+  );
+  await stream.allReady;
+  await new Response(stream).text();
+  vi.clearAllMocks();
+});
+
 afterEach(() => {
   transport.replayBuild = true;
 });

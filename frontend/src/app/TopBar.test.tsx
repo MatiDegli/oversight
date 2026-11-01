@@ -70,3 +70,13 @@ describe("the top bar", () => {
     expect(markup).toMatch(/aria-label="Review queue" class="ml-auto /);
   });
 });
+
+it("exposes two real layout buttons in a labeled group without a shortcut", () => {
+  const markup = renderToStaticMarkup(
+    <TopBar state={through(14)} layout="Chat" onLayout={vi.fn()} />,
+  );
+  expect(markup).toContain('role="group" aria-label="Workspace view"');
+  expect(markup).toMatch(/<button type="button" aria-pressed="true"[^>]*>.*Chat/);
+  expect(markup).toMatch(/<button type="button" aria-pressed="false"[^>]*>.*Oversight/);
+  expect(markup).not.toContain("aria-keyshortcuts");
+});

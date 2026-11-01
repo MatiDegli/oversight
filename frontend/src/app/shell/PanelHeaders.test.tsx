@@ -7,7 +7,7 @@ import { loadConversationPanel, type Conversation } from "../../agents";
 import { ConversationFrame, FileFrame, InboxFrame } from "./PanelFallbacks";
 
 vi.mock("../../editor/monaco", () => ({ monaco: {} }));
-vi.mock("../../graph", async (importOriginal) => ({
+vi.mock("../../graph/firstDraw", async (importOriginal) => ({
   ...(await importOriginal()),
   whenFirstGraphDrawn: () => Promise.resolve(),
 }));

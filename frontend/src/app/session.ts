@@ -1,7 +1,8 @@
 import type { ReplayPlayer } from "../transport";
 import { stateStore } from "../state";
 import { startAppTransport } from "../transport";
-import { afterFirstGraphDraw } from "../graph";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
+import { afterFirstGraphDraw } from "../graph/firstDraw";
 import { prefetchEditorWhenIdle } from "../editor";
 
 /** The shell owns the transport lifetime and exposes the applied cursor to screenshot clients. */

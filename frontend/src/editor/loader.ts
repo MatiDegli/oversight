@@ -1,4 +1,5 @@
-import { whenFirstGraphDrawn } from "../graph";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
+import { whenFirstGraphDrawn } from "../graph/firstDraw";
 
 let pending: Promise<typeof import("./implementation")> | undefined;
 export type EditorImplementation = typeof import("./implementation");
