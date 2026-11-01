@@ -5,12 +5,16 @@ import json
 import sys
 from hashlib import sha256
 from pathlib import Path
+from typing import get_type_hints
 
 import pytest
 from tools.eval.proof2.__main__ import main
 from tools.eval.proof2.report import write_report
 from tools.eval.proof2.report.output import counted
+from tools.eval.proof2.report.timing import add_timing, wall_ms
 from tools.eval.tests.report_events import event, files, receipts, renumber, scenario
+
+from oversight_contracts.events import ServerEvent
 
 
 def report(tmp_path, capsys, events=None, results=None):
@@ -95,6 +99,12 @@ def test_duplicate_and_conflicting_results(tmp_path, rows):
         write_report(*files(tmp_path, results=rows()))
 
 
+def test_tests_only_base_is_refused(tmp_path):
+    rows = [{"kind": "base", "task": "p10", "result": {"exit_code": 0}}]
+    with pytest.raises(ValueError, match=r"^results line 1: base requires a bug or feature task$"):
+        write_report(*files(tmp_path, results=rows))
+
+
 def test_bad_json_and_bad_log(tmp_path):
     log, results = files(tmp_path)
     results.write_text("\n{bad\n")
@@ -161,6 +171,9 @@ def test_correctness_and_selections(tmp_path, capsys):
         (
             r["change_id"],
             r["revision"],
+            r["seq"],
+            r["head_commit"],
+            r["task"],
             r["tests"],
             r["hidden"],
             r["correct"],
@@ -175,6 +188,9 @@ def test_correctness_and_selections(tmp_path, capsys):
         (
             "change-1",
             1,
+            13,
+            "h1a",
+            "p04",
             "passed",
             "fail",
             False,
@@ -184,8 +200,8 @@ def test_correctness_and_selections(tmp_path, capsys):
             "cross_review",
             None,
         ),
-        ("change-1", 2, "passed", "pass", True, False, True, ["clean"], None, 1),
-        ("change-2", 1, "passed", "pass", True, True, True, ["clean"], None, None),
+        ("change-1", 2, 21, "h1b", "p04", "passed", "pass", True, False, True, ["clean"], None, 1),
+        ("change-2", 1, 9, "h2", "p10", "passed", "pass", True, True, True, ["clean"], None, None),
     ]
     assert [(r["regress_vs_base"], r["regress_vs_previous"]) for r in revisions] == [
         ({"status": "known", "ids": ["t_old"]}, {"status": "not_applicable", "ids": []}),
@@ -219,6 +235,7 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
     assert [
         (
             a["arm"],
+            a["changes"],
             a["correct"],
             a["incorrect"],
             a["unknown"],
@@ -229,6 +246,7 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
     ] == [
         (
             "without_oversight",
+            3,
             {"count": 1, "n": 3},
             1,
             0,
@@ -237,6 +255,7 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
         ),
         (
             "with_oversight",
+            3,
             {"count": 2, "n": 3},
             0,
             0,
@@ -482,6 +501,18 @@ def test_last_merge_and_problem(tmp_path, capsys):
     arm = next(r for r in rows if r.get("arm") == "with_oversight")
     assert arm["correct"] == {"count": 1, "n": 3}
     assert arm["problems"] == ["multiple merged resolutions for change-1"]
+
+
+def test_wall_event_types():
+    hints = get_type_hints(wall_ms)
+    assert hints["start"] == ServerEvent | None
+    assert hints["end"] == ServerEvent | None
+
+
+def test_timing_record_types():
+    hints = get_type_hints(add_timing)
+    for parameter in ("revisions", "changes", "arms"):
+        assert hints[parameter] == list[dict]
 
 
 def test_timing(tmp_path, capsys):

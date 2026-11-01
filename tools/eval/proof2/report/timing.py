@@ -3,18 +3,21 @@
 from datetime import timedelta
 
 from oversight.events import fold_activity, parse_ts
+from oversight_contracts.events import ServerEvent
 
 from .inputs import Inputs
 
 
-def wall_ms(start, end) -> int | None:
+def wall_ms(start: ServerEvent | None, end: ServerEvent | None) -> int | None:
     if start is None or end is None:
         return None
     span = (parse_ts(end.ts) - parse_ts(start.ts)) // timedelta(milliseconds=1)
     return span if span >= 0 else None
 
 
-def add_timing(inputs: Inputs, revisions, changes, arms) -> dict:
+def add_timing(
+    inputs: Inputs, revisions: list[dict], changes: list[dict], arms: list[dict]
+) -> dict:
     starts, merges = {}, {}
     for event in inputs.events:
         cid = getattr(event.payload, "change_id", None)
