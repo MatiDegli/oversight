@@ -116,6 +116,7 @@ it("loads evidence before painting the first phone decision without a layout shi
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
     const start = page.getByRole("button", { name: "Start practice", exact: true });
     await check(start).toBeVisible();
+    await check(start).not.toHaveAttribute("aria-busy");
     await page.evaluate(() => document.fonts.ready);
     const introduction = await page.locator(".pp-main").boundingBox();
     const requested = page.waitForRequest("**/ReviewBody.tsx*");

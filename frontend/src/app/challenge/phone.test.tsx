@@ -17,6 +17,13 @@ const actions = {
   onRestart: vi.fn(),
   onExit: vi.fn(),
 };
+it("omits the busy attribute from the idle Start practice button", () => {
+  const html = renderToStaticMarkup(
+    <PhonePractice {...actions} practice={practice} attempt={freshAttempt()} />,
+  );
+  expect(html).not.toContain("aria-busy");
+  expect(html).toContain("Start practice");
+});
 // Settle the lazy evidence before synchronous markup assertions, keeping every assertion intact.
 beforeAll(async () => {
   const stream = await renderToReadableStream(

@@ -22,3 +22,4 @@ export type { FileAccess, FileDraft } from "./fileDocument";
 export { fileKey } from "./fileKey";
 
 export { languageForPath } from "./language";
+export { FileViewHeader } from "./FileViewHeader";

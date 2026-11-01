@@ -51,7 +51,7 @@ function Introduction({ practice, onStart }: PanelProps) {
         <button
           className="pp-button pp-primary"
           aria-label="Start practice"
-          aria-busy={pending}
+          aria-busy={pending || undefined}
           disabled={pending}
           onClick={() => {
             startTransition(async () => {

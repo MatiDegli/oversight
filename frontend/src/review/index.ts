@@ -17,4 +17,5 @@ export const loadReviewPanel = () => import("./ReviewPanel");
 export const loadDecisionInbox = () => import("./DecisionInbox");
 export const loadReviewBody = () => import("./ReviewBody");
 export { ReviewHeader } from "./ReviewHeader";
+export { InboxHeading, InboxViews } from "./InboxHeader";
 export { selectInboxSummary, selectChangeCard } from "./inboxSelectors";
