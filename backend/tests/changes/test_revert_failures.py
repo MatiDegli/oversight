@@ -19,6 +19,7 @@ from oversight.workspace import (
     InverseOutcome,
     ProcessResult,
     apply_inverse,
+    classify_inverse,
     run_process,
 )
 from oversight_contracts.events import ErrorReport, RevertResult
@@ -261,6 +262,13 @@ async def test_revert_repeated_cancel_and_delivery_budget(system, monkeypatch):
     calls = []
 
     normal_timeout = ctx.timeout
+
+    async def normal_classification(ws, **kwargs):
+        # Recovery's real Git verification keeps its normal budget.
+        kwargs["timeout_s"] = normal_timeout
+        return await classify_inverse(ws, **kwargs)
+
+    monkeypatch.setattr(_revert, "classify_inverse", normal_classification)
     success = s.service._success
 
     async def short_delivery(attempt):
