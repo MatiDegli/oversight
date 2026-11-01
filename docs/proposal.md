@@ -772,9 +772,11 @@ agent B running locally on the person's GPU (Muse Glimmer, Meta's other open mod
 candidate if it is smaller than Muse Spark Open), "possible" call edges drawn thinner and
 grey, and inheritance edges.
 
-After level 2, once the cut line is drawn and only if time remains, the order is opening
-the person's own repository, then a minimal native Windows port. The full rules, including
-the per-OS layer and the later Windows isolation, macOS and Tauri work, are in
+After level 2, once the cut line is drawn and only if time remains, opening the person's
+own repository keeps its place. After the hackathon, the Tauri shell comes first, with
+the backend inside WSL; the native Windows and macOS backend ports follow it, including
+item 20's minimal native Windows port. The full rules, including the per-OS layer and
+the later Windows isolation, are in
 [Opening the person's own repository](own-repository.md).
 
 A level is done when its demo runs three times in a row from a clean start, with one command
@@ -788,8 +790,8 @@ A persistent incremental engine, more languages, runtime traces beyond the bound
 test-call recorder of the measured cone, embeddings, a filesystem sandbox (next: bubblewrap
 on Linux), undo, and a worktree pool.
 After the hackathon, each starting as a plan: the repository's git hooks run as evidence
-on a proposal, repositories without Python (opened without a graph), and native isolation
-for Windows and macOS.
+on a proposal; repositories without Python open in Chat, with Oversight showing the Files
+tree with presence instead of the graph; and native isolation for Windows and macOS.
 One bounded exception to undo, in level 3: a one-click Revert of a merge made by rules,
 only while it applies without conflict; otherwise the change goes to "needs you".
 
