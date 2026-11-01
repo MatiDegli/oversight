@@ -115,6 +115,7 @@ function Count({ text }: { text: string }) {
 }
 
 function Popover({ chip, id }: { chip: NodeChip; id: string }) {
+  const [reviewClosed, setReviewClosed] = useState(false);
   return (
     <section
       id={id}
@@ -154,18 +155,25 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
       </ol>
       {chip.extension && (
         <p className="mt-2 wrap-anywhere text-muted">
-          {chip.extension.run_count} calls using <code>{chip.extension.parameters.join(", ")}</code>
-          ;{" "}
+          {chip.extension.run_count > 0
+            ? `${String(chip.extension.run_count)} call${chip.extension.run_count === 1 ? "" : "s"} using `
+            : "Calls using "}
+          <code>{chip.extension.parameters.join(", ")}</code>;{" "}
           <button
             type="button"
-            className="cursor-pointer underline underline-offset-2"
+            className="inline-flex cursor-pointer items-center underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[1280px]:min-h-[44px]"
             onClick={() => {
-              if (chip.extension) visitParameterEvidence(chip.extension.target);
+              if (chip.extension) setReviewClosed(!visitParameterEvidence(chip.extension.target));
             }}
           >
             see review
           </button>
           .
+          {reviewClosed && (
+            <span role="status" className="block">
+              The review for these calls is not open.
+            </span>
+          )}
         </p>
       )}
       {(chip.footer || chip.limitation) && (
@@ -240,7 +248,7 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
             <button
               key={chip.key}
               type="button"
-              className={`relative h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[700px]:before:absolute max-[700px]:before:inset-x-0 max-[700px]:before:-inset-y-[12px] max-[700px]:before:content-[''] ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
+              className={`relative h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[1280px]:before:absolute max-[1280px]:before:inset-x-0 max-[1280px]:before:-inset-y-[12px] max-[1280px]:before:content-[''] ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
               aria-label={`${chip.text}, ${chip.label}`}
               aria-expanded={openKey === chip.key}
               aria-controls={
@@ -257,7 +265,7 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
           ))}
         </div>
       ))}
-      {open && <Popover chip={open} id={`${id}-${encodeURIComponent(open.key)}`} />}
+      {open && <Popover key={open.key} chip={open} id={`${id}-${encodeURIComponent(open.key)}`} />}
     </div>
   );
 }

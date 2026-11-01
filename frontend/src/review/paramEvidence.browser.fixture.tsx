@@ -34,7 +34,7 @@ function Harness() {
   const candidate = candidateKey(state, "change-1");
   const answers = useAnswers((s) => s.drafts[candidate]) ?? {};
   const proposal = state.changes["change-1"]?.proposal;
-  if (innerWidth < 700)
+  if (innerWidth < 1280)
     return (
       <div className="phone-practice" style={agentSlotStyle("A")}>
         <header className="pp-topbar">
@@ -109,6 +109,35 @@ function Harness() {
 export const paramEvidence = {
   decisions: [] as string[],
   visit: visitParameterEvidence,
+  neighbor() {
+    const state = structuredClone(stateStore.getState().state);
+    const change = state.changes["change-1"],
+      facts = state.changeFacts["change-1"]?.at(-1);
+    const agent = state.agents["agent-1"];
+    if (!change?.proposal || !facts || !agent) throw new Error("Missing fixture");
+    state.agents["agent-2"] = { ...agent, agent_id: "agent-2", slot: "B" };
+    state.changes["change-2"] = {
+      ...change,
+      change_id: "change-2",
+      agent_id: "agent-2",
+      proposal: { ...change.proposal, change_id: "change-2", agent_id: "agent-2" },
+    };
+    state.changeFacts["change-2"] = [{ ...facts, change_id: "change-2" }];
+    flushSync(() => {
+      stateStore.setState({ state });
+    });
+  },
+  singleCall() {
+    const state = structuredClone(stateStore.getState().state);
+    const entry = state.changeFacts["change-1"]?.at(-1)?.parameter_extensions?.[0];
+    if (!entry) throw new Error("Missing extension");
+    entry.run_count = 1;
+    entry.rejected_before = 1;
+    entry.rows = entry.rows.slice(0, 1);
+    flushSync(() => {
+      stateStore.setState({ state });
+    });
+  },
   revise() {
     const state = structuredClone(stateStore.getState().state);
     const proposal = state.changes["change-1"]?.proposal;

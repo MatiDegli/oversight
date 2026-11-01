@@ -4,6 +4,8 @@ import { unstableBehaviorSentence } from "./behaviorEvidence";
 import { evidenceWords } from "./evidenceWords";
 import type { parameterExtensions } from "./parameterExtensions";
 
+const calls = (count: number) => `${String(count)} call${count === 1 ? "" : "s"}`;
+
 export function NewParameterCalls({
   entries,
   slot,
@@ -23,11 +25,11 @@ export function NewParameterCalls({
               {entry.node_id.split(":").at(-1)}
               {entry.run_count > 0 && (
                 <>
-                  : {entry.run_count} calls run with <code>{entry.parameters.join(", ")}</code>.
+                  : {calls(entry.run_count)} run with <code>{entry.parameters.join(", ")}</code>.
                 </>
               )}
             </p>
-            {entry.rejected_before > 0 && <p>Base rejected {entry.rejected_before} calls.</p>}
+            {entry.rejected_before > 0 && <p>Base rejected {calls(entry.rejected_before)}.</p>}
             <p className="parameter-bound">
               These calls use the new parameter, so What was compared does not count them.
             </p>

@@ -38,7 +38,7 @@ async function mounted(
   width: number,
   theme: string,
   name: ParameterState,
-  test: (page: Page) => Promise<void>,
+  test: (page: Page, errors: string[]) => Promise<void>,
 ) {
   const page = await browser.newPage({
     viewport: { width, height: width === 1920 ? 1080 : width === 390 ? 844 : 800 },
@@ -59,7 +59,7 @@ async function mounted(
       },
       { name, theme },
     );
-    if (width > 700) {
+    if (width >= 1280) {
       await page.getByRole("button", { name: "Functions", exact: true }).click();
       await page.getByRole("button", { name: "Review change", exact: true }).click();
     }
@@ -67,7 +67,7 @@ async function mounted(
     await page.waitForFunction(
       () => !!document.querySelector('[aria-label="Repository graph"] canvas'),
     );
-    await test(page);
+    await test(page, errors);
     expect(errors).toEqual([]);
   } finally {
     await page.close();
@@ -76,13 +76,38 @@ async function mounted(
 const chip = (page: Page) => page.locator("[data-chip-node] button");
 const section = (page: Page) => page.locator(".parameter-calls > section");
 const samples = (page: Page) => page.locator(".parameter-samples");
+async function frameReport(page: Page, filename: string, errors: string[]) {
+  const overflow = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth - innerWidth,
+    body:
+      (document.querySelector(".review-body")?.scrollWidth ?? 0) -
+      (document.querySelector(".review-body")?.clientWidth ?? 0),
+  }));
+  return { filename, pageErrors: [...errors], overflow };
+}
+it("records actual page errors in frame evidence and fails the clean-page gate", async () => {
+  const evidence: Awaited<ReturnType<typeof frameReport>>[] = [];
+  await expect(
+    mounted(1920, "dark", "none", async (page, errors) => {
+      await page.evaluate(() => {
+        setTimeout(() => {
+          throw new Error("frame-error-sentinel");
+        });
+      });
+      await check.poll(() => errors.length).toBe(1);
+      evidence.push(await frameReport(page, "error-sentinel", errors));
+    }),
+  ).rejects.toThrow();
+  expect(evidence).toHaveLength(1);
+  expect(evidence[0]?.pageErrors).toEqual(["frame-error-sentinel"]);
+});
 it.each([1920, 1280, 390])(
   "captures the approved states at %i in both themes",
   async (width) => {
     for (const theme of ["dark", "day"])
       for (const name of parameterStates) {
         if (width === 390 && name !== "partial" && name !== "mixed") continue;
-        await mounted(width, theme, name, async (page) => {
+        await mounted(width, theme, name, async (page, errors) => {
           if (await page.locator(".review-diff-viewport:not([hidden])").count())
             await check(page.locator(".monaco-diff-editor")).toBeVisible({ timeout: 30000 });
           if (["rejected", "values", "mixed"].includes(name))
@@ -98,15 +123,10 @@ it.each([1920, 1280, 390])(
             await check(
               page.getByRole("button", { name: "see review", exact: true }),
             ).toBeVisible();
-          const overflow = await page.evaluate(() => ({
-            page: document.documentElement.scrollWidth - innerWidth,
-            body:
-              (document.querySelector(".review-body")?.scrollWidth ?? 0) -
-              (document.querySelector(".review-body")?.clientWidth ?? 0),
-          }));
-          expect(overflow).toEqual({ page: 0, body: 0 });
           const filename = `${name}${width === 1920 ? "" : `-${String(width)}`}-${theme}`;
-          reports.push({ filename, pageErrors: [], overflow });
+          const report = await frameReport(page, filename, errors);
+          reports.push(report);
+          expect(report.overflow).toEqual({ page: 0, body: 0 });
           await page.screenshot({ path: `${out}${filename}.png` });
         });
       }
@@ -182,21 +202,89 @@ it("keeps focus, scroll, and user disclosures when evidence arrives and updates"
     await check(page.locator("[data-chip-popover]")).toHaveCount(0);
   });
 });
-it("retains a 22px phone chip with a 44px hit area and anchored neighbors", async () => {
-  await mounted(390, "day", "mixed", async (page) => {
-    await check(chip(page)).toBeVisible();
-    const geometry = await chip(page).evaluate((el) => {
-      const rect = el.getBoundingClientRect(),
-        css = getComputedStyle(el, "::before");
-      return {
-        height: rect.height,
-        hit: parseFloat(css.height),
-        outside: document.elementFromPoint(rect.x + rect.width / 2, rect.y - 10) === el,
-      };
+it.each([390, 900, 1279])(
+  "retains 22px phone chips and 44px hits with neighbors at %i",
+  async (width) => {
+    await mounted(width, "day", "mixed", async (page) => {
+      await check(chip(page)).toBeVisible();
+      const geometry = await chip(page).evaluate((el) => {
+        const rect = el.getBoundingClientRect(),
+          css = getComputedStyle(el, "::before");
+        return {
+          height: rect.height,
+          hit: parseFloat(css.height),
+          outside: document.elementFromPoint(rect.x + rect.width / 2, rect.y - 10) === el,
+        };
+      });
+      expect(geometry).toEqual({ height: 22, hit: 44, outside: true });
+      await chip(page).click({ position: { x: 20, y: -10 }, force: true });
+      await check(page.getByRole("button", { name: "see review", exact: true })).toBeVisible();
+      const button = page.getByRole("button", { name: "see review", exact: true });
+      await check(button).toHaveCSS("min-height", "44px");
+      await page.keyboard.press("Tab");
+      await check(button).toBeFocused();
+      await check(button).toHaveCSS("outline-style", "solid");
+      await check(button).toHaveCSS("outline-width", "2px");
+      await page.keyboard.press("Escape");
+      await page.evaluate(() => {
+        window.paramEvidence.neighbor();
+      });
+      // Two real changes share a node; padding must not steal the adjacent chip's hits.
+      await check(chip(page)).toHaveCount(2);
+      const stage = page.getByRole("main", { name: "Graph stage" });
+      for (let i = 0; i < 3 && !(await chip(page).nth(1).isVisible()); i++)
+        await stage.getByRole("button", { name: "Zoom in", exact: true }).click();
+      for (const neighbor of await chip(page).all()) {
+        await check(neighbor).toBeVisible();
+        expect(
+          await neighbor.evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            return [rect.x + 3, rect.right - 3].every((x) =>
+              [-10, rect.height / 2, rect.height + 10].every(
+                (y) => document.elementFromPoint(x, rect.y + y)?.closest("button") === el,
+              ),
+            );
+          }),
+        ).toBe(true);
+        await neighbor.click({ position: { x: 5, y: -10 }, force: true });
+        await check(neighbor).toHaveAttribute("aria-expanded", "true");
+        await neighbor.press("Escape");
+      }
     });
-    expect(geometry).toEqual({ height: 22, hit: 44, outside: true });
-    await chip(page).click({ position: { x: 20, y: -10 }, force: true });
-    await check(page.getByRole("button", { name: "see review", exact: true })).toBeVisible();
+  },
+);
+
+it("reports a closed review when its explicit navigation has no mounted target", async () => {
+  await mounted(1920, "dark", "mixed", async (page) => {
+    await page.getByRole("button", { name: "Close review", exact: true }).click();
+    await check(section(page)).toHaveCount(0);
+    await chip(page).click();
+    const button = page.getByRole("button", { name: "see review", exact: true });
+    await button.click();
+    await check(
+      page.getByRole("status").filter({ hasText: "The review for these calls is not open." }),
+    ).toBeVisible();
+    await check(button).toBeFocused();
+    await check(section(page)).toHaveCount(0);
+  });
+});
+
+it("omits unavailable echo counters and singularizes one call", async () => {
+  await mounted(1920, "dark", "mixed", async (page) => {
+    await page.evaluate(() => {
+      window.paramEvidence.extensionOnly("unavailable");
+    });
+    await chip(page).click();
+    const echo = page.locator("[data-chip-popover] > p");
+    await check(echo).toHaveText("Calls using cap_percent; see review.");
+    await page.evaluate(() => {
+      window.paramEvidence.singleCall();
+    });
+    await check(echo).toHaveText("1 call using cap_percent; see review.");
+    await page.evaluate(() => {
+      window.paramEvidence.extensionOnly("mixed");
+    });
+    await check(echo).toHaveText("4 calls using cap_percent; see review.");
   });
 });
 
