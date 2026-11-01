@@ -111,6 +111,8 @@ class LeadService:
         return profiles[model] if model is not None else default
 
     async def _begin(self, lead: _Lead, profile: ModelProfile) -> None:
+        if lead.stopping:
+            return
         try:
             await self._status(lead, "starting", STARTING_DETAIL)
         except Exception as error:

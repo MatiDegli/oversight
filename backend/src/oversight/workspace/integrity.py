@@ -111,6 +111,8 @@ class GitIdentity:
                 valid = valid and gitdir_matches(named.decode("utf-8"), self.root / ".git")
             if not valid:
                 raise IntegrityError("unexpected Git registration", ".git")
+        except IntegrityError:
+            raise
         except (OSError, WorkspaceError, UnicodeError) as error:
             raise IntegrityError("unreadable Git registration", ".git") from error
 

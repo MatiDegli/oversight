@@ -244,6 +244,26 @@ async def test_nt_unsafe_snapshot_never_spawns(workspace, monkeypatch, tmp_path,
     assert leaf.read_bytes() == b"untouched"
 
 
+@pytest.mark.parametrize("kind", ["Git metadata", "working file"])
+def test_nt_read_guards_keep_working_mode(tmp_path, monkeypatch, kind):
+    from oversight.workspace import metadata_io as module
+
+    force_nt(monkeypatch)
+    path = tmp_path / "input"
+    path.write_bytes(b"content")
+    original = module.nt_guard
+    modes = []
+
+    def guard(target, deadline, *, working=False):
+        modes.append(working)
+        return original(target, deadline, working=working)
+
+    monkeypatch.setattr(module, "nt_guard", guard)
+    entry = module.read_at(tmp_path, path.name, path, Budget(time.monotonic() + 5), kind=kind)
+    assert entry is not None and entry.data == b"content"
+    assert modes == [kind != "Git metadata"] * 3
+
+
 @pytest.mark.parametrize("failure", ["file", "index", "total", "entries", "deadline"])
 def test_nt_metadata_budgets(tmp_path, monkeypatch, failure):
     from oversight.workspace import metadata_io as module
@@ -253,6 +273,7 @@ def test_nt_metadata_budgets(tmp_path, monkeypatch, failure):
     path.write_bytes(b"12345")
     monkeypatch.setattr(module, "MAX_FILE", 4)
     monkeypatch.setattr(module, "MAX_INDEX", 6)
+    # Five seconds suffices for the five-byte setup read; the timeout case expires it below.
     deadline = time.monotonic() + 5
     if failure == "index":
         entry = read_entry(path, Budget(deadline))
@@ -362,6 +383,7 @@ async def test_nt_hooks_sentinel(workspace, monkeypatch, value):
     config = workspace.main.git_identity.common / "config"
     with config.open("a") as handle:
         handle.write(f"[core]\n hooksPath = {paths.get(value, value)}\n")
+    # take_snapshot clamps these 60 s requests to GUARD_SECONDS = 10.0, as in the sibling tests.
     if value in {"/dev/null", "pinned"}:
         snapshot = take_snapshot(workspace.main.git_identity, workspace.integrity, 60)
         assert workspace.runtime_root / "server.lock" in snapshot.anchors

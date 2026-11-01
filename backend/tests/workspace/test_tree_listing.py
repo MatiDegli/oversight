@@ -1,6 +1,7 @@
 """A cancelled tree listing keeps the workspace locked until its disk walk ends."""
 
 import asyncio
+import hashlib
 import os
 import threading
 import time
@@ -11,10 +12,30 @@ import pytest
 
 from oversight.workspace import Workspace
 from oversight.workspace import tree as module
+from oversight.workspace.metadata_io import nt_guard
 
 from .test_snapshot import force_nt, reparse_at
 
 pytestmark = pytest.mark.anyio
+
+
+def test_nt_hash_guards_keep_working_mode(tmp_path, monkeypatch):
+    force_nt(monkeypatch)
+    path = tmp_path / "input.py"
+    path.write_bytes(b"content")
+    original = nt_guard
+    modes = []
+
+    def guard(target, deadline, *, working=False):
+        modes.append(working)
+        return original(target, deadline, working=working)
+
+    monkeypatch.setattr(module, "nt_guard", guard)
+    assert (
+        module._hash(tmp_path, path.name, [100], time.monotonic() + 5)
+        == hashlib.sha256(b"content").hexdigest()
+    )
+    assert modes == [True] * 3
 
 
 @pytest.mark.parametrize("nt", [False, True])

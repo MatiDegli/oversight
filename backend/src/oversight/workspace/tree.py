@@ -61,7 +61,7 @@ def _hash(parent: int | Path, name: str, budget: list[int], deadline: float) -> 
                 and isinstance(parent, Path)
                 and (
                     nt_token(info) != nt_token(before)
-                    or nt_token(nt_guard(parent / name, deadline)) != nt_token(before)
+                    or nt_token(nt_guard(parent / name, deadline, working=True)) != nt_token(before)
                 )
             ):
                 return None
@@ -92,7 +92,7 @@ def _hash(parent: int | Path, name: str, budget: list[int], deadline: float) -> 
                 return None
             if isinstance(parent, Path) and (
                 nt_token(before) != nt_token(after)
-                or nt_token(nt_guard(parent / name, deadline)) != nt_token(after)
+                or nt_token(nt_guard(parent / name, deadline, working=True)) != nt_token(after)
             ):
                 return None
             return digest.hexdigest()

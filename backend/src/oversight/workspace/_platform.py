@@ -435,6 +435,7 @@ def synced_roots() -> tuple[str, ...]:
 
 
 def _reserved_nt_segment(part: str) -> bool:
+    # Twin of api.static._safe_nt_relative's reserved-name check; layers forbids importing it.
     stem = part.partition(".")[0].rstrip(" ").upper()
     return (
         stem in {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}

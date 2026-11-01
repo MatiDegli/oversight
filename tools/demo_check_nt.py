@@ -263,7 +263,7 @@ def evidence_dir() -> Path:
 
 async def run_once(
     number: int,
-    scratch: Path,
+    logs: Path,
     runtime: Path,
     first: GraphResponse | None,
     clock: OverallClock,
@@ -274,7 +274,7 @@ async def run_once(
 
     port = smoke.free_port()
     base = smoke.base_url(port)
-    log = scratch / f"server-{number}.log"
+    log = logs / f"server-{number}.log"
     server = await start_server(
         [sys.executable, "-m", "oversight", *smoke.BACKEND_ARGS],
         demo_check.server_env(port, runtime),

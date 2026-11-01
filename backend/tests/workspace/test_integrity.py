@@ -455,8 +455,14 @@ async def test_nt_registration_strict_pointer_roundtrip(monkeypatch):
     identity.verify_registration()
     identity.verify_root_entry()
     pointer = b"gitdir: C:/Runtime/other/../.git/worktrees/agent-1\n"
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match="unexpected Git registration") as failure:
         identity.verify_registration()
+    assert failure.value.code == "integrity_invalid"
     pointer = b"gitdir: c:/runtime/.git/worktrees/agent-1\n\n"
-    with pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError, match="unexpected Git registration") as failure:
         identity.verify_root_entry()
+    assert failure.value.code == "integrity_invalid"
+    pointer = b"\xff"
+    with pytest.raises(IntegrityError, match="unreadable Git registration") as failure:
+        identity.verify_registration()
+    assert failure.value.code == "integrity_invalid"

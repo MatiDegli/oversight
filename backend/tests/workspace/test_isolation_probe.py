@@ -187,7 +187,7 @@ async def test_nt_injected_runner_and_cli_refuse_before_lookup_pipe_or_spawn(
     lookup, pipe, spawn = Mock(), Mock(), Mock()
     monkeypatch.setattr(shutil, "which", lookup)
     monkeypatch.setattr(os, "pipe2", pipe)
-    monkeypatch.setattr(asyncio.get_running_loop(), "subprocess_exec", spawn)
+    monkeypatch.setattr(type(asyncio.get_running_loop()), "subprocess_exec", spawn)
     monkeypatch.setattr(sys, "platform", "win32")
     resolve = Mock(side_effect=AssertionError("NT isolation must refuse before resolving input"))
     monkeypatch.setattr(Path, "resolve", resolve)
