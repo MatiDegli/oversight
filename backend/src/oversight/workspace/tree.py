@@ -13,7 +13,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from oversight.workspace._platform import import_flags
+from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
+from oversight.workspace.metadata_io import nt_guard, nt_name, nt_token
 from oversight_contracts.commands import TreeFile
 
 if TYPE_CHECKING:
@@ -30,7 +32,7 @@ ENTRY_CAP = 2000
 HASH_FILE_BYTES = 1024 * 1024
 HASH_TOTAL_BYTES = 8 * 1024 * 1024
 TREE_TIMEOUT_S = 2.0
-_, _, _DIR_FLAGS = import_flags(
+_, _READ_FLAGS, _DIR_FLAGS = import_flags(
     nt=sys.platform == "win32", binary=getattr(os, "O_BINARY", 0) if sys.platform == "win32" else 0
 )
 
@@ -40,13 +42,29 @@ def _check_time(deadline: float) -> None:
         raise TimeoutError("tree listing exceeded its time bound")
 
 
-def _hash(parent: int, name: str, budget: list[int], deadline: float) -> str | None:
-    if sys.platform == "win32":
-        raise OSError("NT tree I/O requires W2")
-    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+def _hash(parent: int | Path, name: str, budget: list[int], deadline: float) -> str | None:
     try:
-        with os.fdopen(os.open(name, flags, dir_fd=parent), "rb", buffering=0) as handle:
+        info = None
+        if isinstance(parent, Path):
+            nt_name(name, working=True)
+            info = nt_guard(parent / name, deadline, working=True)
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                return None
+            fd = os.open(parent / name, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+        else:
+            flags = _READ_FLAGS
+            fd = os.open(name, flags, dir_fd=parent)
+        with os.fdopen(fd, "rb", buffering=0) as handle:
             before = os.fstat(handle.fileno())
+            if (
+                info is not None
+                and isinstance(parent, Path)
+                and (
+                    nt_token(info) != nt_token(before)
+                    or nt_token(nt_guard(parent / name, deadline)) != nt_token(before)
+                )
+            ):
+                return None
             if not stat.S_ISREG(before.st_mode) or before.st_size > min(HASH_FILE_BYTES, budget[0]):
                 return None
             digest = hashlib.sha256()
@@ -72,8 +90,13 @@ def _hash(parent: int, name: str, budget: list[int], deadline: float) -> str | N
                 after.st_ctime_ns,
             ) or read != after.st_size:
                 return None
+            if isinstance(parent, Path) and (
+                nt_token(before) != nt_token(after)
+                or nt_token(nt_guard(parent / name, deadline)) != nt_token(after)
+            ):
+                return None
             return digest.hexdigest()
-    except OSError:
+    except (OSError, IntegrityError):
         return None
 
 
@@ -83,6 +106,12 @@ def walk_tree(root: Path, deadline: float) -> tuple[list[str], list[TreeFile], b
     Hash at most 1 MiB per file and 8 MiB in total; incomplete hashes are null. Traversal uses
     an explicit stack, so deep directories cannot exhaust Python's call stack.
     """
+    if sys.platform == "win32":
+        try:
+            return _walk_nt(root, deadline)
+        except IntegrityError:
+            _check_time(deadline)
+            raise
     directories: list[str] = []
     files: list[TreeFile] = []
     budget = [HASH_TOTAL_BYTES]
@@ -140,6 +169,61 @@ def walk_tree(root: Path, deadline: float) -> tuple[list[str], list[TreeFile], b
         for fd, iterator, _ in stack:
             with closing(iterator):
                 os.close(fd)
+    return sorted(directories), sorted(files, key=lambda file: file.path), truncated
+
+
+def _walk_nt(root: Path, deadline: float) -> tuple[list[str], list[TreeFile], bool]:
+    directories: list[str] = []
+    files: list[TreeFile] = []
+    budget = [HASH_TOTAL_BYTES]
+    stack: list[tuple[Path, _Scan, str]] = []
+
+    def descend(path: Path, prefix: str) -> None:
+        _check_time(deadline)
+        if not stat.S_ISDIR(nt_guard(path, deadline, working=True).st_mode):
+            raise NotADirectoryError(errno.ENOTDIR, "tree directory replaced", str(path))
+        stack.append((path, os.scandir(path), prefix))
+
+    truncated = False
+    try:
+        descend(root, "")
+        while stack:
+            _check_time(deadline)
+            parent, iterator, prefix = stack[-1]
+            entry = next(iterator, None)
+            if entry is None:
+                iterator.close()
+                stack.pop()
+                continue
+            try:
+                nt_name(entry.name, working=True)
+            except IntegrityError:
+                continue
+            path = f"{prefix}/{entry.name}" if prefix else entry.name
+            try:
+                info = nt_guard(parent / entry.name, deadline, working=True)
+                directory = stat.S_ISDIR(info.st_mode)
+                if not directory and not stat.S_ISREG(info.st_mode):
+                    continue
+                if len(directories) + len(files) == ENTRY_CAP:
+                    truncated = True
+                    break
+                if directory:
+                    descend(parent / entry.name, path)
+                    directories.append(path)
+                else:
+                    files.append(
+                        TreeFile(path=path, hash=_hash(parent, entry.name, budget, deadline))
+                    )
+            except (FileNotFoundError, PermissionError):
+                continue
+            except OSError as error:
+                if error.errno not in (errno.ELOOP, errno.ENOTDIR):
+                    raise
+        _check_time(deadline)
+    finally:
+        for _, iterator, _ in stack:
+            iterator.close()
     return sorted(directories), sorted(files, key=lambda file: file.path), truncated
 
 

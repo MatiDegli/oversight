@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, expect, it, vi } from "vitest";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import type { GraphViewProps } from "../../graph";
 import { Frame } from "../Frame";
 import { tabbedView } from "../view";
@@ -25,6 +25,23 @@ vi.mock("../shell/GraphStage", async (original) => {
   };
 });
 vi.mock("./usePhonePractice", () => ({ usePhonePractice: () => probes.phone }));
+// Resolve the real lazy stage before the synchronous composition assertions.
+beforeAll(async () => {
+  const stream = await renderToReadableStream(
+    <Frame
+      state={practice.cut}
+      view={tabbedView}
+      onNodeTap={vi.fn()}
+      canOpenChange={() => false}
+      onOpenChange={vi.fn()}
+      onClosePanel={vi.fn()}
+    />,
+  );
+  await stream.allReady;
+  await new Response(stream).text();
+  vi.clearAllMocks();
+});
+
 afterEach(() => vi.clearAllMocks());
 const practice = validateManifest(manifest, recording);
 const focus = {

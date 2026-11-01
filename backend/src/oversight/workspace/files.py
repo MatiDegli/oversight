@@ -7,6 +7,7 @@ Every function here is synchronous on purpose. The workspace calls them through
 import contextlib
 import errno
 import hashlib
+import ntpath
 import os
 import re
 import shutil
@@ -16,11 +17,11 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import BinaryIO
 
 from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_read, bounded_text
-from oversight.workspace._platform import is_link_like, retry_nt, unlink_retry
+from oversight.workspace._platform import is_link_like, replace_retry, retry_nt, unlink_retry
 from oversight.workspace.errors import (
     FileTooLarge,
     InvalidPath,
@@ -63,7 +64,7 @@ def _refuse(path: str, reason: str) -> InvalidPath:
     return InvalidPath(f"invalid path {shown}: {reason}")
 
 
-def split_relative(path: str) -> list[str]:
+def split_relative(path: str, *, nt: bool | None = None) -> list[str]:
     """Rules 1 to 3 of docs/plans/workspace.md, section 6: the shape of the path, no disk access."""
     if not path or len(path) >= MAX_PATH_CHARS:
         raise _refuse(path, "empty or too long")
@@ -74,7 +75,73 @@ def split_relative(path: str) -> list[str]:
     parts = path.split("/")
     if any(part in ("", ".", "..", ".git") for part in parts):
         raise _refuse(path, "empty, '.', '..' and '.git' segments are not allowed")
+    if (sys.platform == "win32" if nt is None else nt) and any(nt_ambiguous(p) for p in parts):
+        raise _refuse(path, "ambiguous Windows segment")
     return parts
+
+
+def nt_ambiguous(part: str) -> bool:
+    return (
+        part.casefold() == ".git"
+        or part.upper() == ".GIT"
+        or part.endswith((".", " "))
+        or ":" in part
+        or "~" in part
+        or PureWindowsPath(part).is_reserved()
+        or part.split(".", 1)[0].upper() in {"CONIN$", "CONOUT$"}
+    )
+
+
+def _nt_plain(path: Path, *, directory: bool) -> os.stat_result:
+    info = os.lstat(path)
+    kind = stat.S_ISDIR if directory else stat.S_ISREG
+    if is_link_like(info, nt=True) or not kind(info.st_mode):
+        raise _refuse(path.name, "not a plain directory" if directory else "not a regular file")
+    return info
+
+
+def nt_plain_parents(path: Path) -> None:
+    for parent in (*reversed(path.absolute().parents), path):
+        _nt_plain(parent, directory=True)
+        if parent.name:
+            _nt_long_name(parent.parent, parent.name)
+
+
+def _nt_long_name(parent: Path, part: str) -> None:
+    # GetLongPathName is unnecessary: enumerate long names, never trust a DOS alias lookup.
+    with os.scandir(parent) as entries:
+        if not any(
+            entry.name.casefold() == part.casefold() for entry in entries
+        ) and os.path.lexists(parent / part):
+            raise _refuse(part, "DOS alias is not a long basename")
+
+
+def open_nt(path: Path) -> BinaryIO:
+    """No-follow NT boundary, also executable with real POSIX paths in forced-NT tests."""
+    nt_plain_parents(path.parent)
+    _nt_long_name(path.parent, path.name)
+    _nt_plain(path, directory=False)
+    fd = os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    try:
+        fresh, opened = _nt_plain(path, directory=False), os.fstat(fd)
+        if not stat.S_ISREG(opened.st_mode) or (fresh.st_dev, fresh.st_ino) != (
+            opened.st_dev,
+            opened.st_ino,
+        ):
+            raise _refuse(path.name, "file identity changed while opening")
+        return os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def gitdir_matches(text: str, expected: Path | PureWindowsPath, *, pointer: bool = False) -> bool:
+    prefix = "gitdir: " if pointer else ""
+    if not text.startswith(prefix) or not text.endswith("\n") or text.count("\n") != 1:
+        return False
+    value = text[len(prefix) : -1]
+    actual, wanted = PureWindowsPath(value), PureWindowsPath(str(expected))
+    return actual.is_absolute() and wanted.is_absolute() and actual == wanted
 
 
 def _plain_dir(path: Path) -> bool:
@@ -106,9 +173,14 @@ def verify_tree_root(runtime_root: Path, root: Path) -> None:
 def ensure_plain_dir(runtime_root: Path, directory: Path) -> None:
     """Create `directory`, a child of the runtime directory, or accept it if it already is a real
     directory. A symbolic link, or a file, in its place is refused before anything is created."""
+    if sys.platform == "win32":
+        nt_plain_parents(runtime_root)
     if directory.parent != runtime_root or os.path.realpath(runtime_root) != str(runtime_root):
         raise WorkspaceError(f"{directory.name} is not directly under the runtime directory")
     try:
+        if sys.platform == "win32":
+            _nt_plain(directory, directory=True)
+            return
         mode = os.lstat(directory).st_mode
     except FileNotFoundError:
         os.mkdir(directory, DIR_MODE)
@@ -117,11 +189,13 @@ def ensure_plain_dir(runtime_root: Path, directory: Path) -> None:
         raise WorkspaceError(f"{directory.name} is not a plain directory")
 
 
-def resolve_in(root: Path, path: str) -> Path:
+def resolve_in(root: Path, path: str, *, nt: bool | None = None) -> Path:
     """Rules 4 and 5: no existing component is a symlink, and the real path stays under the root.
 
     Returns the lexical path under `root`, which equals the real one once both rules hold.
     """
+    if sys.platform == "win32" if nt is None else nt:
+        return _resolve_nt(root, path)
     parts = split_relative(path)
     current = root
     for part in parts:
@@ -139,12 +213,41 @@ def resolve_in(root: Path, path: str) -> Path:
     return root.joinpath(*parts)
 
 
+def _resolve_nt(root: Path, path: str) -> Path:
+    parts = split_relative(path, nt=True)
+    nt_plain_parents(root)
+    current = root
+    for index, part in enumerate(parts):
+        _nt_long_name(current, part)
+        current = current / part
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            break
+        allowed = stat.S_ISDIR(info.st_mode) or (
+            index == len(parts) - 1 and stat.S_ISREG(info.st_mode)
+        )
+        if is_link_like(info, nt=True) or not allowed:
+            raise _refuse(path, "linked or non-plain component")
+    real_root = ntpath.normcase(os.path.realpath(root))
+    real = ntpath.normcase(os.path.realpath(root.joinpath(*parts)))
+    try:
+        contained = ntpath.commonpath([real_root, real]) == real_root
+    except ValueError:
+        contained = False
+    if not contained:
+        raise _refuse(path, "leaves the workspace")
+    return root.joinpath(*parts)
+
+
 # --- Read, write, list ------------------------------------------------------------------------
 
 
-def open_file(root: Path, path: str) -> BinaryIO:
+def open_file(root: Path, path: str, *, nt: bool | None = None) -> BinaryIO:
     if sys.platform == "win32":
-        raise WorkspaceError("NT agent file I/O requires W2")
+        return open_nt(resolve_in(root, path, nt=True))
+    if nt:
+        return open_nt(resolve_in(root, path, nt=True))
     target = resolve_in(root, path)
     try:
         # O_NONBLOCK: opening a FIFO must not wait for a writer. The regular-file test comes after.
@@ -209,7 +312,7 @@ def write_file(
     `tmp_dir`, then `os.replace` swaps it in, so a reader never sees half a file.
     """
     if sys.platform == "win32":
-        raise WorkspaceError("NT agent file I/O requires W2")
+        return _write_nt(root, tmp_dir, path, content, expected_hash)
     check_content(content)
     data = content.encode("utf-8")
     mode = FILE_MODE
@@ -243,6 +346,56 @@ def write_file(
     return content_hash(data)
 
 
+def _write_nt(root: Path, tmp_dir: Path, path: str, content: str, expected_hash: str | None) -> str:
+    check_content(content)
+    data = content.encode("utf-8")
+    target = resolve_in(root, path, nt=True)
+    current_hash = None
+    try:
+        with open_nt(target) as handle:
+            current_hash = content_hash(bounded_read(handle, name=path))
+    except FileNotFoundError:
+        pass
+    except SizeLimitError as error:
+        raise FileTooLarge(str(error)) from error
+    if current_hash != expected_hash:
+        message = "changed since it was read" if current_hash is not None else "no longer exists"
+        raise StaleFile(f"{path} {message}")
+    current = root
+    for part in split_relative(path, nt=True)[:-1]:
+        current = current / part
+        with contextlib.suppress(FileExistsError):
+            os.mkdir(current, DIR_MODE)
+        nt_plain_parents(current)
+    nt_plain_parents(tmp_dir)
+    tmp = tmp_dir / f".write-{uuid.uuid4().hex}"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+    owned: os.stat_result | None = None
+    try:
+        try:
+            handle = os.fdopen(fd, "wb")
+        except BaseException:
+            os.close(fd)
+            raise
+        with handle:
+            owned = os.fstat(handle.fileno())
+            fresh, opened = _nt_plain(tmp, directory=False), owned
+            if not stat.S_ISREG(opened.st_mode) or (fresh.st_dev, fresh.st_ino) != (
+                opened.st_dev,
+                opened.st_ino,
+            ):
+                raise _refuse(path, "temporary file identity changed")
+            handle.write(data)
+        replace_retry(tmp, resolve_in(root, path, nt=True), nt=True)
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            fresh = _nt_plain(tmp, directory=False)
+            if owned is not None and (fresh.st_dev, fresh.st_ino) != (owned.st_dev, owned.st_ino):
+                raise _refuse(path, "temporary file ownership changed")
+            unlink_retry(tmp, nt=True)
+    return content_hash(data)
+
+
 def list_files(root: Path) -> list[str]:
     """Regular files under `root`, sorted, as relative paths. Follows no link and skips `.git`,
     caches and `*.pyc`."""
@@ -250,38 +403,82 @@ def list_files(root: Path) -> list[str]:
     pending = [root]
     while pending:
         directory = pending.pop()
+        if sys.platform == "win32":
+            nt_plain_parents(directory)
         with os.scandir(directory) as entries:
             for entry in entries:
+                if sys.platform == "win32" and is_link_like(entry, nt=True):
+                    continue
                 if is_link_like(entry):
                     continue
                 if entry.is_dir(follow_symlinks=False):
-                    if entry.name not in CACHE_DIRS:
+                    if (
+                        entry.name.casefold() if sys.platform == "win32" else entry.name
+                    ) not in CACHE_DIRS:
                         pending.append(Path(entry.path))
                 elif (
                     entry.is_file(follow_symlinks=False)
-                    and entry.name != ".git"  # a worktree's .git is a file
+                    and (entry.name.casefold() if sys.platform == "win32" else entry.name)
+                    != ".git"  # a worktree's .git is a file
                     and not entry.name.endswith(".pyc")
                 ):
-                    found.append(Path(entry.path).relative_to(root).as_posix())
+                    relative = Path(entry.path).relative_to(root).as_posix()
+                    if sys.platform == "win32":
+                        try:
+                            _nt_plain(resolve_in(root, relative, nt=True), directory=False)
+                        except InvalidPath:
+                            continue
+                    found.append(relative)
     return sorted(found)
 
 
 def copy_template(template: Path, destination: Path) -> None:
     """Copy file by file: refuse a symlink, skip git, caches and `*.pyc`, write files as 0644."""
+    if sys.platform == "win32":
+        nt_plain_parents(template)
+        nt_plain_parents(destination.parent)
     destination.mkdir(mode=DIR_MODE, exist_ok=True)
+    if sys.platform == "win32":
+        nt_plain_parents(destination)
     with os.scandir(template) as entries:
         ordered = sorted(entries, key=lambda entry: entry.name)
     for entry in ordered:
-        if entry.name in CACHE_DIRS or entry.name.endswith(".pyc"):
+        if (
+            entry.name.casefold() if sys.platform == "win32" else entry.name
+        ) in CACHE_DIRS or entry.name.endswith(".pyc"):
             continue
-        if is_link_like(entry):
+        if (sys.platform == "win32" and is_link_like(entry, nt=True)) or is_link_like(entry):
             raise WorkspaceError(f"the template contains a symbolic link: {entry.name}")
         target = destination / entry.name
         if entry.is_dir(follow_symlinks=False):
             copy_template(Path(entry.path), target)
         elif entry.is_file(follow_symlinks=False):
-            shutil.copyfile(entry.path, target, follow_symlinks=False)
-            os.chmod(target, FILE_MODE)
+            if sys.platform == "win32":
+                with open_nt(Path(entry.path)) as source:
+                    fd = os.open(
+                        target,
+                        os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+                        FILE_MODE,
+                    )
+                    try:
+                        output = os.fdopen(fd, "wb")
+                    except BaseException:
+                        os.close(fd)
+                        raise
+                    with output:
+                        fresh, opened = (
+                            _nt_plain(target, directory=False),
+                            os.fstat(output.fileno()),
+                        )
+                        if not stat.S_ISREG(opened.st_mode) or (fresh.st_dev, fresh.st_ino) != (
+                            opened.st_dev,
+                            opened.st_ino,
+                        ):
+                            raise _refuse(target.name, "copy identity changed")
+                        shutil.copyfileobj(source, output)
+            else:
+                shutil.copyfile(entry.path, target, follow_symlinks=False)
+                os.chmod(target, FILE_MODE)
         else:
             raise WorkspaceError(f"the template contains a special file: {entry.name}")
 
@@ -397,6 +594,21 @@ def registered_worktree(root: Path, main_root: Path, agent_id: str) -> Path:
     target = root / "worktrees" / agent_id
     if not _is_deletable(root, target):
         raise UnsafeDeletion(f"not a deletable target: {_shown(root, target)}")
+    if sys.platform == "win32":
+        try:
+            nt_plain_parents(target)
+            with open_nt(main_root / ".git" / "worktrees" / agent_id / "gitdir") as handle:
+                named = bounded_read(handle).decode("utf-8")
+            metadata = main_root / ".git" / "worktrees" / agent_id
+            with open_nt(target / ".git") as handle:
+                pointer = bounded_read(handle).decode("utf-8")
+            if not gitdir_matches(named, target / ".git") or not gitdir_matches(
+                pointer, metadata, pointer=True
+            ):
+                raise InvalidPath("unexpected Git registration")
+        except (OSError, WorkspaceError, SizeLimitError, UnicodeError) as error:
+            raise UnsafeDeletion(f"{agent_id} is not a registered worktree") from error
+        return target
     if target.is_symlink() or os.path.realpath(target) != str(target) or not target.is_dir():
         raise UnsafeDeletion(f"not a plain directory: {_shown(root, target)}")
     metadata = main_root / ".git" / "worktrees" / agent_id

@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+
+export type ShellLayout = "Chat" | "Oversight";
+/** A fixture may initialize Chat without a URL flag or changing the production default. */
+export const InitialShellLayout = createContext<ShellLayout>("Oversight");
 
 /** Includes Monaco's hidden input and native edit context, not just ordinary fields. */
 export function isTyping(target: EventTarget | null): boolean {
@@ -16,6 +20,8 @@ export function isEditableMonaco(target: EventTarget | null): boolean {
 }
 
 export function useShell(open: boolean, onClose: () => void) {
+  const [layout, setLayout] = useState(useContext(InitialShellLayout));
+  const [oversightVisited, setOversightVisited] = useState(layout === "Oversight");
   const [layoutRevision, setLayoutRevision] = useState(0);
   useEffect(() => {
     const resized = () => {
@@ -96,6 +102,12 @@ export function useShell(open: boolean, onClose: () => void) {
     };
   }, [open, onClose, shortcuts, palette]);
   return {
+    layout,
+    setLayout: (choice: ShellLayout) => {
+      setLayout(choice);
+      if (choice === "Oversight") setOversightVisited(true);
+    },
+    oversightVisited,
     layoutRevision,
     sidebar,
     dock,

@@ -9,6 +9,7 @@ pytest's text.
 import asyncio
 import json
 import re
+import sys
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
@@ -17,6 +18,7 @@ from typing import cast
 
 from oversight.limits import MAX_REPORT_BYTES, MAX_REPORT_LINE_BYTES, SizeLimitError
 from oversight.test_output import retain_failure
+from oversight.workspace._platform import unlink_retry
 from oversight.workspace.junit import MAX_XML_BYTES, parse_junit
 from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallReport, CallTarget, read_calls
@@ -140,7 +142,10 @@ def _take_report(path: Path) -> Iterator[str] | None:
                         )
                     yield from row.decode("utf-8", errors="replace").splitlines()
         finally:
-            path.unlink(missing_ok=True)
+            if sys.platform == "win32":
+                unlink_retry(path, missing_ok=True, nt=True)
+            else:
+                path.unlink(missing_ok=True)
 
     return lines()
 
@@ -227,9 +232,15 @@ async def run_suite(
             try:
                 measured = await offload(lambda: read_calls(recording, measured_targets))
             finally:
-                await offload(
-                    lambda: (request.unlink(missing_ok=True), recording.unlink(missing_ok=True))
-                )
+                if sys.platform == "win32":
+                    try:
+                        await offload(lambda: unlink_retry(request, missing_ok=True, nt=True))
+                    finally:
+                        await offload(lambda: unlink_retry(recording, missing_ok=True, nt=True))
+                else:
+                    await offload(
+                        lambda: (request.unlink(missing_ok=True), recording.unlink(missing_ok=True))
+                    )
     if report_error is not None:
         tally.failed_tests.append(report_error)
     result = summarize(
@@ -283,7 +294,10 @@ def _take_cases(
     except FileNotFoundError:
         return (), ("JUnit report unavailable",)
     finally:
-        path.unlink(missing_ok=True)
+        if sys.platform == "win32":
+            unlink_retry(path, missing_ok=True, nt=True)
+        else:
+            path.unlink(missing_ok=True)
     return (
         tuple(
             CaseResult(

@@ -14,13 +14,17 @@ from oversight.workspace.isolation import IsolatedRunner
 from oversight.workspace.metadata_io import Entry, replace_file
 from oversight.workspace.snapshot import MetadataSnapshot, take_snapshot
 
+from .test_snapshot import force_nt
 from .test_snapshot_attacks import attack_source, attack_workspace, monitor_git
 
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize("nt", [False, True])
 @pytest.mark.parametrize("artifact", ["out.json", ".coverage"])
-async def test_ordinary_artifact_only_vetoes_that_suite(make_workspace: Any, artifact: str) -> None:
+async def test_ordinary_artifact_only_vetoes_that_suite(
+    make_workspace: Any, artifact: str, monkeypatch: pytest.MonkeyPatch, nt: bool
+) -> None:
     workspace = await attack_workspace(make_workspace)
     first = await workspace.create_worktree("agent-1")
     second = await workspace.create_worktree("agent-2")
@@ -31,6 +35,8 @@ async def test_ordinary_artifact_only_vetoes_that_suite(make_workspace: Any, art
     # Ignore it too: a status-only barrier would miss this artifact.
     with (first.git_identity.common / "info/exclude").open("a") as handle:
         handle.write(artifact + "\n")
+    if nt:
+        force_nt(monkeypatch)
     run = await workspace.run_tests(first, timeout_s=10)
     assert run.result.outcome == "passed"
     assert any("code=integrity_invalid" in p and artifact in p for p in run.problems)
@@ -39,12 +45,15 @@ async def test_ordinary_artifact_only_vetoes_that_suite(make_workspace: Any, art
     assert other.result.outcome == "passed" and not other.problems
 
 
+@pytest.mark.parametrize("nt", [False, True])
 async def test_failed_readback_is_suspect_without_another_git(
-    make_workspace: Any, monkeypatch: pytest.MonkeyPatch
+    make_workspace: Any, monkeypatch: pytest.MonkeyPatch, nt: bool
 ) -> None:
     workspace = await attack_workspace(make_workspace)
     tree = await workspace.create_worktree("agent-1")
     (tree.root / "tests/test_attack.py").write_text(attack_source(workspace, "config", main=False))
+    if nt:
+        force_nt(monkeypatch)
     original = replace_file
     writes: list[Path] = []
 
@@ -69,11 +78,14 @@ async def test_failed_readback_is_suspect_without_another_git(
     assert len(calls) == before and not sentinel.exists()
 
 
+@pytest.mark.parametrize("nt", [False, True])
 async def test_lock_racing_restoration_is_not_stolen(
-    workspace: Workspace, monkeypatch: pytest.MonkeyPatch
+    workspace: Workspace, monkeypatch: pytest.MonkeyPatch, nt: bool
 ) -> None:
+    if nt:
+        force_nt(monkeypatch)
     identity = workspace.main.git_identity
-    snapshot = take_snapshot(identity, workspace.integrity, 5)
+    snapshot = take_snapshot(identity, workspace.integrity, 60)
     path = identity.common / "refs/heads/main"
     path.write_bytes(b"1" * 40 + b"\n")
     original = replace_file
@@ -92,8 +104,9 @@ async def test_lock_racing_restoration_is_not_stolen(
     assert path.read_bytes() == b"1" * 40 + b"\n"
 
 
+@pytest.mark.parametrize("nt", [False, True])
 async def test_repeated_cancellation_holds_lease_through_restoration(
-    make_workspace: Any, monkeypatch: pytest.MonkeyPatch
+    make_workspace: Any, monkeypatch: pytest.MonkeyPatch, nt: bool
 ) -> None:
     workspace = await attack_workspace(make_workspace)
     tree = await workspace.create_worktree("agent-1")
@@ -113,6 +126,8 @@ async def test_repeated_cancellation_holds_lease_through_restoration(
         finish(self, state, deadline)
 
     monkeypatch.setattr(MetadataSnapshot, "finish", delayed)
+    if nt:
+        force_nt(monkeypatch)
     task = asyncio.create_task(workspace.run_tests(tree, timeout_s=10))
     async with asyncio.timeout(5):
         while not await asyncio.to_thread(marker.exists):  # noqa: ASYNC110 -- Child file, bounded wait.
@@ -201,3 +216,99 @@ async def test_git_queued_before_uncertainty_is_refused_inside_lease(
     with pytest.raises(IntegrityError, match="code=main_suspect"):
         await queued
     assert len(calls) == before
+
+
+@pytest.mark.parametrize("artifact", ["out.json", ".coverage", "linked", "junction"])
+async def test_nt_artifact_failures_only_veto_evidence(workspace, monkeypatch, artifact):
+    from oversight.workspace.suite_files import file_problems, file_stamp
+
+    from .test_snapshot import reparse_at
+
+    force_nt(monkeypatch)
+    before = file_stamp(workspace.main.root)
+    path = workspace.main.root / artifact
+    path.write_bytes(b"ignored artifact")
+    if artifact == "linked":
+        path.unlink()
+        path.symlink_to(workspace.runtime_root / "server.lock")
+    elif artifact == "junction":
+        path.unlink()
+        path.mkdir()
+        reparse_at(monkeypatch, path)
+    assert file_problems(workspace.main.root, before)
+    assert not workspace.integrity.rules_suspended and not workspace.integrity.main_suspect
+
+
+NT_REFUSALS = (
+    ".GIT",
+    ".g\u0131t",
+    ".git.",
+    ".git ",
+    "GIT~1",
+    "a.py:s",
+    "CON",
+    "nul.txt",
+    "COM1",
+    "C:x",
+    "a/../b",
+    "CON/x.py",
+    "NUL/a.py",
+    "COM1/b",
+    "sub/CON",
+    "CONIN$",
+    "CONOUT$.txt",
+    "LPT1.txt",
+    "COM¹",
+    "C:/root",
+    "/root",
+    "\\root",
+    "\\\\host\\share",
+    "a\\b",
+    "a::$DATA",
+    "sub/a.",
+    "sub/a ",
+)
+
+
+@pytest.mark.parametrize("name", NT_REFUSALS)
+def test_nt_working_names_refuse_before_access(tmp_path, monkeypatch, name):
+    from unittest.mock import Mock
+
+    from oversight.workspace import tree
+    from oversight.workspace.metadata_io import Budget, nt_guard, nt_name, read_at
+    from oversight.workspace.suite_files import file_stamp
+
+    force_nt(monkeypatch)
+    access = Mock(side_effect=AssertionError("refused name reached lstat"))
+    monkeypatch.setattr(Path, "lstat", access)
+    with pytest.raises(IntegrityError):
+        nt_name(name, working=True)
+    with pytest.raises(IntegrityError):
+        read_at(tmp_path, name, tmp_path / name, Budget(float("inf")), kind="working file")
+    assert tree._hash(tmp_path, name, [100], float("inf")) is None
+    # Multi-component traversal reaches the actual working-root boundary too.
+    if not name.startswith(("/", "\\")) and ":" not in name and "\\" not in name:
+        with pytest.raises(IntegrityError):
+            file_stamp(tmp_path / name)
+        with pytest.raises(IntegrityError):
+            nt_guard(tmp_path / name, float("inf"), working=True)
+    access.assert_not_called()
+
+
+@pytest.mark.parametrize("name", [".git", ".GIT", ".g\u0131t"])
+def test_nt_nested_git_vetoes_without_access(tmp_path, monkeypatch, name):
+    from oversight.workspace.suite_files import file_problems, file_stamp
+
+    force_nt(monkeypatch)
+    (tmp_path / "sub").mkdir()
+    before = file_stamp(tmp_path)
+    nested = tmp_path / "sub" / name
+    nested.mkdir()
+    original = Path.lstat
+
+    def no_access(self):
+        assert not self.is_relative_to(nested)
+        return original(self)
+
+    monkeypatch.setattr(Path, "lstat", no_access)
+    assert file_problems(tmp_path, before)

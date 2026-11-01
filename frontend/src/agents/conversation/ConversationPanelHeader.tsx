@@ -8,7 +8,7 @@ const chip =
 
 export function ConversationPanelHeader({ header }: { header: ConversationHeader }) {
   return (
-    <header className="shrink-0 border-b border-divider bg-panel px-[18px] py-4">
+    <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
       <div className="flex items-start gap-[10px]">
         <span
           className={`flex size-(--letter-badge-size) shrink-0 items-center justify-center rounded-label font-bold ${agentLook[header.slot].swatch}`}

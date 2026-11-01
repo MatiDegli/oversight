@@ -234,3 +234,46 @@ async def test_restore_is_needed_to_prevent_later_git_filter(
     await tree.commit_all("Must not execute the filter", workspace.user_author())
     assert "add" in calls and "commit" in calls
     assert not sentinel.exists()
+
+
+@pytest.mark.parametrize("main", [False, True], ids=["agent", "main"])
+@pytest.mark.parametrize("attack", ["config", "index", "replace", "info", "junction", "reparse"])
+async def test_nt_suite_metadata_attacks(make_workspace, monkeypatch, main, attack):
+    from .test_snapshot import force_nt, reparse_at
+
+    workspace = await attack_workspace(make_workspace)
+    tree = workspace.main if main else await workspace.create_worktree("agent-1")
+    (tree.root / ".gitattributes").write_text("*.txt filter=trap\n")
+    (tree.root / "data.txt").write_text("original\n")
+    source = attack_source(
+        workspace, "config" if attack in {"junction", "reparse"} else attack, main=main
+    )
+    (tree.root / "tests/test_attack.py").write_text(source)
+    force_nt(monkeypatch)
+    baseline = take_snapshot(tree.git_identity, workspace.integrity, 60)
+    calls = monitor_git(workspace, monkeypatch, workspace.tmp_dir / "git-sentinel")
+    if attack in {"junction", "reparse"}:
+        from oversight.workspace.snapshot import MetadataSnapshot
+
+        original = MetadataSnapshot.finish
+
+        def injected(self, state, deadline):
+            common = self.identity.common
+            reparse_at(monkeypatch, common / ("info" if attack == "junction" else "config"))
+            original(self, state, deadline)
+
+        monkeypatch.setattr(MetadataSnapshot, "finish", injected)
+    with pytest.raises(IntegrityError):
+        await workspace.run_tests(tree, timeout_s=10, case_ids=("tests/test_attack.py",))
+    assert calls and workspace.integrity.rules_suspended
+    uncertain = attack in {"junction", "reparse"}
+    assert workspace.integrity.main_suspect is uncertain
+    before = len(calls)
+    if uncertain:
+        with pytest.raises(IntegrityError, match="code=main_suspect"):
+            await tree.commit_all("Never spawn", workspace.user_author())
+        assert len(calls) == before
+    else:
+        assert take_snapshot(tree.git_identity, workspace.integrity, 60).entries == baseline.entries
+        await tree.commit_all("Restored metadata", workspace.user_author())
+    assert not (workspace.tmp_dir / "git-sentinel").exists()
