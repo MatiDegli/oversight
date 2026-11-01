@@ -3064,3 +3064,22 @@ not guess values. Python's symbol tables resolve body loads through nested scope
 set representations sort their members so hash seeds cannot change the text. Signatures
 are capped at 400 characters and constant representations over 120 characters are
 omitted, with reasons, to keep individual entries bounded without copying source bodies.
+
+## 2026-10-31 — Use words at three problem sites
+
+Problem texts are read by the person; exception class names are not words. In
+`backend/src/oversight/changes/_measured.py`, the fallback is "caller measurement
+unavailable"; timeout stays "caller measurement budget exhausted" and isolation stays
+"isolation unavailable". In `backend/src/oversight/changes/_probes.py`, timeouts say
+"added tests: {phase} timed out" and workspace or operating-system failures say
+"added tests: {phase} unavailable"; the redacted isolation detail suffix stays. In
+`backend/src/oversight/workspace/measured_report.py`, operating-system failures say
+"caller report unavailable" and invalid report contents say "caller report unreadable".
+
+Tech debt and residual risk: type names remain at two sites in
+`backend/src/oversight/changes/_review_cards.py` because the bench classifies them as
+"review unavailable" through a frozen pattern in `tools/eval/detection/reporting.py`;
+changing them invalidates the recorded paid pilots. They also remain at two sites in
+`backend/src/oversight/changes/_proposal.py`, with the same texts as two sites here,
+while open fronts edit that file. A later front words them when the bench fingerprints
+may change.
