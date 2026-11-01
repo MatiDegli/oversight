@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 import type { BoxSource } from "./boxSource";
-import { createFieldController } from "./controller";
 import type { FieldController, FieldHost, FieldInput } from "./controller";
 
 export interface DotFieldProps extends FieldInput {
@@ -30,17 +29,27 @@ export function DotField({
   useEffect(() => {
     const element = canvas.current;
     if (!element) return;
-    // The stage boundary loads this implementation before mounting either graph surface.
-    const created = createFieldController(element, source.current);
-    created.update(input.current);
-    controller.current = created;
-    const resize = new ResizeObserver(() => {
-      created.redraw();
-    });
-    resize.observe(element);
+    // Load the field separately so the graph and controls stay within the startup budget.
+    const initial = input.current;
+    let cancelled = false;
+    let resize: ResizeObserver | undefined;
+    void import("./controller")
+      .then(({ createFieldController }) => {
+        if (cancelled) return;
+        const created = createFieldController(element, source.current);
+        created.update(initial);
+        created.update(input.current);
+        controller.current = created;
+        resize = new ResizeObserver(() => {
+          created.redraw();
+        });
+        resize.observe(element);
+      })
+      .catch(() => undefined);
     return () => {
-      resize.disconnect();
-      created.dispose();
+      cancelled = true;
+      resize?.disconnect();
+      controller.current?.dispose();
       controller.current = null;
     };
   }, [source]);

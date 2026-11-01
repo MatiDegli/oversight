@@ -32,7 +32,6 @@ from oversight.agents import (
 from oversight.app import LiveRun
 from oversight.changes import ChangeManager, PolicyInputs, WrongState
 from oversight.changes._mode import (
-    RULES_ACTIVATION,
     ModeController,
     StartCapability,
     start_capability,
@@ -461,13 +460,16 @@ async def _receipt(live: LiveRun, owner: ChangeManager) -> None:
     owner.spend_received(await live.store.publish(tick()))
 
 
-async def test_f3a_does_not_open_activation(live: LiveRun, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_spend_does_not_override_closed_build(
+    live: LiveRun, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("oversight.changes._mode.RULES_ACTIVATION", False)
     await live._publish(tick())
     capability = start_capability(
         live.workspace, replace(live._settings, cross_review=True, review_model="fake")
     )
-    assert not RULES_ACTIVATION and not capability.confirmed
-    assert "Rules mode is closed" in capability.reason
+    assert not capability.confirmed
+    assert "Rules authority is unavailable in this build" in capability.reason
     monkeypatch.setattr(manager(live)._ctx.mode, "_availability", lambda: capability)
     assert manager(live)._ctx.ports.rules_evidence is not None
     with pytest.raises(WrongState):

@@ -189,6 +189,8 @@ async def review(
             return
         # The confirmed receipt is the only authority for a subsequent automatic decision.
         stored = await live._publish(outcome.review)
+        assert live._manager is not None
+        live._manager.rules_received(stored)
         if not eligible(live, capture, proposal.agent_id):
             return
         await apply_outcome(live, capture, proposal, outcome, stored.seq)

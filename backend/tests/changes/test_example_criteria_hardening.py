@@ -17,7 +17,7 @@ from test_rules_reservation import terminal_code
 from test_rules_transaction import configure_transaction, execute
 from test_rules_transaction import reserved as rules_reserved
 
-from oversight.changes import _mode, _proposal
+from oversight.changes import _proposal
 from oversight.changes._example_criteria import install_criteria, refusal_code, unverified_run
 from oversight.workspace import ProcessResult, content_hash, render_examples
 from oversight_contracts.events import ChangeResolved, ChangeUpdated, ErrorReport, SuiteExecution
@@ -88,7 +88,6 @@ async def test_rules_preserve_integrity_code(
     )
     assert await h.main_head() == pre and not h.payloads(ChangeResolved)
     await assert_main_clean(h)
-    assert not _mode.RULES_ACTIVATION
 
 
 @pytest.mark.anyio

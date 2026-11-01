@@ -81,3 +81,23 @@ Approved graph-evidence sketch of 2026-10-31.
 | [working-open-1920-dark.png](progress-r2/working-open-1920-dark.png) | Earlier calls opened | Target | `frontend/progress-activity` |
 | [retry-1920-dark.png](progress-r2/retry-1920-dark.png) | Model retry notice | Target | `frontend/progress-activity` |
 | [limits-1920-dark.png](progress-r2/limits-1920-dark.png) | Budget and time notices | Target | `frontend/progress-activity` |
+
+## Map
+
+Approved map sketch of 2026-10-31.
+
+| File | What it shows | Status | Delivery or replacement |
+| --- | --- | --- | --- |
+| [map-dark.png](map-r1/map-dark.png) | Rest: one panel per folder, equal circles, no lines, dark | Target | `frontend/map-rest` |
+| [map-day.png](map-r1/map-day.png) | Rest: one panel per folder, equal circles, no lines, day | Target | `frontend/map-rest` |
+| [map-1280-dark.png](map-r1/map-1280-dark.png) | Rest: one panel per folder, equal circles, no lines at 1280px | Target | `frontend/map-rest` |
+| [fit-dark.png](map-r1/fit-dark.png) | Boltons fitted with tests: map | Target | `frontend/map-rest` |
+| [fit-notests-dark.png](map-r1/fit-notests-dark.png) | Boltons fitted with tests hidden: map | Target | `frontend/map-rest` |
+| [cross-dark.png](map-r1/cross-dark.png) | Crossfade midpoint at enter, cards and map at 50% | Target | `frontend/map-rest` |
+| [demo-1280-dark.png](map-r1/demo-1280-dark.png) | Demo at 1280px: cards | Target | `frontend/map-rest` |
+| [layout-dark.png](map-r1/layout-dark.png) | Today's preset beside the grouped one, same zoom | Target | `frontend/map-rest` |
+| [map-groups-dark.png](map-r1/map-groups-dark.png) | Groups named by Oversight; tests, misc and docs stay folders, dark | Target | `frontend/map-rest` (named groups: seam only) |
+| [map-groups-day.png](map-r1/map-groups-day.png) | Groups named by Oversight; tests, misc and docs stay folders, day | Target | `frontend/map-rest` (named groups: seam only) |
+| [map-hover-dark.png](map-r1/map-hover-dark.png) | Pointer on typeutils.py: incoming and outgoing calls with counts; its panel lifts | Target | `frontend/map-lines` |
+| [map-cone-dark.png](map-r1/map-cone-dark.png) | A's cone: changed module to modules reached, badges, other names hidden | Target | `frontend/map-lines` |
+| [group-dark.png](map-r1/group-dark.png) | After a boltons group click: cards | Target | `frontend/map-lines` |

@@ -21,22 +21,23 @@ export default defineConfig((env) =>
         name: "oversight-level2-fixture",
         buildStart() {
           // Validate the exact exported bytes and fake-only receipt before bundling the fixture.
-          execFileSync(
-            "uv",
-            [
-              "run",
-              "--frozen",
-              "python",
-              "tools/validate_recording.py",
-              "--fake-fixture",
-              "fixtures/events/scripted-level2.jsonl",
-            ],
-            {
-              cwd: root,
-              stdio: "pipe",
-              timeout: 60_000,
-            },
-          );
+          for (const fixture of ["scripted-level2", "scripted-rules"])
+            execFileSync(
+              "uv",
+              [
+                "run",
+                "--frozen",
+                "python",
+                "tools/validate_recording.py",
+                "--fake-fixture",
+                `fixtures/events/${fixture}.jsonl`,
+              ],
+              {
+                cwd: root,
+                stdio: "pipe",
+                timeout: 60_000,
+              },
+            );
         },
       },
     ],
