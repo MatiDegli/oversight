@@ -42,7 +42,7 @@ class ChangeStages(ContractModel):
     checks: StageTime
     waiting_for_person: StageTime
     test_runs: StageTime
-    test_phases: list[SuitePhaseTime] = Field(default_factory=list, max_length=5)
+    test_phases: list[SuitePhaseTime] = Field(default_factory=list[SuitePhaseTime], max_length=5)
     """One entry per phase that ran, in the order above."""
     problems: list[NonEmptyText] = Field(default_factory=list, max_length=20)
     """Why an interval is unknown, with the seq that shows it."""
