@@ -58,6 +58,7 @@ export interface GraphViewProps extends MapOptions {
   litIds?: readonly string[] | null;
   /** The review proposal's cone, used for its card, framing and out-of-view report. */
   cone?: ImpactCone | null;
+  merging?: readonly string[];
   measured?: ReadonlyMap<string, MeasuredWord | null> | null;
   /** Live preview: framed once on opening, then updates badges and dimming without following edits. */
   liveCone?: ImpactCone | null;
@@ -90,6 +91,7 @@ export function GraphView({
   map = false,
   onMapLevel,
   measured = null,
+  merging,
   liveCone = null,
   frameKey = null,
   onFramed,
@@ -119,6 +121,7 @@ export function GraphView({
       latest.current.cone !== cone ||
       latest.current.map !== map ||
       latest.current.measured !== measured ||
+      latest.current.merging !== merging ||
       latest.current.liveCone !== liveCone ||
       latest.current.field?.mode !== field.mode;
     latest.current = {
@@ -131,6 +134,7 @@ export function GraphView({
       map,
       onMapLevel,
       measured,
+      merging,
       liveCone,
       frameKey,
       onFramed,
@@ -151,6 +155,7 @@ export function GraphView({
     map,
     onMapLevel,
     measured,
+    merging,
     liveCone,
     frameKey,
     onFramed,
@@ -476,6 +481,8 @@ export function GraphView({
         lights={field.lights}
         merges={field.merges}
         modules={field.modules}
+        milestones={field.milestones}
+        mergeStarts={field.mergeStarts}
       />
       {map && <ControlledMapLayer control={mapControl} />}
       <div

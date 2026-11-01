@@ -14,7 +14,7 @@ import { createFileSession } from "./files";
 import { createRecordedFiles } from "./recordedFiles";
 import { FilesProvider } from "./FilesContext";
 import { useEscapeCloses } from "./escape";
-import { mergeModePending, type MergeModeAttempt } from "./shell/SettingsPanel";
+import { mergeModePending, type MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { Frame } from "./Frame";
 import { usePractice } from "./challenge/usePractice";
 import { startAppSession } from "./session";

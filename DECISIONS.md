@@ -3477,3 +3477,21 @@ and adds the event log to the areas that keep the full rule.
 
 Reason: findings that are not really problematic are documented as residual risk and merged
 anyway, for pace before the freeze.
+## 2026-10-29/30 — Milestone pulses and merge arrival
+
+Approved Oct 29 about 22:18 ART (Oct 30 01:18 UTC), answers about 22:35 ART; confirmed
+Oct 31 at 12:47:21 ART, packet B 1031b item 3. Reason: card and queue milestones left the graph
+silent; finite team-colored field light reports them through the same 7px lamps, levels, dither and mask.
+The PNGs in `docs/sketches/milestone-pulses/` are superseded on ring shape and Needs you beats.
+Ready expands quietly once in 700ms; Needs you contracts twice in one 700ms event, at least as bright,
+never looping or moving focus. Both circles use the node center and half its rendered width as inner radius.
+Merged keeps r6 travel: “Merging” until the shared 250ms delay plus 1450ms journey ends, then “Merged”,
+removal of pending marks, and a 7px, 40% team-colored box halo contracting to zero in 550ms.
+Reduced motion skips rings, travel, halo and wait; history has arrived. Same-team events within 1s coalesce;
+Merged replaces a ring with travel. Only its own team dips; another team's same-node ring waits 350ms.
+Each lamp takes its strongest source hue while intensities add, giving resting lights a clean edge.
+At most four effects: drop Ready before Merged, never Needs you (excess Needs you waits).
+The maintainer excepted 700ms rings and the 550ms halo from the 160–320ms range, and Needs you from
+Waiting's “never pulses”. Card glow, an extra merged sentence and a 300ms node-light hold are excluded
+for good; a merged node word stays held. Evidence: dark/day pulses, overlap, arrival, 1280×800 and 720p
+frames, software-GL costs, and the coordinator's Windows real-GPU timing.

@@ -4,6 +4,7 @@ import type { Framing, GraphApi } from "../../graph";
 import { ImpactConeCard, selectConeWords } from "../../review";
 import type { State } from "../../state";
 import { DetailControls, GraphHeading, Legend, ZoomControls } from "../GraphOverlays";
+import type { MergeArrival } from "../useMergeArrival";
 import { fieldInput } from "../fieldScope";
 import { graphScope } from "../graphScope";
 import { changeNodeIds, panelOpen } from "../view";
@@ -14,11 +15,13 @@ export function GraphStage({
   view,
   onNodeTap,
   layoutKey = "",
+  arrival,
 }: {
   state: State;
   view: View;
   onNodeTap: (id: string) => void;
   layoutKey?: string;
+  arrival?: MergeArrival;
 }) {
   const [detail, setDetail] = useState<"Modules" | "Functions" | "Details">("Modules");
   const [mapLevel, setMapLevel] = useState<"cards" | "map">("cards");
@@ -31,7 +34,10 @@ export function GraphStage({
   // The cone and the change stay lit until the decision; events never open review themselves.
   const { cone, liveCone, litIds } = useMemo(() => graphScope(state, view), [state, view]);
   // The dot field's light follows the same state and the same view, so it never needs an event.
-  const field = useMemo(() => fieldInput(state, view), [state, view]);
+  const field = useMemo(
+    () => ({ ...fieldInput(state, view), mergeStarts: arrival?.starts }),
+    [state, view, arrival?.starts],
+  );
   // When the panel opens, the camera centers the nodes of the change it shows, review or live diff.
   const shown = view.review ?? view.diff?.changeId ?? null;
   const words = useMemo(() => (shown ? selectConeWords(state, shown) : null), [state, shown]);
@@ -83,6 +89,7 @@ export function GraphStage({
         frameIds={frameIds}
         cone={cone}
         measured={cone ? words : null}
+        merging={arrival?.merging}
         liveCone={liveCone}
         frameKey={frameKey}
         onFramed={onFramed}

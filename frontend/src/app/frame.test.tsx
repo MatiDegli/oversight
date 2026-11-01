@@ -1,5 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { Frame } from "./Frame";
 import type { FrameProps } from "./Frame";
@@ -27,6 +27,32 @@ function render(seq: number, view: View = initialView, props: Partial<FrameProps
     />,
   );
 }
+
+// Settle the real lazy review before checking its fully loaded static markup.
+beforeAll(async () => {
+  const state = through(20);
+  const abort = new AbortController();
+  const stream = await renderToReadableStream(
+    <Frame
+      state={state}
+      view={openReview(state, initialView, "change-1") ?? initialView}
+      onNodeTap={vi.fn()}
+      canOpenChange={() => true}
+      onOpenChange={vi.fn()}
+      onClosePanel={vi.fn()}
+    />,
+    { signal: abort.signal, onError: () => {} },
+  );
+  const reader = (stream as ReadableStream<Uint8Array>).getReader();
+  let html = "";
+  while (!html.includes('class="review-body')) {
+    const { value, done } = await reader.read();
+    if (done) throw new Error("Review did not load");
+    html += new TextDecoder().decode(value);
+  }
+  abort.abort();
+  await reader.cancel();
+});
 
 /** The opening tag of the first element with this aria-label. */
 function tag(markup: string, label: string) {

@@ -348,3 +348,14 @@ it("offers Conversation in every state only with a callback, in footer order", (
   button.props.onClick();
   expect(onConversation).toHaveBeenCalledExactlyOnceWith("agent-1");
 });
+
+it("uses only the optional merge pill and preserves Done for agents without a merge", () => {
+  const data = selectAgentCard(through(23), "agent-1");
+  if (!data) throw new Error("Missing card");
+  for (const mergeLabel of ["Merging", "Merged"] as const) {
+    expect(renderToStaticMarkup(<AgentCard data={data} mergeLabel={mergeLabel} />)).toContain(
+      `>${mergeLabel}</span>`,
+    );
+  }
+  expect(renderToStaticMarkup(<AgentCard data={data} />)).toContain(">Done</span>");
+});

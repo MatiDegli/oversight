@@ -6,7 +6,7 @@ export { graphElements } from "./elements";
 export type { MeasuredWord } from "./elements";
 export type { GraphProbe, GraphProbeHost, NodeBounds } from "./probe";
 export type { Framing } from "./camera";
-export { selectMerges, selectModules, selectSignalLights } from "./field";
+export { selectMilestones, selectMerges, selectModules, selectSignalLights } from "./field";
 export type {
   FieldInput,
   FieldLight,
@@ -22,5 +22,6 @@ export { selectGraphBehavior } from "./behavior";
 export type { GraphBehaviorEntry } from "./behavior";
 export { NodeChips } from "./NodeChips";
 
+export { afterlightOf, mergeArrivalDelay, MilestoneLife } from "./field";
 export { folderGroups } from "./groups";
 export type { MapLevel } from "./mapLevel";
