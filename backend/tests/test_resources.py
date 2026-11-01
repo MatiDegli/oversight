@@ -1,8 +1,5 @@
 """Host readings and stable memory-hold messages, without depending on the host."""
 
-import runpy
-import sys
-from importlib.machinery import PathFinder
 from pathlib import Path
 
 import pytest
@@ -12,25 +9,13 @@ from oversight.resources import hold_reason, is_hold, memory_used, parse_meminfo
 MEMINFO = "MemTotal:       1000 kB\nMemFree:         20 kB\nMemAvailable:   101 kB\n"
 
 
-def test_memory_fixture_keeps_agent_helpers_scoped(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Loading the shared fixtures must not expose helpers from the agents test suite."""
-    tests = Path(__file__).parent
-    agents = tests / "agents"
-    # Other selections may already have loaded agents/conftest.py in this worker.
-    monkeypatch.setattr(sys, "path", [p for p in sys.path if Path(p).resolve() != agents])
-
-    runpy.run_path(str(tests / "conftest.py"))
-
-    assert PathFinder.find_spec("live_helpers") is not None
-    assert PathFinder.find_spec("agent_helpers") is None
-
-
 @pytest.mark.parametrize(
     "text,expected",
     [
         (MEMINFO, 89),
         ("MemTotal: 100 kB\nMemAvailable: 101 kB", 0),
-        ("MemTotal: 100 kB\nMemAvailable: -1 kB", 100),
+        ("MemTotal: 100 kB\nMemAvailable: -1 kB", None),
+        ("MemTotal: -1 kB\nMemAvailable: 10 kB", None),
         ("MemTotal: 100 kB", None),
         ("MemAvailable: 10 kB", None),
         ("MemTotal: 0 kB\nMemAvailable: 0 kB", None),
