@@ -1,21 +1,25 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { ConversationPanel } from "./ConversationPanel";
 import { Composer } from "./Composer";
 import { sketchState } from "./fixture";
-import { selectConversation } from "./selectConversation";
+import { selectConversation, type Conversation } from "./selectConversation";
 import { TimelineEntry } from "./rows";
 
-it("keeps a positive cost below half a cent visible in the header chip", () => {
+async function panelMarkup(conversation: Conversation) {
+  const stream = await renderToReadableStream(<ConversationPanel conversation={conversation} />);
+  await stream.allReady;
+  return (await new Response(stream).text()).replace(/<!--.*?-->/gs, "");
+}
+
+it("keeps a positive cost below half a cent visible in the header chip", async () => {
   const conversation = selectConversation(sketchState, "agent-1", []);
   if (!conversation) throw new Error("Missing fixture");
   conversation.header.cost = 0.001;
-  expect(renderToStaticMarkup(<ConversationPanel conversation={conversation} />)).toContain(
-    ">&lt;US$0.01</span>",
-  );
+  expect(await panelMarkup(conversation)).toContain(">&lt;US$0.01</span>");
 });
 
-it("renders optional header chips from retained facts and withholds message text", () => {
+it("renders optional header chips from retained facts and withholds message text", async () => {
   const conversation = selectConversation(sketchState, "agent-1", [
     { seq: 14, ts: "2026-10-27T17:02:02Z", text: null },
   ]);
@@ -26,13 +30,13 @@ it("renders optional header chips from retained facts and withholds message text
     cost: null,
     zonePaths: ["pricing.py", "cart.py", "orders.py"],
   };
-  const html = renderToStaticMarkup(<ConversationPanel conversation={conversation} />);
+  const html = await panelMarkup(conversation);
   expect(html).toContain("Zone: pricing.py and 2 more");
   expect(html).toContain("Cost unknown");
   expect(html).not.toContain("reasoning");
   expect(html).toContain("Message sent. Its text is not in this recording.");
   conversation.header = { ...conversation.header, cost: undefined, round: 1, zonePaths: [] };
-  const empty = renderToStaticMarkup(<ConversationPanel conversation={conversation} />);
+  const empty = await panelMarkup(conversation);
   expect(empty).not.toMatch(/Cost unknown|US\$|Zone:|Round 1/);
 });
 

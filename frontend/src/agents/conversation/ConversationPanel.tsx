@@ -1,13 +1,33 @@
-import { useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef } from "react";
 import { agentLook } from "../../theme";
 import { costText } from "../../state";
 import { labels } from "../AgentCard";
-import { Composer } from "./Composer";
 import type { ConversationControls } from "./Composer";
 import type { Conversation, ConversationHeader } from "./selectConversation";
-import { ActivityBlock } from "./ActivityBlock";
-import { BudgetNotice, Notices } from "./Notices";
-import { TimelineEntry } from "./rows";
+
+// Mount the timeline after all renderers load, so its first layout anchors the full content.
+async function loadRenderers() {
+  const [activity, notices, composer, rows] = await Promise.all([
+    import("./ActivityBlock"),
+    import("./Notices"),
+    import("./Composer"),
+    import("./rows"),
+  ]);
+  return {
+    ActivityBlock: activity.ActivityBlock,
+    BudgetNotice: notices.BudgetNotice,
+    Notices: notices.Notices,
+    Composer: composer.Composer,
+    TimelineEntry: rows.TimelineEntry,
+  };
+}
+const DeferredPanel = lazy(() =>
+  loadRenderers().then((renderers) => ({
+    default: function LoadedPanel(props: ConversationPanelProps) {
+      return <Panel {...props} renderers={renderers} />;
+    },
+  })),
+);
 
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation;
@@ -57,11 +77,13 @@ function Header({ header }: { header: ConversationHeader }) {
 }
 
 /** The timeline owns scrolling; event arrivals never move keyboard focus. */
-export function ConversationPanel({
+function Panel({
   conversation,
   onOpenDiff,
+  renderers,
   ...controls
-}: ConversationPanelProps) {
+}: ConversationPanelProps & { renderers: Awaited<ReturnType<typeof loadRenderers>> }) {
+  const { ActivityBlock, BudgetNotice, Notices, Composer, TimelineEntry } = renderers;
   const { header, entries } = conversation;
   const list = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
@@ -125,5 +147,14 @@ export function ConversationPanel({
       </div>
       <Composer key={header.agentId} header={header} {...controls} />
     </section>
+  );
+}
+
+/** Conversation UI loads only when its focus tab is opened. */
+export function ConversationPanel(props: ConversationPanelProps) {
+  return (
+    <Suspense fallback={null}>
+      <DeferredPanel {...props} />
+    </Suspense>
   );
 }

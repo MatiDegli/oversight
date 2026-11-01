@@ -58,8 +58,52 @@ async function open(
     .getByRole("article", { name: "Agent A", exact: true })
     .getByRole("button", { name: "Conversation", exact: true })
     .click();
+  await check(panel(page).getByText("Working", { exact: true })).toBeVisible();
+  await check(panel(page).getByText("Task from you", { exact: true })).toBeVisible();
+  await check(panel(page).getByRole("textbox")).toBeVisible();
+  if (moment === "retry")
+    await check(panel(page).getByText("Waiting for model", { exact: true })).toBeVisible();
+  if (moment === "limits")
+    await check(panel(page).getByText(/time limit for this round/)).toBeVisible();
   return page;
 }
+it("loads conversation renderers only when its tab opens", async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 500 } });
+  const modules = ["ActivityBlock.tsx", "Notices.tsx", "Composer.tsx", "rows.tsx"];
+  const requested = new Set<string>();
+  page.on("request", (request) => {
+    const name = new URL(request.url()).pathname.split("/").at(-1) ?? "";
+    if (modules.includes(name)) requested.add(name);
+  });
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => !!window.progressTest);
+    await page.evaluate(() => {
+      window.progressTest.mount("limits");
+    });
+    await check(page.getByRole("article", { name: "Agent A", exact: true })).toBeVisible();
+    expect([...requested]).toEqual([]);
+    await page
+      .getByRole("article", { name: "Agent A", exact: true })
+      .getByRole("button", { name: "Conversation", exact: true })
+      .click();
+    await check(panel(page).getByText("Working", { exact: true })).toBeVisible();
+    await check(panel(page).getByText("Task from you", { exact: true })).toBeVisible();
+    await check(panel(page).getByRole("textbox")).toBeVisible();
+    await check(panel(page).getByText(/time limit for this round/)).toBeVisible();
+    expect([...requested].sort()).toEqual([...modules].sort());
+    await check
+      .poll(() =>
+        panel(page)
+          .getByRole("list", { name: "Conversation timeline" })
+          .evaluate((node) => node.scrollHeight - node.scrollTop - node.clientHeight),
+      )
+      .toBeLessThanOrEqual(2);
+  } finally {
+    await page.close();
+  }
+});
 it("folds calls and rounds with keyboard buttons, keeps newest last and preserves focus on events", async () => {
   const page = await open();
   try {
