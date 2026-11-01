@@ -44,6 +44,7 @@ class ChangeRecord(TypedDict):
     merged_revision: int | None
     merged_by: str | None
     review_cost: NotRequired[Cost]
+    wall_ms: NotRequired[dict[str, int | None]]
 
 
 class ArmRecord(TypedDict):
@@ -61,6 +62,7 @@ class ArmRecord(TypedDict):
     cost: NotRequired[Cost]
     by_role: NotRequired[dict[str, Cost]]
     usd_per_correct: NotRequired[float | None]
+    wall_ms_per_correct: NotRequired[int | None]
 
 
 type Receipts = tuple[

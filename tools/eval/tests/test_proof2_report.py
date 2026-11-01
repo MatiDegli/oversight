@@ -1,20 +1,25 @@
 """Proof 2 measures use frozen definitions and independent expected values."""
 
+import asyncio
 import io
 import json
 import sys
 from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
+from typing import get_type_hints
 
 import pytest
 from tools.eval.proof2.__main__ import main
 from tools.eval.proof2.report import write_report
-from tools.eval.proof2.report.arms import build_arms
+from tools.eval.proof2.report.arms import ArmRecord, ChangeRecord, RevisionRecord, build_arms
 from tools.eval.proof2.report.inputs import load_inputs
 from tools.eval.proof2.report.output import counted, write_lines
 from tools.eval.proof2.report.spend import add_spend
+from tools.eval.proof2.report.timing import add_timing, wall_ms
 from tools.eval.tests.report_events import event, files, receipts, renumber, scenario
+
+from oversight_contracts.events import ServerEvent
 
 
 def report(tmp_path, capsys, events=None, results=None):
@@ -105,6 +110,12 @@ def test_duplicate_and_conflicting_results(tmp_path, rows):
         write_report(*files(tmp_path, results=rows()))
 
 
+def test_tests_only_base_is_refused(tmp_path):
+    rows = [{"kind": "base", "task": "p10", "result": {"exit_code": 0}}]
+    with pytest.raises(ValueError, match=r"^results line 1: base requires a bug or feature task$"):
+        write_report(*files(tmp_path, results=rows))
+
+
 def test_bad_json_and_bad_log(tmp_path):
     log, results = files(tmp_path)
     results.write_text("\n{bad\n")
@@ -187,6 +198,9 @@ def test_correctness_and_selections(tmp_path, capsys):
         (
             r["change_id"],
             r["revision"],
+            r["seq"],
+            r["head_commit"],
+            r["task"],
             r["tests"],
             r["hidden"],
             r["correct"],
@@ -201,6 +215,9 @@ def test_correctness_and_selections(tmp_path, capsys):
         (
             "change-1",
             1,
+            13,
+            "h1a",
+            "p04",
             "passed",
             "fail",
             False,
@@ -210,8 +227,8 @@ def test_correctness_and_selections(tmp_path, capsys):
             "cross_review",
             None,
         ),
-        ("change-1", 2, "passed", "pass", True, False, True, ["clean"], None, 1),
-        ("change-2", 1, "passed", "pass", True, True, True, ["clean"], None, None),
+        ("change-1", 2, 21, "h1b", "p04", "passed", "pass", True, False, True, ["clean"], None, 1),
+        ("change-2", 1, 9, "h2", "p10", "passed", "pass", True, True, True, ["clean"], None, None),
     ]
     assert [(r["task"], r["seq"], r["head_commit"]) for r in revisions] == [
         ("p04", 13, "h1a"),
@@ -254,6 +271,7 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
     assert [
         (
             a["arm"],
+            a["changes"],
             a["correct"],
             a["incorrect"],
             a["unknown"],
@@ -264,6 +282,7 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
     ] == [
         (
             "without_oversight",
+            3,
             {"count": 1, "n": 3},
             1,
             0,
@@ -272,6 +291,7 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
         ),
         (
             "with_oversight",
+            3,
             {"count": 2, "n": 3},
             0,
             0,
@@ -517,6 +537,318 @@ def test_last_merge_and_problem(tmp_path, capsys):
     arm = next(r for r in rows if r.get("arm") == "with_oversight")
     assert arm["correct"] == {"count": 1, "n": 3}
     assert arm["problems"] == ["multiple merged resolutions for change-1"]
+
+
+def test_wall_event_types():
+    hints = get_type_hints(wall_ms)
+    assert hints["start"] == ServerEvent | None
+    assert hints["end"] == ServerEvent | None
+
+
+def test_timing_record_types():
+    hints = get_type_hints(add_timing)
+    assert hints["revisions"] == list[RevisionRecord]
+    assert hints["changes"] == list[ChangeRecord]
+    assert hints["arms"] == list[ArmRecord]
+
+
+def test_timing(tmp_path, capsys):
+    rows = report(tmp_path, capsys)
+    assert [r["wall_ms"] for r in rows if r["record"] == "change"] == [
+        {"without_oversight": 60000, "with_oversight": 140000},
+        {"without_oversight": 40000, "with_oversight": 80000},
+        {"without_oversight": None, "with_oversight": None},
+    ]
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [40000, 110000]
+    assert next(r for r in rows if r["record"] == "run") == dict(
+        record="run",
+        agent_ms=188000,
+        known_agent_ms=188000,
+        agent_hours=0.052222,
+        active_ms=128000,
+        known_active_ms=128000,
+        parallelism=1.46875,
+        coverage="complete",
+        problems=[],
+        parallelism_over_time={"status": "not_built"},
+    )
+
+
+def test_plan_activity_unknown(tmp_path, capsys):
+    events = renumber([*scenario(), event("usage.tick", 142, role="plan", change_id=None)])
+    rows = report(tmp_path, capsys, events)
+    assert next(r for r in rows if r["record"] == "run") == dict(
+        record="run",
+        agent_ms=None,
+        known_agent_ms=188000,
+        agent_hours=None,
+        active_ms=None,
+        known_active_ms=128000,
+        parallelism=None,
+        coverage="missing_metrics",
+        problems=["plan calls have no activity interval"],
+        parallelism_over_time={"status": "not_built"},
+    )
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [40000, 110000]
+
+
+def test_negative_wall_and_correct_mean(tmp_path, capsys):
+    events = renumber(
+        [
+            event("usage.tick", 100),
+            event("change.proposed", 60),
+            event("change.resolved", 80),
+            event("change.proposed", 90, change=2, head_commit="h2"),
+            event("change.resolved", 100, change=2),
+        ]
+    )
+    results = [receipts()[3], {**receipts()[1], "result": {"exit_code": 0}}]
+    rows = report(tmp_path, capsys, events, results)
+    assert [r["wall_ms"] for r in rows if r["record"] == "change"] == [
+        {"without_oversight": None, "with_oversight": None},
+        {"without_oversight": 0, "with_oversight": 10000},
+    ]
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [0, 10000]
+
+
+def test_unselected_and_no_correct_timing(tmp_path, capsys):
+    rows = report(tmp_path, capsys, results=[])
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [None, None]
+    rows = report(tmp_path, capsys, [], [])
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [None, None]
+
+
+def test_wall_uses_selected_endpoints(tmp_path, capsys):
+    events = renumber([*scenario(), event("change.resolved", 142)])
+    rows = report(tmp_path, capsys, events)
+    change = next(r for r in rows if r["record"] == "change")
+    assert change["wall_ms"] == {"without_oversight": 60000, "with_oversight": 142000}
+    events = scenario()
+    proposal = events[12]
+    assert proposal.type == "change.proposed"
+    events[12] = proposal.model_copy(
+        update={
+            "payload": proposal.payload.model_copy(
+                update={"tests": proposal.payload.tests.model_copy(update={"outcome": "failed"})}
+            )
+        }
+    )
+    rows = report(tmp_path, capsys, events)
+    change = next(r for r in rows if r["record"] == "change")
+    assert change["wall_ms"] == {"without_oversight": 120000, "with_oversight": 140000}
+
+
+def test_wall_mean_floors_milliseconds(tmp_path, capsys):
+    events = renumber(
+        [
+            event("agent.status", state="working"),
+            event("agent.status", change=2, state="working"),
+            event("change.proposed", 1),
+            event("change.proposed", 2, change=2, head_commit="h2").model_copy(
+                update={"ts": "2026-10-31T12:00:02.001Z"}
+            ),
+        ]
+    )
+    results = [{**receipts()[1], "result": {"exit_code": 0}}, receipts()[3]]
+    rows = report(tmp_path, capsys, events, results)
+    assert [r["wall_ms_per_correct"] for r in rows if r["record"] == "arm"] == [1500, None]
+
+
+@pytest.mark.parametrize(
+    "kind, keys",
+    [
+        (
+            "meta",
+            (
+                "changes",
+                "contract_version",
+                "log_sha256",
+                "price_retrieved",
+                "price_source",
+                "prompt_version",
+                "record",
+                "results_sha256",
+                "revisions",
+                "run_id",
+                "schema",
+                "through_seq",
+                "with_hidden",
+            ),
+        ),
+        (
+            "revision",
+            (
+                "change_id",
+                "correct",
+                "first_green",
+                "head_commit",
+                "hidden",
+                "merged",
+                "previous",
+                "record",
+                "regress_vs_base",
+                "regress_vs_previous",
+                "request",
+                "revision",
+                "seq",
+                "task",
+                "tests",
+                "verdicts",
+            ),
+        ),
+        (
+            "change",
+            (
+                "agent_id",
+                "change_id",
+                "end",
+                "first_green",
+                "merged_by",
+                "merged_revision",
+                "proposals",
+                "record",
+                "review_cost",
+                "rounds",
+                "task",
+                "wall_ms",
+            ),
+        ),
+        ("E1", ("cells", "duplicate_reviews", "n", "record", "review_cost")),
+        (
+            "E2",
+            (
+                "changes_with_requests",
+                "findings",
+                "hidden_by_round",
+                "record",
+                "regress_vs_base",
+                "regress_vs_previous",
+                "requests_by",
+                "rounds",
+            ),
+        ),
+        (
+            "arm",
+            (
+                "arm",
+                "by_role",
+                "changes",
+                "correct",
+                "cost",
+                "incorrect",
+                "not_selected",
+                "problems",
+                "questions",
+                "questions_not_needed",
+                "record",
+                "regressions_let_through",
+                "unknown",
+                "usd_per_correct",
+                "wall_ms_per_correct",
+            ),
+        ),
+        (
+            "run",
+            (
+                "active_ms",
+                "agent_hours",
+                "agent_ms",
+                "coverage",
+                "known_active_ms",
+                "known_agent_ms",
+                "parallelism",
+                "parallelism_over_time",
+                "problems",
+                "record",
+            ),
+        ),
+        ("E3", ("record", "status")),
+        ("E4", ("record", "status")),
+        ("E6", ("record", "status")),
+        ("E7", ("record", "status")),
+    ],
+)
+def test_record_keys(tmp_path, capsys, kind, keys):
+    records = [r for r in report(tmp_path, capsys) if r["record"] == kind]
+    assert records
+    assert all(tuple(sorted(r)) == keys for r in records)
+
+
+def test_full_record_order_and_not_built(tmp_path, capsys):
+    rows = report(tmp_path, capsys)
+    assert tuple(r["record"] for r in rows) == (
+        "meta",
+        "revision",
+        "revision",
+        "revision",
+        "change",
+        "change",
+        "change",
+        "E1",
+        "E2",
+        "arm",
+        "arm",
+        "run",
+        "E3",
+        "E4",
+        "E6",
+        "E7",
+    )
+    assert [r["arm"] for r in rows if r["record"] == "arm"] == [
+        "without_oversight",
+        "with_oversight",
+    ]
+    assert rows[-4:] == [
+        {"record": "E3", "status": "not_built"},
+        {"record": "E4", "status": "not_built"},
+        {"record": "E6", "status": "not_built"},
+        {"record": "E7", "status": "not_built"},
+    ]
+    assert [r["questions"] for r in rows if r["record"] == "arm"] == [
+        {"status": "not_built"},
+        {"status": "not_built"},
+    ]
+    assert [r["questions_not_needed"] for r in rows if r["record"] == "arm"] == [
+        {"status": "not_built"},
+        {"status": "not_built"},
+    ]
+
+
+@pytest.mark.anyio
+async def test_cli_deterministic_bytes(tmp_path):
+    log, results = files(tmp_path)
+    command = [
+        sys.executable,
+        "-m",
+        "tools.eval.proof2",
+        "report",
+        "--log",
+        str(log),
+        "--results",
+        str(results),
+    ]
+
+    async def invoke(*extra):
+        process = await asyncio.create_subprocess_exec(
+            *command, *extra, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=30)
+        finally:
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+        assert process.returncode == 0
+        assert stderr == b""
+        return stdout
+
+    first = await invoke()
+    assert first.endswith(b'\n{"record": "E7", "status": "not_built"}\n')
+    assert b'"pct":' not in first
+    assert await invoke() == first
+    out = tmp_path / "report.jsonl"
+    assert await invoke("--out", str(out)) == b""
+    assert out.read_bytes() == first
 
 
 def test_first_green_later_revision_counts_and_spend(tmp_path, capsys):
