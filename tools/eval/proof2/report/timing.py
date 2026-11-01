@@ -1,12 +1,26 @@
 """Change wall spans and observed activity for one run."""
 
 from datetime import timedelta
+from typing import TypedDict
 
 from oversight.events import fold_activity, parse_ts
 from oversight_contracts.events import ServerEvent
 
 from .arms import ArmRecord, ChangeRecord, RevisionRecord
 from .inputs import Inputs
+
+
+class RunRecord(TypedDict):
+    record: str
+    agent_ms: int | None
+    known_agent_ms: int
+    agent_hours: float | None
+    active_ms: int | None
+    known_active_ms: int
+    parallelism: float | None
+    coverage: str
+    problems: list[str]
+    parallelism_over_time: dict[str, str]
 
 
 def wall_ms(start: ServerEvent | None, end: ServerEvent | None) -> int | None:
@@ -21,8 +35,9 @@ def add_timing(
     revisions: list[RevisionRecord],
     changes: list[ChangeRecord],
     arms: list[ArmRecord],
-) -> dict:
-    starts, merges = {}, {}
+) -> RunRecord:
+    starts: dict[str, ServerEvent] = {}
+    merges: dict[str, ServerEvent] = {}
     for event in inputs.events:
         cid = getattr(event.payload, "change_id", None)
         if cid is not None:
@@ -32,7 +47,7 @@ def add_timing(
             and event.payload.decision == "approved"
             and event.payload.merge == "merged"
         ):
-            merges[cid] = event
+            merges[event.payload.change_id] = event
     for change in changes:
         cid = change["change_id"]
         first_green = change["first_green"]
@@ -53,9 +68,9 @@ def add_timing(
     return run_record(inputs)
 
 
-def run_record(inputs: Inputs) -> dict:
+def run_record(inputs: Inputs) -> RunRecord:
     activity = fold_activity(inputs.events)
-    return dict(
+    return RunRecord(
         record="run",
         agent_ms=activity.agent_ms,
         known_agent_ms=activity.known_agent_ms,
