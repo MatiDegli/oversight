@@ -145,7 +145,11 @@ export function Frame(props: FrameProps) {
           {shell.dock && <BottomDock onClose={shell.toggleDock} />}
           {props.replay && props.onReplayCommit && !props.practice?.active && (
             <Suspense fallback={<div className="hidden h-[44px] shrink-0 min-[1280px]:block" />}>
-              <ReplayBar player={props.replay} onCommit={props.onReplayCommit} />
+              <ReplayBar
+                key={props.replay.id}
+                player={props.replay}
+                onCommit={props.onReplayCommit}
+              />
             </Suspense>
           )}
         </div>

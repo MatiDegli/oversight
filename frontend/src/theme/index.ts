@@ -29,7 +29,6 @@ const baseThemes = {
     "replay-stem": { color: "#ededea", alpha: 0.38 },
     "replay-hover": { color: "#ededea", alpha: 0.12 },
     "replay-ghost": { color: "#ededea", alpha: 0.5 },
-    "replay-focus-glow": { color: "#ededea", alpha: 0.55 },
     "replay-edge-light": { color: "#ffffff", alpha: 0.17 },
     "focus-glow": { color: "#ededea", alpha: 0.55 },
     "text-hover": "#ffffff",

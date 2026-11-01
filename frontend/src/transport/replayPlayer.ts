@@ -15,6 +15,8 @@ export interface ReplaySnapshot {
   revision: number;
 }
 export interface ReplayPlayer {
+  /** Controller identity, independent of the recording and its revision. */
+  readonly id: number;
   ready: Promise<void>;
   getSnapshot: () => ReplaySnapshot;
   subscribe: (listener: () => void) => () => void;
@@ -25,6 +27,8 @@ export interface ReplayPlayer {
   setSpeed: (speed: ReplayRate) => void;
   dispose: () => void;
 }
+
+let nextPlayerId = 0;
 
 /** One session owns the clock, pending work and publication capability. */
 export function createReplayPlayer({
@@ -121,6 +125,7 @@ export function createReplayPlayer({
     if (!abort.signal.aborted) throw error;
   });
   return {
+    id: ++nextPlayerId,
     ready,
     getSnapshot: () => snapshot,
     subscribe: (listener) => {

@@ -11,6 +11,36 @@ function player() {
   return { store, control };
 }
 describe("controlled replay", () => {
+  it("seeks while playing, replaces the timer and advances the new prefix at the selected rate", async () => {
+    const { store, control } = player();
+    await control.ready;
+    control.setSpeed(4);
+    await vi.advanceTimersByTimeAsync(17);
+    expect(vi.getTimerCount()).toBe(1);
+    control.seek(8000);
+    expect(control.getSnapshot()).toMatchObject({ position: 8000, speed: 4, status: "playing" });
+    expect(vi.getTimerCount()).toBe(1);
+    const prefix = store.getState().state;
+    await vi.advanceTimersByTimeAsync(39);
+    expect(control.getSnapshot().position).toBe(8000);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(control.getSnapshot()).toMatchObject({ position: 8160, status: "playing" });
+    await vi.advanceTimersByTimeAsync(500);
+    control.pause();
+    expect(control.getSnapshot().position).toBe(10160);
+    expect(store.getState().state.lastSeq).toBeGreaterThan(prefix.lastSeq);
+    control.dispose();
+  });
+  it("gives a fresh controller a new identity even when its revision matches", async () => {
+    const first = player().control;
+    await first.ready;
+    first.dispose();
+    const fresh = player().control;
+    await fresh.ready;
+    expect(fresh.getSnapshot().revision).toBe(first.getSnapshot().revision);
+    expect(fresh.id).not.toBe(first.id);
+    fresh.dispose();
+  });
   it("preserves partial gaps across pause/resume and rate changes", async () => {
     const { control } = player();
     await control.ready;

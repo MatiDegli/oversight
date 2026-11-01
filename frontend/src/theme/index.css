@@ -32,7 +32,6 @@
   --replay-stem: color-mix(in srgb, var(--text) 38%, transparent);
   --replay-hover: color-mix(in srgb, var(--text) 12%, transparent);
   --replay-ghost: color-mix(in srgb, var(--text) 50%, transparent);
-  --replay-focus-glow: color-mix(in srgb, var(--text) 55%, transparent);
   --replay-edge-light: rgba(255, 255, 255, 0.17);
 
   --edge-light: rgba(255, 255, 255, 0.17);
@@ -123,7 +122,6 @@
   --replay-stem: color-mix(in srgb, var(--text) 38%, transparent);
   --replay-hover: color-mix(in srgb, var(--text) 12%, transparent);
   --replay-ghost: color-mix(in srgb, var(--text) 50%, transparent);
-  --replay-focus-glow: color-mix(in srgb, var(--text) 55%, transparent);
   --replay-edge-light: rgba(255, 255, 255, 0);
 
   --edge-light: rgba(255, 255, 255, 0.9);
@@ -480,7 +478,6 @@
   --color-replay-stem: var(--replay-stem);
   --color-replay-hover: var(--replay-hover);
   --color-replay-ghost: var(--replay-ghost);
-  --color-replay-focus-glow: var(--replay-focus-glow);
   --color-replay-edge-light: var(--replay-edge-light);
   --font-sans: var(--text-font);
   --font-mono: var(--code-font);

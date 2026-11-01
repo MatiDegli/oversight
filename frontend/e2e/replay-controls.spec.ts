@@ -81,6 +81,7 @@ test("real App controls preserve prefixes, navigation, files and session ownersh
   const paused = await slider(page).getAttribute("aria-valuenow");
   await page.clock.runFor(2200);
   await expect(slider(page)).toHaveAttribute("aria-valuenow", paused ?? "");
+  await expect(row(page).getByRole("group", { name: "Playback speed" })).toBeVisible();
   for (const rate of [2, 4, 1]) {
     const button = row(page).getByRole("button", { name: `${String(rate)}×`, exact: true });
     await button.click();
@@ -88,9 +89,14 @@ test("real App controls preserve prefixes, navigation, files and session ownersh
     expect(await button.evaluate((node) => getComputedStyle(node).fontWeight)).toBe("700");
   }
   await row(page).getByRole("button", { name: "Play", exact: true }).click();
+  await seek(page, 5);
+  await expect(row(page)).toContainText("Playing");
+  await row(page).getByRole("button", { name: "4×", exact: true }).click();
   await page.clock.runFor(500);
   await row(page).getByRole("button", { name: "Pause", exact: true }).click();
-  expect(Number(await slider(page).getAttribute("aria-valuenow"))).toBeGreaterThan(8000);
+  expect(Number(await slider(page).getAttribute("aria-valuenow"))).toBeCloseTo(7001, -2);
+  await prefix(page, 7001);
+  await row(page).getByRole("button", { name: "1×", exact: true }).click();
   await seek(page, 8);
   const mark = row(page).getByRole("button", {
     name: "Agent A · Ready for review, 0:16",
@@ -183,12 +189,46 @@ test("real App controls preserve prefixes, navigation, files and session ownersh
   await expect(conversation).toHaveCount(0);
   await row(page).getByRole("button", { name: "Restart", exact: true }).click();
   await expect(row(page).getByRole("button", { name: "Pause", exact: true })).toBeVisible();
+  await row(page).getByRole("button", { name: "Pause", exact: true }).click();
+  await seek(page, 8);
+  await expect(row(page)).toContainText("Paused");
   await page.getByRole("button", { name: "Two-change practice", exact: true }).click();
   await expect(row(page)).toHaveCount(0);
   await page.clock.runFor(30000);
   await expect(page.locator("#root")).toHaveAttribute("data-seq", "63");
+  // Record the first visible row, including the commit before a new session's effect runs.
+  // An eventual assertion alone would miss a disposed controller briefly reappearing.
+  const resumed = await page.evaluateHandle(() => {
+    let first: { position: string | null; state: string | null } | null = null;
+    const observer = new MutationObserver(() => {
+      const row = document.querySelector(".replay-bar");
+      if (row && !first)
+        first = {
+          position: row.querySelector('[role="slider"]')?.getAttribute("aria-valuenow") ?? null,
+          state: row.querySelector("small")?.textContent ?? null,
+        };
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    return {
+      read: () => {
+        observer.disconnect();
+        return first;
+      },
+    };
+  });
   await page.getByRole("button", { name: "Return to ordinary replay", exact: true }).click();
   await expect(row(page)).toBeVisible();
+  expect(await resumed.evaluate((probe) => probe.read())).toEqual({
+    position: "0",
+    state: "Playing",
+  });
+  await resumed.dispose();
+  await expect(row(page)).toContainText("Playing");
+  await expect(slider(page)).toHaveAttribute("aria-valuenow", "0");
+  await prefix(page, 0);
+  await page.clock.runFor(2000);
+  await expect(slider(page)).toHaveAttribute("aria-valuenow", "2000");
+  await prefix(page, 2000);
   await page.clock.runFor(32);
   expect(
     await graph.evaluate(
@@ -323,7 +363,11 @@ if (shots)
             control: rect(".replay-button").height,
             strip: rect(".replay-strip").width,
             spacing: Math.min(...marks.slice(1).map((mark, i) => mark.x - (marks[i]?.x ?? 0))),
-            targets: marks.map((mark) => mark.width),
+            targets: marks.map((mark) => [mark.width, mark.height]),
+            speeds: [...root.querySelectorAll(".replay-speed button")].map(
+              (node) => node.getBoundingClientRect().width,
+            ),
+            time: rect(".replay-time").width,
           };
         });
         writeFileSync(
@@ -336,13 +380,24 @@ if (shots)
           control: 34,
           strip: width === 1920 ? 1018 : 446,
         });
-        expect(boxes.spacing).toBeGreaterThanOrEqual(24);
+        expect(Math.abs(boxes.spacing - (width === 1920 ? 61 : 27))).toBeLessThanOrEqual(1);
+        expect(boxes.targets).toEqual(Array.from({ length: 5 }, () => [24, 24]));
+        expect(boxes.speeds).toEqual([36, 36, 36]);
+        expect(boxes.time).toBeGreaterThanOrEqual(100);
         await row(page).getByRole("button", { name: "Pause", exact: true }).click();
         await seek(page, 15);
         // Keyboard traversal supplies :focus-visible, without programmatic focus on Play.
         await slider(page).press("Shift+Tab");
         await page.keyboard.press("Shift+Tab");
         await expect(row(page).getByRole("button", { name: "Play", exact: true })).toBeFocused();
+        expect(
+          await row(page)
+            .getByRole("button", { name: "Play", exact: true })
+            .evaluate((button) => {
+              const style = getComputedStyle(button);
+              return [style.outlineWidth, style.outlineOffset, style.outlineStyle];
+            }),
+        ).toEqual(["2px", "2px", "solid"]);
         await capture("paused");
         await seek(page, 8);
         await row(page).getByRole("button", { name: "Play", exact: true }).click();
@@ -350,6 +405,10 @@ if (shots)
           .getByRole("button", { name: "Agent A · Ready for review, 0:16", exact: true })
           .hover();
         await expect(page.getByRole("tooltip")).toBeVisible();
+        const tooltip = await page.getByRole("tooltip").boundingBox();
+        const bar = await row(page).boundingBox();
+        if (!tooltip || !bar) throw new Error("Missing tooltip or row bounds");
+        expect(Math.abs(bar.y - (tooltip.y + tooltip.height) - 8)).toBeLessThanOrEqual(1);
         await capture("seeking");
         await page.mouse.move(5, 5);
         await slider(page).press("End");

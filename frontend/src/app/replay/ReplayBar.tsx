@@ -6,6 +6,7 @@ import { agentSlotStyle } from "../../theme";
 import type { ReplayPlayer } from "../../transport";
 import type { View } from "../view";
 import { reconcileReplayView, replayMarks, replayTime } from "./model";
+import type { ReplayMark } from "./model";
 import "./replay.css";
 
 export default function ReplayBar({
@@ -46,7 +47,7 @@ export default function ReplayBar({
   useEffect(() => {
     const state = stateStore.getState().state;
     onCommit((view) => reconcileReplayView(view, state));
-  }, [revision, onCommit]);
+  }, [player, revision, onCommit]);
   const pointerPosition = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     return Math.max(0, Math.min(duration, ((event.clientX - box.left) / box.width) * duration));
@@ -168,51 +169,9 @@ export default function ReplayBar({
             <i aria-hidden="true" />
           </button>
         ))}
-        {tooltip && (
-          <div
-            role="tooltip"
-            id="replay-tooltip"
-            className="replay-tooltip"
-            style={{
-              left: `clamp(0px, calc(${percent(tooltip.offset)} - 140px), max(0px, 100% - 330px))`,
-              ...agentSlotStyle(tooltip.slot),
-            }}
-          >
-            <div>
-              <span className="replay-tooltip-letter" data-kind={tooltip.kind}>
-                {tooltip.letters}
-              </span>
-              <strong>{tooltip.title}</strong>
-              <time>{replayTime(tooltip.offset)}</time>
-            </div>
-            {tooltip.proposal && (
-              <p>
-                <span
-                  className={
-                    tooltip.proposal.tests.outcome === "passed" ? "text-passed" : "text-failed-text"
-                  }
-                >
-                  {tooltip.proposal.tests.outcome === "passed" ? (
-                    <Check aria-hidden="true" />
-                  ) : (
-                    <X aria-hidden="true" />
-                  )}
-                  {tooltip.proposal.tests.passed} of{" "}
-                  {tooltip.proposal.tests.passed + tooltip.proposal.tests.failed}{" "}
-                  {tooltip.proposal.tests.outcome === "passed"
-                    ? "pass"
-                    : tooltip.proposal.tests.outcome}
-                </span>{" "}
-                · <span className="text-added">+{tooltip.proposal.lines_added}</span>{" "}
-                <span className="text-removed">−{tooltip.proposal.lines_removed}</span> in{" "}
-                {tooltip.proposal.files.length} files
-              </p>
-            )}
-            {tooltip.hash && <p className="replay-hash">{tooltip.hash.slice(0, 7)}</p>}
-          </div>
-        )}
+        {tooltip && <ReplayTooltip mark={tooltip} percent={percent(tooltip.offset)} />}
       </div>
-      <div className="replay-speed" aria-label="Playback speed">
+      <div className="replay-speed" role="group" aria-label="Playback speed">
         {([1, 2, 4] as const).map((rate) => (
           <button
             key={rate}
@@ -226,5 +185,49 @@ export default function ReplayBar({
         ))}
       </div>
     </section>
+  );
+}
+
+export function ReplayTooltip({ mark: tooltip, percent }: { mark: ReplayMark; percent: string }) {
+  return (
+    <div
+      role="tooltip"
+      id="replay-tooltip"
+      className="replay-tooltip"
+      style={{
+        left: `clamp(0px, calc(${percent} - 140px), max(0px, 100% - 330px))`,
+        ...agentSlotStyle(tooltip.slot),
+      }}
+    >
+      <div>
+        <span className="replay-tooltip-letter" data-kind={tooltip.kind}>
+          {tooltip.letters}
+        </span>
+        <strong>{tooltip.title}</strong>
+        <time>{replayTime(tooltip.offset)}</time>
+      </div>
+      {tooltip.proposal && (
+        <p>
+          <span
+            className={
+              tooltip.proposal.tests.outcome === "passed" ? "text-passed" : "text-failed-text"
+            }
+          >
+            {tooltip.proposal.tests.outcome === "passed" ? (
+              <Check aria-hidden="true" />
+            ) : (
+              <X aria-hidden="true" />
+            )}
+            {tooltip.proposal.tests.passed} of{" "}
+            {tooltip.proposal.tests.passed + tooltip.proposal.tests.failed}{" "}
+            {tooltip.proposal.tests.outcome === "passed" ? "pass" : tooltip.proposal.tests.outcome}
+          </span>{" "}
+          · <span className="text-added">+{tooltip.proposal.lines_added}</span>{" "}
+          <span className="text-removed">−{tooltip.proposal.lines_removed}</span> in{" "}
+          {tooltip.proposal.files.length} {tooltip.proposal.files.length === 1 ? "file" : "files"}
+        </p>
+      )}
+      {tooltip.hash && <p className="replay-hash">{tooltip.hash.slice(0, 7)}</p>}
+    </div>
   );
 }

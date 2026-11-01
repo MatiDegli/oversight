@@ -19,7 +19,6 @@ export const dayColors = {
   "replay-stem": { color: "#1c1c1a", alpha: 0.38 },
   "replay-hover": { color: "#1c1c1a", alpha: 0.12 },
   "replay-ghost": { color: "#1c1c1a", alpha: 0.5 },
-  "replay-focus-glow": { color: "#1c1c1a", alpha: 0.55 },
   "replay-edge-light": { color: "#ffffff", alpha: 0 },
   "focus-glow": { color: "#1c1c1a", alpha: 0.55 },
   "text-hover": "#000000",

@@ -82,7 +82,7 @@ export function App() {
     replaySource,
   );
   useEffect(() => {
-    const stop = startAppSession(
+    const stopTransport = startAppSession(
       document.getElementById("root"),
       (failure) => {
         setConnection(failure === null ? "connected" : "lost");
@@ -95,6 +95,10 @@ export function App() {
       },
       setReplay,
     );
+    const stop = () => {
+      stopTransport();
+      setReplay(null);
+    };
     stopSession.current = stop;
     return stop;
   }, [retry]);
