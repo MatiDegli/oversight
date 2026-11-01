@@ -66,6 +66,40 @@ async def test_terminal_during_reply_publish_skips_idle(
         assert error_code(response) == (409, "wrong_state")
 
 
+async def test_begin_skips_already_stopping_lead(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered, release = asyncio.Event(), asyncio.Event()
+    factory = ThreadModels()
+    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), factory) as s:
+        service = s.live.leads
+        original = service._begin
+
+        async def begin(lead: Any, profile: Any) -> None:
+            entered.set()
+            await release.wait()
+            await original(lead, profile)
+
+        monkeypatch.setattr(service, "_begin", begin)
+        starting = asyncio.create_task(s.client.post("/leads", json={"task": "task"}))
+        await entered.wait()
+        owned = service.leads["agent-1"]
+        owned.stopping = True
+        await service._finish_open(owned)
+        statuses = [e for e in s.events() if e.type == "lead.status"]
+        revision = owned.revision
+        assert [e.payload.state for e in statuses] == ["stopped"]
+        release.set()
+        assert (await starting).status_code == 201
+        assert owned.initializing is not None
+        await owned.initializing
+        await asyncio.gather(*owned.tasks)
+        assert [e for e in s.events() if e.type == "lead.status"] == statuses
+        assert owned.revision == revision
+        assert owned.task is None and not owned.tasks
+        assert not factory.built
+
+
 async def test_two_concurrent_messages_have_exactly_one_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
