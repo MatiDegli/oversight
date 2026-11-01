@@ -152,7 +152,7 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
         ))}
       </ol>
       {chip.extension && (
-        <p className="mt-2 text-muted">
+        <p className="mt-2 wrap-anywhere text-muted">
           {chip.extension.run_count} calls using <code>{chip.extension.parameters.join(", ")}</code>
           ;{" "}
           <button

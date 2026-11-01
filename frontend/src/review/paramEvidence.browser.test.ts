@@ -198,6 +198,21 @@ it("retains a 22px phone chip with a 44px hit area and anchored neighbors", asyn
   });
 });
 
+it.each([1920, 1280, 390])("wraps long parameter names at %i", async (width) => {
+  await mounted(width, "day", "mixed", async (page) => {
+    const parameter = "parameter_with_long_name_".repeat(12) + "日本語";
+    await page.evaluate((parameter) => {
+      window.paramEvidence.extensionOnly("mixed", [parameter]);
+    }, parameter);
+    await chip(page).click();
+    const popover = page.locator("[data-chip-popover]");
+    await check(popover.locator("p code")).toHaveText(parameter);
+    expect(await popover.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+    expect(await section(page).evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+    await check(page.getByRole("button", { name: "see review", exact: true })).toBeVisible();
+  });
+});
+
 it("keeps the existing question as the sole approval gate and has no approval shortcut", async () => {
   await mounted(1920, "dark", "mixed", async (page) => {
     const approve = page.getByRole("button", { name: "Approve and merge", exact: true });

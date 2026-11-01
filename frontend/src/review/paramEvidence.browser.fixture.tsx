@@ -117,12 +117,14 @@ export const paramEvidence = {
       stateStore.setState({ state });
     });
   },
-  extensionOnly(name: ParameterState) {
+  extensionOnly(name: ParameterState, parameters?: string[]) {
     const state = structuredClone(stateStore.getState().state);
     const facts = state.changeFacts["change-1"]?.at(-1);
     if (facts)
       facts.parameter_extensions =
         parameterState(name).changeFacts["change-1"]?.at(-1)?.parameter_extensions ?? null;
+    if (parameters)
+      for (const entry of facts?.parameter_extensions ?? []) entry.parameters = parameters;
     flushSync(() => {
       stateStore.setState({ state });
     });
