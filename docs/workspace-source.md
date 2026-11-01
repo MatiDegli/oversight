@@ -101,3 +101,16 @@ Historical P2-A delivery size review signals (before later runtime additions): `
 policy and preparation live in new small modules. Keeping those additions local avoids
 a refactor of shared files during measured-cone integration. No touched function exceeds
 80 lines.
+
+## Native Windows source boundary (W3)
+
+The PowerShell demo checks in [README](../README.md#native-windows-advisory-checks) explicitly set
+`OVERSIGHT_WORKSPACE_SOURCE=""`. W3 changes checkout text attributes only in Oversight:
+`* text=auto eol=lf`, preserving `DECISIONS.md merge=union`, without renormalizing files or
+changing demo template bytes. It never changes an external source's attributes.
+
+The supported profile list above is unchanged. W3 covers only the empty demo source setting;
+native qualification of the pinned profile, W4's path-based COPY and native own-source
+qualification are pending; do not pass arbitrary repository paths. Demo acceptance requires
+both W2 fronts before read/edit/tests/proposal/Approve and three-start proof. Record raw bytes,
+hashes, Git EOL output and initial/merge commits; do not infer LF from text-mode reads.

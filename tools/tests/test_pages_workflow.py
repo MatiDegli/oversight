@@ -112,7 +112,7 @@ def test_build_installs_exactly_as_ci_jobs() -> None:
     assert_install_matches_ci(PAGES.read_text())
 
 
-@pytest.mark.parametrize("workflow", ["ci.yml", "pages.yml"])
+@pytest.mark.parametrize("workflow", ["ci.yml", "pages.yml", "windows.yml"])
 def test_every_remote_action_is_pinned(workflow: str) -> None:
     assert_pinned_actions((PAGES.parent / workflow).read_text())
 

@@ -1,0 +1,89 @@
+name: windows advisory
+
+on:
+  pull_request:
+    paths: [backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
+  push:
+    branches: [main]
+    paths: [backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  windows:
+    name: windows advisory
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      META_API_KEY: ""
+      BASETEN_API_KEY: ""
+      OVERSIGHT_CROSS_REVIEW: "false"
+      OVERSIGHT_WORKSPACE_SOURCE: ""
+      OVERSIGHT_AGENT_MODEL: fake
+      OVERSIGHT_AGENT_MODEL_B: fake
+      OVERSIGHT_FAKE_SCRIPT: fixtures/fake-model/demo-l2-coupon.json
+      OVERSIGHT_FAKE_SCRIPT_B: fixtures/fake-model/demo-l2-restock.json
+      OVERSIGHT_NT_EVIDENCE_DIR: ${{ github.workspace }}/nt-evidence
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Versions and staging
+        run: |
+          New-Item -ItemType Directory -Force nt-evidence | Out-Null
+          uv --version | Tee-Object nt-evidence/versions.log
+          git --version | Tee-Object -Append nt-evidence/versions.log
+          node --version | Tee-Object -Append nt-evidence/versions.log
+          pnpm --version | Tee-Object -Append nt-evidence/versions.log
+          [System.Environment]::OSVersion.VersionString | Tee-Object -Append nt-evidence/versions.log
+          'W1 + W2b + W3 only. Full driver/three starts and cold-uv backend death await W2a + W2b; own-source fixtures and six-run/two-machine proof await W4. Missing dependencies are not acceptance.' | Set-Content nt-evidence/staging.txt
+      - run: uv sync --frozen
+      - run: pnpm -C frontend install --frozen-lockfile
+      - run: pnpm -C frontend build
+      - name: Windows target typing for landed sites
+        run: uv run --frozen pyright --pythonplatform Windows tools/demo_check_nt.py tools/demo_check.py tools/smoke.py tools/tests/test_demo_check_nt.py tools/tests/test_demo_check.py tools/tests/test_smoke.py tools/tests/test_pages_workflow.py tools/tests/test_verify_workflow.py backend/src/oversight/__main__.py backend/src/oversight/api/static.py backend/src/oversight/app.py backend/src/oversight/events/store.py backend/src/oversight/workspace/__init__.py backend/src/oversight/workspace/_platform.py backend/src/oversight/workspace/capability.py backend/src/oversight/workspace/core.py backend/src/oversight/workspace/files.py backend/src/oversight/workspace/integrity.py backend/src/oversight/workspace/isolation.py backend/src/oversight/workspace/metadata_io.py backend/src/oversight/workspace/runner.py backend/src/oversight/workspace/source.py backend/src/oversight/workspace/test_tree.py backend/src/oversight/workspace/tree.py backend/src/oversight/workspace/snapshot.py backend/src/oversight/workspace/suite_files.py
+      - name: W1 native cases
+        run: |
+          uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_platform_windows.py -rs -s 2>&1 | Tee-Object nt-evidence/w1-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: W3 injected and native cases
+        run: |
+          uv run --frozen pytest -o timeout_method=thread tools/tests/test_demo_check_nt.py -rs -s 2>&1 | Tee-Object nt-evidence/w3-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Smoke with retained jobs
+        timeout-minutes: 3
+        run: |
+          uv run --frozen python tools/smoke.py 2>&1 | Tee-Object nt-evidence/smoke.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Report unavailable Linux isolation
+        run: |
+          uv run --frozen python -m oversight isolation-probe > nt-evidence/isolation-probe.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $probe = Get-Content -Raw nt-evidence/isolation-probe.json | ConvertFrom-Json
+          if ($probe.status -ne 'unavailable' -or $probe.reason -ne 'network isolation C is Linux-only') { throw 'Unexpected NT isolation verdict' }
+      - name: Runtime version evidence
+        if: always()
+        run: |
+          uv run --frozen python -c "import asyncio,platform; loop=asyncio.new_event_loop(); print(platform.python_version(), type(loop).__name__); loop.close()" 2>&1 | Tee-Object nt-evidence/python-loop.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload Windows evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-advisory-evidence
+          path: nt-evidence/
+          if-no-files-found: error
+          retention-days: 7
