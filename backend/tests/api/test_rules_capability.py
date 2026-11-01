@@ -14,8 +14,7 @@ pytestmark = pytest.mark.anyio
 
 @pytest.mark.parametrize("activation", [False, True])
 async def test_startup_binds_a_live_adapter_and_never_reconfirms(tmp_path, monkeypatch, activation):
-    if activation:
-        monkeypatch.setattr(_mode, "RULES_ACTIVATION", True)
+    monkeypatch.setattr(_mode, "RULES_ACTIVATION", activation)
     settings = live_settings(tmp_path, cross_review=True, review_model="fake-b")
     async with live_server(settings) as server:
         manager = server.live._manager
@@ -23,9 +22,7 @@ async def test_startup_binds_a_live_adapter_and_never_reconfirms(tmp_path, monke
         capability = manager._ctx.mode.capability()
         assert capability.confirmed is activation
         if not activation:
-            assert capability.reason == (
-                "Rules mode is closed until Revert, protected paths and follow-main land"
-            )
+            assert capability.reason == ("Rules authority is unavailable in this build")
         forbidden = Mock(side_effect=AssertionError("Read re-ran startup confirmation"))
         monkeypatch.setattr(server.live.workspace, "check_isolation", forbidden)
         monkeypatch.setattr(server.live.workspace._isolation, "check", forbidden)

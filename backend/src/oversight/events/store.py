@@ -11,16 +11,18 @@ import json
 import os
 import re
 import sqlite3
+import sys
 from collections import ChainMap
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import TypeAdapter
 
 from oversight.events.clock import Clock, format_ts, system_clock
 from oversight.events.graph_fold import apply_delta
+from oversight.events.lead_fold import CommittedLeadPrefix, fold_lead_status
 from oversight.events.needs_you import TerminalClaim, TerminalClaims, terminal_key
 from oversight.events.references import validate_references
 from oversight_contracts.events import (
@@ -154,9 +156,14 @@ def _connect(path: Path) -> sqlite3.Connection:
     # The writer task is the only user, through one worker thread at a time.
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.parent.chmod(0o700)
-    descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    flags = os.O_CREAT | os.O_RDWR
+    if sys.platform == "win32":
+        flags |= os.O_BINARY
+    descriptor = os.open(path, flags, 0o600)
     try:
-        os.fchmod(descriptor, 0o600)
+        name = "fchmod"
+        if hasattr(os, name):
+            cast(Callable[[int, int], None], getattr(os, name))(descriptor, 0o600)
     finally:
         os.close(descriptor)
     # SQLite derives new WAL/SHM permissions from the database. Tighten existing sidecars too.
@@ -352,6 +359,13 @@ class EventStore:
     @property
     def last_seq(self) -> int:
         return len(self._events)
+
+    def lead_status(self) -> tuple[int, str]:
+        """Fold one committed prefix without copying or exposing the full event log."""
+        through_seq = self.last_seq
+        return fold_lead_status(
+            CommittedLeadPrefix(self._reference_events, through_seq), through_seq
+        )
 
     def committed_events(self) -> tuple[ServerEvent, ...]:
         """Independent envelopes from this run, after SQL commit only; no disk IO."""

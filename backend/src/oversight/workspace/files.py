@@ -11,12 +11,16 @@ import os
 import re
 import shutil
 import stat
+import sys
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from typing import BinaryIO
 
 from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_read, bounded_text
+from oversight.workspace._platform import is_link_like, retry_nt, unlink_retry
 from oversight.workspace.errors import (
     FileTooLarge,
     InvalidPath,
@@ -76,6 +80,9 @@ def split_relative(path: str) -> list[str]:
 def _plain_dir(path: Path) -> bool:
     """True for a real directory: `lstat`, so a symbolic link to one does not count."""
     try:
+        if sys.platform == "win32":
+            info = os.lstat(path)
+            return stat.S_ISDIR(info.st_mode) and not is_link_like(info)
         return stat.S_ISDIR(os.lstat(path).st_mode)
     except OSError:
         return False
@@ -136,6 +143,8 @@ def resolve_in(root: Path, path: str) -> Path:
 
 
 def open_file(root: Path, path: str) -> BinaryIO:
+    if sys.platform == "win32":
+        raise WorkspaceError("NT agent file I/O requires W2")
     target = resolve_in(root, path)
     try:
         # O_NONBLOCK: opening a FIFO must not wait for a writer. The regular-file test comes after.
@@ -199,6 +208,8 @@ def write_file(
     `expected_hash=None` requires that the file not exist. The data goes to a temp file in
     `tmp_dir`, then `os.replace` swaps it in, so a reader never sees half a file.
     """
+    if sys.platform == "win32":
+        raise WorkspaceError("NT agent file I/O requires W2")
     check_content(content)
     data = content.encode("utf-8")
     mode = FILE_MODE
@@ -241,7 +252,7 @@ def list_files(root: Path) -> list[str]:
         directory = pending.pop()
         with os.scandir(directory) as entries:
             for entry in entries:
-                if entry.is_symlink():
+                if is_link_like(entry):
                     continue
                 if entry.is_dir(follow_symlinks=False):
                     if entry.name not in CACHE_DIRS:
@@ -263,7 +274,7 @@ def copy_template(template: Path, destination: Path) -> None:
     for entry in ordered:
         if entry.name in CACHE_DIRS or entry.name.endswith(".pyc"):
             continue
-        if entry.is_symlink():
+        if is_link_like(entry):
             raise WorkspaceError(f"the template contains a symbolic link: {entry.name}")
         target = destination / entry.name
         if entry.is_dir(follow_symlinks=False):
@@ -313,9 +324,66 @@ def remove_tree(root: Path, target: Path) -> None:
         raise UnsafeDeletion(f"not a deletable target: {_shown(root, target)}")
     if not os.path.lexists(target):
         return
+    if sys.platform == "win32":
+        _remove_nt(root, target)
+        return
     if target.is_symlink() or os.path.realpath(target) != str(target):
         raise UnsafeDeletion(f"a symbolic link in the way: {_shown(root, target)}")
     shutil.rmtree(target)
+
+
+def _plain_ancestors(path: Path) -> None:
+    for directory in (path, *path.parents):
+        if not _plain_dir(directory):
+            raise UnsafeDeletion("Windows deletion requires plain root and ancestors")
+
+
+def _remove_nt(root: Path, target: Path) -> None:
+    """Pre-walk without traversal; only known descendant links may be unlinked.
+
+    Destination race and inherited ACL residuals are accepted only for our disposable demo.
+    """
+    _plain_ancestors(target)
+    pending = [target]
+    links: list[tuple[Path, bool]] = []
+    while pending:
+        with os.scandir(pending.pop()) as entries:
+            for entry in entries:
+                info = entry.stat(follow_symlinks=False)
+                if is_link_like(info, nt=True):
+                    if getattr(info, "st_reparse_tag", 0) not in {0xA0000003, 0xA000000C}:
+                        raise UnsafeDeletion("unknown descendant reparse point")
+                    links.append((Path(entry.path), stat.S_ISDIR(info.st_mode)))
+                elif stat.S_ISDIR(info.st_mode):
+                    pending.append(Path(entry.path))
+    for link, directory in links:
+        if directory:
+            retry_nt(partial(os.rmdir, link), nt=True)
+        else:
+            unlink_retry(link)
+
+    def onexc(function: Callable[[str], object], path: str, error: BaseException) -> None:
+        destination = Path(path)
+        if not destination.is_relative_to(target):
+            raise UnsafeDeletion("deletion callback left its destination")
+        _plain_ancestors(destination.parent)
+        info = destination.lstat()
+        if is_link_like(info) or not isinstance(error, OSError):
+            raise error
+        if getattr(error, "winerror", None) not in {5, 32, 33}:
+            raise error
+        if not info.st_mode & stat.S_IWRITE:
+            os.chmod(destination, info.st_mode | stat.S_IWRITE)
+
+        def retry() -> None:
+            function(path)
+
+        try:
+            retry_nt(retry, nt=True)
+        except OSError:
+            raise error from None
+
+    shutil.rmtree(target, onexc=onexc)
 
 
 def registered_worktree(root: Path, main_root: Path, agent_id: str) -> Path:

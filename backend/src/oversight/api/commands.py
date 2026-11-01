@@ -88,6 +88,7 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("POST", "/graph/rescan", "Rescanning the graph"),
     ("POST", "/leads", "Starting a lead"),
     ("POST", "/leads/{agent_id}/stop", "Stopping a lead"),
+    ("POST", "/leads/{agent_id}/message", "Messages to a lead"),
 )
 
 
@@ -101,6 +102,8 @@ class Commands(Protocol):
     async def start_lead(self, request: StartLead) -> LeadCreated: ...
 
     def stop_lead(self, agent_id: str, request: StopLead) -> None: ...
+
+    async def lead_message(self, agent_id: str, request: AgentMessage) -> None: ...
 
     async def start(self, request: StartAgent) -> AgentCreated: ...
 
@@ -244,6 +247,11 @@ def add_command_routes(router: APIRouter, commands: Commands | None, *, run_id: 
     @router.post("/leads/{agent_id}/stop", status_code=202, response_class=Response)
     async def stop_lead(agent_id: str, request: StopLead) -> Response:  # pyright: ignore[reportUnusedFunction]
         commands.stop_lead(agent_id, request)
+        return Response(status_code=202)
+
+    @router.post("/leads/{agent_id}/message", status_code=202, response_class=Response)
+    async def lead_message(agent_id: str, request: AgentMessage) -> Response:  # pyright: ignore[reportUnusedFunction]
+        await commands.lead_message(agent_id, request)
         return Response(status_code=202)
 
     @router.get("/merge-mode")

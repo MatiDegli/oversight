@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 
 
 # Only the activation front may open this latch. No environment or setting controls it.
-RULES_ACTIVATION = False
-_CLOSED_REASON = "Rules mode is closed until Revert, protected paths and follow-main land"
+RULES_ACTIVATION = True
+_CLOSED_REASON = "Rules authority is unavailable in this build"
 
 
 @dataclass(frozen=True)
