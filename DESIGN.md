@@ -625,8 +625,20 @@ when the person explicitly maximizes that panel. The [v4 sketches](docs/sketches
 | Focus panel | 880px wide | tabs for file view, live diff, review, conversation, plan and settings |
 | Graph stage | remaining width, at least 560px | the same graph, its heading, legend and controls |
 | Agents panel / rail | 400px / 56px wide | cards and task composer, or letter avatars with state |
-| Bottom dock | 280px high when open | Terminal, Tests, Activity log; later the replay timeline |
+| Bottom dock | 280px high when open | Terminal, Tests, Activity log |
+| Recorded replay row (built) | 44px high | Play/pause, Restart, position, milestones and 1×/2×/4× speed; below the open dock and above status |
 | Status line | 24px high | live or named replay, merge mode, budget brake and connection |
+
+The desktop replay row is built for browser-owned recordings, including the static site.
+It uses 14px horizontal padding, 12px gaps, 34px controls, a 100px two-line time display,
+and 24px milestone targets above a 4px track. Restart shows its word from 1600px.
+The timeline is fixed 1× time: first event at zero, then cumulative timestamp gaps clamped
+between zero and 2000ms before speed is applied. Times floor seconds. The slider alone handles
+Left/Right (one second), Shift+Left/Right (five seconds), Home and End. Hover/focus previews
+milestone details; activation or pointer release seeks without opening a tab. The row is hidden
+below 1280px and during practice. At overlay widths it subtracts the agents panel occlusion,
+leaving the existing graph owner and framing rules intact. Neutral replay paint and control
+gradients belong to theme tokens; control boundaries use control-edge and focus uses text.
 
 - **Watch:** the focus panel is closed, leaving the graph beside the agents panel.
 - **Focus:** opening any focus tab folds the agents panel into its rail. Up to six tabs open by
@@ -1561,7 +1573,7 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 | --- | --- |
 | 1 | tokens and type; rest, read and editing states with letter badges; watch mode with agent cards and the decisions chip; the "Ready for review" pill; read-only live diff; review with Approve and Reject, dimming all but the change; plain review header |
 | 2 | agent B's color; pending nodes and edges; impact cone with distance badges, dimming and the cone card; Request changes; editable new side; editable file view; spend total; Stop and discard |
-| 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; replay timeline |
+| 3 | possible call edges; "no test calls it" badges (neutral, with an icon); agent cursors with names in the editor; "Earlier today" history; cone overlap alerts; desktop recorded replay row (built Nov 1) |
 | Brought forward to level 1, never blocking | the LED field with its local light, working rings and agent marker, the rest contours and merge travel; plain ground (#070707 in dark) whenever WebGL2 is missing |
 | After level 1, never blocking | the matte header's grain |
 | Mon Nov 2, only with level 2 closed | day mode |

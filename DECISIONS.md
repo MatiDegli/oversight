@@ -3244,3 +3244,32 @@ text and a 1.5px press over 70ms ease-out (instant under reduced motion). The ri
 Panel pseudo-elements use a compensated flex row so static and floating roots keep their
 positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
 light that stays outside its row gap. Monaco and the graph host receive neither control effect.
+
+
+## 2026-11-01 — Browser-owned replay controls
+
+The approved b-1101a sketch (01:03:27 ART) adds a desktop row to Vite replay mode and the
+static recording. Its premises reference main `6ab92e7`; implementation starts at `54dc64d`,
+where the same session, navigation and shell code moved and panel edge feedback is already built.
+Backend SSE replay (`make replay`) keeps the ordinary live frontend and has no controls.
+
+Seek rebuilds the complete recorded prefix through the existing reducer and publishes it once.
+It preserves playing/paused state; seeking backward from ended pauses. Restart and Play again
+start at zero and play at the selected rate. The end stops, without looping. Only absent tab
+subjects close, using the existing history behavior. Recorded file access refreshes after a
+seek even when the graph commit is unchanged; snapshot-only paths still lack source contents.
+
+Milestones are sibling buttons beside the slider, so assistive technology can reach them
+without nested interactive descendants. Pointer preview changes no prefix. Only slider keys
+seek; there is no global Space handler and no automatic focus. The neutral focus ring and
+agent/state labels retain DESIGN.md's meaning and take precedence over generic skill advice
+about touch target sizes: these approved desktop targets are 24px and the row excludes phones.
+
+The controlled player and timeline are separately deferred from the shell, and the row uses
+React.lazy with a local 44px Suspense reservation. Session cleanup cancels pending imports,
+clock callbacks and loading publications; practice stops that same session before setting its cut.
+The existing startReplay API remains compatible for direct callers and test seams: it divides
+each gap by speed before applying the two-second cap and supports speed zero. The new player
+caps each gap first, forming one stable axis for every rate; its ready promise means loaded and
+validated, while legacy ready still means the entire log finished. Keeping both avoids changing
+backend-like timing or the tested immediate replay API.
