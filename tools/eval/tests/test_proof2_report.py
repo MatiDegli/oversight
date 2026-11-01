@@ -284,3 +284,98 @@ def test_unattributable_regressions_and_missing_base(tmp_path, capsys):
         "not_applicable",
     ]
     assert revisions[1]["regress_vs_previous"] == {"status": "unknown", "ids": []}
+
+
+def test_spend(tmp_path, capsys):
+    rows = report(tmp_path, capsys)
+    changes = [r for r in rows if r["record"] == "change"]
+    assert [c["review_cost"] for c in changes] == [
+        {"calls": 2, "usd": 0.1, "known_usd": 0.1, "coverage": "complete"},
+        {"calls": 1, "usd": 0.05, "known_usd": 0.05, "coverage": "complete"},
+        {"calls": 0, "usd": 0.0, "known_usd": 0.0, "coverage": "complete"},
+    ]
+    arms = [r for r in rows if r["record"] == "arm"]
+    assert [a["cost"] for a in arms] == [
+        {"calls": 3, "usd": 0.3, "known_usd": 0.3, "coverage": "complete"},
+        {"calls": 7, "usd": 0.65, "known_usd": 0.65, "coverage": "complete"},
+    ]
+    assert [a["usd_per_correct"] for a in arms] == [0.3, 0.325]
+    assert [a["by_role"] for a in arms] == [
+        {"agent": {"calls": 3, "usd": 0.3, "known_usd": 0.3, "coverage": "complete"}},
+        {
+            "agent": {"calls": 4, "usd": 0.5, "known_usd": 0.5, "coverage": "complete"},
+            "review": {"calls": 3, "usd": 0.15, "known_usd": 0.15, "coverage": "complete"},
+        },
+    ]
+    assert [a["problems"] for a in arms] == [[], []]
+
+
+@pytest.mark.parametrize(
+    "variation, usd, known, coverage, calls, agent_usd, agent_known",
+    [
+        (2, None, 0.45, "missing_metrics", 7, None, 0.3),
+        (3, 0.75, 0.75, "complete", 8, 0.5, 0.5),
+        (4, 0.75, 0.75, "complete", 8, 0.5, 0.5),
+        (6, None, 0.55, "missing_metrics", 7, None, 0.4),
+    ],
+)
+def test_spend_variations(
+    tmp_path, capsys, variation, usd, known, coverage, calls, agent_usd, agent_known
+):
+    events = scenario()
+    if variation in (2, 6):
+        index = 19 if variation == 2 else 1
+        update = (
+            dict(input_tokens=None, cached_tokens=None, output_tokens=None)
+            if variation == 2
+            else dict(model="unpriced")
+        )
+        events[index] = events[index].model_copy(
+            update={"payload": events[index].payload.model_copy(update=update)}
+        )
+    else:
+        events.append(
+            event(
+                "usage.tick",
+                142,
+                role="plan" if variation == 3 else None,
+                change_id=None if variation == 3 else "change-1",
+            )
+        )
+    rows = report(tmp_path, capsys, renumber(events))
+    without, with_ = [r for r in rows if r["record"] == "arm"]
+    assert with_["cost"] == dict(calls=calls, usd=usd, known_usd=known, coverage=coverage)
+    assert with_["by_role"]["agent"] == dict(
+        calls=4,
+        usd=agent_usd,
+        known_usd=agent_known,
+        coverage="complete" if agent_usd is not None else "missing_metrics",
+    )
+    assert with_["by_role"]["review"]["usd"] == 0.15
+    assert with_["usd_per_correct"] == (None if variation in (2, 6) else 0.375)
+    assert without["cost"] == dict(
+        calls=3,
+        usd=None if variation in (4, 6) else 0.3,
+        known_usd=0.2 if variation == 6 else 0.3,
+        coverage="missing_metrics" if variation in (4, 6) else "complete",
+    )
+    if variation == 3:
+        assert with_["by_role"]["plan"] == dict(
+            calls=1, usd=0.1, known_usd=0.1, coverage="complete"
+        )
+    if variation == 4:
+        assert with_["by_role"]["unknown_role"]["usd"] == 0.1
+        assert without["problems"] == ["1 ticks without a role"]
+
+
+def test_zero_and_unattributed_cost(tmp_path, capsys):
+    for tokens, expected in [(0, 0.0), (1000000, 0.1)]:
+        rows = report(
+            tmp_path, capsys, [event("usage.tick", change_id=None, input_tokens=tokens)], []
+        )
+        without = next(r for r in rows if r.get("arm") == "without_oversight")
+        assert without["cost"] == dict(
+            calls=1, usd=expected, known_usd=expected, coverage="complete"
+        )
+        assert without["usd_per_correct"] is None
+        assert without["problems"] == ["1 agent ticks without a change"]
