@@ -85,7 +85,7 @@ export function AgentsRail({ state }: { state: State }) {
   return (
     <aside
       aria-label="Agents"
-      className="flex w-(--agents-rail-width) shrink-0 flex-col items-center gap-3.5 border-l border-divider bg-shell py-3.5"
+      className="agents-rail flex w-(--agents-rail-width) shrink-0 flex-col items-center gap-3.5 border-l border-divider bg-shell py-3.5"
     >
       {selectAgents(state).map((agent) => {
         const look = agentLook[agent.slot];

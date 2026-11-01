@@ -3234,3 +3234,13 @@ the live capture: the preservation and concurrent-update cases use false shape c
 the mutation-rejection cases use null shape or false completeness. Previously empty shape
 and true completeness matched a clean capture: preservation failed, four mutation cases
 failed to raise, and the concurrent-update case passed without testing a changed value.
+
+## 2026-10-31 — Panel edges and control feedback
+
+Reason: the maintainer approved the life-layer look on 2026-10-29: "a 1px top-edge light on
+panels; a soft glow on keyboard focus; buttons press down 1-2px". The implementation follows
+main `04a32ab`: themed edge and glow tokens, a 1px gradient, a 6px focus drop-shadow at 55%
+text and a 1.5px press over 70ms ease-out (instant under reduced motion). The ring stays intact.
+Panel pseudo-elements use a compensated flex row so static and floating roots keep their
+positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
+light that stays outside its row gap. Monaco and the graph host receive neither control effect.
