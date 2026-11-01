@@ -1,0 +1,239 @@
+.replay-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 44px;
+  height: 44px;
+  gap: 12px;
+  padding-inline: 14px;
+  width: calc(100% - var(--graph-overlay-occlusion, 0px));
+  border-top: 1px solid var(--divider);
+  background: var(--panel);
+  box-shadow: inset 0 1px 0 var(--replay-edge-light);
+  z-index: 4;
+}
+.replay-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  gap: 8px;
+  border: 1px solid var(--control-edge);
+  border-radius: 7px;
+  color: var(--text);
+  background: linear-gradient(var(--replay-control-top), var(--replay-control-bottom));
+  box-shadow: var(--top-highlight);
+  font-size: 14px;
+  font-weight: 600;
+}
+.replay-button svg {
+  width: 16px;
+  height: 16px;
+}
+.replay-button:hover {
+  background: var(--raised);
+}
+.replay-button.is-primary {
+  color: var(--page);
+  background: var(--text);
+  border-color: var(--text);
+}
+.replay-button.is-primary:hover {
+  background: var(--text-hover);
+}
+.replay-restart span {
+  display: none;
+}
+.replay-time {
+  min-width: 100px;
+  line-height: 1.2;
+  font: 400 14px/1.2 var(--code-font);
+}
+.replay-time span {
+  color: var(--muted);
+}
+.replay-time small {
+  display: block;
+  font: 400 12px/1.2 var(--text-font);
+  color: var(--faint);
+}
+.replay-speed {
+  display: flex;
+  flex-shrink: 0;
+  height: 34px;
+  border: 1px solid var(--control-edge);
+  border-radius: 8px;
+  background: var(--inset);
+}
+.replay-speed button {
+  width: 36px;
+  font: 400 14px var(--code-font);
+  color: var(--muted);
+  border-right: 1px solid var(--divider);
+}
+.replay-speed button:first-child {
+  border-radius: 7px 0 0 7px;
+}
+.replay-speed button:last-child {
+  border-right: 0;
+  border-radius: 0 7px 7px 0;
+}
+.replay-speed button[aria-pressed="true"] {
+  background: var(--raised);
+  color: var(--text);
+  font-weight: 700;
+}
+.replay-speed button:hover {
+  color: var(--text);
+}
+.replay-strip {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  margin-inline: 12px;
+  height: 44px;
+}
+.replay-slider {
+  position: absolute;
+  inset: 25px 0 0;
+  border-radius: 2px;
+  touch-action: none;
+  cursor: pointer;
+}
+.replay-track {
+  position: absolute;
+  top: 6px;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--replay-track);
+}
+.replay-track > div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--replay-fill);
+}
+.replay-knob {
+  position: absolute;
+  top: 1px;
+  width: 14px;
+  height: 14px;
+  transform: translateX(-50%);
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 1px var(--replay-knob-edge);
+}
+.replay-mark {
+  position: absolute;
+  top: 1px;
+  width: 24px;
+  height: 24px;
+  transform: translateX(-50%);
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.replay-mark > span {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  font: 700 12px var(--text-font);
+  border-radius: 4px;
+  color: var(--on-agent);
+  background: var(--slot-graphic);
+}
+.replay-mark[data-kind="start"] > span {
+  background: var(--raised);
+  color: var(--text);
+  font-size: 10px;
+  border: 1px solid var(--border);
+}
+.replay-mark[data-kind="merge"] > span {
+  background: var(--panel);
+  color: var(--slot-text);
+  border: 1px solid var(--slot-graphic);
+}
+.replay-mark > i {
+  position: absolute;
+  top: 24px;
+  width: 1px;
+  height: 6px;
+  background: var(--replay-stem);
+}
+.replay-mark:hover {
+  background: var(--replay-hover);
+}
+.replay-ghost {
+  position: absolute;
+  top: 0;
+  height: 44px;
+  width: 1px;
+  background: var(--replay-ghost);
+  pointer-events: none;
+}
+.replay-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  max-width: min(330px, 100%);
+  width: max-content;
+  padding: 10px 14px 11px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--top-highlight), var(--card-shadow);
+  font: 400 13px var(--text-font);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.replay-tooltip > div {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.replay-tooltip strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.replay-tooltip time,
+.replay-hash {
+  font: 400 13px var(--code-font);
+}
+.replay-tooltip p {
+  margin-top: 4px;
+}
+.replay-tooltip p span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.replay-tooltip svg {
+  width: 13px;
+  height: 13px;
+}
+.replay-bar :is(button, [role="slider"]):focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  box-shadow: 0 0 6px var(--replay-focus-glow);
+}
+@media (min-width: 1600px) {
+  .replay-restart {
+    width: 102px;
+    padding-inline: 14px;
+  }
+  .replay-restart span {
+    display: inline;
+  }
+}
+@media (max-width: 1279px) {
+  .replay-bar,
+  .replay-placeholder {
+    display: none;
+  }
+}
