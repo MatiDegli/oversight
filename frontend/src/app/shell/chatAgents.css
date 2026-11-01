@@ -47,6 +47,11 @@ button.chat-agent-row:hover {
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
+.chat-agent-badge,
+.chat-agent-pill {
+  /* Anchor translucent team tints to panel so selection cannot lower text contrast. */
+  background: linear-gradient(var(--slot-tint), var(--slot-tint)), var(--panel);
+}
 .chat-agent-badge {
   position: relative;
   display: flex;
@@ -95,7 +100,6 @@ button.chat-agent-row:hover {
   font-size: 12px;
   font-weight: 700;
   color: var(--slot-text);
-  background: var(--slot-tint);
 }
 .chat-agent-row[data-ended="true"] .chat-agent-pill {
   color: var(--muted);
