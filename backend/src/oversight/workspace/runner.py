@@ -135,6 +135,21 @@ def child_env(extra: Mapping[str, str] | None) -> dict[str, str]:
         "LC_ALL": "C.UTF-8",
         "TZ": "UTC",
     }
+    if sys.platform == "win32":
+        base |= {
+            key: os.environ[key]
+            for key in ("SYSTEMROOT", "WINDIR", "COMSPEC", "PATHEXT")
+            if key in os.environ
+        }
+        base |= dict(extra or {})
+        base["PYTHONUTF8"] = "1"
+        if home := (extra or {}).get("HOME"):
+            base |= dict.fromkeys(("TEMP", "TMP", "USERPROFILE"), home)
+        return {
+            key: value
+            for key, value in base.items()
+            if key.casefold() not in {"meta_api_key", "baseten_api_key"}
+        }
     return base | dict(extra or {})
 
 
@@ -181,9 +196,15 @@ async def _reap_nt(
     """Refuse evidence unless both the leader and every job member are gone before return."""
     try:
         if launch_failed:
-            handle = getattr(transport.get_extra_info("subprocess"), "_handle", None)
-            terminate_suspended(transport.get_pid(), process_handle=int(handle) if handle else None)
-        terminate_job(job)
+            try:
+                handle = getattr(transport.get_extra_info("subprocess"), "_handle", None)
+                terminate_suspended(
+                    transport.get_pid(), process_handle=int(handle) if handle else None
+                )
+            finally:
+                terminate_job(job)
+        else:
+            terminate_job(job)
         deadline = time.monotonic() + KILL_WAIT_S
         while not collector.exited.done() or job_pids(job):
             if time.monotonic() >= deadline:

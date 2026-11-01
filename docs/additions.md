@@ -283,9 +283,9 @@ new candidate work waits for the maintainer’s order.
 - After the hackathon, after the Tauri shell: native backend ports for Windows and macOS, as their
   own fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
   process-tree cleanup, file locks, no-follow file opens), then a test-isolation design for each OS.
-  A minimal Windows port, the per-OS layer in the mode without isolation, is item 20 below; since
-  2026-11-01 it may start before the freeze when a slot is free, behind Chat and the lead
-  (DECISIONS.md). Windows isolation follows that port. Until a port has its own isolation, it runs
+  A minimal Windows port, the per-OS layer in the mode without isolation, is item 20 below; on
+  2026-11-01 the maintainer ranked it immediately after the conversational lead and Chat, ahead
+  of the other displaced fronts, superseding its after-Tauri order (DECISIONS.md). Windows isolation follows that port. Until a port has its own isolation, it runs
   in the existing mode without isolation (network open; rules, Revert and added-test probes disabled).
   Any new dependency follows the license list; filelock (Unlicense) needs the maintainer's OK.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
@@ -293,7 +293,7 @@ new candidate work waits for the maintainer’s order.
 
 | # | Item | State and commit or branch | In contracts proposal |
 | --- | --- | --- | --- |
-| 20 | Minimal native Windows port | Moved 2026-11-01: after the hackathon, after the Tauri shell; per-OS layer, mode without isolation | No |
+| 20 | Minimal native Windows port | Prioritized 2026-11-01: immediately after lead and Chat; W1 startup/lifetime implemented; native acceptance pending on `workspace/windows-platform`, open mode; `_platform.py` and later `source_nt.py` approved | No |
 
 ## No
 

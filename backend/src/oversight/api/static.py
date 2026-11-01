@@ -77,7 +77,7 @@ def _safe_nt_relative(relative: str) -> bool:
             return False
         if any(ord(char) < 32 or char in '<>"|?*' for char in part):
             return False
-        stem = part.partition(".")[0].upper()
+        stem = part.partition(".")[0].rstrip(" ").upper()
         if stem in {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"} or (
             len(stem) == 4 and stem[:3] in {"COM", "LPT"} and stem[3] in "123456789¹²³"
         ):
@@ -124,6 +124,8 @@ def add_static(app: FastAPI, dist: Path) -> bool:
         if target is not None:
             return _respond(target, root)
         looks_like_file = relative.partition("/")[0] == ASSETS or "." in relative.rpartition("/")[2]
+        if sys.platform == "win32" and relative.partition("/")[0].casefold() == ASSETS:
+            looks_like_file = True
         index = _file_under(root, INDEX)
         if looks_like_file or index is None:
             return error_response("not_found", "no such resource")

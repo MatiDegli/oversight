@@ -192,7 +192,7 @@ class IsolatedRunner:
     """A Spawn implementation selected by C3 or injected for local acceptance/tests."""
 
     def __init__(self, runtime: Path, *, port: int = 0) -> None:
-        self.runtime = runtime.resolve()
+        self.runtime = runtime if sys.platform == "win32" else runtime.resolve()
         self.port = port
         self.entry: dict[str, object] | None = None
         self._ready = False

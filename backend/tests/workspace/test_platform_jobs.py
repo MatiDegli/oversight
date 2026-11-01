@@ -306,3 +306,28 @@ async def test_cleanup_failure_retains_partial_suite_report(tmp_path, launch, mo
         )
     assert exc.value.run.result.passed == 1
     assert exc.value.run.result.outcome == "error"
+
+
+@pytest.mark.anyio
+async def test_job_empty_deadline_refuses_evidence(tmp_path, launch, monkeypatch):
+    state, calls = launch
+    monkeypatch.setattr(runner, "KILL_WAIT_S", 0.02)
+    monkeypatch.setattr(runner, "job_pids", lambda job: (99,))
+    with pytest.raises(OSError, match="deadline"):
+        await runner._execute_nt(["python.exe"], tmp_path, 1, None, 100, asyncio.Event())
+    assert calls[-1] == "close" and state["transport"].was_closed
+
+
+@pytest.mark.anyio
+async def test_launch_failure_still_terminates_job_if_process_termination_fails(
+    tmp_path, launch, monkeypatch
+):
+    state, calls = launch
+    monkeypatch.setattr(runner, "assign_job", Mock(side_effect=OSError("assignment failed")))
+    monkeypatch.setattr(
+        runner, "terminate_suspended", Mock(side_effect=OSError("termination failed"))
+    )
+    with pytest.raises(OSError, match="termination failed"):
+        await runner._execute_nt(["python.exe"], tmp_path, 1, None, 100, asyncio.Event())
+    assert calls[-2:] == ["kill", "close"]
+    assert state["transport"].collector.exited.done() and state["transport"].was_closed

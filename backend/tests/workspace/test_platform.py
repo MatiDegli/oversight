@@ -69,3 +69,45 @@ def test_nt_unlock_closes_even_on_error(tmp_path):
         platform.release_lock(fd, msvcrt_api=crt)
     with pytest.raises(OSError):
         os.fstat(fd)
+
+
+@pytest.mark.parametrize("nt", [False, True])
+def test_link_classification_and_posix_no_stat(nt):
+    import stat
+    from types import SimpleNamespace
+    from typing import cast
+    from unittest.mock import Mock
+
+    child = SimpleNamespace(
+        is_symlink=Mock(return_value=False),
+        stat=Mock(return_value=SimpleNamespace(st_mode=stat.S_IFDIR, st_file_attributes=0x400)),
+    )
+    assert platform.is_link_like(cast(os.DirEntry[str], child), nt=nt) == nt
+    assert child.stat.call_count == int(nt)
+    for mode, attributes in [(stat.S_IFLNK, 0), (stat.S_IFDIR, 0x400)]:
+        assert platform.is_link_like(
+            cast(os.stat_result, SimpleNamespace(st_mode=mode, st_file_attributes=attributes)),
+            nt=True,
+        )
+
+
+@pytest.mark.parametrize(
+    "number,nt,retries", [(5, True, 7), (32, True, 7), (33, True, 7), (5, False, 1), (2, True, 1)]
+)
+def test_retry_exhaustion_preserves_first_error(monkeypatch, number, nt, retries):
+    from unittest.mock import Mock
+
+    first = PermissionError("first failure")
+    first.__dict__["winerror"] = number
+    errors = [first] + [PermissionError("later") for _ in range(6)]
+    for error in errors:
+        error.__dict__["winerror"] = number
+    operation = Mock(side_effect=errors)
+    sleep = Mock()
+    import time
+
+    monkeypatch.setattr(time, "sleep", sleep)
+    with pytest.raises(OSError) as exc:
+        platform.retry_nt(operation, nt=nt)
+    assert exc.value is first and operation.call_count == retries
+    assert sum(call.args[0] for call in sleep.call_args_list) <= 1

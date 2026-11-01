@@ -2,10 +2,15 @@
 
 import ctypes
 import errno
+import logging
+import ntpath
 import os
+import re
+import stat
 import sys
 import threading
-from collections.abc import Callable
+import time
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -73,11 +78,13 @@ def acquire_lock(path: Path, *, msvcrt_api: Locking | None = None) -> int:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
+                os.close(fd)
                 raise WorkspaceBusy(
                     "another Oversight server is using this runtime directory"
                 ) from None
     except BaseException:
-        os.close(fd)
+        if nt:
+            os.close(fd)
         raise
     return fd
 
@@ -115,6 +122,9 @@ class Kernel(Protocol):
     TerminateProcess: Callable[..., int]
     CloseHandle: Callable[..., int]
     GetLastError: Callable[..., int]
+    QueryDosDeviceW: Callable[..., int]
+    GetVolumeInformationW: Callable[..., int]
+    GetDriveTypeW: Callable[..., int]
 
 
 class _BasicLimits(ctypes.Structure):
@@ -170,6 +180,21 @@ def kernel32() -> Kernel:
         "TerminateProcess": (_DWORD, [_HANDLE, _DWORD]),
         "CloseHandle": (_DWORD, [_HANDLE]),
         "GetLastError": (_DWORD, []),
+        "GetDriveTypeW": (_DWORD, [ctypes.c_wchar_p]),
+        "QueryDosDeviceW": (_DWORD, [ctypes.c_wchar_p, ctypes.c_wchar_p, _DWORD]),
+        "GetVolumeInformationW": (
+            _DWORD,
+            [
+                ctypes.c_wchar_p,
+                ctypes.c_wchar_p,
+                _DWORD,
+                _HANDLE,
+                _HANDLE,
+                _HANDLE,
+                ctypes.c_wchar_p,
+                _DWORD,
+            ],
+        ),
     }
     for name, (result, args) in signatures.items():
         call = getattr(dll, name)
@@ -224,6 +249,8 @@ def resume_suspended(pid: int, *, kernel: Kernel | None = None) -> None:
         entry.size = ctypes.sizeof(entry)
         ok = api.Thread32First(snapshot, ctypes.byref(entry))
         while ok:
+            if entry.size < 16:
+                raise OSError("incomplete thread snapshot")
             if entry.pid == pid:
                 threads.append(entry.tid)
             entry.size = ctypes.sizeof(entry)
@@ -296,3 +323,196 @@ def ensure_lifetime_job() -> None:
                 close_job(job)
                 raise error
             _lifetime_job = job
+
+
+def is_link_like(entry: os.DirEntry[str] | os.stat_result, *, nt: bool | None = None) -> bool:
+    windows = sys.platform == "win32" if nt is None else nt
+    if hasattr(entry, "is_symlink"):
+        child = cast(os.DirEntry[str], entry)
+        if not windows:
+            return child.is_symlink()
+        if child.is_symlink() or getattr(child, "is_junction", lambda: False)():
+            return True
+        info = child.stat(follow_symlinks=False)
+    else:
+        info = cast(os.stat_result, entry)
+    return stat.S_ISLNK(info.st_mode) or (
+        windows and bool(getattr(info, "st_file_attributes", 0) & 0x400)
+    )
+
+
+def retry_nt(operation: Callable[[], None], *, nt: bool) -> None:
+    first: OSError | None = None
+    for delay in (0.02, 0.04, 0.08, 0.16, 0.32, 0.32, None):
+        try:
+            operation()
+            return
+        except OSError as error:
+            if not nt or getattr(error, "winerror", None) not in {5, 32, 33}:
+                raise
+            first = first or error
+            if delay is None:
+                raise first from None
+            time.sleep(delay)
+
+
+def replace_retry(source: Path, destination: Path, *, nt: bool | None = None) -> None:
+    retry_nt(
+        lambda: os.replace(source, destination), nt=sys.platform == "win32" if nt is None else nt
+    )
+
+
+def unlink_retry(path: Path, *, missing_ok: bool = False, nt: bool | None = None) -> None:
+    retry_nt(
+        lambda: path.unlink(missing_ok=missing_ok), nt=sys.platform == "win32" if nt is None else nt
+    )
+
+
+def executable(name: str, *, path: str | None = None) -> str:
+    if sys.platform != "win32":
+        return name
+    # shutil.which on Windows can implicitly search cwd, even with an explicit PATH.
+    for directory in (os.environ.get("PATH", "") if path is None else path).split(os.pathsep):
+        directory = directory.strip('"')
+        if not os.path.isabs(directory):
+            continue
+        candidate = Path(directory) / (name + ".exe")
+        if candidate.is_file():
+            return str(candidate.absolute())
+    raise FileNotFoundError(f"{name}.exe is required on an explicit absolute PATH")
+
+
+def verify_sentinel(path: Path, fd: int) -> None:
+    opened, current = os.fstat(fd), path.lstat()
+    if (
+        not stat.S_ISREG(current.st_mode)
+        or current.st_nlink != 1
+        or is_link_like(current)
+        or (opened.st_dev, opened.st_ino) != (current.st_dev, current.st_ino)
+    ):
+        raise WorkspaceBusy("runtime lock sentinel changed or is not a plain file")
+
+
+def volume_info(drive: str, *, kernel: Kernel | None = None) -> tuple[int, str, str]:
+    api = kernel or kernel32()
+    device, filesystem = ctypes.create_unicode_buffer(32768), ctypes.create_unicode_buffer(32)
+    if not api.QueryDosDeviceW(drive, device, len(device)):
+        raise _failure(api, "QueryDosDeviceW")
+    if not api.GetVolumeInformationW(
+        drive + "\\", None, 0, None, None, None, filesystem, len(filesystem)
+    ):
+        raise _failure(api, "GetVolumeInformationW")
+    return api.GetDriveTypeW(drive + "\\"), filesystem.value, device.value
+
+
+def synced_roots() -> tuple[str, ...]:
+    roots = [
+        value
+        for key, value in os.environ.items()
+        if key.casefold() in {"onedrive", "onedriveconsumer", "onedrivecommercial"}
+    ]
+    if sys.platform == "win32":
+        import winreg
+
+        # Windows registers cloud sync roots, including custom OneDrive folder names.
+        location = r"Software\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager"
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(hive, location) as parent:
+                    for index in range(winreg.QueryInfoKey(parent)[0]):
+                        provider = winreg.EnumKey(parent, index)
+                        try:
+                            with winreg.OpenKey(parent, provider + r"\UserSyncRoots") as key:
+                                for value in range(winreg.QueryInfoKey(key)[1]):
+                                    _, folder, kind = winreg.EnumValue(key, value)
+                                    if kind in (winreg.REG_SZ, winreg.REG_EXPAND_SZ):
+                                        roots.append(os.path.expandvars(str(folder)))
+                        except FileNotFoundError:
+                            continue
+            except FileNotFoundError:
+                pass
+    return tuple(roots)
+
+
+def _reserved_nt_segment(part: str) -> bool:
+    stem = part.partition(".")[0].rstrip(" ").upper()
+    return (
+        stem in {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"}
+        or re.fullmatch(r"(?:COM|LPT)[1-9¹²³]", stem) is not None
+    )
+
+
+def preflight_placement(
+    path: Path | str,
+    *,
+    nt: bool | None = None,
+    lstat: Callable[[str], os.stat_result] = os.lstat,
+    query: Callable[[str], tuple[int, str, str]] = volume_info,
+    synced: Sequence[str] | None = None,
+    userprofile: str | None = None,
+) -> None:
+    """Inspect lexical inputs and existing ancestors before resolve, creation or Git.
+
+    Demo-only check, not an ACL or filesystem sandbox. No elevation or safe.directory bypass.
+    """
+    if not (sys.platform == "win32" if nt is None else nt):
+        return
+    raw = str(path)
+    drive, tail = ntpath.splitdrive(raw)
+    parts = tail.replace("/", "\\").split("\\")
+    if (
+        not re.fullmatch(r"[A-Za-z]:", drive)
+        or not tail.startswith(("/", "\\"))
+        or raw.startswith(("/", "\\"))
+        or any(p in {".", ".."} or _reserved_nt_segment(p) for p in parts)
+        or any(":" in p or "~" in p or p.endswith((".", " ")) for p in parts if p)
+        or any(any(ord(c) < 32 or c in '<>"|?*' for c in p) for p in parts)
+    ):
+        raise OSError(
+            "Windows placement requires a short absolute local path without aliases or ADS"
+        )
+    canonical = ntpath.normpath(raw)
+    known = synced_roots() if synced is None else synced
+    if any(
+        p.casefold() == "onedrive" or p.casefold().startswith("onedrive -") for p in parts
+    ) or any(
+        ntpath.commonpath([canonical, root]).casefold() == ntpath.normpath(root).casefold()
+        for root in known
+        if ntpath.splitdrive(root)[0].casefold() == drive.casefold()
+    ):
+        raise OSError("Windows placement must be in nonsynced folders, outside cloud sync roots")
+    kind, filesystem, device = query(drive)
+    if (
+        kind != 3
+        or filesystem.upper() != "NTFS"
+        or re.fullmatch(r"\\Device\\HarddiskVolume[0-9]+", device) is None
+    ):
+        raise OSError(
+            "Windows placement requires a fixed local NTFS drive, without SUBST or mappings"
+        )
+    current = drive + "\\"
+    for part in ["", *(p for p in parts if p)]:
+        current = ntpath.join(current, part)
+        try:
+            info = lstat(current)
+        except FileNotFoundError:
+            break
+        if is_link_like(info, nt=True) or getattr(info, "st_file_attributes", 0) & (
+            0x1000 | 0x40000 | 0x400000
+        ):
+            raise OSError("Windows placement has a reparse, offline or recall ancestor")
+        if not stat.S_ISDIR(info.st_mode):
+            raise OSError("Windows placement ancestors must be plain directories")
+    profile = userprofile if userprofile is not None else os.environ.get("USERPROFILE", "")
+    if (
+        not profile
+        or ntpath.splitdrive(profile)[0].casefold() != drive.casefold()
+        or (
+            ntpath.commonpath([canonical, profile]).casefold()
+            != ntpath.normpath(profile).casefold()
+        )
+    ):
+        logging.getLogger(__name__).warning(
+            "Windows placement is outside USERPROFILE; "
+            "use a short private local NTFS nonsynced folder"
+        )

@@ -251,3 +251,52 @@ def test_windows_reload_refuses_before_uvicorn(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["oversight", "serve"])
     cli.main()
     assert run.call_args.kwargs["reload"] is False
+
+
+def test_windows_placement_refuses_before_workspace_or_store(tmp_path, monkeypatch):
+    import sys
+    from unittest.mock import Mock
+
+    from oversight import app as composition
+
+    check = Mock(side_effect=OSError("unsafe placement"))
+    workspace, store = Mock(), Mock()
+    monkeypatch.setattr(composition, "preflight_placement", check)
+    monkeypatch.setattr(composition, "Workspace", workspace)
+    monkeypatch.setattr(composition, "EventStore", store)
+    monkeypatch.setattr(sys, "platform", "win32")
+    with pytest.raises(OSError, match="unsafe placement"):
+        create_app(Settings(runtime_dir=tmp_path / ".runtime"))
+    workspace.assert_not_called()
+    store.assert_not_called()
+
+
+def test_windows_ledger_settlement_does_not_require_placement_or_git(tmp_path, monkeypatch):
+    import json
+    import os
+    import sys
+    from unittest.mock import AsyncMock, Mock
+
+    from oversight import app as composition
+    from oversight.workspace import core
+    from oversight.workspace._platform import acquire_lock
+
+    root = tmp_path / ".runtime"
+    root.mkdir()
+    fd = acquire_lock(root / "server.lock")
+    monkeypatch.setattr(core, "acquire_lock", lambda path: fd)
+    release = Mock(side_effect=os.close)
+    lifetime, probe = Mock(), AsyncMock()
+    monkeypatch.setattr(core, "release_lock", release)
+    monkeypatch.setattr(core, "ensure_lifetime_job", lifetime)
+    monkeypatch.setattr(core, "probe_job_support", probe)
+    monkeypatch.setattr(core, "executable", Mock(side_effect=AssertionError("Git not needed")))
+    monkeypatch.setattr(
+        composition, "preflight_placement", Mock(side_effect=AssertionError("placement"))
+    )
+    monkeypatch.setattr(sys, "platform", "win32")
+    result = composition.ledger_command(Settings(runtime_dir=root), 1.25)
+    assert json.loads(result) == {"spent_usd": 1.25, "unknown": []}
+    release.assert_called_once_with(fd)
+    lifetime.assert_called_once()
+    probe.assert_awaited_once()

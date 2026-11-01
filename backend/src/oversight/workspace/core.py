@@ -17,7 +17,13 @@ from functools import partial
 from pathlib import Path
 
 from oversight.limits import bounded_text
-from oversight.workspace._platform import acquire_lock, ensure_lifetime_job, release_lock
+from oversight.workspace._platform import (
+    acquire_lock,
+    ensure_lifetime_job,
+    executable,
+    release_lock,
+    verify_sentinel,
+)
 from oversight.workspace.behavior_run import (
     BehaviorObservation,
     BehaviorTarget,
@@ -230,8 +236,23 @@ class Workspace:
         pytest_options: tuple[str, ...] = (),
     ) -> None:
         validate_runtime_root(runtime_root)
-        if not shutil.rmtree.avoids_symlink_attacks:
+        if sys.platform != "win32" and not shutil.rmtree.avoids_symlink_attacks:
             raise UnsafeDeletion("this platform's rmtree follows symbolic links; refusing to run")
+        self.git_flags = (
+            (
+                "-c",
+                f"core.hooksPath={runtime_root / 'server.lock' / 'hooks'}",
+                *GIT_FLAGS[2:],
+                "-c",
+                "core.eol=lf",
+                "-c",
+                "core.longpaths=true",
+                "-c",
+                "core.protectNTFS=true",
+            )
+            if sys.platform == "win32"
+            else GIT_FLAGS
+        )
         self._root = runtime_root
         self._template = template
         self._pytest_pin = pytest_pin
@@ -312,7 +333,7 @@ class Workspace:
             "HOME": str(self._root / "tmp" / "home"),
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_CONFIG_GLOBAL": "nul" if sys.platform == "win32" else "/dev/null",
             # Read-only status queries must not normalize a suite-tampered real index.
             "GIT_OPTIONAL_LOCKS": "0",
             # The runtime directory sits inside the IDE's own repository: never look above it.
@@ -362,15 +383,21 @@ class Workspace:
             scan_identity=scan_identity,
             verify=verify,
             lease=self.git_lease(),
-            flags=GIT_FLAGS,
+            flags=self.git_flags,
             env=self._git_env(tree, author, date),
             timeout_s=timeout_s,
             spawn=run_process,
         )
 
-    def git_lease(self) -> AbstractAsyncContextManager[None]:
+    @asynccontextmanager
+    async def git_lease(self) -> AsyncGenerator[None]:
         """Shared by server Git, suites and future Revert; acquire after all tree/mode locks."""
-        return self._locks.git_lease()
+        async with self._locks.git_lease():
+            if sys.platform == "win32":
+                if self._lock_fd is None:
+                    raise WorkspaceBusy("Git requires the runtime lock sentinel")
+                await offload(partial(verify_sentinel, self._root / "server.lock", self._lock_fd))
+            yield
 
     async def veto_index(self, tree: Tree, *, timeout_s: float = 30) -> None:
         """Reject gitlinks and .gitmodules before staging and again before a commit."""
@@ -410,6 +437,12 @@ class Workspace:
     def _acquire_sync(self) -> None:
         self._root.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
         self._lock_fd = acquire_lock(self._root / "server.lock")
+        if sys.platform == "win32":
+            try:
+                verify_sentinel(self._root / "server.lock", self._lock_fd)
+            except BaseException:
+                self.release_runtime()
+                raise
 
     async def acquire_runtime(self) -> None:
         """Take the runtime directory's lock, so a second server fails; children do not hold it."""
@@ -450,6 +483,9 @@ class Workspace:
             raise WorkspaceBusy("an operation is in progress")
         if self._reset_done:
             raise WorkspaceBusy("reset already ran; it is for server start only")
+        if sys.platform == "win32":
+            await offload(partial(executable, "git"))
+            await offload(partial(executable, "uv"))
         with self._locks.track():
             async with self._locks.acquire(main=True):
                 for name in ("worktrees", "workspace", "tmp"):
@@ -470,7 +506,10 @@ class Workspace:
     def _uv_env(self) -> dict[str, str]:
         """uv needs its cache, its Python installs and the network settings, which HOME and the
         allowlist would hide: the names in `UV_PASSTHROUGH`, nothing else. No API key is there."""
-        return {key: value for key, value in os.environ.items() if key in UV_PASSTHROUGH}
+        allowed = UV_PASSTHROUGH
+        if sys.platform == "win32":
+            allowed |= {"LOCALAPPDATA", "APPDATA", "USERPROFILE", "SYSTEMROOT", "TEMP", "TMP"}
+        return {key: value for key, value in os.environ.items() if key in allowed}
 
     async def ensure_demo_venv(self) -> None:
         """Reuse `demo-venv/` if its stamp names the pinned pytest and its python runs; otherwise
@@ -501,15 +540,18 @@ class Workspace:
                 return
         await offload(partial(remove_tree, self._root, venv))
         env = self._uv_env()
+        binary = "uv"
+        if sys.platform == "win32":
+            binary = await offload(partial(executable, "uv"))
         await self._run_ok(
-            ["uv", "--no-config", "venv", "--quiet", "--python", "3.12", str(venv)],
+            [binary, "--no-config", "venv", "--quiet", "--python", "3.12", str(venv)],
             cwd=self._root,
             timeout_s=120,
             env=env,
         )
         await self._run_ok(
             [
-                "uv",
+                binary,
                 "--no-config",
                 "pip",
                 "install",
@@ -644,7 +686,7 @@ class Workspace:
                     tree,
                     python=self._demo_python,
                     plugin_dir=PLUGIN_DIR,
-                    flags=GIT_FLAGS,
+                    flags=self.git_flags,
                     git_env=self._git_env(tree, None, None),
                     timeout_s=timeout_s,
                     case_ids=case_ids,

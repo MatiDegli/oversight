@@ -289,3 +289,4 @@ async def test_nt_root_and_regular_client_routes(tmp_path, dist, monkeypatch):
             response = await client.get(path)
             assert response.status_code == 200 and response.text == INDEX_HTML
         assert (await client.get("/assets/index-abc123.js")).status_code == 200
+        assert (await client.get("/ASSETS/no-suffix")).status_code == 404

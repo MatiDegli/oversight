@@ -131,8 +131,10 @@ async def test_job_failure_cleanup(tmp_path, monkeypatch):
     from oversight.workspace import runner
 
     marker = tmp_path / "must-not-execute"
+    handles = []
 
     def refuse(job, pid):
+        handles.append(_open_process(pid))
         raise OSError("injected assignment refusal")
 
     monkeypatch.setattr(runner, "assign_job", refuse)
@@ -141,6 +143,14 @@ async def test_job_failure_cleanup(tmp_path, monkeypatch):
             [sys.executable, "-c", f"open({str(marker)!r},'w').close()"], cwd=tmp_path, timeout_s=3
         )
     assert not marker.exists()
+    import ctypes
+
+    api, handle = handles[0]
+    try:
+        code = ctypes.c_uint32()
+        assert api.GetExitCodeProcess(handle, ctypes.byref(code)) and code.value != 259
+    finally:
+        api.CloseHandle(handle)
 
 
 async def test_reacquire_and_ledger_survive(tmp_path, template):
@@ -194,9 +204,92 @@ async def test_console_shutdown(tmp_path, monkeypatch):
         assert await wait_done(collector.exited, 10), collector.stderr.text()
         assert await wait_done(collector.closed, 2)
         assert "Application shutdown complete" in collector.stderr.text()
-        assert transport.get_returncode() == 0
+        assert transport.get_returncode() is not None  # Uvicorn re-emits the shutdown signal.
     finally:
         if not collector.exited.done():
             transport.kill()
             await wait_done(collector.exited, 5)
         transport.close()
+
+
+@pytest.mark.parametrize("shadow", ["worktree/nul", "drive/dev/null"])
+async def test_hooks_disabled(tmp_path, template, shadow):
+    from oversight.workspace import WorkspaceError
+    from oversight.workspace.test_tree import capture_test_tree
+
+    workspace = Workspace(tmp_path / ".runtime", template, pytest_pin="9.1.1")
+    await workspace.acquire_runtime()
+    owned = None
+    try:
+        await workspace.reset()
+        marker = tmp_path / "hook-ran"
+        hook = f"#!/bin/sh\nprintf bad > '{marker.as_posix()}'\nexit 1\n"
+        normal = workspace.main.root / ".git/hooks"
+        (normal / "pre-commit").write_text(hook)
+        (workspace.main.root / "changed.py").write_text("value = 1\n")
+        assert await workspace.main.commit_all("Plain hooks fixture", workspace.user_author())
+        assert not marker.exists()
+        if shadow == "drive/dev/null":
+            owned = Path("C:/dev/null")
+            if owned.exists():
+                owned = None
+                pytest.skip("drive-root subcase: existing dev/null must remain untouched")
+            try:
+                owned.mkdir(parents=True)
+            except PermissionError:
+                owned = None
+                pytest.skip("drive-root subcase: drive root is not writable")
+            (owned / "pre-commit").write_text(hook)
+        else:
+            extended = Path("\\\\?\\" + str(workspace.main.root)) / "nul"
+            extended.mkdir()
+            (extended / "pre-commit").write_text(hook)
+        (workspace.main.root / "changed.py").write_text("value = 2\n")
+        if shadow == "worktree/nul":
+            with pytest.raises(WorkspaceError):
+                await workspace.main.commit_all("Refuse reserved path", workspace.user_author())
+            assert not marker.exists()
+            return
+        assert await workspace.main.commit_all("Native fixture", workspace.user_author())
+        async with workspace.locks(main=True), workspace.git_lease():
+            await capture_test_tree(
+                workspace.main.root,
+                workspace.tmp_dir,
+                env=workspace._git_env(workspace.main, None, None),
+                flags=workspace.git_flags,
+                timeout_s=10,
+            )
+        assert not marker.exists()
+    finally:
+        workspace.release_runtime()
+        if owned is not None:
+            (owned / "pre-commit").unlink(missing_ok=True)
+            owned.rmdir()
+
+
+async def test_reduced_env_restart(tmp_path, template, monkeypatch):
+    import json
+
+    monkeypatch.setenv("META_API_KEY", "must-not-reach-child")
+    monkeypatch.setenv("BASETEN_API_KEY", "must-not-reach-child")
+    for _ in range(2):
+        workspace = Workspace(tmp_path / ".runtime", template, pytest_pin="9.1.1")
+        await workspace.acquire_runtime()
+        try:
+            await workspace.reset()
+            home = str(workspace.tmp_dir / "home")
+            result = await run_process(
+                [sys.executable, "-c", "import os,json;print(json.dumps(dict(os.environ)))"],
+                cwd=workspace.main.root,
+                env={"HOME": home},
+                timeout_s=5,
+            )
+            env = json.loads(result.stdout)
+            assert result.returncode == 0
+            assert env["TEMP"] == env["TMP"] == env["USERPROFILE"] == home
+            assert env["SYSTEMROOT"] and env["PYTHONUTF8"] == "1"
+            assert "META_API_KEY" not in env and "BASETEN_API_KEY" not in env
+            (workspace.main.root / "readonly").write_text("disposable")
+            (workspace.main.root / "readonly").chmod(0o400)
+        finally:
+            workspace.release_runtime()

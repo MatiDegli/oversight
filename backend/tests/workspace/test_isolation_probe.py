@@ -189,6 +189,8 @@ async def test_nt_injected_runner_and_cli_refuse_before_lookup_pipe_or_spawn(
     monkeypatch.setattr(os, "pipe2", pipe)
     monkeypatch.setattr(asyncio.get_running_loop(), "subprocess_exec", spawn)
     monkeypatch.setattr(sys, "platform", "win32")
+    resolve = Mock(side_effect=AssertionError("NT isolation must refuse before resolving input"))
+    monkeypatch.setattr(Path, "resolve", resolve)
     with pytest.raises(IsolationUnavailable, match="Linux-only"):
         await IsolatedRunner(tmp_path)(["true"], cwd=tmp_path, timeout_s=1)
     isolation.refuse_orphans(tmp_path, proc=tmp_path / "missing")
@@ -199,3 +201,4 @@ async def test_nt_injected_runner_and_cli_refuse_before_lookup_pipe_or_spawn(
     lookup.assert_not_called()
     pipe.assert_not_called()
     spawn.assert_not_called()
+    resolve.assert_not_called()
