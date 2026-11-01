@@ -187,6 +187,8 @@ async def test_checkout_cleans_on_cancel(h: Harness) -> None:
 
 @pytest.mark.anyio
 async def test_validator_rejects_forged_probe_result_and_reference(h: Harness) -> None:
+    from oversight.changes._shape_facts import ShapeCapture
+
     await h.open(1)
     await add_test(h, "def test_added():\n    assert True\n")
     assert await h.finish(1)
@@ -206,6 +208,11 @@ async def test_validator_rejects_forged_probe_result_and_reference(h: Harness) -
             rec, added_test_ids=tuple(probe.test_id for probe in facts.added_tests)
         ),
         reach=facts.reach,
+        shape=ShapeCapture(
+            tuple(facts.shape) if facts.shape is not None else None,
+            facts.shape_complete,
+            tuple(problem for problem in facts.problems if problem.startswith("shape:")),
+        ),
     )
     validate_change_facts(facts, evidence)
     for update in ({"result": "fails_before_passes_after"}, {"before_seq": facts.test_runs[0]}):

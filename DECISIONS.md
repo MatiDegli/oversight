@@ -3200,3 +3200,37 @@ The input and output character caps stay on canonical ASCII text entering genera
 and its hash. Non-ASCII expansion can therefore refuse otherwise short raw input. Rebasing
 the caps to raw length would change which examples install and requires a separate product
 decision; this change only documents and tests the existing behavior.
+
+## 2026-11-01 — Capture structural observations with candidate facts
+
+`backend/src/oversight/changes/_facts.py` captures shape before publishing the proposal,
+under the main and agent locks. `backend/src/oversight/changes/_shape_facts.py` takes the
+record's base/head graphs, copies both source maps and freezes added/modified node ids on
+the loop thread. Each producer compares those snapshots against the captured Git trees;
+publication and replay therefore retain the exact candidate's observations.
+
+Size/import observations precede duplicate observations. Both successful producers must
+be complete for shape completeness to be true; a successful empty result means checked
+with no observations. One failed producer preserves the other's observations with false
+completeness, its problems followed by the failure text. Two failures yield null findings
+and null completeness. The exact diagnostics are "shape: size and import checks unavailable"
+or "shape: size and import checks timed out", and "shape: duplicate check unavailable" or
+"shape: duplicate check timed out". Exception names, text and paths never enter these
+diagnostics. Cancellation propagates. Each producer runs in a thread with a four-second
+wait bound: a timeout stops waiting, not the worker thread. There is no setting or flag
+because both checks are static and pure. Shape remains an observation with no effect on
+approval, rules, cards, summaries or overall facts completeness.
+
+Projection deep-copies each finding and its evidence. Validation checks both shape fields
+against the capture and requires every capture problem. In
+`backend/src/oversight/changes/_shape_duplicates.py`, function-level PEP 695 TypeVar,
+ParamSpec and TypeVarTuple names are bindings, including references in bodies; TypeVar
+bounds are annotations and are stripped. Generic and non-generic signatures remain
+distinct. Class-level type parameters stay unrenamed, an accepted residual of the
+function-wide structural normalizer.
+
+Three sentinels in `backend/tests/changes/test_review_card_lifecycle.py` now differ from
+the live capture: the preservation and concurrent-update cases use false shape completeness;
+the mutation-rejection cases use null shape or false completeness. Previously empty shape
+and true completeness matched a clean capture: preservation failed, four mutation cases
+failed to raise, and the concurrent-update case passed without testing a changed value.
