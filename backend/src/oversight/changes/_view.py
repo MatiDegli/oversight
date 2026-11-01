@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from oversight.changes._state import ChangeNotFound
-from oversight.events import EventStore, fold_usage
+from oversight.events import EventStore, fold_stages, fold_usage
 from oversight_contracts.commands import ChangeView
 from oversight_contracts.events import (
     AgentStatus,
@@ -132,7 +132,9 @@ def build_change_view(change_id: str, events: Sequence[ServerEvent]) -> ChangeVi
     facts, review, assessment = _evidence(change_id, events, archive)
     usage = None
     rounds = None
+    stages = None
     if all(event.seq == expected for expected, event in enumerate(events, start=1)):
+        stages = fold_stages(events, change_id)
         rounds = sum(
             event.type == "change.resolved"
             and event.payload.change_id == change_id
@@ -156,6 +158,7 @@ def build_change_view(change_id: str, events: Sequence[ServerEvent]) -> ChangeVi
         resolution=archive.resolution,
         usage=usage,
         revision_rounds=rounds,
+        stages=stages,
     )
 
 

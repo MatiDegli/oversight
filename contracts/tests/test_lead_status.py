@@ -5,7 +5,7 @@ from oversight_contracts.events import LeadStatus
 
 
 def test_lead_status_version_and_default_null() -> None:
-    assert CONTRACT_VERSION == "1.12.0"
+    assert CONTRACT_VERSION == "1.13.0"
     status = LeadStatus(
         agent_id="agent-1",
         revision=1,

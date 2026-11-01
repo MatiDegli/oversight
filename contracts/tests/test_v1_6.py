@@ -232,6 +232,9 @@ def test_schema_changes_only_approved_attachments() -> None:
         "UsageHours",
         "UsageTeam",
         "UsageView",
+        "StageTime",
+        "SuitePhaseTime",
+        "ChangeStages",
         "DecisionRef",
         "ReviewCardDecisionRef",
         "ChangeDecisionRef",
@@ -287,6 +290,17 @@ def test_schema_changes_only_approved_attachments() -> None:
                 updated["properties"][field]["description"] = definition["properties"][field][
                     "description"
                 ]
+            assert updated == definition
+            continue
+        if name == "ChangeView":
+            updated = deepcopy(current[name])
+            field = updated["properties"].pop("stages")
+            assert field == {
+                "anyOf": [{"$ref": "#/$defs/ChangeStages"}, {"type": "null"}],
+                "default": None,
+                "description": "Raw time per stage through seq; null for incomplete history.",
+            }
+            updated["required"].remove("stages")
             assert updated == definition
             continue
         if name == "LeadStatus":
