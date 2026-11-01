@@ -3439,3 +3439,10 @@ and adds the event log to the areas that keep the full rule.
 
 Reason: findings that are not really problematic are documented as residual risk and merged
 anyway, for pace before the freeze.
+
+## 2026-11-01 — Displaced fronts may start before the freeze
+The maintainer allowed the fronts the Chat plan had moved past the freeze to start before it, each when a writer slot
+is free and behind the Chat and lead fronts: lead actions slices 2 and 4, item 10 (team and period grouping), the
+optional-parameter evidence review, item 20, and the map fronts (map 1d, the map brief, map lines). For these fronts
+this supersedes "No new graph or map work before the freeze" in the Chat view entry above. Reason: free slots should
+do useful work, while Chat and the lead keep priority. The freeze itself is unchanged: Tue Nov 3 20:00 ART.
