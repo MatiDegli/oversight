@@ -102,7 +102,7 @@ export function PracticeFrame({
   if (phone)
     return (
       <section className="phone-practice" aria-label="Two-change practice">
-        <header className="pp-chrome">
+        <header inert className="pp-chrome">
           <div className="pp-topbar">
             <span>Oversight</span>
             <button onClick={onExit}>

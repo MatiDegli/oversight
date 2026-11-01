@@ -167,7 +167,7 @@ export function PracticePanel(props: PanelProps) {
   return (
     <section
       aria-label="Two-change practice"
-      className="practice-panel h-full w-[min(100%,calc(70ch+3rem))] overflow-auto p-6 text-text"
+      className="practice-panel h-full overflow-auto p-6 text-text"
     >
       <div className="mx-auto flex max-w-[70ch] flex-col gap-5">
         <h1 className="text-xl font-semibold">

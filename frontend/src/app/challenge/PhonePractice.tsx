@@ -6,6 +6,8 @@ import { AgentLetter, AgentLine, PhoneGraph } from "./PhoneGraph";
 import { caseSlot, nodeName } from "./phoneEvidence";
 import { PhoneDecision } from "./PhoneDecision";
 import { preparePhoneReview } from "./PhoneReview";
+import { LazyPanel } from "../shell/LazyPanel";
+import { PracticeFrame } from "../shell/PanelFallbacks";
 import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import { score } from "./PracticePanel";
 import type { PanelProps } from "./PracticePanel";
@@ -191,7 +193,7 @@ export function PhonePractice(props: PanelProps) {
   const decision = attempt.started && !attempt.revealed;
   const entry = decision ? practice.cases[attempt.index] : undefined;
   // The recording stays frozen at the decision cut. Only this bounded illustration shows merges.
-  return (
+  const content = (
     <section className="phone-practice" aria-label="Two-change practice">
       <header className="pp-chrome">
         <div className="pp-topbar">
@@ -221,5 +223,8 @@ export function PhonePractice(props: PanelProps) {
         />
       )}
     </section>
+  );
+  return (
+    <LazyPanel frame={<PracticeFrame attempt={attempt} onExit={onExit} />}>{content}</LazyPanel>
   );
 }

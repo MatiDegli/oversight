@@ -201,6 +201,83 @@ it.each(["failed", "left"])("handles a pending phone decision when %s", async (o
   }
 });
 
+it("waits for evidence when resizing into an already started phone decision", async () => {
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/ReviewBody.tsx*", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  try {
+    await page.goto(url);
+    await page.getByRole("button", { name: "Two-change practice", exact: true }).click();
+    await page.getByRole("button", { name: "Start practice", exact: true }).click();
+    await check(page.getByRole("heading", { name: "Decision 1 of 2" })).toBeVisible();
+    const requested = page.waitForRequest("**/ReviewBody.tsx*");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await requested;
+    await check(page.locator(".phone-practice .pp-chrome")).toBeVisible();
+    await check(page.locator(".phone-practice .pp-chrome")).toHaveAttribute("inert", "");
+    await check(page.locator(".pp-decision-rows")).toHaveCount(0);
+    await page.evaluate(() => document.fonts.ready);
+    const firstRows = page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          const observer = new MutationObserver(() => {
+            const rows = document.querySelector(".pp-decision-rows");
+            if (!rows) return;
+            observer.disconnect();
+            resolve(rows.getBoundingClientRect().y);
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+        }),
+    );
+    await page.evaluate(() => true);
+    release();
+    const firstY = await firstRows;
+    await check(page.getByRole("region", { name: "Review lead" })).toBeVisible();
+    expect((await page.locator(".pp-decision-rows").boundingBox())?.y).toBe(firstY);
+  } finally {
+    release();
+    await page.close();
+  }
+});
+
+it("keeps the phone fallback chrome out of keyboard focus", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/PhonePractice.tsx*", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+  try {
+    await page.goto(url);
+    await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
+    const leave = page.getByRole("button", { name: "Leave practice", includeHidden: true });
+    await check(leave).toBeVisible();
+    await check(page.locator(".phone-practice .pp-chrome")).toHaveAttribute("inert", "");
+    await leave.evaluate((element: HTMLButtonElement) => {
+      element.focus();
+    });
+    await check(leave).not.toBeFocused();
+    release();
+    await check(page.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Leave practice", exact: true }).click();
+    await check(page.locator(".phone-practice")).toHaveCount(0);
+  } finally {
+    release();
+    await page.close();
+  }
+});
+
 it.each([390, 1280, 1920])(
   "keeps practice frame geometry through every stage at %ipx",
   async (width) => {
