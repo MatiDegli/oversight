@@ -3367,3 +3367,24 @@ threshold; the message names the cause. Setting 100 effectively turns off the co
 except at a full 100% reading. Tests inject readings so general tests never depend on host load.
 Test-run queue words (such as "2 test runs ahead"), running-agent card words and frontend
 changes are not built here.
+
+## 2026-11-01 — AGENTS.md keeps the rules every repository agent needs
+
+The maintainer approved the compact AGENTS.md in chat on 2026-11-01. It keeps only the
+rules for every agent working in this repository. The file is loaded into every agent's
+context on every call; module detail and history belong to the document that owns them.
+
+- ARCHITECTURE.md owns module detail, runtime workspace, events and commands, graph and
+  impact rules, agent tools, pending changes and conflicts, robustness and coverage badges.
+- DESIGN.md owns the UI and look, including the design skill's restrictions; PRODUCT.md
+  already describes what the product is and whom its graph serves.
+- docs/own-repository.md owns opening the person's repository, the minimal native Windows
+  port and the later platform work.
+- docs/proposal.md, section 5, owns the scope levels, their completion criterion, the order
+  after level 2 and the out-of-scope list with its bounded Revert exception. Section 7 keeps
+  the public-before-submission requirement. Existing proposal, decision and daily records keep the
+  proposal approval, day-1 delivery and level-closure history.
+
+Moved rules keep AGENTS.md's authority and change only with the maintainer's approval.
+DESIGN.md's and PRODUCT.md's precedence statements still name AGENTS.md for the rules it
+keeps. This relocation changes no behavior, test logic or contract.

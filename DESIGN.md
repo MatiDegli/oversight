@@ -297,6 +297,14 @@ components:
 
 ## Overview
 
+Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
+
+Design work uses Impeccable 4.5.2 with DESIGN.md and PRODUCT.md as its reference.
+Allowed commands are shape, harden, onboard, audit, critique, polish, clarify, typeset and
+layout. Forbidden commands are bolder, colorize, delight, overdrive, animate, live, generate
+and document. Shape plans a screen inside DESIGN.md and never opens a new visual world.
+Where Impeccable clashes with DESIGN.md or AGENTS.md, ours wins and DECISIONS.md records the clash.
+
 **Creative North Star: "Signal"**
 
 Oversight has two surfaces with different jobs, and they never borrow each other's materials. The
@@ -325,7 +333,7 @@ The maintainer approved the life-layer sketches on 2026-10-29:
 layer, on the same shell. Two flaws are known and are not copied: the light in merge-mid has a hard
 top edge, and the clip runs the contour drift and the light fade at 10x, as its label says. Its
 "Sketch" strip is mockup only.
-Where a sketch disagrees with AGENTS.md, the table of departures records the rule that wins;
+Where a sketch disagrees with AGENTS.md or this file, the table of departures records the rule that wins;
 contrast failures remain explicit maintainer notes below. Sizes are CSS pixels on a 1920 by 1080
 frame, the size the demo is recorded at. Panels scale with the window; type sizes and radii do not.
 
@@ -342,12 +350,12 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | What | Sketch | Here | Why |
 | --- | --- | --- | --- |
 | Border of a changed node | solid | dashed | AGENTS.md: a dashed border means a pending change, changed and new alike |
-| Module names on the graph | Mono | Next | AGENTS.md: graph labels use Next |
+| Module names on the graph | Mono | Next | DESIGN.md, Typography: graph labels use Next |
 | Long name on a touched row | not drawn | the name is cut with an ellipsis where it would meet the state word | a row is fixed at 282px; the state word and badges keep their place |
-| Title weight of a frame | light, Mono | 600, Next | AGENTS.md: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
+| Title weight of a frame | light, Mono | 600, Next | DESIGN.md, Typography: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
 | Import edges | not drawn | in the data, not drawn | the sketch draws calls; imports say which files, not which functions |
 | Aggregate call counts | counts at rest | count on the hovered edge and the selected node's aggregates only | the maintainer approved removing resting label collisions on 2026-10-29; arrows and count data stay |
-| Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed border or line means a pending change in the agent's color, and color is an agent only on its own change |
+| Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed node border means a pending change in the agent's color; DESIGN.md, Graph nodes and their states: added edges are dashed, possible calls never are |
 | Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
 | First view | the whole demo in view | the whole graph when it fits at the legibility floor or above (the demo at 1920x1080: 83%); otherwise the floor on the module of the hub | names and state words stay at least 11 CSS px (**Opening a change**); a larger graph is a canvas to pan and zoom |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
@@ -372,7 +380,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Pressed rail button | varies in the earlier sketches | raised | one color for hover and pressed |
 | New-node fill for agent B | not drawn | `rgba(4, 8, 20, 0.95)` | derived from A's pair, so both agents follow one rule |
 | Letter in a rail avatar | the agent's color | agent-a-text, agent-b-text | use the text variants; tint contrasts are checked below |
-| Live diff hint | "Pause to edit by hand" | read-only; editing happens in review | AGENTS.md: the new side is editable only in review while the agent is idle; pause is level 3 |
+| Live diff hint | "Pause to edit by hand" | read-only; editing happens in review | ARCHITECTURE.md, Pending changes, approval and conflicts: the new side is editable only in review while the agent is idle; docs/proposal.md, section 5: pause is level 3 |
 | Product name | "Graph IDE" | Oversight | the placeholder was replaced |
 | Approve fill in v4 review | blue | text fill, page label | neutral decision; blue belongs to agent B |
 | Settings examples | sample numbers, rules and provider rows | backed settings only | the sketch does not create configuration or change contracts |
@@ -857,7 +865,8 @@ keys, with a Saved line and the repository scope below. Section headings remain 
   policy and its assessment; the sketch's sample list does not redefine the merge rules.
 - **Limits and budget:** a currency input for the budget, then a threshold bar showing spent,
   warnings at 50% and 80%, and the brake at 90%. Labels and marks carry these meanings without
-  color alone; warnings are neutral. The brake refuses new runs above 90%, as AGENTS.md specifies.
+  color alone; warnings are neutral. The brake refuses new runs above 90%, as ARCHITECTURE.md,
+  Usage and the spend brake, specifies.
   Steps per task is a minus/value/plus stepper. Change size and cone limits use numeric inputs
   with visible units (lines, functions); they do not turn fixed contract limits into editable
   settings without backing support.
