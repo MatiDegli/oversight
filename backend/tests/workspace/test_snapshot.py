@@ -382,6 +382,7 @@ async def test_nt_hooks_sentinel(workspace, monkeypatch, value):
     config = workspace.main.git_identity.common / "config"
     with config.open("a") as handle:
         handle.write(f"[core]\n hooksPath = {paths.get(value, value)}\n")
+    # take_snapshot clamps these 60 s requests to GUARD_SECONDS = 10.0, as in the sibling tests.
     if value in {"/dev/null", "pinned"}:
         snapshot = take_snapshot(workspace.main.git_identity, workspace.integrity, 60)
         assert workspace.runtime_root / "server.lock" in snapshot.anchors
