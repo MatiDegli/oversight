@@ -21,7 +21,7 @@ from oversight_contracts.events import ChangeResolved, ErrorReport, SuiteResult
 from oversight_contracts.policy import MergeModeState
 
 pytestmark = pytest.mark.anyio
-LATCH_REASON = "Rules mode is closed until Revert, protected paths and follow-main land"
+LATCH_REASON = "Rules authority is unavailable in this build"
 C_REASON = "Network isolation C is unavailable for this session"
 
 
@@ -40,7 +40,8 @@ def notices(h):
 
 
 async def test_ordered_truth_table_refuses_without_any_event(h, monkeypatch):
-    # Every combination still refuses with the real, closed latch, even after confirmed C.
+    monkeypatch.setattr(_mode, "RULES_ACTIVATION", False)
+    # Every combination refuses with an explicitly closed build, even after confirmed C.
     settings = Settings(agent_model="fake", review_model="fake-b", cross_review=True)
     for born, invalid, suspended, suspect, review_on, same in product((False, True), repeat=6):
         monkeypatch.setattr(h.workspace._isolation, "_checked", True)
@@ -85,7 +86,11 @@ async def test_reviewer_differs_from_every_offered_author(h, slot):
     )
 
 
-async def test_reads_never_probe_construct_clients_or_consult_environment(h, monkeypatch):
+@pytest.mark.parametrize("activation", [False, True])
+async def test_reads_never_probe_construct_clients_or_consult_environment(
+    h, monkeypatch, activation
+):
+    monkeypatch.setattr(_mode, "RULES_ACTIVATION", activation)
     await h.workspace.check_isolation()
     configured(h, Settings(cross_review=True))
     forbidden = Mock(side_effect=AssertionError("Capability read performed work"))
@@ -100,18 +105,20 @@ async def test_reads_never_probe_construct_clients_or_consult_environment(h, mon
     monkeypatch.setattr("oversight.review_config.configured_reviewer", forbidden)
     monkeypatch.setattr("oversight.review_config.OpenAIClient", forbidden)
     monkeypatch.setattr(Settings, "load", forbidden)
-    monkeypatch.setenv("RULES_ACTIVATION", "true")
-    monkeypatch.setenv("OVERSIGHT_RULES_ACTIVATION", "true")
-    assert _mode.RULES_ACTIVATION is False
+    monkeypatch.setenv("RULES_ACTIVATION", str(not activation).lower())
+    monkeypatch.setenv("OVERSIGHT_RULES_ACTIVATION", str(not activation).lower())
+    assert _mode.RULES_ACTIVATION is activation
     for _ in range(3):
-        assert h.manager._ctx.mode.capability() == _mode.StartCapability(False, LATCH_REASON)
+        assert h.manager._ctx.mode.capability() == _mode.StartCapability(
+            activation, "Rules prerequisites confirmed" if activation else LATCH_REASON
+        )
     h.workspace._isolation.invalidate("Lost after startup")
     assert h.manager._ctx.mode.capability() == _mode.StartCapability(False, C_REASON)
     forbidden.assert_not_called()
 
 
 async def arm_production_port(h, monkeypatch):
-    # Only tests open the code latch to exercise authority loss beyond it.
+    # Exercise authority loss through the production capability port.
     clock = make_clock(h, monkeypatch)
     await h.workspace.check_isolation()
     settings = Settings(cross_review=True)

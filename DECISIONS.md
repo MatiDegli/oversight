@@ -3652,3 +3652,68 @@ crosses this change.
 
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
+
+## 2026-11-01 — The native Windows port moves ahead
+
+The maintainer ranked item 20 immediately after the conversational lead and the Chat view,
+ahead of the other displaced fronts, and approved the new workspace modules `_platform.py`
+(W1) and `source_nt.py` (a later front). This supersedes the earlier after-Tauri Windows order.
+W1 is the cohesive startup/process-lifetime front, split into three independently checked
+commits. It adds no Windows isolation, own-repository permission or contracts.
+
+Windows keeps OPEN_NOTICE and open network mode; rules, Revert, behavior and measured evidence
+remain unavailable. W1 alone does not enable native tree/files, agent tools, proposals or Approve:
+W2a and W2b are both required. Native Jobs, console delivery, Defender sharing behavior and Git
+localization still require non-elevated Windows acceptance. Destination races and inherited ACLs
+are accepted only for our disposable demo, never for the person's own repository.
+
+## 2026-11-01 — Item 8 F10: rules activation opens after approval
+
+The maintainer approved activation in chat at 2026-11-01T17:07:29Z (14:07:29 ART).
+The activation front rechecked main `697775b`: F1–F9 and PRODUCT.md's merge-authority
+sentence were present. `changes/_mode.py:RULES_ACTIVATION` is now true. There is no setting
+or environment switch. Every fresh run still starts in Ask me, revision zero; selecting
+Merge alone when safe requires the existing CAS and a committed merge_mode.changed receipt.
+
+This supersedes the activation-status qualification in the 2026-10-30 decision
+"Item 8: a closed activation latch, and rules mode refuses without cross-review".
+Its code-only latch, refusal order, cross-review requirement and remaining answers stand.
+All earlier dated statements that activation remains closed, that every merge still requires
+a separate personal decision, or that Settings must present the preactivation refusal are
+historical and superseded for activation status by this entry. This includes the protected-path,
+Revert, person-preemption, idle/queued follow-main and grant delivery entries. Their safety
+conditions and dated delivery records remain unchanged.
+
+Selection still refuses unavailable/revoked C, suspended rules authority, suspect main,
+cross-review off, an unconfigured reviewer or any offered author sharing its model.
+Spend and protected paths remain later evidence/transaction guards, alongside the other
+seven rules. No wire contract, policy profile, route, status code, grant scope or transaction
+guard changed. Revert remains person-only: empty 202 on admission, result through events.
+
+A fake-only HTTP/SSE proof first reproduced a missing committed review receipt in the rules
+scheduler. Runtime review now forwards only the StoredEvent returned by successful publication
+to the existing rules_received port. No assessment or review evidence is synthesized.
+Dedicated zero-delay fake author/reviewer scripts include usage on every turn. For the second,
+protected-path proposal, the harness switches only its scratch reviewer script to an unavailable
+verdict after the first review has settled; ordinary review parsing emits current-target Needs you.
+The protected-path and invalid-spend matrix separately proves those guards prevent merging.
+
+`fixtures/events/scripted-rules.jsonl` and its fake provenance contain the rules merge at seq 33,
+person Revert at seq 36 and unavailable-review Needs you at seq 59. All nine merge rules have
+committed passing evidence, including the combined suite. The recorder uses explicit Settings,
+a positive scratch budget and the durable ledger, exports only its own shut-down scratch store
+with fake_fixture=True, and validates the unchanged event contracts and exact-byte provenance.
+This is scripted fake evidence, not a paid or real-provider recording; the published real demo
+recording and public read-only replay are unchanged.
+
+`make rules-check` shares demo-check's parent-death, graceful shutdown, descendant and runtime-lock
+checks. Three consecutive starts on this host passed with real C: start 1, merge/Revert/Needs you
+and cleanup passed; start 2, the same passed; start 3, the same passed. All three initial graph
+versions and commits matched over one scratch runtime. Missing host C fails with its reason.
+Playwright uses this exact recording and the shared reducer/replay holds to check reasons,
+Revert, Needs you and unavailable replay commands. Full repository gates and independent review
+remain the coordinator's merge prerequisites; activation does not complete proof 2 or item 9.
+
+Reason: approval and delivered prerequisites allow explicit rules selection, while live fake
+proof, committed receipts and repeatable clean starts establish the activation path without
+spending provider credits or relaxing any authority condition.

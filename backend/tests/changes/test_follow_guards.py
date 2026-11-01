@@ -11,7 +11,6 @@ from test_follow_main import fail_scan, ready_wait, save
 from test_mode import select
 
 from oversight.changes import ChangeManager, _delivery
-from oversight.changes._mode import RULES_ACTIVATION
 from oversight.changes._preemption import PersonIntent
 from oversight.changes._proposal import record_proposal
 from oversight.changes._state import APPROVABLE
@@ -21,12 +20,12 @@ from oversight_contracts.policy import ChangeAssessment
 pytestmark = pytest.mark.anyio
 
 
-async def test_closed_latch_scheduling_is_inert(h: Harness, clock):
+async def test_ask_me_scheduling_is_inert(h: Harness, clock):
     await h.run_agent(1, EDIT)
     post = await save(h)
     await settled(h)
     sched = h.manager._ctx.assessment
-    assert not RULES_ACTIVATION and sched.waits == {} and sched.committed_main == post
+    assert sched.waits == {} and sched.committed_main == post
     assert not clock.calls.called and not h.payloads(ChangeAssessment) and not terminals(h)
     assert "error" not in h.types()
 

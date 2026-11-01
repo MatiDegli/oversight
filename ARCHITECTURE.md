@@ -432,7 +432,7 @@ The Revert route answers 202 after synchronous admission, loads its target from 
 committed log, and reports its outcome only through events.
 `change.reviewed` (when enabled), `change.facts_recorded`, `tests.executed`,
 `queue.updated` and `lead.status` have live producers, as do `change.assessed`,
-`merge_mode.changed` and `plan.updated`. Publication does not imply that rules activation is open.
+`merge_mode.changed` and `plan.updated`. Rules activation is open; publication alone does not authorize a rules merge.
 Approve, Reject and Request changes require the revision and head shown by the review render;
 revision zero is limited to rejecting the published agent base before any proposal.
 During a rules decision, the person’s Reject or Request changes is admitted until rules
@@ -482,10 +482,16 @@ Contracts are at 1.11.0 (`contracts/src/oversight_contracts/__init__.py`). Polic
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,
-but `changes/_mode.py` keeps rules activation closed pending approval. Every merge today still
-requires the person's decision. Plans, dependency dispatch, the queue and the lead runtime are
+and `changes/_mode.py` opens rules activation. Every fresh run starts in Ask me; explicit
+selection still requires C, trustworthy main and independent cross-review, and every automatic
+merge requires all nine rules and transaction guards. Clean rules merges offer person-only Revert. Plans, dependency dispatch, the queue and the lead runtime are
 wired; the lead requests plans and leaves their approval to the person.
-`merge_mode.changed` sets the merge mode that the status line and the Settings tab show.
+`merge_mode.changed` confirms selection using the existing CAS revision and sets the mode shown
+in Settings and the status line. Committed runtime review receipts are forwarded to the existing
+rules receipt port, just as manager publications are. `make rules-check` shares demo-check's
+shutdown, descendant and runtime-lock checks for three consecutive rules scenarios. The separate
+`scripted-rules.jsonl` and provenance are fake evidence, validated with `--fake-fixture`; public
+replay still bundles the real recording and stays read-only.
 
 `changes/_reviewfacts` remains a private unwired core. The `_zones` and `_partition` algorithms
 also remain outside live plan production; the public partition export does not wire a producer.

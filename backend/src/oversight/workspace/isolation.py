@@ -40,6 +40,8 @@ class IsolationUnavailable(OSError):
 
 
 def unshare_binary() -> str:
+    if sys.platform == "win32":
+        raise FileNotFoundError("network isolation C is Linux-only")
     binary = shutil.which("unshare")
     if binary is None:
         raise FileNotFoundError("unshare is not installed")
@@ -52,6 +54,8 @@ def signature(runtime: Path, binary: str) -> list[str]:
 
 def refuse_orphans(runtime: Path, *, proc: Path = Path("/proc")) -> None:
     """Called under the runtime lock, before reset. Report exact matches; never kill them."""
+    if sys.platform == "win32":
+        return
     marker = MARKER + str(runtime.resolve())
     for entry in proc.iterdir():
         if not entry.name.isdecimal():
@@ -95,6 +99,8 @@ async def _read_entry(fd: int) -> bytes:
 
 def open_pidfd(pid: int) -> int:
     """Some CPython builds omit os.pidfd_open; Linux exposes the same syscall directly."""
+    if sys.platform == "win32":
+        raise IsolationUnavailable("network isolation C is Linux-only")
     if hasattr(os, "pidfd_open"):
         return os.pidfd_open(pid)
     libc = ctypes.CDLL(None, use_errno=True)
@@ -161,6 +167,8 @@ async def _namespace_gone(pidfd: int) -> bool:
 async def _cleanup(
     transport: asyncio.SubprocessTransport, collector: ProcessCollector, init: int | None
 ) -> None:
+    if sys.platform == "win32":
+        raise IsolationUnavailable("network isolation C is Linux-only")
     pid = transport.get_pid()
     try:
         if not collector.exited.done():
@@ -184,7 +192,7 @@ class IsolatedRunner:
     """A Spawn implementation selected by C3 or injected for local acceptance/tests."""
 
     def __init__(self, runtime: Path, *, port: int = 0) -> None:
-        self.runtime = runtime.resolve()
+        self.runtime = runtime if sys.platform == "win32" else runtime.resolve()
         self.port = port
         self.entry: dict[str, object] | None = None
         self._ready = False
@@ -259,6 +267,8 @@ class IsolatedRunner:
         started = time.monotonic()
         binary = unshare_binary()
         collector = ProcessCollector(cap)
+        if sys.platform == "win32":
+            raise IsolationUnavailable("network isolation C is Linux-only")
         readfd, writefd = os.pipe2(os.O_CLOEXEC)
         ackread, ackwrite = os.pipe2(os.O_CLOEXEC)
         nonce = uuid.uuid4().hex

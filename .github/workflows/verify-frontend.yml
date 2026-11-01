@@ -1,0 +1,290 @@
+name: verify-frontend
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - run: make check-ci
+      - run: make smoke
+      - name: Report network isolation probe
+        run: |
+          uv run --frozen python -m oversight isolation-probe > /tmp/isolation-probe.json
+          uv run --frozen python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          verdict = json.loads(Path("/tmp/isolation-probe.json").read_text())
+          status = verdict["status"]
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Network isolation probe: **{status}**\n\n")
+              summary.write("```json\n" + json.dumps(verdict, indent=2) + "\n```\n")
+          if status not in {"confirmed", "unavailable"}:
+              raise SystemExit(1)
+          PY
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Scan HEAD history
+        run: gitleaks git --config .gitleaks.toml --redact --verbose --log-opts="HEAD" .
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  browser-1:
+    name: browser-1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Install Playwright's Chromium and its system libraries
+        run: pnpm -C frontend exec playwright install --with-deps chromium
+      - name: Run browser-1
+        run: make test-browser BROWSER_SHARD=1/2
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  browser-2:
+    name: browser-2
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Install Playwright's Chromium and its system libraries
+        run: pnpm -C frontend exec playwright install --with-deps chromium
+      - name: Run browser-2
+        run: make test-browser BROWSER_SHARD=2/2
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Install Playwright's Chromium and its system libraries
+        run: pnpm -C frontend exec playwright install --with-deps chromium
+      - name: Run e2e
+        run: make e2e
+      - name: Upload e2e failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-${{ github.sha }}
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  shots:
+    name: shots
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Install Playwright's Chromium and its system libraries
+        run: pnpm -C frontend exec playwright install --with-deps chromium
+      - name: Run shots
+        run: timeout -k 60 900 make shots
+      - name: Stage shot evidence
+        id: stage
+        run: |
+          uv run --frozen python - <<'PY'
+          import os
+          import shutil
+          import tempfile
+          from pathlib import Path
+
+          source = Path(".shots")
+          staged = Path(tempfile.mkdtemp(prefix="shots-", dir=os.environ["RUNNER_TEMP"]))
+          expected = set()
+          for png in sorted(source.glob("*.png")):
+              for path in (png, png.with_suffix(".json")):
+                  if path.is_symlink() or not path.is_file():
+                      raise SystemExit(f"Not a regular evidence file: {path.name}")
+                  shutil.copyfile(path, staged / path.name)
+                  expected.add(path.name)
+          files = list(staged.iterdir())
+          if not files or {path.name for path in files} != expected:
+              raise SystemExit("Missing or unexpected evidence files")
+          if any(path.is_symlink() or not path.is_file() for path in files):
+              raise SystemExit("Evidence must contain only regular files")
+          if any(path.suffix not in {".png", ".json"} for path in files):
+              raise SystemExit("Evidence must contain only PNGs and scene metrics")
+          if len(files) > 64 or sum(path.stat().st_size for path in files) > 20 * 1024 * 1024:
+              raise SystemExit("Evidence exceeds 64 files or 20 MiB")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"directory={staged}\n")
+          PY
+      - name: Report capture environment
+        working-directory: frontend
+        env:
+          SHOT_EVIDENCE: ${{ steps.stage.outputs.directory }}
+        run: |
+          node --input-type=module <<'JS'
+          import { appendFile, readdir, readFile } from "node:fs/promises";
+          import { join } from "node:path";
+          import { chromium } from "@playwright/test";
+
+          const renderers = new Set();
+          for (const name of await readdir(process.env.SHOT_EVIDENCE)) {
+            if (name.endsWith(".json")) {
+              const metrics = JSON.parse(await readFile(join(process.env.SHOT_EVIDENCE, name), "utf8"));
+              renderers.add(metrics.webglRenderer);
+            }
+          }
+          const browser = await chromium.launch();
+          try {
+            const environment = {
+              ImageOS: process.env.ImageOS,
+              ImageVersion: process.env.ImageVersion,
+              chromium: browser.version(),
+              webglRenderers: [...renderers].sort(),
+            };
+            await appendFile(process.env.GITHUB_STEP_SUMMARY,
+              "Capture environment\n\n```json\n" + JSON.stringify(environment, null, 2) + "\n```\n");
+          } finally {
+            await browser.close();
+          }
+          JS
+      - name: Upload shot evidence
+        if: ${{ always() && steps.stage.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shots-${{ github.sha }}
+          path: ${{ steps.stage.outputs.directory }}
+          retention-days: 7
+          if-no-files-found: error
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
