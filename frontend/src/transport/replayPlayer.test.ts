@@ -96,4 +96,52 @@ describe("controlled replay", () => {
     expect(store.getState().state).toBe(state);
     expect(control.getSnapshot()).toBe(snapshot);
   });
+  it("ignores callbacks captured before a seek or disposal", async () => {
+    const timers = vi.spyOn(globalThis, "setTimeout");
+    const { control, store } = player();
+    await control.ready;
+    const obsolete = timers.mock.calls.at(-1)?.[0];
+    control.seek(15000);
+    const state = store.getState().state;
+    if (typeof obsolete !== "function") throw new Error("No scheduled callback");
+    obsolete();
+    expect(store.getState().state).toBe(state);
+    const late = timers.mock.calls.at(-1)?.[0];
+    control.dispose();
+    if (typeof late !== "function") throw new Error("No late callback");
+    late();
+    expect(store.getState().state).toBe(state);
+    timers.mockRestore();
+  });
+  it.each(["", "{broken", "{}"])("rejects malformed recording %s", async (text) => {
+    const store = createStateStore();
+    const control = createReplayPlayer({ store, source: { text } });
+    await expect(control.ready).rejects.toThrow();
+    expect(store.getState().state.lastSeq).toBe(0);
+    control.dispose();
+  });
+  it("rejects load errors and stops before a deferred transport import can publish", async () => {
+    const store = createStateStore();
+    const failed = createReplayPlayer({
+      store,
+      source: { url: "/recording" },
+      request: vi.fn().mockResolvedValue(new Response(null, { status: 500 })),
+    });
+    await expect(failed.ready).rejects.toThrow("Replay log request failed: 500");
+    failed.dispose();
+    vi.stubEnv("MODE", "replay");
+    vi.resetModules();
+    try {
+      const { startAppTransport } = await import("./index");
+      const onReplay = vi.fn();
+      const transport = startAppTransport(store, undefined, undefined, onReplay);
+      transport.stop();
+      await transport.ready;
+      expect(onReplay).not.toHaveBeenCalled();
+      expect(store.getState().state.lastSeq).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.resetModules();
+    }
+  });
 });

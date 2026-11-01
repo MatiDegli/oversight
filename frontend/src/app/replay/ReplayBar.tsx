@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { Check, Pause, Play, RotateCcw, X } from "lucide-react";
 import { stateStore } from "../../state";
@@ -26,6 +26,20 @@ export default function ReplayBar({
   const [focused, setFocused] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const drag = useRef<number | null>(null);
+  const slider = useRef<HTMLDivElement>(null);
+  const cancelDrag = useCallback(() => {
+    const pointer = drag.current;
+    drag.current = null;
+    if (pointer !== null && slider.current?.hasPointerCapture(pointer))
+      slider.current.releasePointerCapture(pointer);
+    setPreview(null);
+  }, []);
+  useEffect(() => {
+    window.addEventListener("blur", cancelDrag);
+    return () => {
+      window.removeEventListener("blur", cancelDrag);
+    };
+  }, [cancelDrag]);
   const mark = marks.find((candidate) => candidate.id === (hovered ?? focused));
   const tooltip = dismissed ? undefined : mark;
   const ghost = tooltip?.offset ?? preview;
@@ -77,6 +91,7 @@ export default function ReplayBar({
       </div>
       <div className="replay-strip">
         <div
+          ref={slider}
           className="replay-slider"
           role="slider"
           tabIndex={0}
@@ -103,18 +118,9 @@ export default function ReplayBar({
             player.seek(pointerPosition(event));
             setPreview(null);
           }}
-          onPointerCancel={() => {
-            drag.current = null;
-            setPreview(null);
-          }}
-          onLostPointerCapture={() => {
-            drag.current = null;
-            setPreview(null);
-          }}
-          onBlur={() => {
-            drag.current = null;
-            setPreview(null);
-          }}
+          onPointerCancel={cancelDrag}
+          onLostPointerCapture={cancelDrag}
+          onBlur={cancelDrag}
           onPointerLeave={() => {
             if (drag.current === null) setPreview(null);
           }}
@@ -169,9 +175,13 @@ export default function ReplayBar({
             className="replay-tooltip"
             style={{
               left: `clamp(0px, calc(${percent(tooltip.offset)} - 140px), max(0px, 100% - 300px))`,
+              ...agentSlotStyle(tooltip.slot),
             }}
           >
             <div>
+              <span className="replay-tooltip-letter" data-kind={tooltip.kind}>
+                {tooltip.letters}
+              </span>
               <strong>{tooltip.title}</strong>
               <time>{replayTime(tooltip.offset)}</time>
             </div>

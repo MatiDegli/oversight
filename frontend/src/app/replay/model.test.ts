@@ -1,12 +1,26 @@
 import { describe, expect, it } from "vitest";
 import log from "../../../../fixtures/events/recorded-demo.jsonl?raw";
-import { parseEvent } from "../../transport/events";
-import { replayOffsets, replayPrefix } from "../../transport/replayTimeline";
+import { parseEvent } from "../../transport";
+import { applyEvent, createInitialState } from "../../state";
 import { conversationTab, navigateView, surfaceTab, tabbedView, viewReducer } from "../view";
 import { reconcileReplayView, replayMarks, replayTime } from "./model";
 
 const events = log.trim().split("\n").map(parseEvent);
-const offsets = replayOffsets(events);
+let elapsed = 0;
+const offsets = events.map((event, index) => {
+  const previous = events[index - 1];
+  if (previous)
+    elapsed += Math.min(2000, Math.max(0, Date.parse(event.ts) - Date.parse(previous.ts)));
+  return elapsed;
+});
+const replayPrefix = (_events: unknown, _offsets: unknown, position: number) =>
+  events
+    .filter((_, i) => (offsets[i] ?? Infinity) <= position)
+    .reduce(applyEvent, createInitialState());
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Missing recording subject");
+  return value;
+}
 const state = replayPrefix(events, offsets, Infinity);
 describe("replay navigation", () => {
   it("derives future marks, identities, tests, counts and only successful merge hashes", () => {
@@ -18,16 +32,16 @@ describe("replay navigation", () => {
       ["64", "merge", "A"],
       ["67", "merge", "B"],
     ]);
-    const proposal = marks[2]!;
+    const proposal = required(marks[2]);
     expect(replayTime(proposal.offset)).toBe("0:16");
     expect(proposal.proposal).toMatchObject({
       tests: { passed: 32 },
       lines_added: 28,
       lines_removed: 0,
     });
-    const merge = events[63]!;
+    const merge = required(events[63]);
     if (merge.type !== "change.resolved") throw new Error("Missing merge");
-    expect(marks[3]!.hash).toBe(merge.payload.merge_commit);
+    expect(required(marks[3]).hash).toBe(merge.payload.merge_commit);
     expect(
       replayMarks(
         events.filter(
@@ -38,9 +52,9 @@ describe("replay navigation", () => {
     ).toBe(false);
   });
   it("preserves valid and neutral tabs, closes absent subjects through history, clears selection", () => {
-    const agent = Object.keys(state.agents)[0]!;
-    const change = Object.values(state.changes)[0]!;
-    const path = Object.keys(change.files)[0]!;
+    const agent = required(Object.keys(state.agents)[0]);
+    const change = required(Object.values(state.changes)[0]);
+    const path = required(Object.keys(change.files)[0]);
     let view = viewReducer(tabbedView, { type: "open", tab: surfaceTab(tabbedView, "settings") });
     view = navigateView(
       view,
@@ -61,5 +75,22 @@ describe("replay navigation", () => {
     const beginning = reconcileReplayView(next, replayPrefix(events, offsets, 0));
     expect(beginning.tabs?.map((tab) => tab.id)).toEqual(["settings"]);
     expect(beginning.activeTab).toBe("settings");
+  });
+  it("keeps pending added nodes selected but clears discarded nodes", () => {
+    const node = { ...required(state.graph?.nodes[0]), id: "pending-only" };
+    const change = required(Object.values(state.changes)[0]);
+    const pending = {
+      ...change,
+      status: "editing" as const,
+      graph: { ...change.graph, nodes_added: [node] },
+    };
+    const view = { ...tabbedView, selected: node.id };
+    expect(reconcileReplayView(view, { ...state, changes: { pending } }).selected).toBe(node.id);
+    expect(
+      reconcileReplayView(view, {
+        ...state,
+        changes: { pending: { ...pending, status: "rejected" } },
+      }).selected,
+    ).toBeNull();
   });
 });

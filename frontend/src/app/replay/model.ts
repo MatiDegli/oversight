@@ -1,4 +1,5 @@
 import type { ChangeProposed, ServerEvent, Slot } from "@contracts";
+import { selectPendingChanges } from "../../state";
 import type { State } from "../../state";
 import { viewReducer } from "../view";
 import type { FocusTab, View } from "../view";
@@ -61,8 +62,13 @@ export function replayMarks(
 
 /** Close through navigation's history rules, without opening or activating a new subject. */
 export function reconcileReplayView(view: View, state: State): View {
-  const hasNode = (id: string | null) =>
-    id === null || Boolean(state.graph?.nodes.some((node) => node.id === id));
+  const nodes = new Set(
+    [
+      ...(state.graph?.nodes ?? []),
+      ...selectPendingChanges(state).flatMap((change) => change.graph.nodes_added),
+    ].map((node) => node.id),
+  );
+  const hasNode = (id: string | null) => id === null || nodes.has(id);
   const valid = (tab: Pick<FocusTab, "review" | "diff" | "conversation" | "file">) => {
     if (tab.review && !state.changes[tab.review]?.proposal) return false;
     if (tab.diff && !state.changes[tab.diff.changeId]?.files[tab.diff.path]) return false;

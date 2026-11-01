@@ -131,7 +131,7 @@
   top: 1px;
   width: 24px;
   height: 24px;
-  transform: translateX(-50%);
+  translate: -50% 0;
   border-radius: 5px;
   display: grid;
   place-items: center;
@@ -194,7 +194,7 @@
 .replay-tooltip > div {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 8px;
 }
 .replay-tooltip strong {
   font-size: 14px;
@@ -221,6 +221,7 @@
   outline: 2px solid var(--text);
   outline-offset: 2px;
   box-shadow: 0 0 6px var(--replay-focus-glow);
+  filter: none;
 }
 @media (min-width: 1600px) {
   .replay-restart {
@@ -236,4 +237,30 @@
   .replay-placeholder {
     display: none;
   }
+}
+
+.replay-tooltip-letter {
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--slot-graphic, var(--raised));
+  color: var(--on-agent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.replay-tooltip-letter[data-kind="start"] {
+  color: var(--text);
+}
+.replay-tooltip-letter[data-kind="merge"] {
+  color: var(--slot-text);
+  background: var(--panel);
+  border: 1px solid var(--slot-graphic);
+}
+.replay-tooltip time {
+  margin-left: 10px;
+}
+.replay-tooltip p {
+  padding-left: 28px;
 }
