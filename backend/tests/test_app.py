@@ -229,3 +229,25 @@ def test_agent_b_settings_load_from_the_env_file(
     settings = Settings.load(env)
     assert settings.agent_model_b == "muse-spark-open"
     assert settings.fake_script_b == REPO_ROOT / "fixtures" / "fake-model" / "b.json"
+
+
+def test_windows_reload_refuses_before_uvicorn(monkeypatch, capsys):
+    import sys
+    from unittest.mock import Mock
+
+    import uvicorn
+
+    from oversight import __main__ as cli
+
+    run = Mock()
+    monkeypatch.setattr(uvicorn, "run", run)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "argv", ["oversight", "serve", "--reload"])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert "reload is unavailable on Windows" in capsys.readouterr().err
+    run.assert_not_called()
+    monkeypatch.setattr(sys, "argv", ["oversight", "serve"])
+    cli.main()
+    assert run.call_args.kwargs["reload"] is False

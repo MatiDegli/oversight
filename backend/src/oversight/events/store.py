@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sqlite3
+import sys
 from collections import ChainMap
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -156,7 +157,8 @@ def _connect(path: Path) -> sqlite3.Connection:
     path.parent.chmod(0o700)
     descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        os.fchmod(descriptor, 0o600)
+        if sys.platform != "win32" and hasattr(os, "fchmod"):
+            os.fchmod(descriptor, 0o600)
     finally:
         os.close(descriptor)
     # SQLite derives new WAL/SHM permissions from the database. Tighten existing sidecars too.

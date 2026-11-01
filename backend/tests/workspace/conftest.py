@@ -5,6 +5,7 @@ import ctypes
 import errno
 import os
 import select
+import sys
 from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
 
@@ -26,6 +27,8 @@ class Gate:
     `child_wait` until the test calls `open_gate`; the child's `child_signal` ends `wait_signal`."""
 
     def __init__(self, directory: Path, name: str) -> None:
+        if sys.platform == "win32":
+            pytest.skip("POSIX FIFO gate")
         self.go = directory / f"{name}.go"
         self.signal = directory / f"{name}.signal"
         os.mkfifo(self.go)
@@ -40,6 +43,8 @@ class Gate:
         return f"open({str(self.signal)!r}, 'w').write(str(os.getpid()))"
 
     async def _exchange(self, path: Path, *, writing: bool, timeout_s: float) -> str:
+        if sys.platform == "win32":
+            pytest.skip("POSIX FIFO gate")
         loop = asyncio.get_running_loop()
         opened = asyncio.Event()
         aborted = False
@@ -72,6 +77,8 @@ class Gate:
             aborted = True
 
             async def release() -> None:
+                if sys.platform == "win32":
+                    pytest.skip("POSIX FIFO gate")
                 while not worker.done():
                     try:
                         fd = os.open(
@@ -123,6 +130,8 @@ def gate_factory(tmp_path: Path) -> Callable[[str], Gate]:
 def _pidfd_open(pid: int) -> int | None:
     """None when the process is already gone. Some Python builds lack os.pidfd_open, so it falls
     back to the system call, number 434 on every architecture Linux gained it on."""
+    if sys.platform == "win32":
+        pytest.skip("Linux pidfd proof")
     if hasattr(os, "pidfd_open"):
         try:
             return os.pidfd_open(pid)
@@ -233,7 +242,7 @@ def demo_python(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """The demo repo's environment, built once per session from tools/demo-venv-requirements.txt."""
     root = tmp_path_factory.mktemp("demo-venv-build")
     venv = root / "venv"
-    python = venv / "bin" / "python"
+    python = venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
     env = {k: v for k, v in os.environ.items() if k in UV_PASSTHROUGH}
     requirements = REPO_ROOT / "tools" / "demo-venv-requirements.txt"
 

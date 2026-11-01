@@ -5,10 +5,10 @@ virtual environment and the temp directory. `Tree` is main or one agent's worktr
 discard decisions belong to the change manager; this module gives it safe primitives.
 """
 
-import fcntl
 import os
 import re
 import shutil
+import sys
 import time
 from collections.abc import AsyncGenerator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
@@ -17,6 +17,7 @@ from functools import partial
 from pathlib import Path
 
 from oversight.limits import bounded_text
+from oversight.workspace._platform import acquire_lock, release_lock
 from oversight.workspace.behavior_run import (
     BehaviorObservation,
     BehaviorTarget,
@@ -236,7 +237,9 @@ class Workspace:
         self._pytest_pin = pytest_pin
         self._pytest_targets = pytest_targets
         self._pytest_options = pytest_options
-        self._demo_python = demo_python or runtime_root / "demo-venv" / "bin" / "python"
+        self._demo_python = demo_python or runtime_root / "demo-venv" / (
+            "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+        )
         self._demo_python_given = demo_python is not None
         self._locks = Locks()
         self.harness_pack = False
@@ -406,15 +409,7 @@ class Workspace:
 
     def _acquire_sync(self) -> None:
         self._root.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
-        fd = os.open(self._root / "server.lock", os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            os.close(fd)
-            raise WorkspaceBusy(
-                "another Oversight server is using this runtime directory"
-            ) from None
-        self._lock_fd = fd
+        self._lock_fd = acquire_lock(self._root / "server.lock")
 
     async def acquire_runtime(self) -> None:
         """Take the runtime directory's lock, so a second server fails; children do not hold it."""
@@ -428,7 +423,7 @@ class Workspace:
 
     def release_runtime(self) -> None:
         if self._lock_fd is not None:
-            os.close(self._lock_fd)
+            release_lock(self._lock_fd)
             self._lock_fd = None
 
     def _populate(self) -> None:

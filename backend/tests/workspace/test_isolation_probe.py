@@ -168,3 +168,34 @@ def _write_report(report: Path, code: int, valid_report: bool) -> None:
         f"{failure}</testcase></testsuite>"
     )
     report.with_suffix(".xml").write_text(xml if valid_report else "invalid XML")
+
+
+@pytest.mark.anyio
+async def test_nt_injected_runner_and_cli_refuse_before_lookup_pipe_or_spawn(
+    tmp_path, template, monkeypatch, capsys
+):
+    import os
+    import shutil
+    from unittest.mock import Mock
+
+    from oversight.workspace import isolation
+
+    fake = tmp_path / "unshare"
+    fake.write_text("fake")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    lookup, pipe, spawn = Mock(), Mock(), Mock()
+    monkeypatch.setattr(shutil, "which", lookup)
+    monkeypatch.setattr(os, "pipe2", pipe)
+    monkeypatch.setattr(asyncio.get_running_loop(), "subprocess_exec", spawn)
+    monkeypatch.setattr(sys, "platform", "win32")
+    with pytest.raises(IsolationUnavailable, match="Linux-only"):
+        await IsolatedRunner(tmp_path)(["true"], cwd=tmp_path, timeout_s=1)
+    isolation.refuse_orphans(tmp_path, proc=tmp_path / "missing")
+    monkeypatch.setattr(sys, "argv", ["oversight", "isolation-probe"])
+    # CLI is synchronous, so exercise it in a thread with its own asyncio.run.
+    await asyncio.to_thread(cli.main)
+    assert "Linux-only" in json.loads(capsys.readouterr().out)["reason"]
+    lookup.assert_not_called()
+    pipe.assert_not_called()
+    spawn.assert_not_called()
