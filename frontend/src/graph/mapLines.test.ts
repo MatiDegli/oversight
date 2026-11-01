@@ -15,10 +15,12 @@ import {
 } from "./mapLines";
 import { MapLayer } from "./MapLayer";
 import design from "../../../DESIGN.md?raw";
+import decisions from "../../../DECISIONS.md?raw";
 import controllerSource from "./mapController.ts?raw";
 import layerSource from "./MapLayer.tsx?raw";
 import pointerSource from "./mapPointer.ts?raw";
 import linesSource from "./MapLines.tsx?raw";
+import pureLinesSource from "./mapLines.ts?raw";
 
 it("keeps the map controller and layer functions within the 80-line limit", () => {
   for (const [source, kind] of [
@@ -59,6 +61,31 @@ it("preserves the pending name priority and documents built evidence in lines an
   expect(point(5)).toContain("names hide with visibility");
   expect(point(8)).toContain("distance badges are 20px");
   expect(point(8)).toContain("panels without members use 0.5 opacity");
+});
+
+it("appends the map decision after existing entries with heading separation", () => {
+  const heading = "## 2026-11-01 — Map evidence, calls and pointer navigation";
+  expect(decisions.split(heading)).toHaveLength(2);
+  for (const later of [
+    "## 2026-11-01 — Displaced fronts may start before the freeze",
+    "## Contracts 1.15.0",
+    "## 2026-11-01 — The lead keeps one thread per run",
+    "## 2026-11-01 — Lead thread lifetime and restart",
+  ]) {
+    expect(decisions.indexOf(heading)).toBeGreaterThan(decisions.indexOf(later));
+  }
+  expect(decisions).toContain(`\n\n${heading}\n\n`);
+});
+
+it("uses a static module type import", () => {
+  const file = ts.createSourceFile("mapLines.ts", pureLinesSource, ts.ScriptTarget.Latest, true);
+  const imports: ts.ImportTypeNode[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isImportTypeNode(node)) imports.push(node);
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  expect(imports.map((node) => node.getText(file))).toEqual([]);
 });
 
 function fixture() {

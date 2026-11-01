@@ -1,20 +1,21 @@
 import type { GraphElement } from "./elements";
 import { moduleOwners } from "./mapEvidence";
 import type { Box } from "./camera";
-import type { MapModel } from "./mapModel";
+import type { MapModel, MapModule } from "./mapModel";
 import { moduleLayout, panelBox } from "./mapModel";
 
+type Point = { x: number; y: number };
 export type MapHover = { kind: "module" | "group"; id: string };
 export interface MapViewport {
   model: MapModel;
   zoom: number;
-  pan: { x: number; y: number };
+  pan: Point;
 }
-const contains = (box: Box, p: { x: number; y: number }) =>
+const contains = (box: Box, p: Point) =>
   p.x >= box.x1 && p.x <= box.x2 && p.y >= box.y1 && p.y <= box.y2;
 
 /** Input stays on the graph stage; this mirrors the pointer-free layer's screen boxes. */
-export function mapHit(point: { x: number; y: number }, frame: MapViewport): MapHover | undefined {
+export function mapHit(point: Point, frame: MapViewport): MapHover | undefined {
   const { model, zoom, pan } = frame;
   for (const group of model.groups)
     for (const module of group.modules)
@@ -70,10 +71,10 @@ export function mapCalls(elements: readonly GraphElement[]): MapCall[] {
 
 export const chipFractions = [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.12, 0.88];
 const overlaps = (a: Box, b: Box) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1;
-type Circle = { x: number; y: number; radius: number };
+type Circle = Point & { radius: number };
 export function placeChip(
-  start: { x: number; y: number },
-  end: { x: number; y: number },
+  start: Point,
+  end: Point,
   width: number,
   names: Box[],
   circles: Circle[],
@@ -102,18 +103,16 @@ export function placeChip(
 
 /** Insets are screen pixels measured from the outside of the pending ring, when present. */
 export function endPoints(a: Circle, b: Circle, possible = false) {
-  const length = Math.hypot(b.x - a.x, b.y - a.y),
-    ux = (b.x - a.x) / length,
-    uy = (b.y - a.y) / length;
+  const dx = b.x - a.x,
+    dy = b.y - a.y,
+    length = Math.hypot(dx, dy);
+  const inset = (c: Circle, gap: number) => ({
+    x: c.x + (dx / length) * gap,
+    y: c.y + (dy / length) * gap,
+  });
   return {
-    start: {
-      x: a.x + ux * (a.radius + (possible ? 2 : 3)),
-      y: a.y + uy * (a.radius + (possible ? 2 : 3)),
-    },
-    end: {
-      x: b.x - ux * (b.radius + (possible ? 2 : 4)),
-      y: b.y - uy * (b.radius + (possible ? 2 : 4)),
-    },
+    start: inset(a, a.radius + (possible ? 2 : 3)),
+    end: inset(b, -b.radius - (possible ? 2 : 4)),
   };
 }
 
@@ -173,6 +172,6 @@ export function mapSegments(frame: MapViewport & { calls?: MapCall[]; hover?: Ma
 }
 
 /** Seeds and agent marks keep their own signal, without a distance badge. */
-export function distanceBadge(module: import("./mapModel").MapModule) {
+export function distanceBadge(module: MapModule) {
   return module.agents.length ? undefined : module.distance;
 }

@@ -3587,33 +3587,6 @@ Waiting's “never pulses”. Card glow, an extra merged sentence and a 300ms no
 for good; a merged node word stays held. Evidence: dark/day pulses, overlap, arrival, 1280×800 and 720p
 frames, software-GL costs, and the coordinator's Windows real-GPU timing.
 
-
-## 2026-11-01 — Map evidence, calls and pointer navigation
-
-Group hover draws one line per module pair crossing its boundary, including both directions,
-so the reader sees actual callers and callees rather than an invented group hub. Hover exact
-arrows end at the callee. Cone arrows run from callee to caller for exact pairs whose modules
-are both members, showing how a change may propagate; a shared hover/cone pair draws once.
-The bounded cone remains possibly affected, without a second omission message.
-
-Group clicks fit card boxes in the clear area, clamped to [68.75%, 100%]: the readability
-floor returns cards and oversized groups remain centered for scrolling. Module clicks center
-at 100%. "Open" means unfold, only when folded; visiting an open module cannot fold it.
-The map keeps drag panning, distinguishing drags from clicks. Cytoscape explicitly blurs on
-mousedown, so map gestures are handled on the stage before its canvas to preserve focus.
-Clicks are pointer-only because the map layer is aria-hidden and accepts no events; keyboard
-users retain Fit and zoom buttons. Neither click selects a node or opens a panel.
-
-Hover uses edge, which reads against both panel surfaces in captures; map-line-hover was not
-needed. Possible calls stay faint, without arrows or chips. All colors remain theme tokens.
-Headers measure every flex item once, then wrap to 37px, 60px and 23px per additional line;
-rows share the tallest header to preserve their ground. The 22px chip overhangs its 20px line
-by 1px above and below, preserving the existing one-line strip. Rings include current reads.
-Names hide with visibility in the cone, keeping their layout boxes and circle positions;
-a pointed dimmed module reveals its full name. The neutral decision chip counts ready or
-conflicting changes touching the group; the top bar counts the entire inbox, including plans
-and questions, so these counts need not match. Exact test-to-module calls supply "tested by";
-tests stay hidden in the product and their name-prefix rule is unit-tested only.
 ## 2026-11-01 — Displaced fronts may start before the freeze
 The maintainer allowed the fronts the Chat plan had moved past the freeze to start before it, each when a writer slot
 is free and behind the Chat and lead fronts: lead actions slices 2 and 4, item 10 (team and period grouping), the
@@ -3677,3 +3650,30 @@ crosses this change.
 
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
+
+## 2026-11-01 — Map evidence, calls and pointer navigation
+
+Group hover draws one line per module pair crossing its boundary, including both directions,
+so the reader sees actual callers and callees rather than an invented group hub. Hover exact
+arrows end at the callee. Cone arrows run from callee to caller for exact pairs whose modules
+are both members, showing how a change may propagate; a shared hover/cone pair draws once.
+The bounded cone remains possibly affected, without a second omission message.
+
+Group clicks fit card boxes in the clear area, clamped to [68.75%, 100%]: the readability
+floor returns cards and oversized groups remain centered for scrolling. Module clicks center
+at 100%. "Open" means unfold, only when folded; visiting an open module cannot fold it.
+The map keeps drag panning, distinguishing drags from clicks. Cytoscape explicitly blurs on
+mousedown, so map gestures are handled on the stage before its canvas to preserve focus.
+Clicks are pointer-only because the map layer is aria-hidden and accepts no events; keyboard
+users retain Fit and zoom buttons. Neither click selects a node or opens a panel.
+
+Hover uses edge, which reads against both panel surfaces in captures; map-line-hover was not
+needed. Possible calls stay faint, without arrows or chips. All colors remain theme tokens.
+Headers measure every flex item once, then wrap to 37px, 60px and 23px per additional line;
+rows share the tallest header to preserve their ground. The 22px chip overhangs its 20px line
+by 1px above and below, preserving the existing one-line strip. Rings include current reads.
+Names hide with visibility in the cone, keeping their layout boxes and circle positions;
+a pointed dimmed module reveals its full name. The neutral decision chip counts ready or
+conflicting changes touching the group; the top bar counts the entire inbox, including plans
+and questions, so these counts need not match. Exact test-to-module calls supply "tested by";
+tests stay hidden in the product and their name-prefix rule is unit-tested only.

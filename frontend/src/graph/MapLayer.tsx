@@ -76,6 +76,7 @@ const mapStyles = `
 [aria-label="Repository graph"][data-map-level="map"] {
   opacity: 0;
 }
+@media (max-width: 1439px) { .map-legend-hint { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   .map-layer,
   [aria-label="Repository graph"][data-map-level] {
@@ -95,7 +96,7 @@ export interface MapFrame {
 
 /** Screen-sized type and circles, world-sized cells. This layer never accepts input. */
 export function MapLayer({ frame }: { frame: MapFrame }) {
-  const { model, level } = frame;
+  const { model, zoom, pan, level } = frame;
   return (
     <div
       aria-hidden="true"
@@ -107,9 +108,50 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
       {model.groups.map((group) => (
         <div key={group.id}>
           {group.panel && <MapPanel group={group} frame={frame} />}
-          {group.modules.map((module) => (
-            <MapModule key={module.id} module={module} groupId={group.id} frame={frame} />
-          ))}
+          {group.modules.map((module) => {
+            const layout = moduleLayout(module, model, zoom, pan);
+            const full = pointed(module.id, group.id, frame.hover);
+            const dim = module.inCone === false && !module.agents.length;
+            const hidden = dim && !full ? "hidden" : undefined;
+            return (
+              <div
+                key={module.id}
+                data-map-module={module.id}
+                className="absolute text-center"
+                style={{
+                  zIndex: 2,
+                  left: layout.x,
+                  top: layout.y1,
+                  width: model.cellWidth * zoom - 10,
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <MapModuleCircle module={module} radius={layout.radius} dim={dim} />
+                <div
+                  className={`map-name mt-[3px] ${full ? "map-full-name" : "truncate"}`}
+                  style={{
+                    visibility: hidden,
+                    background:
+                      frame.hover || module.inCone !== undefined
+                        ? "color-mix(in srgb, var(--card) 85%, transparent)"
+                        : undefined,
+                  }}
+                >
+                  {full ? (module.fullName ?? module.name) : module.name}
+                </div>
+                <div className="map-count" style={{ visibility: hidden }}>
+                  {module.functions
+                    ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
+                    : "empty"}
+                </div>
+                {module.agents.map(({ slot, text }) => (
+                  <div key={slot} className={`map-agent ${agentLook[slot].textClass}`}>
+                    {text}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       ))}
     </div>
@@ -171,15 +213,8 @@ function MapPanel({ group, frame }: { group: MapGroup; frame: MapFrame }) {
   );
 }
 
-function MapModuleCircle({
-  module,
-  radius,
-  dim,
-}: {
-  module: Module;
-  radius: number;
-  dim: boolean;
-}) {
+type CircleProps = { module: Module; radius: number; dim: boolean };
+function MapModuleCircle({ module, radius, dim }: CircleProps) {
   const badge = distanceBadge(module);
   return (
     <div className="relative mx-auto" style={{ width: radius * 2, height: radius * 2 }}>
@@ -206,58 +241,6 @@ function MapModuleCircle({
           className={`absolute rounded-full border-2 border-dashed ${agentLook[slot].border}`}
           style={{ inset: -5 }}
         />
-      ))}
-    </div>
-  );
-}
-
-function MapModule({
-  module,
-  groupId,
-  frame,
-}: {
-  module: Module;
-  groupId: string;
-  frame: MapFrame;
-}) {
-  const { model, zoom, pan } = frame;
-  const layout = moduleLayout(module, model, zoom, pan);
-  const full = pointed(module.id, groupId, frame.hover);
-  const dim = module.inCone === false && !module.agents.length;
-  return (
-    <div
-      data-map-module={module.id}
-      className="absolute text-center"
-      style={{
-        zIndex: 2,
-        left: layout.x,
-        top: layout.y1,
-        width: model.cellWidth * zoom - 10,
-        transform: "translateX(-50%)",
-      }}
-    >
-      <MapModuleCircle module={module} radius={layout.radius} dim={dim} />
-      <div
-        className={`map-name mt-[3px] ${full ? "map-full-name" : "truncate"}`}
-        style={{
-          visibility: dim && !full ? "hidden" : undefined,
-          background:
-            frame.hover || module.inCone !== undefined
-              ? "color-mix(in srgb, var(--card) 85%, transparent)"
-              : undefined,
-        }}
-      >
-        {full ? (module.fullName ?? module.name) : module.name}
-      </div>
-      <div className="map-count" style={{ visibility: dim && !full ? "hidden" : undefined }}>
-        {module.functions
-          ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
-          : "empty"}
-      </div>
-      {module.agents.map(({ slot, text }) => (
-        <div key={slot} className={`map-agent ${agentLook[slot].textClass}`}>
-          {text}
-        </div>
       ))}
     </div>
   );

@@ -5,6 +5,14 @@ import { flushSync } from "react-dom";
 import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import { Frame } from "./Frame";
+import { graphElements } from "../graph";
+import { getActiveTheme } from "../theme";
+// eslint-disable-next-line no-restricted-imports -- Browser regression for the map's retained layout.
+import { MapLayer } from "../graph/MapLayer";
+// eslint-disable-next-line no-restricted-imports -- Fixed model isolates cone styling from review framing.
+import { mapModel } from "../graph/mapModel";
+// eslint-disable-next-line no-restricted-imports -- Apply actual cone evidence to the fixed model.
+import { mapEvidence } from "../graph/mapEvidence";
 import { initialView, type View } from "./view";
 import { syntheticMapGraph } from "./map.browser.fixture";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
@@ -223,6 +231,29 @@ export function mountEvidence(graph = evidenceGraph(), name = "map fixture") {
   root = createRoot(host);
   flushSync(() => root?.render(<Harness />));
 }
+let stableModel: ReturnType<typeof mapModel>;
+export function stationaryEvidence(cone = false) {
+  const state = stateStore.getState().state;
+  const elements = graphElements(state, false);
+  if (!cone) {
+    stableModel = mapModel(elements, getActiveTheme());
+    root?.unmount();
+    const host = document.createElement("div");
+    document.body.replaceChildren(host);
+    root = createRoot(host);
+  }
+  mapEvidence(
+    stableModel,
+    elements,
+    state,
+    cone ? state.changes["change-A"]?.proposal?.impact : null,
+  );
+  flushSync(() =>
+    root?.render(
+      <MapLayer frame={{ model: stableModel, level: "map", zoom: 0.3, pan: { x: 40, y: 40 } }} />,
+    ),
+  );
+}
 export function reviewEvidence() {
   flushSync(() => {
     updateView({ ...initialView, review: "change-A" });
@@ -239,6 +270,7 @@ declare global {
     mapLinesTest: {
       mount: typeof mountEvidence;
       review: typeof reviewEvidence;
+      stationary: typeof stationaryEvidence;
       demo: typeof demoEvidence;
       taps: typeof evidenceTaps;
     };

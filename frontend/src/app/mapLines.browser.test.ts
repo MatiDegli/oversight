@@ -21,7 +21,7 @@ beforeAll(async () => {
   });
   html = await server.transformIndexHtml(
     "/",
-    '<html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { mountEvidence, reviewEvidence, demoEvidence, evidenceTaps } from "/src/app/mapLines.browser.fixture.tsx"; window.mapLinesTest = { mount: mountEvidence, review: reviewEvidence, demo: demoEvidence, taps: evidenceTaps };</script></body></html>',
+    '<html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { mountEvidence, reviewEvidence, demoEvidence, evidenceTaps, stationaryEvidence } from "/src/app/mapLines.browser.fixture.tsx"; window.mapLinesTest = { mount: mountEvidence, review: reviewEvidence, demo: demoEvidence, taps: evidenceTaps, stationary: stationaryEvidence };</script></body></html>',
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
@@ -147,6 +147,31 @@ it("shows calls for module/group hover alone, without graph render, camera or fo
     await check(
       page.locator(".map-layer svg, [data-map-call-chip], [data-map-distance]"),
     ).toHaveCount(0);
+  } finally {
+    await page.close();
+  }
+});
+it("continues a map drag outside the stage and stops on window mouseup", async () => {
+  const page = await setup();
+  try {
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await ready(page);
+    await page.getByRole("button", { name: "Zoom out", exact: true }).focus();
+    const point = await modulePoint(page, "library.module_00");
+    await pointAt(page, point);
+    await page.mouse.down();
+    await page.mouse.move(point.x + 10, point.y + 10);
+    await clearPointer(page);
+    await check(page.locator("[data-map-line]")).toHaveCount(0);
+    const before = await camera(page);
+    await page.mouse.move(20, 15);
+    const after = await camera(page);
+    expect(after.pan).toEqual({ x: (before.pan?.x ?? 0) + 15, y: (before.pan?.y ?? 0) + 10 });
+    expect(after).toMatchObject({ level: "map", focus: "Zoom out", zoom: before.zoom });
+    await page.mouse.up();
+    await page.mouse.move(30, 25);
+    expect(await camera(page)).toEqual(after);
+    expect(await page.evaluate(() => window.mapLinesTest.taps())).toBe(0);
   } finally {
     await page.close();
   }
@@ -284,7 +309,6 @@ it("projects review after zooming out: badges, reversed calls, entry counts, sta
     await page.getByRole("button", { name: "Fit the graph to the view" }).click();
     await ready(page);
     await zoomTo(page, 0.3);
-    const before = await modulePoint(page, "tools.module_15");
     await page.evaluate(() => {
       window.mapLinesTest.review();
     });
@@ -308,12 +332,29 @@ it("projects review after zooming out: badges, reversed calls, entry counts, sta
       "visible",
     );
     expect(await modulePoint(page, "tools.module_15")).toEqual(point);
-    expect(before.x).toBeTypeOf("number");
     await clearPointer(page);
     await check(page.locator('[data-map-module="tools.module_15"] .map-name')).toHaveCSS(
       "visibility",
       "hidden",
     );
+  } finally {
+    await page.close();
+  }
+});
+it("keeps the circle at its pre-cone position when the dimmed name hides", async () => {
+  const page = await setup();
+  try {
+    await page.evaluate(() => {
+      window.mapLinesTest.stationary();
+    });
+    const name = page.locator('[data-map-module="tools.module_15"] .map-name');
+    await check(name).toHaveCSS("visibility", "visible");
+    const before = await modulePoint(page, "tools.module_15");
+    await page.evaluate(() => {
+      window.mapLinesTest.stationary(true);
+    });
+    await check(name).toHaveCSS("visibility", "hidden");
+    expect(await modulePoint(page, "tools.module_15")).toEqual(before);
   } finally {
     await page.close();
   }

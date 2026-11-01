@@ -28,11 +28,21 @@ function mapGestures(options: MapPointerOptions, state: PointerState) {
     if (!active() || !surface(event) || event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    state.down = state.point ?? localPoint(host, event);
+    state.down = localPoint(host, event);
     state.dragged = false;
   };
   const mousemove = (event: MouseEvent) => {
-    if (active() && surface(event)) event.stopPropagation();
+    if (!active()) return;
+    if (surface(event)) event.stopPropagation();
+    const point = localPoint(host, event),
+      cy = options.graph();
+    if (!state.down || !point || !cy) return;
+    const dx = point.x - state.down.x,
+      dy = point.y - state.down.y;
+    if (Math.hypot(dx, dy) <= 3 && !state.dragged) return;
+    state.dragged = true;
+    cy.panBy({ x: dx, y: dy });
+    state.down = point;
   };
   const mouseup = () => {
     state.down = undefined;
@@ -75,21 +85,19 @@ function attachMapPointer(
   pointermove: (event: PointerEvent) => void,
   pointerleave: () => void,
 ) {
-  stage?.addEventListener("mousedown", gestures.mousedown, true);
-  stage?.addEventListener("mousemove", gestures.mousemove, true);
-  stage?.addEventListener("click", gestures.click, true);
-  stage?.ownerDocument.defaultView?.addEventListener("mouseup", gestures.mouseup);
-  stage?.addEventListener("pointermove", pointermove);
-  stage?.addEventListener("pointerleave", pointerleave);
-  stage?.addEventListener("wheel", gestures.wheel, { passive: false });
+  const scope = stage?.ownerDocument.defaultView;
+  const controller = new AbortController();
+  const capture = { capture: true, signal: controller.signal };
+  const passive = { passive: false, signal: controller.signal };
+  stage?.addEventListener("mousedown", gestures.mousedown, capture);
+  scope?.addEventListener("mousemove", gestures.mousemove, capture);
+  stage?.addEventListener("click", gestures.click, capture);
+  scope?.addEventListener("mouseup", gestures.mouseup, passive);
+  stage?.addEventListener("pointermove", pointermove, passive);
+  stage?.addEventListener("pointerleave", pointerleave, passive);
+  stage?.addEventListener("wheel", gestures.wheel, passive);
   return () => {
-    stage?.removeEventListener("mousedown", gestures.mousedown, true);
-    stage?.removeEventListener("mousemove", gestures.mousemove, true);
-    stage?.removeEventListener("click", gestures.click, true);
-    stage?.ownerDocument.defaultView?.removeEventListener("mouseup", gestures.mouseup);
-    stage?.removeEventListener("pointermove", pointermove);
-    stage?.removeEventListener("pointerleave", pointerleave);
-    stage?.removeEventListener("wheel", gestures.wheel);
+    controller.abort();
   };
 }
 
@@ -107,16 +115,6 @@ export function createMapPointer(options: MapPointerOptions) {
   const pointermove = (event: PointerEvent) => {
     if (!options.active()) return;
     state.point = localPoint(options.host, event);
-    const cy = options.graph();
-    if (state.down && state.point && cy) {
-      const dx = state.point.x - state.down.x,
-        dy = state.point.y - state.down.y;
-      if (Math.hypot(dx, dy) > 3 || state.dragged) {
-        state.dragged = true;
-        cy.panBy({ x: dx, y: dy });
-        state.down = state.point;
-      }
-    }
     refresh();
   };
   const clear = () => {
