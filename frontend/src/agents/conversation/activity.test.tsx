@@ -30,7 +30,9 @@ it("renders a single call without a hidden fold row or an extra divider", () => 
     round: { ...activity.round, steps: [activity.round.steps[0]] },
   };
   const html = renderToStaticMarkup(<ActivityBlock entry={entry} slot="A" changeId="change-1" />);
-  expect(html).toContain("read_file");
+  expect(html).toContain('title="read_file"');
+  expect(html.replace(/<[^>]*>/g, "")).toContain(entry.round.steps[0]?.step.summary);
+  expect(html.replace(/<[^>]*>/g, "")).not.toContain("read_file");
   expect(html).not.toContain("earlier call");
   expect(html).not.toContain("aria-expanded");
   expect(html).not.toContain('hidden=""');
@@ -52,7 +54,7 @@ it("shows an open block, folded earlier calls and newest call last", async () =>
   const text = await html("working");
   expect(text).toContain("Working3 min 20 s");
   expect(text).toContain("6 earlier calls50 ms in tools");
-  expect(text).toContain("edit_file · Edited pricing.pyok 6 ms");
+  expect(text).toContain("Edited pricing.pyok 6 ms");
   expect(text).not.toContain("Read orders.py");
   expect(text).toContain("Round 1 · proposed, then you asked for changes6 calls · 2 min 41 s");
 });

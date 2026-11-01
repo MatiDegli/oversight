@@ -245,7 +245,9 @@ it.each([608, 304])(
     const page = await pageFor("revising", width);
     try {
       await page.getByRole("button", { name: /^Round 1 ·/ }).click();
-      await page.getByRole("heading").evaluate((node) => {
+      await check(page.getByRole("heading")).toHaveCount(1);
+      await check(page.getByRole("heading")).toHaveText("Agent A");
+      await page.getByRole("heading", { name: "Agent A", exact: true }).evaluate((node) => {
         node.textContent = node.textContent.repeat(4);
       });
       await page.getByText(/^Cross-review ·/).evaluate((node) => {

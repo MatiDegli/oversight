@@ -1,10 +1,60 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
+import { ConversationPanelHeader } from "./ConversationPanelHeader";
 import { ConversationPanel } from "./ConversationPanel";
 import { Composer } from "./Composer";
 import { sketchState } from "./fixture";
 import { selectConversation } from "./selectConversation";
 import { TimelineEntry } from "./rows";
+
+it("names the agent once in the header and keeps the task in the first timeline row", () => {
+  const conversation = selectConversation(sketchState, "agent-1", []);
+  if (!conversation) throw new Error("Missing fixture");
+  const task = conversation.entries[0];
+  if (task?.kind !== "task") throw new Error("Missing task");
+  const header = renderToStaticMarkup(<ConversationPanelHeader header={conversation.header} />);
+  expect(header.match(/<h2\b/g)).toHaveLength(1);
+  expect(header).toMatch(/<h2[^>]*>Agent A<\/h2>/);
+  expect(header).not.toContain(task.text);
+  const panel = renderToStaticMarkup(<ConversationPanel conversation={conversation} />);
+  expect(panel.match(/<h[1-6]\b/g)).toHaveLength(1);
+  expect(panel.split(task.text)).toHaveLength(2);
+  expect(panel).toContain("Task from you");
+});
+
+it.each([false, true])("shows a sentence and keeps the tool on hover (compact=%s)", (compact) => {
+  const step = sketchState.steps["agent-1"]?.find((step) => step.tool === "edit_file");
+  if (!step) throw new Error("Missing edit");
+  const html = renderToStaticMarkup(
+    <TimelineEntry
+      compact={compact}
+      changeId="change-1"
+      onOpenDiff={() => undefined}
+      entry={{ kind: "step", seq: 1, ts: undefined, step }}
+    />,
+  );
+  const text = html.replace(/<[^>]*>/g, "");
+  expect(text).toContain(step.summary);
+  expect(text).not.toContain(step.tool);
+  expect(text).toContain("View in diff");
+  expect(html).toContain(`title="${step.tool}"`);
+  expect(html).not.toContain("<code");
+});
+
+it.each([false, true])("falls back to the tool in body type (compact=%s)", (compact) => {
+  const step = sketchState.steps["agent-1"]?.[0];
+  if (!step) throw new Error("Missing step");
+  const html = renderToStaticMarkup(
+    <TimelineEntry
+      compact={compact}
+      changeId="change-1"
+      entry={{ kind: "step", seq: 1, ts: undefined, step: { ...step, summary: "" } }}
+    />,
+  );
+  expect(html.replace(/<[^>]*>/g, "")).toContain(step.tool);
+  expect(html).toContain(`title="${step.tool}"`);
+  expect(html).not.toMatch(/<code|font-mono[^>]*>list_files/);
+});
 
 it("keeps a positive cost below half a cent visible in the header chip", () => {
   const conversation = selectConversation(sketchState, "agent-1", []);

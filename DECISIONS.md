@@ -3612,3 +3612,13 @@ crosses this change.
 
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
+
+
+## 2026-11-01 — Name the agent above its conversation
+
+The maintainer, Nov 1 at 16:11 ART: a repeated task above the conversation read as a stray message.
+The Conversation heading therefore names the agent at 16px/600, retaining its line height and text
+color, badge, status and chips. The task stays only in the first timeline message, "Task from you".
+Tool rows show their existing summary as a sentence, with the tool name on hover; an empty summary
+falls back to the tool name in body type. Icons, results, milliseconds, errors, View in diff and
+Test output remain. This supersedes the task headline in the approved Conversation sketch.
