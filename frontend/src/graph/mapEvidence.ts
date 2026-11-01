@@ -18,7 +18,7 @@ export function moduleOwners(elements: readonly GraphElement[]) {
   );
   return new Map(
     [...nodes].map(([id, data]) => {
-      while (data.parent && nodes.has(data.parent)) data = nodes.get(data.parent)!;
+      while (data.parent && nodes.has(data.parent)) data = nodes.get(data.parent) ?? data;
       return [id, data.id];
     }),
   );
@@ -35,7 +35,8 @@ export function mapEvidence(
   const graphNodes = new Map(state.graph?.nodes.map((n) => [n.id, n]));
   for (const [id, original] of graphNodes) {
     let node = original;
-    while (node.parent_id && graphNodes.has(node.parent_id)) node = graphNodes.get(node.parent_id)!;
+    while (node.parent_id && graphNodes.has(node.parent_id))
+      node = graphNodes.get(node.parent_id) ?? node;
     owners.set(id, node.id);
   }
   const seeds = new Set(cone?.seeds.map((id) => owners.get(id)));

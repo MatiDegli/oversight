@@ -139,8 +139,11 @@ function createMapController(
     event.preventDefault();
     // Cytoscape explicitly blurs on mousedown; own the map gesture before it reaches its canvas.
     event.stopPropagation();
-    down = point(event);
+    down = pointer ?? point(event);
     dragged = false;
+  };
+  const mousemove = (event: MouseEvent) => {
+    if (active() && surface(event)) event.stopPropagation();
   };
   const mouseup = () => {
     down = undefined;
@@ -251,8 +254,9 @@ function createMapController(
       cy = graph;
       const stage = host.current?.parentElement;
       stage?.addEventListener("mousedown", mousedown, true);
+      stage?.addEventListener("mousemove", mousemove, true);
       stage?.addEventListener("click", click, true);
-      window.addEventListener("mouseup", mouseup);
+      stage?.ownerDocument?.defaultView?.addEventListener("mouseup", mouseup);
       stage?.addEventListener("pointermove", pointermove);
       stage?.addEventListener("pointerleave", pointerleave);
       cy.on("viewport", viewport);
@@ -260,8 +264,9 @@ function createMapController(
       host.current?.parentElement?.addEventListener("wheel", wheel, { passive: false });
       return () => {
         stage?.removeEventListener("mousedown", mousedown, true);
+        stage?.removeEventListener("mousemove", mousemove, true);
         stage?.removeEventListener("click", click, true);
-        window.removeEventListener("mouseup", mouseup);
+        stage?.ownerDocument?.defaultView?.removeEventListener("mouseup", mouseup);
         stage?.removeEventListener("pointermove", pointermove);
         stage?.removeEventListener("pointerleave", pointerleave);
         cancelAnimationFrame(pointerFrame);
