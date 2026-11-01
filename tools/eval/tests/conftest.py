@@ -10,6 +10,12 @@ sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "backend" / "tests"))
 
 
+@pytest.fixture(autouse=True)
+def no_host_memory_hold(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eval tests never depend on host memory pressure when starting fake agents."""
+    monkeypatch.setattr("oversight.app.memory_used", lambda: None)
+
+
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
