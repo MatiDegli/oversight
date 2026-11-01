@@ -32,7 +32,7 @@ def write_report(log: Path, results: Path, out: Path | None = None) -> None:
         price_retrieved=LIST_PRICES.retrieved,
     )
     revisions, changes, arms = build_arms(inputs)
-    add_spend(inputs, changes, arms)
+    changes, arms = add_spend(inputs, changes, arms)
     run = add_timing(inputs, revisions, changes, arms)
     not_built = [dict(record=name, status="not_built") for name in ("E3", "E4", "E6", "E7")]
     write_lines(

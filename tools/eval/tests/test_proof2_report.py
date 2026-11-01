@@ -1,8 +1,10 @@
 """Proof 2 measures use frozen definitions and independent expected values."""
 
 import asyncio
+import io
 import json
 import sys
+from copy import deepcopy
 from hashlib import sha256
 from pathlib import Path
 from typing import get_type_hints
@@ -10,7 +12,10 @@ from typing import get_type_hints
 import pytest
 from tools.eval.proof2.__main__ import main
 from tools.eval.proof2.report import write_report
-from tools.eval.proof2.report.output import counted
+from tools.eval.proof2.report.arms import ArmRecord, ChangeRecord, RevisionRecord, build_arms
+from tools.eval.proof2.report.inputs import load_inputs
+from tools.eval.proof2.report.output import counted, write_lines
+from tools.eval.proof2.report.spend import add_spend
 from tools.eval.proof2.report.timing import add_timing, wall_ms
 from tools.eval.tests.report_events import event, files, receipts, renumber, scenario
 
@@ -22,7 +27,7 @@ def report(tmp_path, capsys, events=None, results=None):
     return [json.loads(line) for line in capsys.readouterr().out.splitlines()]
 
 
-def test_meta(tmp_path, capsys):
+def test_meta(tmp_path, capsys, monkeypatch):
     log, results = files(tmp_path)
     write_report(log, results)
     meta = json.loads(capsys.readouterr().out.splitlines()[0])
@@ -42,10 +47,16 @@ def test_meta(tmp_path, capsys):
         price_retrieved="2026-10-30",
     )
     results.write_text("")
-    write_report(Path("fixtures/events/recorded-demo.jsonl"), results)
+    monkeypatch.chdir(tmp_path)
+    demo_log = Path(__file__).resolve().parents[3] / "fixtures/events/recorded-demo.jsonl"
+    write_report(demo_log, results)
     demo = json.loads(capsys.readouterr().out.splitlines()[0])
     assert (demo["through_seq"], demo["revisions"], demo["with_hidden"]) == (69, 2, 0)
-    assert demo["run_id"] is not None
+    assert (demo["run_id"], demo["contract_version"], demo["prompt_version"]) == (
+        "run-20261027-185214",
+        "1.3.0",
+        "agent-v1-3739943df858",
+    )
 
 
 @pytest.mark.parametrize(
@@ -164,6 +175,22 @@ def test_lazy_import(monkeypatch, command):
     assert cli.main() == 0
 
 
+def test_inputs_uses_relative_runner_import(monkeypatch):
+    import builtins
+    import importlib
+
+    from tools.eval.proof2.report import inputs
+
+    original = builtins.__import__
+
+    def guarded(name, *args, **kwargs):
+        assert name != "tools.eval.proof2.runner"
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded)
+    importlib.reload(inputs)
+
+
 def test_correctness_and_selections(tmp_path, capsys):
     rows = report(tmp_path, capsys)
     revisions = [r for r in rows if r["record"] == "revision"]
@@ -203,6 +230,11 @@ def test_correctness_and_selections(tmp_path, capsys):
         ("change-1", 2, 21, "h1b", "p04", "passed", "pass", True, False, True, ["clean"], None, 1),
         ("change-2", 1, 9, "h2", "p10", "passed", "pass", True, True, True, ["clean"], None, None),
     ]
+    assert [(r["task"], r["seq"], r["head_commit"]) for r in revisions] == [
+        ("p04", 13, "h1a"),
+        ("p04", 21, "h1b"),
+        ("p10", 9, "h2"),
+    ]
     assert [(r["regress_vs_base"], r["regress_vs_previous"]) for r in revisions] == [
         ({"status": "known", "ids": ["t_old"]}, {"status": "not_applicable", "ids": []}),
         ({"status": "known", "ids": []}, {"status": "known", "ids": []}),
@@ -232,6 +264,10 @@ def test_change_records_and_arm_counts(tmp_path, capsys):
         ("change-3", "agent-3", None, 0, 0, "stopped", None, None, None),
     ]
     arms = [r for r in rows if r["record"] == "arm"]
+    for arm in arms:
+        assert arm["changes"] == 3
+        assert arm["questions"] == {"status": "not_built"}
+        assert arm["questions_not_needed"] == {"status": "not_built"}
     assert [
         (
             a["arm"],
@@ -511,8 +547,9 @@ def test_wall_event_types():
 
 def test_timing_record_types():
     hints = get_type_hints(add_timing)
-    for parameter in ("revisions", "changes", "arms"):
-        assert hints[parameter] == list[dict]
+    assert hints["revisions"] == list[RevisionRecord]
+    assert hints["changes"] == list[ChangeRecord]
+    assert hints["arms"] == list[ArmRecord]
 
 
 def test_timing(tmp_path, capsys):
@@ -812,3 +849,102 @@ async def test_cli_deterministic_bytes(tmp_path):
     out = tmp_path / "report.jsonl"
     assert await invoke("--out", str(out)) == b""
     assert out.read_bytes() == first
+
+
+def test_first_green_later_revision_counts_and_spend(tmp_path, capsys):
+    events = scenario()
+    events[12] = event(
+        "change.proposed",
+        60,
+        tests=dict(
+            outcome="failed", passed=5, failed=1, skipped=0, duration_ms=1, failed_tests=["t"]
+        ),
+    )
+    rows = report(tmp_path, capsys, renumber(events))
+    without = next(r for r in rows if r.get("arm") == "without_oversight")
+    assert without["correct"] == {"count": 2, "n": 3}
+    assert without["incorrect"] == 0
+    assert without["cost"] == {"calls": 4, "usd": 0.5, "known_usd": 0.5, "coverage": "complete"}
+    assert without["by_role"] == {
+        "agent": {"calls": 4, "usd": 0.5, "known_usd": 0.5, "coverage": "complete"}
+    }
+    assert without["usd_per_correct"] == 0.25
+
+
+@pytest.mark.parametrize(
+    "task, status, unknown", [("p04", "unknown", 1), ("p10", "not_applicable", 0)]
+)
+def test_missing_first_revision_regression(tmp_path, capsys, task, status, unknown):
+    results = [
+        r for r in receipts() if not (r.get("change_id") == "change-1" and r.get("revision") == 1)
+    ]
+    results[1] = {**results[1], "task": task}
+    rows = report(tmp_path, capsys, results=results)
+    first, second = [
+        r for r in rows if r.get("change_id") == "change-1" and r["record"] == "revision"
+    ]
+    assert first["previous"] is None
+    assert first["regress_vs_previous"] == {"status": status, "ids": []}
+    assert second["previous"] is None
+    assert second["regress_vs_previous"] == {"status": "not_applicable", "ids": []}
+    e2 = next(r for r in rows if r["record"] == "E2")
+    assert e2["regress_vs_previous"] == {"checks": 0, "unknown_revisions": unknown}
+
+
+def test_zero_cost_per_correct_is_unknown(tmp_path, capsys):
+    events = [
+        e.model_copy(
+            update={
+                "payload": e.payload.model_copy(
+                    update={"input_tokens": 0, "cached_tokens": 0, "output_tokens": 0}
+                )
+            }
+        )
+        if e.type == "usage.tick"
+        else e
+        for e in scenario()
+    ]
+    rows = report(tmp_path, capsys, events)
+    without, with_ = [r for r in rows if r["record"] == "arm"]
+    assert [without["correct"], with_["correct"]] == [{"count": 1, "n": 3}, {"count": 2, "n": 3}]
+    assert [without["cost"], with_["cost"]] == [
+        {"calls": 3, "usd": 0.0, "known_usd": 0.0, "coverage": "complete"},
+        {"calls": 7, "usd": 0.0, "known_usd": 0.0, "coverage": "complete"},
+    ]
+    assert without["usd_per_correct"] is None
+    assert with_["usd_per_correct"] is None
+
+
+def test_spend_returns_new_records(tmp_path):
+    inputs = load_inputs(*files(tmp_path))
+    _, changes, arms = build_arms(inputs)
+    original_changes, original_arms = deepcopy(changes), deepcopy(arms)
+    original_seqs = [event.seq for event in inputs.events]
+    enriched_changes, enriched_arms = add_spend(inputs, changes, arms)
+    assert [event.seq for event in inputs.events] == original_seqs
+    assert changes == original_changes
+    assert arms == original_arms
+    assert all(new is not old for new, old in zip(enriched_changes, changes, strict=True))
+    assert all(new is not old for new, old in zip(enriched_arms, arms, strict=True))
+    assert enriched_changes[0].get("review_cost") == {
+        "calls": 2,
+        "usd": 0.1,
+        "known_usd": 0.1,
+        "coverage": "complete",
+    }
+    assert enriched_arms[0].get("cost") == {
+        "calls": 3,
+        "usd": pytest.approx(0.3),
+        "known_usd": pytest.approx(0.3),
+        "coverage": "complete",
+    }
+
+
+def test_stdout_and_file_are_utf8_bytes(tmp_path, monkeypatch):
+    buffer = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(buffer, encoding="ascii"))
+    records = [{"text": "revisión"}]
+    write_lines(records, None)
+    out = tmp_path / "out"
+    write_lines(records, out)
+    assert buffer.getvalue() == out.read_bytes() == b'{"text": "revisi\xc3\xb3n"}\n'

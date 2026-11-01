@@ -5,10 +5,13 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tools.eval.proof2.runner import load_tasks
-
 from oversight.events import fold_supervision, read_jsonl
 from oversight_contracts.events import ChangeProposedEvent, ServerEvent
+
+from ..runner import load_tasks  # noqa: TID252 - Keep runner imports relative, as in the CLI.
+
+type Result = dict[str, object]
+type RevisionKey = tuple[str, int]
 
 
 def change_number(change_id: str) -> int:
@@ -18,9 +21,9 @@ def change_number(change_id: str) -> int:
 @dataclass
 class Inputs:
     events: list[ServerEvent]
-    proposals: dict[tuple[str, int], ChangeProposedEvent] = field(default_factory=dict)
-    bases: dict[str, dict] = field(default_factory=dict)
-    results: dict[tuple[str, int], dict] = field(default_factory=dict)
+    proposals: dict[RevisionKey, ChangeProposedEvent] = field(default_factory=dict)
+    bases: dict[str, Result] = field(default_factory=dict)
+    results: dict[RevisionKey, Result] = field(default_factory=dict)
     tasks: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -61,7 +64,7 @@ def load_inputs(log: Path, results: Path) -> Inputs:
     return inputs
 
 
-def add_revision(inputs: Inputs, row: dict, task: str, result: dict) -> None:
+def add_revision(inputs: Inputs, row: dict[str, object], task: str, result: Result) -> None:
     cid, revision = row.get("change_id"), row.get("revision")
     if not isinstance(cid, str) or not re.fullmatch(r"change-[1-9]\d*", cid):
         raise ValueError("invalid change_id")
@@ -81,5 +84,5 @@ def add_revision(inputs: Inputs, row: dict, task: str, result: dict) -> None:
     inputs.results[key] = result
 
 
-def hidden_status(result: dict | None) -> str:
+def hidden_status(result: Result | None) -> str:
     return "unknown" if result is None else "pass" if result["exit_code"] == 0 else "fail"

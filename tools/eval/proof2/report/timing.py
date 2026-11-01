@@ -5,6 +5,7 @@ from datetime import timedelta
 from oversight.events import fold_activity, parse_ts
 from oversight_contracts.events import ServerEvent
 
+from .arms import ArmRecord, ChangeRecord, RevisionRecord
 from .inputs import Inputs
 
 
@@ -16,7 +17,10 @@ def wall_ms(start: ServerEvent | None, end: ServerEvent | None) -> int | None:
 
 
 def add_timing(
-    inputs: Inputs, revisions: list[dict], changes: list[dict], arms: list[dict]
+    inputs: Inputs,
+    revisions: list[RevisionRecord],
+    changes: list[ChangeRecord],
+    arms: list[ArmRecord],
 ) -> dict:
     starts, merges = {}, {}
     for event in inputs.events:
@@ -31,7 +35,8 @@ def add_timing(
             merges[cid] = event
     for change in changes:
         cid = change["change_id"]
-        green = inputs.proposals.get((cid, change["first_green"]))
+        first_green = change["first_green"]
+        green = inputs.proposals.get((cid, first_green)) if first_green is not None else None
         merged = merges.get(cid) if (cid, change["merged_revision"]) in inputs.proposals else None
         change["wall_ms"] = dict(
             without_oversight=wall_ms(starts.get(cid), green),
@@ -39,11 +44,11 @@ def add_timing(
         )
     correct = {(r["change_id"], r["revision"]) for r in revisions if r["correct"] is True}
     for arm, selection in zip(arms, ("first_green", "merged_revision"), strict=True):
-        spans = [
-            c["wall_ms"][arm["arm"]]
-            for c in changes
-            if (c["change_id"], c[selection]) in correct and c["wall_ms"][arm["arm"]] is not None
-        ]
+        spans: list[int] = []
+        for change in changes:
+            span = change.get("wall_ms", {}).get(arm["arm"])
+            if (change["change_id"], change[selection]) in correct and span is not None:
+                spans.append(span)
         arm["wall_ms_per_correct"] = sum(spans) // len(spans) if spans else None
     return run_record(inputs)
 
