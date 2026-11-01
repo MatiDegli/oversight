@@ -206,7 +206,7 @@ function activate(view: View, tabs: readonly FocusTab[], id: string | null): Vie
   );
   return {
     ...view,
-    selected: tab?.selected ?? view.selected,
+    selected: tab?.id === "usage" ? view.selected : (tab?.selected ?? view.selected),
     diff: tab?.diff ?? null,
     review: tab?.review ?? null,
     file: tab?.file ?? null,

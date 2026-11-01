@@ -122,13 +122,17 @@ describe("usage display semantics", () => {
   });
   it("preserves observed time alongside unavailable plan and lead work", () => {
     const data = view();
-    data.cost.rows[0]!.role = "plan";
+    const first = data.cost.rows[0];
+    if (!first) throw new Error("Missing cost row");
+    first.role = "plan";
     expect(rows(data, "agent")[0]?.time).toEqual({ value: null, known: 30000 });
     expect(rows(data, "role").find((row) => row.id === "plan")?.time).toEqual({
       value: null,
       known: null,
     });
-    data.hours.actors[0]!.ms = null;
+    const actor = data.hours.actors[0];
+    if (!actor) throw new Error("Missing actor");
+    actor.ms = null;
     expect(rows(data, "agent")[0]?.time).toEqual({ value: null, known: null });
   });
   it("suppresses affected exact figures on incomplete coverage and uses response totals", () => {
@@ -165,5 +169,31 @@ describe("usage display semantics", () => {
     expect(selection(data, "agent")).toBe("agent");
     data.teams.pop();
     expect(selection(data)).toBe("agent");
+  });
+});
+
+it("keeps actor-only calls unknown and stable unpriced rows last", () => {
+  const data = view();
+  data.hours.actors.push({
+    team: "agent-8",
+    agent_id: "agent-8",
+    role: "lead",
+    model: "other",
+    change_id: null,
+    ms: 0,
+    open: false,
+  });
+  const actor = rows(data, "agent").find((row) => row.id === "agent-8");
+  expect(actor).toMatchObject({
+    calls: null,
+    cost: { value: null, known: null },
+    time: { value: 0, known: 0 },
+  });
+  const byModel = rows(data, "model");
+  expect(byModel.map((row) => row.id)).toEqual(["unknown", "other", "open"]);
+  expect(byModel.at(-1)).toMatchObject({ unpriced: true, cost: { value: null, known: 0 } });
+  expect(rows(data, "model").find((row) => row.id === "other")?.time).toEqual({
+    value: null,
+    known: 0,
   });
 });

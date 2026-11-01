@@ -1,0 +1,278 @@
+.usage-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--page);
+  color: var(--text);
+  container-type: inline-size;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.usage-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 30px 32px 40px;
+}
+.usage-closing {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.usage-closing.is-long {
+  max-width: 510px;
+}
+.usage-number {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.usage-closing .usage-number {
+  line-height: 1;
+  font-size: 19px;
+}
+.usage-qualifier {
+  color: var(--muted);
+  font-weight: 400;
+}
+.usage-facts {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+.usage-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  border-bottom: 1px solid var(--border);
+}
+.usage-panel h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.usage-coverage {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 15px;
+}
+.usage-coverage.is-incomplete {
+  color: var(--failed-text);
+}
+.usage-panel dl {
+  margin: 0;
+}
+.usage-fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.usage-fact dt {
+  color: var(--muted);
+}
+.usage-fact dd {
+  margin: 0;
+  text-align: end;
+  white-space: nowrap;
+}
+.usage-panel small {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--faint);
+}
+.usage-fact small {
+  margin-top: 2px;
+}
+.usage-explanation {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.usage-groups {
+  margin-top: 36px;
+}
+.usage-grouping {
+  display: flex;
+  align-items: stretch;
+  gap: 22px;
+  min-height: 40px;
+  border-bottom: 1px solid var(--border);
+}
+.usage-grouping h2 {
+  align-self: center;
+}
+.usage-grouping button {
+  min-height: 39px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+}
+.usage-grouping button[aria-pressed="true"] {
+  color: var(--text);
+  font-weight: 700;
+  border-bottom-color: var(--text);
+}
+.usage-grouping button:hover {
+  background: var(--raised);
+}
+.usage-panel :is(button, a):focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.usage-panel table {
+  font: inherit;
+  width: 100%;
+  border-collapse: collapse;
+}
+.usage-panel tr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 190px 150px;
+  gap: 16px;
+  align-items: start;
+  min-height: 44px;
+  border-bottom: 1px solid var(--divider);
+  padding: 10px 0;
+}
+.usage-panel th {
+  font-weight: 400;
+  text-align: start;
+  min-width: 0;
+}
+.usage-panel td {
+  text-align: end;
+  white-space: nowrap;
+}
+.usage-panel thead tr {
+  min-height: 35px;
+  padding: 8px 0;
+  font-size: 13px;
+  color: var(--faint);
+}
+.usage-panel thead th:not(:first-child) {
+  text-align: end;
+}
+.usage-panel tfoot tr {
+  border-top: 1px solid var(--border);
+  border-bottom: 0;
+}
+.usage-panel tfoot th,
+.usage-panel strong {
+  font-weight: 700;
+}
+.usage-identity {
+  display: flex;
+  gap: 10px;
+}
+.usage-identity > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.usage-chip {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-weight: 700;
+}
+
+.usage-chip.is-small {
+  width: 18px;
+  height: 18px;
+  font-size: 11px;
+  margin-inline-end: 3px;
+}
+.usage-source {
+  max-width: 560px;
+  margin: 34px 0 0;
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.usage-source a {
+  font-family: var(--font-mono);
+  text-decoration: underline;
+}
+.usage-scope {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 46px;
+  padding: 0 32px;
+  gap: 4px;
+  border-top: 1px solid var(--divider);
+  background: var(--page);
+  color: var(--muted);
+  font-size: 13px;
+}
+.usage-scope .usage-number {
+  font-size: 13px;
+}
+@container (min-width: 760px) {
+  .usage-facts {
+    grid-template-columns: 1fr 1fr;
+    gap: 44px;
+    margin-top: 26px;
+  }
+}
+@container (max-width: 719px) {
+  .usage-scroll {
+    padding: 22px 28px 32px;
+  }
+  .usage-scope {
+    padding-inline: 28px;
+  }
+  .usage-group-header {
+    min-height: 28px;
+  }
+  .usage-fact {
+    padding: 5px 0;
+  }
+  .usage-groups {
+    margin-top: 22px;
+  }
+  .usage-panel tr {
+    grid-template-columns: minmax(0, 1fr) 40px 164px 112px;
+    gap: 10px;
+    padding: 8px 0;
+  }
+  .usage-panel thead tr {
+    padding: 8px 0;
+  }
+}
+.usage-panel tbody th {
+  line-height: 1.4;
+}
+.usage-panel .usage-team-note {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 6px;
+  color: var(--muted);
+}
+.usage-identity strong {
+  display: block;
+  line-height: 20px;
+}
+.usage-identity small {
+  line-height: 19px;
+}
+@container (max-width: 719px) {
+  .usage-facts .usage-explanation {
+    line-height: 18px;
+  }
+}

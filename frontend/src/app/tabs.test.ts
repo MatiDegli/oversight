@@ -80,6 +80,7 @@ it("Usage retains selection, navigation history and the six-tab limit", () => {
   expect(usage.selected).toBe("a");
   expect(usage.tabs?.at(-1)?.frameIds).toEqual([]);
   const b = open(usage, "b");
+  expect(viewReducer(b, { type: "activate", id: "usage" }).selected).toBe("b");
   expect(viewReducer(b, { type: "close", id: "b" }).activeTab).toBe("usage");
   expect(viewReducer(usage, { type: "close", id: "usage" }).activeTab).toBe("a");
   let many = usage;

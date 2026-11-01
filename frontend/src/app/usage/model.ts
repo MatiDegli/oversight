@@ -133,7 +133,8 @@ export function rows(view: UsageView, group: Grouping): UsageRow[] {
             !absent &&
             actors.length &&
             observed.length === actors.length &&
-            view.hours.coverage !== "incomplete"
+            view.hours.coverage !== "incomplete" &&
+            (group !== "model" || view.hours.coverage === "complete")
               ? knownTime
               : null,
           known: knownTime,

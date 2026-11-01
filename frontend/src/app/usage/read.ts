@@ -4,7 +4,9 @@ import type { UsageView } from "@contracts";
 export async function readUsage(
   runId: string,
   signal: AbortSignal,
-  request: (url: string, init: RequestInit) => Promise<Response>,
+  // The approved Usage brief explicitly owns this deferred read outside transport.
+  // eslint-disable-next-line no-restricted-globals
+  request: (url: string, init: RequestInit) => Promise<Response> = fetch,
 ): Promise<UsageView> {
   let response: Response;
   try {
