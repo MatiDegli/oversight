@@ -37,6 +37,7 @@ export const panelOpen = (view: View) =>
   view.file !== null ||
   view.activeTab === "inbox" ||
   view.activeTab === "settings" ||
+  view.activeTab === "usage" ||
   Boolean(view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation);
 
 /** Proposed and not yet decided: what review opens on. A revising change shows its live diff. */
@@ -285,7 +286,7 @@ export function navigateView(view: View, next: View, state: State): View {
 }
 
 /** Neutral focus tabs keep the same shell and graph owner. */
-export function surfaceTab(view: View, id: "inbox" | "settings"): FocusTab {
+export function surfaceTab(view: View, id: "inbox" | "settings" | "usage"): FocusTab {
   return {
     id,
     selected: view.selected,

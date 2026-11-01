@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialView, navigateView, panelOpen, tabbedView, viewReducer } from "./view";
+import { initialView, navigateView, panelOpen, surfaceTab, tabbedView, viewReducer } from "./view";
 import type { FocusTab } from "./view";
 import { through } from "./replay.fixture";
 
@@ -71,4 +71,18 @@ describe("person-owned focus tabs", () => {
     through(23);
     expect(c).toEqual(saved);
   });
+});
+
+it("Usage retains selection, navigation history and the six-tab limit", () => {
+  const a = open(tabbedView, "a");
+  const usage = viewReducer(a, { type: "open", tab: surfaceTab(a, "usage") });
+  expect(panelOpen(usage)).toBe(true);
+  expect(usage.selected).toBe("a");
+  expect(usage.tabs?.at(-1)?.frameIds).toEqual([]);
+  const b = open(usage, "b");
+  expect(viewReducer(b, { type: "close", id: "b" }).activeTab).toBe("usage");
+  expect(viewReducer(usage, { type: "close", id: "usage" }).activeTab).toBe("a");
+  let many = usage;
+  for (let n = 0; n < 7; n++) many = open(many, String(n));
+  expect(many.tabs).toHaveLength(6);
 });

@@ -1,10 +1,11 @@
 import { agentSlotStyle } from "../../theme";
-import { Maximize2, Minimize2, Settings, X } from "lucide-react";
+import { Maximize2, Minimize2, Settings, Timer, X } from "lucide-react";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
 import { ConversationPanel, selectConversation } from "../../agents";
 import { ReviewPanel, DecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
+import { UsageMount } from "../usage/UsageMount";
 import { SettingsPanel } from "./SettingsPanel";
 import { LivePanel } from "./LivePanel";
 import { focusRing } from "./shared";
@@ -53,19 +54,21 @@ export function FocusPanel(
             const title =
               tab.id === "inbox"
                 ? "Decisions"
-                : tab.id === "settings"
-                  ? "Settings"
-                  : tab.id === "practice"
-                    ? "Two-change practice"
-                    : tab.conversation
-                      ? slot
-                        ? `Agent ${slot} · conversation`
-                        : "Conversation"
-                      : tab.review
-                        ? `Review · ${tab.review}`
-                        : tab.diff
-                          ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
-                          : (tab.file?.path.split("/").at(-1) ?? "File");
+                : tab.id === "usage"
+                  ? "Usage"
+                  : tab.id === "settings"
+                    ? "Settings"
+                    : tab.id === "practice"
+                      ? "Two-change practice"
+                      : tab.conversation
+                        ? slot
+                          ? `Agent ${slot} · conversation`
+                          : "Conversation"
+                        : tab.review
+                          ? `Review · ${tab.review}`
+                          : tab.diff
+                            ? `Live diff · ${tab.diff.path.split("/").at(-1) ?? tab.diff.path}`
+                            : (tab.file?.path.split("/").at(-1) ?? "File");
             return (
               <div
                 key={tab.id}
@@ -84,6 +87,9 @@ export function FocusPanel(
                   {slot && <span className="mr-2 font-bold">{slot}</span>}
                   {tab.id === "settings" && (
                     <Settings aria-hidden="true" className="mr-2 inline size-3.5" />
+                  )}
+                  {tab.id === "usage" && (
+                    <Timer aria-hidden="true" className="mr-2 inline size-3.5" />
                   )}
                   {title}
                   {tab.review && (
@@ -115,7 +121,13 @@ export function FocusPanel(
         </button>
       </div>
       <div id="focus-content" role="tabpanel" className="focus-body">
-        {view.activeTab === "settings" ? (
+        {view.activeTab === "usage" ? (
+          <UsageMount
+            key={state.run?.run_id ?? "empty"}
+            state={state}
+            recorded={Boolean(props.replayOf)}
+          />
+        ) : view.activeTab === "settings" ? (
           <SettingsPanel
             state={state}
             attempt={props.mergeModeAttempt}
