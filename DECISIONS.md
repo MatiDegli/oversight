@@ -3689,3 +3689,8 @@ accessible description exposes model, full activity, step and optional cost alon
 existing full identity and pressed selection. A browser regression covers Arabic/CJK/emoji,
 long model/activity text, unknown cost and forced-colors focus. Approved geometry, visible
 copy, team allocation, selection and lazy boundaries stay unchanged.
+
+The contrast audit also found team text below 4.5:1 on selected raised rows: dark F and day D/E.
+Badge and active-pill tints now compose over the existing panel token, so selecting or hovering
+cannot reduce their text contrast. This changes no palette token or geometry. A rendered-pixel
+regression checks both identity surfaces for every A–F hue in both themes.
