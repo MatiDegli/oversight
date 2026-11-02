@@ -12,6 +12,7 @@ import os
 import signal
 import sys
 import time
+from collections import deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -70,6 +71,21 @@ class NtCleanupError(OSError):
     """NT leader/Job death could not be confirmed; no evidence or restoration is safe."""
 
 
+def nt_cleanup_failed(error: BaseException | None) -> bool:
+    """Find NT cleanup signals even behind suppressed context; bound work and break cycles."""
+    pending = deque([error])
+    seen: set[int] = set()
+    while pending and len(seen) < 64:
+        current = pending.popleft()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        if isinstance(current, NtCleanupError):
+            return True
+        pending.extend((current.__context__, current.__cause__))
+    return False
+
+
 class NtCleanupRunner:
     """Track the existing runner's NT completion signal across probe and pytest calls."""
 
@@ -91,7 +107,7 @@ class NtCleanupRunner:
                 argv, cwd=cwd, timeout_s=timeout_s, env=env, output_cap=output_cap
             )
         except BaseException as error:
-            if isinstance(error, NtCleanupError) or isinstance(error.__cause__, NtCleanupError):
+            if nt_cleanup_failed(error):
                 self.cleanup_complete = False
             raise
 

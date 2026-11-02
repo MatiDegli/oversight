@@ -12,7 +12,7 @@ from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.isolation import IsolatedRunner
 from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallTarget
-from oversight.workspace.runner import NtCleanupError, NtCleanupRunner, Spawn
+from oversight.workspace.runner import NtCleanupRunner, Spawn, nt_cleanup_failed
 from oversight.workspace.snapshot import finish_snapshot, take_snapshot
 from oversight.workspace.source_nt import OwnEnvironment
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
@@ -96,11 +96,7 @@ async def guarded_suite(
         )
     finally:
         pending = sys.exception()
-        if (
-            _nt_cleanup_unverified(runner)
-            or isinstance(pending, NtCleanupError)
-            or (pending is not None and isinstance(pending.__cause__, NtCleanupError))
-        ):
+        if _nt_cleanup_unverified(runner) or nt_cleanup_failed(pending):
             error = workspace.refuse_unverified_cleanup()
             if isinstance(pending, SuiteInterrupted):
                 pending.run = replace(

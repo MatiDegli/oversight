@@ -78,6 +78,7 @@ from oversight.workspace.runner import (
     NtCleanupRunner,
     ProcessResult,
     Spawn,
+    nt_cleanup_failed,
     probe_job_support,
     run_process,
 )
@@ -523,7 +524,7 @@ class Workspace:
         try:
             yield
         except BaseException as error:
-            if isinstance(error, NtCleanupError) or isinstance(error.__cause__, NtCleanupError):
+            if nt_cleanup_failed(error):
                 self.refuse_unverified_cleanup()
             raise
 
@@ -552,7 +553,7 @@ class Workspace:
             selection = await offload(partial(validate_selection, listing))
             return await stage_source(selection, git=binary, lock_fd=self._lock_fd)
         except BaseException as error:
-            if isinstance(error, NtCleanupError) or isinstance(error.__cause__, NtCleanupError):
+            if nt_cleanup_failed(error):
                 self.refuse_unverified_cleanup()
             raise
 
@@ -621,11 +622,8 @@ class Workspace:
                     await offload(ensure_lifetime_job)
                     await probe_job_support(self._root)
                 await offload(partial(refuse_orphans, self._root))
-            except BaseException:
-                error = sys.exception()
-                if isinstance(error, NtCleanupError) or (
-                    error is not None and isinstance(error.__cause__, NtCleanupError)
-                ):
+            except BaseException as error:
+                if nt_cleanup_failed(error):
                     self.refuse_unverified_cleanup()
                 self.release_runtime()
                 raise

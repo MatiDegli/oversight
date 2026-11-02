@@ -1,6 +1,7 @@
 """NT completion signals across the real suite wrapper, snapshots, locks and discard."""
 
 import asyncio
+from typing import Never
 from unittest.mock import Mock
 
 import pytest
@@ -68,7 +69,14 @@ async def test_native_combination_exercise_uses_real_merged_tree(
 
 
 @pytest.mark.parametrize("mode", ["normal", "cancel"])
-async def test_capture_cleanup_failure_never_restores_snapshot(workspace, monkeypatch, mode):
+@pytest.mark.parametrize("masked", [False, True])
+async def test_capture_cleanup_failure_never_restores_snapshot(
+    workspace, monkeypatch, mode, masked
+):
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from oversight.workspace import test_tree
     from oversight.workspace.snapshot import finish_snapshot
 
     entered, finish = asyncio.Event(), asyncio.Event()
@@ -81,6 +89,20 @@ async def test_capture_cleanup_failure_never_restores_snapshot(workspace, monkey
     restored = Mock(wraps=finish_snapshot)
     monkeypatch.setattr(runner, "_execute", execute)
     monkeypatch.setattr(suite_guard, "finish_snapshot", restored)
+    unlinks = []
+    if masked:
+        original_unlink = Path.unlink
+        monkeypatch.setattr(test_tree, "sys", SimpleNamespace(platform="win32"))
+
+        def unlink(path, *args, **kwargs):
+            if path.name.startswith("suite-index-"):
+                unlinks.append(path)
+                error = PermissionError("index sharing violation")
+                error.winerror = 32
+                raise error from None
+            return original_unlink(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", unlink)
     task = asyncio.create_task(workspace.run_tests(workspace.main, timeout_s=75))
     await asyncio.wait_for(entered.wait(), 5)
     if mode == "cancel":
@@ -91,11 +113,14 @@ async def test_capture_cleanup_failure_never_restores_snapshot(workspace, monkey
     finish.set()
     try:
         with pytest.raises(
-            asyncio.CancelledError if mode == "cancel" else IntegrityError
+            asyncio.CancelledError if mode == "cancel" and not masked else IntegrityError
         ) as caught:
             await task
-        if mode == "cancel":
+        if mode == "cancel" and not masked:
             assert str(caught.value) == "capture stopped"
+        if masked:
+            assert len(unlinks) == 14  # Both index and lock exhaust the real NT retry loop.
+            assert unlinks[-1].suffix == ".lock"
         restored.assert_not_called()
         assert workspace.integrity.main_suspect and workspace.integrity.rules_suspended
         workspace.release_runtime()
@@ -263,6 +288,125 @@ async def test_reap_close_failure_has_nt_only_signal(monkeypatch):
     monkeypatch.setattr(runner, "_reap_nt_job", failed)
     with pytest.raises(NtCleanupError, match="cleanup is unverified"):
         await runner._reap_nt(Mock(), Mock(), 123)
+
+
+async def test_staging_relist_rewrap_retains_runtime(workspace, monkeypatch, tmp_path):
+    from dataclasses import replace
+    from functools import partial
+    from unittest.mock import AsyncMock
+
+    from oversight.workspace import core, source_nt
+
+    from .test_source_nt import source_case, unnamed
+    from .test_source_nt_copy import fixture, selection
+
+    with source_case(tmp_path) as (source, _):
+        source = replace(source, runtime=workspace.runtime_root)
+        await fixture(source)
+        assert workspace._lock_fd is not None
+        chosen = await selection(source, workspace._lock_fd)
+        cleanup = NtCleanupError("relist Job still alive")
+
+        async def relist(*args, **kwargs):
+            raise cleanup
+
+        workspace._own_source = source
+        monkeypatch.setattr(core, "inventory", AsyncMock(return_value=chosen.inventory))
+        monkeypatch.setattr(core, "validate_selection", lambda _: chosen)
+        monkeypatch.setattr(core, "executable", lambda _: r"C:\Git\git.exe")
+        # Keep the real copy, relist and `from None` refusal boundary.
+        monkeypatch.setattr(
+            core,
+            "stage_source",
+            partial(
+                source_nt.stage_source,
+                spawn=relist,
+                ancestors=(),
+                sensitive=lambda _: False,
+                streams=unnamed,
+            ),
+        )
+        try:
+            with pytest.raises(OSError, match="unsafe or changed selected input") as caught:
+                await workspace.stage_own_source()
+            assert caught.value.__cause__ is None and caught.value.__suppress_context__
+            assert caught.value.__context__ is cleanup
+            assert not list(source.runtime.glob("source-stage-*"))
+            assert workspace.integrity.main_suspect and workspace.integrity.rules_suspended
+            workspace.release_runtime()
+            assert workspace._lock_fd is not None
+            with pytest.raises(IntegrityError):
+                await workspace.reset()
+        finally:
+            workspace._cleanup_unverified = False
+
+
+@pytest.mark.parametrize("boundary", ["guard", "acquire", "runner"])
+@pytest.mark.parametrize("nt_failure", [False, True])
+async def test_masked_cleanup_latches_each_boundary(workspace, monkeypatch, boundary, nt_failure):
+    from oversight.workspace import core
+
+    cleanup = NtCleanupError("live members") if nt_failure else OSError("ordinary failure")
+
+    def masked(*args, **kwargs) -> Never:
+        try:
+            raise cleanup
+        finally:
+            raise OSError("later cleanup") from None
+
+    async def spawn(*args, **kwargs) -> Never:
+        masked()
+
+    tracked = NtCleanupRunner(spawn)
+    if boundary == "acquire":
+        workspace.release_runtime()
+        monkeypatch.setattr(core, "refuse_orphans", masked)
+    try:
+        with pytest.raises(OSError, match="later cleanup"):
+            if boundary == "guard":
+                async with workspace.guard_nt_cleanup():
+                    masked()
+            elif boundary == "acquire":
+                await workspace.acquire_runtime()
+            else:
+                await tracked(["fixture"], cwd=workspace.main.root, timeout_s=1)
+        if boundary == "runner":
+            assert tracked.cleanup_complete is not nt_failure
+        else:
+            assert workspace.integrity.main_suspect is nt_failure
+            assert workspace.integrity.rules_suspended is nt_failure
+            workspace.release_runtime()
+            assert (workspace._lock_fd is not None) is nt_failure
+    finally:
+        workspace._cleanup_unverified = False
+
+
+async def test_cleanup_signal_search_handles_both_links_cycles_and_deep_chains():
+    error = OSError("outer cleanup")
+    error.__cause__ = ValueError("unrelated explicit cause")
+    error.__cause__.__context__ = error
+    hidden = OSError("suppressed intermediate")
+    hidden.__context__ = NtCleanupError("still alive")
+    hidden.__suppress_context__ = True
+    error.__context__ = hidden
+    assert runner.nt_cleanup_failed(error)
+    error.__context__ = None
+    assert not runner.nt_cleanup_failed(error)
+    error.__context__ = hidden
+    for _ in range(70):
+        cause = ValueError("unrelated cause chain")
+        cause.__cause__ = error.__cause__
+        error.__cause__ = cause
+    assert runner.nt_cleanup_failed(error)
+    error.__context__ = None
+    assert not runner.nt_cleanup_failed(error)
+    # A long ordinary chain must terminate without recursion or suspending POSIX work.
+    for _ in range(1000):
+        outer = OSError("ordinary cleanup")
+        outer.__context__ = error
+        error = outer
+    assert not runner.nt_cleanup_failed(error)
+    assert not runner.nt_cleanup_failed(None)
 
 
 @pytest.mark.parametrize("own", [False, True])
