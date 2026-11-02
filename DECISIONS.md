@@ -3777,6 +3777,7 @@ Reason: approval and delivered prerequisites allow explicit rules selection, whi
 proof, committed receipts and repeatable clean starts establish the activation path without
 spending provider credits or relaxing any authority condition.
 
+
 ## 2026-11-01 — W3 console supervision and staged Windows advisory CI
 
 The reviewed W3 scope adds only `tools/demo_check_nt.py` as implementation, using W1's public
@@ -3925,3 +3926,129 @@ planners, and lead accounting has no plan id.
 `frontend/src/state/teamSelector.parity.test.ts` guard parity through one shared golden fixture,
 using the server's `team_of` as the oracle. K2 Chat with multiple leads and K3 team colors are
 future shared consumers; this front adds no production import or visible change.
+## 2026-11-01 — C2 builds compact Chat agents and conversation selection
+
+C2 fills C1's existing agents frame with coding-agent rows. State is forwarded at the existing
+Frame call; Oversight, its default, shared conversation identity and lazy graph boundary stay
+unchanged. The first structural child position remains empty for L3's lead row. C3–C6 and L3
+remain pending; DESIGN's coordinated lane remains held beside C1's proposed addition.
+
+The pure Chat projection reuses the card's model, tool/focus/model-wait activity, maximum observed
+step, per-round limit and cumulative per-agent cost. No tick omits a reading; unknown remains
+unknown after priced ticks. Review activity uses a matching retained needs-you reason, otherwise
+"Waiting for your review". "Merged by your rules" requires an approved, merged rules resolution.
+No merge time is shown. The count reuses slotUsage: paused, halted, conflicting and review work
+hold a slot until resolution, so the approved wording is "N of M running"; no metadata means no
+numeric claim. It does not mean agents currently calling a tool.
+
+Teams follow explicit agent origin, else the highest-revision plan's lead, else plan, else agent.
+Allocation and release replay retained sequence order: first coding status introduces a team,
+new teams take the longest-idle A–F hue with A–F ties, and member numbers follow first status.
+Ended rows keep their identities; later statuses and physical slot reuse do not replace them.
+This presentation is Chat-only and resets through the existing new-run reducer.
+
+Native row buttons expose full identity and pressed selection. Modified keys keep their native
+behavior. Tab reaches each row; unmodified Up/Down
+and Home/End move focus only on those keypresses, and Enter/Space activates without moving focus
+away. Without the callback rows are noninteractive groups. Events never select, focus or scroll
+another row. Tests cover the actual reducer and Frame, command targets, replay navigation, layout
+round trips, independent scrolling and team-label wrapping at 1280.
+
+The approved compact geometry and theme tokens replace sketch literals. Ready pills fit beside
+standalone names at 260px; team labels can wrap the line without shrinking or clipping state.
+The fixture's A remains waiting for review after B merges because it has no rules-hold receipt.
+The C2 review capture retains proposed list state and A's conversation; C4's review layout is
+intentionally deferred. Twenty captures and twenty full-reference-size comparisons live under
+`.shots/chat-agents/`; proposed DESIGN text remains uncommitted there. No other-front work lands.
+
+### C2 reference verification
+
+The five required Impeccable references were re-read in full:
+
+- `.agents/skills/impeccable/reference/layout.md`
+- `.agents/skills/impeccable/reference/typeset.md`
+- `.agents/skills/impeccable/reference/harden.md`
+- `.agents/skills/impeccable/reference/clarify.md`
+- `.agents/skills/impeccable/reference/audit.md`
+
+Rendered stress at 1280 showed
+unbroken model text clipping, so row content now permits arbitrary-token wrapping. A row's
+accessible description exposes model, full activity, step and optional cost alongside its
+existing full identity and pressed selection. A browser regression covers Arabic/CJK/emoji,
+long model/activity text, unknown cost and forced-colors focus. Approved geometry, visible
+copy, team allocation, selection and lazy boundaries stay unchanged.
+
+The contrast audit also found team text below 4.5:1 on selected raised rows: dark F and day D/E.
+Badge and active-pill tints now compose over the existing panel token, so selecting or hovering
+cannot reduce their text contrast. This changes no palette token or geometry. A rendered-pixel
+regression checks both identity surfaces for every A–F hue in both themes.
+
+Header markup is covered without screenshot flags for empty, working, proposed, review and
+merged states, absent metadata and a different slot denominator. Default browser coverage also
+checks incoming status, proposal, conflict and merge events with paused and halted slot holders.
+It verifies that two plans from one lead keep member numbers through slot reuse, then that a
+new run clears rows and restarts lettering at A without selecting it. The handwritten harness
+starts event sequence at 1 for a new run, matching the reducer's existing run boundary contract.
+
+### C2 startup and workspace evidence (2026-11-02)
+
+A replay build on the merged tree measures static startup at 153511 → 155067 B gzip
+(delta +1556 B) and effective Oversight-default startup at 381569 → 383135 B gzip
+(delta +1566 B); both remain below 409600 B. The baseline overrides only Frame.tsx and
+ChatShell.tsx with main integration parent `0fa0f274`, keeping the remaining source identical.
+Responses are gzipped separately and counted once. Effective startup includes the requested
+graph closure and replay row; Save-Data excludes post-draw idle Monaco prefetch.
+The following exact chunk names and per-response gzip deltas are retained here as well as in
+uncommitted `.shots/chat-agents/startup-delta.json`.
+
+| Before chunk | After chunk | Before gzip B | After gzip B | Delta B |
+| --- | --- | ---: | ---: | ---: |
+| assets/ConversationPanelHeader-C0YpGoE0.js | assets/ConversationPanelHeader-wjH_7u-q.js | 19867 | 19865 | -2 |
+| assets/DecisionContext-mEKhlscQ.js | assets/DecisionContext-mEKhlscQ.js | 245 | 245 | 0 |
+| assets/FileViewHeader-C0BLzO8r.js | assets/FileViewHeader-C0BLzO8r.js | 2066 | 2066 | 0 |
+| assets/InboxHeader-DmgtEOKr.js | assets/InboxHeader-DmgtEOKr.js | 503 | 503 | 0 |
+| assets/OversightStage-D9q5GUgL.js | assets/OversightStage-xaWriDsM.js | 209245 | 209246 | 1 |
+| assets/ReplayBar-YAV5_9YG.js | assets/ReplayBar-CHgmiHmP.js | 2765 | 2768 | 3 |
+| assets/ReviewHeader-CHzoaaTi.js | assets/ReviewHeader-DBGrQ1G8.js | 13470 | 13470 | 0 |
+| assets/behaviorEvidence-Cd5v8l0y.js | assets/behaviorEvidence-ChBnlueA.js | 654 | 659 | 5 |
+| assets/coneWords-Be6sP8n8.js | assets/coneWords-3nsygrqM.js | 691 | 691 | 0 |
+| assets/controller-OQgxx7vY.js | assets/controller-Bx0IKfQQ.js | 13501 | 13502 | 1 |
+| assets/createLucideIcon-DU7RiFmk.js | assets/createLucideIcon-DU7RiFmk.js | 4405 | 4405 | 0 |
+| assets/editor-ZSm51VOF.js | assets/editor-0B9YQldw.js | 1869 | 1873 | 4 |
+| assets/events-aIBntNdw.js | assets/events-aIBntNdw.js | 420 | 420 | 0 |
+| assets/eye-CWFOLv-v.js | assets/eye-CWFOLv-v.js | 353 | 353 | 0 |
+| assets/firstDraw-B6F0renU.js | assets/firstDraw-B6F0renU.js | 245 | 245 | 0 |
+| assets/index-D8iVTMSQ.js | assets/index-8Jp9VIZ4.js | 96357 | 97901 | 1544 |
+| assets/play-Ct1ERjno.js | assets/play-Ct1ERjno.js | 324 | 324 | 0 |
+| assets/preload-helper-BLdHbfdN.js | assets/preload-helper-BLdHbfdN.js | 797 | 797 | 0 |
+| assets/replayPlayer-Nqlr8BzF.js | assets/replayPlayer-BKT9Noly.js | 1202 | 1202 | 0 |
+| assets/revert-BBUEeJVG.js | assets/revert-_r4_MTMX.js | 507 | 510 | 3 |
+| assets/review-C13GEN1z.js | assets/review-YwYFloKd.js | 750 | 755 | 5 |
+| assets/rolldown-runtime-hePW80VL.js | assets/rolldown-runtime-hePW80VL.js | 428 | 428 | 0 |
+| assets/selectors-D4T75Ftv.js | assets/selectors-D4T75Ftv.js | 773 | 773 | 0 |
+| assets/state-BDWgWLO0.js | assets/state-B8RD2YGb.js | 6142 | 6144 | 2 |
+| assets/theme-DIot6wvK.js | assets/theme-DIot6wvK.js | 3811 | 3811 | 0 |
+| assets/x-ClajOlv0.js | assets/x-ClajOlv0.js | 179 | 179 | 0 |
+
+Static traversal contains all rows except OversightStage, ReplayBar, behaviorEvidence,
+coneWords, controller and replayPlayer; these six immediate chunks add 228058 → 228068 B
+(delta +10 B). Content hashes can change without a response's gzip size changing.
+
+The local proof is `.shots/chat-agents/STATE-WIDTH-THEME.png` (20 captures),
+`.shots/chat-agents/compare/STATE-WIDTH-THEME.png` (20 full-size build-left/reference-right
+comparisons), and `.shots/chat-agents/measurements-delta.json` (40 properties × four
+viewport/theme pairs, with their computed-style source selectors). A gated local-evidence
+regression decodes all 40 images, checks complete reference dimensions and every comparison
+pixel, reconciles all 160 pairs with measured styles, and checks this startup table's sums.
+Captures use handwritten fixture events, not a recording. Coordinator confirmation of the
+workspace artifacts remains required before this evidence closes the blocking review item.
+
+The final C2 slice against main integration parent `0fa0f274` contains
+1762 additions, 9 deletions, 1771 changed lines (exact `git diff --numstat` totals).
+This excludes merge-only changes since accepted C1 `05527f47`; the previous round's
+`147428f9` slice was 1531 additions, 9 deletions, 1540 changed lines.
+This exceeds the 350–450 changed-line estimate because the required selector, row, event-shaped
+fixture, browser interaction, stress, contrast and capture proof accounts for most additions.
+The local evidence regressions additionally guard missing files, wrong comparisons, startup
+chunk accounting and stale slice totals. The work remains within the authorized agents slice;
+C3–C6 and L3 remain pending.

@@ -340,7 +340,7 @@ it.each(
     expect(measured.switch).toBe(34);
     expect(measured.sideHeaders).toEqual([56, 56]);
     expect(measured.status).toBe(24);
-    await check(page.locator(".chat-side-body > *")).toHaveCount(0);
+    await check(page.locator(".chat-work .chat-side-body > *")).toHaveCount(0);
     await check(page.locator(".chat-shell article, .chat-shell .file-agent-mark")).toHaveCount(0);
     await check(
       page.getByText(/^(Proposed change|Merged by rules|See on graph|New task)$/),
