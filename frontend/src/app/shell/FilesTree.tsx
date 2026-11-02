@@ -202,13 +202,14 @@ function TreeEntry({
         {row.deleted && <span className="text-xs text-muted">Deleted</span>}
         {marks.map((mark) => (
           <span
-            key={mark.slot}
+            key={mark.agentId}
+            data-agent-id={mark.agentId}
             className="file-agent-mark"
             data-slot={mark.slot}
             style={agentSlotStyle(mark.slot)}
             data-mode={mark.mode}
             aria-label={`Agent ${mark.slot} · ${mark.mode === "pending" ? "Pending change" : mark.mode === "edit" ? "Editing" : "Reading"}`}
-            title={`Agent ${mark.slot} · ${mark.mode}`}
+            title={`Agent ${mark.slot} · ${mark.mode === "pending" ? "Pending change" : mark.mode === "edit" ? "Editing" : "Reading"}`}
           >
             {mark.slot}
           </span>

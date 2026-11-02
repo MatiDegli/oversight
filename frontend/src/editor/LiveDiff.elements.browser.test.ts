@@ -77,8 +77,14 @@ it.each(["review", "live diff"])("%s facts use Mono only for data", async (surfa
         exact: true,
       })
       .click();
+    if (surface === "review") {
+      // The lazy loading frame has the same Facts, but its header is replaced on mount.
+      // Wait for the real panel's body so evaluate cannot capture that detached header.
+      await browserExpect(page.getByLabel("Review context", { exact: true })).toBeVisible();
+    }
     const facts = page.getByLabel("Facts", { exact: true });
     await browserExpect(facts).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
     for (const outcome of ["passed", "failed", "error", "timeout"] as const) {
       const value = structuredClone(through(20));
       const change = value.changes["change-1"];

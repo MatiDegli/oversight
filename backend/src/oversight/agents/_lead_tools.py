@@ -194,7 +194,7 @@ class LeadTools:
             if len(content) > 20_000:
                 content = content[:20_000] + "\n(Queue truncated at 20,000 characters.)"
             return LeadOutcome(content)
-        return LeadOutcome("Finished.", finish=True)
+        raise RuntimeError("Unknown lead tool outcome.")
 
     async def _read_file(self, request: _Read) -> LeadOutcome:
         path = request.path

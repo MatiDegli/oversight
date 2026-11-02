@@ -11,10 +11,16 @@ import type {
   SetMergeMode,
   ImpactCone,
   RejectChange,
+  PlanRevision,
+  RejectPlan,
+  QueueRevision,
   RevertChange,
   RequestChanges,
   SaveFile,
   StartAgent,
+  StartLead,
+  LeadCreated,
+  StopLead,
   TreeResponse,
 } from "@contracts";
 
@@ -99,6 +105,17 @@ export function createCommandClient(request: typeof fetch = fetch) {
   const agent = (id: string, action: string) => `/agents/${encodeURIComponent(id)}/${action}`;
   const change = (id: string, action: string) => `/changes/${encodeURIComponent(id)}/${action}`;
   return {
+    startLead: (body: StartLead) => send<LeadCreated>("/leads", "POST", body),
+    messageLead: (id: string, body: AgentMessage) =>
+      send<undefined>(`/leads/${encodeURIComponent(id)}/message`, "POST", body),
+    stopLead: (id: string, body: StopLead) =>
+      send<undefined>(`/leads/${encodeURIComponent(id)}/stop`, "POST", body),
+    startPlan: (id: string, body: PlanRevision) =>
+      send<undefined>(`/plans/${encodeURIComponent(id)}/start`, "POST", body),
+    rejectPlan: (id: string, body: RejectPlan) =>
+      send<undefined>(`/plans/${encodeURIComponent(id)}/reject`, "POST", body),
+    cancelQueue: (id: string, body: QueueRevision) =>
+      send<undefined>(`/queue/${encodeURIComponent(id)}/cancel`, "POST", body),
     setMergeMode: (body: SetMergeMode) => send<MergeModeState>("/merge-mode", "PUT", body),
     startAgent: (body: StartAgent) => send<AgentCreated>("/agents", "POST", body),
     stopAgent: (id: string) => send<undefined>(agent(id, "stop"), "POST"),

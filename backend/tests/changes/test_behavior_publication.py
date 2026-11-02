@@ -26,6 +26,13 @@ from oversight.workspace import BehaviorObservation
 from oversight_contracts.review import ChangeFacts
 
 
+@pytest.fixture(autouse=True)
+def semantic_worker_budget(monkeypatch):
+    # These tests prove values and publication, not speed. Match the live behavior tests'
+    # import/call allowance under contention; keep real workers, repeats and outer deadlines.
+    monkeypatch.setattr("oversight.workspace.behavior_run.PER_CALL_TIMEOUT_S", 1.0)
+
+
 @pytest.fixture
 def session_c() -> bool:
     return True
@@ -549,7 +556,7 @@ async def test_direct_and_caller_publications_capture_and_validate_separate_evid
     assert facts.measured_cone == project_measured(rec.measured_cones[1], evidence.target)
     assert facts.behavior_diff is not None and facts.measured_cone is not None
     direct = {row.node_id: row for row in facts.behavior_diff}
-    assert direct["shop.mod:value"].differing_count == 1
+    assert direct["shop.mod:value"].differing_count == 1, rec.behavior_diffs[1]
     assert "shop.mod:twice" not in direct
     assert [(row.node_id, row.differing_count) for row in facts.measured_cone] == [
         ("shop.mod:twice", 1)

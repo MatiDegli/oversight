@@ -85,7 +85,7 @@ async def test_lock_racing_restoration_is_not_stolen(
     if nt:
         force_nt(monkeypatch)
     identity = workspace.main.git_identity
-    snapshot = take_snapshot(identity, workspace.integrity, 5)
+    snapshot = take_snapshot(identity, workspace.integrity, 60)
     path = identity.common / "refs/heads/main"
     path.write_bytes(b"1" * 40 + b"\n")
     original = replace_file

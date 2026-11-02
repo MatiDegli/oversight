@@ -146,7 +146,9 @@ def read_at(
             1,
         ):
             raise IntegrityError(f"{kind} changed during open", str(path))
-        if isinstance(fd, Path) and nt_token(nt_guard(path, budget.deadline)) != nt_token(opened):
+        if isinstance(fd, Path) and nt_token(
+            nt_guard(path, budget.deadline, working=kind != "Git metadata")
+        ) != nt_token(opened):
             raise IntegrityError(f"{kind} changed during open", str(path))
         chunks: list[bytes] = []
         size = 0
@@ -169,7 +171,8 @@ def read_at(
         if isinstance(fd, Path) and (
             size != after.st_size
             or nt_token(after) != nt_token(opened)
-            or nt_token(nt_guard(path, budget.deadline)) != nt_token(after)
+            or nt_token(nt_guard(path, budget.deadline, working=kind != "Git metadata"))
+            != nt_token(after)
         ):
             raise IntegrityError(f"{kind} changed during read", str(path))
     budget.charge(size)

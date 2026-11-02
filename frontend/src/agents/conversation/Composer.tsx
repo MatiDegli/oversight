@@ -1,15 +1,17 @@
 import { TriangleAlert } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 import { stateStore } from "../../state";
 import { commandFailure } from "../../transport";
 import { PauseControl } from "../PauseControl";
 import { StopControl } from "../StopControl";
 import { beginSend, clearSentDraft, draftKey, draftStore, finishSend, setDraft } from "./drafts";
-import type { ConversationHeader } from "./selectConversation";
+import type { ConversationHeader, LeadHeader } from "./selectConversation";
 import { focusRing } from "./rows";
+import { selectLeadConversation } from "./selectLeadConversation";
 
 export interface ConversationControls {
+  actionAccessory?: ReactNode;
   onSend?: (text: string) => Promise<unknown>;
   onPause?: () => Promise<unknown>;
   onResume?: () => Promise<unknown>;
@@ -24,17 +26,22 @@ export function Composer({
   onPause,
   onResume,
   onStop,
-}: { header: ConversationHeader } & ConversationControls) {
+  actionAccessory,
+}: { header: ConversationHeader | LeadHeader } & ConversationControls) {
   const runId = useStore(stateStore, ({ state }) => state.run?.run_id ?? null);
   const key = draftKey(runId, header.agentId);
   const text = useStore(draftStore, (drafts) => drafts[key]?.text ?? "");
   const pending = useStore(draftStore, (drafts) => drafts[key]?.pending ?? false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const failedControl = useRef(false);
   const [controlKey, setControlKey] = useState(0);
   const captionId = useId();
-  const active = ["working", "revising", "paused"].includes(header.state);
-  const replay = !onSend && !onPause && !onResume && !onStop;
+  const lead = header.kind === "lead";
+  const active = lead
+    ? header.state === "idle"
+    : ["working", "revising", "paused"].includes(header.state);
+  const tooLong = lead && text.length > 4096;
+  const replay = lead ? !onSend : !onSend && !onPause && !onResume && !onStop;
   function clearControlFailure() {
     if (failedControl.current) {
       failedControl.current = false;
@@ -43,15 +50,25 @@ export function Composer({
     }
   }
   async function send() {
-    if (!onSend || !active || !text.trim() || !beginSend(key)) return;
+    const current = stateStore.getState().state;
+    const currentLead = lead ? selectLeadConversation(current, header.agentId)?.header : undefined;
+    if (
+      !onSend ||
+      !active ||
+      tooLong ||
+      !text.trim() ||
+      (lead && (current.run?.run_id !== runId || currentLead?.state !== "idle")) ||
+      !beginSend(key)
+    )
+      return;
     setFailure(null);
     clearControlFailure();
     try {
       await onSend(text);
-      clearSentDraft(key, text);
+      if (!lead || stateStore.getState().state.run?.run_id === runId) clearSentDraft(key, text);
     } catch (error) {
       clearControlFailure();
-      setFailure(commandFailure("Send", error));
+      setFailure({ key, message: commandFailure(lead ? "Message the lead" : "Send", error) });
     } finally {
       finishSend(key);
     }
@@ -66,22 +83,33 @@ export function Composer({
     });
     return result;
   }
-  if (replay)
-    return (
-      <p className="shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted">
-        Recorded run: messages, pause and stop are off.
-      </p>
+  if (replay && !lead) {
+    const caption = "Recorded run: messages, pause and stop are off.";
+    const replayClass =
+      "conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted";
+    return actionAccessory ? (
+      <div className={replayClass}>
+        <p>{caption}</p>
+        <div className="composer-actions flex">{actionAccessory}</div>
+      </div>
+    ) : (
+      <p className={replayClass}>{caption}</p>
     );
+  }
   const paused = header.state === "paused";
   return (
-    <div className="shrink-0 border-t border-divider p-[14px]">
-      {onSend && (
+    <div className="conversation-composer shrink-0 border-t border-divider p-[14px]">
+      {(onSend || lead) && (
         <textarea
-          aria-label={`Message Agent ${header.slot}`}
-          aria-describedby={!active ? captionId : undefined}
-          placeholder={`Message Agent ${header.slot}. It reads it at its next step.`}
-          aria-disabled={!active}
-          readOnly={pending || !active}
+          aria-label={lead ? "Message the lead" : `Message Agent ${header.slot}`}
+          aria-describedby={!active || replay || tooLong ? captionId : undefined}
+          placeholder={
+            lead
+              ? "Message the lead"
+              : `Message Agent ${header.slot}. It reads it at its next step.`
+          }
+          aria-disabled={!active || replay}
+          readOnly={pending || !active || replay}
           value={text}
           onChange={(event) => {
             setDraft(key, event.target.value);
@@ -89,13 +117,19 @@ export function Composer({
           className={`block h-16 w-full resize-none rounded-[10px] border border-control-edge bg-field px-3 py-[10px] text-[15px] text-text placeholder:text-faint aria-disabled:text-faint ${focusRing}`}
         />
       )}
-      {!active && (
+      {(!active || (lead && replay) || tooLong) && (
         <p id={captionId} className="mt-[6px] text-[14px] text-muted">
-          Agent {header.slot} is not running.
+          {lead
+            ? replay
+              ? "Replay: lead messages and stop are off."
+              : tooLong
+                ? "Use at most 4,096 characters."
+                : `The lead is ${header.state}. Messages are available only while idle.`
+            : `Agent ${header.slot} is not running.`}
         </p>
       )}
-      <div className="mt-[10px] flex flex-wrap items-start gap-2">
-        {active && (paused ? onResume : onPause) && (
+      <div className="composer-actions mt-[10px] flex flex-wrap items-start gap-2">
+        {!lead && active && (paused ? onResume : onPause) && (
           <PauseControl
             key={controlKey}
             agentId={header.agentId}
@@ -104,12 +138,14 @@ export function Composer({
             onResume={() => control(onResume)}
           />
         )}
-        {active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
+        {!lead && active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
+        {actionAccessory}
         {onSend && (
           <button
             type="button"
-            className={`${button} ml-auto bg-raised`}
-            aria-disabled={!active || pending || !text.trim()}
+            className={`${button} ${actionAccessory ? "" : "ml-auto"} bg-raised`}
+            aria-disabled={!active || pending || !text.trim() || tooLong}
+            aria-label={lead ? "Send message to lead" : undefined}
             onClick={() => {
               void send();
             }}
@@ -118,14 +154,14 @@ export function Composer({
           </button>
         )}
       </div>
-      {failure && (
+      {failure && (!lead || failure.key === key) && (
         <p
           role="alert"
-          title={failure}
+          title={failure.message}
           className="mt-[6px] flex min-w-0 gap-2 text-[14px] text-muted"
         >
           <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-          <span className="truncate">{failure}</span>
+          <span className={lead ? "wrap-anywhere" : "truncate"}>{failure.message}</span>
         </p>
       )}
     </div>

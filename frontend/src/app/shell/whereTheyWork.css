@@ -1,0 +1,92 @@
+.where-they-work {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  color: var(--text);
+}
+.where-they-work .work-group {
+  padding: 14px 14px 4px;
+}
+.where-they-work h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 8px;
+  font-size: 13.5px;
+}
+.where-they-work .work-agent {
+  font-weight: 600;
+}
+.where-they-work .work-badge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--slot-graphic);
+  color: var(--on-agent);
+  font-size: 12px;
+  font-weight: 700;
+}
+.where-they-work .work-mode {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+.where-they-work .work-file {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 9px;
+  padding: 9px 10px;
+  margin-bottom: 6px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+}
+.where-they-work .work-file > svg {
+  margin-top: 2px;
+  color: var(--muted);
+}
+.where-they-work .work-file-content {
+  min-width: 0;
+}
+.where-they-work .work-path,
+.where-they-work .work-function {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.where-they-work .work-path {
+  font-size: 13.5px;
+}
+.where-they-work .work-function,
+.where-they-work .work-range {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.where-they-work .work-statistics {
+  font-size: 13px;
+}
+.where-they-work .work-divider {
+  border: 0;
+  border-top: 1px solid var(--divider);
+  margin: 10px 18px 0;
+}
+.where-they-work .work-empty {
+  padding: 16px 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.where-they-work .work-footer {
+  margin-top: auto;
+  border-top: 1px solid var(--divider);
+  padding: 12px 18px 16px;
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1.45;
+}

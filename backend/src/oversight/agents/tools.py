@@ -8,6 +8,7 @@ summary, the focus, the test result) feeds events only.
 import asyncio
 import contextlib
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
@@ -172,6 +173,28 @@ def _validate(name: str, arguments: dict[str, object]) -> None:
         return
 
 
+def _raw_boundary(raw: str, normalized_index: int) -> int:
+    """Map a character boundary in the CRLF-to-LF view back to the untouched raw string."""
+    skipped = 0
+    for pair in re.finditer("\r\n", raw):
+        if pair.start() - skipped >= normalized_index:
+            break
+        skipped += 1
+    return normalized_index + skipped
+
+
+def _local_replacement(raw: str, start: int, new: str) -> str:
+    """Use the line ending at/after the match, else the previous ending, else LF.
+
+    Only replacement text is rendered. Lone CR characters are literal text, not line endings.
+    """
+    newline = raw.find("\n", start)
+    if newline == -1:
+        newline = raw.rfind("\n", 0, start)
+    style = "\r\n" if newline > 0 and raw[newline - 1] == "\r" else "\n"
+    return new.replace("\r\n", "\n").replace("\n", style)
+
+
 async def _in_thread_to_the_end[T](fn: Callable[[], T]) -> T:
     """Run `fn` in a thread. If the caller is cancelled, wait for the thread to end before the
     cancellation goes on, so a lock taken around the call is held until the thread is done."""
@@ -265,7 +288,11 @@ class Toolbox:
         except (ToolError, WorkspaceError) as error:
             message = self._workspace.redact(str(error))
         except SuiteUnavailable as error:
-            message = f"cannot access the file: {error.strerror or type(error.cause).__name__}"
+            message = (
+                f"tests unavailable: {error.own_source_reason}"
+                if error.own_source_reason is not None
+                else f"cannot access the file: {error.strerror or type(error.cause).__name__}"
+            )
             return ToolOutcome(
                 content=f"Error: {message}",
                 ok=False,
@@ -416,19 +443,29 @@ class Toolbox:
         current = await self._read(path)
         if current.hash != seen:
             raise ToolError(f"{path} changed since you last read it; read it again")
-        index = current.content.find(old)
+        view, needle = current.content, old
+        if self._tree.nt_source_bytes:
+            view, needle = view.replace("\r\n", "\n"), old.replace("\r\n", "\n")
+        index = view.find(needle)
         if index == -1:
             raise ToolError(
                 f"old_text does not appear in {path}; read the file again and copy the exact "
                 "text without line numbers; it must appear exactly once"
             )
         # From index + 1, not past the match: "ana" appears twice in "banana".
-        if current.content.find(old, index + 1) != -1:
+        if view.find(needle, index + 1) != -1:
             raise ToolError(
                 f"old_text appears more than once in {path}; it must appear exactly once, "
                 "so include more of the lines around it"
             )
-        content = current.content[:index] + new + current.content[index + len(old) :]
+        end_index = index + len(needle)
+        if self._tree.nt_source_bytes:
+            index, end_index = (
+                _raw_boundary(current.content, index),
+                _raw_boundary(current.content, end_index),
+            )
+            new = _local_replacement(current.content, index, new)
+        content = current.content[:index] + new + current.content[end_index:]
         self._harness.check_syntax(path, current.content, content)
         self._read_hashes[path] = await self._tree.write_text(
             path, content, expected_hash=current.hash
@@ -453,13 +490,20 @@ class Toolbox:
         run = await self._workspace.run_tests(self._tree, timeout_s=self._test_timeout_s)
         result = run.result
         if result.outcome == "timeout":
-            headline = f"Ran tests: timed out after {self._test_timeout_s:g} s"
+            headline = (
+                f"Tests reached the {int(self._test_timeout_s)} s limit. Results are incomplete."
+            )
         elif result.outcome == "error" and result.passed + result.failed == 0:
             headline = "Ran tests: the suite could not run"
         else:
             headline = f"Ran tests: {result.passed} of {result.passed + result.failed} pass"
         return ToolOutcome(
-            content=test_observation(run, MAX_TEST_OUTPUT, harness_pack=self._harness.enabled),
+            content=test_observation(
+                run,
+                MAX_TEST_OUTPUT,
+                harness_pack=self._harness.enabled,
+                test_timeout_s=self._test_timeout_s,
+            ),
             ok=True,
             summary=headline,
             tests=result,

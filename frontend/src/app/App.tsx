@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ContextType, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useStore } from "zustand";
 
-import type { FileSaved, MergeMode } from "@contracts";
+import type { FileSaved, MergeMode, Plan, QueuedTask } from "@contracts";
 
 import type { ReplayPlayer } from "../transport";
 import type { FileDraft } from "../editor";
@@ -33,6 +33,10 @@ import {
 } from "./view";
 import type { View } from "./view";
 
+type PlanCapability = NonNullable<ContextType<typeof DecisionContext>["planActions"]>;
+type PlanAttempt = PlanCapability["attempts"][string];
+type PlanAction = Parameters<PlanCapability["send"]>[1];
+
 export function App() {
   const [replay, setReplay] = useState<ReplayPlayer | null>(null);
   const [retry, setRetry] = useState(0);
@@ -43,6 +47,8 @@ export function App() {
   const settingMode = useRef(false);
   const [attempts, setAttempts] = useState<Record<string, DecisionAttempt>>({});
   const [revertAttempts, setRevertAttempts] = useState<Record<string, RevertAttempt>>({});
+  const [planAttempts, setPlanAttempts] = useState<Record<string, PlanAttempt>>({});
+  const sendingPlans = useRef(new Set<string>());
   const reverting = useRef(new Set<string>());
   // The replay build has no backend: it never sends a command or starts an agent, and review shows
   // recorded decisions.
@@ -54,7 +60,6 @@ export function App() {
   const inFlightSaves = useRef(new Map<string, Promise<FileSaved>>());
   // A stable session owns settlement; its getters read these refs only in handlers and effects.
   // The factory stores these getters and never reads either ref during render.
-  // eslint-disable-next-line react-hooks/refs
   const [files, setFiles] = useState(() =>
     commands
       ? createFileSession(
@@ -234,6 +239,56 @@ export function App() {
     },
     [commands, state],
   );
+  const onPlanAction = async (plan: Plan, action: PlanAction, queue?: QueuedTask, comment = "") => {
+    const key = `${state.run?.run_id ?? ""}:${plan.plan_id}`;
+    if (!commands || state.run !== stateStore.getState().state.run || sendingPlans.current.has(key))
+      return;
+    sendingPlans.current.add(key);
+    const attempt: PlanAttempt = {
+      run: state.run,
+      planId: plan.plan_id,
+      action,
+      revision: plan.revision,
+      queueRevision: queue?.revision,
+      queueId: queue?.queued_task_id,
+      phase: "pending",
+    };
+    setPlanAttempts((all) => ({ ...all, [plan.plan_id]: attempt }));
+    try {
+      if (action === "queue") await commands.startPlan(plan.plan_id, { revision: plan.revision });
+      if (action === "reject")
+        await commands.rejectPlan(plan.plan_id, {
+          revision: plan.revision,
+          ...(comment.trim() ? { comment: comment.trim() } : {}),
+        });
+      if (action === "cancel" && queue)
+        await commands.cancelQueue(queue.queued_task_id, { revision: queue.revision });
+    } catch (error) {
+      const current = stateStore.getState().state;
+      if (current.run === attempt.run)
+        setPlanAttempts((all) =>
+          all[plan.plan_id] !== attempt
+            ? all
+            : {
+                ...all,
+                [plan.plan_id]: {
+                  ...attempt,
+                  phase: "failed",
+                  message: commandFailure(
+                    action === "cancel"
+                      ? "Taking the plan out of the queue"
+                      : action === "reject"
+                        ? "Reject plan"
+                        : "Queue plan",
+                    error,
+                  ),
+                },
+              },
+        );
+    } finally {
+      sendingPlans.current.delete(key);
+    }
+  };
   const onOpenFile = useCallback((path: string) => {
     const state = stateStore.getState().state;
     const keepComment = Boolean(
@@ -264,6 +319,14 @@ export function App() {
         attempts,
         onDecide: commands ? onDecide : undefined,
         revokeGrant: commands?.revokeGrant,
+        planActions: commands
+          ? {
+              attempts: planAttempts,
+              send: (plan, action, queue, comment) => {
+                void onPlanAction(plan, action, queue, comment);
+              },
+            }
+          : undefined,
         replayOf: replayBuild ? replaySource.kind : undefined,
       }}
     >

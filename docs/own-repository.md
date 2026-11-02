@@ -12,7 +12,7 @@ The demo path (`demo-repo/`, `make demo`, `make demo-check`) does not change.
   are worktrees of the person's repository under `.runtime/worktrees/`.
 - When the person commits on their own branch, the session takes it in with the follow-main logic.
 - The graph shows the session plus the person's uncommitted edits as a separate "your edits"
-  layer, drawn as its sketch decides: color stays reserved for agents and states. Approval
+  layer, drawn as its sketch decides: color stays reserved for teams and states. Approval
   warns when an agent's change touches lines the person edited.
 - A file watcher (watchfiles, MIT) only triggers the existing rescan path. It debounces saves,
   skips while a merge or another main write holds the git lease, and emits the usual
@@ -29,6 +29,17 @@ The demo path (`demo-repo/`, `make demo`, `make demo-check`) does not change.
 - Tests run with the repository's own `.venv` Python when there is one; otherwise they show
   as unavailable.
 - Agent commits keep the repository's git hooks disabled.
+
+Set `OVERSIGHT_TEST_TIMEOUT_S` before starting an own-repository run (seconds, default 60;
+no policy maximum, with a nine-significant-digit parsing bound). Demo and Boltons keep 60 seconds;
+own repositories become selectable in W4c2. The agent's time limit per round is
+`max(600, 3*T + 300)` seconds. Both stay fixed for the run; the model cannot change them.
+The console says `Test limit: {T} s. Agent time limit: {W} s per round. These settings stay fixed for this run.`
+For a nondefault setting on demo/Boltons it also says
+`OVERSIGHT_TEST_TIMEOUT_S applies only to your own repositories; this run keeps 60 s.`
+A long limit holds main's lock and the Git lease while the suite runs: other agents' tests and
+Approve wait. Stop ends the suite. A timeout reports incomplete results with an unknown cause;
+set a different limit when starting the next run.
 
 ## Native platforms after opening a repository
 

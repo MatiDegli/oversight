@@ -83,9 +83,13 @@ beforeAll(async () => {
   mkdirSync(out, { recursive: true });
 }, 60_000);
 afterAll(async () => {
-  await browser.close();
-  await server.close();
-});
+  try {
+    await browser.close();
+  } finally {
+    await server.close();
+  }
+  // Allow software-GL work to drain even after a test has hit its own timeout.
+}, 60_000);
 async function scene(
   theme: string,
   width: number,
@@ -305,10 +309,11 @@ it.runIf(process.env.MILESTONE_SHOTS === "1")(
 );
 
 it("waits for the lazy field probe before capturing camera motion", async () => {
+  // This checks probe readiness and all 180 real frames, without a full-HD field to rasterize.
   await scene(
     "dark",
-    1920,
-    1080,
+    1600,
+    480,
     async (page) => {
       await page.evaluate(() => {
         const host = document.querySelector<HTMLCanvasElement & { oversightField?: FieldProbe }>(

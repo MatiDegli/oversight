@@ -47,6 +47,19 @@ it("uses configured budget thresholds, metered Meta words and actual blocked per
   expect(budgetWords(mark, budget, true).detail).toBe("new Meta runs stop at 90%");
 });
 
+it("omits a blocked percentage and amounts when spend is unknown", () => {
+  const state = progressState("limits");
+  const budget = state.run?.budget,
+    mark = state.budgetMarks[0];
+  if (!budget || !mark) throw new Error("Missing budget");
+  expect(
+    budgetWords({ ...mark, brake: "blocked", spent_usd: 136, budget_usd: 150 }, budget, true),
+  ).toEqual({
+    lead: "Budget",
+    detail: "new Meta runs are refused",
+  });
+});
+
 it("omits a blocked percentage without a positive budget denominator", () => {
   const state = progressState("limits");
   const budget = state.run?.budget,

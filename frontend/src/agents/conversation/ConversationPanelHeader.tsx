@@ -1,21 +1,43 @@
 import { agentLook } from "../../theme";
 import { costText } from "../../state";
 import { labels } from "../AgentCard";
-import type { ConversationHeader } from "./selectConversation";
+import type { ConversationHeader, LeadHeader } from "./selectConversation";
 
 const chip =
   "max-w-full rounded-control border border-border px-[10px] py-1 text-[14px] wrap-anywhere";
 
-export function ConversationPanelHeader({ header }: { header: ConversationHeader }) {
+export function ConversationPanelHeader({ header }: { header: ConversationHeader | LeadHeader }) {
+  if (header.kind === "lead")
+    return (
+      <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
+        <div className="flex items-center gap-[10px]">
+          <h2 className="text-[16px]! leading-[1.3]! font-semibold text-text">Lead</h2>
+          <span className={chip}>
+            {header.state === "done" ? "Done (historical)" : header.state}
+          </span>
+        </div>
+        <div className="mt-[14px] flex flex-wrap gap-2">
+          <span className={chip}>{header.modelLabel}</span>
+          <span className={chip}>
+            Step <span className="font-mono">{header.step}</span>
+          </span>
+        </div>
+        {header.detail !== null && (
+          <p className="mt-2 text-[14px] text-muted wrap-anywhere">{header.detail}</p>
+        )}
+      </header>
+    );
   return (
-    <header className="shrink-0 border-b border-divider bg-panel px-[18px] py-4">
+    <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
       <div className="flex items-start gap-[10px]">
         <span
           className={`flex size-(--letter-badge-size) shrink-0 items-center justify-center rounded-label font-bold ${agentLook[header.slot].swatch}`}
         >
           {header.slot}
         </span>
-        <h2 className="min-w-0 text-[20px] leading-[1.3] font-bold wrap-anywhere">{header.task}</h2>
+        <h2 className="min-w-0 text-[16px]! leading-[1.3]! font-semibold wrap-anywhere text-text">
+          Agent {header.slot}
+        </h2>
         <span className="shrink-0 rounded-full bg-raised px-[10px] py-[3px] text-[13px] font-semibold text-muted">
           {header.waiting ? "Waiting" : labels[header.state]}
         </span>

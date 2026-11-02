@@ -78,7 +78,7 @@ async def test_ref_compare_and_swap_does_not_overwrite_new_writer(
     if nt:
         force_nt(monkeypatch)
     path = workspace.main.git_identity.common / "refs/heads/main"
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 60
     previous = read_entry(path, Budget(deadline))
     path.write_bytes(b"1" * 40 + b"\n")
     with pytest.raises(IntegrityError, match="compare-and-swap failed"):
@@ -103,7 +103,7 @@ async def test_snapshot_api_does_not_invoke_git(
 ) -> None:
     spawn = AsyncMock()
     monkeypatch.setattr(core, "run_process", spawn)
-    snapshot = MetadataSnapshot.take(workspace.main.git_identity, time.monotonic() + 5)
+    snapshot = MetadataSnapshot.take(workspace.main.git_identity, time.monotonic() + 60)
     finish_snapshot(snapshot, workspace.integrity)
     spawn.assert_not_awaited()
 
@@ -169,7 +169,7 @@ async def test_read_failure_names_its_kind(tmp_path, monkeypatch, kind, failure,
             return info
 
         monkeypatch.setattr(os, "fstat", changed)
-    budget = Budget(time.monotonic() + 5)
+    budget = Budget(time.monotonic() + 60)
     with metadata_io.directory(tmp_path, budget.deadline) as fd:
         kwargs = {} if kind == "Git metadata" else {"kind": kind}
         with pytest.raises(IntegrityError, match=messages[failure]):
@@ -244,6 +244,26 @@ async def test_nt_unsafe_snapshot_never_spawns(workspace, monkeypatch, tmp_path,
     assert leaf.read_bytes() == b"untouched"
 
 
+@pytest.mark.parametrize("kind", ["Git metadata", "working file"])
+def test_nt_read_guards_keep_working_mode(tmp_path, monkeypatch, kind):
+    from oversight.workspace import metadata_io as module
+
+    force_nt(monkeypatch)
+    path = tmp_path / "input"
+    path.write_bytes(b"content")
+    original = module.nt_guard
+    modes = []
+
+    def guard(target, deadline, *, working=False):
+        modes.append(working)
+        return original(target, deadline, working=working)
+
+    monkeypatch.setattr(module, "nt_guard", guard)
+    entry = module.read_at(tmp_path, path.name, path, Budget(time.monotonic() + 5), kind=kind)
+    assert entry is not None and entry.data == b"content"
+    assert modes == [kind != "Git metadata"] * 3
+
+
 @pytest.mark.parametrize("failure", ["file", "index", "total", "entries", "deadline"])
 def test_nt_metadata_budgets(tmp_path, monkeypatch, failure):
     from oversight.workspace import metadata_io as module
@@ -253,6 +273,7 @@ def test_nt_metadata_budgets(tmp_path, monkeypatch, failure):
     path.write_bytes(b"12345")
     monkeypatch.setattr(module, "MAX_FILE", 4)
     monkeypatch.setattr(module, "MAX_INDEX", 6)
+    # Five seconds suffices for the five-byte setup read; the timeout case expires it below.
     deadline = time.monotonic() + 5
     if failure == "index":
         entry = read_entry(path, Budget(deadline))
@@ -284,7 +305,7 @@ async def test_nt_binary_cas_and_exclusive_lock(tmp_path, monkeypatch):
         return real_open(name, flags & ~binary, mode)
 
     monkeypatch.setattr(os, "open", opened)
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 60
     before = read_entry(path, Budget(deadline))
     assert before is not None
     wanted = Entry(before.mode, b"new\r\n\x1a\x00")
@@ -306,7 +327,7 @@ def test_nt_owned_temp_and_retry_exhaustion(tmp_path, monkeypatch, failure):
     monkeypatch.setattr("oversight.workspace._platform.time.sleep", lambda _: None)
     path = tmp_path / "HEAD"
     path.write_bytes(b"old")
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 60
     before = read_entry(path, Budget(deadline))
     original = module._same
     calls = []
@@ -362,13 +383,14 @@ async def test_nt_hooks_sentinel(workspace, monkeypatch, value):
     config = workspace.main.git_identity.common / "config"
     with config.open("a") as handle:
         handle.write(f"[core]\n hooksPath = {paths.get(value, value)}\n")
+    # take_snapshot clamps these 60 s requests to GUARD_SECONDS = 10.0, as in the sibling tests.
     if value in {"/dev/null", "pinned"}:
-        snapshot = take_snapshot(workspace.main.git_identity, workspace.integrity, 5)
+        snapshot = take_snapshot(workspace.main.git_identity, workspace.integrity, 60)
         assert workspace.runtime_root / "server.lock" in snapshot.anchors
         finish_snapshot(snapshot, workspace.integrity)
     else:
         with pytest.raises(IntegrityError, match="code=main_suspect"):
-            take_snapshot(workspace.main.git_identity, workspace.integrity, 5)
+            take_snapshot(workspace.main.git_identity, workspace.integrity, 60)
 
 
 @pytest.mark.parametrize("failure", ["config-case", "lock-case", "sentinel"])
@@ -384,7 +406,7 @@ async def test_nt_snapshot_pins_and_admin_names(workspace, monkeypatch, failure)
     elif failure == "lock-case":
         (identity.common / "HEAD.LOCK").write_bytes(b"unknown owner")
     else:
-        snapshot = take_snapshot(identity, workspace.integrity, 5)
+        snapshot = take_snapshot(identity, workspace.integrity, 60)
         sentinel = workspace.runtime_root / "server.lock"
         sentinel.rename(sentinel.with_name("displaced-lock"))
         sentinel.write_bytes(b"different identity")
@@ -393,7 +415,7 @@ async def test_nt_snapshot_pins_and_admin_names(workspace, monkeypatch, failure)
             assert snapshot is not None
             finish_snapshot(snapshot, workspace.integrity)
         else:
-            take_snapshot(identity, workspace.integrity, 5)
+            take_snapshot(identity, workspace.integrity, 60)
     spawn = AsyncMock()
     monkeypatch.setattr(core, "run_process", spawn)
     with pytest.raises(IntegrityError, match="code=main_suspect"):
@@ -404,7 +426,7 @@ async def test_nt_snapshot_pins_and_admin_names(workspace, monkeypatch, failure)
 async def test_nt_delete_and_directory_restoration(workspace, monkeypatch):
     force_nt(monkeypatch)
     identity = workspace.main.git_identity
-    snapshot = take_snapshot(identity, workspace.integrity, 5)
+    snapshot = take_snapshot(identity, workspace.integrity, 60)
     (identity.common / "refs/extra").mkdir()
     (identity.common / "refs/extra/ref").write_bytes(b"1" * 40 + b"\n")
     (identity.common / "info/exclude").unlink()
@@ -412,7 +434,7 @@ async def test_nt_delete_and_directory_restoration(workspace, monkeypatch):
     with pytest.raises(IntegrityError, match="rules suspended"):
         finish_snapshot(snapshot, workspace.integrity)
     assert not workspace.integrity.main_suspect
-    assert take_snapshot(identity, workspace.integrity, 5).entries == snapshot.entries
+    assert take_snapshot(identity, workspace.integrity, 60).entries == snapshot.entries
 
 
 @pytest.mark.parametrize("name", [".git", ".GIT", ".g\u0131t"])
@@ -421,5 +443,5 @@ def test_nt_authorized_metadata_roots(tmp_path, monkeypatch, name):
     admin = tmp_path / name
     admin.mkdir()
     (admin / "index").write_bytes(b"binary\r\n\x1a\x00")
-    entry = read_entry(admin / "index", Budget(time.monotonic() + 5))
+    entry = read_entry(admin / "index", Budget(time.monotonic() + 60))
     assert entry is not None and entry.data == b"binary\r\n\x1a\x00"

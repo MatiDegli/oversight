@@ -2,7 +2,7 @@
 
 > Status: partly built. Frozen manifest/checks merged in `65199d9`/`40a6e8d`, reliability
 > producers in `06c34a5`, agent-hours/prices in `95e40e5`/`56b5f18`, lead runtime in `6818b3b`.
-> Lead-plan inbox display followed in `bf9fb04`; plan editing/start UI remains absent.
+> Lead-plan inbox display followed in `bf9fb04`; Queue/Reject/Keep are built; Edit and post-dispatch plan tracking remain.
 > Checked against main `8b9b589`; this status does not claim a completed proof 2 run.
 
 ## Status
@@ -189,7 +189,7 @@ Price source: Meta's official pricing page ([item 10's amended rules][item10]). 
 stores only the extracted table,
 its page URL and retrieval date, not a page copy; leak-guard gets an exception for that one file.
 The table and `events/list_prices.py:price_usage` are built (`56b5f18`);
-`tools/run_cost.py` reports the dated source. Team/period grouping and aggregate UI remain.
+`tools/run_cost.py` reports the dated source. Team grouping and desktop aggregate Usage are built; live period grouping remains.
 Baseten is a lower bound;
 unknown costs stay unknown.
 

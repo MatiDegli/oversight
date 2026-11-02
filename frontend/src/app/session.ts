@@ -1,7 +1,8 @@
 import type { ReplayPlayer } from "../transport";
 import { stateStore } from "../state";
 import { startAppTransport } from "../transport";
-import { afterFirstGraphDraw } from "../graph";
+// eslint-disable-next-line no-restricted-imports -- Share editor eligibility without loading its implementation.
+import { editorReady } from "../editor/loader";
 import { prefetchEditorWhenIdle } from "../editor";
 
 /** The shell owns the transport lifetime and exposes the applied cursor to screenshot clients. */
@@ -13,8 +14,8 @@ export function startAppSession(
 ) {
   let active = true;
   let cancelPrefetch: () => void = () => undefined;
-  const stopWaitingForGraph = afterFirstGraphDraw(() => {
-    cancelPrefetch = prefetchEditorWhenIdle();
+  void editorReady.then(() => {
+    if (active) cancelPrefetch = prefetchEditorWhenIdle();
   });
   if (root) root.dataset.seq = String(stateStore.getState().state.lastSeq);
   const unsubscribe = stateStore.subscribe(({ state }, previous) => {
@@ -57,7 +58,6 @@ export function startAppSession(
   void transport.ready.catch(report);
   return () => {
     active = false;
-    stopWaitingForGraph();
     cancelPrefetch();
     unsubscribe();
     transport.stop();

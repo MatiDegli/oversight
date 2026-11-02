@@ -77,6 +77,7 @@ def _safe_nt_relative(relative: str) -> bool:
             return False
         if any(ord(char) < 32 or char in '<>"|?*' for char in part):
             return False
+        # Twin of workspace._platform._reserved_nt_segment; private-workspace forbids importing it.
         stem = part.partition(".")[0].rstrip(" ").upper()
         if stem in {"CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"} or (
             len(stem) == 4 and stem[:3] in {"COM", "LPT"} and stem[3] in "123456789¹²³"

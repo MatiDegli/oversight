@@ -25,3 +25,5 @@ export { NodeChips } from "./NodeChips";
 export { afterlightOf, mergeArrivalDelay, MilestoneLife } from "./field";
 export { folderGroups } from "./groups";
 export type { MapLevel } from "./mapLevel";
+
+export { prepareDotField } from "./field";

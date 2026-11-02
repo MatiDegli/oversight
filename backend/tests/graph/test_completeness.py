@@ -73,3 +73,28 @@ def test_declared_encoding_is_parsed_and_unknown_encoding_is_a_gap(tmp_path: Pat
         "latin.py": "parsed",
         "unknown.py": "encoding",
     }
+
+
+def test_nt_completeness_matches_posix_and_excludes_reparse(tmp_path, monkeypatch):
+    import os
+    from types import SimpleNamespace
+
+    from oversight.graph import _workspace
+
+    (tmp_path / "a.py").write_bytes(b"def f(): pass\n")
+    (tmp_path / "bad-name.py").write_bytes(b"def f(): pass\n")
+    expected = graph_completeness(tmp_path)
+    (tmp_path / "junction").mkdir()
+    (tmp_path / "junction/canary.py").write_bytes(b"CANARY")
+    real = os.lstat
+
+    def reparse(path, *args, **kwargs):
+        info = real(path, *args, **kwargs)
+        if Path(path).name == "junction":
+            return SimpleNamespace(st_mode=info.st_mode, st_file_attributes=0x400)
+        return info
+
+    monkeypatch.setattr(os, "lstat", reparse)
+    assert graph_completeness(tmp_path, nt=True) == expected
+    monkeypatch.setattr(_workspace, "sys", SimpleNamespace(platform="win32"))
+    assert graph_completeness(tmp_path, nt=True) == expected

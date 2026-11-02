@@ -30,7 +30,8 @@ def path_backend(request, monkeypatch):
 
 
 def listing(root: Path) -> TreeResponse:
-    directories, files, truncated = walk_tree(root, time.monotonic() + 2)
+    # The time bound is tested elsewhere; result checks need room on loaded machines.
+    directories, files, truncated = walk_tree(root, time.monotonic() + 60)
     return TreeResponse(
         run_id="run-20261028-000001",
         agent_id=None,

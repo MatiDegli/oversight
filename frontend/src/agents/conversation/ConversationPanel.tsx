@@ -1,19 +1,25 @@
-import { useLayoutEffect, useRef } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, type ReactNode } from "react";
 import { ConversationPanelHeader } from "./ConversationPanelHeader";
 import { Composer, type ConversationControls } from "./Composer";
 import { ActivityBlock } from "./ActivityBlock";
 import { BudgetNotice, Notices } from "./Notices";
 import { TimelineEntry } from "./rows";
-import type { Conversation } from "./selectConversation";
+import type { Conversation, ConversationEntry, LeadConversation } from "./selectConversation";
+
+export { selectLeadConversation } from "./selectLeadConversation";
+
+const LeadThreadRows = lazy(() => import("./LeadThreadRows"));
 
 export interface ConversationPanelProps extends ConversationControls {
-  conversation: Conversation;
+  conversation: Conversation | LeadConversation;
+  renderResolution?: (entry: Extract<ConversationEntry, { kind: "resolution" }>) => ReactNode;
   onOpenDiff?: (changeId: string) => void;
 }
 /** The timeline owns scrolling; event arrivals never move keyboard focus. */
 export function ConversationPanel({
   conversation,
   onOpenDiff,
+  renderResolution,
   ...controls
 }: ConversationPanelProps) {
   const { header, entries } = conversation;
@@ -40,8 +46,10 @@ export function ConversationPanel({
   }, [entries]);
   return (
     <section
-      aria-label={`Agent ${header.slot} conversation`}
-      className="flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
+      aria-label={
+        header.kind === "lead" ? "Lead conversation" : `Agent ${header.slot} conversation`
+      }
+      className="conversation-panel flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >
       <ConversationPanelHeader header={header} />
       <div
@@ -49,34 +57,52 @@ export function ConversationPanel({
         role="list"
         aria-label="Conversation timeline"
         tabIndex={0}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-[9px] [overflow-anchor:none] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-text"
+        className="conversation-timeline min-h-0 flex-1 overflow-y-auto overscroll-contain py-[9px] [overflow-anchor:none] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-text"
         onScroll={(event) => {
           const node = event.currentTarget;
           atBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight <= 2;
         }}
       >
-        <div ref={content}>
-          {entries.map((entry) => (
-            <div
-              role="listitem"
-              key={`${entry.kind === "activity" ? "round" : entry.kind}:${String(entry.seq)}`}
-            >
-              {entry.kind === "activity" || entry.kind === "round" ? (
-                <ActivityBlock
-                  entry={entry}
-                  slot={header.slot}
-                  changeId={header.changeId}
-                  onOpenDiff={onOpenDiff}
-                  showHeader={entry === lastActivity}
-                />
-              ) : entry.kind === "budget" ? (
-                <BudgetNotice mark={entry.mark} progress={conversation.progress} />
-              ) : (
-                <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
-              )}
-            </div>
-          ))}
-          <Notices conversation={conversation} />
+        <div ref={content} className="conversation-entries">
+          {conversation.kind === "lead" ? (
+            <Suspense fallback={<p role="status">Loading lead conversation…</p>}>
+              <LeadThreadRows
+                conversation={conversation}
+                onReady={() => {
+                  if (atBottom.current && list.current)
+                    list.current.scrollTop = list.current.scrollHeight;
+                }}
+              />
+            </Suspense>
+          ) : (
+            conversation.entries.map((entry) => (
+              <div
+                role="listitem"
+                key={`${entry.kind === "activity" ? "round" : entry.kind}:${String(entry.seq)}`}
+              >
+                {entry.kind === "activity" || entry.kind === "round" ? (
+                  <ActivityBlock
+                    entry={entry}
+                    slot={conversation.header.slot}
+                    changeId={conversation.header.changeId}
+                    onOpenDiff={onOpenDiff}
+                    showHeader={entry === lastActivity}
+                  />
+                ) : entry.kind === "budget" ? (
+                  <BudgetNotice mark={entry.mark} progress={conversation.progress} />
+                ) : (
+                  ((entry.kind === "resolution" ? renderResolution?.(entry) : null) ?? (
+                    <TimelineEntry
+                      entry={entry}
+                      changeId={conversation.header.changeId}
+                      onOpenDiff={onOpenDiff}
+                    />
+                  ))
+                )}
+              </div>
+            ))
+          )}
+          {conversation.kind !== "lead" && <Notices conversation={conversation} />}
         </div>
       </div>
       <Composer key={header.agentId} header={header} {...controls} />

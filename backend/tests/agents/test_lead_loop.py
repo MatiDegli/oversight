@@ -36,6 +36,17 @@ async def test_a_lead_reads_requests_two_plans_and_finishes() -> None:
     assert "    1| line 1" in str(model.requests)
 
 
+async def test_exhausted_tool_dispatch_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    from oversight.agents import _lead_tools
+
+    tools, _ = setup_tools()
+    outcome = await tools.call("finish", '{"reply":"Ready."}')
+    assert outcome.ok and outcome.finish and outcome.content == "Ready."
+    monkeypatch.setattr(_lead_tools._Finish, "model_validate_json", lambda _: _lead_tools._Empty())
+    with pytest.raises(RuntimeError, match=r"^Unknown lead tool outcome\.$"):
+        await tools.call("finish", "{}")
+
+
 async def test_decision_tools_are_unknown_and_change_nothing() -> None:
     tools, propose = setup_tools()
     names = [

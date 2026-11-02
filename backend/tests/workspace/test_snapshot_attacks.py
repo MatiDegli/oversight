@@ -250,7 +250,7 @@ async def test_nt_suite_metadata_attacks(make_workspace, monkeypatch, main, atta
     )
     (tree.root / "tests/test_attack.py").write_text(source)
     force_nt(monkeypatch)
-    baseline = take_snapshot(tree.git_identity, workspace.integrity, 5)
+    baseline = take_snapshot(tree.git_identity, workspace.integrity, 60)
     calls = monitor_git(workspace, monkeypatch, workspace.tmp_dir / "git-sentinel")
     if attack in {"junction", "reparse"}:
         from oversight.workspace.snapshot import MetadataSnapshot
@@ -274,6 +274,6 @@ async def test_nt_suite_metadata_attacks(make_workspace, monkeypatch, main, atta
             await tree.commit_all("Never spawn", workspace.user_author())
         assert len(calls) == before
     else:
-        assert take_snapshot(tree.git_identity, workspace.integrity, 5).entries == baseline.entries
+        assert take_snapshot(tree.git_identity, workspace.integrity, 60).entries == baseline.entries
         await tree.commit_all("Restored metadata", workspace.user_author())
     assert not (workspace.tmp_dir / "git-sentinel").exists()

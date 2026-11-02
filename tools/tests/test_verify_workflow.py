@@ -212,3 +212,256 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
     ci = (WORKFLOWS / "ci.yml").read_text()
     with pytest.raises(AssertionError):
         assert_ci_triggers(ci.replace("on:\n", "on:\n  pull_request:\n", 1))
+
+
+WINDOWS_PATHS = (
+    "backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, "
+    "README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, "
+    "pyproject.toml, uv.lock, conftest.py, Makefile"
+)
+WINDOWS_TOOLS = (
+    "tools/demo_check_nt.py tools/demo_check.py tools/smoke.py "
+    "tools/tests/test_demo_check_nt.py tools/tests/test_demo_check.py tools/tests/test_smoke.py "
+    "tools/tests/test_pages_workflow.py tools/tests/test_verify_workflow.py"
+)
+WINDOWS_BACKEND = (
+    "__main__.py api/static.py app.py events/store.py workspace/__init__.py "
+    "workspace/_platform.py workspace/capability.py workspace/core.py workspace/files.py "
+    "workspace/integrity.py workspace/isolation.py workspace/metadata_io.py workspace/runner.py "
+    "workspace/source.py workspace/test_tree.py workspace/tree.py workspace/snapshot.py "
+    "workspace/suite_files.py workspace/suite_guard.py agents/tools.py"
+)
+UPLOAD = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2"
+WINDOWS_NATIVE_IF = "${{ !cancelled() && steps.frontend_build.outcome == 'success' }}"
+
+
+def assert_windows_policy(text: str) -> None:
+    workflow = mapping(text)
+    assert set(workflow) == {"name", "on", "permissions", "jobs"}
+    assert workflow["name"] == "windows advisory" and workflow["permissions"] == "{}"
+    assert mapping(workflow["on"]) == {
+        "pull_request": f"paths: [{WINDOWS_PATHS}]",
+        "push": f"branches: [main]\npaths: [{WINDOWS_PATHS}]",
+        "workflow_dispatch": "",
+    }
+    assert "secrets" not in text and "continue-on-error" not in text
+    assert mapping(workflow["jobs"]).keys() == {"windows"}
+    job = mapping(mapping(workflow["jobs"])["windows"])
+    assert set(job) == {
+        "name",
+        "runs-on",
+        "timeout-minutes",
+        "permissions",
+        "defaults",
+        "env",
+        "steps",
+    }
+    assert job["name"] == "windows advisory" and job["runs-on"] == "windows-latest"
+    assert job["timeout-minutes"] == "30"
+    assert mapping(job["permissions"]) == {"contents": "read"}
+    assert mapping(mapping(job["defaults"])["run"]) == {"shell": "pwsh"}
+    assert mapping(job["env"]) == {
+        "META_API_KEY": '""',
+        "BASETEN_API_KEY": '""',
+        "OVERSIGHT_CROSS_REVIEW": '"false"',
+        "OVERSIGHT_WORKSPACE_SOURCE": '""',
+        "OVERSIGHT_AGENT_MODEL": "fake",
+        "OVERSIGHT_AGENT_MODEL_B": "fake",
+        "OVERSIGHT_FAKE_SCRIPT": "fixtures/fake-model/demo-l2-coupon.json",
+        "OVERSIGHT_FAKE_SCRIPT_B": "fixtures/fake-model/demo-l2-restock.json",
+        "OVERSIGHT_NT_EVIDENCE_DIR": "${{ github.workspace }}/nt-evidence",
+    }
+    assert_windows_steps(steps(job["steps"]))
+    assert (
+        "tools/demo_check_nt.py --hard-kill-check" not in text
+    )  # driver qualification remains staged
+    assert "OVERSIGHT_NT_FULL_DEMO" not in text
+    assert_ci_triggers((WORKFLOWS / "ci.yml").read_text())
+
+
+def assert_windows_steps(items: list[dict[str, str]]) -> None:
+    ci = mapping(mapping((WORKFLOWS / "ci.yml").read_text())["jobs"])
+    assert items[:4] == steps(mapping(ci["check"])["steps"])[:4]
+    assert items[-1] == {
+        "name": "Upload Windows evidence",
+        "if": "always()",
+        "uses": UPLOAD,
+        "with": "name: windows-advisory-evidence\npath: nt-evidence/\n"
+        "if-no-files-found: error\nretention-days: 7",
+    }
+    assert UPLOAD in (WORKFLOWS / "ci.yml").read_text()
+    assert len(items) == 19
+    assert items[7:9] == [
+        {"uses": GITLEAKS},
+        {
+            "name": "Gitleaks version",
+            "run": "gitleaks version | Tee-Object -Append nt-evidence/versions.log",
+        },
+    ]
+    items = items[:7] + items[9:]
+    for index, step in enumerate(items[4:-1], 4):
+        permitted = {"name", "run"}
+        if index == 7:
+            permitted.add("id")
+        if 8 <= index <= 14:
+            permitted.add("if")
+            assert step.get("if") == WINDOWS_NATIVE_IF
+        if index == 13:
+            permitted.add("timeout-minutes")
+            assert step["timeout-minutes"] == "3"
+        if index == 15:
+            permitted.add("if")
+            assert step["if"] == "always()"
+        assert set(step) <= permitted
+    assert items[5:7] == [
+        {"run": command}
+        for command in (
+            "uv sync --frozen",
+            "pnpm -C frontend install --frozen-lockfile",
+        )
+    ]
+    assert items[7] == {"id": "frontend_build", "run": "pnpm -C frontend build"}
+    files = WINDOWS_TOOLS.split() + ["backend/src/oversight/" + f for f in WINDOWS_BACKEND.split()]
+    files += [
+        "backend/tests/workspace/test_source_bytes.py",
+        "backend/tests/workspace/test_source_bytes_windows.py",
+        "backend/tests/agents/test_tools_nt_bytes.py",
+        "backend/tests/api/test_files.py",
+    ]
+    assert items[8] == {
+        "name": "Windows target typing for landed sites",
+        "if": WINDOWS_NATIVE_IF,
+        "run": "uv run --frozen pyright --pythonplatform Windows " + " ".join(files),
+    }
+    assert all((WORKFLOWS.parents[1] / path).is_file() for path in files)
+    assert_windows_runtime_checks(items)
+
+
+def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
+    for index, name, file, log in (
+        (9, "W1 native cases", "backend/tests/workspace/test_platform_windows.py", "w1-tests"),
+        (10, "W3 injected and native cases", "tools/tests/test_demo_check_nt.py", "w3-tests"),
+    ):
+        assert items[index] == {
+            "name": name,
+            "if": WINDOWS_NATIVE_IF,
+            "run": "|\nuv run --frozen pytest -o timeout_method=thread "
+            + file
+            + f" -rs -s 2>&1 | Tee-Object nt-evidence/{log}.log\n"
+            + "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+        }
+    assert items[11] == {
+        "name": "W4b injected and native byte cases",
+        "if": WINDOWS_NATIVE_IF,
+        "run": "|\nuv run --frozen pytest -o timeout_method=thread "
+        "backend/tests/workspace/test_source_bytes.py "
+        "backend/tests/workspace/test_source_bytes_windows.py "
+        "backend/tests/agents/test_tools_nt_bytes.py -n 2 -rs -s 2>&1 | "
+        "Tee-Object nt-evidence/w4b-tests.log\n"
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+    }
+    assert items[12] == {
+        "name": "W4a2 injected and native reset cases",
+        "if": WINDOWS_NATIVE_IF,
+        "run": "|\nuv run --frozen pytest -o timeout_method=thread "
+        "backend/tests/workspace/test_source_nt_copy.py "
+        "backend/tests/workspace/test_source_nt_reset.py "
+        "backend/tests/workspace/test_source_nt_reset_windows.py -n 2 -rs -s 2>&1 | "
+        "Tee-Object nt-evidence/w4a2-tests.log\n"
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+    }
+    assert items[13]["run"] == (
+        "|\nuv run --frozen python tools/smoke.py 2>&1 | Tee-Object nt-evidence/smoke.log\n"
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
+    )
+    assert items[14] == {
+        "name": "Report unavailable Linux isolation",
+        "if": WINDOWS_NATIVE_IF,
+        "run": "|\nuv run --frozen python -m oversight isolation-probe "
+        "> nt-evidence/isolation-probe.json\n"
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+        "$probe = Get-Content -Raw nt-evidence/isolation-probe.json | ConvertFrom-Json\n"
+        "if ($probe.status -ne 'unavailable' -or $probe.reason -ne "
+        "'network isolation C is Linux-only') { throw 'Unexpected NT isolation verdict' }",
+    }
+    versions = items[4]["run"]
+    assert "[System.Environment]::OSVersion.VersionString" in versions
+    assert all(f"{tool} --version" in versions for tool in ("uv", "git", "node", "pnpm"))
+    assert "W1 + W2 + W3 + W4b byte policy only" in versions
+    assert "awaits W4a2 + W4c1 + W4c2" in versions and "not acceptance" in versions
+    assert "Set-Content nt-evidence/staging.txt" in versions
+    assert "platform.python_version(), type(loop).__name__" in items[15]["run"]
+    assert "Tee-Object nt-evidence/python-loop.log" in items[15]["run"]
+
+
+def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> None:
+    assert_windows_policy((WORKFLOWS / "windows.yml").read_text())
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("branches: [main]", "branches: ['*']"),
+        ("docs/**, ", ""),
+        ("permissions: {}", "permissions: write-all"),
+        ("contents: read", "contents: write"),
+        ("shell: pwsh", "shell: bash"),
+        ("timeout-minutes: 30", "timeout-minutes: 300"),
+        ("persist-credentials: false", "persist-credentials: true"),
+        ("uv sync --frozen", "uv sync"),
+        ("      - id: frontend_build\n", "      - id: other_build\n"),
+        ("      - id: frontend_build\n        run:", "      - run:"),
+        ("node-version: 24", "node-version: 22"),
+        ("      - uses: ./.github/actions/setup-gitleaks\n", ""),
+        ("gitleaks version", "gitleaks --help"),
+        ("--pythonplatform Windows", "--pythonplatform Linux"),
+        ("-o timeout_method=thread", ""),
+        ("-rs -s", ""),
+        ("exit $LASTEXITCODE", "Write-Output ignored"),
+        ("$probe.status -ne 'unavailable'", "$probe.status -eq 'failed'"),
+        ("if: always()", "if: failure()"),
+        ("W4b byte policy only", "ready"),
+        ("awaits W4a2 + W4c1 + W4c2", "ready"),
+        ("tools/tests/test_smoke.py", "tools/tests"),
+        ("uses: actions/checkout@", "uses: untrusted/checkout@"),
+    ],
+)
+def test_windows_rejects_policy_regressions(old: str, new: str) -> None:
+    text = (WORKFLOWS / "windows.yml").read_text()
+    assert old in text
+    with pytest.raises(AssertionError):
+        assert_windows_policy(text.replace(old, new, 1))
+
+
+@pytest.mark.parametrize("index", range(10, 17))
+@pytest.mark.parametrize(
+    "condition",
+    [
+        None,
+        "success()",
+        "always()",
+        "${{ steps.frontend_build.outcome == 'success' }}",
+        "${{ !cancelled() && steps.frontend_build.outcome == 'failure' }}",
+        "${{ !cancelled() && steps.other_build.outcome == 'success' }}",
+    ],
+)
+def test_windows_rejects_missing_or_changed_native_condition(
+    index: int, condition: str | None
+) -> None:
+    job = mapping(mapping(mapping((WORKFLOWS / "windows.yml").read_text())["jobs"])["windows"])
+    items = steps(job["steps"])
+    if condition is None:
+        del items[index]["if"]
+    else:
+        items[index]["if"] = condition
+    with pytest.raises(AssertionError):
+        assert_windows_steps(items)
+
+
+@pytest.mark.parametrize("index", range(10))
+def test_windows_rejects_native_condition_on_setup(index: int) -> None:
+    job = mapping(mapping(mapping((WORKFLOWS / "windows.yml").read_text())["jobs"])["windows"])
+    items = steps(job["steps"])
+    items[index]["if"] = WINDOWS_NATIVE_IF
+    with pytest.raises(AssertionError):
+        assert_windows_steps(items)

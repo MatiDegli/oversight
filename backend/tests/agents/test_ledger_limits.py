@@ -31,3 +31,64 @@ def test_oversized_ledger_write_preserves_all_previous_entries(tmp_path: Path) -
     assert ledger.path.read_bytes() == before
     assert ledger.read() == previous
     assert list(tmp_path.iterdir()) == [ledger.path]
+
+
+@pytest.mark.parametrize("exhaust", [False, True])
+def test_nt_replace_retry_preserves_ledger(tmp_path, monkeypatch, exhaust):
+    import os
+    import time
+    from types import SimpleNamespace
+
+    from oversight.agents import usage
+
+    ledger = LedgerFile(tmp_path / "ledger.json")
+    ledger.write(LedgerState(3.0, ()))
+    previous = ledger.path.read_bytes()
+    replace = os.replace
+    attempts = []
+
+    class SharingError(PermissionError):
+        winerror = 32
+
+    first = SharingError("sharing")
+
+    def sharing(*args):
+        attempts.append(args)
+        if exhaust or len(attempts) < 3:
+            raise first
+        return replace(*args)
+
+    monkeypatch.setattr(usage, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(os, "replace", sharing)
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    if exhaust:
+        with pytest.raises(PermissionError) as caught:
+            ledger.write(LedgerState(4.0, ()))
+        assert caught.value is first and len(attempts) == 7
+        assert ledger.path.read_bytes() == previous
+    else:
+        ledger.write(LedgerState(4.0, ()))
+        assert len(attempts) == 3 and ledger.read().spent_usd == 4.0
+    assert list(tmp_path.iterdir()) == [ledger.path]
+
+
+def test_nt_ledger_cleanup_failure_surfaces(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.agents import usage
+
+    ledger = LedgerFile(tmp_path / "ledger.json")
+    ledger.write(LedgerState(3.0, ()))
+    monkeypatch.setattr(usage, "sys", SimpleNamespace(platform="win32"))
+
+    def fail_replace(*args, **kwargs):
+        raise PermissionError("replace")
+
+    def fail_unlink(*args, **kwargs):
+        raise PermissionError("cleanup")
+
+    monkeypatch.setattr(usage, "replace_retry", fail_replace)
+    monkeypatch.setattr(usage, "unlink_retry", fail_unlink)
+    with pytest.raises(PermissionError, match="cleanup"):
+        ledger.write(LedgerState(4.0, ()))
+    assert ledger.read().spent_usd == 3.0

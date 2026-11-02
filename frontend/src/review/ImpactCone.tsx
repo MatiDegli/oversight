@@ -1,6 +1,7 @@
 import type { GraphNode, ImpactCone } from "@contracts";
 import type { ConeWord } from "./coneWords";
-import { routingOmissionText } from "../graph";
+// eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
+import { routingOmissionText } from "../graph/RoutingOmissions";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";

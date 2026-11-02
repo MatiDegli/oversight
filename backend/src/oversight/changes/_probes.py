@@ -2,6 +2,7 @@
 
 import ast
 import asyncio
+import sys
 from dataclasses import replace
 
 from oversight.changes._beforeafter import FactKind, RunProblem, TestRun, affected_tests
@@ -153,6 +154,11 @@ async def probe_added_tests(
     outside the process budget, as for ordinary suite evidence. The caller holds
     main/agent locks; interruption keeps partial evidence and runs cleanup.
     """
+    if sys.platform == "win32":
+        return (), (
+            "base_probe unavailable: native Windows isolation is unavailable",
+            "head_probe unavailable: native Windows isolation is unavailable",
+        )
     ids, diagnostics = await asyncio.to_thread(added_cases, rec, revision)
     if not ids:
         return (), diagnostics
@@ -192,6 +198,9 @@ async def probe_added_tests(
                 if isinstance(error, TimeoutError)
                 else f"added tests: {phase} unavailable"
             )
+            if isinstance(error, SuiteUnavailable) and error.own_source_reason is not None:
+                detail += ": " + error.own_source_reason
+                await publish_suite(ctx, rec, error.run, phase=phase, revision=revision)
             if isinstance(error, IsolationUnavailable):
                 detail += ": " + ctx.workspace.redact(str(error))
             problems.append(detail)
@@ -245,6 +254,8 @@ async def _run(
             tree, timeout_s=rec.task.limits.test_timeout_s, case_ids=ids, isolation="required"
         )
     except SuiteUnavailable as error:
+        if error.own_source_reason is not None:
+            raise
         return error.run
     except SuiteInterrupted as error:
         if not deadline.expired():

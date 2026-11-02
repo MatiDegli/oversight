@@ -354,3 +354,17 @@ def test_paths_profile_exactly_nine_never_falls_back(ready: PolicyInputs) -> Non
         assert assess(ready, profile) == assess(
             replace(ready, protected_paths=None, changed_files=None), profile
         )
+
+
+def test_nt_patterns_explicit_paths_and_validation(ready, monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(_protected_paths, "sys", SimpleNamespace(platform="win32"))
+    for path in ("PYPROJECT.TOML", "sub/REQUIREMENTS-PROD.TXT"):
+        assert result(changed(ready, file(path))).result == "fail"
+    inputs = replace(
+        ready, protected_paths=ProtectedPathSnapshot(paths=("Shop/Policy.py",), evidence=(TABLE,))
+    )
+    assert result(changed(inputs, file("shop/POLICY.PY"))).result == "fail"
+    for path in (".GIT", ".g\u0131t", "x:ads", "CON", "sub/file."):
+        assert not _protected_paths._valid_path(path)

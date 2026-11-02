@@ -99,3 +99,55 @@ def test_oversized_source_is_skipped_with_reason_and_recovers(tmp_path: Path) ->
     fixed = graph.scan(COMMIT)
     assert not fixed.parse_errors
     assert "big:after" in {n.id for n in fixed.nodes}
+
+
+def test_nt_reparse_and_cache_casing_before_read(tmp_path, monkeypatch):
+    import os
+    from types import SimpleNamespace
+
+    from oversight.graph import _workspace
+
+    write(
+        tmp_path,
+        {
+            "a.py": "def f(): pass\n",
+            "junction/canary.py": "CANARY",
+            "linked.py": "CANARY",
+            "__PYCACHE__/bad.py": "CANARY",
+        },
+    )
+    real = os.lstat
+
+    def injected(path, *args, **kwargs):
+        info = real(path, *args, **kwargs)
+        if Path(path).name in {"junction", "linked.py"}:
+            return SimpleNamespace(st_mode=info.st_mode, st_file_attributes=0x400)
+        return info
+
+    monkeypatch.setattr(os, "lstat", injected)
+    monkeypatch.setattr(_workspace, "sys", SimpleNamespace(platform="win32"))
+    graph = WorkspaceGraph(tmp_path)
+    snapshot = graph.scan(COMMIT)
+    assert {n.path for n in snapshot.nodes} == {"a.py"}
+    assert graph.scan(COMMIT) == snapshot
+    assert graph.last_parsed == ()
+
+
+def test_nt_graph_refuses_swap_before_hash(tmp_path, monkeypatch):
+    import os
+    from types import SimpleNamespace
+
+    import pytest
+
+    from oversight.graph._workspace import open_source
+
+    (tmp_path / "a.py").write_bytes(b"canary")
+    real = os.fstat
+
+    def mismatch(fd):
+        info = real(fd)
+        return SimpleNamespace(st_mode=info.st_mode, st_dev=info.st_dev, st_ino=info.st_ino + 1)
+
+    monkeypatch.setattr(os, "fstat", mismatch)
+    with pytest.raises(OSError, match="identity changed"):
+        open_source(tmp_path, "a.py", nt=True)

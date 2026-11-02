@@ -47,7 +47,8 @@ The maintainer set this order on 2026-10-30, ahead of the queue below. Delivery 
    (DECISIONS.md, “No paid H1 pair”).
 2. Item 10's agent-hours, project active hours and parallelism landed in `95e40e5`
    (`events/activity_fold.py`, `tools/run_hours.py`); dated prices in `56b5f18`
-   (`events/list_prices.py`, `tools/run_cost.py`). Team/period grouping and aggregate UI remain;
+   (`events/list_prices.py`, `tools/run_cost.py`). Team grouping and desktop aggregate Usage are built;
+   live period grouping remains;
    lead hours are unavailable because lead statuses do not distinguish work from waiting.
 3. Unprobed reasons use fixed allowlisted phrases (`f44dd62`,
    `changes/_behavior_publish.py:NOT_PROBED_REASONS`) and frontend templates
@@ -57,7 +58,8 @@ The maintainer set this order on 2026-10-30, ahead of the queue below. Delivery 
 
 ### Chat view with the lead (2026-11-01)
 
-State: **Not built**. The maintainer approved two views of one shell on 2026-11-01.
+State: **Partly built** — the shared shell/switch, presence and shared merge mode/review are on main;
+the lead thread UI remains. The maintainer approved two views of one shell on 2026-11-01.
 Build Chat only from an approved sketch round.
 
 - Chat lists agents on the left, with the run's lead first and the agents it queued under it;
@@ -65,8 +67,8 @@ Build Chat only from an approved sketch round.
   on the right. Oversight keeps the existing shell unchanged: graph, Files and conversations
   as tabs. A "Chat | Oversight" switch in the top bar changes layout only: both views share
   one client state and switching never reloads. The graph loads on the first switch to Oversight.
-- The lead is Chat's first conversation. The lead's thread itself is step 1 of the lead plan
-  and waits on its own contract approval.
+- The lead is Chat's first conversation. The lead thread contracts and L2 runtime are on main;
+  its Chat UI remains.
 - Review, merge mode and approve rules are shared. Chat opens the same review panel and the
   same merge-mode setting; it shows impact as text plus "See on graph", which switches to
   Oversight with the cone framed.
@@ -110,26 +112,26 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; manual review route still 501 | No |
 | 8 | Merge by rules, follow main and Revert (package 1) | Partial — start capability `1824a46`, Revert route `69aaee8`, person preemption `a2aaa6a`, idle follow-main F5a `769d0c7`, protected-path authority `1b1ed44`; F5b, Settings and Revert UI delivered; F10 opens activation with fake-only HTTP/SSE evidence, recorded replay and three clean starts; every fresh run starts in Ask me | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
 | 9 | A change card with three states | Partial — producer `3786310`, witnesses `3068b81`, answer guards `2efd586`, projection `f4ab346`, mounted inbox/answers/grants `7c25429`, lead-plan display `bf9fb04`; rules-resolution rendering built, activation open; mode state folded, assessment/Revert retained in decisionEvents for selectors | Yes |
-| 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived totals `bf36052`, agent-hours `95e40e5`, dated prices `56b5f18`; team/period grouping and aggregate UI remain | Yes — stored aggregates; event-derived totals need none |
-| 11 | One plan, server-computed zones and task queue (package 6) | Partial — standalone queue `c820fbf`, dependency contracts `bb9dc43`, plan service/routes and internal dependency dispatch `efd592f`, metered single-subtask generation `f907e41`; partition core `deb7148` remains unwired; lead-plan inbox display `bf9fb04` built, plan edit/start UI remains | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
+| 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived totals `bf36052`, agent-hours `95e40e5`, dated prices `56b5f18`, GET /usage, team grouping and desktop aggregate Usage built; live period grouping remains | Yes — stored aggregates; event-derived totals need none |
+| 11 | One plan, server-computed zones and task queue (package 6) | Partial — standalone queue `c820fbf`, dependency contracts `bb9dc43`, plan service/routes and internal dependency dispatch `efd592f`, metered single-subtask generation `f907e41`; partition core `deb7148` remains unwired; lead-plan inbox display `bf9fb04` and Queue/Reject/Keep built; Edit and post-dispatch plan tracking remain | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
 | — | [Lead agent](#lead-agent) | Runtime on main `6818b3b` — lead routes and metered plan proposals; requests plans only, without starting agents or merging | No — lead routes and `started_by` reserved |
 | — | [Saved agent flows](#saved-agent-flows) | Queued — picker absent at `8b9b589`; after the lead, extends package 12 `c1c19c6` | No while filling task text; a distinct role or tool limits need maintainer review |
-| 12 | Examples before code | Partial — E1 selector and bounded examples call `1539ab2`; E2 runtime admission, E3 human confirmation and E4 execution remain | Yes |
+| 12 | Examples before code | Partial — E1 selector and bounded examples call `1539ab2`, E3 human-confirmation ports and E4 criteria/check libraries built; E2 runtime admission and public wiring remain | Yes |
 | 13 | Pinned examples and graph lenses | Queued — pin contract reserved `649ff0d`; no pins or lens control on main `8b9b589` | Yes |
 | 17 | Run rule (package 5) | Backend on main — assertion findings `aa4e658`, removed/skipped checks `071844e`; review rendering remains | Yes — run-rule finding kind for removed, skipped, deleted checks |
-| 18 | Remaining packages 11–14 | Partial — run controls `d27875a`, HTTP `d085748`, Pause/Resume card `74bb81d`, mounted conversation/composer `bc6c659`; dictation still 501, replay timeline remains; 11 `ee92691` and 12 `c1c19c6` complete | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
+| 18 | Remaining packages 11–14 | Partial — run controls `d27875a`, HTTP `d085748`, Pause/Resume card `74bb81d`, mounted conversation/composer `bc6c659`, browser replay player and desktop timeline/seek built; dictation still 501; 11 `ee92691` and 12 `c1c19c6` complete | Yes — separate dictation endpoint, initially 501; message/pause/resume reserved; replay/input controls local |
 | — | [Standing grants](#standing-grants) | Backend `93a3664` and inbox grant UI `7c25429` on main — run-local possible_callers, module/run scope and revoke; activation open by explicit selection; broader scopes, protected-path grants and session expiry remain | Contracts 1.7.0 approved and delivered; creation, nullable SaveFile hash, zones and inventory take the next free version after its approval |
 
-- [Scale and depth](../DESIGN.md#scale-and-depth): Approved map and folder groups, queued before
-  milestone pulses if ready before the cut line. Built scope and remaining interactions are in DESIGN.
+- [Scale and depth](../DESIGN.md#scale-and-depth): Map at rest, folder groups and milestone pulses are built.
+  Built scope and remaining interactions are in DESIGN.
 
 ### Only if time remains
 
 | # | Item | State and commit or branch | In contracts proposal |
 | --- | --- | --- | --- |
 | 14 | Node card explained by examples | Queued — caller evidence `1c50382`; node example view absent at `8b9b589` | Yes |
-| 15 | Shape guard | Queued — contract reserved `649ff0d`; no structural comparison producer on main `8b9b589` | Yes |
-| 16 | Bounded one-hop context for initial tasks | Queued — initial slice absent at `8b9b589`, waits for bench; revision callers/siblings `ee92691` | No |
+| 15 | Shape guard | Partial — contract reserved `649ff0d`; structural comparison producers and `_facts.py` capture are wired; review rendering remains | Yes |
+| 16 | Bounded one-hop context for initial tasks | Partial — pure `_initial_context.py` builder on main; measured adoption and task wiring remain; revision callers/siblings `ee92691` | No |
 | 19 | [Opening the person's own repository](own-repository.md) | Decided 2026-10-31, after the cut line; plan first, with the double review | Plan decides |
 
 **Not ranked, goes in regardless:** delivery (package 9; static replay `a0a4624`, challenge
@@ -177,8 +179,8 @@ new candidate work waits for the maintainer’s order.
      code does while it runs.
 
 - Progress made visible, from real data only (maintainer, 2026-10-31). No bar or percentage
-  without a real denominator. A sketch round follows the map sketch; nothing is built before the
-  checkpoint.
+  without a real denominator. Collapsible steps, durations and time/budget/retry notices are built;
+  evidence-step and plan checklists and the agent-written todo list remain.
 
   1. Evidence steps on each change card: tests, fails before and passes after, behavior diff, cone,
      cross-review and decision, each shown as done, running or pending from existing events.
@@ -202,13 +204,16 @@ new candidate work waits for the maintainer’s order.
   separate candidate.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
 - A dependency guard for package existence, license and vulnerability evidence.
-- Native workflow candidates from the maintainer (2026-10-29), none queued. The cut line, drawn
-  once the checkpoint list is on main, comes before any of them is considered.
-  - Resource admission: the person's cap on running agents stays the limit. Memory and spend can
-    only hold a start below that cap, never raise it, and a held start shows its reason, for
-    example "Waiting: memory at 88%, 2 test runs ahead". Thresholds are deterministic; no model
-    decides. An already-running agent waiting on a shared resource shows the reason in words on
-    its card, built from the scheduler's own data, for example "waiting for a test slot (2 queued)".
+- Native workflow candidates from the maintainer (2026-10-29); memory admission below is built,
+  and the remaining candidates are not queued. The cut line, drawn once the checkpoint list is on main,
+  comes before considering the remainder.
+  - Resource admission: the person's cap on running agents stays the limit. Memory can only hold
+    a new start below that cap; the spending brake refuses new runs above 90% of credits. Both are built.
+    `OVERSIGHT_MAX_AGENTS` defaults to four (1–6); `OVERSIGHT_MEMORY_HOLD_PERCENT` defaults to 90 (1–100).
+    A memory hold names the configured threshold; queued work rechecks every five seconds after a hold.
+    Thresholds are deterministic; no model decides. Still a candidate: an already-running agent
+    waiting on a shared resource would show the reason in words on its card, built from the
+    scheduler's own data, for example "waiting for a test slot (2 queued)".
     Use the same form as a model wait, for example "waiting for model (retry 3/5)".
   - A start-box warning: when the person starts an agent by hand and its target lies inside a
     running agent's impact cone, the start box says so. It only warns; it never blocks or
@@ -223,13 +228,50 @@ new candidate work waits for the maintainer’s order.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
 - Person-drawn work zones that limit edits, with a scope-request tool, warn mode and zone growth by approval; item 11's server-computed zones and the reserved `within_zone` rule are separate.
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
-- Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
+- Outside agents reporting through hooks or MCP, low priority because the product scope is Meta-only.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
 - A local model in slot B and named editor cursors. The Tauri shell is decided: see Next.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.
 - Native candidates from the maintainer (2026-11-01), none queued.
+  - <a id="plan-flow-with-a-lock"></a>**The plan as a flow with a lock.** Controls are not queued. Its read-only view is decided before the
+    freeze ([decision](../DECISIONS.md#2026-11-02--a-read-only-plan-flow-before-the-freeze)); the lock, lead
+    edits, modes and optional action nodes come after the hackathon. Draw the [Lead agent](#lead-agent)'s
+    [plan (item 11)](#11-one-plan-server-computed-zones-and-task-queue) as agent nodes beside action nodes
+    from a closed catalog: tests, review, a pause for the person, Approve and combined tests. The person locks
+    the whole flow or one block; Oversight enforces the lock on plan edits and queueing, not in the prompt.
+    Modes: observe, guided and strict. Prerequisites: subtask ids that survive edits (`depends_on` holds
+    revision-local indices today), action nodes with their own identity, and a separate decision on whether
+    the lead may edit plans at all: today it only proposes (DECISIONS.md, “The lead runs inside one run
+    with fixed limits”).
+    Hard rules are drawn and can never be removed: combined tests before main and a deliberate click on
+    Approve. Later still: several workflows by context, where the lead picks the one that fits the task,
+    or one workflow whose optional nodes switch on by context; a library of saved workflows (see
+    [Saved agent flows](#saved-agent-flows)); and after that a public workshop or marketplace where people
+    publish workflows for others to see and use. A shared workflow uses only nodes from the closed catalog
+    and never removes a hard rule.
+  - **The graph optional by configuration.** After the hackathon, not queued. Keep it on by default;
+    when off, Cytoscape, fcose and the WebGL field never load, and the [Files tree](../DESIGN.md#layout)
+    and panels stand in for the graph.
+    Replacing AGENTS.md's “One graph, always visible” requires the maintainer's entry in DECISIONS.md first.
+    Prerequisites: the editor loader currently waits for `whenFirstGraphDrawn()`; node selection, the impact
+    cone, the palette's graph commands and both practice graphs need paths that work with the graph off.
+  - **A fresh-context review of the plan.** After the hackathon, not queued. Before the person queues a lead's plan, a second Meta model
+    that never saw the lead's conversation reads only the plan and its named files, returning findings ranked blocker, major or minor in the plan piece.
+    The person still decides: the review never queues, edits or blocks a plan. It would be an optional node of the [plan flow](#plan-flow-with-a-lock),
+    complementing [item 7's cross-review](#7-cross-review-and-automatic-request-changes), which reads a change after it is written. A cheaper, model-free step
+    lists repository docs mentioning files a change touches as review evidence, so stale docs surface before merge. Prerequisites: an event for plan review findings
+    and a docs-list field (both contract changes approved by the maintainer), plus review prompts written for Oversight. Inspired by Google's open-source
+    [Elephant-Goldfish Model](https://github.com/google/elephant-goldfish-model) (Apache-2.0): an author holds full context while reviewers hold none.
+    Ideas only; no text or code copied.
+  - Slash commands in Chat, low priority, not built. Read-only: `/usage` (usage screen), `/status`,
+    `/context` (tokens per call; missing usage is "unknown", never zero), `/export`. Existing routes:
+    `/pause`, `/resume`, `/stop`, `/revert` (only where Revert applies cleanly). Contract decisions,
+    not proposed now: `/goal` (done-condition; status comes from tool calls), `/model` (Muse Spark vs
+    Muse Spark Open), `/compact` (little value with per-run threads lost on server restart; DECISIONS.md,
+    “Lead thread lifetime and restart”). No `/approve`: Approve has no keyboard shortcut; a typed command
+    is the same thing. Chat adds no events, contracts or endpoints today.
   - Standing instructions and lessons from reviews: see Repository memory's refinements below,
     extending the Lead agent and Next's "Text rules attached to areas of the repository".
   - Retrospective: building on item 1's facts from events, a failed run, merge conflict, rejection
@@ -251,6 +293,17 @@ new candidate work waits for the maintainer’s order.
     references, with the reason "mentioned in docs". Deterministic text matching on names flags
     documentation that may have gone stale. These are not call edges and do not change call-edge
     exactness; present them as possibly affected, never as a complete list.
+- Settings proposals in Chat (maintainer, 2026-11-02), not queued; built before the freeze only if
+  time allows, otherwise after the hackathon. Agents suggest; only the person applies, edits then
+  applies, or rejects. It starts with the per-repository test limit, which stays on by default: when
+  it fires, a card shows measured facts (the limit, the time used, the cases that finished) apart from
+  the agent's assessment and a recommended value. Proposals are structured, for a closed list of
+  settings that the server validates; bounds limit only what agents recommend, and the person may set
+  any valid value, as with the settings themselves. Applying is a deliberate click with no keyboard
+  shortcut and takes effect from the next run; proposals and their resolutions stay as receipts in the
+  Decisions inbox and in replay. A first step needs no model: a fixed rule proposes the value.
+  Contracts, agent tools, where the limits are stored and the card's sketches need the maintainer's
+  approval; Chat adds no events, contracts or endpoints today.
 
 ## Next
 
@@ -266,7 +319,9 @@ new candidate work waits for the maintainer’s order.
 - Tell the later agent about an overlap in its next tool result; each agent already has a worktree.
 - Select tests from the graph inside the agent loop, starting in shadow mode.
 - Per-test coverage, beyond the per-test outcomes already recorded.
-- Mask older tool results on long runs; measure dollars and correctness before adoption.
+- Covered older read results can be pruned with opt-in `OVERSIGHT_HISTORY_PRUNE_TOKENS`; measure
+  dollars and correctness before default adoption. Broader history bounds and a visible handoff
+  remain separate candidates.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
 - Filesystem isolation for tests and probes (bubblewrap on Linux); today's isolation covers the
@@ -505,7 +560,7 @@ one pending decision per change (`eef7daa`). The inbox is mounted in
 `app/shell/FocusPanel.tsx`, counted in `app/TopBar.tsx`, and sends answers, grants and
 revocations (`7c25429`, `review/DecisionInbox.tsx`). Lead-plan rows landed in `bf9fb04`;
 `state/decisionLifecycle.ts:recordPlanEntries` retains each requested plan while proposed and
-`DecisionInbox` renders its text. Plan approval/edit/start controls remain absent.
+`DecisionInbox` renders its text. Queue/Reject/Keep are built; Edit and post-dispatch plan tracking remain.
 
 The inbox shipped with item 9; remaining live state wiring keeps the same item numbers, anchors
 and queue order. Visual follow-ups still require the maintainer’s shot review.
@@ -579,18 +634,21 @@ Writer/reviewer ticks already carry attribution (`contracts/src/oversight_contra
 never sum cumulative `spent_usd`. Main has the committed usage/rounds fold (`43f3bb8`) and exposes
 change/role totals and rounds in archived GET /changes/{id} (`bf36052`,
 `backend/src/oversight/changes/_view.py`); GET /agents/{id} and bounded GET /history are wired
-too (`bf36052`, `0e5305a`). The frontend still keeps agent totals, not the aggregate usage view
-(`frontend/src/state/applyAgentEvent.ts:applyAgentEvent`). Agent-hours (`95e40e5`,
+too (`bf36052`, `0e5305a`). Desktop aggregate Usage is mounted through UsageMount/UsagePanel over GET /usage
+(`frontend/src/app/usage/UsageMount.tsx`, `frontend/src/app/usage/UsagePanel.tsx`). Agent-hours (`95e40e5`,
 `events/activity_fold.py:fold_activity`, `tools/run_hours.py`) and dated list-price accounting
-(`56b5f18`, `events/list_prices.py:price_usage`, `tools/run_cost.py`) are built. Team/period grouping
-and aggregate UI remain. E6 emits failed attempts (`06c34a5`); retry-card rendering is built
+(`56b5f18`, `events/list_prices.py:price_usage`, `tools/run_cost.py`) are built. Offline hour/day
+reports exist (`events/usage_periods.py`, `tools/run_periods.py`); live period grouping still needs a
+contract change; team grouping and desktop aggregate Usage are built. E6 emits failed attempts (`06c34a5`);
+retry-card rendering is built
 (`26d59f1`). Live/replay derivation needs no addition;
 optional archived totals/rounds were reserved in `649ff0d`. Unknown usage/unpriced Baseten work stays
 unknown, never free. The cumulative product Meta ledger is separate from the bench ledger.
 
 ### 11. One plan, server-computed zones and task queue
 
-The person reviews one editable plan; independent subtasks can then run in two slots. The server
+The person reviews one editable plan; independent subtasks can then use the offered slots, four
+by default and up to six. The server
 computes zones, keeping import/call cycles together and cross-zone edges few, and checks that
 their impact cones do not overlap. The model writes subtask text only. Dependent work starts after
 its prerequisite merges. Use one agent when no independent split exists. Queue dispatch waits until a slot is actually released.
@@ -603,7 +661,8 @@ live (`backend/src/oversight/api/commands.py`). Queue routes are live, with the 
 FIFO dispatcher wired (`c820fbf`); plan queueing and dependency dispatch landed in `efd592f`
 (`runtime_plans.py:PlanService.dispatch_plan`, `changes/_plans.py:ready`). Lead-plan inbox display
 landed in `bf9fb04` (`state/decisionLifecycle.ts:recordPlanEntries`, `review/DecisionInbox.tsx`).
-Plan editing/start controls remain; plan.updated is retained in decisionEvents for that projection,
+Queue/Reject/Keep are built; Edit and post-dispatch plan tracking remain.
+plan.updated is retained in decisionEvents for that projection,
 although `applyEvidenceEvent` has no separate plan/queue state fold. Finishing alone
 does not free a retained worktree's slot. Contracts 1.8.0 (`bb9dc43`, P1–P5) now allow one
 to six subtasks, validated dependencies and sequential/single-agent starts. The runtime service,
@@ -622,8 +681,9 @@ The original lead runtime landed in `6818b3b` (`runtime_leads.py:LeadService`, l
 POST /leads/{id}/stop). It reads repository context and requests plans through
 `PlanService.create_and_propose`; it does not start agents, approve plans, review or merge.
 The person starts a proposed plan through plan routes; the server owns dispatch and zones.
-The inbox displays each requested plan (`bf9fb04`); plan edit/start controls and partition
-completeness production remain item 11 work. This is narrower than the
+The inbox displays each requested plan (`bf9fb04`); Queue is wired to plan start, and Reject/Keep are built;
+Edit, post-dispatch plan tracking and partition completeness production remain item 11 work.
+This is narrower than the
 earlier ambition to have the lead start agents for proof 2.
 
 ### Saved agent flows
@@ -648,7 +708,8 @@ most three alternative meanings; beyond that, ask for clearer task text.
 
 E1 landed in `1539ab2`: `examples_selector.py:select_examples` and
 `agents/examples.py:run_examples_call` supply a selector and one bounded no-edit call as library
-code only. E2 runtime admission, E3 human confirmation and E4 execution remain;
+code only. E3 human-confirmation ports (`examples_confirmation.py`, `changes/_examples.py`) and E4
+criteria/check libraries are built; E2 runtime admission and public runtime/HTTP wiring remain;
 `agents/TaskBox.tsx` still starts coding directly. Optional fields were reserved in `649ff0d`. Unconfirmed prose is not
 acceptance evidence. This is selective, not an extra call for every task; a confirmed example's
 result needs no model judgment.
@@ -691,17 +752,18 @@ not contain unchanged source. This is not a general runtime tracer.
 Ask about duplicated logic instead of reuse, new import cycles/module dependencies, and functions
 growing past a size threshold. Build a deterministic before/after analyzer over captured AST/source
 and graph data. Spans/import edges exist (`backend/src/oversight/graph/_workspace.py`,
-`backend/src/oversight/graph/_link.py`), but no shape producer is wired on main.
+`backend/src/oversight/graph/_link.py`); `_facts.py` invokes `capture_shape` before publishing the proposal.
 
-Optional findings, evidence and completeness are reserved in `649ff0d`; the producer and card
-rendering remain absent at `8b9b589`. State dynamic or unsupported cases. Size remains a review
+Optional findings, evidence and completeness are reserved in `649ff0d`; the producer is wired,
+and card rendering remains. State dynamic or unsupported cases. Size remains a review
 signal under AGENTS.md, not an automatic rejection
 gate or learned risk score.
 
 ### 16. Bounded one-hop context for initial tasks
 
 Give the agent a fixed-order slice of target signatures, direct callers/callees and module constants,
-about 1,500 tokens at most, explicitly listing omissions. Adopt only after the bench shows fewer
+with a default budget of 1,500 estimated tokens, explicitly listing omissions; the pure
+`_initial_context.py` builder accepts `budget` but has no runtime caller. Adopt only after the bench shows fewer
 steps and tokens with tasks still solved. The server builds this context as text, never a graph tool
 for agents, following PRODUCT.md's graph-for-the-person rule and the existing Request changes context. No contract addition is needed.
 
@@ -740,7 +802,7 @@ Package 14 is person-to-agent messages, pause/resume and replay timeline. Messag
 routes are live (`backend/src/oversight/api/commands.py:add_command_routes`). Pause/Resume is
 on the card (`74bb81d`, `agents/PauseControl.tsx`); Conversation is mounted as a focus tab with a
 live composer (`bc6c659`, `app/shell/FocusPanel.tsx:ConversationFocus`). Replay consumes ordered
-events, but timeline and seeking remain.
+events; the browser player and desktop replay row provide a timeline and seeking.
 Earlier-today history belongs to item 8; usage views belong to item 10.
 
 ### Standing grants
@@ -789,8 +851,8 @@ Each kind of knowledge goes to the mechanism that fits it:
 
 Text pins load deterministically, with no model choosing: the pins in the task's zone; the pins in
 its cone, here including possible calls, because for context a false positive costs only tokens;
-and an index that is always present, one line per pin, capped at about 30 lines, holding only what
-search cannot derive.
+and an index that is always present, one line per pin, defaulting to about 30 lines with a
+person-adjustable limit, holding only what search cannot derive.
 
 Muse Spark Open can still only stop or flag. It checks whether a change contradicts a text pin in
 its zone or cone; if so, the change waits, quoting the pin. When an anchored node changes, it says
@@ -878,6 +940,10 @@ in `9ad1ecf`;
 binds the arm configuration hash.
 Keep charges, unknowns and reservations in one ledger keyed by task, profile, arm and repetition;
 never reset it or change output directories to manufacture another attempt.
+
+Semantic retrieval (RAG): experimental, outside the hackathon, evals only; not queued or built. No product agents
+or daily coordination: grep suffices at this size; the graph is the structured index; stale retrieval yields to
+DECISIONS.md. An index needs a dependency allowed by the license rule and a Meta-only model.
 
 Declare criteria before paid execution. Combined paid bench work has a US$20 ceiling within the
 US$150 budget; agent B's Baseten cost stays unknown until its price per million tokens is set in
