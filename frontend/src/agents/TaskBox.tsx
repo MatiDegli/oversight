@@ -15,8 +15,8 @@ import {
   slotHolder,
   startBlock,
   taskBoxStore,
-} from "./taskBox";
-import type { TaskBoxModel } from "./taskBox";
+} from "./taskBoxModel";
+import type { TaskBoxModel } from "./taskBoxModel";
 
 const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";

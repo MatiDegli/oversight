@@ -9,7 +9,7 @@ import {
   selectComparisonSummary,
   selectFunctionComparisons,
 } from "./inboxSelectors";
-import { selectMeasuredCallers } from "./measuredCallers";
+import { selectMeasuredCallers } from "./measuredCallerFacts";
 
 export const smallestExample = (rows: BehaviorDiffRow[]) =>
   rows

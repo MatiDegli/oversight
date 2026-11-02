@@ -2,7 +2,7 @@ import { ChevronRight } from "lucide-react";
 import type { MeasuredCaller } from "@contracts";
 import type { State } from "../state";
 import { smallestExample } from "./reviewBodyEvidence";
-import { selectMeasuredCallers } from "./measuredCallers";
+import { selectMeasuredCallers } from "./measuredCallerFacts";
 import { unstableBehaviorSentence } from "./behaviorEvidence";
 
 const focusRing =
