@@ -13,11 +13,11 @@ from typing import TYPE_CHECKING
 from oversight.agents import (
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
-    STARTING_DETAIL,
     UNVERIFIED_PROFILES,
     LeadProposalError,
     LeadRun,
     LeadTools,
+    build_starting_detail,
 )
 from oversight.api import ApiError
 from oversight.changes import plan_core, read_queue
@@ -27,7 +27,7 @@ from oversight.setup import missing_settings
 from oversight_contracts.commands import LeadCreated as LeadCreated
 from oversight_contracts.commands import StartLead as StartLead
 from oversight_contracts.commands import StopLead as StopLead
-from oversight_contracts.events import LeadStatus, ModelProfile
+from oversight_contracts.events import LeadLimits, LeadStatus, ModelProfile
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import SubtaskDraft
 
@@ -43,6 +43,7 @@ UNEXPECTED_DETAIL = "The lead failed unexpectedly."
 class _Lead:
     status: LeadStatus
     profile: ModelProfile
+    limits: LeadLimits
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     phase: str = "starting"
     turns: int = 0
@@ -73,8 +74,13 @@ class LeadService:
             raise ApiError("not_configured", "Server setup is incomplete.", missing=missing)
         if profile.provider == "meta" and (reason := live.brake_reason()) is not None:
             raise ApiError("spend_brake", reason)
-        if any(lead.phase in {"starting", "working", "idle"} for lead in self.leads.values()):
-            raise ApiError("wrong_state", "a lead is already active")
+        active = sum(lead.phase in {"starting", "working", "idle"} for lead in self.leads.values())
+        if active >= live._max_leads:
+            raise ApiError(
+                "wrong_state",
+                f"OVERSIGHT_MAX_LEADS is {live._max_leads} for this run. "
+                "Stop a lead to free capacity, or change the setting for the next run.",
+            )
         live._count += 1
         agent_id = f"agent-{live._count}"
         lead = _Lead(
@@ -85,9 +91,11 @@ class LeadService:
                 model=profile.id,
                 state="starting",
                 step=0,
-                detail=STARTING_DETAIL,
+                detail=build_starting_detail(live._lead_limits),
+                limits=live._lead_limits,
             ),
             profile,
+            live._lead_limits,
         )
         self.leads[agent_id] = lead
         # Registration is synchronous. Retain initialization so shutdown cannot miss a start
@@ -114,11 +122,12 @@ class LeadService:
         if lead.stopping:
             return
         try:
-            await self._status(lead, "starting", STARTING_DETAIL)
+            await self._status(lead, "starting", build_starting_detail(lead.limits))
         except Exception as error:
             await self._halt_unexpected(lead, error)
             return
-        self._launch(lead)
+        if not (lead.stopping or self._closing or self.live._closing):
+            self._launch(lead)
 
     def _launch(
         self,
@@ -147,6 +156,7 @@ class LeadService:
                 "step": lead.status.step if step is None else step,
                 "detail": detail,
                 "requested_plan_id": plan_id,
+                "limits": lead.limits,
             }
         )
         await self.live.store.publish(status)
@@ -182,6 +192,7 @@ class LeadService:
             slots=len(self.live._slots),
             mask=self.live._redactor,
             status=self.live.store.lead_status,
+            limits=lead.limits,
         )
 
     async def _drive(
@@ -250,7 +261,9 @@ class LeadService:
         admitting: asyncio.Task[None] | None,
         previous: asyncio.Task[None] | None,
     ) -> None:
-        await asyncio.gather(*(t for t in (admitting, previous) if t), return_exceptions=True)
+        await asyncio.gather(
+            *(t for t in (lead.initializing, admitting, previous) if t), return_exceptions=True
+        )
         await self._finish_open(lead)
 
     def _ending(self, lead: _Lead) -> tuple[str, str]:
