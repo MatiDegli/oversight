@@ -4074,3 +4074,11 @@ comments and copy:
 6. Use exactly "These calls use the new parameter, so What was compared does not count them."
    as the muted sentence. It explains count separation without suggesting additional measurement
    or an unsupported binding interpretation.
+
+
+## 2026-11-02 — Findings designed in the built review
+
+The maintainer requested design directly in code without a sketch round. This overrides
+Impeccable shape's brief-confirmation stop for this work. Findings follow the built Details
+and New-parameter calls typography and disclosure anatomy; DESIGN.md governs their layout,
+neutral evidence language and phone behavior.

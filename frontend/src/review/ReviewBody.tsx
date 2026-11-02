@@ -8,6 +8,7 @@ import { candidateKey, useAnswers } from "./answers";
 import { CardEvidence, eventTime } from "./ChangeCard";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { mergedRuleWords } from "./evidenceWords";
+import { hasReviewFindings } from "./reviewFindings";
 import { ReviewFacts } from "./ReviewFacts";
 import { NewParameterCalls } from "./NewParameterCalls";
 import { parameterExtensions } from "./parameterExtensions";
@@ -79,7 +80,7 @@ export function ReviewBody({
       next.forEach((details, i) => {
         details.open = detailsNodes.current[i]?.open ?? false;
       });
-    detailsNodes.current = next;
+    if (next.length) detailsNodes.current = next;
     const previous = focusedDetail.current;
     if (previous && !previous.element.isConnected && document.activeElement === document.body) {
       const replacement = root.current
@@ -249,9 +250,16 @@ export function ReviewBody({
               <>
                 {comparison}
                 <NewParameterCalls entries={extensions} slot={slot} />
-                {extensions.length > 0 && comparison && change?.proposal && (
-                  <ReviewFacts state={state} proposal={change.proposal} scrollable={false} panel />
-                )}
+                {((extensions.length > 0 && comparison) ||
+                  (!comparison && hasReviewFindings(facts))) &&
+                  change?.proposal && (
+                    <ReviewFacts
+                      state={state}
+                      proposal={change.proposal}
+                      scrollable={false}
+                      panel
+                    />
+                  )}
               </>
             )}
           </Fragment>
