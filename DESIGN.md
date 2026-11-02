@@ -1520,7 +1520,7 @@ This definition sits beside graph structure and folding because depth controls h
 while scale controls how it is drawn. It refines [Layout](#layout)'s **Opening a change** readability
 floor, **The preset's arrangement** and fit behavior, together with the folding rules above.
 The Modules / Functions / Details depth control, folder packing and map at rest are built.
-Group-header signals, hover, cone lines and clicks below remain targets, not built yet.
+Group-header evidence, hover, cone lines and the two pointer clicks below are built.
 The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
 
 1. **Two axes.** Depth is the Modules / Functions / Details control: how much unfolds. Scale is
@@ -1558,30 +1558,46 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    without touching or overlap. Panels in a row share their top edge.
 4. **Group summary.** Name and module count are built in a wrapping header strip, with 8px/12px
    padding and a divider, on a quiet panel: card surface at 60%, node border, 12px radius and
-   top highlight. Targets, not built yet: a ring in the color of each team working inside
-   (color means a team, per the separate team-color decision); pending decisions, neutral; how
-   much of the cone reaches it, for example "3 of 9 in billing"; and "tested by N calls".
-   These belong to `frontend/map-lines`. A module's dashed agent ring is built only for that
+   top highlight. Solid 20px agent rings include pending changes and current read/edit focus,
+   in slot order. A neutral 22px chip counts ready or conflicting changes ("1 decision" or
+   "N decisions"); "tested by N calls" counts exact calls from tests, hidden at zero and on
+   the tests group. In a cone, "N of M in group" counts its entries instead. These are built.
+   A module's dashed agent ring is built only for that
    agent's pending change, never a read; below its count, "Agent A · N changed" or
    "Agent B · editing" names the state and agent.
-5. **Lines.** No call lines, counts or edge labels at rest. Targets in `frontend/map-lines`:
-   cone lines from the changed module to the modules it possibly affects, and the pointed
-   module's incoming and outgoing exact calls with counts plus faint possible calls, following
-   the call-visibility rules
-   ([DESIGN.md "Call visibility"](#graph-nodes-and-their-states-signature-component)).
+5. **Lines.** Built: no call lines, counts or edge labels at rest. On hover, exact module
+   pairs show incoming/outgoing arrows at the callee and ×N when N > 1; group hover includes
+   only boundary pairs. Possible-only pairs are faint, without arrows or counts, only when
+   restPossible permits and no exact call joins the pair in either direction. Cone lines
+   reverse exact calls between cone modules, callee to caller, in lit-edge. A shared pair is
+   drawn once, as a cone line. Chips try .5, .4, .6, .3, .7, .2, .8, .12, .88, avoiding names,
+   circles and earlier chips; a chip with no room disappears. Hover uses neutral edge.
+   Hover restores full names; cone and hover names have an 85% card backing.
+   Outside-cone circles without agent marks use dim-node; their names hide with visibility,
+   retaining their boxes so circles do not move. Pointing at one reveals its name. Non-seed
+   cone modules without agent marks show the smallest entry distance in a ground badge.
+   The cone remains only "possibly affected".
    Nothing invented. With no lines at rest, the LED field and the contours carry the texture.
 6. **Names.** Constant size on screen. Group names always shown; module names are 13px/600 in
    module-label, centered under the circles, ellipsized at the cell width minus 10px; counts
    are 12px muted. Circle radius is clamp(round(screen cell height × 0.1), 5, 9)px. All colors
    use theme tokens. Target, not built yet: prioritize names an agent touches, the cone reaches
    or the selection holds, then by size; the rest on hover.
-7. **Interaction.** Target, not built yet: clicking a group zooms to frame it, and the cards
-   come back. Clicking a circle brings that module to 100%. The built map at rest takes no
-   taps, drags or user selection; difference chips are hidden. No event changes level, moves
-   the camera, opens a panel, selects a node or takes focus. Hover and the cone remain targets.
+7. **Interaction.** Built: a group click centers its card boxes in the clear area, clamping
+   the fit to [68.75%, 100%]; oversized groups show their center and scroll for the rest.
+   A module block click unfolds only a folded card and centers it at 100%. Both return cards
+   in one camera move, a cut under reduced motion. The map accepts pointer clicks and drags
+   for panning, without node selection or focus changes; difference chips remain hidden.
+   Hover, events and the cone never change the camera, level, panels, selection or focus.
+   Keyboard users retain Fit and the zoom buttons; the layer remains aria-hidden.
 8. **Scope.** Built after the review panel rework and the Conversation tab; if ready before
    the cut line, the map launches before milestone pulses. Folder packing, map layer, Fit,
    crossfade, pending module rings and overlays follow the approved sketch linked above.
+   Header strips measure every flex item once: 37px for one line, 60px for two, then 23px
+   per additional line; a row shares its tallest strip. The 22px decision chip overhangs the
+   20px text line by 1px above and below. Group-click zoom is clamped to 68.75%–100%.
+   Cone distance badges are 20px; panels without members use 0.5 opacity.
+   The sketch's Boltons group fit is 47.1% at 1920 and 31.8% at 1280, both raised to 68.75%.
    The proof 2 repository, Boltons `d31d821`, has 66 modules by top folder in
    [its preset](fixtures/layouts/boltons-d31d821.json): boltons 30, tests 32, misc 3, docs 1.
    With tests hidden, the product shows boltons and misc panels; docs, with one module, draws

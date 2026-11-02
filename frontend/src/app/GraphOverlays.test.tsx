@@ -115,3 +115,13 @@ it("uses the approved map count, readout and legend copy", () => {
   expect(readout).toContain(" · Map");
   expect(readout).toContain("font-semibold text-text");
 });
+
+it("explains both map clicks after the swatches", () => {
+  const state = through(4);
+  const legend = renderToStaticMarkup(<Legend state={state} map />);
+  expect(legend).toContain("Click a group to frame it, a module to open it at 100%");
+  const list = Legend({ state, map: true }) as ReactElement<{
+    children: ReactElement[];
+  }>;
+  expect(list.props.children.every((child) => child.type === "li")).toBe(true);
+});
