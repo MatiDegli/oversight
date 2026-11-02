@@ -70,12 +70,16 @@ const mapStyles = `
   position: relative;
   left: 50%;
   width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   transform: translateX(-50%);
 }
 [aria-label="Repository graph"][data-map-level="map"] {
   opacity: 0;
 }
+[data-map-level="map"] [data-field-markers] { visibility: hidden; }
 @media (max-width: 1439px) { .map-legend-hint { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   .map-layer,
@@ -145,7 +149,7 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                     : "empty"}
                 </div>
                 {module.agents.map(({ slot, text }) => (
-                  <div key={slot} className={`map-agent ${agentLook[slot].textClass}`}>
+                  <div key={slot} title={text} className={`map-agent ${agentLook[slot].textClass}`}>
                     {text}
                   </div>
                 ))}

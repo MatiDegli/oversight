@@ -84,13 +84,15 @@ async function camera(page: Page) {
   });
 }
 async function zoomTo(page: Page, target: number) {
+  const area = await page.locator("[data-graph-clear-area]").boundingBox();
+  if (!area) throw new Error("Missing zoom area");
   for (let i = 0; i < 8; i++) {
     const zoom = (await camera(page)).zoom ?? 1;
     if (Math.abs(zoom - target) < 0.00001) break;
     await page.getByRole("img", { name: "Repository graph" }).dispatchEvent("wheel", {
       deltaY: -250 * Math.log10(target / zoom),
-      clientX: 400,
-      clientY: 400,
+      clientX: area.x + area.width / 2,
+      clientY: area.y + area.height / 2,
       bubbles: true,
     });
     await page.waitForTimeout(40);
@@ -115,6 +117,22 @@ async function pointAt(page: Page, point: { x: number; y: number }) {
 async function clearPointer(page: Page) {
   await page.mouse.move(5, 5);
   await page.waitForTimeout(40);
+}
+async function unobstructedNames(page: Page) {
+  const overlaps = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll(".map-name, .map-count")];
+    return [...document.querySelectorAll(".map-agent, [data-field-markers] g")].flatMap((agent) => {
+      if (getComputedStyle(agent).visibility === "hidden") return [];
+      const a = agent.getBoundingClientRect();
+      return labels.flatMap((label) => {
+        const b = label.getBoundingClientRect();
+        return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+          ? [{ agent: agent.textContent, label: label.textContent }]
+          : [];
+      });
+    });
+  });
+  expect(overlaps).toEqual([]);
 }
 it("shows calls for module/group hover alone, without graph render, camera or focus changes", async () => {
   const page = await setup();
@@ -453,10 +471,12 @@ for (const width of [1920, 1280])
         await ready(page);
         await clearPointer(page);
         expect((await camera(page)).level).toBe("map");
+        await unobstructedNames(page);
         await capture("map");
         const id = boltons ? "boltons.typeutils" : "library.module_00",
           group = boltons ? "boltons" : "library";
         await pointAt(page, await modulePoint(page, id));
+        await unobstructedNames(page);
         await capture("map-hover");
         await check(page.locator("[data-map-line]").first()).toBeVisible();
         const measured = await page.evaluate(() => {
@@ -480,24 +500,49 @@ for (const width of [1920, 1280])
         const click = await groupPoint(page, group);
         await page.mouse.click(click.x, click.y);
         await ready(page);
+        await check(page.locator("[data-field-markers]").first()).toHaveCSS(
+          "visibility",
+          "visible",
+        );
         const groupZoom = (await camera(page)).zoom;
         await capture("group");
         await page.evaluate(() => {
           window.mapLinesTest.review();
         });
         await ready(page);
+        await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+        await ready(page);
         await zoomTo(page, width === 1280 ? 0.2 : 0.3);
         await clearPointer(page);
+        await check(
+          page.locator(
+            `[data-map-module="${boltons ? "boltons.iterutils" : "library.module_00"}"] [data-map-circle]`,
+          ),
+        ).toBeInViewport();
         await capture("map-cone");
-        const badge = await page.locator("[data-map-distance]").first().boundingBox();
-        expect(badge?.width).toBe(20);
+        // All real callers of is_iterable are inside its seed module; tests stay hidden.
+        await check(page.locator("[data-map-distance]")).toHaveCount(boltons ? 0 : 3);
+        await check(page.locator('[data-map-line="cone"]')).toHaveCount(boltons ? 0 : 4);
+        await check(
+          page
+            .locator(".map-header")
+            .filter({ hasText: boltons ? "12 of 12 in boltons" : "3 of 3 in tools" }),
+        ).toBeVisible();
+        await check(page.locator(`[data-map-module="${id}"] .map-name`)).toHaveCSS(
+          "visibility",
+          boltons ? "hidden" : "visible",
+        );
+        const badge = boltons
+          ? null
+          : await page.locator("[data-map-distance]").first().boundingBox();
+        if (!boltons) expect(badge?.width).toBe(20);
         if (process.env.MAP_LINES_SHOTS === "1")
           await writeFile(
             `${shots}measurements-${String(width)}-${theme}.json`,
             JSON.stringify(
               {
                 ...measured,
-                badge: badge?.width,
+                badge: badge?.width ?? null,
                 snapshot: boltons ? "boltons" : "synthetic",
                 groupZoom,
               },
