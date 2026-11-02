@@ -1,4 +1,4 @@
-"""Internal NT source inputs, never a public selector or a reset/copy entry point.
+"""Internal NT source selection, staging and recovery; never a public selector.
 
 Future wiring must preflight before constructors, then hold the runtime lock/server Job,
 guard the previous runtime and disclose trust before calling source Git. Staging must
@@ -14,8 +14,9 @@ import sys
 import time
 from collections.abc import Callable, Generator
 from contextlib import closing
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from uuid import uuid4
 
 from oversight.workspace._platform import (
     case_sensitive_directory,
@@ -31,8 +32,23 @@ from oversight.workspace.files import (
     resolve_in,
     split_relative,
 )
+from oversight.workspace.integrity import IntegrityError, validate_source_byte_policy
 from oversight.workspace.locks import offload
-from oversight.workspace.metadata_io import nt_token
+from oversight.workspace.metadata_io import (
+    MAX_FILE as MAX_METADATA_FILE,
+)
+from oversight.workspace.metadata_io import (
+    Budget,
+    Entry,
+    make_directory,
+    nt_token,
+    read_entry,
+    remove_directory,
+    replace_file,
+)
+from oversight.workspace.metadata_io import (
+    directory as safe_directory,
+)
 from oversight.workspace.runner import Spawn, run_process
 from oversight.workspace.secret_paths import is_secret_path
 from oversight.workspace.source import BOLTONS, SourceProfile
@@ -123,6 +139,34 @@ class Inventory:
     tracked: frozenset[str]
     skipped_roots: int
     deadline: float
+    metadata: tuple[tuple[str, tuple[int, ...] | None, str | None], ...] = ()
+
+
+def source_metadata(
+    root: Path, deadline: float, clock: Callable[[], float] = time.monotonic
+) -> tuple[tuple[str, tuple[int, ...] | None, str | None], ...]:
+    deadline = time.monotonic() + remaining(deadline, clock)
+    result: list[tuple[str, tuple[int, ...] | None, str | None]] = []
+    for name in ("HEAD", "index"):
+        path = root / ".git" / name
+        try:
+            before = nt_token(path.lstat()) if os.path.lexists(path) else None
+            entry = read_entry(path, Budget(deadline)) if before is not None else None
+            after = nt_token(path.lstat()) if os.path.lexists(path) else None
+        except (OSError, IntegrityError):
+            raise refuse(".git/" + name + ": unsafe or changed source metadata") from None
+        if before != after or (entry is not None and entry.data is None):
+            raise refuse(".git/" + name + ": metadata changed or unsafe")
+        result.append(
+            (
+                name,
+                after,
+                hashlib.sha256(entry.data).hexdigest()
+                if entry and entry.data is not None
+                else None,
+            )
+        )
+    return tuple(result)
 
 
 def remaining(deadline: float, clock: Callable[[], float]) -> float:
@@ -190,9 +234,10 @@ async def inventory(
     spawn: Spawn = run_process,
     clock: Callable[[], float] = time.monotonic,
     ancestors: tuple[Path, ...] | None = None,
+    _deadline: float | None = None,
 ) -> Inventory:
     """Read-only Git inventory; caller owns the prior-runtime and trust prerequisites."""
-    deadline = clock() + PHASE_SECONDS
+    deadline = clock() + PHASE_SECONDS if _deadline is None else _deadline
     if not absolute_drive(git).lower().endswith(".exe"):
         raise refuse("absolute Git executable required")
     sentinel = source.runtime / "server.lock"
@@ -205,6 +250,7 @@ async def inventory(
             tuple(source.root.parents) if ancestors is None else ancestors,
         )
     )
+    metadata = await offload(lambda: source_metadata(source.root, deadline, clock))
     flags = tuple(
         item
         for setting in (
@@ -275,8 +321,16 @@ async def inventory(
         short_path(path)
     await offload(lambda: nested_markers(source.root, paths))
     remaining(deadline, clock)
+    if metadata != await offload(lambda: source_metadata(source.root, deadline, clock)):
+        raise refuse("HEAD/index changed during inventory")
     return Inventory(
-        source, head.strip(), tuple(sorted(paths)), frozenset(tracked), len(set(ignored)), deadline
+        source,
+        head.strip(),
+        tuple(sorted(paths)),
+        frozenset(tracked),
+        len(set(ignored)),
+        deadline,
+        metadata,
     )
 
 
@@ -300,6 +354,19 @@ def projections(source: NtSource, paths: tuple[str, ...] = ()) -> tuple[str, ...
         for base in (source.source_path, *(ntpath.join(runtime, tree) for tree in trees))
         for path in (*paths, ".git")
     ]
+    result.extend(
+        ntpath.join(runtime, f"source-stage-{token}", suffix)
+        for suffix in (
+            "manifest",
+            f".oversight-{token}",
+            *("tree/" + p for p in paths),
+            *("tree/" + ntpath.join(ntpath.dirname(p), f".oversight-{token}") for p in paths),
+        )
+    )
+    result.extend(
+        ntpath.join(runtime, p)
+        for p in ("own-source", "own-reset", "own-runtime", f".oversight-{token}")
+    )
     result.extend(
         ntpath.join(runtime, "tmp", suffix)
         for suffix in (
@@ -355,6 +422,8 @@ def validate_selection(
 ) -> Selection:
     """No writes. Recheck records during W4a2 staging; these attest only this phase."""
     root = listing.source.root
+    if listing.metadata and source_metadata(root, listing.deadline, clock) != listing.metadata:
+        raise refuse("HEAD/index changed before validation")
     entries: list[ValidatedEntry] = []
     directories: dict[str, tuple[int, ...]] = {}
     total = 0
@@ -411,6 +480,8 @@ def validate_selection(
         if nt_token((root / relative).lstat()) != token:
             raise refuse(relative + ": directory changed")
     remaining(listing.deadline, clock)
+    if listing.metadata and source_metadata(root, listing.deadline, clock) != listing.metadata:
+        raise refuse("HEAD/index changed during validation")
     return Selection(listing, tuple(entries), tuple(sorted(directories.items())), total)
 
 
@@ -451,3 +522,210 @@ def check_streams(
                     f"{path.name}: stream {name}; review first, then Unblock-File or "
                     "Remove-Item -Stream Zone.Identifier for Zone.Identifier"
                 )
+
+
+@dataclass
+class StagedSource:
+    selection: Selection
+    root: Path
+    manifest: Path
+    sensitive: Callable[[Path], bool] = case_sensitive_directory
+    streams: Callable[[Path], Generator[str]] = stream_names
+    deadline: float = float("inf")
+    owned: list[tuple[Path, tuple[int, int]]] = field(
+        default_factory=lambda: list[tuple[Path, tuple[int, int]]]()
+    )
+
+    @property
+    def tree(self) -> Path:
+        return self.root / "tree"
+
+    def remember(self, path: Path) -> None:
+        info = path.lstat()
+        self.owned.append((path, (info.st_dev, info.st_ino)))
+
+    def cleanup(self) -> None:
+        self.cleanup_owned(self.owned)
+
+    @staticmethod
+    def cleanup_owned(owned: list[tuple[Path, tuple[int, int]]]) -> None:
+        """Only exact recorded inodes, never a sibling walk or general deletion override."""
+        deadline = time.monotonic() + PHASE_SECONDS
+        for path, identity in owned:
+            try:
+                with safe_directory(path, deadline):
+                    info = path.lstat()
+                    if (info.st_dev, info.st_ino) != identity:
+                        raise refuse("owned staging directory identity changed")
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+        for path, identity in reversed(owned):
+            entry = read_entry(path, Budget(deadline))
+            if entry is None:
+                continue
+            info = path.lstat()
+            if (info.st_dev, info.st_ino) != identity:
+                raise refuse("owned staging identity changed; preserve for recovery")
+            if entry.data is None:
+                remove_directory(path, deadline)
+            else:
+                replace_file(path, entry, None, deadline, cas=False)
+
+
+def bounded_metadata(data: bytes) -> Entry:
+    if len(data) > MAX_METADATA_FILE:
+        raise refuse("source manifest/reset metadata exceeds the 4 MiB metadata budget")
+    return Entry(0o600, data)
+
+
+def manifest_bytes(selection: Selection) -> bytes:
+    return b"".join(
+        p.encode("utf-8") + b"\0"
+        for p in sorted(e.path for e in selection.entries if e.hash is not None)
+    )
+
+
+def verify_stage(stage: StagedSource, runtime: Path, deadline: float) -> None:
+    deadline = min(deadline, stage.deadline)
+    if (
+        stage.selection.inventory.source.runtime != runtime
+        or stage.root.parent != runtime
+        or re.fullmatch(r"source-stage-[0-9a-f]{32}", stage.root.name) is None
+        or stage.manifest != stage.root / "manifest"
+    ):
+        raise refuse("unowned staging handoff")
+    for path, identity in stage.owned:
+        entry = read_entry(path, Budget(deadline))
+        info = path.lstat()
+        if entry is not None and entry.data is None:
+            owned_paths = {p for p, _ in stage.owned}
+            if any(child not in owned_paths for child in path.iterdir()):
+                raise refuse("unexpected staging entry")
+        if entry is None or (info.st_dev, info.st_ino) != identity:
+            raise refuse("owned staging identity changed")
+    if read_entry(stage.manifest, Budget(deadline)) != Entry(
+        0o600, manifest_bytes(stage.selection)
+    ):
+        raise refuse("staging manifest changed")
+    listing = replace(
+        stage.selection.inventory,
+        source=replace(stage.selection.inventory.source, root=stage.tree),
+        metadata=(),
+        deadline=deadline,
+    )
+    checked = validate_selection(listing, sensitive=stage.sensitive, streams=stage.streams)
+    if [(e.path, e.hash, e.size) for e in checked.entries] != [
+        (e.path, e.hash, e.size) for e in stage.selection.entries
+    ]:
+        raise refuse("staging bytes changed")
+
+
+def publish_stage(stage: StagedSource, runtime: Path) -> None:
+    deadline = time.monotonic() + PHASE_SECONDS
+    with safe_directory(stage.root, deadline), safe_directory(runtime, deadline):
+        info = stage.tree.lstat()
+        if (stage.tree, (info.st_dev, info.st_ino)) not in stage.owned:
+            raise refuse("staging tree identity changed")
+        os.replace(stage.tree, runtime / "workspace")
+
+
+def copy_selection(stage: StagedSource, deadline: float, clock: Callable[[], float]) -> None:
+    io_until = time.monotonic() + remaining(deadline, clock)
+    make_directory(stage.root, 0o700, io_until)
+    stage.remember(stage.root)
+    make_directory(stage.tree, 0o700, io_until)
+    stage.remember(stage.tree)
+    for relative, _ in stage.selection.directories:
+        if relative:
+            make_directory(stage.tree / relative, 0o700, io_until)
+            stage.remember(stage.tree / relative)
+    for entry in stage.selection.entries:
+        remaining(deadline, clock)
+        if entry.hash is None:
+            continue
+        path = stage.selection.inventory.source.root / entry.path
+        with open_nt(path) as handle:
+            data = handle.read(MAX_FILE + 1)
+            if (
+                nt_token(os.fstat(handle.fileno())) != entry.identity
+                or nt_token(path.lstat()) != entry.identity
+                or len(data) != entry.size
+                or hashlib.sha256(data).hexdigest() != entry.hash
+            ):
+                raise refuse(entry.path + ": changed during copy")
+        target = stage.tree / entry.path
+        replace_file(target, None, Entry(0o600, data), io_until, cas=False)
+        stage.remember(target)
+    replace_file(
+        stage.manifest, None, bounded_metadata(manifest_bytes(stage.selection)), io_until, cas=False
+    )
+    stage.remember(stage.manifest)
+
+
+async def stage_source(
+    selection: Selection,
+    *,
+    git: str,
+    lock_fd: int,
+    spawn: Spawn = run_process,
+    sensitive: Callable[[Path], bool] = case_sensitive_directory,
+    streams: Callable[[Path], Generator[str]] = stream_names,
+    clock: Callable[[], float] = time.monotonic,
+    ancestors: tuple[Path, ...] | None = None,
+) -> StagedSource:
+    """Independent COPY deadline, including all revalidation and the final Git relisting."""
+    deadline = clock() + PHASE_SECONDS
+    listing = replace(selection.inventory, deadline=deadline)
+    source = listing.source
+    root = source.runtime / ("source-stage-" + uuid4().hex)
+    stage = StagedSource(
+        selection,
+        root,
+        root / "manifest",
+        sensitive,
+        streams,
+        time.monotonic() + remaining(deadline, clock),
+    )
+    try:
+        if not listing.metadata or any(token is None for _, token, _ in listing.metadata):
+            raise refuse("source HEAD/index handoff missing")
+        for path in projections(source, listing.paths):
+            short_path(path)
+
+        def check() -> Selection:
+            return validate_selection(listing, sensitive=sensitive, streams=streams, clock=clock)
+
+        if await offload(check) != replace(selection, inventory=listing):
+            raise refuse("selection changed before copy")
+        await offload(
+            lambda: validate_source_byte_policy(
+                source.root,
+                source.root / ".git",
+                tuple(e.path for e in selection.entries if e.hash is not None),
+                time.monotonic() + remaining(deadline, clock),
+            )
+        )
+        await offload(lambda: copy_selection(stage, deadline, clock))
+        if await offload(check) != replace(selection, inventory=listing):
+            raise refuse("selection changed during copy")
+        again = await inventory(
+            source,
+            git=git,
+            lock_fd=lock_fd,
+            spawn=spawn,
+            clock=clock,
+            ancestors=ancestors,
+            _deadline=deadline,
+        )
+        if replace(again, deadline=listing.deadline) != listing:
+            raise refuse("HEAD/index/selection changed during copy")
+        remaining(deadline, clock)
+        return stage
+    except (OSError, IntegrityError) as exc:
+        await offload(stage.cleanup)
+        if str(exc).startswith("Windows source refused:"):
+            raise
+        raise refuse("unsafe or changed selected input; retry selection") from None
+    except BaseException:
+        await offload(stage.cleanup)
+        raise

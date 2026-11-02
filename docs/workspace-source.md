@@ -115,10 +115,10 @@ qualification are pending; do not pass arbitrary repository paths. Demo acceptan
 both W2 fronts before read/edit/tests/proposal/Approve and three-start proof. Record raw bytes,
 hashes, Git EOL output and initial/merge commits; do not infer LF from text-mode reads.
 
-## Internal native selection (W4a1)
+## Internal native source handoffs
 
 `workspace/source_nt.py` prepares internal NT placements and a read-only Git inventory.
-It does not activate COPY: public repository paths still fail before Workspace/EventStore
+Public repository paths still fail before Workspace/EventStore
 construction or source Git. Demo/Boltons selection and pinned-profile `status` validation
 are unchanged. Own-source queries use a separate path: verified HEAD, staged index listing,
 tracked plus untracked-not-ignored listing, and bounded ignored-root listing. No recursive
@@ -134,8 +134,18 @@ profile under runtime `sources` is exempt. A source cannot be inside a reset tar
 
 The future startup contract is lexical placement before resolve/constructors/source Git;
 lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
-reset. Current startup does not yet provide this own-source ordering. W4a2/W4c2 own staging,
-guard and wiring. No disk manifest, source provenance publication, reset or copy exists here.
+reset. Current startup does not yet provide this own-source ordering. Public startup wiring remains pending. Private staging now pins bounded no-follow HEAD/index
+stamps and hashes around selection and rechecks them after copying and relisting Git paths.
+Selected present files are copied as writable raw bytes under a unique runtime-owned staging
+directory outside `workspace`, `worktrees` and `tmp`. Working deletions create no file.
+A NUL-separated UTF-8 relative-file manifest retains tracked ignored and permitted literal names.
+The independent initial 10-second COPY deadline includes revalidation and relisting; its byte,
+path and query budgets match selection. Attributes policy is checked before any copy or reset.
+Failure preserves the previous runtime; cleanup removes only recorded owned staging identities
+through bounded metadata I/O. Staging, manifest, state and temporary paths join the UTF-16
+projection checks. Manifests and reset records retain W2's 4 MiB per-metadata-file limit
+and refuse before destruction if they exceed it. These are injected internal handoffs, not
+native acceptance or public enablement.
 
 Internal validation rejects links/reparse/special or multiple-link files, casefold or uppercase
 sibling collisions, case-sensitive directories, and named streams (only `::$DATA` is allowed).

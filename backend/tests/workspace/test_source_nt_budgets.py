@@ -93,6 +93,8 @@ def test_nt_long_path_refusal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         projected = nt.projections(source, ("dir/file.py",))
         assert any("worktrees/agent-9999" in p for p in projected)
         assert any("base-probe-" in p for p in projected)
+        for name in ("source-stage-", "own-source", "own-reset", "manifest", ".oversight-"):
+            assert any(name in p for p in projected)
         for suffix in projected:
             units = len(suffix.encode("utf-16-le")) // 2
             nt.short_path("x" * (239 - units) + suffix)
@@ -112,3 +114,62 @@ def test_nt_long_path_refusal(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
                 streams=unnamed,
                 clock=lambda: 0,
             )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("limit", ["file", "total", "time", "output", "metadata"])
+async def test_copy_budget_no_reset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: str
+) -> None:
+    from .test_source_nt_copy import fixture, selection, source_git
+
+    with source_case(tmp_path) as (source, fd):
+        await fixture(source)
+        prior = source.runtime / "workspace"
+        prior.mkdir()
+        (prior / "keep").write_bytes(b"prior")
+        checked = await selection(source, fd)
+        monkeypatch.setattr(nt, "MAX_FILE", max(e.size for e in checked.entries))
+        monkeypatch.setattr(nt, "MAX_TOTAL", checked.total_bytes)
+        copied = await nt.stage_source(
+            checked,
+            git=r"C:\Git\git.exe",
+            lock_fd=fd,
+            spawn=source_git,
+            ancestors=(),
+            sensitive=lambda _: False,
+            streams=unnamed,
+        )
+        copied.cleanup()
+        if limit in {"file", "total"}:
+            monkeypatch.setattr(
+                nt,
+                "MAX_FILE" if limit == "file" else "MAX_TOTAL",
+                nt.MAX_FILE - 1 if limit == "file" else nt.MAX_TOTAL - 1,
+            )
+        if limit == "metadata":
+            monkeypatch.setattr(nt, "MAX_METADATA_FILE", 1)
+        calls = 0
+
+        async def output(*args, **kwargs):
+            result = await source_git(*args, **kwargs)
+            return replace(result, stderr="x" * (nt.MAX_GIT + 1)) if limit == "output" else result
+
+        def clock() -> float:
+            nonlocal calls
+            calls += 1
+            return 0 if calls == 1 or limit != "time" else 10.001
+
+        with pytest.raises(OSError, match="Windows source refused:"):
+            await nt.stage_source(
+                checked,
+                git=r"C:\Git\git.exe",
+                lock_fd=fd,
+                spawn=output,
+                ancestors=(),
+                sensitive=lambda _: False,
+                streams=unnamed,
+                clock=clock,
+            )
+        assert (prior / "keep").read_bytes() == b"prior"
+        assert not list(source.runtime.glob("source-stage-*"))
