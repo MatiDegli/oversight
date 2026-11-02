@@ -2,10 +2,14 @@
 
 import asyncio
 import os
+import stat
 import sys
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -14,7 +18,9 @@ from oversight.workspace import run_process
 from oversight.workspace import source_nt as nt
 from oversight.workspace._platform import case_sensitive_directory, executable, stream_names
 from oversight.workspace.files import open_nt
+from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
+from oversight.workspace.metadata_io import Budget, Entry, read_entry
 from oversight.workspace.runner import ProcessResult
 
 from .test_source_nt import source_case, unnamed
@@ -246,6 +252,72 @@ async def test_staging_tamper_and_owned_cleanup(tmp_path: Path) -> None:
             nt.verify_stage(copied, source.runtime, time.monotonic() + 10)
         copied.cleanup()
         assert (sibling / "keep").read_bytes() == b"outside"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "mutation,reason",
+    [
+        ("none", ""),
+        ("readonly", "staging manifest changed"),
+        ("bytes", "staging manifest changed"),
+        ("swap", "owned staging identity changed"),
+        ("hardlink", "linked"),
+        ("symlink", "linked"),
+        ("tree", "staging bytes changed"),
+    ],
+)
+async def test_staging_windows_manifest_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str, reason: str
+) -> None:
+    """Read real bytes with injected NT modes; retain every staging refusal on Linux."""
+    with source_case(tmp_path) as (source, fd):
+        await fixture(source)
+        copied = await stage(source, fd)
+        identity = copied.manifest.stat()
+        mode, changes = 0o666, {}
+        original_stat, original_fstat = os.stat, os.fstat
+
+        def windows_stat(info: os.stat_result) -> os.stat_result:
+            if (info.st_dev, info.st_ino) != (identity.st_dev, identity.st_ino):
+                return info
+            fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+            fields["st_mode"] = stat.S_IFMT(info.st_mode) | mode
+            fields.update(changes)
+            return cast(os.stat_result, SimpleNamespace(**fields))
+
+        def observed_stat(*args, **kwargs):
+            return windows_stat(original_stat(*args, **kwargs))
+
+        def observed_fstat(fd: int) -> os.stat_result:
+            return windows_stat(original_fstat(fd))
+
+        try:
+            with monkeypatch.context() as patch:
+                patch.setattr(os, "stat", observed_stat)
+                patch.setattr(os, "fstat", observed_fstat)
+                deadline = time.monotonic() + 10
+                actual = read_entry(copied.manifest, Budget(deadline))
+                assert actual == Entry(0o666, nt.manifest_bytes(copied.selection))
+                nt.verify_stage(copied, source.runtime, deadline)
+                if mutation == "none":
+                    return
+                if mutation == "readonly":
+                    mode = 0o444
+                elif mutation == "bytes":
+                    copied.manifest.write_bytes(b"tampered\0")
+                elif mutation == "swap":
+                    changes["st_ino"] = identity.st_ino + 1
+                elif mutation == "hardlink":
+                    changes["st_nlink"] = 2
+                elif mutation == "symlink":
+                    changes["st_mode"] = stat.S_IFLNK | mode
+                elif mutation == "tree":
+                    (copied.tree / "data.bin").write_bytes(b"tampered")
+                with pytest.raises((OSError, IntegrityError), match=reason):
+                    nt.verify_stage(copied, source.runtime, deadline)
+        finally:
+            copied.cleanup()
 
 
 @pytest.mark.anyio
