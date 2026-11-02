@@ -819,7 +819,45 @@ it.each(["dark", "day"] as const)(
       const point = await groupPoint(page, boltons ? "boltons" : "library");
       await page.mouse.click(point.x, point.y);
       await ready(page);
-      await assertCardPool(page, theme);
+      const emitterBoxes = () =>
+        page.evaluate((real) => {
+          const graph = document.querySelector<GraphProbeHost>(
+            '[aria-label="Repository graph"]',
+          )?.oversightGraph;
+          if (!graph) throw new Error("Missing card camera");
+          const ids = real
+            ? ["boltons.iterutils:is_iterable", "boltons.strutils:slugify"]
+            : ["library.module_00:run", "library.module_01:run"];
+          return {
+            boxes: ids.map((id) => graph.renderedBox(graph.representative(id))),
+            viewport: graph.metrics().viewport,
+            zoom: graph.zoom(),
+            level: graph.level(),
+          };
+        }, Boolean(boltons));
+      const before = await emitterBoxes();
+      const emitter = before.boxes[0];
+      const host = await page.getByRole("img", { name: "Repository graph" }).boundingBox();
+      const area = await page.locator("[data-graph-clear-area]").boundingBox();
+      if (!emitter || !host || !area) throw new Error("Missing emitter framing geometry");
+      // At the retained card zoom their combined height exceeds the viewport; pan one into view.
+      const x = area.x + area.width / 2;
+      const y = area.y + area.height - 20;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(
+        x + area.x + area.width / 2 - host.x - (emitter.x1 + emitter.x2) / 2,
+        y + area.y + area.height / 2 - host.y - (emitter.y1 + emitter.y2) / 2,
+        { steps: 4 },
+      );
+      await page.mouse.up();
+      await ready(page);
+      const pool = await assertCardPool(page, theme);
+      console.log(
+        "Card emitter framing",
+        theme,
+        JSON.stringify({ before, after: await emitterBoxes(), pool }),
+      );
       await fit.click();
       await ready(page);
       await zoomTo(page, 0.21);
