@@ -8,6 +8,11 @@ import { launchBrowser } from "../browserLaunch.support";
 // eslint-disable-next-line no-restricted-imports -- Offline optional graph fixture only.
 import { readBoltonsSnapshot } from "../graph/exactFixtures.testSupport";
 import type { GraphProbeHost } from "../graph";
+// eslint-disable-next-line no-restricted-imports -- Read-only lamp evidence from the existing probe.
+import type { FieldHost } from "../graph/field/controller";
+import { themes } from "../theme";
+// eslint-disable-next-line no-restricted-imports -- Independent CPU oracle for the unchanged card profile.
+import { createLampField, fieldConfig, parseHex } from "../graph/field/model";
 import type {} from "./mapLines.browser.fixture";
 
 let server: ViteDevServer, browser: Browser, url: string, html: string;
@@ -58,8 +63,10 @@ async function setup(width = 1920, theme = "dark", real = false) {
     viewport: { width, height: width === 1280 ? 800 : 1080 },
     reducedMotion: "reduce",
   });
-  await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
-  await page.goto(url);
+  await page.route("**/?field-time=2", (route) =>
+    route.fulfill({ contentType: "text/html", body: html }),
+  );
+  await page.goto(`${url}?field-time=2`);
   await page.waitForFunction(() => !!window.mapLinesTest);
   await page.evaluate(
     ({ graph, theme }) => {
@@ -525,6 +532,190 @@ it("fits header rows at wrapping boundaries using the rendered borders and type 
     await page.close();
   }
 });
+/** Count B's visible lamp centers, never guide dots, labels, masks or transient rings.
+ * The 84px apron is fixed in screen space. At least 150 lit centers rejects the launch
+ * result (a few lamps), while allowing viewport-dependent dither and mask alignment.
+ * Reduced motion holds full steady strengths and disables working/milestone rings.
+ */
+async function measurePool(page: Page, id: string) {
+  return page.evaluate((id) => {
+    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+    const canvas = document.querySelector<FieldHost>(
+      '[aria-label="Graph stage"] canvas[aria-hidden]',
+    );
+    const cell = document.querySelector(`[data-map-module="${id}"]`);
+    if (!host?.oversightGraph || !canvas?.oversightField || !cell)
+      throw new Error("Missing lamp evidence");
+    const field = canvas.oversightField;
+    const origin = canvas.getBoundingClientRect();
+    const bounds = cell.getBoundingClientRect();
+    const box = {
+      x1: bounds.left - origin.left,
+      y1: bounds.top - origin.top,
+      x2: bounds.right - origin.left,
+      y2: bounds.bottom - origin.top,
+    };
+    const region = {
+      x1: Math.max(0, box.x1 - 84),
+      y1: Math.max(0, box.y1 - 84),
+      x2: Math.min(origin.width, box.x2 + 84),
+      y2: Math.min(origin.height, box.y2 + 84),
+    };
+    const hidden = [
+      ...document.querySelectorAll(".map-name, .map-count, .map-agent, [data-map-circle]"),
+    ]
+      .filter((el) => getComputedStyle(el).visibility !== "hidden")
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          x1: r.left - origin.left,
+          y1: r.top - origin.top,
+          x2: r.right - origin.left,
+          y2: r.bottom - origin.top,
+        };
+      });
+    const masks = [...field.masks(), ...hidden];
+    const step = Number.parseFloat(getComputedStyle(canvas).getPropertyValue("--dot-cell-size"));
+    const levels = [0, 0, 0, 0];
+    let excluded = 0;
+    for (let y = (Math.ceil(region.y1 / step - 0.5) + 0.5) * step; y <= region.y2; y += step)
+      for (let x = (Math.ceil(region.x1 / step - 0.5) + 0.5) * step; x <= region.x2; x += step) {
+        if (
+          x >= canvas.clientWidth ||
+          y >= canvas.clientHeight ||
+          masks.some((b) => x + 3.5 > b.x1 && x - 3.5 < b.x2 && y + 3.5 > b.y1 && y - 3.5 < b.y2)
+        ) {
+          excluded++;
+          continue;
+        }
+        const lamp = field.lamp(x, y);
+        const level =
+          lamp && lamp.color[2] > lamp.color[0] && lamp.color[2] > lamp.color[1] ? lamp.level : 0;
+        levels[level] = (levels[level] ?? 0) + 1;
+      }
+    return {
+      box,
+      region,
+      zoom: host.oversightGraph.zoom(),
+      level: host.oversightGraph.level(),
+      fieldClock: 2,
+      reducedMotion: true,
+      step,
+      excluded,
+      levels,
+      lit: levels.slice(1).reduce((sum, n) => sum + n, 0),
+      source: "B only (strongest blue hue)",
+    };
+  }, id);
+}
+it.each(["dark", "day"])("keeps a broad working module pool at zoom 0.21 in %s", async (theme) => {
+  const page = await setup(1280, theme, true);
+  try {
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await ready(page);
+    await zoomTo(page, 0.21);
+    await clearPointer(page);
+    const pool = await measurePool(page, boltons ? "boltons.strutils" : "library.module_01");
+    console.log("Working module pool", theme, pool);
+    if (process.env.MAP_LINES_SHOTS === "1")
+      await writeFile(`${shots}pool-21-${theme}.json`, JSON.stringify(pool, null, 2));
+    expect(pool.lit).toBeGreaterThanOrEqual(150);
+  } finally {
+    await page.close();
+  }
+});
+/** Compare every unmasked card lamp with the pre-existing card spread and mode gain. */
+async function assertCardPool(page: Page, theme: "dark" | "day") {
+  const sample = await page.evaluate((real) => {
+    const graph = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    const canvas = document.querySelector<FieldHost>(
+      '[aria-label="Graph stage"] canvas[aria-hidden]',
+    );
+    const field = canvas?.oversightField;
+    if (!graph || !canvas || !field) throw new Error("Missing card evidence");
+    const ids = real
+      ? ["boltons.iterutils:is_iterable", "boltons.strutils:slugify"]
+      : ["library.module_00:run", "library.module_01:run"];
+    const boxes = ids.map((id) => graph.renderedBox(graph.representative(id)));
+    if (boxes.some((b) => !b)) throw new Error("Missing card emitter");
+    const levels: number[] = [];
+    const masks = field.masks();
+    for (let y = 3.5; y < Math.ceil(canvas.clientHeight / 7) * 7; y += 7)
+      for (let x = 3.5; x < Math.ceil(canvas.clientWidth / 7) * 7; x += 7)
+        levels.push(
+          x >= canvas.clientWidth ||
+            y >= canvas.clientHeight ||
+            masks.some((b) => x + 3.5 > b.x1 && x - 3.5 < b.x2 && y + 3.5 > b.y1 && y - 3.5 < b.y2)
+            ? -1
+            : (field.lamp(x, y)?.level ?? -1),
+        );
+    return {
+      boxes,
+      levels,
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+      zoom: graph.zoom(),
+      level: graph.level(),
+    };
+  }, !!boltons);
+  expect(sample.level).toBe("cards");
+  const base = fieldConfig(themes[theme], "watch");
+  const expected = createLampField()(
+    { ...base, profile: { near: 26 * sample.zoom, far: 72 * sample.zoom, gain: 0.92 } },
+    sample.width,
+    sample.height,
+    sample.boxes.flatMap((box, i) =>
+      box
+        ? [
+            {
+              box,
+              weight: i === 0 ? 0.5 : 1,
+              pulses: false,
+              color: parseHex(themes[theme][i === 0 ? "agent-a" : "agent-b"]),
+            },
+          ]
+        : [],
+    ),
+    null,
+  );
+  const mismatches = sample.levels.filter(
+    (level, i) => level >= 0 && level !== Math.round(((expected.data[i * 4 + 3] ?? 0) / 255) * 3),
+  ).length;
+  expect(mismatches).toBe(0);
+  expect(sample.levels.filter((level) => level > 0).length).toBeGreaterThan(0);
+  return { zoom: sample.zoom, lit: sample.levels.filter((level) => level > 0).length, mismatches };
+}
+it.each(["dark", "day"] as const)(
+  "restores card light after an explicit map move in %s",
+  async (theme) => {
+    const page = await setup(1280, theme, true);
+    try {
+      const fit = page.getByRole("button", { name: "Fit the graph to the view" });
+      await fit.click();
+      await ready(page);
+      await zoomTo(page, 0.21);
+      await clearPointer(page);
+      expect(
+        (await measurePool(page, boltons ? "boltons.strutils" : "library.module_01")).lit,
+      ).toBeGreaterThanOrEqual(150);
+      const point = await groupPoint(page, boltons ? "boltons" : "library");
+      await page.mouse.click(point.x, point.y);
+      await ready(page);
+      await assertCardPool(page, theme);
+      await fit.click();
+      await ready(page);
+      await zoomTo(page, 0.21);
+      await clearPointer(page);
+      expect(
+        (await measurePool(page, boltons ? "boltons.strutils" : "library.module_01")).lit,
+      ).toBeGreaterThanOrEqual(150);
+    } finally {
+      await page.close();
+    }
+  },
+);
 async function measureEvidence(page: Page) {
   const measured = await page.evaluate(() => {
     const size = (selector: string, property: "width" | "height") => {
@@ -563,6 +754,7 @@ async function captureCone(
       `[data-map-module="${boltons ? "boltons.iterutils" : "library.module_00"}"] [data-map-circle]`,
     ),
   ).toBeInViewport();
+  await check(page.locator(".monaco-editor .view-lines").first()).toBeVisible();
   await capture("map-cone");
   // All real callers of is_iterable are inside its seed module; tests stay hidden.
   await check(page.locator("[data-map-distance]")).toHaveCount(boltons ? 0 : 3);
@@ -581,10 +773,13 @@ async function captureCone(
   return badge?.width ?? null;
 }
 for (const width of [1920, 1280])
-  for (const theme of ["dark", "day"]) {
+  for (const theme of ["dark", "day"] as const) {
     it(`captures evidence at ${String(width)} in ${theme}`, async () => {
       const page = await setup(width, theme, true);
+      const pools: Record<string, Awaited<ReturnType<typeof measurePool>>> = {};
       const capture = async (name: string) => {
+        if (name !== "group")
+          pools[name] = await measurePool(page, boltons ? "boltons.strutils" : "library.module_01");
         if (process.env.MAP_LINES_SHOTS === "1")
           await page.screenshot({ path: `${shots}${name}-${String(width)}-${theme}.png` });
       };
@@ -615,6 +810,7 @@ for (const width of [1920, 1280])
           "visible",
         );
         const groupZoom = (await camera(page)).zoom;
+        const cardPool = await assertCardPool(page, theme);
         await capture("group");
         const badge = await captureCone(page, width, id, capture);
         if (process.env.MAP_LINES_SHOTS === "1")
@@ -623,9 +819,11 @@ for (const width of [1920, 1280])
             JSON.stringify(
               {
                 ...measured,
+                pools,
                 badge,
                 snapshot: boltons ? "boltons" : "synthetic",
                 groupZoom,
+                cardPool,
               },
               null,
               2,
