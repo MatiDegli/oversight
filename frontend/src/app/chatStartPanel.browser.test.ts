@@ -2,7 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { expect as check, type Browser } from "@playwright/test";
+import { expect as check, type Browser, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
@@ -28,7 +28,33 @@ afterAll(async () => {
   await server.close();
 });
 
-it.each(["New task", "New lead"])("%s hides Chat without losing shared tabs", async (action) => {
+async function openReviewWithSettings(page: Page) {
+  await page
+    .locator(".shell-top-bar")
+    .getByRole("button", { name: /Decisions/ })
+    .click();
+  await page
+    .locator(".inbox-row")
+    .filter({ hasText: "Agent A" })
+    .getByRole("button", { name: /Review change/ })
+    .click();
+  await check(page.getByRole("complementary", { name: "Review panel" })).toBeVisible();
+  const settings = page.locator(".shell-top-bar").getByRole("button", {
+    name: "Settings",
+    exact: true,
+  });
+  await settings.click();
+  const tabs = page.getByRole("tablist", { name: "Open files and changes" });
+  const review = tabs.getByRole("tab", { name: /Review · change-1/ });
+  await check(review).toBeVisible();
+  const retained = await tabs.getByRole("tab").allTextContents();
+  await review.click();
+  return { settings, tabs, review, retained };
+}
+
+it.each(
+  ["New task", "New lead"].flatMap((action) => ["Escape", "Alt+w"].map((key) => ({ action, key }))),
+)("$action keeps hidden shared tabs through $key", async ({ action, key }) => {
   const page = await browser.newPage({
     viewport: { width: 1280, height: 800 },
     reducedMotion: "reduce",
@@ -43,25 +69,7 @@ it.each(["New task", "New lead"])("%s hides Chat without losing shared tabs", as
     await page.evaluate(() => {
       window.chatReviewTest.mount(true);
     });
-    await page
-      .locator(".shell-top-bar")
-      .getByRole("button", { name: /Decisions/ })
-      .click();
-    await page
-      .locator(".inbox-row")
-      .filter({ hasText: "Agent A" })
-      .getByRole("button", { name: /Review change/ })
-      .click();
-    await check(page.getByRole("complementary", { name: "Review panel" })).toBeVisible();
-    const settings = page
-      .locator(".shell-top-bar")
-      .getByRole("button", { name: "Settings", exact: true });
-    await settings.click();
-    const tabs = page.getByRole("tablist", { name: "Open files and changes" });
-    const review = tabs.getByRole("tab", { name: /Review · change-1/ });
-    await check(review).toBeVisible();
-    const retained = await tabs.getByRole("tab").allTextContents();
-    await review.click();
+    const { settings, tabs, review, retained } = await openReviewWithSettings(page);
 
     await page
       .locator(".chat-start-actions")
@@ -78,6 +86,19 @@ it.each(["New task", "New lead"])("%s hides Chat without losing shared tabs", as
     });
     await check(input).toBeFocused();
     await check(page.locator(".focus-panel")).toBeHidden();
+
+    const draft = `Keep the ${action} draft through ${key}`;
+    await input.fill(draft);
+    const button =
+      action === "New lead"
+        ? page.getByRole("button", { name: "Start lead", exact: true })
+        : page.locator(".chat-start-actions").getByRole("button", { name: action, exact: true });
+    await button.focus();
+    await button.press(key);
+    await check(button).toBeFocused();
+    await check(page.locator(".focus-panel")).toBeHidden();
+    await check(input).toBeVisible();
+    await check(input).toHaveValue(draft);
 
     const layouts = page.getByRole("group", { name: "Workspace view" });
     await layouts.getByRole("button", { name: "Oversight", exact: true }).click();
@@ -101,6 +122,14 @@ it.each(["New task", "New lead"])("%s hides Chat without losing shared tabs", as
       "true",
     );
     await check(tabs.getByRole("tab")).toHaveText(retained);
+    // The same key still closes the active tab once the panel is visible again.
+    await settings.focus();
+    await settings.press(key);
+    await check(page.getByRole("complementary", { name: "Review panel" })).toBeVisible();
+    await layouts.getByRole("button", { name: "Oversight", exact: true }).click();
+    await check(tabs.getByRole("tab", { name: "Settings", exact: true })).toHaveCount(0);
+    await check(tabs.getByRole("tab")).toHaveText(retained.slice(0, -1));
+    await check(review).toHaveAttribute("aria-selected", "true");
   } finally {
     await page.close();
   }

@@ -6,6 +6,7 @@ import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
 import type { View, ViewAction, FocusTab } from "./view";
 import { panelOpen } from "./view";
+import { useEscapeCloses } from "./escape";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
@@ -101,9 +102,10 @@ export function Frame(props: FrameProps) {
   const [newLead, setNewLead] = useState(false);
   const [hiddenChatView, setHiddenChatView] = useState<View | null>(null);
   const leadInput = useRef<HTMLTextAreaElement>(null);
-  const shell = useShell(panelOpen(view), onClosePanel);
   // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
-  const open = panelOpen(view) && (shell.layout !== "Chat" || hiddenChatView !== view);
+  const shell = useShell(panelOpen(view), onClosePanel, hiddenChatView === view);
+  const open = shell.panelOpen;
+  useEscapeCloses(open, onClosePanel);
   const showNewLead = newLead && !open && shell.layout === "Chat";
   const chatReview = useChatReviewNavigation(state, view, shell, props.onTabAction);
   const task = useFunctionTask(

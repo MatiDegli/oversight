@@ -14,7 +14,6 @@ import { commandFailure, createCommandClient, replayBuild, replaySource } from "
 import { createFileSession } from "./files";
 import { createRecordedFiles } from "./recordedFiles";
 import { FilesProvider } from "./FilesContext";
-import { useEscapeCloses } from "./escape";
 import { mergeModePending, type MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { Frame } from "./Frame";
 import { usePractice } from "./challenge/usePractice";
@@ -29,7 +28,6 @@ import {
   conversationTab,
   openChange,
   openReview,
-  panelOpen,
 } from "./view";
 import type { View } from "./view";
 
@@ -132,7 +130,6 @@ export function App() {
   const onClosePanel = useCallback(() => {
     setView(closePanel);
   }, []);
-  useEscapeCloses(panelOpen(view), onClosePanel);
   const onReview = useCallback((changeId: string) => {
     setView((current) =>
       navigateView(
