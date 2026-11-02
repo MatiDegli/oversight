@@ -125,8 +125,6 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  font-size: 19px;
-  line-height: 1.4;
 }
 .chat-shell .conversation-timeline {
   padding-block: 14px 16px;
