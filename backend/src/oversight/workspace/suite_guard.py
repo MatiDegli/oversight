@@ -1,6 +1,6 @@
 """One suite boundary for agents, proposals, combinations and selected-case probes."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
@@ -12,6 +12,7 @@ from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.runner import Spawn
 from oversight.workspace.snapshot import finish_snapshot, take_snapshot
+from oversight.workspace.source_nt import OwnEnvironment
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
 from oversight.workspace.suite_files import file_problems, file_stamp
 from oversight.workspace.test_tree import capture_test_tree
@@ -39,6 +40,7 @@ async def guarded_suite(
     pytest_targets: tuple[str, ...] = (),
     pytest_options: tuple[str, ...] = (),
     measured_targets: tuple[CallTarget, ...] | None = None,
+    _own_prepare: Callable[[Path, float], OwnEnvironment] | None = None,
 ) -> SuiteRun:
     """Caller retains main/worktree/lease through capture, namespace death and restoration."""
     state = workspace.integrity
@@ -68,6 +70,7 @@ async def guarded_suite(
                 pytest_options=pytest_options,
                 harness_pack=workspace.harness_pack,
                 measured_targets=measured_targets,
+                _own_prepare=_own_prepare,
             )
         except (SuiteInterrupted, SuiteUnavailable) as error:
             problems = await offload(partial(file_problems, tree.root, before))

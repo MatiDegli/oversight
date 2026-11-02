@@ -1,13 +1,90 @@
 """Server-owned workspace profiles. Selection and startup validation never fetch a source."""
 
+import hashlib
+import ntpath
 import os
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from oversight.workspace._platform import executable, preflight_placement
+from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
+from oversight.workspace.metadata_io import Budget, Entry, read_entry, replace_file
 from oversight.workspace.runner import Spawn, run_process
+
+if TYPE_CHECKING:
+    from oversight.workspace.source_nt import NtSource
+
+TRUST_POLICY = "own-copy-v1"
+TRUST_NOTICE = (
+    "Approval changes only this disposable copy. Tests/plugins run your code as your user, "
+    "with network and no filesystem sandbox; they may write outside runtime. Windows path "
+    "checks have concurrent-swap races; copies/logs inherit folder ACLs, possibly readable by "
+    "others. Child Python with -I/cleared environment can import original source undetected. "
+    "Use trusted code/private folders."
+)
+
+
+@dataclass(frozen=True)
+class OwnSource:
+    """Private composition value. Public selection stays closed until qualification wiring."""
+
+    raw: str
+    provenance: str = "own-repository (disposable copy)"
+    pytest_targets: tuple[str, ...] = ()
+    pytest_options: tuple[str, ...] = ()
+
+    def prepare(self, runtime: Path, ide: Path) -> "NtSource":
+        # Local import keeps source_nt's existing profile dependency acyclic.
+        from oversight.workspace.source_nt import prepare_source
+
+        return prepare_source(self.raw, str(runtime), str(ide), ntpath.join(self.raw, ".venv"))
+
+
+def outside_profile(source: "NtSource", profile: str | None) -> bool:
+    if not profile:
+        return True
+    try:
+        root, home = map(ntpath.normcase, (source.source_path, ntpath.normpath(profile)))
+        return ntpath.commonpath((root, home)) != home
+    except ValueError:
+        return True
+
+
+def remember_trust(
+    source: "NtSource", providers: tuple[str, ...], outside: bool, *, policy: str = TRUST_POLICY
+) -> bool:
+    """Informational only. Unsafe metadata is neither followed nor replaced; disclose again."""
+    key = (
+        hashlib.sha256(
+            repr(
+                (
+                    ntpath.normcase(source.source_path),
+                    policy,
+                    tuple(sorted(set(providers))),
+                    outside,
+                )
+            ).encode("utf-8")
+        )
+        .hexdigest()
+        .encode("ascii")
+    )
+    path = source.runtime / "own-trust"
+    deadline = time.monotonic() + 2
+    try:
+        before = read_entry(path, Budget(deadline))
+        if before is not None and (before.data is None or len(before.data) != 64):
+            return False
+        if before is not None and before.data == key:
+            return True
+        replace_file(path, before, Entry(0o600, key), deadline, cas=True)
+    except (OSError, IntegrityError):
+        pass
+    return False
+
 
 FETCH_HINT = "Run make workspace-fetch-boltons to prepare the pinned source."
 SOURCE_GIT_ENV = {
@@ -50,7 +127,7 @@ BOLTONS = SourceProfile(
 )
 
 
-def select_source(name: str) -> SourceProfile | None:
+def select_source(name: str) -> SourceProfile | OwnSource | None:
     """Empty means the existing demo; no paths or model-provided argv are accepted."""
     if not name:
         return None
