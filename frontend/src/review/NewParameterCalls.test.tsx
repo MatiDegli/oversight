@@ -34,6 +34,7 @@ it.each(parameterStates)("renders supplied values and separated counts: %s", (na
   const html = render(state);
   for (const entry of entries) {
     expect(html).toContain(entry.node_id.split(":").at(-1));
+    expect(html).toContain("<p>compute_price");
     for (const sample of entry.rows) {
       expect(html).toContain(sample.inputs);
       expect(html).toContain(sample.after);
