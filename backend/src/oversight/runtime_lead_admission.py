@@ -29,19 +29,27 @@ async def message(service: LeadService, agent_id: str, text: str) -> None:
     if lead is None:
         raise ApiError("not_found", f"there is no lead {agent_id!r}")
     _eligible(service, lead)
-    async with lead.lock:
-        _eligible(service, lead)
-        if lead.profile.provider == "meta" and (reason := service.live.brake_reason()):
-            raise ApiError("spend_brake", reason)
-        masked = service.live._redactor(text)
-        if not masked.strip() or len(masked) > 4096 or len(text) > 4096:
-            raise ApiError(
-                "invalid_request", "message must be nonblank and at most 4,096 characters"
-            )
-        # No publication await may precede this claim. Competing HTTP sends see working.
-        lead.phase = "working"
-        lead.admitting = asyncio.create_task(_publish(service, lead, masked))
-    await service.live._finish(lead.admitting)
+    # Register human priority before waiting behind another lock owner. A queued wake
+    # has not claimed working yet and must yield even if it entered the lock queue first.
+    lead.humans_waiting += 1
+    try:
+        async with lead.lock:
+            _eligible(service, lead)
+            if lead.profile.provider == "meta" and (reason := service.live.brake_reason()):
+                raise ApiError("spend_brake", reason)
+            masked = service.live._redactor(text)
+            if not masked.strip() or len(masked) > 4096 or len(text) > 4096:
+                raise ApiError(
+                    "invalid_request", "message must be nonblank and at most 4,096 characters"
+                )
+            # No publication await may precede this claim. Competing HTTP sends see working.
+            lead.phase = "working"
+            lead.admitting = asyncio.create_task(_publish(service, lead, masked))
+        await service.live._finish(lead.admitting)
+    finally:
+        lead.humans_waiting -= 1
+        if lead.watcher is not None:
+            lead.watcher.changed.set()
 
 
 async def _publish(service: LeadService, lead: _Lead, masked: str) -> None:
@@ -72,6 +80,8 @@ async def wake(service: LeadService, lead: _Lead) -> None:
     async with lead.lock:
         watcher = lead.watcher
         if not _open(service, lead) or service.live._manager is None or lead.phase != "idle":
+            return
+        if lead.humans_waiting:
             return
         if watcher is None or service.policy.wakes == 0:
             return

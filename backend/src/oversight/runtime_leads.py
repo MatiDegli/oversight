@@ -50,6 +50,7 @@ class _Lead:
     phase: str = "starting"
     turns: int = 0
     wakes: int = 0
+    humans_waiting: int = 0
     through_seq: int | None = None
     refusals: set[str] = field(default_factory=set[str])
     watcher: LeadWatcher | None = None

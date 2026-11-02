@@ -26,8 +26,8 @@ The supplied export citations were re-found by content. Current locations after 
 | Contract version / reply fields | `contracts/src/oversight_contracts/__init__.py:12`, `contracts/src/oversight_contracts/events.py:555` | Version line unchanged; fields now include `woken_by:562` |
 | Reply reference validation / facade | `backend/src/oversight/events/references.py:66`, `backend/src/oversight/events/__init__.py:24,133` | Expanded validation and new predicate export |
 | Defaults and configurable lead prompt | `backend/src/oversight/agents/_lead_policy.py:7,41` | Moved out of `_lead.py:36` / `_prompts.py:52` by configurable policy work |
-| Lead ownership / launch / status / close | `backend/src/oversight/runtime_leads.py:46,139,155,303` | Previously `42,123,142,263` |
-| Human commitment and launch / wake admission | `backend/src/oversight/runtime_lead_admission.py:47,70` | Human publication remains at 47; digest take now follows open checks |
+| Lead ownership / launch / status / close | `backend/src/oversight/runtime_leads.py:46,140,156,304` | Previously `42,123,142,263` |
+| Human commitment and launch / wake admission | `backend/src/oversight/runtime_lead_admission.py:55,78` | Previously publication at 47; digest take now follows open checks |
 | Turn accounting / serialized finalization | `backend/src/oversight/runtime_lead_turns.py:86,118` | Previously `84,108` |
 | Loop input / model messages / reply | `backend/src/oversight/agents/_lead.py:99,145,193` | Previously `97,135,183` |
 | Distinct history / notice instructions / hashing | `backend/src/oversight/agents/_lead_history.py:12,45`, `backend/src/oversight/agents/_prompts.py:54,69` | History and prompt expanded; hashing entry moved from 75 |
@@ -49,7 +49,7 @@ or provider calls are used. New lifecycle tests live in their own module to keep
 | Shared closed catalog, per-lead event-time ownership, completed summary, approval excluded | `test_watcher_uses_shared_catalog_and_isolates_leads`, `test_recorded_wake_fixture_matches_predicate_and_watcher` |
 | Prefix order, replay without a gap or duplicate | `test_subscription_replay_and_human_sync_have_no_gap_or_duplicate`, `test_recorded_wake_fixture_matches_predicate_and_watcher` |
 | Fixed five-second window, accumulation while working, committed-horizon repruning | `test_first_trigger_sets_fixed_five_second_window`, `test_running_turn_coalesces_then_reprunes_reply_horizon` |
-| Human priority, post-commit digest take, mixed correlation, failure preservation | `test_human_launch_takes_pending_only_after_message_commit`, `test_failed_human_publication_preserves_pending_triggers` |
+| Human priority, post-commit digest take, mixed correlation, failure preservation | `test_waiting_human_wins_before_wake_claim`, `test_human_launch_takes_pending_only_after_message_commit`, `test_failed_human_publication_preserves_pending_triggers` |
 | Running Send response and one claim | `test_send_during_wake_returns_409`, existing `test_two_concurrent_messages_have_exactly_one_claim` |
 | Wake/turn counts, provider brake, cap, last human turn | `test_wake_counts_once_and_preserves_last_human_turn`, `test_refusal_decision_and_publish_hold_idle_lock` (brake/cap/last-turn) |
 | Refusal decision and durable publication hold the idle lock; revision and unchanged state | `test_refusal_decision_and_publish_hold_idle_lock` |
@@ -79,6 +79,30 @@ SHA-256:
 
 - Recording: `07b8c83c07ce7e22623a790763ca2f6ab680bf8750881c587eb441b6f6b3f7c5`
 - Expected: `aaba7265ebfd967595a54655095caf3f2c24310af9de7331e8a53f87dce2f2eb`
+
+## Targeted validation
+
+The bounded fake-only regression run passed **643 tests** with `-n 2`:
+
+```sh
+bash tools/bounded.sh 240 env -u META_API_KEY -u BASETEN_API_KEY uv run --frozen pytest -n 2 \
+  backend/tests/api/test_lead_wakes.py backend/tests/api/test_lead_wake_lifecycle.py \
+  backend/tests/api/test_lead_messages.py backend/tests/api/test_lead_races.py \
+  backend/tests/api/test_lead_lifecycle.py backend/tests/api/test_leads.py \
+  backend/tests/agents/test_lead_wakes.py backend/tests/agents/test_lead_history.py \
+  backend/tests/agents/test_lead_loop.py backend/tests/agents/test_lead_limits.py \
+  backend/tests/agents/test_lead_replies.py backend/tests/events/test_lead_wake_parity.py \
+  backend/tests/events/test_lead_wake.py backend/tests/events/test_lead_reply.py \
+  backend/tests/events/test_lead_status.py backend/tests/test_lead_wake_settings.py \
+  backend/tests/test_lead_settings.py backend/tests/test_lead_policy_snapshot.py \
+  contracts/tests/test_lead_reply.py --tb=short
+```
+
+Targeted `ruff check`, `ruff format --check`, and `pyright` passed for every changed Python
+file. `pnpm -C frontend exec tsc --noEmit` passed. `git diff --check` passed. Commit hooks run
+secret scanning, targeted Ruff and commit-message/size validation. The full `make check`,
+repository-wide lint and frontend related Vitest/ESLint are not run: the requested scope is
+targeted checks, and no frontend file changes in this implementation.
 
 ## Limits and remaining integration
 

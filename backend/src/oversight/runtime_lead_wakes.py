@@ -62,7 +62,13 @@ def _line(event: ServerEvent, prior: Mapping[int, ServerEvent], mask: Callable[[
                     subtask = index + 1
     fields = {
         "seq": event.seq,
-        "scope": f"subtask {subtask}" if subtask is not None else "plan-wide",
+        "scope": (
+            "plan-wide"
+            if event.type == "plan.updated"
+            else f"subtask {subtask}"
+            if subtask is not None
+            else "subtask unknown"
+        ),
         "type": event.type,
         "data": _masked(payload.model_dump(mode="json"), mask),
     }
