@@ -352,16 +352,6 @@
   .new-lead-model select {
     width: 119px;
   }
-  .new-lead-limits:has(.new-lead-limit-cards) .new-lead-limit-heading p {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
 }
 .new-lead-failure {
   display: flex;

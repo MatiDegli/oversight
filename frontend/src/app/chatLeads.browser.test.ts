@@ -409,10 +409,10 @@ it.each([1920, 1280])(
     }
   },
 );
-it.each([1920, 1280])(
-  "shows the first-task field, observed limits and selected draft at %s",
-  async (width) => {
-    const page = await open("lead-new", width, "dark", true, false, true);
+it.each([1920, 1280].flatMap((width) => ["dark", "day"].map((theme) => ({ width, theme }))))(
+  "shows the first-task field, observed limits and selected draft at $width in $theme",
+  async ({ width, theme }) => {
+    const page = await open("lead-new", width, theme, true, false, true);
     try {
       await startForm(page);
       await check(page.locator(".chat-lead-draft")).toBeVisible();
@@ -425,6 +425,18 @@ it.each([1920, 1280])(
         "Muse Spark Open · low",
       ]);
       await check(page.locator(".new-lead-limit-cards")).toContainText("2,000 characters a task");
+      const explanation = page.locator(".new-lead-limit-heading p");
+      await check(explanation).toHaveText("Set before Oversight starts; every lead gets the same.");
+      await check(explanation).toBeInViewport();
+      const copy = await explanation.boundingBox();
+      const heading = await page.locator(".new-lead-limit-heading").boundingBox();
+      const cards = await page.locator(".new-lead-limit-cards").boundingBox();
+      expect(copy?.width).toBeGreaterThan(300);
+      expect(copy?.height).toBeGreaterThanOrEqual(18);
+      if (!copy || !heading || !cards) throw new Error("Missing limits layout");
+      expect(copy.y).toBeGreaterThanOrEqual(heading.y);
+      expect(copy.y + copy.height).toBeLessThanOrEqual(heading.y + heading.height);
+      expect(heading.y + heading.height).toBeLessThan(cards.y);
       const field = await page.locator(".new-lead-box textarea").boundingBox();
       expect(field?.width).toBe(width === 1920 ? 734 : 630);
       expect(field?.height).toBe(width === 1920 ? 112 : 76);
