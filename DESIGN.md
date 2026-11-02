@@ -804,7 +804,7 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   a short summary and its age ("now", "40 s ago", "2 min ago"), counted from the latest event's time,
   not the reader's clock. Buttons: Live diff, Conversation, Pause or Resume, and Stop and discard
   for working, revising, ready, halted or paused agents. Stop also appears in the composer.
-  Overlap lines say "Also changed by B·1: ..." or "Read ..., which B·1 is changing",
+  Overlap lines say "Also changed by Agent B: ..." or "Read ..., which Agent B is changing",
   with up to two names and a remaining count; the full sentence is available on hover.
 - **Ready for review:** the card's pill changes to "Ready for review", its border turns the agent's
   color and its lamp fills. The card's body then gives way to a summary of what the agent finished
@@ -999,7 +999,7 @@ introduces no animation. Folded cards and opaque graph text plates mask straight
 Open frames retain their translucent body fill and stay below their rows during edge hover;
 straight lines can show through that fill.
 
-**Agent labels.** Hue means team; label means agent. Use the same label on graph work chips and markers, cards, Conversation, inbox, file presence and rails. Use letter·n for plan subtasks and the letter alone for a person-started lone agent. Labels are never inferred from runtime seats or palette families. No avatars, beads or mascots.
+**Agent labels.** Hue means team; label means agent. Use the same label on graph work chips and markers, cards, Conversation, inbox, file presence and rails. Use letter·n for plan subtasks and the letter alone for a person-started lone agent. Labels are never inferred from runtime seats or palette families. For example, a plan’s second subtask is "Agent A·2"; a person-started lone agent is "Agent A". No avatars, beads or mascots.
 
 **Distance badges.** A 20px circle filled with text, the distance as a page-colored number, 12px,
 weight 700. Neutral: the cone is about the code, not an agent.
@@ -1087,11 +1087,11 @@ The graph stays visible and keeps positions.
    letter 15/700, radius 7px, agent tint and 1.5px agent border; headline 20/700 on 28px lines;
    "Ready for review" pill 13/600, fully round, agent tint and text; close 28px. Caption 13px muted, 6px below,
    hash and worktree Mono 13. Chips 30px high, 14/600, radius 7px, gap 8px, 12px below caption.
-   State a's caption reads "B·1 · Muse Spark Open · cost unknown · step 4 of 30 · worktree
+   State a's caption reads "Agent B · Muse Spark Open · cost unknown · step 4 of 30 · worktree
    agent-2 · base 4ca5596". Unknown cost is written as "cost unknown".
 2. **Lead:** 24px below the header, with a 16/700 title on 22px lines and a right-hand 13px
    muted caption on 18px lines, separated by 14px. The variants and exact copy follow below.
-3. **Agent note:** "B·1 says" (or A), 13px muted caption, then the agent's words at 15px
+3. **Agent note:** "Agent B says" (or Agent A), 13px muted caption, then the agent's words at 15px
    on 22px lines, 4px below. State a says "Reserve also rejects fractional and boolean quantities."
    Cross-review follows when present, 18px below: "Muse Spark Open reviewed this change",
    "Nothing blocking · 1 note", then "pricing.py:23 · no test covers an extra percent above 30
@@ -1191,7 +1191,7 @@ never its local color values. No new syntax color is chosen here.
 example Mono 13 on 19px lines, answer and Change at 14/600; 12px above and below, divider below.
 Open question 15/600 on 22px lines; input Mono 14 on 20px lines, 10px below its caption. The pair
 has equal cells with 10px radius and 14px padding, 8px gaps and a 24px arrow column. "Before · main"
-and "After · B·1" (or A) are 13px; After takes the agent tint, text and 1px border. Values are
+and "After · Agent B" (or Agent A) are 13px; After takes the agent tint, text and 1px border. Values are
 Mono 15 on 21px lines with soft wraps. Below a 700px panel the pair stacks, with a down arrow;
 labels share their value's line, 12px gap, cells padded 9px by 12px. At 1280 the panel is 608px;
 the After cell may start below the first screen. The fixed prompt and three equal 34px answers
@@ -1204,8 +1204,8 @@ not measured." In c: "3 of 9 callers measured; 6 were not.", "1 of 36 functions 
 
 **Phone, f and f-b (390×844).** One column, 16px gutters: 48px bar, one provenance strip,
 168px graph context, then scrolling evidence. The build supplies the real recording label once.
-The review header holds a 24px letter badge beside "B·1 · Muse Spark Open" in f or
-"A·1 · Muse Spark" in f-b: 14px text, agent name in its agent color at 600, model muted.
+The review header holds a 24px letter badge beside "Agent B · Muse Spark Open" in f or
+"Agent A · Muse Spark" in f-b: 14px text, agent name in its agent color at 600, model muted.
 Below it, the task headline wraps at 20/700 on 26px lines, 8px below the agent line, then the
 chips follow 12px below and wrap to at most two lines (three, then one). There is no provenance
 caption, status pill or review close button.
@@ -1639,7 +1639,7 @@ Each item is a target checked on the built result:
   boundaries use control-edge and focus uses text. Values below the floor stay visible as
   maintainer notes, not silent token changes.
 - **Errors:** every error message says what happened and how to go on, in the product's words:
-  "The merge conflicts with main in pricing.py. Ask A·1 to redo it on the new base, or reject
+  "The merge conflicts with main in pricing.py. Ask Agent A to redo it on the new base, or reject
   it." Never a bare code or "Something went wrong". Errors use neutral colors with an icon;
   failed red is for failing tests and destructive actions, not for chrome.
 - **Browser surfaces:** text selection, caret, scrollbars and focus rings take theme tokens.

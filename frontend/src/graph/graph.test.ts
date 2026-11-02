@@ -279,6 +279,7 @@ describe("graph mapping", () => {
       const pending = graph.getElementById(id);
       expect(pending.hasClass("pending")).toBe(true);
       expect(pending.style("border-style")).toBe("dashed");
+      expect(pending.style("border-dash-pattern")).toBe("6 4");
       expect(pending.style("border-color")).toBe(rgb(theme["agent-a"]));
       const fill = id === "billing:discount" ? theme["agent-a-node-new"] : theme["agent-a-node"];
       expect(pending.style("background-color")).toBe(rgb(fill.color));
@@ -293,6 +294,7 @@ describe("graph mapping", () => {
     expect(graph.getElementById("billing").style("border-style")).toBe("solid");
     expect(graph.getElementById("added-call").nonempty()).toBe(true);
     expect(graph.getElementById("added-call").style("line-style")).toBe("dashed");
+    expect(graph.getElementById("added-call").style("line-dash-pattern")).toBe("6 4");
     expect(graph.getElementById("added-call").style("line-color")).toBe(rgb(theme["agent-a"]));
     expect(graph.getElementById("edge-imports").nonempty()).toBe(true); // Main is unchanged.
     expect(JSON.stringify(state)).toBe(before);

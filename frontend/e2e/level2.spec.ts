@@ -2,8 +2,6 @@
 // client only in this e2e build; page.route answers every command, while replay alone changes state.
 import { expect, test } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
-import { applyEvent, createInitialState } from "../src/state";
-import { presentationFor } from "../src/teams/presentation";
 
 import { installRecorder, nodeIds, recorded } from "./graph-support";
 import { engaged, installHolds, release } from "./holds";
@@ -35,13 +33,10 @@ import {
   tapNode,
 } from "./level2-support";
 
-const firstProposal = events.find((event) => event.type === "change.proposed");
-const working = events
-  .filter((event) => event.seq < (firstProposal?.seq ?? 0))
-  .reduce(applyEvent, createInitialState());
-const identityA = presentationFor(working, a.agent_id);
-const identityB = presentationFor(working, b.agent_id);
-if (!identityA || !identityB) throw new Error("Missing recording identity");
+// This recording starts two unrelated, person-started agents in this order.
+// Keep expected paint independent of the product reducer and its browser-only module graph.
+const identityA = { label: "A", hue: "A", family: "agent-a" } as const;
+const identityB = { label: "B", hue: "B", family: "agent-b" } as const;
 
 test.afterEach(async ({ page }) => removeRoutes(page));
 

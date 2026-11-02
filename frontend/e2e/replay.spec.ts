@@ -12,8 +12,6 @@ import type { Page } from "@playwright/test";
 import type { ServerEvent } from "@contracts";
 
 import type { GraphProbeHost } from "../src/graph";
-import { applyEvent, createInitialState } from "../src/state";
-import { presentationFor } from "../src/teams/presentation";
 import { E2E_LOG } from "./log.ts";
 import { installRecorder, nodeIds, recorded } from "./graph-support.ts";
 
@@ -63,11 +61,9 @@ const afterDelta = [
 const REPLAY_OF = "Replay of a hand-written demo fixture";
 const firstStatus = events.find((event) => event.type === "agent.status");
 if (firstStatus?.type !== "agent.status") throw new Error(`${LOG_NAME} has no agent status`);
-const firstState = events
-  .filter((event) => event.seq <= firstStatus.seq)
-  .reduce(applyEvent, createInitialState());
-const identity = presentationFor(firstState, firstStatus.payload.agent_id);
-if (!identity) throw new Error(`${LOG_NAME} has no agent identity`);
+// The first person-started lone agent in this fixture is team A.
+// This expectation is independent of the product reducer and its browser-only module graph.
+const identity = { label: "A", hue: "A" };
 // What the person sees light up, in order: each focus event names the nodes it lights.
 const lighting = payloads("agent.focus").map(
   ({ mode, node_ids }) =>

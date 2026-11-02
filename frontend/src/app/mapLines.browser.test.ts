@@ -108,7 +108,9 @@ async function modulePoint(page: Page, id: string) {
 async function groupPoint(page: Page, id: string) {
   const box = await page.locator(`[data-map-group="${id}"] .map-header`).boundingBox();
   if (!box) throw new Error(`Missing group ${id}`);
-  return { x: box.x + 10, y: box.y + 10 };
+  // At 1280 the summary plate overlaps the header's top line after zooming.
+  // Point inside the lower part of the header so the graph stage receives the event.
+  return { x: box.x + 10, y: box.y + box.height - 10 };
 }
 async function pointAt(page: Page, point: { x: number; y: number }) {
   await page.mouse.move(point.x, point.y);

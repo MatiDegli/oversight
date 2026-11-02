@@ -4,18 +4,23 @@ import { createServer, type ViteDevServer } from "vite";
 import { beforeAll, afterAll, it, expect } from "vitest";
 import { launchBrowser } from "../../browserLaunch.support";
 import { themes } from "../../theme";
-// eslint-disable-next-line no-restricted-imports -- Read the original offline graph for presentation regressions.
-import { readBoltonsSnapshot } from "../../graph/exactFixtures.testSupport";
+import { readFileSync } from "node:fs";
+import { parseEvent } from "../../transport";
 import type { GraphSnapshot } from "@contracts";
 
-const graph = readBoltonsSnapshot();
-function requireGraph() {
-  if (!graph) throw new Error("Missing Boltons d31d821 snapshot");
-  return graph;
-}
+// Ordinary paint regressions use the committed demo graph. Only the opt-in capture suite
+// requires the original Boltons snapshot; it retains its no-substitute guard.
+const graph = readFileSync(
+  new URL("../../../../fixtures/events/recorded-demo.jsonl", import.meta.url),
+  "utf8",
+)
+  .trim()
+  .split("\n")
+  .map(parseEvent)
+  .find((event) => event.type === "graph.snapshot")?.payload;
+if (!graph) throw new Error("Missing committed demo graph");
 let server: ViteDevServer, browser: Browser, html: string, url: string;
 beforeAll(async () => {
-  if (!graph) throw new Error("Missing Boltons d31d821 snapshot");
   server = await createServer({
     root: fileURLToPath(new URL("../../../", import.meta.url)),
     server: { host: "127.0.0.1", port: 0 },
@@ -49,12 +54,18 @@ it.each(["dark", "day"] as const)(
         ({ graph, theme }) => {
           document.documentElement.dataset.theme = theme;
           (
-            window as unknown as { showTeamColors: (graph: GraphSnapshot, scene: string) => void }
-          ).showTeamColors(graph, "graph-busy");
+            window as unknown as {
+              showTeamColors: (graph: GraphSnapshot, scene: string, workspace: string) => void;
+            }
+          ).showTeamColors(graph, "graph-busy", "demo-repo");
         },
-        { graph: requireGraph(), theme },
+        { graph, theme },
       );
       await page.evaluate(() => document.fonts.ready);
+      await check(page.getByText("Handwritten events over demo-repo", { exact: true })).toBeVisible();
+      await check(page.getByRole("region", { name: "New agent" })).toContainText(
+        "Replay of a handwritten event log over demo-repo",
+      );
       const first = page.getByRole("article", { name: "Agent A·1", exact: true });
       const second = page.getByRole("article", { name: "Agent A·2", exact: true });
       const ready = page.getByRole("article", { name: "Agent A·3", exact: true });

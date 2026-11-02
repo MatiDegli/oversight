@@ -125,3 +125,15 @@ it.each([false, true])(
     if (!reduced) expect(life.gain("A", 1001)).toBeLessThan(1);
   },
 );
+
+it.each(["dark", "day"] as const)("reserves the count line for agent marks in %s", (theme) => {
+  const drawn = elements([mark("A", "editing", "A·2")]);
+  const model = mapModel(drawn, themes[theme]);
+  const markup = renderToStaticMarkup(
+    <MapLayer frame={{ model, level: "map", zoom: 0.2, pan: { x: 0, y: 0 } }} />,
+  );
+  // Keep the line's box so the circle stays stationary, but do not paint a count under a marker.
+  expect(markup).toContain('class="map-count" style="visibility:hidden">1 function</div>');
+  expect(markup).toContain('class="map-count">empty</div>');
+  expect(markup).toContain("A·2 editing</div>");
+});

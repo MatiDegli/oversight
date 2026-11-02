@@ -19,8 +19,12 @@ export type TeamScene = keyof typeof teamCuts;
 const source = log.trim().split("\n").map(parseEvent);
 let root: Root | undefined;
 
-/** Real components, original offline graph, contract-validated handwritten event prefixes. */
-export function showTeamColors(graph: GraphSnapshot, scene: TeamScene) {
+/** Real components and contract-validated handwritten team events over the supplied graph. */
+export function showTeamColors(
+  graph: GraphSnapshot,
+  scene: TeamScene,
+  workspace = "Boltons d31d821",
+) {
   root?.unmount();
   const opening = source[0];
   if (!opening || opening.type !== "run.started") throw new Error("Missing handwritten run");
@@ -58,8 +62,8 @@ export function showTeamColors(graph: GraphSnapshot, scene: TeamScene) {
           onOpenChange={() => undefined}
           onReview={() => undefined}
           onClosePanel={() => undefined}
-          replayLabel="Handwritten events over Boltons d31d821"
-          replayOf="handwritten events over Boltons d31d821"
+          replayLabel={`Handwritten events over ${workspace}`}
+          replayOf={`handwritten event log over ${workspace}`}
         />
       </FilesProvider>,
     ),
