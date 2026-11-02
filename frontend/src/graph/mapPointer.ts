@@ -1,7 +1,7 @@
 import type { Core } from "cytoscape";
 import type { RefObject } from "react";
 import type { MapFrame } from "./MapLayer";
-import { mapHit, type MapHover } from "./mapLines";
+import { mapHit, type MapHover } from "./mapLinesModel";
 
 interface MapPointerOptions {
   host: RefObject<HTMLDivElement | null>;

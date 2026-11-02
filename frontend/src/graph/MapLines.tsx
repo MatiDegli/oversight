@@ -1,5 +1,5 @@
 import type { MapFrame } from "./MapLayer";
-import { mapSegments } from "./mapLines";
+import { mapSegments } from "./mapLinesModel";
 
 function MapLine({ line }: { line: ReturnType<typeof mapSegments>[number] }) {
   const { start: a, end: b } = line;

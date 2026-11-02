@@ -374,6 +374,31 @@ it("opens a folded module at 100% and leaves an open module open on the next vis
       await page.mouse.click(point.x, point.y);
       await ready(page);
       expect(await camera(page)).toMatchObject({ level: "cards", zoom: 1, focus: "Zoom out" });
+      const centers = await page.evaluate(() => {
+        const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]'),
+          probe = host?.oversightGraph;
+        const bounds = probe?.nodeBounds(".module").find((node) => node.id === "tools.module_12"),
+          clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+        if (!host || !probe || !bounds || !clear) throw new Error("Missing module geometry");
+        const box = host.getBoundingClientRect(),
+          pan = probe.pan(),
+          zoom = probe.zoom();
+        return {
+          actual: {
+            x: ((bounds.x1 + bounds.x2) * zoom) / 2 + pan.x,
+            y: ((bounds.y1 + bounds.y2) * zoom) / 2 + pan.y,
+          },
+          expected: {
+            x: (40 + Math.min(box.width - 40, clear.right - box.left)) / 2,
+            y:
+              (Math.max(40, clear.top - box.top) +
+                Math.min(box.height - 40, clear.bottom - box.top)) /
+              2,
+          },
+        };
+      });
+      expect(centers.actual.x).toBeCloseTo(centers.expected.x, 0);
+      expect(centers.actual.y).toBeCloseTo(centers.expected.y, 0);
       expect(
         await page.evaluate(() =>
           document

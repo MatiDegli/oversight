@@ -19,9 +19,9 @@ import { FIT_PADDING } from "./geometry";
 import type { GraphViewProps } from "./GraphView";
 import type { MapFrame } from "./MapLayer";
 import { MAP_MIN_MODULES, nextLevel, targetLevel } from "./mapLevel";
-import { mapCalls } from "./mapLines";
+import { mapCalls } from "./mapLinesModel";
 import { createMapPointer } from "./mapPointer";
-import type { MapHover } from "./mapLines";
+import type { MapHover } from "./mapLinesModel";
 import { mapModel, panelBox } from "./mapModel";
 import { settle } from "./updateGraph";
 

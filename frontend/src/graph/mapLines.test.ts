@@ -12,7 +12,7 @@ import {
   mapHit,
   mapSegments,
   placeChip,
-} from "./mapLines";
+} from "./mapLinesModel";
 import { MapLayer } from "./MapLayer";
 import { createMapPointer } from "./mapPointer";
 import design from "../../../DESIGN.md?raw";
@@ -21,7 +21,7 @@ import controllerSource from "./mapController.ts?raw";
 import layerSource from "./MapLayer.tsx?raw";
 import pointerSource from "./mapPointer.ts?raw";
 import linesSource from "./MapLines.tsx?raw";
-import pureLinesSource from "./mapLines.ts?raw";
+import pureLinesSource from "./mapLinesModel.ts?raw";
 // eslint-disable-next-line no-restricted-imports -- Test source only, for the capture callback size gate.
 import captureSource from "../app/mapLines.browser.test.ts?raw";
 
@@ -96,7 +96,22 @@ it.each([
 ])("keeps one separated map decision heading with %s", (_case, document) => {
   const heading = "## 2026-11-01 — Map evidence, calls and pointer navigation";
   expect(document.split(heading)).toHaveLength(2);
-  expect(document).toContain(`\n\n${heading}\n\n`);
+  // The union merge driver can join the heading to the previous entry's final line.
+  const joined = document.replace(`\n\n${heading}`, `\n${heading}`);
+  for (const merged of [document, joined]) {
+    expect(merged.split(heading)).toHaveLength(2);
+    expect(merged).toContain(`\n${heading}\n\n`);
+  }
+});
+
+it("separates the deferred review policy and keeps decision entries unique", () => {
+  const headings = decisions.match(/^## .+$/gm) ?? [];
+  expect(headings.length).toBeGreaterThan(0);
+  expect(new Set(headings).size).toBe(headings.length);
+  const heading = "## 2026-11-01 — Deferred SHOULD-FIX findings on every front";
+  const index = decisions.indexOf(heading);
+  expect(index).toBeGreaterThan(1);
+  expect(decisions.slice(index - 2, index), heading).toBe("\n\n");
 });
 
 it("checks whether the map is active before handling window mouseup", () => {
@@ -123,7 +138,12 @@ it("checks whether the map is active before handling window mouseup", () => {
 });
 
 it("uses a static module type import", () => {
-  const file = ts.createSourceFile("mapLines.ts", pureLinesSource, ts.ScriptTarget.Latest, true);
+  const file = ts.createSourceFile(
+    "mapLinesModel.ts",
+    pureLinesSource,
+    ts.ScriptTarget.Latest,
+    true,
+  );
   const imports: ts.ImportTypeNode[] = [];
   const visit = (node: ts.Node) => {
     if (ts.isImportTypeNode(node)) imports.push(node);

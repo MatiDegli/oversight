@@ -7,8 +7,8 @@ import type { MapModel, MapGroup, MapModule as Module } from "./mapModel";
 import { MapLines } from "./MapLines";
 import { decisionsLabel, testedLabel } from "./mapEvidence";
 import { moduleLayout, panelBox } from "./mapModel";
-import { distanceBadge, pointed } from "./mapLines";
-import type { MapCall, MapHover } from "./mapLines";
+import { distanceBadge, pointed } from "./mapLinesModel";
+import type { MapCall, MapHover } from "./mapLinesModel";
 import type { MapLevel } from "./mapLevel";
 
 const mapStyles = `
