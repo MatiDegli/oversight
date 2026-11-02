@@ -223,13 +223,20 @@ new candidate work waits for the maintainer’s order.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
 - Person-drawn work zones that limit edits, with a scope-request tool, warn mode and zone growth by approval; item 11's server-computed zones and the reserved `within_zone` rule are separate.
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
-- Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
+- Outside agents reporting through hooks or MCP, low priority because the product scope is Meta-only.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
 - A local model in slot B and named editor cursors. The Tauri shell is decided: see Next.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.
 - Native candidates from the maintainer (2026-11-01), none queued.
+  - Slash commands in Chat, low priority, not built. Read-only: `/usage` (usage screen), `/status`,
+    `/context` (tokens per call; missing usage is "unknown", never zero), `/export`. Existing routes:
+    `/pause`, `/resume`, `/stop`, `/revert` (only where Revert applies cleanly). Contract decisions,
+    not proposed now: `/goal` (done-condition; status comes from tool calls), `/model` (Muse Spark vs
+    Muse Spark Open), `/compact` (little value with per-run threads lost on server restart; DECISIONS.md,
+    “Lead thread lifetime and restart”). No `/approve`: Approve has no keyboard shortcut; a typed command
+    is the same thing. Chat adds no events, contracts or endpoints today.
   - Standing instructions and lessons from reviews: see Repository memory's refinements below,
     extending the Lead agent and Next's "Text rules attached to areas of the repository".
   - Retrospective: building on item 1's facts from events, a failed run, merge conflict, rejection
@@ -878,6 +885,10 @@ in `9ad1ecf`;
 binds the arm configuration hash.
 Keep charges, unknowns and reservations in one ledger keyed by task, profile, arm and repetition;
 never reset it or change output directories to manufacture another attempt.
+
+Semantic retrieval (RAG): experimental, outside the hackathon, evals only; not queued or built. No product agents
+or daily coordination: grep suffices at this size; the graph is the structured index; stale retrieval yields to
+DECISIONS.md. An index needs a dependency allowed by the license rule and a Meta-only model.
 
 Declare criteria before paid execution. Combined paid bench work has a US$20 ceiling within the
 US$150 budget; agent B's Baseten cost stays unknown until its price per million tokens is set in
