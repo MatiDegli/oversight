@@ -188,6 +188,33 @@ async def test_startup_exports_the_selected_prompt_version(
             await live.shutdown()
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_agent_prompt_version_follows_the_configured_lead_limits(
+    tmp_path: Path, enabled: bool
+) -> None:
+    from live_helpers import live_settings
+
+    from oversight.app import LiveRun
+    from oversight.settings import build_lead_limits
+    from oversight_contracts.commands import StartAgent
+
+    settings = live_settings(tmp_path, harness_pack=enabled, lead_max_turns=7)
+    live = LiveRun(settings)
+    await live.startup()
+    try:
+        stream = live.store.subscribe()
+        started = await anext(stream)
+        version = json.loads(started.envelope)["payload"]["prompt_version"]
+        assert version == _prompts.prompt_version(
+            enabled, None, lead_limits=build_lead_limits(settings)
+        )
+        assert version != _prompts.prompt_version(enabled)
+        agent = await live.start(StartAgent(task="Do the task."))
+        assert live._kept[agent.agent_id].prompt_version == version
+    finally:
+        await live.shutdown()
+
+
 async def test_off_preserves_prompt_and_tool_results(
     small_tree: Opened, monkeypatch: pytest.MonkeyPatch
 ) -> None:
