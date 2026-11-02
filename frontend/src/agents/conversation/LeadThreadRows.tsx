@@ -3,12 +3,28 @@ import { EventTime, TimelineEntry } from "./rows";
 import { useLayoutEffect } from "react";
 import type { LeadConversation } from "./selectConversation";
 
-const cuts = {
-  tool_calls: "Turn ended: 12 tool calls reached",
-  model_calls: "Turn ended: 18 model calls reached",
-  time: "Turn ended: 300 s reached",
-  spend_brake: "Turn ended: the spending brake stopped the next model call",
-};
+function cutText(entry: Extract<LeadConversation["entries"][number], { kind: "lead-reply" }>) {
+  const { cut } = entry.event.payload;
+  const n = (value: number) => value.toLocaleString("en-US", { maximumSignificantDigits: 21 });
+  switch (cut) {
+    case "tool_calls":
+      return entry.limits
+        ? `Turn ended: ${n(entry.limits.tool_calls)} tool calls reached`
+        : "Turn ended: tool call limit reached";
+    case "model_calls":
+      return entry.limits
+        ? `Turn ended: ${n(entry.limits.model_calls)} model calls reached`
+        : "Turn ended: model call limit reached";
+    case "time":
+      return entry.limits
+        ? `Turn ended: ${n(entry.limits.wall_clock_s)} s reached`
+        : "Turn ended: time limit reached";
+    case "spend_brake":
+      return "Turn ended: the spending brake stopped the next model call";
+    case null:
+      return null;
+  }
+}
 
 /** Speech is plain text. Server limits remain outside the lead's speech. */
 export default function LeadThreadRows({
@@ -53,7 +69,7 @@ export default function LeadThreadRows({
             </div>
             {entry.event.payload.cut !== null && (
               <p className="mx-[22px] my-2 rounded-[10px] border border-divider bg-inset px-[14px] py-2 text-[14px] text-muted">
-                {cuts[entry.event.payload.cut]}
+                {cutText(entry)}
               </p>
             )}
           </>

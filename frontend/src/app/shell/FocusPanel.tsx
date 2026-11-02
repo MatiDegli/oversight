@@ -34,9 +34,10 @@ const LeadConversationFocus = lazy(() =>
       state,
       agentId,
       onMessageLead,
+      onStopLead,
       chat,
       onOpenSettings,
-    }: Pick<FrameProps, "state" | "onMessageLead" | "onOpenSettings"> & {
+    }: Pick<FrameProps, "state" | "onMessageLead" | "onStopLead" | "onOpenSettings"> & {
       agentId: string;
       chat?: boolean;
     }) => {
@@ -48,6 +49,7 @@ const LeadConversationFocus = lazy(() =>
           actionAccessory={
             chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
           }
+          onStopLead={onStopLead}
           onSend={onMessageLead ? (text) => onMessageLead(agentId, text) : undefined}
         />
       );
@@ -239,6 +241,7 @@ function ConversationFocus({
   agentId,
   onMessageAgent,
   onMessageLead,
+  onStopLead,
   onPauseAgent,
   onResumeAgent,
   onStopAgent,
@@ -260,24 +263,16 @@ function ConversationFocus({
         <LazyPanel
           key={agentId}
           frame={
-            <ConversationFrame
-              header={{
-                ...lead.status,
-                kind: "lead",
-                agentId,
-                hue: lead.hue,
-                letter: lead.letter,
-                modelLabel:
-                  state.run?.models.find((model) => model.id === lead.status.model)?.label ??
-                  lead.status.model,
-              }}
-            />
+            <p role="status" className="px-[18px] py-4 text-muted">
+              Loading lead conversation…
+            </p>
           }
         >
           <LeadConversationFocus
             state={state}
             agentId={agentId}
             onMessageLead={onMessageLead}
+            onStopLead={onStopLead}
             chat={chat}
             onOpenSettings={onOpenSettings}
           />

@@ -4340,3 +4340,26 @@ unchanged, including full working strength and the current 0.5 waiting weight.
 Map counts and resting agent labels use opaque plates matching the group panel resolved over
 ground (or ground without a panel) to keep text above 4.5:1 over stronger pools without adding
 a visible box to unlit cells; expanded agent labels retain their existing hover backing.
+
+## 2026-11-02 — K2b lead operations within the direct-task-first Chat
+
+The coordinator's K2b dispatch implements packet a-1102c on base `5b6ebb08`.
+The selected lead's exact published task is its headline, with team ring and separate identity/model
+fact; the earlier coding-agent name-headline departure remains for coding agents. Turn, distinct
+owned plans, cumulative Step, per-turn calls, limits and lead-role cost use retained events only.
+A reply precedes its final status, whose Step becomes the next turn's baseline. Historical null
+limits retain numerators without fabricated denominators. Cut captions use the snapshot before
+that reply, never current defaults.
+
+Stop sends the rendered lead revision once. Admission retains the observed state, pending Stop and
+draft until a terminal event; rejection permits only another person's action. Ended leads replace
+the sketch's textbox with exact server detail and a continuation sentence. Stop preserves member
+work and plans. New lead sends only `{task}`, uses the backend's default and observes the published
+active-lead cap independently of held coding slots.
+
+The detailed dispatch takes precedence over Impeccable's generic discovery/confirmation,
+subagent and typography defaults: work proceeds in this session without another interview or
+agents; DESIGN.md's 15px body/16px title roles and existing tokens remain authoritative. The
+approved raster is a layout reference, not authority for unpublished numbers, ended inputs or
+model selection. K2c notices/timeline and K3 grouping remain separate; this slice compacts rows
+without adding member collapse. Captures remain explicitly handwritten, not a real recording.

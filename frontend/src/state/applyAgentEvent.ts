@@ -105,6 +105,16 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
         budgetMarks,
         modelWaits,
         agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },
+        leadCosts:
+          tick.role === "lead"
+            ? {
+                ...state.leadCosts,
+                [tick.agent_id]:
+                  tick.cost_usd === null || state.leadCosts[tick.agent_id] === null
+                    ? null
+                    : (state.leadCosts[tick.agent_id] ?? 0) + tick.cost_usd,
+              }
+            : state.leadCosts,
         spendUnknown:
           !profile || profile.provider === "meta" ? tick.cost_usd === null : state.spendUnknown,
       };

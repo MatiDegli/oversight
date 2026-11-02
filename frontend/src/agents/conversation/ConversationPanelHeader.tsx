@@ -1,4 +1,5 @@
-import { agentLook, agentSlotStyle } from "../../theme";
+import { LeadHeaderView } from "./LeadHeaderView";
+import { agentLook } from "../../theme";
 import { costText } from "../../state";
 import { labels } from "../AgentCard";
 import type { ConversationHeader, LeadHeader } from "./selectConversation";
@@ -7,35 +8,7 @@ const chip =
   "max-w-full rounded-control border border-border px-[10px] py-1 text-[14px] wrap-anywhere";
 
 export function ConversationPanelHeader({ header }: { header: ConversationHeader | LeadHeader }) {
-  if (header.kind === "lead")
-    return (
-      <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
-        <div className="flex items-center gap-[10px]">
-          <span
-            aria-hidden="true"
-            style={agentSlotStyle(header.hue)}
-            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-(--slot-graphic) font-bold text-(--slot-text)"
-          >
-            {header.letter}
-          </span>
-          <h2 className="text-[16px]! leading-[1.3]! font-semibold text-text">
-            Lead {header.letter}
-          </h2>
-          <span className={chip}>
-            {header.state === "done" ? "Done (historical)" : header.state}
-          </span>
-        </div>
-        <div className="mt-[14px] flex flex-wrap gap-2">
-          <span className={chip}>{header.modelLabel}</span>
-          <span className={chip}>
-            Step <span className="font-mono">{header.step}</span>
-          </span>
-        </div>
-        {header.detail !== null && (
-          <p className="mt-2 text-[14px] text-muted wrap-anywhere">{header.detail}</p>
-        )}
-      </header>
-    );
+  if (header.kind === "lead") return <LeadHeaderView header={header} />;
   return (
     <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
       <div className="flex items-start gap-[10px]">

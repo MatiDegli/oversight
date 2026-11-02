@@ -20,6 +20,8 @@ export function ChatLeadRow({
       style={agentSlotStyle(row.hue)}
       data-selected={selectedAgentId === row.id}
       data-ended={row.done}
+      title={[row.status.task, row.teamLine, row.activity].filter(Boolean).join(" · ")}
+      aria-description={[row.teamLine, row.activity].filter(Boolean).join(" · ")}
       aria-label={`Lead ${row.letter}: ${row.status.task}. ${row.label}. ${row.id}`}
       {...(onOpenConversation
         ? {

@@ -63,4 +63,6 @@ One line per day, in Argentina time (ART).
   Verified exclusive reply correlation across human, autonomous and mixed turns, and isolated
   wake admission after integrating concurrent leads and their captured limits.
   Updated prompt-version goldens, bounded wake summaries, delivered notices as tool data, and
-  labeled the synthetic wake attribution fixture with its generator provenance.
+  labeled the synthetic wake attribution fixture with its generator provenance. Added K2b's event-derived
+  lead header, observed-revision Stop, ended composer, default-only lead start, cap guards and
+  compact lead rows with fake-only lifecycle and responsive capture proof.
