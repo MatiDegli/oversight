@@ -35,6 +35,28 @@ it("holds changed and dashed pending marks until the shared 250 + 1450 ms arriva
   expect(mergingChanges(starts, 1000, true)).toEqual([]);
   expect(mergingChanges(mergeArrivals(state, new Map(), 1000, true), 1000, false)).toEqual([]);
   expect(mergeArrivals(createInitialState(), starts, 3000).size).toBe(0);
+  const beforeMerge = events
+    .filter((event) => event.seq <= 20)
+    .reduce(applyEvent, createInitialState());
+  let reduced = false;
+  vi.stubGlobal("matchMedia", () => ({ matches: reduced }));
+  const clock = new ArrivalClock(beforeMerge);
+  try {
+    clock.update(state);
+    expect(clock.getSnapshot().merging).toEqual(["change-1"]);
+    reduced = true;
+    clock.update(state);
+    expect(clock.getSnapshot().merging).toEqual([]);
+    reduced = false;
+    clock.update(state);
+    expect(clock.getSnapshot().merging).toEqual([]);
+    clock.update(beforeMerge);
+    clock.update(state);
+    expect(clock.getSnapshot().merging).toEqual(["change-1"]);
+  } finally {
+    clock.dispose();
+    vi.unstubAllGlobals();
+  }
 });
 
 it("preserves starts and snapshot identity for unrelated events", () => {
@@ -42,6 +64,10 @@ it("preserves starts and snapshot identity for unrelated events", () => {
   const before = clock.getSnapshot();
   const listener = vi.fn();
   const unsubscribe = clock.subscribe(listener);
+  expect(clock.derive(createInitialState()).snapshot.starts.size).toBe(0);
+  expect(clock.getSnapshot()).toBe(before);
+  expect(clock.derive({ ...state, lastSeq: state.lastSeq + 1 }).snapshot).toBe(before);
+  expect(listener).not.toHaveBeenCalled();
   clock.update({ ...state, lastSeq: state.lastSeq + 1 });
   expect(clock.getSnapshot().starts).toBe(before.starts);
   expect(clock.getSnapshot()).toBe(before);
@@ -89,7 +115,15 @@ it("shows an evicted merge as arrived instead of Merging without travel", () => 
         message: "Needs you — revision=1; head=abc; code=main_moved; reason=Main moved",
       },
     }));
-  clock.update({ ...state, changes, agents, decisionEvents });
+  const next = { ...state, changes, agents, decisionEvents };
+  const before = clock.getSnapshot();
+  const listener = vi.fn();
+  clock.subscribe(listener);
+  expect(clock.derive(next).snapshot.labels.get("A")).toBe("Merged");
+  expect(clock.derive(next).snapshot.merging).toEqual([]);
+  expect(clock.getSnapshot()).toBe(before);
+  expect(listener).not.toHaveBeenCalled();
+  clock.update(next);
   const snapshot = clock.getSnapshot();
   expect(snapshot.labels.get("A")).toBe("Merged");
   expect(snapshot.merging).toEqual([]);
