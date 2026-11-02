@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -120,15 +121,17 @@ def test_outer_assignment_is_before_execution_and_handle_is_retained(
 
 
 @pytest.mark.anyio
-async def test_empty_job_poll_yields_and_times_out_without_closing() -> None:
+async def test_empty_job_poll_yields_and_times_out_without_closing(monkeypatch) -> None:
     jobs = FakeJobs()
     jobs.members = (10, 20, 30)  # launcher, Git, and an unrelated-session descendant
     ticks = 0
+    # Advance the deadline only after all ticks: native timer resolution is not 5 ms.
+    monkeypatch.setattr(nt, "time", SimpleNamespace(monotonic=lambda: 0.04 if ticks == 4 else 0))
 
     async def ticking() -> None:
         nonlocal ticks
         for _ in range(4):
-            await asyncio.sleep(0.005)
+            await asyncio.sleep(0)
             ticks += 1
 
     with pytest.raises(smoke.SmokeError, match="still contains"):
@@ -143,13 +146,18 @@ async def test_empty_job_poll_yields_and_times_out_without_closing() -> None:
     "code,log,deadline_s",
     [
         (0, True, 1),
-        (nt.NT_GRACEFUL_EXITS[0], False, 1),
+        (3, False, 1),
         (None, True, 0),
-        (nt.NT_GRACEFUL_EXITS[0], True, 1),
-        (nt.NT_GRACEFUL_EXITS[0], True, 0),
+        (3, True, 1),
+        (3, True, 0),
+        (0xC000013A, True, 1),
     ],
 )
-async def test_shutdown_verdict(tmp_path: Path, code: int | None, log: bool, deadline_s: float):
+async def test_shutdown_verdict(
+    tmp_path: Path, monkeypatch, code: int | None, log: bool, deadline_s: float
+):
+    # Two reads can share a native clock tick; an exhausted budget must still refuse.
+    monkeypatch.setattr(nt, "time", SimpleNamespace(monotonic=lambda: 100))
     jobs, child = FakeJobs(), Child()
     path = tmp_path / "server.log"
     path.write_text("Application shutdown complete" if log else "startup only")
@@ -160,7 +168,7 @@ async def test_shutdown_verdict(tmp_path: Path, code: int | None, log: bool, dea
         sent.append((pid, event))
         child.returncode = code
 
-    if code == nt.NT_GRACEFUL_EXITS[0] and log and deadline_s > 0:
+    if code == 3 and log and deadline_s > 0:
         await server.stop(deadline_s, send)
         assert "terminate" not in jobs.calls
     else:
@@ -296,7 +304,7 @@ async def test_three_runs_share_runtime_and_use_the_full_driver(
         await nt.run_checks()
         assert phases == ["full level2", "stop", "lock"] * 3
         assert len(set(runtimes)) == 1 and outer_checks == [99] * 4
-        assert cleaned == [runtimes[0].parent]
+        assert len(cleaned) == 1 and cleaned[0].resolve() == runtimes[0].parent
     # The injected cleanup deliberately kept scratch for inspection; remove it now.
     nt.shutil.rmtree(runtimes[0].parent)
 
