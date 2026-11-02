@@ -589,8 +589,10 @@ change/role totals and rounds in archived GET /changes/{id} (`bf36052`,
 too (`bf36052`, `0e5305a`). The frontend still keeps agent totals, not the aggregate usage view
 (`frontend/src/state/applyAgentEvent.ts:applyAgentEvent`). Agent-hours (`95e40e5`,
 `events/activity_fold.py:fold_activity`, `tools/run_hours.py`) and dated list-price accounting
-(`56b5f18`, `events/list_prices.py:price_usage`, `tools/run_cost.py`) are built. Team/period grouping
-and aggregate UI remain. E6 emits failed attempts (`06c34a5`); retry-card rendering is built
+(`56b5f18`, `events/list_prices.py:price_usage`, `tools/run_cost.py`) are built. Offline hour/day
+reports exist (`events/usage_periods.py`, `tools/run_periods.py`); live period grouping still needs a
+contract change, and team grouping and aggregate UI remain. E6 emits failed attempts (`06c34a5`);
+retry-card rendering is built
 (`26d59f1`). Live/replay derivation needs no addition;
 optional archived totals/rounds were reserved in `649ff0d`. Unknown usage/unpriced Baseten work stays
 unknown, never free. The cumulative product Meta ledger is separate from the bench ledger.
