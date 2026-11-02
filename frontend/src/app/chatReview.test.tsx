@@ -16,7 +16,7 @@ import { ChatChangeCard } from "./shell/ChatChangeCard";
 import { ConversationPanel } from "../agents/conversation/ConversationPanel";
 // eslint-disable-next-line no-restricted-imports -- Preserve the built order and current entry identity.
 import { selectConversation } from "../agents/conversation/selectConversation";
-import { openReview, tabbedView } from "./view";
+import { openReview, tabbedView, type View } from "./view";
 import { resolvedReviewAction } from "./shell/ChatMerge";
 
 it("keeps the C4 integration decision discoverable", () => {
@@ -38,6 +38,37 @@ it("settles graph snapshots when phone practice recreates an equivalent view", (
   }
   expect(html(<RecreatedView />)).toBe("<span>practice</span>");
 });
+
+it.each(["selection", "review", "diff"] as const)(
+  "preserves Oversight %s through run replacement and replay restart without a graph click",
+  (target) => {
+    const state = chatReviewState();
+    const view: View = {
+      ...tabbedView,
+      selected: "shop.cart:Cart.quote_add",
+      review: target === "review" ? "change-1" : null,
+      diff: target === "diff" ? { changeId: "change-1", path: "shop/cart.py" } : null,
+    };
+    const replacement = {
+      ...state,
+      run: { ...required(state.run), run_id: "replacement-run" },
+    };
+    for (const next of [replacement, createInitialState()]) {
+      function RunSwap() {
+        const [phase, setPhase] = useState(0);
+        const navigation = useChatReviewNavigation(phase === 0 ? state : next, view, {
+          layout: "Oversight",
+          setLayout: () => {},
+        });
+        // Check both the replacement render and the settled snapshot, with no view dispatch.
+        if (phase < 2) setPhase(phase + 1);
+        expect(navigation.graphView).toEqual(view);
+        return null;
+      }
+      html(<RunSwap />);
+    }
+  },
+);
 
 const model = () => selectChatChange(chatReviewState(), "change-1");
 it.each([true, false])(

@@ -629,6 +629,45 @@ it.each([
     }
   },
 );
+it("preserves the Oversight conversation width inside C4 wrappers at 1600px", async () => {
+  const { page } = await open({ width: 1600 });
+  try {
+    await layout(page, "Oversight").click();
+    const thread = page.locator('.focus-panel [aria-label="Agent A conversation"]');
+    await check(thread).toBeVisible();
+    expect(required(await page.locator(".focus-panel").boundingBox()).width).toBe(880);
+    expect(required(await page.locator(".chat-review-conversation").boundingBox()).width).toBe(879);
+    expect(required(await thread.boundingBox()).width).toBe(879);
+  } finally {
+    await page.close();
+  }
+});
+it("retains the Oversight review cone after a run swap with no See on graph click", async () => {
+  const { page } = await open();
+  try {
+    await card(page).getByRole("button", { name: "Review change", exact: true }).click();
+    await layout(page, "Oversight").click();
+    await framed(page);
+    await check(page.getByRole("region", { name: "Possibly affected", exact: true })).toBeVisible();
+    await page.evaluate(() => {
+      const state = window.chatReviewTest.state();
+      if (!state.run) throw new Error("Missing run");
+      window.chatReviewTest.emit({
+        seq: 1,
+        ts: state.clock ?? "2026-11-01T22:40:00Z",
+        type: "run.started",
+        payload: { ...state.run, run_id: "replacement-run" },
+      });
+      // Restore retained events as replay does; leave the person's View untouched throughout.
+      window.chatReviewTest.seed();
+    });
+    await check(layout(page, "Oversight")).toHaveAttribute("aria-pressed", "true");
+    await check(panel(page)).toBeVisible();
+    await check(page.getByRole("region", { name: "Possibly affected", exact: true })).toBeVisible();
+  } finally {
+    await page.close();
+  }
+});
 it("cold and visited See on graph frame the cone, repeat a fresh frame and retain one graph", async () => {
   const { page } = await open();
   try {

@@ -56,18 +56,15 @@ export function useChatReviewNavigation(
   const replaced = snapshot.runId !== state.run?.run_id;
   const abandoned = snapshot.layout === "Oversight" && shell.layout === "Chat";
   const invalid = intent !== null && graphReviewAction(state, intent) === null;
-  if ((replaced || invalid) && cancelledView !== view) setCancelledView(view);
+  const cancelled = intent !== null && (replaced || invalid);
+  if (cancelled && cancelledView !== view) setCancelledView(view);
   if (intent && (replaced || abandoned || invalid || view.review !== intent.proposal.change_id))
     setIntent(null);
-  // A hidden/cold graph must not finish a discarded frame. The existing Usage navigation
-  // preserves its camera and suppresses initial framing, without any new graph API.
+  // A hidden/cold graph must not finish a discarded frame. GraphStage maps activeTab "usage"
+  // to GraphView's preserveCamera, suppressing initial framing without a new graph API.
   const frozen = abandoned && intent ? { ...snapshot.view, activeTab: "usage" } : snapshot.view;
   const graphView =
-    replaced || invalid || cancelledView === view
-      ? tabbedView
-      : shell.layout === "Oversight"
-        ? view
-        : frozen;
+    cancelled || cancelledView === view ? tabbedView : shell.layout === "Oversight" ? view : frozen;
   // Phone practice derives a fresh View on each render. Snapshot navigation values,
   // rather than object identity, so the render-phase adjustment can settle.
   const viewKey = JSON.stringify(graphView);
