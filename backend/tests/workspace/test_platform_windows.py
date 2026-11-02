@@ -572,7 +572,7 @@ async def test_native_secret_tools(workspace, monkeypatch):
 async def test_added_probe_unavailable(tmp_path, monkeypatch):
     from unittest.mock import AsyncMock
 
-    from live_helpers import is_type, live_server, live_settings, start
+    from live_helpers import live_server, live_settings, start
 
     from oversight.changes import _probes
     from oversight.settings import REPO_ROOT
@@ -595,7 +595,22 @@ async def test_added_probe_unavailable(tmp_path, monkeypatch):
 
         monkeypatch.setattr(server.live.workspace, "git", capture)
         assert (await start(server)).status_code == 201
-        await server.until(is_type("agent.status", state="ready_for_review"))
+        try:
+            events = await server.until(
+                lambda e: (
+                    e.type == "agent.status"
+                    and e.payload.state in {"ready_for_review", "halted", "stopped"}
+                )
+            )
+            status = events[-1].payload
+            assert status.state == "ready_for_review", status.detail
+        except (AssertionError, asyncio.CancelledError):
+            print("Agent diagnostics:")
+            for event in server.events():
+                if event.type in {"agent.status", "agent.step", "error", "tests.executed"}:
+                    print(event.model_dump_json(exclude_none=True))
+            print("Recent Git commands:", calls[-20:])
+            raise
         facts = [e.payload for e in server.events() if e.type == "change.facts_recorded"][-1]
         assert not facts.added_tests
         assert any("base_probe unavailable: native Windows" in p for p in facts.problems)
