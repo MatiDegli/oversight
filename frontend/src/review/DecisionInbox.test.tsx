@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import * as selectors from "../state";
@@ -8,6 +8,8 @@ import leadPlans from "../../../fixtures/events/handwritten-lead-plans.jsonl?raw
 import { applyEvent, createInitialState } from "../state";
 import { parseEvent } from "../transport";
 import { DecisionInbox } from "./DecisionInbox";
+import { InboxHeading } from "./InboxHeader";
+import PlanActions from "./PlanActions";
 
 const state = log.trim().split("\n").map(parseEvent).reduce(applyEvent, createInitialState());
 
@@ -111,7 +113,7 @@ it.each(["plan-1", "plan-2", "plan-3"])("renders %s's task and detail once", (pl
   expect(row).not.toContain('class="decision-reasons"');
 });
 
-it("keeps the fallback for a plan without detail and ignores an older plan update", () => {
+it("replaces the generic fallback with a lazy plan piece and ignores an older update", () => {
   const event = leadEvents[7];
   if (event?.type !== "plan.updated") throw new Error("Missing plan");
   const updated = applyEvent(leadState, {
@@ -125,8 +127,8 @@ it("keeps the fallback for a plan without detail and ignores an older plan updat
     event.payload.task,
   );
   expect(row).toContain(`<h3>${event.payload.task}</h3>`);
-  expect(row).toContain("<p>Lead plan awaits approval</p>");
-  expect(row.split("Lead plan awaits approval")).toHaveLength(2);
+  expect(row).not.toContain("Lead plan awaits approval");
+  expect(row).not.toContain("</h3><p>");
 });
 
 it("omits a plan paragraph when its detail equals its heading", () => {
@@ -142,7 +144,7 @@ it("omits a plan paragraph when its detail equals its heading", () => {
     event.payload.task,
   );
   expect(row.split(event.payload.task)).toHaveLength(2);
-  expect(row).not.toContain("<p>");
+  expect(row).not.toContain("</h3><p>");
   expect(row).not.toContain('class="decision-reasons"');
 });
 
@@ -167,4 +169,187 @@ it("lists a second distinct reason once, excluding the heading and paragraph", (
   } finally {
     projection.mockRestore();
   }
+});
+
+it("ships the inbox headline before any lazy plan and removes the obsolete hero count", () => {
+  const eager = readFileSync(new URL("./inbox.css", import.meta.url), "utf8");
+  const lazy = readFileSync(new URL("./planActions.css", import.meta.url), "utf8");
+  for (const inbox of [
+    renderToStaticMarkup(<DecisionInbox state={leadState} />),
+    renderToStaticMarkup(<InboxHeading count={3} agents={1} steps={3} minutes={0} />),
+  ]) {
+    expect(inbox).toContain("<h2>Decisions waiting for you</h2>");
+    expect(inbox).not.toContain("<style>");
+    expect(inbox).not.toContain('style="');
+  }
+  expect(eager).toMatch(
+    /\.inbox-heading h2\s*\{[^}]*font-size: 20px;[^}]*font-weight: 700;[^}]*line-height: 1\.3;/s,
+  );
+  expect(eager).toMatch(/\.inbox-count\s*\{\s*display: none;\s*\}/);
+  expect(eager).not.toContain("font-size: 64px");
+  expect(lazy).not.toContain(".inbox-heading");
+});
+
+it("records the ratified eager stylesheet and separates the next decision entry", () => {
+  const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
+  const entry = decisions
+    .split("## 2026-11-01 — Lead plan actions keep their eager layout within scope\n")[1]
+    ?.split("## ")[0];
+  expect(entry).toContain("17:25 UTC");
+  expect(entry).toContain("`inbox.css`");
+  expect(entry).not.toContain("exclude");
+  expect(entry).not.toContain("style element");
+  expect(entry).toMatch(/\n\n$/);
+});
+
+it("attributes the plan only to its author while tracking remains pending", () => {
+  const event = leadEvents[7];
+  if (event?.type !== "plan.updated") throw new Error("Missing plan");
+  const html = renderToStaticMarkup(
+    <PlanActions state={leadState} plan={event.payload} slots={null} />,
+  );
+  expect(html).toContain("Drafted by the lead</span>");
+  expect(html).not.toContain("tracked by Oversight");
+});
+
+it("gives failed plans without detail a readable neutral explanation", () => {
+  const event = leadEvents[7];
+  if (event?.type !== "plan.updated") throw new Error("Missing plan");
+  const html = renderToStaticMarkup(
+    <PlanActions
+      state={leadState}
+      plan={{ ...event.payload, state: "failed", detail: null }}
+      slots={null}
+    />,
+  );
+  expect(html).toMatch(/<blockquote>.*?<\/svg>No detail recorded<\/blockquote>/s);
+});
+
+it("documents the visible plan groups using the Group type", () => {
+  const design = readFileSync(new URL("../../../DESIGN.md", import.meta.url), "utf8")
+    .split("### Lead plan actions — first slice built")[1]
+    ?.split("### Settings tab")[0];
+  expect(design).toContain("Queued, waiting for slots");
+  expect(design).toContain("Ended without running");
+  expect(design).toContain("Group type");
+  expect(design).not.toContain("Queued plans");
+});
+
+it("keeps additional plan reasons while omitting only duplicate or generic fallback copy", () => {
+  const entry = selectors
+    .selectDecisionInbox(leadState)
+    .find((entry) => entry.decisions[0]?.planId);
+  const decision = entry?.decisions[0];
+  if (!entry || !decision) throw new Error("Missing lead decision");
+  const reason = "Check the stock recovery before starting.";
+  const projection = vi.spyOn(selectors, "selectDecisionInbox").mockReturnValue([
+    {
+      ...entry,
+      decisions: [...entry.decisions, { ...decision, id: "extra", reason }],
+    },
+  ]);
+  try {
+    expect(renderToStaticMarkup(<DecisionInbox state={leadState} />)).toContain(
+      `<ul class="decision-reasons"><li>${reason}</li></ul>`,
+    );
+  } finally {
+    projection.mockRestore();
+  }
+});
+
+it.each(["starting", "failed"] as const)(
+  "labels retained %s evidence as a plan at its first time",
+  (status) => {
+    const first = leadEvents[7];
+    if (first?.type !== "plan.updated") throw new Error("Missing plan");
+    const next = applyEvent(leadState, {
+      ...first,
+      seq: 9,
+      ts: "2026-11-01T19:30:00Z",
+      payload: { ...first.payload, revision: 2, state: status, queued_task_id: "queue-test" },
+    });
+    const row = rowContaining(
+      renderToStaticMarkup(<DecisionInbox state={next} />),
+      first.payload.task,
+    );
+    expect(row).toContain("Plan · <time>15:00 ART</time>");
+    expect(row).not.toContain("Decision ·");
+    const label = status === "starting" ? "Queued, waiting for slots" : "Ended without running";
+    const html = renderToStaticMarkup(<DecisionInbox state={next} />);
+    expect(html).toContain(`aria-label="${label}"`);
+    expect(html).toContain(`<h3 class="group-label">${label}</h3>`);
+  },
+);
+
+it.each([
+  [1, 1, "queued", null, "Waits for the running agent to finish."],
+  [1, 2, "queued", null, "Waits for one of the 2 running agents to finish."],
+  [2, 2, "queued", null, "Waits for 2 of the 2 running agents to finish."],
+  [1, 2, "blocked", null, null],
+  [
+    2,
+    2,
+    "queued",
+    "Waiting for the spending brake to clear",
+    "Waiting for the spending brake to clear",
+  ],
+  [1, null, "queued", null, "Waiting for slot evidence."],
+  [1, 0, "queued", null, "Waiting for slot evidence."],
+] as const)(
+  "uses observed waiting copy for wave=%s, held=%s, state=%s, detail=%s",
+  (wave, held, status, detail, words) => {
+    const event = leadEvents[7];
+    if (event?.type !== "plan.updated") throw new Error("Missing plan");
+    const task = event.payload.subtasks?.[0];
+    if (!task) throw new Error("Missing subtask");
+    const plan = {
+      ...event.payload,
+      queued_task_id: "queue-test",
+      subtasks: Array.from({ length: wave }, () => ({ ...task, depends_on: [] })),
+    };
+    const next = applyEvent(leadState, {
+      seq: 9,
+      ts: event.ts,
+      type: "queue.updated",
+      payload: {
+        queued_task_id: "queue-test",
+        revision: 1,
+        state: status,
+        plan_id: plan.plan_id,
+        plan_revision: plan.revision,
+        agent: null,
+        agent_ids: [],
+        detail,
+        started_by: null,
+      },
+    });
+    const html = renderToStaticMarkup(
+      <PlanActions state={next} plan={plan} slots={held === null ? null : { held, total: 2 }} />,
+    );
+    if (status === "queued") {
+      expect(html).toMatch(
+        /<p class="plan-explanation"><svg[^>]*class="lucide lucide-clock"[^>]*aria-hidden="true"[^>]*>.*?<\/svg>/s,
+      );
+      expect(html).toContain(`</svg>${words}</p>`);
+    } else {
+      expect(html).toContain("Blocked");
+      expect(html).not.toContain("Waits for");
+      expect(html).not.toContain("Waiting for slot evidence");
+      expect(html).not.toContain('<p class="plan-explanation"></p>');
+    }
+  },
+);
+
+it("omits the explanation spacing for a queue link without observed queue evidence", () => {
+  const event = leadEvents[7];
+  if (event?.type !== "plan.updated") throw new Error("Missing plan");
+  const html = renderToStaticMarkup(
+    <PlanActions
+      state={leadState}
+      plan={{ ...event.payload, queued_task_id: "unobserved" }}
+      slots={null}
+    />,
+  );
+  expect(html).toContain("Queue link recorded");
+  expect(html).not.toContain('<p class="plan-explanation"></p>');
 });

@@ -908,6 +908,32 @@ Static aggregate bundling and the phone Usage layout remain deferred. The Missin
 uses recorded-run context over a mocked available backend. At 390px the full IDE retains
 its narrow-window notice, intentionally differing from the phone feasibility sheets.
 
+### Lead plan actions — first slice built
+
+Premises: main `6ab92e7`, applied to the moved code on `54dc64d`; approved sketch packet
+b-1101a item 3 (2026-11-01, 01:03:27 ART). Decisions lazily loads proposed plan pieces:
+numbered subtasks, dependency conditions and a derived first-wave explanation. Queue plan
+uses the displayed plan revision; Reject plan opens an optional labeled comment with Reject
+plan and Keep plan. Linked proposed plans move below decisions into Queued, waiting for slots
+and stop counting. Observed queued/blocked items offer Take out of the queue with their own
+revision; dispatching withholds those actions. Failed lead plans retain their quoted detail
+under Ended without running. Both labels use the Group type (600, 11.5px, 0.08em tracking,
+uppercase styling), with readable sentence case in the DOM. Replay reads these pieces with
+source-aware words and no mutation controls.
+
+Plan rows use 12px vertical / 22px horizontal padding; the piece begins 8px below its title,
+with a solid 1px border, 12px radius, card-to-card-end fill and top-highlight. Its header uses
+10px 16px 8px padding / 10px gaps, and subtask rows 7px 16px / 20px neutral circles / 12px gaps.
+Rows grow with wrapped text. Titles are Next 15px/600, tasks 14px/1.4, conditions 13px/1.3,
+Plan 15.5px/700, captions 13px; numbers/counts use Mono, piece counts 13.5px. The inbox headline
+is 20px/700/1.3 without a separate hero numeral. Actions wrap: 34px high, 8px radius/gaps,
+14px/600 and 14px horizontal padding. Comments are 34px, on inset; focus is 2px text, offset
+2px. Existing theme roles supply every color, including day mode; Queue uses text/page,
+hover text-hover; Reject pairs failed-text with its word and X. Failures remain neutral with X.
+The existing 880/608px focus panel, 56px rails, graph minimum and scrolling remain owned by
+the shell. Edit, lead composer/card lifecycle and post-dispatch Plan tracking remain pending;
+the reserved Plan focus tab is not implemented by this slice.
+
 ### Settings tab
 
 Settings opens in the focus panel. The tab names it once: there is no second Settings title in

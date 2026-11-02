@@ -3334,6 +3334,31 @@ Panel pseudo-elements use a compensated flex row so static and floating roots ke
 positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
 light that stays outside its row gap. Monaco and the graph host receive neither control effect.
 
+## 2026-11-01 — Lead plan actions preserve evidence and command settlement
+
+Premises: main `6ab92e7`; moved implementation on `54dc64d`. Keep main's oldest-first
+evidence order, including B before A, rather than the sketch's decorative ordering. At 1280,
+retain the existing scroll area and wrapping actions instead of reproducing sketch clipping.
+Use theme roles rather than decorative raw colors; preserve the current shell and life edges.
+An empty 202 is acceptance only: attempts bind run, plan, action and observed revisions and
+remain locked until corresponding event evidence; HTTP refusal retains the comment. No
+automatic revision retry. Queue links exclude decisions without replacing their identity or
+first evidence, so unlinking restores their original age. The sketch omits dispatch failures:
+retain failed requested lead plans read-only with the server's detail, outside decision counts.
+Only proposed-plan Queue/Reject and undispatched queue cancellation are built here; Edit,
+lead lifecycle and the reserved Plan tab's tracking remain follow-up fronts.
+
+## 2026-11-01 — Lead plan actions keep their eager layout within scope
+
+The coordinator ratified `inbox.css` at 17:25 UTC (14:25 ART) on Nov 1 for the eager inbox
+headline, row-title and plan-group layout. Keep those rules in that stylesheet, including
+the loading fallback's plan-content marker. Restore the shared InboxHeading to main's markup
+and hide its separate hero numeral through the eager stylesheet.
+Only the plan piece and controls need the lazy stylesheet; their arrival must not change
+row gutters, titles or group labels.
+Reject opens with focus in the comment; Keep returns it to the original Reject control.
+The caption attributes drafting to the lead only: post-dispatch tracking remains pending.
+
 ## 2026-11-01 — Usage read lifecycle, camera and lower bounds
 
 Packet b-1101a item 1 was approved at 01:03:27 ART. Premises refer to main `6ab92e7`;
