@@ -235,7 +235,7 @@ new candidate work waits for the maintainer’s order.
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.
 - Native candidates from the maintainer (2026-11-01), none queued.
-  - **The plan as a flow with a lock.** Controls are not queued. Its read-only view is decided before the
+  - <a id="plan-flow-with-a-lock"></a>**The plan as a flow with a lock.** Controls are not queued. Its read-only view is decided before the
     freeze ([decision](../DECISIONS.md#2026-11-02--a-read-only-plan-flow-before-the-freeze)); the lock, lead
     edits, modes and optional action nodes come after the hackathon. Draw the [Lead agent](#lead-agent)'s
     [plan (item 11)](#11-one-plan-server-computed-zones-and-task-queue) as agent nodes beside action nodes
@@ -257,6 +257,14 @@ new candidate work waits for the maintainer’s order.
     Replacing AGENTS.md's “One graph, always visible” requires the maintainer's entry in DECISIONS.md first.
     Prerequisites: the editor loader currently waits for `whenFirstGraphDrawn()`; node selection, the impact
     cone, the palette's graph commands and both practice graphs need paths that work with the graph off.
+  - **A fresh-context review of the plan.** After the hackathon, not queued. Before the person queues a lead's plan, a second Meta model
+    that never saw the lead's conversation reads only the plan and its named files, returning findings ranked blocker, major or minor in the plan piece.
+    The person still decides: the review never queues, edits or blocks a plan. It would be an optional node of the [plan flow](#plan-flow-with-a-lock),
+    complementing [item 7's cross-review](#7-cross-review-and-automatic-request-changes), which reads a change after it is written. A cheaper, model-free step
+    lists repository docs mentioning files a change touches as review evidence, so stale docs surface before merge. Prerequisites: an event for plan review findings
+    and a docs-list field (both contract changes approved by the maintainer), plus review prompts written for Oversight. Inspired by Google's open-source
+    [Elephant-Goldfish Model](https://github.com/google/elephant-goldfish-model) (Apache-2.0): an author holds full context while reviewers hold none.
+    Ideas only; no text or code copied.
   - Slash commands in Chat, low priority, not built. Read-only: `/usage` (usage screen), `/status`,
     `/context` (tokens per call; missing usage is "unknown", never zero), `/export`. Existing routes:
     `/pause`, `/resume`, `/stop`, `/revert` (only where Revert applies cleanly). Contract decisions,
