@@ -57,6 +57,34 @@ const LeadConversationFocus = lazy(() =>
   })),
 );
 
+function LeadConversationFrame({
+  lead,
+  children = (
+    <p role="status" className="px-[18px] py-4 text-muted">
+      Loading lead conversation…
+    </p>
+  ),
+}: {
+  lead: ReturnType<typeof selectChatLeads>[number];
+  children?: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={`Lead ${lead.letter} conversation`}
+      className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
+      style={agentSlotStyle(lead.hue)}
+    >
+      <header className="conversation-header flex items-center gap-3 px-[18px] py-4">
+        <span className="chat-lead-ring" aria-hidden="true">
+          {lead.letter}
+        </span>
+        <h2 className="min-w-0 text-[16px] font-semibold wrap-anywhere">{lead.status.task}</h2>
+      </header>
+      {children}
+    </section>
+  );
+}
+
 export function FocusPanel(
   props: FrameProps & {
     startAgentAction: ReactNode;
@@ -260,14 +288,7 @@ function ConversationFocus({
     const lead = selectChatLeads(state).find((row) => row.id === agentId);
     if (lead)
       return (
-        <LazyPanel
-          key={agentId}
-          frame={
-            <p role="status" className="px-[18px] py-4 text-muted">
-              Loading lead conversation…
-            </p>
-          }
-        >
+        <LazyPanel key={agentId} frame={<LeadConversationFrame lead={lead} />}>
           <LeadConversationFocus
             state={state}
             agentId={agentId}

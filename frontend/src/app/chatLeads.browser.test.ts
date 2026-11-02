@@ -68,6 +68,72 @@ async function startForm(page: Page) {
   await check(page.getByRole("textbox", { name: "First task" })).toBeFocused();
 }
 
+async function themeColor(page: Page, token: string) {
+  return page.evaluate((token) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(--${token})`;
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
+it("keeps the lead region and header through cold loading and chunk failure", async () => {
+  const page = await open("lead-new", 1280, "dark", true, false, true);
+  let failChunk!: () => void;
+  const heldChunk = new Promise<void>((resolve) => {
+    failChunk = resolve;
+  });
+  await page.route("**/src/agents/conversation/ConversationPanel.tsx*", async (route) => {
+    await heldChunk;
+    await route.abort("failed");
+  });
+  try {
+    await leadRow(page, "A").click();
+    const frame = page.getByRole("region", { name: "Lead A conversation", exact: true });
+    await check(frame).toBeVisible();
+    await check(frame.getByRole("heading")).toHaveText(
+      "Add input checks to the shop: reject negative prices and quantities, and zero or negative reserve quantities.",
+    );
+    await check(frame.getByRole("status")).toHaveText("Loading lead conversation…");
+    failChunk();
+    await check(frame.getByRole("alert")).toHaveText(
+      "This panel could not load. Reload the page to try again.",
+    );
+    await check(frame.getByRole("heading")).toBeVisible();
+    await check(frame.getByRole("status")).toHaveCount(0);
+    await check(page.locator('p p, [role="status"] [role="alert"]')).toHaveCount(0);
+  } finally {
+    failChunk();
+    await page.close();
+  }
+});
+
+it.each([1920, 1280, 390].flatMap((width) => ["dark", "day"].map((theme) => ({ width, theme }))))(
+  "styles lead-new actions at $width in $theme",
+  async ({ width, theme }) => {
+    const page = await open("lead-new", width, theme, true, false, true);
+    try {
+      await startForm(page);
+      await page.getByRole("textbox", { name: "First task" }).fill("Coordinate validation");
+      const start = page.getByRole("button", { name: "Start lead", exact: true });
+      const height = width === 390 ? "44px" : "40px";
+      await check(start).toHaveCSS("height", height);
+      await check(page.getByRole("button", { name: "Cancel", exact: true })).toHaveCSS(
+        "height",
+        height,
+      );
+      await check(start).toHaveCSS("background-color", await themeColor(page, "text"));
+      await check(start).toHaveCSS("color", await themeColor(page, "page"));
+      await start.hover();
+      await check(start).toHaveCSS("background-color", await themeColor(page, "text-hover"));
+    } finally {
+      await page.close();
+    }
+  },
+);
+
 async function publishLead(page: Page, id: string, patch: Partial<LeadStatus>) {
   await page.evaluate(
     ({ id, patch }) => {
@@ -594,6 +660,10 @@ it.each([1280, 640, 390])("guards cap entry points and an open draft at %i", asy
         );
       }),
     ).toBe(true);
+    if (width === 390) {
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toHaveText("1 plan needs you");
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toBeVisible();
+    }
     if (process.env.CHAT_LEADS_SHOTS === "1" && width === 390) {
       await check(page.locator(".lead-header")).toBeVisible();
       await capture(page, "lead-cap", width, "dark");
@@ -618,6 +688,11 @@ it.each([1280, 640, 390])("guards cap entry points and an open draft at %i", asy
       "aria-disabled",
       "true",
     );
+    const cappedStart = page.getByRole("button", { name: "Start lead", exact: true });
+    await cappedStart.hover();
+    await check(cappedStart).toHaveCSS("color", await themeColor(page, "faint"));
+    await check(cappedStart).toHaveCSS("background-color", await themeColor(page, "raised"));
+    await check(cappedStart).toHaveCSS("cursor", "not-allowed");
     await check(page.getByRole("textbox", { name: "First task" })).toHaveValue("Keep capped draft");
     await page
       .getByRole("button", { name: "Start lead", exact: true })
@@ -636,6 +711,10 @@ it.each(["dark", "day"])(
     const page = await open("leads-two", 390, theme, true, false, true);
     try {
       await check(page.getByRole("textbox", { name: "Message Lead A", exact: true })).toBeVisible();
+      await check(leadRow(page, "A").locator(".chat-lead-team")).toBeVisible();
+      await check(leadRow(page, "A").locator(".chat-lead-team")).toContainText("3 agents");
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toHaveText("1 plan needs you");
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toBeVisible();
       await page.locator(".conversation-composer").scrollIntoViewIfNeeded();
       const measured = await page.evaluate(() => ({
         sizes: [
@@ -681,6 +760,45 @@ it.each(["dark", "day"])(
   },
 );
 
+async function assertLifecycleScene(page: Page, name: string) {
+  const six = name === "leads-six";
+  await check(leadRow(page, six ? "D" : "A")).toHaveAttribute("aria-pressed", "true");
+  await check(page.locator(".lead-header h2")).toHaveText(
+    six
+      ? "Lowercase customer emails everywhere and reject bad addresses in every setter."
+      : "Add input checks to the shop: reject negative prices and quantities, and zero or negative reserve quantities.",
+  );
+  const states: Record<string, string> = six
+    ? { A: "Stopped", B: "Working", C: "Working", D: "Halted", E: "Idle", F: "Idle" }
+    : { A: "Stopped", B: "Working" };
+  for (const [letter, state] of Object.entries(states))
+    await check(leadRow(page, letter).locator(".chat-agent-pill")).toHaveText(state);
+  if (six) {
+    await check(leadRow(page, "F").locator(".chat-lead-team")).toHaveText("1 plan needs you");
+    await check(leadRow(page, "F").locator(".chat-lead-team")).toBeVisible();
+  }
+  await check(page.locator(".chat-agents > header")).toContainText("3 of 4 running");
+}
+
+it.each(["lead-stopped", "leads-six"])(
+  "verifies the selected lead and row states in %s",
+  async (name) => {
+    const page = await open(name, 390, "dark", true, false, true);
+    try {
+      await assertLifecycleScene(page, name);
+      const rows = await page.locator(".chat-lead-row").evaluateAll((rows) =>
+        rows.map((row) => {
+          const r = row.getBoundingClientRect();
+          return [r.width, r.height];
+        }),
+      );
+      expect(rows).toEqual(Array.from({ length: name === "leads-six" ? 6 : 2 }, () => [374, 59]));
+    } finally {
+      await page.close();
+    }
+  },
+);
+
 const captureStates = [
   "chat-start",
   "task-direct",
@@ -710,6 +828,9 @@ for (const name of captureStates)
               await page
                 .getByRole("heading", { name: "What should the new lead work on?" })
                 .click();
+              const start = page.getByRole("button", { name: "Start lead", exact: true });
+              await check(start).toHaveCSS("height", "40px");
+              await check(start).toHaveCSS("background-color", await themeColor(page, "text"));
             }
             if (name === "task-direct") {
               await check(page.getByRole("textbox", { name: "Message Agent C" })).toBeVisible();
@@ -734,7 +855,7 @@ for (const name of captureStates)
               await check(
                 page.locator(".conversation-entries [role=listitem]").last(),
               ).toBeVisible();
-              await check(page.locator(".chat-agents > header")).toContainText("3 of 4 running");
+              await assertLifecycleScene(page, name);
             }
             if (width === 390)
               await page.locator(".conversation-composer").scrollIntoViewIfNeeded();

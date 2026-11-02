@@ -241,6 +241,28 @@
   gap: 8px;
   margin-top: 12px;
 }
+.new-lead-actions > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.new-lead-start {
+  background: var(--text);
+  color: var(--page);
+}
+.new-lead-start:hover:not([aria-disabled="true"]) {
+  background: var(--text-hover);
+}
+.new-lead-start[aria-disabled="true"] {
+  background: var(--raised);
+  color: var(--faint);
+  cursor: not-allowed;
+}
 .new-lead-cancel {
   border: 1px solid var(--border);
 }
@@ -376,10 +398,16 @@
     grid-row: 1 / 3;
   }
   .chat-agent-list .chat-lead-row .chat-agent-task {
+    display: none;
+  }
+  .chat-lead-row .chat-lead-team {
     grid-column: 2;
     margin-top: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .chat-lead-row .chat-lead-team,
   .chat-lead-row .chat-lead-activity {
     display: none;
   }
