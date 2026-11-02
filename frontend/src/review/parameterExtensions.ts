@@ -2,6 +2,8 @@ import type { ChangeProposed, ParameterExtensionDiff } from "@contracts";
 import type { State } from "../state";
 import { factsForRevision } from "./factsForRevision";
 
+export const parameterEvidenceSelector = '.review-body [aria-label="New-parameter calls"]';
+
 export function parameterTarget(proposal: ChangeProposed, nodeId: string): string {
   return `parameter-calls-${encodeURIComponent(JSON.stringify([proposal.change_id, proposal.revision, proposal.head_commit, nodeId]))}`;
 }
@@ -22,7 +24,7 @@ export function parameterExtensions(state: State, changeId: string) {
 /** Called only by an explicit popover action; a closed or stale review has no target. */
 export function visitParameterEvidence(target: string) {
   const section = document.getElementById(target);
-  if (!section?.closest('.review-body [aria-label="New-parameter calls"]')) return false;
+  if (!section?.closest(parameterEvidenceSelector)) return false;
   section.scrollIntoView({ block: "start", behavior: "instant" });
   section.focus({ preventScroll: true });
   return true;
