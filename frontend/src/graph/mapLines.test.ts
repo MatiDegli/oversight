@@ -61,11 +61,13 @@ it("preserves the pending name priority and documents built evidence in lines an
   expect(point(8)).toContain("panels without members use 0.5 opacity");
 });
 
-it("appends the map decision after existing entries with heading separation", () => {
+it.each([
+  ["current entries", decisions],
+  ["a later entry", `${decisions}\n## 2026-11-02 — Another decision\n\nA later entry.\n`],
+])("keeps one separated map decision heading with %s", (_case, document) => {
   const heading = "## 2026-11-01 — Map evidence, calls and pointer navigation";
-  expect(decisions.split(heading)).toHaveLength(2);
-  expect(decisions.match(/^## .+$/gm)?.at(-1)).toBe(heading);
-  expect(decisions).toContain(`\n\n${heading}\n\n`);
+  expect(document.split(heading)).toHaveLength(2);
+  expect(document).toContain(`\n\n${heading}\n\n`);
 });
 
 it("checks whether the map is active before handling window mouseup", () => {
