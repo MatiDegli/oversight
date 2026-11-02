@@ -730,7 +730,7 @@ it.each(["dark", "day"])("keeps map text at 4.5:1 over the hottest lamp in %s", 
   }
 });
 /** Compare every unmasked card lamp with the pre-existing card spread and mode gain. */
-async function assertCardPool(page: Page, theme: "dark" | "day") {
+async function assertCardPool(page: Page, theme: "dark" | "day", real = !!boltons) {
   const sample = await page.evaluate((real) => {
     const graph = document.querySelector<GraphProbeHost>(
       '[aria-label="Repository graph"]',
@@ -764,7 +764,7 @@ async function assertCardPool(page: Page, theme: "dark" | "day") {
       zoom: graph.zoom(),
       level: graph.level(),
     };
-  }, !!boltons);
+  }, real);
   expect(sample.level).toBe("cards");
   const base = fieldConfig(themes[theme], "watch");
   const expected = createLampField()(
@@ -816,6 +816,24 @@ it.each(["dark", "day"] as const)(
       expect(
         (await measurePool(page, boltons ? "boltons.strutils" : "library.module_01")).lit,
       ).toBeGreaterThanOrEqual(150);
+    } finally {
+      await page.close();
+    }
+  },
+);
+it.each(["dark", "day"] as const)(
+  "keeps synthetic group-control lamps visible in %s",
+  async (theme) => {
+    const page = await setup(1280, theme);
+    try {
+      await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+      await ready(page);
+      await zoomTo(page, 0.21);
+      await clearPointer(page);
+      const point = await groupPoint(page, "library");
+      await page.mouse.click(point.x, point.y);
+      await ready(page);
+      await assertCardPool(page, theme, false);
     } finally {
       await page.close();
     }
