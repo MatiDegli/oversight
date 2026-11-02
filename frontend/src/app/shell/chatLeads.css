@@ -1,3 +1,6 @@
+.chat-agent-list:has(.chat-lead-row) {
+  gap: 2px;
+}
 .chat-lead-ring {
   position: relative;
   display: inline-flex;

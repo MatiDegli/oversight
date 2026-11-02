@@ -366,6 +366,11 @@ it.each([1920, 1280])(
       for (const [i, target] of (width === 1920 ? [136, 107, 139] : [111, 62, 115]).entries()) {
         expect(Math.abs((sizes[i] ?? 0) - target)).toBeLessThanOrEqual(4);
       }
+      const member = await page
+        .locator('.chat-agent-row[data-member="true"]')
+        .first()
+        .boundingBox();
+      expect(member?.y).toBe(width === 1920 ? 298 : 269);
       await leadRow(page, "B").click();
       await check(page.getByRole("textbox", { name: "Message Lead B" })).toBeEditable();
     } finally {
