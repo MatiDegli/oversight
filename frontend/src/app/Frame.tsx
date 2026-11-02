@@ -17,6 +17,7 @@ import { LazyPanel } from "./shell/LazyPanel";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
 import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
+import { useChatReviewNavigation } from "./chatReviewNavigation";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 import "./shell/chatShell.css";
@@ -94,6 +95,7 @@ export function Frame(props: FrameProps) {
       : props.view;
   const open = panelOpen(view);
   const shell = useShell(open, onClosePanel);
+  const chatReview = useChatReviewNavigation(state, view, shell, props.onTabAction);
   const task = useFunctionTask(
     state,
     view,
@@ -162,6 +164,7 @@ export function Frame(props: FrameProps) {
                 {...props}
                 view={view}
                 chat={shell.layout === "Chat"}
+                onGraph={chatReview.onGraph}
                 practiceOnly={phone}
                 startAgentAction={task.action}
                 maximized={shell.maximized}
@@ -191,7 +194,7 @@ export function Frame(props: FrameProps) {
                     stacked={phone}
                     arrival={arrival}
                     state={state}
-                    view={view}
+                    view={chatReview.graphView}
                     onNodeTap={phone ? () => undefined : props.onNodeTap}
                     layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
                   />
