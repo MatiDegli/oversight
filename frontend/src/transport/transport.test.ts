@@ -29,7 +29,12 @@ describe("live transport", () => {
       }),
     );
     source().emit(reply);
-    expect(store.getState().state).toEqual({ ...before, lastSeq: reply.seq, clock: reply.ts });
+    expect(store.getState().state).toEqual({
+      ...before,
+      lastSeq: reply.seq,
+      clock: reply.ts,
+      leadReplies: { ...before.leadReplies, "agent-1": [reply] },
+    });
     const idle = parseEvent(
       JSON.stringify({
         seq: reply.seq + 1,
@@ -53,6 +58,7 @@ describe("live transport", () => {
       lastSeq: idle.seq,
       clock: idle.ts,
       decisionEvents: [...before.decisionEvents, idle],
+      leadReplies: { ...before.leadReplies, "agent-1": [reply] },
     });
     expect(onError).not.toHaveBeenCalled();
   });
