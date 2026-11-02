@@ -71,6 +71,12 @@ it.each([
       await page.getByRole("button", { name: "Review change", exact: true }).click();
       const panel = page.getByRole("complementary", { name: "Review panel" });
       await panel.getByRole("textbox", { name: /Comment/ }).fill("Cover empty carts");
+      // The cold editor chunk, fonts and file read must settle before decisions open.
+      await browserExpect(panel.getByLabel("Editable review file")).toHaveAttribute(
+        "data-state",
+        "clean",
+        { timeout: 15_000 },
+      );
       await browserExpect(panel.getByRole("button", { name: label, exact: true })).toBeEnabled();
       const sent = page.waitForRequest((request) =>
         request.url().endsWith(`/changes/change-1/${action}`),
