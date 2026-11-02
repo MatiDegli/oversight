@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
+// eslint-disable-next-line no-restricted-imports -- Signal eligibility without loading the editor implementation.
+import { allowEditorWithoutGraph } from "../../editor/loader";
 
 export type ShellLayout = "Chat" | "Oversight";
 /** A fixture may initialize Chat without a URL flag or changing the production default. */
@@ -22,6 +24,9 @@ export function isEditableMonaco(target: EventTarget | null): boolean {
 export function useShell(open: boolean, onClose: () => void) {
   const [layout, setLayout] = useState(useContext(InitialShellLayout));
   const [oversightVisited, setOversightVisited] = useState(layout === "Oversight");
+  useEffect(() => {
+    if (layout === "Chat" && !oversightVisited) allowEditorWithoutGraph();
+  }, [layout, oversightVisited]);
   const [layoutRevision, setLayoutRevision] = useState(0);
   useEffect(() => {
     const resized = () => {
