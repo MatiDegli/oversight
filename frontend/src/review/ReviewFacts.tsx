@@ -2,6 +2,8 @@ import { ChevronRight } from "lucide-react";
 import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
 
 import type { State } from "../state";
+import { RunFindings } from "./RunFindings";
+import { ShapeFindings } from "./ShapeFindings";
 import { BehaviorDiff } from "./BehaviorDiff";
 import { behaviorNotRecorded } from "./behaviorEvidence";
 import { MeasuredCallers } from "./MeasuredCallers";
@@ -218,6 +220,8 @@ export function ReviewFacts({
                 ))}
               </ul>
             )}
+            <RunFindings facts={facts} state={state} proposal={proposal} />
+            <ShapeFindings facts={facts} />
             <div className="mt-3.5">
               <BehaviorDiff state={state} changeId={proposal.change_id} detailsOnly={panel} />
               {facts.behavior_diff == null && <p>{behaviorNotRecorded}</p>}
