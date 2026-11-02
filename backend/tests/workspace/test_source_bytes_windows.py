@@ -36,6 +36,8 @@ async def test_native_common_tamper(
         b"* filter=evil",
         b"* working-tree-encoding=UTF-16",
         b"* ident",
+        b"* -text\rident",
+        b'"*"ident',
         b"[attr]hidden filter=evil\n* hidden",
     ],
 )
@@ -43,6 +45,17 @@ async def test_native_transform_refusal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, policy: bytes
 ) -> None:
     await cases.test_transforms_refuse_before_spawn(tmp_path, monkeypatch, policy)
+
+
+async def test_native_external_attributes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    await cases.test_external_attributes_cannot_transform_bytes(tmp_path, monkeypatch)
+
+
+@pytest.mark.parametrize("entry", ["file", "directory"])
+async def test_native_pinned_global_attributes_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str
+) -> None:
+    await cases.test_pinned_global_attributes_must_remain_absent(tmp_path, monkeypatch, entry)
 
 
 async def test_native_combined_policy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

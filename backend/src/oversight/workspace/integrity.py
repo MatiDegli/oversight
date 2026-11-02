@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import stat
 import sys
 import time
@@ -433,6 +434,7 @@ async def verify_merge_abort(
 
 
 BYTE_OVERRIDE = b"* -text\n"
+DISABLED_GLOBAL_ATTRIBUTES = "info/disabled-global-attributes"
 
 
 def _policy_bytes(path: Path, shown: str, deadline: float) -> bytes | None:
@@ -456,10 +458,16 @@ def _veto_attributes(data: bytes, relative: str) -> None:
     # Git's attributes are ASCII names even when patterns contain arbitrary filename bytes.
     # Inspect all tokens conservatively; reject custom macro definitions rather than interpret
     # recursion, quoting or precedence differently from Git. The built-in binary macro is safe.
-    for line in data.removeprefix(b"\xef\xbb\xbf").splitlines():
-        tokens = line.strip().split()
-        if not tokens or tokens[0].startswith(b"#"):
+    # Git ends lines only at LF and treats CR as a blank, alongside space and tab.
+    for line in data.removeprefix(b"\xef\xbb\xbf").split(b"\n"):
+        line = line.strip(b" \t\r")
+        if not line or line.startswith(b"#"):
             continue
+        if line.startswith(b'"'):
+            raise IntegrityError(
+                "quoted attribute patterns unsupported; use an unquoted pattern", relative
+            )
+        tokens = re.split(rb"[ \t\r]+", line)
         if tokens[0].startswith(b"[attr]"):
             raise IntegrityError(
                 "attribute macros unsupported; expand the macro explicitly", relative
@@ -517,6 +525,19 @@ def install_byte_override(identity: GitIdentity, deadline: float) -> None:
 
 
 def verify_byte_override(identity: GitIdentity, deadline: float) -> None:
+    # Pin the global layer away from suite-writable HOME, and refuse any created entry.
+    if (
+        _policy_bytes(
+            identity.common / DISABLED_GLOBAL_ATTRIBUTES,
+            f".git/{DISABLED_GLOBAL_ATTRIBUTES}",
+            deadline,
+        )
+        is not None
+    ):
+        raise IntegrityError(
+            "global attributes entry must be absent; restart with a fresh runtime",
+            f".git/{DISABLED_GLOBAL_ATTRIBUTES}",
+        )
     if (
         _policy_bytes(identity.common / "info" / "attributes", ".git/info/attributes", deadline)
         != BYTE_OVERRIDE

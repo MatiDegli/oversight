@@ -56,6 +56,7 @@ from oversight.workspace.files import (
     write_file,
 )
 from oversight.workspace.integrity import (
+    DISABLED_GLOBAL_ATTRIBUTES,
     GitIdentity,
     guarded_git,
     install_byte_override,
@@ -262,6 +263,9 @@ class Workspace:
             if sys.platform == "win32"
             else GIT_FLAGS
         )
+        if _nt_source_bytes:
+            global_attributes = runtime_root / "workspace/.git" / DISABLED_GLOBAL_ATTRIBUTES
+            self.git_flags += ("-c", f"core.attributesFile={global_attributes}")
         self.nt_source_bytes = _nt_source_bytes
         self._byte_bootstrap = False
         self._root = runtime_root
@@ -374,6 +378,8 @@ class Workspace:
             "GIT_COMMITTER_NAME": who.name,
             "GIT_COMMITTER_EMAIL": who.email,
         }
+        if self.nt_source_bytes:
+            env["GIT_ATTR_NOSYSTEM"] = "1"
         if date:
             env |= {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
         return env | tree.git_identity.pins()

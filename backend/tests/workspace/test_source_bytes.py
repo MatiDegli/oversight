@@ -123,6 +123,8 @@ async def test_initial_bytes_and_shared_override(tmp_path: Path, autocrlf: str) 
         b"* filter=evil",
         b"* working-tree-encoding=UTF-16",
         b"* ident",
+        b"* -text\rident",
+        b'"*"ident',
         b"* ident\0hidden",
         b"[attr]hidden filter=evil\n* hidden",
         b"[attr]a b\n[attr]b a\n* a",
@@ -136,6 +138,15 @@ async def test_transforms_refuse_before_spawn(
         nested = workspace.main.root / "nested"
         nested.mkdir()
         (nested / ".gitattributes").write_bytes(policy)
+        source_policy = tmp_path / "source/.gitattributes"
+        source_policy.write_bytes(policy)
+        with pytest.raises(IntegrityError, match=r"\.gitattributes"):
+            validate_source_byte_policy(
+                source_policy.parent,
+                source_policy.parent / ".git",
+                (".gitattributes",),
+                time.monotonic() + 10,
+            )
         spawn = AsyncMock()
         monkeypatch.setattr(core, "run_process", spawn)
         monkeypatch.setattr(test_tree, "run_process", spawn)
@@ -155,6 +166,99 @@ async def test_transforms_refuse_before_spawn(
         spawn.assert_not_awaited()
     finally:
         workspace.release_runtime()
+
+
+async def test_external_attributes_cannot_transform_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw = b"$Id: preserve these bytes $\r\n"
+    workspace = await opened(tmp_path, {"id.txt": raw})
+    try:
+        home_policy = workspace.tmp_dir / "home/.config/git/attributes"
+        home_policy.parent.mkdir(parents=True)
+        home_policy.write_bytes(b"* ident\n")
+        calls: list[Sequence[str]] = []
+
+        async def observe(
+            argv: Sequence[str],
+            *,
+            cwd: Path,
+            timeout_s: float,
+            env: Mapping[str, str] | None = None,
+            output_cap: int = 262_144,
+        ) -> ProcessResult:
+            assert env is not None and env.get("GIT_ATTR_NOSYSTEM") == "1"
+            calls.append(argv)
+            return await run_process(
+                argv, cwd=cwd, timeout_s=timeout_s, env=env, output_cap=output_cap
+            )
+
+        monkeypatch.setattr(core, "run_process", observe)
+        monkeypatch.setattr(test_tree, "run_process", observe)
+        agent = await workspace.create_worktree("agent-1")
+        assert (agent.root / "id.txt").read_bytes() == raw
+        async with workspace.locks(agent_id="agent-1"):
+            await workspace.git_ok(agent, "add", "--renormalize", ".")
+            oid = (await workspace.git_ok(agent, "rev-parse", ":id.txt")).strip()
+        assert oid == hashlib.sha1(f"blob {len(raw)}\0".encode() + raw).hexdigest()
+        _, commit = await capture_test_tree(
+            agent.root,
+            workspace.tmp_dir,
+            env=workspace._git_env(agent, None, None),
+            flags=workspace.git_flags,
+            timeout_s=10,
+            nt_source_bytes=True,
+        )
+        assert commit == await agent.head()
+        assert calls
+        disabled = workspace.main.git_identity.common / "info/disabled-global-attributes"
+        assert all(f"core.attributesFile={disabled}" in argv for argv in calls)
+        assert not disabled.exists()
+    finally:
+        workspace.release_runtime()
+
+
+@pytest.mark.parametrize("entry", ["file", "directory"])
+async def test_pinned_global_attributes_must_remain_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str
+) -> None:
+    workspace = await opened(tmp_path, {"id.txt": b"$Id: raw $\r\n"})
+    try:
+        agent = await workspace.create_worktree("agent-1")
+        disabled = workspace.main.git_identity.common / "info/disabled-global-attributes"
+        if entry == "file":
+            disabled.write_bytes(b"* ident\n")
+        else:
+            disabled.mkdir()
+        spawn = AsyncMock()
+        monkeypatch.setattr(core, "run_process", spawn)
+        monkeypatch.setattr(test_tree, "run_process", spawn)
+        for tree in (workspace.main, agent):
+            async with workspace.locks(main=tree.agent_id is None, agent_id=tree.agent_id):
+                with pytest.raises(IntegrityError, match="disabled-global-attributes"):
+                    await workspace.git(tree, "add", "-A")
+            with pytest.raises(IntegrityError, match="disabled-global-attributes"):
+                await capture_test_tree(
+                    tree.root,
+                    workspace.tmp_dir,
+                    env=workspace._git_env(tree, None, None),
+                    flags=workspace.git_flags,
+                    timeout_s=10,
+                    nt_source_bytes=True,
+                )
+        spawn.assert_not_awaited()
+    finally:
+        workspace.release_runtime()
+
+
+def test_default_mode_external_attribute_settings_unchanged(tmp_path: Path) -> None:
+    workspace = Workspace(tmp_path / ".runtime", tmp_path / "source", pytest_pin="9.1.1")
+    nt_workspace = Workspace(
+        tmp_path / ".runtime", tmp_path / "source", pytest_pin="9.1.1", _nt_source_bytes=True
+    )
+    assert "GIT_ATTR_NOSYSTEM" not in workspace._git_env(workspace.main, None, None)
+    assert not any("core.attributesFile=" in flag for flag in workspace.git_flags)
+    assert nt_workspace.git_flags[:-2] == workspace.git_flags
 
 
 @pytest.mark.parametrize("tamper", ["missing", "altered", "symlink", "hardlink", "directory"])
