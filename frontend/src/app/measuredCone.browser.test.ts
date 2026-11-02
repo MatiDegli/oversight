@@ -31,10 +31,11 @@ afterAll(async () => {
   await server.close();
 });
 
-async function open(width: number, theme: string, seq = 21, folded = false) {
+async function open(width: number, theme: string, seq = 21, folded = false, deviceScaleFactor = 1) {
   const page = await browser.newPage({
     viewport: { width: 1920, height: 1080 },
     reducedMotion: "reduce",
+    deviceScaleFactor,
   });
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   await page.goto(url);
@@ -154,7 +155,9 @@ it("observes all four measured words drawn to a canvas", async () => {
 });
 
 it("updates facts in place without camera, nodes, routes, borders or focus moving", async () => {
-  const page = await open(1920, "dark");
+  // DPR 2 gives 560px level 1 row textures at the review zoom. Two cannot share a 1024px
+  // Cytoscape atlas, so invalidating another row cannot evict the unchanged differs texture.
+  const page = await open(1920, "dark", 21, false, 2);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   try {
