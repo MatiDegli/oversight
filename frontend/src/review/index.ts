@@ -18,6 +18,8 @@ export { candidateKey, currentCards, approvalLocked, approvalLockedCaption } fro
 export const loadReviewPanel = () => import("./ReviewPanel");
 export const loadDecisionInbox = () => import("./DecisionInbox");
 export const loadReviewBody = () => import("./ReviewBody");
+export const loadPlanActions = () => import("./PlanActions");
+export { selectPlanEvidence, selectPlanQueue } from "./planSelectors";
 export { ReviewHeader } from "./ReviewHeader";
 export { InboxHeading, InboxViews } from "./InboxHeader";
 export { selectInboxSummary, selectChangeCard } from "./inboxSelectors";
