@@ -130,7 +130,7 @@ async def test_human_launch_takes_pending_only_after_message_commit(tmp_path: Pa
         answer = replies(s)[-1].payload
         assert answer.answers_seq and answer.woken_by is None and answer.through_seq == seqs[-1]
         assert owned(s).wakes == 0 and not owned(s).watcher.pending
-        assert any(m["role"] == "system" and "Server notice:" in str(m) for m in factory.inputs[-1])
+        assert any(m["role"] == "tool" and "Server notice:" in str(m) for m in factory.inputs[-1])
         assert factory.inputs[-1][-1] == {"role": "user", "content": "Human instruction"}
 
 

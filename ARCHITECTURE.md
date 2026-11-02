@@ -412,8 +412,11 @@ publication preserves pending work. Mixed turns correlate only with `answers_seq
 `woken_by` null; the digest advances their committed reply horizon so it cannot wake again.
 Autonomous turns emit no `agent.message`, have sorted server-selected `woken_by` and null
 `answers_seq`, and use the same tool loop, accounting role and per-turn budgets. A typed
-`ServerNotice` retains the fenced, masked digest separately from human exchanges. Whole event
-lines, labels, fences and omission counts fit 4,096 characters; omitted lines still correlate.
+`ServerNotice` retains the fenced, masked digest separately from human exchanges and delivers it
+as a status tool-result pair, never as system instructions. Compact summaries carry trigger seq,
+event-time plan/subtask scope, state or outcome, counts and up to three failed test ids. Each line
+fits 1,024 characters; labels, fences and omission counts fit 4,096 characters together. Whole
+overflow lines are omitted and still correlate.
 
 The run policy captures `OVERSIGHT_LEAD_WAKES` once: default 3, nonnegative integers without a
 configured maximum, with 0 disabling autonomous execution. A wake counts as one turn and one

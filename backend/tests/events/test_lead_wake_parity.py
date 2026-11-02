@@ -1,4 +1,4 @@
-"""One exported fake run and an explicit golden for Python and future frontend attribution."""
+"""Hand-written wake scenarios and an explicit golden for Python and future frontend attribution."""
 
 # The watcher is held working so timing and admission budgets cannot hide attribution.
 # pyright: reportPrivateUsage=false
@@ -20,8 +20,17 @@ from oversight.runtime_lead_wakes import LeadWatcher
 from oversight_contracts.events import ServerEvent
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures/events"
-RECORDING = FIXTURES / "recorded-lead-wakes.jsonl"
-EXPECTED = FIXTURES / "lead-wakes.expected.json"
+RECORDING = FIXTURES / "handwritten-lead-wakes.jsonl"
+EXPECTED = FIXTURES / "handwritten-lead-wakes.expected.json"
+
+
+def test_handwritten_fixture_has_explicit_provenance():
+    assert RECORDING.name == "handwritten-lead-wakes.jsonl"
+    assert EXPECTED.name == "handwritten-lead-wakes.expected.json"
+    assert not (FIXTURES / "recorded-lead-wakes.jsonl").exists()
+    note = RECORDING.with_suffix(".md").read_text(encoding="utf-8")
+    assert "_record" in note and "OVERSIGHT_RECORD_WAKE_FIXTURE=1" in note
+    assert "hand-written" in note and "store.publish" in note
 
 
 async def _record(tmp_path: Path) -> None:
@@ -68,7 +77,7 @@ async def _record(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
-async def test_recorded_wake_fixture_matches_predicate_and_watcher(tmp_path: Path):
+async def test_handwritten_wake_fixture_matches_predicate_and_watcher(tmp_path: Path):
     async with asyncio.timeout(DEADLINE_S):
         if os.environ.get("OVERSIGHT_RECORD_WAKE_FIXTURE") == "1":
             await _record(tmp_path / "recording")

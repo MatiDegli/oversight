@@ -685,8 +685,10 @@ is unchanged; the shared Meta spending brake still refuses calls rather than que
 The backend also watches each lead's own committed catalog triggers, coalesces for five seconds,
 and admits bounded server-digest turns with human priority. Wakes default to three per thread;
 the person's setting has no configured maximum and zero disables execution. Refusals are
-existing lead-status revisions. The shared fake recording is `fixtures/events/recorded-lead-wakes.jsonl`
-with `fixtures/events/lead-wakes.expected.json`; frontend attribution and notice rendering remain
+existing lead-status revisions. The shared hand-written fixture is
+`fixtures/events/handwritten-lead-wakes.jsonl`
+with `fixtures/events/handwritten-lead-wakes.expected.json`; its companion Markdown file documents
+the fake-only generator and synthetic transitions. Frontend attribution and notice rendering remain
 separate work, with no TypeScript parity claim here.
 L3 remains the Chat composer/navigation, freshness and withheld/cut UI, plan links, graph/focus,
 fixture exclusion, approval keyboard protection, decision-count cost fixture and Playwright work.

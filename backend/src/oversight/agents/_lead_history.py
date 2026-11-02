@@ -16,6 +16,24 @@ class ServerNotice:
     through_seq: int
     triggers: tuple[int, ...]
 
+    def messages(self) -> list[Message]:
+        """Deliver observations through the same unprivileged channel as status data."""
+        call_id = f"server_notice_{self.through_seq}"
+        return [
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": call_id,
+                        "type": "function",
+                        "function": {"name": "status", "arguments": "{}"},
+                    }
+                ],
+            },
+            {"role": "tool", "tool_call_id": call_id, "content": self.text},
+        ]
+
 
 class LeadHistory:
     def __init__(self, task: str, *, history_chars: int = HISTORY_CHARS) -> None:
@@ -56,13 +74,13 @@ class LeadHistory:
         messages: list[Message] = [{"role": "user", "content": task}]
         for (question, answer), retained in zip(self.exchanges, self.notices, strict=True):
             if retained is not None:
-                messages.append({"role": "system", "content": retained.text})
+                messages.extend(retained.messages())
             if question is not None:
                 messages.append({"role": "user", "content": question})
             if answer is not None:
                 messages.append({"role": "assistant", "content": answer})
         if notice is not None:
-            messages.append({"role": "system", "content": notice.text})
+            messages.extend(notice.messages())
         if human is not None:
             messages.append({"role": "user", "content": human})
         return messages

@@ -38,14 +38,29 @@ class WakeClock:
                     await changed.wait()
 
 
-def _masked(value: Any, mask: Callable[[str], str]) -> Any:
+def _data(value: Any, mask: Callable[[str], str]) -> str:
     if isinstance(value, str):
-        return mask(value)
+        masked = mask(value)
+        bounded = masked[:120]
+        while True:
+            encoded = json.dumps(bounded + ("..." if bounded != masked else ""), ensure_ascii=True)
+            for character in "`~<>&":
+                encoded = encoded.replace(character, f"\\u{ord(character):04x}")
+            if len(encoded) <= 122:
+                return encoded
+            bounded = bounded[:-1]
     if isinstance(value, dict):
-        return {key: _masked(item, mask) for key, item in cast(dict[str, Any], value).items()}
+        return (
+            "{"
+            + ",".join(
+                json.dumps(key) + ":" + _data(item, mask)
+                for key, item in cast(dict[str, Any], value).items()
+            )
+            + "}"
+        )
     if isinstance(value, list):
-        return [_masked(item, mask) for item in cast(list[Any], value)]
-    return value
+        return "[" + ",".join(_data(item, mask) for item in cast(list[Any], value)) + "]"
+    return json.dumps(value)
 
 
 def _line(event: ServerEvent, prior: Mapping[int, ServerEvent], mask: Callable[[str], str]) -> str:
@@ -53,14 +68,24 @@ def _line(event: ServerEvent, prior: Mapping[int, ServerEvent], mask: Callable[[
     # Labels use the event-time plan/subtask metadata; eligibility belongs only to events.
     plans = [e.payload for e in prior.values() if e.seq < event.seq and e.type == "plan.updated"]
     agent_id = getattr(payload, "agent_id", None)
+    plan_id = getattr(payload, "plan_id", None)
+    if event.type == "tests.executed":
+        statuses = [
+            e.payload
+            for e in prior.values()
+            if e.seq < event.seq and e.type == "agent.status" and e.payload.agent_id == agent_id
+        ]
+        plan_id = statuses[-1].plan_id if statuses else None
     subtask = None
     if event.type != "plan.updated":
         latest = {plan.plan_id: plan for plan in plans}
         for plan in latest.values():
+            if plan.plan_id != plan_id:
+                continue
             for index, task in enumerate(plan.subtasks or []):
                 if task.agent_id == agent_id:
                     subtask = index + 1
-    fields = {
+    fields: dict[str, Any] = {
         "seq": event.seq,
         "scope": (
             "plan-wide"
@@ -70,12 +95,22 @@ def _line(event: ServerEvent, prior: Mapping[int, ServerEvent], mask: Callable[[
             else "subtask unknown"
         ),
         "type": event.type,
-        "data": _masked(payload.model_dump(mode="json"), mask),
+        "plan_id": plan_id,
     }
-    text = mask(json.dumps(fields, ensure_ascii=True))
-    for character in "`~<>&":
-        text = text.replace(character, f"\\u{ord(character):04x}")
-    return text
+    if event.type == "tests.executed":
+        suite = event.payload.suite
+        fields.update(
+            outcome=suite.outcome,
+            passed=suite.passed,
+            failed=suite.failed,
+            skipped=suite.skipped,
+            failed_tests=suite.failed_tests[:3],
+        )
+    elif event.type == "agent.status":
+        fields.update(state=event.payload.state, detail=event.payload.detail)
+    elif event.type == "plan.updated":
+        fields.update(state=event.payload.state, subtasks=len(event.payload.subtasks or []))
+    return _data(fields, mask)
 
 
 def digest(
@@ -89,7 +124,7 @@ def digest(
         remaining = len(triggers) - index - 1
         marker = f"\n({remaining} more)" if remaining else ""
         candidate = header + "\n".join([*lines, line]) + footer + marker
-        if len(candidate) > 4096:
+        if len(line) > 1024 or len(candidate) > 4096:
             break
         lines.append(line)
     omitted = len(triggers) - len(lines)

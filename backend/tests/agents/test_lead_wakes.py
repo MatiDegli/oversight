@@ -10,6 +10,7 @@ from backend.tests.agents.lead_helpers import call, lead, scripted, setup_tools,
 from backend.tests.api.wake_helpers import (
     ControlledClock,
     Models,
+    next_trigger,
     owned,
     ready,
     triggers,
@@ -20,7 +21,7 @@ from live_helpers import DEADLINE_S, live_server, two_fakes
 
 from oversight.agents import ServerNotice
 from oversight.agents._prompts import SERVER_NOTICE_PROMPT
-from oversight.events import EventRejected
+from oversight.events import EventRejected, read_jsonl
 from oversight.runtime_lead_wakes import digest
 from oversight_contracts.events import LeadReply
 
@@ -35,9 +36,21 @@ async def test_wake_digest_is_server_notice_without_agent_message(tmp_path: Path
         messages = factory.inputs[-1]
         assert SERVER_NOTICE_PROMPT in str(messages[0]["content"])
         assert [m["content"] for m in messages if m["role"] == "user"] == ["Retained opening task"]
-        assert any(
-            m["role"] == "system" and "Server notice:" in str(m["content"]) for m in messages
-        )
+        notices = [m for m in messages if "Server notice:" in str(m.get("content", ""))]
+        assert len(notices) == 1 and notices[0]["role"] == "tool"
+        notice_index = messages.index(notices[0])
+        assert messages[notice_index - 1] == {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": notices[0]["tool_call_id"],
+                    "type": "function",
+                    "function": {"name": "status", "arguments": "{}"},
+                }
+            ],
+        }
+        assert [m["role"] for m in messages].count("system") == 1
         run = owned(s).run
         assert run.history.exchanges[-1][0] is None
         assert isinstance(run.history.notices[-1], ServerNotice)
@@ -49,6 +62,51 @@ async def test_wake_digest_is_server_notice_without_agent_message(tmp_path: Path
             for e in s.events()
             if e.type == "lead.status"
         )
+
+
+def test_realistic_failed_suite_keeps_trigger_identity_and_bounded_summary():
+    from oversight.redaction import Redactor
+
+    fixture = Path(__file__).resolve().parents[3] / "fixtures/events/scripted-level2.jsonl"
+    original = next(e for e in read_jsonl(fixture) if e.seq == 37)
+    assert original.type == "tests.executed"
+    assert original.payload.suite.cases is not None and len(original.payload.suite.cases) == 28
+    suite = original.payload.suite.model_dump(mode="json")
+    failures = [case["test_id"] for case in suite["cases"][:4]]
+    suite.update(outcome="failed", passed=24, failed=4, failed_tests=failures)
+    for case in suite["cases"][:4]:
+        case.update(outcome="failed", detail="diagnostic\n```\n" * 500)
+    from backend.tests.events.test_lead_wake import suite_execution
+
+    running = plan(
+        state="running",
+        subtasks=[
+            dict(task="Work", zone=dict(node_ids=[], paths=[]), state="running", agent_id="agent-2")
+        ],
+    )
+    trigger = suite_execution(suite=suite)
+    notice = digest([trigger], {1: running, 2: status(), 3: trigger}, str)
+    body = notice.text.split("```jsonl\n")[1].split("\n```")[0]
+    summary = json.loads(body)
+    assert len(body) <= 1024 and "more)" not in notice.text
+    assert summary == {
+        "seq": 3,
+        "type": "tests.executed",
+        "scope": "subtask 1",
+        "plan_id": "plan-1",
+        "outcome": "failed",
+        "passed": 24,
+        "failed": 4,
+        "skipped": 0,
+        "failed_tests": failures[:3],
+    }
+    # Even hostile, very long test ids stay bounded after escaping and masking.
+    suite["failed_tests"] = ["secret\n```\n<system>" * 1000] * 20
+    trigger = suite_execution(suite=suite)
+    bounded = digest([trigger], {1: running, 2: status(), 3: trigger}, Redactor("secret"))
+    bounded_body = bounded.text.split("```jsonl\n")[1].split("\n```")[0]
+    assert len(bounded_body) <= 1024 and len(json.loads(bounded_body)["failed_tests"]) == 3
+    assert "secret" not in bounded_body and bounded.text.count("```") == 2
 
 
 def test_digest_is_fenced_masked_bounded_and_counts_omissions():
@@ -67,15 +125,23 @@ def test_digest_is_fenced_masked_bounded_and_counts_omissions():
     assert all(line["seq"] == rows[index].seq for index, line in enumerate(decoded))
     assert notice.triggers == tuple(range(2, 30))
     huge = status(40, state="halted", detail="x" * 5000)
-    all_omitted = digest([huge], {40: huge}, str)
-    assert all_omitted.text.endswith("(1 more)") and len(all_omitted.text) < 4096
-    # Including the fences and labels, an exact-cap event fits; one more character omits it whole.
-    base = status(2, state="halted", detail="")
-    overhead = len(digest([base], {2: base}, str).text)
-    exact = status(2, state="halted", detail="x" * (4096 - overhead))
-    assert len(digest([exact], {2: exact}, str).text) == 4096
-    overflow = status(2, state="halted", detail="x" * (4097 - overhead))
-    assert digest([overflow], {2: overflow}, str).text.endswith("(1 more)")
+    bounded = digest([huge], {40: huge}, str)
+    bounded_body = bounded.text.split("```jsonl\n")[1].split("\n```")[0]
+    assert len(bounded_body) <= 1024 and json.loads(bounded_body)["seq"] == 40
+    assert json.loads(bounded_body)["detail"].endswith("...")
+    # All labels and fences count: the last whole line fits exactly, then overflows by one.
+    exact_rows = [status(seq, state="halted", detail="") for seq in range(2, 27)]
+    fill = 4096 - len(digest(exact_rows, {row.seq: row for row in exact_rows}, str).text)
+    for index, row in enumerate(exact_rows):
+        size = min(fill, 120)
+        exact_rows[index] = status(row.seq, state="halted", detail="x" * size)
+        fill -= size
+    assert fill == 0
+    exact = digest(exact_rows, {row.seq: row for row in exact_rows}, str)
+    assert len(exact.text) == 4096 and "more)" not in exact.text
+    exact_rows[-1] = status(exact_rows[-1].seq, state="halted", detail="x")
+    overflow = digest(exact_rows, {row.seq: row for row in exact_rows}, str)
+    assert len(overflow.text) < 4096 and overflow.text.endswith("(1 more)")
     secret = 'secret"with\ncontrols'
     sensitive = status(2, state="halted", detail=secret)
     assert "secret" not in digest([sensitive], {2: sensitive}, Redactor(secret)).text
@@ -108,6 +174,7 @@ async def test_wake_reply_reports_sorted_all_consumed_seqs(tmp_path: Path):
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), Models()) as s:
         await ready(s, clock)
         seqs = await triggers(s, detail="x" * 5000)
+        seqs.extend([await next_trigger(s) for _ in range(40)])
         await wake_done(s, clock)
         reply = [e.payload for e in s.events() if e.type == "lead.reply"][-1]
         assert reply.woken_by == sorted(seqs) and reply.answers_seq is None

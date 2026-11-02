@@ -79,7 +79,18 @@ def test_server_notices_trim_with_exchanges_without_becoming_human() -> None:
     assert "Old" not in str(messages)
     assert messages == [
         {"role": "user", "content": "task"},
-        {"role": "system", "content": "New server data"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "server_notice_2",
+                    "type": "function",
+                    "function": {"name": "status", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "server_notice_2", "content": "New server data"},
         {"role": "assistant", "content": "New reply"},
         {"role": "user", "content": "Human now"},
     ]

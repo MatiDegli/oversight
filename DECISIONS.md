@@ -4250,9 +4250,11 @@ while idle and holding the lock through publication, it records an existing lead
 revision with `Skipped a wake: <reason>`. A reason is suppressed only after successful
 publication until the next launched turn; failed publication preserves pending work and retry.
 
-Digests are typed server notices, never the person's speech or a status-event payload. Escaped,
-masked JSON lines identify seq and stable subtask number where available; plan-wide events
-remain plan-wide. The complete digest fits 4,096 characters, omitting whole lines with a counted
+Digests are typed server notices delivered as status tool-result pairs, never system instructions,
+the person's speech or a status-event payload. Compact escaped, masked JSON lines identify seq,
+event-time plan and stable subtask number where available; plan-wide events remain plan-wide.
+Each line fits 1,024 characters, with state/outcome, counts and up to three failed test ids instead
+of full payloads. The complete digest fits 4,096 characters, omitting whole lines with a counted
 marker. History trims notices with their exchanges. The new notice instructions participate in
 the existing prompt-version hash. Tools, propose-only authority, lead accounting, per-turn
 budgets and thread-wide plan limits remain unchanged.

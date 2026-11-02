@@ -62,3 +62,5 @@ One line per day, in Argentina time (ART).
   bounded server notices and reply correlation, with fake-only race and lifecycle evidence.
   Verified exclusive reply correlation across human, autonomous and mixed turns, and isolated
   wake admission after integrating concurrent leads and their captured limits.
+  Updated prompt-version goldens, bounded wake summaries, delivered notices as tool data, and
+  labeled the synthetic wake attribution fixture with its generator provenance.
