@@ -7,6 +7,7 @@ import sys
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from inspect import signature
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -14,7 +15,7 @@ from typing import cast
 import pytest
 
 from oversight.graph import WorkspaceGraph
-from oversight.workspace import run_process
+from oversight.workspace import Workspace, run_process
 from oversight.workspace import source_nt as nt
 from oversight.workspace._platform import case_sensitive_directory, executable, stream_names
 from oversight.workspace.files import open_nt
@@ -24,6 +25,8 @@ from oversight.workspace.metadata_io import Budget, Entry, read_entry
 from oversight.workspace.runner import ProcessResult
 
 from .test_source_nt import source_case, unnamed
+
+GIT_TIMEOUT_S = signature(Workspace.git).parameters["timeout_s"].default
 
 
 async def git(root: Path, *args: str) -> str:
@@ -348,7 +351,7 @@ async def test_max_manifest_bounded_add(tmp_path: Path) -> None:
         option = f"--pathspec-from-file={manifest}"
         argv = [executable("git"), "add", "-f", option, "--pathspec-file-nul"]
         result = await run_process(
-            argv, cwd=source.root, env={"GIT_LITERAL_PATHSPECS": "1"}, timeout_s=10
+            argv, cwd=source.root, env={"GIT_LITERAL_PATHSPECS": "1"}, timeout_s=GIT_TIMEOUT_S
         )
         if result.timed_out:
             index_lock = source.root / ".git" / "index.lock"
@@ -359,7 +362,7 @@ async def test_max_manifest_bounded_add(tmp_path: Path) -> None:
                 argv,
                 cwd=source.root,
                 env={"GIT_LITERAL_PATHSPECS": "1", "GIT_TRACE": "1", "GIT_TRACE2_PERF": "1"},
-                timeout_s=10,
+                timeout_s=GIT_TIMEOUT_S,
             )
             pytest.fail(
                 f"git add timed out: index_lock_exists={index_lock_exists}; "
@@ -421,5 +424,5 @@ async def test_max_manifest_timeout_evidence(
     assert "must-not-appear-in-evidence" not in message
     assert len(calls) == 2
     argv, cwd, env, limit = calls[0]
-    assert env == {"GIT_LITERAL_PATHSPECS": "1"} and limit == 10
+    assert env == {"GIT_LITERAL_PATHSPECS": "1"} and limit == GIT_TIMEOUT_S
     assert calls[1] == (argv, cwd, env | {"GIT_TRACE": "1", "GIT_TRACE2_PERF": "1"}, limit)
