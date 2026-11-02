@@ -19,7 +19,14 @@ describe("lead thread compatibility", () => {
           seq: before.lastSeq + 1,
           ts,
           type: "lead.reply",
-          payload: { agent_id: "agent-1", answers_seq: null, text, through_seq: null, cut },
+          payload: {
+            agent_id: "agent-1",
+            answers_seq: null,
+            woken_by: null,
+            text,
+            through_seq: null,
+            cut,
+          },
         };
         const after = applyEvent(before, event);
         expect(after).toEqual({

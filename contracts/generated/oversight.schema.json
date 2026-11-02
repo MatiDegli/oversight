@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.16.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.17.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -3571,7 +3571,23 @@
               "type": "null"
             }
           ],
-          "description": "An earlier agent.message to this lead; null answers the opening task."
+          "description": "An earlier agent.message to this lead; null answers the opening task or a wake."
+        },
+        "woken_by": {
+          "anyOf": [
+            {
+              "items": {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Committed plan events that woke this lead, in seq order; null when a person's message or\nthe opening task started the turn."
         },
         "text": {
           "anyOf": [
@@ -3620,6 +3636,7 @@
       "required": [
         "agent_id",
         "answers_seq",
+        "woken_by",
         "text",
         "through_seq",
         "cut"

@@ -165,11 +165,8 @@ def test_save_file_unchanged_and_plan_cardinality_has_no_ceiling() -> None:
     with pytest.raises(ValidationError):
         SaveFile.model_validate(dict(path="a.py", content="new", base_hash=None))
     subtask = dict(task="work", zone=dict(node_ids=[], paths=[]))
-    for count in (0,):
-        with pytest.raises(ValidationError):
-            UpdatePlan.model_validate(
-                dict(revision=1, graph_version="v1", subtasks=[subtask] * count)
-            )
+    with pytest.raises(ValidationError):
+        UpdatePlan.model_validate(dict(revision=1, graph_version="v1", subtasks=[]))
     assert (
         len(
             UpdatePlan.model_validate(
