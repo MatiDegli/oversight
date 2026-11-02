@@ -60,6 +60,7 @@ describe("lead thread compatibility", () => {
         state: "idle",
         step: 1,
         detail: null,
+        limits: null,
         requested_plan_id: null,
       },
     };

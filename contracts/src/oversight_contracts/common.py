@@ -77,8 +77,8 @@ type Timestamp = Annotated[
 """UTC with millisecond precision and a `Z`: `2026-10-27T14:03:12.345Z`."""
 
 type Slot = Literal["A", "B", "C", "D", "E", "F"]
-"""Agent slot identifiers; UI appearance and runtime capacity are configured outside contracts.
-Plans contain one to six subtasks; slot reuse across starts uses distinct agent ids.
+"""A seat representing capacity, not agent identity; its color comes from the team.
+Slot reuse across starts uses distinct agent ids.
 """
 
 type FileStatus = Literal["added", "modified", "deleted"]

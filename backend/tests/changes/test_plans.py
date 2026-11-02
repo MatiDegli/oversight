@@ -173,3 +173,25 @@ def test_partial_initial_launch_refusals_and_ready_dependents_keep_priority() ->
     plan = core.resolved(plan, "agent-1", "merged")
     plan = core.launched(plan, 1, "agent-2")
     assert plan.state == "running"
+
+
+@pytest.mark.parametrize("transition", ["propose", "update"])
+@pytest.mark.parametrize("dependency", [False, True])
+def test_plan_transitions_keep_runtime_bounds(transition: str, dependency: bool) -> None:
+    plan = proposed(1)
+    drafts = [
+        SubtaskDraft(task=f"task {i}", zone=ZONE, depends_on=[6] if dependency and i == 0 else [])
+        for i in range(7)
+    ]
+    message = (
+        "A subtask dependency index must be at most 5."
+        if dependency
+        else "A plan has 1 to 6 subtasks."
+    )
+    with pytest.raises(ValueError, match=message):
+        if transition == "propose":
+            core.propose(plan.model_copy(update={"state": "planning"}), drafts)
+        else:
+            core.update(
+                plan, UpdatePlan(revision=2, graph_version=plan.graph_version, subtasks=drafts)
+            )

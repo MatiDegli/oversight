@@ -267,11 +267,11 @@ class PlanCreated(ContractModel):
 
 
 class UpdatePlan(ContractModel):
-    """Replace the one to six proposed subtasks using the expected plan revision."""
+    """Replace the proposed subtasks using the expected plan revision."""
 
     revision: PositiveInt
     graph_version: NonEmptyText
-    subtasks: list[SubtaskDraft] = Field(min_length=1, max_length=6)
+    subtasks: list[SubtaskDraft] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _dependencies(self) -> Self:

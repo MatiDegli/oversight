@@ -114,6 +114,7 @@ class LeadTurn:
                 await live._finish(live.store.publish(end.reply))
                 if lead.stopping or service._closing or live._closing:
                     state, detail = service._ending(lead)
-                elif lead.turns >= 50:
-                    state, detail = "halted", "Reached the limit of 50 turns."
+                elif lead.turns >= self.run.limits.turns:
+                    state = "halted"
+                    detail = f"Reached the limit of {self.run.limits.turns} turns."
             await live._finish(service._status(lead, state, detail, step=self.run.steps))

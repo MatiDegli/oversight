@@ -1,5 +1,6 @@
 """Pure, immutable plan transitions for one to six subtasks."""
 
+from collections.abc import Sequence
 from typing import Any, Literal
 
 from oversight.changes._state import WrongState
@@ -32,7 +33,16 @@ def whole_graph(snapshot: GraphSnapshot) -> PlanZone:
     return PlanZone(node_ids=[], paths=sorted(paths))
 
 
+def check_limits(drafts: Sequence[SubtaskDraft]) -> None:
+    """Keep runtime admission unchanged until the person can configure plan limits."""
+    if any(dependency > 5 for draft in drafts for dependency in draft.depends_on):
+        raise ValueError("A subtask dependency index must be at most 5.")
+    if not 1 <= len(drafts) <= 6:
+        raise ValueError("A plan has 1 to 6 subtasks.")
+
+
 def _waiting(drafts: list[SubtaskDraft]) -> list[PlanSubtask]:
+    check_limits(drafts)
     if any(not draft.task.strip() for draft in drafts):
         raise ValueError("subtask tasks must not be empty")
     return [PlanSubtask(**draft.model_dump(), state="waiting") for draft in drafts]

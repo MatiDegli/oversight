@@ -31,20 +31,17 @@ from oversight.agents.loop import (
     _canonical,
 )
 from oversight.events import EventPayload
-from oversight_contracts.events import LeadReply
+from oversight_contracts.events import LeadLimits, LeadReply
 
-
-@dataclass(frozen=True)
-class LeadLimits:
-    tool_calls: int = 12
-    model_calls: int = 12 + FAILURE_LIMIT
-    wall_clock_s: float = 300
-    plans: int = 3
-    subtasks: int = 6
-    task_chars: int = 2_000
-
-
-LEAD_LIMITS = LeadLimits()
+LEAD_LIMITS = LeadLimits(
+    turns=50,
+    tool_calls=12,
+    model_calls=12 + FAILURE_LIMIT,
+    wall_clock_s=300,
+    plans=3,
+    subtasks=6,
+    task_chars=2_000,
+)
 STARTING_DETAIL = (
     "Limits: 12 tool calls, 18 model calls, 300 s, 3 plans of up to 6 subtasks, "
     "2,000 characters per task."

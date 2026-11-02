@@ -99,6 +99,7 @@ PAYLOADS: dict[str, dict[str, Any]] = {
             "cone_max_depth": 4,
             "cone_max_nodes": 40,
         },
+        "max_leads": None,
         "budget": {"budget_usd": 150.0, "spent_usd": 0.0, "warn_at": [0.5, 0.8], "block_at": 0.9},
     },
     "graph.snapshot": {
