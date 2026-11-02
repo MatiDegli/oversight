@@ -220,6 +220,9 @@ async def copied_suite(source, tree, io, *, missing=False):
         own = nt.prepare_environment(source, root, deadline, io=io)
         assert own.guard is not None
         policy = json.loads(own.guard)
+        policy["libraries"].append(
+            str(Path(sys.prefix) / ("Lib" if sys.platform == "win32" else "lib"))
+        )
         if missing:
             policy["packages"] = ["absent"]
         return replace(own, python=Path(sys.executable), guard=json.dumps(policy))
@@ -234,3 +237,61 @@ async def copied_suite(source, tree, io, *, missing=False):
         spawn=run_process,
         _own_prepare=prepare,
     )
+
+
+def test_own_finder_removed_and_deleted_submodule_cannot_fall_back(tmp_path, monkeypatch):
+    source, _tree, plugin, report = guarded(tmp_path, monkeypatch)
+    module = ModuleType("__editable__own")
+    original = source.root / "backend/src/sample/deleted.py"
+    original.write_text("value = 'original'")
+    exec(
+        "class _EditableFinder:\n"
+        "    @classmethod\n"
+        "    def find_spec(cls, fullname, path=None, target=None):\n"
+        "        if fullname == 'sample.deleted':\n"
+        "            from importlib.util import spec_from_file_location\n"
+        f"            return spec_from_file_location(fullname, {str(original)!r})\n",
+        module.__dict__,
+    )
+    module.__dict__.update(MAPPING={"sample": str(original.parent)}, NAMESPACES={})
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    own = module.__dict__["_EditableFinder"]
+    dependency = type(
+        "_EditableFinder",
+        (),
+        {"__module__": "__editable__dependency", "find_spec": lambda *a: None},
+    )
+    monkeypatch.setattr(sys, "meta_path", [*sys.meta_path, own, dependency])
+    monkeypatch.delitem(sys.modules, "sample", raising=False)
+    plugin.prepare_imports()
+    assert own not in sys.meta_path and dependency in sys.meta_path
+    with pytest.raises(ModuleNotFoundError, match=r"sample\.deleted"):
+        importlib.import_module("sample.deleted")
+    assert plugin.import_problem() is None
+    assert not report.exists()
+    sys.modules.pop("sample", None)
+
+
+@pytest.mark.parametrize("original", [False, True])
+def test_namespace_requires_copy_and_allows_only_venv_extra(tmp_path, monkeypatch, original):
+    source, tree, plugin, _ = guarded(tmp_path, monkeypatch)
+    extra = source.root / ("lib/sample" if original else ".venv/Lib/site-packages/sample")
+    spec = importlib.machinery.ModuleSpec("sample", None)
+    spec.submodule_search_locations = [str(tree / "backend/src/sample"), str(extra)]
+    monkeypatch.setattr(plugin.importlib.util, "find_spec", lambda _: spec)
+    assert plugin.import_problem() == ("mapped package outside tested tree" if original else None)
+    spec.submodule_search_locations = [str(extra)]
+    assert plugin.import_problem() == "mapped package outside tested tree"
+
+
+@pytest.mark.parametrize("raw", ["", "{", "null", "{}", '{"libraries": [1]}'])
+def test_malformed_policy_emits_refusal(tmp_path, monkeypatch, raw):
+    _, _, plugin, report = guarded(tmp_path, monkeypatch)
+    monkeypatch.setenv("OVERSIGHT_IMPORT_GUARD", raw)
+    with pytest.raises(pytest.exit.Exception):
+        plugin.prepare_imports()
+    assert json.loads(report.read_text()) == {
+        "kind": "guard",
+        "ok": False,
+        "reason": "invalid import guard policy",
+    }

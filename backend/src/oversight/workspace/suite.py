@@ -15,7 +15,7 @@ import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from oversight.limits import MAX_REPORT_BYTES, MAX_REPORT_LINE_BYTES, SizeLimitError
 from oversight.test_output import retain_failure
@@ -46,20 +46,56 @@ def compatible(name, minimum):
 ok = (compatible('python', (3, 10)) and compatible('pytest', (8, 2))
       and compatible('pluggy', (1, 5)))
 try:
-    spec = importlib.util.find_spec('oversight_report')
-    expected = os.environ['OVERSIGHT_TRUSTED_PLUGIN']
-    ok = ok and spec is not None and spec.origin is not None
-    ok = ok and os.path.normcase(os.path.realpath(spec.origin)) == os.path.normcase(expected)
+    policy = json.loads(os.environ['OVERSIGHT_IMPORT_GUARD'])
+    expected = os.path.realpath(os.environ['OVERSIGHT_TRUSTED_PLUGIN'])
+    def normalized(p):
+        return os.path.normcase(os.path.realpath(p))
+    def trusted(name, origin):
+        if not origin:
+            return False
+        if name.startswith('oversight_'):
+            return normalized(origin) == normalized(os.path.join(
+                os.path.dirname(expected), name + '.py'))
+        return any(os.path.commonpath([normalized(lib), normalized(origin)]) == normalized(lib)
+                   for lib in policy['libraries'])
+    names = ('pytest', 'pluggy', 'oversight_calls', 'oversight_report')
+    for name in names:
+        spec = importlib.util.find_spec(name)
+        ok = ok and spec is not None and trusted(name, spec.origin)
     if ok:
-        import pytest, oversight_report
-        origin = os.path.normcase(os.path.realpath(oversight_report.__file__))
-        ok = origin == os.path.normcase(expected)
+        import pytest, pluggy, oversight_calls, oversight_report
+        for name in names:
+            module = __import__(name)
+            ok = ok and trusted(name, module.__file__)
+            ok = ok and module.__spec__ is not None and trusted(name, module.__spec__.origin)
         if ok:
             oversight_report.guard_imports()
 except BaseException:
     ok = False
 print(json.dumps(dict(versions, ok=ok)))
 """
+
+
+def _require_guard(raw: str | None) -> None:
+    try:
+        parsed: object = json.loads(raw or "")
+        if not isinstance(parsed, dict):
+            raise ValueError
+        policy = cast(dict[str, Any], parsed)
+        if (
+            any(not isinstance(policy.get(k), str) or not policy[k] for k in ("tree", "source"))
+            or not isinstance(policy.get("libraries"), list)
+            or not policy["libraries"]
+            or any(not isinstance(p, str) or not p for p in policy["libraries"])
+            or not isinstance(policy.get("packages"), list)
+            or any(
+                not isinstance(p, str) or not p or any(not n.isidentifier() for n in p.split("."))
+                for p in policy["packages"]
+            )
+        ):
+            raise ValueError
+    except (ValueError, TypeError):
+        raise OSError("Own-source environment unavailable: invalid import guard policy") from None
 
 
 async def _probe_environment(
@@ -70,6 +106,7 @@ async def _probe_environment(
     clock: Callable[[], float],
     spawn: Spawn,
 ) -> None:
+    _require_guard(env.get("OVERSIGHT_IMPORT_GUARD"))
     left = deadline - clock()
     if left <= 0:
         raise OSError("Own-source environment unavailable: suite deadline expired")
@@ -296,6 +333,7 @@ async def run_suite(
         if _own_prepare is not None:
             assert deadline is not None
             own = await offload(lambda: _own_prepare(tree_root, deadline))
+            _require_guard(own.guard)
             python = own.python
             env.pop("PYTEST_DISABLE_PLUGIN_AUTOLOAD")
             env.update(

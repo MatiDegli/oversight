@@ -20,6 +20,17 @@ from oversight.workspace.suite import (
 )
 
 
+def guard_policy(tree, source=None):
+    return json.dumps(
+        dict(
+            tree=str(tree),
+            source=str(source or tree / "original"),
+            libraries=[str(Path(sys.prefix) / ("Lib" if sys.platform == "win32" else "lib"))],
+            packages=[],
+        )
+    )
+
+
 def environment(tmp_path: Path):
     source = nt.NtSource(tmp_path / "source", tmp_path / "runtime", "C:/source", "C:/runtime")
     base, tree = tmp_path / "base", source.runtime / "workspace"
@@ -138,7 +149,7 @@ async def test_own_environment_and_one_deadline(tmp_path, monkeypatch, budget, e
     def prepare(tree, deadline):
         assert tree == tmp_path and deadline == 100 + budget
         now[0] += 0.5  # preparation consumes the same allowance
-        return nt.OwnEnvironment(python, (tmp_path / "backend/src",))
+        return nt.OwnEnvironment(python, (tmp_path / "backend/src",), guard_policy(tmp_path))
 
     async def spawn(argv, *, cwd, timeout_s, env=None, output_cap=262144):
         assert env is not None and cwd == tmp_path and argv[0] == str(python)
@@ -151,6 +162,7 @@ async def test_own_environment_and_one_deadline(tmp_path, monkeypatch, budget, e
             "PYTHONHASHSEED": "0",
             "OVERSIGHT_REPORT": env["OVERSIGHT_REPORT"],
             "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+            "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
         }
         calls.append((argv, timeout_s))
         if argv[1] == "-c":
@@ -225,7 +237,9 @@ async def test_probe_failure_is_bounded_and_cleanup_runs(tmp_path, fault):
             timeout_s=7,
             redact=lambda s: s,
             spawn=spawn,
-            _own_prepare=lambda *_: nt.OwnEnvironment(Path(sys.executable)),
+            _own_prepare=lambda *_: nt.OwnEnvironment(
+                Path(sys.executable), guard=guard_policy(tmp_path)
+            ),
         )
     if isinstance(error.value, SuiteUnavailable):
         assert "private" not in str(error.value.cause) and len(str(error.value.cause)) < 200
@@ -240,6 +254,7 @@ async def test_real_probe_pins_trusted_plugin(tmp_path):
     env = {
         "PYTHONPATH": str(plugin),
         "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+        "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
     }
     await _probe_environment(
         Path(sys.executable), tmp_path, env, time.monotonic() + 5, time.monotonic, run_process
@@ -288,8 +303,50 @@ async def test_probe_checks_actual_injected_versions(tmp_path, name, version):
             {
                 "PYTHONPATH": str(plugin),
                 "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+                "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
             },
             time.monotonic() + 5,
             time.monotonic,
             injected,
         )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("raw", [None, "", "{}", "null", "{", '{"libraries":[]}'])
+async def test_invalid_guard_never_launches(tmp_path, raw):
+    async def forbidden(*args, **kwargs):
+        pytest.fail("invalid guard launched a process")
+
+    with pytest.raises(SuiteUnavailable):
+        await run_suite(
+            python=Path("unused"),
+            plugin_dir=tmp_path,
+            runtime_root=tmp_path,
+            tree_root=tmp_path,
+            timeout_s=3,
+            redact=lambda s: s,
+            spawn=forbidden,
+            _own_prepare=lambda *_: nt.OwnEnvironment(Path(sys.executable), guard=raw),
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", ["oversight_calls", "pytest", "pluggy"])
+async def test_probe_refuses_shadow_before_import(tmp_path, name):
+    plugin = Path(__file__).parents[2] / "src/oversight/workspace/report_plugin"
+    marker = tmp_path / "executed"
+    (tmp_path / (name + ".py")).write_text(f"open({str(marker)!r}, 'w').close()")
+    with pytest.raises(OSError, match="probe failed"):
+        await _probe_environment(
+            Path(sys.executable),
+            tmp_path,
+            {
+                "PYTHONPATH": str(plugin),
+                "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+                "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
+            },
+            time.monotonic() + 5,
+            time.monotonic,
+            run_process,
+        )
+    assert not marker.exists()
