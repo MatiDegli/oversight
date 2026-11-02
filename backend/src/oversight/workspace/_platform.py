@@ -10,7 +10,7 @@ import stat
 import sys
 import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Generator, Sequence
 from pathlib import Path
 from typing import Protocol, cast
 
@@ -125,6 +125,11 @@ class Kernel(Protocol):
     QueryDosDeviceW: Callable[..., int]
     GetVolumeInformationW: Callable[..., int]
     GetDriveTypeW: Callable[..., int]
+    CreateFileW: Callable[..., int]
+    GetFileInformationByHandleEx: Callable[..., int]
+    FindFirstStreamW: Callable[..., int]
+    FindNextStreamW: Callable[..., int]
+    FindClose: Callable[..., int]
 
 
 class _BasicLimits(ctypes.Structure):
@@ -180,6 +185,14 @@ def kernel32() -> Kernel:
         "TerminateProcess": (_DWORD, [_HANDLE, _DWORD]),
         "CloseHandle": (_DWORD, [_HANDLE]),
         "GetLastError": (_DWORD, []),
+        "CreateFileW": (
+            _HANDLE,
+            [ctypes.c_wchar_p, _DWORD, _DWORD, _HANDLE, _DWORD, _DWORD, _HANDLE],
+        ),
+        "GetFileInformationByHandleEx": (_DWORD, [_HANDLE, _DWORD, _HANDLE, _DWORD]),
+        "FindFirstStreamW": (_HANDLE, [ctypes.c_wchar_p, _DWORD, _HANDLE, _DWORD]),
+        "FindNextStreamW": (_DWORD, [_HANDLE, _HANDLE]),
+        "FindClose": (_DWORD, [_HANDLE]),
         "GetDriveTypeW": (_DWORD, [ctypes.c_wchar_p]),
         "QueryDosDeviceW": (_DWORD, [ctypes.c_wchar_p, ctypes.c_wchar_p, _DWORD]),
         "GetVolumeInformationW": (
@@ -517,3 +530,46 @@ def preflight_placement(
             "Windows placement is outside USERPROFILE; "
             "use a short private local NTFS nonsynced folder"
         )
+
+
+class _StreamData(ctypes.Structure):
+    _fields_ = [("size", ctypes.c_int64), ("name", ctypes.c_wchar * 296)]
+
+
+def case_sensitive_directory(path: Path, *, kernel: Kernel | None = None) -> bool:
+    api = kernel or kernel32()
+    handle = api.CreateFileW(str(path), 0x80, 7, None, 3, 0x02200000, None)
+    if not handle or handle == ctypes.c_void_p(-1).value:
+        raise OSError(api.GetLastError(), "CreateFileW for case sensitivity failed")
+    try:
+        flags = _DWORD()
+        if not api.GetFileInformationByHandleEx(
+            handle, 23, ctypes.byref(flags), ctypes.sizeof(flags)
+        ):
+            raise OSError(api.GetLastError(), "FileCaseSensitiveInfo failed")
+        return bool(flags.value & 1)
+    finally:
+        if not api.CloseHandle(handle):
+            raise OSError(api.GetLastError(), "CloseHandle failed")
+
+
+def stream_names(path: Path, *, kernel: Kernel | None = None) -> Generator[str]:
+    """Caller closes the iterator even on early refusal; no stream contents are opened."""
+    api = kernel or kernel32()
+    data = _StreamData()
+    handle = api.FindFirstStreamW(str(path), 0, ctypes.byref(data), 0)
+    if handle == ctypes.c_void_p(-1).value:
+        if api.GetLastError() == 38:  # ERROR_HANDLE_EOF, including directories with no streams.
+            return
+        raise OSError(api.GetLastError(), "FindFirstStreamW failed")
+    if not handle:
+        raise OSError("FindFirstStreamW returned a null handle")
+    try:
+        yield data.name
+        while api.FindNextStreamW(handle, ctypes.byref(data)):
+            yield data.name
+        if api.GetLastError() != 38:
+            raise OSError(api.GetLastError(), "FindNextStreamW failed")
+    finally:
+        if not api.FindClose(handle):
+            raise OSError(api.GetLastError(), "FindClose failed")

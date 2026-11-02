@@ -114,3 +114,37 @@ native qualification of the pinned profile, W4's path-based COPY and native own-
 qualification are pending; do not pass arbitrary repository paths. Demo acceptance requires
 both W2 fronts before read/edit/tests/proposal/Approve and three-start proof. Record raw bytes,
 hashes, Git EOL output and initial/merge commits; do not infer LF from text-mode reads.
+
+## Internal native selection (W4a1)
+
+`workspace/source_nt.py` prepares internal NT placements and a read-only Git inventory.
+It does not activate COPY: public repository paths still fail before Workspace/EventStore
+construction or source Git. Demo/Boltons selection and pinned-profile `status` validation
+are unchanged. Own-source queries use a separate path: verified HEAD, staged index listing,
+tracked plus untracked-not-ignored listing, and bounded ignored-root listing. No recursive
+walk of ignored trees, filters, status, diff, configuration writes or source mutation occurs.
+Tracked ignored files remain selected; absent tracked files represent working deletions.
+Secrets, `.venv`, caches, `node_modules` and bytecode are excluded before content access.
+
+Placements must be short private local NTFS nonsynced drive paths. UNC/device/relative paths,
+ADS, aliases, unsafe components, reparse/offline/recall entries, SUBST/mapped/network drives,
+ReFS and known sync roots refuse. Outside USERPROFILE warns; unknown sync clients cannot be
+detected. Source/runtime ancestry overlap requires a separate clone; only the existing named
+profile under runtime `sources` is exempt. A source cannot be inside a reset target.
+
+The future startup contract is lexical placement before resolve/constructors/source Git;
+lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
+reset. Current startup does not yet provide this own-source ordering. W4a2/W4c2 own staging,
+guard and wiring. No disk manifest, source provenance publication, reset or copy exists here.
+
+Internal validation rejects links/reparse/special or multiple-link files, casefold or uppercase
+sibling collisions, case-sensitive directories, and named streams (only `::$DATA` is allowed).
+Review `Zone.Identifier` before using `Unblock-File` or `Remove-Item -Stream Zone.Identifier`.
+W2 binary opens and fresh identity checks precede SHA-256 records; working deletions are explicit.
+Source-only limits are 16,384 unique relative selected paths including their ancestors, 128 MiB
+selected bytes, 4 MiB/file and 8 MiB/query output. One initial 10-second deadline covers Git,
+enumeration, validation and hashing; there is no tuning knob. Linux metadata limits are unchanged.
+Source, destination and current agent/Git/probe/report projections refuse at 240 UTF-16 units.
+Later W3 qualification must measure a flat 16,384-file/128 MiB fixture on both Windows machines
+under a qualification-only 120-second cap, then freeze release phase deadlines at
+`max(10 seconds, 1.5 × slowest phase)`. No native timing evidence has been collected here.
