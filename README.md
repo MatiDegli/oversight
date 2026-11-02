@@ -43,8 +43,8 @@ below are labeled separately.
 - On by default: live overlap on the graph and agent cards, including shared edits and earlier reads.
 - Available by explicit selection: merge by rules, idle and queued follow-main, and person-triggered Revert in review. Every fresh run starts in Ask me; rules require isolation C, independent cross-review and all nine guards.
 - In progress: a change card with three states.
-- In progress: aggregate cost and rounds UI; archived change totals and event-derived usage measurements are built.
-- In progress: server-computed plan zones and plan UI; plan routes, dependency dispatch and the task queue are built.
+- Built: desktop aggregate Usage, archived change totals and event-derived usage measurements; live period grouping, static aggregates and phone layout remain.
+- In progress: server-computed plan zones, Edit and post-dispatch plan tracking; Queue/Reject/Keep, plan routes, dependency dispatch and the task queue are built.
 - On by default: standing grant selection, listing and revocation; automatic use requires explicitly selected rules mode and current grant/evidence checks.
 - On by default: a lead runtime that requests plans for the person's approval; it never starts coding agents or merges changes.
 
