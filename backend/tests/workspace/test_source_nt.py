@@ -1,8 +1,10 @@
 """Internal forced-NT inventory: Git may describe source bytes, never mutate them."""
 
+import hashlib
 import os
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from itertools import chain
 from pathlib import Path
 
 import pytest
@@ -11,7 +13,13 @@ from oversight.workspace import run_process
 from oversight.workspace._platform import acquire_lock, release_lock
 from oversight.workspace.errors import InvalidPath
 from oversight.workspace.runner import ProcessResult
-from oversight.workspace.source_nt import Inventory, NtSource, inventory
+from oversight.workspace.source_nt import (
+    Inventory,
+    NtSource,
+    inventory,
+    selected,
+    validate_selection,
+)
 
 HEAD = "a" * 40
 
@@ -37,6 +45,7 @@ class Git:
             "cache/\0",
         ]
         self.calls: list[tuple[str, ...]] = []
+        self.result: Callable[[ProcessResult], ProcessResult] = lambda r: r
 
     async def __call__(
         self,
@@ -62,7 +71,7 @@ class Git:
             "core.longpaths=true",
             "core.eol=lf",
         } <= set(argv)
-        return ProcessResult(0, self.answers.pop(0), "", False, False, 0)
+        return self.result(ProcessResult(0, self.answers.pop(0), "", False, False, 0))
 
 
 async def collect(source: NtSource, fd: int, git: Git) -> Inventory:
@@ -93,19 +102,21 @@ async def test_inventory_allowlist_dedup_head_and_exclusions(tmp_path: Path) -> 
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("stage", ["160000", "120000", "100644"])
-async def test_gitlinks_symlinks_conflicts(tmp_path: Path, stage: str) -> None:
+@pytest.mark.parametrize("stage,number", [("160000", 0), ("120000", 0), ("100644", 1)])
+async def test_gitlinks_symlinks_conflicts(tmp_path: Path, stage: str, number: int) -> None:
     with source_case(tmp_path) as (source, fd), pytest.raises(OSError, match="index, conflict"):
-        await collect(source, fd, Git(stages=f"{stage} {HEAD} 1\tx\0"))
+        await collect(source, fd, Git(stages=f"{stage} {HEAD} {number}\tx\0"))
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("marker", ["gitdir", "nested", "ancestor"])
+@pytest.mark.parametrize("marker", ["gitdir", "commondir", "nested", "ancestor"])
 async def test_plain_git_and_nested_markers(tmp_path: Path, marker: str) -> None:
     with source_case(tmp_path) as (source, fd):
         if marker == "gitdir":
             (source.root / ".git").rmdir()
             (source.root / ".git").write_text("gitdir: elsewhere\n")
+        elif marker == "commondir":
+            (source.root / ".git/commondir").write_text("elsewhere\n")
         else:
             parent = source.root / "sub" if marker == "nested" else source.root.parent
             parent.mkdir(exist_ok=True)
@@ -129,6 +140,7 @@ async def test_changed_sentinel_prevents_source_spawn(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_real_readonly_git_dirty_untracked_deleted_and_tracked_ignored(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     with source_case(tmp_path) as (source, fd):
         root = source.root
@@ -157,6 +169,16 @@ async def test_real_readonly_git_dirty_untracked_deleted_and_tracked_ignored(
         (root / "new.py").write_bytes(b"new")
         (root / ".ENV").mkdir()
         (root / ".ENV/private.py").write_bytes(b"secret")
+        for cache in (".venv", "cache", "node_modules"):
+            (root / cache).mkdir()
+            os.link(root / ".ENV/private.py", root / cache / "hardlink")
+        from oversight.workspace.files import open_nt
+
+        def observed(path: Path):
+            assert path.parent == root and not path.name.startswith(".ENV")
+            return open_nt(path)
+
+        monkeypatch.setattr("oversight.workspace.source_nt.open_nt", observed)
         before = {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
 
         async def native(
@@ -179,8 +201,36 @@ async def test_real_readonly_git_dirty_untracked_deleted_and_tracked_ignored(
             source, git=r"C:\Git\git.exe", lock_fd=fd, spawn=native, ancestors=(root.parent,)
         )
         assert result.paths == (".gitignore", "a.py", "deleted.py", "ignored.py", "new.py")
+        checked = validate_selection(result, sensitive=lambda _: False, streams=unnamed)
+        by_path = {entry.path: entry for entry in checked.entries}
+        assert by_path["a.py"].hash == hashlib.sha256(b"dirty\r\n").hexdigest()
+        assert by_path["deleted.py"].identity is None
         assert result.head == await setup("rev-parse", "HEAD")
         assert before == {p: p.read_bytes() for p in root.rglob("*") if p.is_file()}
+
+
+def listing(source: NtSource, paths: tuple[str, ...]) -> Inventory:
+    return Inventory(source, HEAD, paths, frozenset(paths), 0, 10)
+
+
+def unnamed(_: Path) -> Generator[str]:
+    yield "::$DATA"
+
+
+@pytest.mark.parametrize(
+    "name",
+    tuple(
+        chain(
+            (".GIT", ".g\u0131t", ".git.", ".git ", "GIT~1"),
+            ("a.py:s", "C:x", "a/../b", "CON/x.py", "NUL/a.py", "COM1/b/", "sub/CON"),
+            ("CON", "nul.txt", "COM1", "CONIN$", "CONOUT$.txt", "LPT1.txt", "COM¹"),
+            (".env::$DATA", ".env.", ".env /x"),
+        )
+    ),
+)
+def test_nt_refusal_table(name: str) -> None:
+    with pytest.raises((OSError, InvalidPath)):
+        selected(name)
 
 
 def test_selection_path_count_includes_ancestors() -> None:

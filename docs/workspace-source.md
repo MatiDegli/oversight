@@ -136,3 +136,15 @@ The future startup contract is lexical placement before resolve/constructors/sou
 lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
 reset. Current startup does not yet provide this own-source ordering. W4a2/W4c2 own staging,
 guard and wiring. No disk manifest, source provenance publication, reset or copy exists here.
+
+Internal validation rejects links/reparse/special or multiple-link files, casefold or uppercase
+sibling collisions, case-sensitive directories, and named streams (only `::$DATA` is allowed).
+Review `Zone.Identifier` before using `Unblock-File` or `Remove-Item -Stream Zone.Identifier`.
+W2 binary opens and fresh identity checks precede SHA-256 records; working deletions are explicit.
+Source-only limits are 16,384 unique relative selected paths including their ancestors, 128 MiB
+selected bytes, 4 MiB/file and 8 MiB/query output. One initial 10-second deadline covers Git,
+enumeration, validation and hashing; there is no tuning knob. Linux metadata limits are unchanged.
+Source, destination and current agent/Git/probe/report projections refuse at 240 UTF-16 units.
+Later W3 qualification must measure a flat 16,384-file/128 MiB fixture on both Windows machines
+under a qualification-only 120-second cap, then freeze release phase deadlines at
+`max(10 seconds, 1.5 × slowest phase)`. No native timing evidence has been collected here.
