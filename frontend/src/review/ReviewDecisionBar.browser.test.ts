@@ -11,6 +11,7 @@ let server: ViteDevServer, browser: Browser, html: string, url: string;
 const shots = fileURLToPath(new URL("../../../.shots/review-bar/", import.meta.url));
 const capture = process.env.REVIEW_BAR_SHOTS === "1";
 // Fresh pages load Monaco and its fonts before the file becomes clean; cold startup can exceed 5 s.
+// Use half of each test's 60 s limit, leaving the other half for the steps after this wait.
 const editorReady = { timeout: 30_000 };
 const sketchDir = process.env.REVIEW_BAR_SKETCH_DIR;
 const unlocked =

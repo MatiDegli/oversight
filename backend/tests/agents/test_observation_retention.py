@@ -1,10 +1,18 @@
 """Truncation notes describe the output that survived the cut."""
 
+import inspect
+
 import pytest
 
 from oversight.agents._observations import test_observation as observation
 from oversight.workspace import SuiteRun
 from oversight_contracts.events import SuiteResult
+
+
+def test_the_test_limit_has_no_default() -> None:
+    parameter = inspect.signature(observation).parameters["test_timeout_s"]
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameter.default is inspect.Parameter.empty
 
 
 @pytest.mark.parametrize("harness_pack", [False, True])
@@ -38,7 +46,7 @@ def test_note_only_claims_a_first_failure_when_retained(failure_header: bool) ->
         SuiteResult(outcome="error", passed=0, failed=1, skipped=0, duration_ms=1, failed_tests=[]),
         output,
     )
-    text = observation(run, 1000, harness_pack=True)
+    text = observation(run, 1000, harness_pack=True, test_timeout_s=60)
     if failure_header:
         assert "retaining the first failure and final tail" in text
         assert "AssertionError: first" in text

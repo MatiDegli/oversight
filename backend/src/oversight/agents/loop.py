@@ -49,6 +49,7 @@ from oversight_contracts.events import (
     AgentStatus,
     AgentStep,
     ErrorReport,
+    LeadLimits,
     Limits,
 )
 from oversight_contracts.examples import TaskExample
@@ -138,6 +139,7 @@ class AgentRun:
         pricing: Pricing | None = None,
         harness_pack: bool = False,
         history_prune_tokens: int | None = None,
+        lead_limits: LeadLimits | None = None,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         require_verified(model.profile)
@@ -152,7 +154,9 @@ class AgentRun:
         self._pricing = pricing
         self._monotonic = monotonic
         self._system_prompt = system_prompt(harness_pack)
-        self.prompt_version = prompt_version(harness_pack, history_prune_tokens)
+        self.prompt_version = prompt_version(
+            harness_pack, history_prune_tokens, lead_limits=lead_limits
+        )
         self._history = HistoryPruner(history_prune_tokens)
         self._tools = Toolbox(
             workspace, tree, test_timeout_s=task.limits.test_timeout_s, harness_pack=harness_pack

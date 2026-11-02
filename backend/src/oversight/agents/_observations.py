@@ -5,7 +5,7 @@ from oversight.workspace import SuiteRun
 
 
 def test_observation(
-    run: SuiteRun, max_chars: int, *, harness_pack: bool = False, test_timeout_s: float = 60
+    run: SuiteRun, max_chars: int, *, harness_pack: bool = False, test_timeout_s: float
 ) -> str:
     result = run.result
     counts = f"{result.passed} passed, {result.failed} failed, {result.skipped} skipped"
