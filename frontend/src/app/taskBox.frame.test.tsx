@@ -61,13 +61,13 @@ describe("the agents panel's new-agent section", () => {
     }
   });
 
-  it("counts the slots in use beside the heading, as the server offers them", () => {
-    expect(render(2, live)).toContain("0 of 2 slots");
+  it("counts running agents beside the heading, including those waiting for review", () => {
+    expect(render(2, live)).toContain("0 running");
     // Agent A holds its slot while it works and while it waits for review.
-    expect(render(4, live)).toContain("1 of 2 slots");
-    expect(render(20, live)).toContain("1 of 2 slots");
+    expect(render(4, live)).toContain("1 running");
+    expect(render(20, live)).toContain("1 running");
     // A level 1 server offers one slot.
-    expect(render(4, live, ["A"])).toContain("1 of 1 slot<");
+    expect(render(4, live, ["A"])).toContain("1 running");
     // Nothing to count before the run has started.
     const before = renderToStaticMarkup(
       <Frame

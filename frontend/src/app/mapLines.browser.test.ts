@@ -137,7 +137,7 @@ async function unobstructedNames(page: Page) {
 async function fullAgentLabel(page: Page, id: string) {
   const agent = page.locator(`[data-map-module="${id}"] .map-agent`);
   await check(page.locator(`[data-map-module="${id}"] .map-name`)).toHaveClass(/map-full-name/);
-  await check(agent).toHaveText("Agent B · editing");
+  await check(agent).toHaveText("B editing");
   await check(agent).toHaveCSS("max-width", "none");
   await check(agent).toHaveCSS("overflow", "visible");
   await check(agent).toHaveCSS("text-overflow", "clip");
@@ -157,7 +157,7 @@ it.each(["dark", "day"])("reveals the full pointed agent label at 1280 in %s", a
     await clearPointer(page);
     const id = "library.module_01";
     const agent = page.locator(`[data-map-module="${id}"] .map-agent`);
-    await check(agent).toHaveText("Agent B · editing");
+    await check(agent).toHaveText("B editing");
     expect(await agent.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
     await unobstructedNames(page);
     const label = await agent.boundingBox();
