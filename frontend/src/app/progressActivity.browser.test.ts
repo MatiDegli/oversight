@@ -79,8 +79,15 @@ it("folds calls and rounds with keyboard buttons, keeps newest last and preserve
     await check(
       panel(page).getByText("The old text appears 2 times. Nothing was changed."),
     ).toBeVisible();
-    const tools = await panel(page).locator("code").allTextContents();
-    expect(tools.at(-1)).toBe("edit_file");
+    const newest = panel(page).locator('[title="edit_file"]').last();
+    await check(newest).toContainText("Edited pricing.py");
+    await check(newest).not.toContainText("edit_file");
+    await check(newest.locator("code")).toHaveCount(0);
+    const calls = await panel(page)
+      .getByRole("list", { name: "Conversation timeline" })
+      .locator("[title]")
+      .allTextContents();
+    expect(calls.at(-1)).toContain("Edited pricing.py");
     await page.evaluate(() => {
       window.progressTest.advance("retry");
     });

@@ -43,7 +43,7 @@ export function ConversationPanel({
   return (
     <section
       aria-label={`Agent ${header.slot} conversation`}
-      className="conversation-panel flex h-full min-h-0 min-w-0 flex-col bg-page text-text"
+      className="conversation-panel flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >
       <ConversationPanelHeader header={header} />
       <div

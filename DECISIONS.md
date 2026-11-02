@@ -3842,3 +3842,11 @@ C4's graph action. C4 still owns
 hiding the work column in review; proposal events do not infer review navigation.
 DESIGN.md and the coordinated inventory stay unchanged; proposed text and full-frame
 comparison evidence live under `.shots/chat-where/`.
+## 2026-11-01 — Name the agent above its conversation
+
+The maintainer, Nov 1 at 16:11 ART: a repeated task above the conversation read as a stray message.
+The Conversation heading therefore names the agent at 16px/600, retaining its line height and text
+color, badge, status and chips. The task stays only in the first timeline message, "Task from you".
+Tool rows show their existing summary as a sentence, with the tool name on hover; an empty summary
+falls back to the tool name in body type. Icons, results, milliseconds, errors, View in diff and
+Test output remain. This supersedes the task headline in the approved Conversation sketch.

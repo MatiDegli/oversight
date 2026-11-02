@@ -169,30 +169,33 @@ export function StepRow({
       View in diff
     </button>
   );
+  // The tool hover title deliberately includes the diff action and test output.
   return (
-    <Row
-      compact={compact}
-      icon={icons[step.tool] ?? Circle}
-      title={
-        <>
-          <code className="font-mono text-[14px]">{step.tool}</code> · {step.summary}
-          {compact && diff && <span className="ml-3">{diff}</span>}
-        </>
-      }
-      aside={
-        <span
-          className={`shrink-0 text-[13px] whitespace-nowrap ${step.result === "ok" ? "text-passed" : "text-failed-text"}`}
-        >
-          {step.result} <span className="font-mono">{step.duration_ms} ms</span>
-        </span>
-      }
-    >
-      {step.result === "error" && step.error && (
-        <p className="text-[14px] text-muted wrap-anywhere">{step.error}</p>
-      )}
-      {!compact && diff}
-      {step.tool === "run_tests" && step.tests && <TestOutput tests={step.tests} />}
-    </Row>
+    <div title={step.tool}>
+      <Row
+        compact={compact}
+        icon={icons[step.tool] ?? Circle}
+        title={
+          <>
+            {step.summary || step.tool}
+            {compact && diff && <span className="ml-3">{diff}</span>}
+          </>
+        }
+        aside={
+          <span
+            className={`shrink-0 text-[13px] whitespace-nowrap ${step.result === "ok" ? "text-passed" : "text-failed-text"}`}
+          >
+            {step.result} <span className="font-mono">{step.duration_ms} ms</span>
+          </span>
+        }
+      >
+        {step.result === "error" && step.error && (
+          <p className="text-[14px] text-muted wrap-anywhere">{step.error}</p>
+        )}
+        {!compact && diff}
+        {step.tool === "run_tests" && step.tests && <TestOutput tests={step.tests} />}
+      </Row>
+    </div>
   );
 }
 

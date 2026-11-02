@@ -349,6 +349,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 
 | What | Sketch | Here | Why |
 | --- | --- | --- | --- |
+| Conversation header | task as headline | the agent's name; the task is the first message | the maintainer, Nov 1: a repeated task above the conversation read as a stray message |
 | Conversation edit row | +4 −0 | no line counts | agent.step carries no line counts |
 | Conversation retry pill | Waiting | Revising stays Revising | the card's rule; only working becomes Waiting |
 | Conversation time limit | from the run start | from this round's start, pauses excluded | the server times each round; maintainer answer 2 |
@@ -1248,7 +1249,8 @@ select anything or move keyboard focus. The timeline keeps its bottom anchoring.
   its event order. Reads status envelopes, stepSeqs, stepTimes, steps.duration_ms and state.clock.
   "Working" and elapsed agent time; "Paused" with a still ring while paused. The newest completed
   call stays last and visible; earlier calls fold behind "{n} earlier calls" and "{t} in tools".
-  StepRow retains its tool, summary, result, milliseconds, error, View in diff and Test output.
+  StepRow shows the summary, with the tool name as its hover title (or the body-font fallback
+  when the summary is empty), plus result, milliseconds, error, View in diff and Test output.
   Blocks sit 56px from the left and 22px from the right: card fill, border, 12px radius,
   40px call rows (errors grow), divider lines and a 38px muted fold button with aria-expanded.
 - **Round row:** first proposal or ready_for_review/halted/stopped/done ends the round. Reads the

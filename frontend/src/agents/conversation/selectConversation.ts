@@ -29,7 +29,6 @@ export type ConversationEntry = { seq: number } & (
 export interface ConversationHeader {
   agentId: string;
   changeId: string;
-  task: string;
   slot: AgentStatus["slot"];
   state: AgentStatus["state"];
   modelLabel: string;
@@ -155,7 +154,6 @@ export function selectConversation(
     header: {
       agentId,
       changeId: agent.change_id,
-      task: agent.task,
       slot: agent.slot,
       state: agent.state,
       modelLabel: profile?.label ?? agent.model,
