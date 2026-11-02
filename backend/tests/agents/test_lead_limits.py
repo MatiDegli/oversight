@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from backend.tests.agents.lead_helpers import call, lead, plan, scripted, setup_tools, turn
 
-from oversight.agents import LEAD_LIMITS
+from oversight.agents import LEAD_LIMITS, _prompts
 
 pytestmark = pytest.mark.anyio
 
@@ -212,7 +212,7 @@ async def test_thread_builds_derived_policy_once_and_passes_its_snapshot(monkeyp
     tools, _ = setup_tools(limits=limits)
     prompt = Mock(wraps=build_lead_prompt)
     schemas = Mock(wraps=build_lead_tool_schemas)
-    monkeypatch.setattr(_lead, "build_lead_prompt", prompt)
+    monkeypatch.setattr(_prompts, "build_lead_prompt", prompt)
     monkeypatch.setattr(_lead, "build_lead_tool_schemas", schemas)
     model = scripted([dict(text="Answer", usage={})] * 2)
     model.complete = AsyncMock(wraps=model.complete)
@@ -234,6 +234,22 @@ async def test_thread_builds_derived_policy_once_and_passes_its_snapshot(monkeyp
     instance_schemas[5]["function"]["parameters"]["properties"]["subtasks"]["maxItems"] = 99
     assert other == build_lead_tool_schemas(LEAD_LIMITS)
     assert other != run.schemas
+
+
+@pytest.mark.parametrize(
+    "pack,version",
+    [(False, "agent-v1-53ab6d25b16f"), (True, "agent-v1-83e8717606d6")],
+)
+def test_the_lead_prompt_builder_keeps_the_sent_and_hashed_text(pack: bool, version: str) -> None:
+    from oversight.agents import build_lead_prompt
+
+    limits = LEAD_LIMITS.model_copy(update={"turns": 7})
+    assert _prompts.prompt_version(pack, lead_limits=limits) == version
+    assert (
+        _prompts.lead_system_prompt(limits)
+        == build_lead_prompt(limits) + "\n\n" + _prompts.SERVER_NOTICE_PROMPT
+    )
+    assert _prompts.lead_system_prompt(LEAD_LIMITS) == _prompts.LEAD_PROMPT
 
 
 def test_mismatched_loop_and_tool_snapshots_are_rejected() -> None:

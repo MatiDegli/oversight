@@ -646,7 +646,7 @@ def test_native_readonly_and_locked_directory_cleanup(tmp_path):
 @pytest.mark.anyio
 async def test_native_backend_death_during_uv_then_three_clean_starts():
     if os.environ.get("OVERSIGHT_NT_FULL_DEMO") != "1":
-        pytest.skip("full demo staged until both W2a and W2b land; set OVERSIGHT_NT_FULL_DEMO=1")
+        pytest.skip("the full demo is opt-in; set OVERSIGHT_NT_FULL_DEMO=1")
     native_console()
     await nt.run_checks(hard_kill=True)
 

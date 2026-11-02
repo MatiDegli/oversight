@@ -4253,8 +4253,8 @@ neither model nor lead can extend the catalog or acquire approval authority.
 The watcher coalesces for five seconds from the first trigger, accumulates during work, and
 admits only an idle open lead under its lock. Only a committed reply's observation horizon
 prunes seen triggers. A person's Send wins until a wake claims working and takes pending
-triggers only after message commitment and the final open checks. The maintainer's resolved
-mixed-turn interpretation is explicit: that reply has the accepted message's `answers_seq`
+triggers only after message commitment and the final open checks. The coordinator's ruling of
+2026-11-02 fixes the mixed-turn interpretation: that reply has the accepted message's `answers_seq`
 only, with `woken_by=None`. Its digest triggers count as seen through the committed
 `through_seq`; they do not get another wake merely to obtain wake correlation. A wake sends
 no human-message event and names all consumed seqs, including omitted digest lines, in sorted
@@ -4263,7 +4263,7 @@ Every runtime reply after the opening one has exactly one of `answers_seq` and `
 Historical null/null replies keep validating; the runtime invariant does not change log validation.
 
 The person-owned run snapshot adds `OVERSIGHT_LEAD_WAKES`: default 3, no configured maximum,
-0 disables wake execution, and invalid or negative values stop configuration. Admission checks
+0 disables wake execution, and invalid or negative values fail startup. Admission checks
 the existing provider-applicable spending brake and wake cap and preserves the last thread
 turn for the person. An admitted wake spends one wake and one turn. A refusal spends neither;
 while idle and holding the lock through publication, it records an existing lead-status
@@ -4283,6 +4283,7 @@ The service owns and retains watchers, cancels them at terminalization, and canc
 shutdown gathers while the store remains open. Closing is set before initialization can spawn
 another watcher. Restart is still a fresh run, without restored leads, pending triggers, wakes
 or model calls; the run-local lifetime and per-turn budget decisions above remain in force.
+
 ## 2026-11-02 — Several leads with person-set limits
 
 K1 was approved by the maintainer on 2026-11-02. This explicitly supersedes the singleton
