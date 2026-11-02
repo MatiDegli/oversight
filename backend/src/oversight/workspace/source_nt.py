@@ -962,6 +962,16 @@ def begin_reset(runtime: Path, stage: StagedSource | None) -> None:
         store_fields(runtime / "own-runtime", ["own-runtime-v1"], deadline)
 
 
+def record_populated_reset(runtime: Path) -> None:
+    """Pin the populated template identity before runtime Git can be interrupted."""
+    deadline = time.monotonic() + PHASE_SECONDS
+    journal = state_fields(runtime / "own-reset", deadline)
+    if journal is None:
+        raise refuse("incomplete reset state missing")
+    journal[3] = directory_id(runtime / "workspace", deadline)
+    store_fields(runtime / "own-reset", journal, deadline)
+
+
 def finish_reset(runtime: Path, commit: str, stage: StagedSource | None) -> None:
     deadline = time.monotonic() + PHASE_SECONDS
     journal = state_fields(runtime / "own-reset", deadline)

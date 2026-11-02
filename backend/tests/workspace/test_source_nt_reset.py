@@ -261,21 +261,27 @@ async def test_unsafe_state_preserves_runtime(tmp_path: Path, damage: str) -> No
         assert workspace.main.root.exists()
 
 
-@pytest.mark.parametrize("phase", ["before", "deleted", "published", "committed", "baseline"])
+@pytest.mark.parametrize(
+    "phase",
+    ["before", "deleted", "published", "committed", "baseline", "unstaged-init"],
+)
 async def test_interrupted_reset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phase: str
 ) -> None:
     async with opened(tmp_path) as (workspace, source, _):
-        new = await restart(workspace, source, own=True)
+        own = phase != "unstaged-init"
+        new = await restart(workspace, source, own=own)
         try:
             assert new._lock_fd is not None
-            staged = await stage(source, new._lock_fd)
+            staged = await stage(source, new._lock_fd) if own else None
 
             def fail(*args, **kwargs):
                 raise OSError("interrupted reset")
 
+            spawn = AsyncMock(side_effect=fail)
             with monkeypatch.context() as patch:
                 if phase == "baseline":
+                    assert staged is not None
                     patch.setattr(staged, "cleanup", fail)
                 else:
                     target = {
@@ -283,13 +289,19 @@ async def test_interrupted_reset(
                         "deleted": "publish_stage",
                         "published": "run_process",
                         "committed": "finish_reset",
+                        "unstaged-init": "run_process",
                     }[phase]
-                    patch.setattr(
-                        core, target, AsyncMock(side_effect=fail) if phase == "published" else fail
-                    )
+                    patch.setattr(core, target, spawn if target == "run_process" else fail)
                 with pytest.raises(OSError, match="interrupted reset"):
                     await new.reset(_nt_stage=staged)
+                if not own:
+                    spawn.assert_awaited_once()
+                    assert spawn.call_args is not None and "init" in spawn.call_args.args[0]
             assert not new._reset_done
+            if not own:
+                assert (new.main.root / "demo.py").read_bytes() == b"demo = True\n"
+                assert not (new.main.root / ".git").exists()
+                new = await restart(new, source)
             if phase == "before":
                 assert nt.main_ref(source.runtime, time.monotonic() + 10)
             if phase == "committed":
@@ -300,9 +312,16 @@ async def test_interrupted_reset(
                     nt.guard_previous(source.runtime, recover=True)
             else:
                 assert nt.guard_previous(source.runtime, recover=True)
-                assert not staged.root.exists()
-                await new.reset(_nt_stage=await stage(source, new._lock_fd))
-                assert nt.guard_previous(source.runtime)
+                if staged is not None:
+                    assert not staged.root.exists()
+                assert new._lock_fd is not None
+                await new.reset(_nt_stage=await stage(source, new._lock_fd) if own else None)
+                assert nt.guard_previous(source.runtime) is own
+                if not own:
+                    assert await new.main.head()
+                    assert (new.main.root / "demo.py").read_bytes() == b"demo = True\n"
+                    assert not (source.runtime / "own-reset").exists()
+                    assert not (source.runtime / "own-runtime").exists()
         finally:
             new.release_runtime()
 

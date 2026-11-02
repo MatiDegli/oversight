@@ -79,6 +79,7 @@ from oversight.workspace.source_nt import (
     finish_reset,
     guard_previous,
     publish_stage,
+    record_populated_reset,
     verify_stage,
 )
 from oversight.workspace.suite import SuiteRun, SuiteUnavailable
@@ -562,6 +563,8 @@ class Workspace:
                     await offload(partial(remove_tree, self._root, self._root / name))
                 if _nt_stage is None:
                     await offload(self._populate)
+                    if protected:
+                        await offload(partial(record_populated_reset, self._root))
                 else:
                     await offload(partial(publish_stage, _nt_stage, self._root))
                     (self._root / "tmp" / "home").mkdir(mode=DIR_MODE, parents=True)
