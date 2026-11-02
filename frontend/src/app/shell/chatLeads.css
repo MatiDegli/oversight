@@ -201,7 +201,9 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: linear-gradient(var(--card), var(--card-end));
-  box-shadow: var(--top-highlight), var(--card-shadow);
+  box-shadow:
+    var(--top-highlight),
+    0 4px 16px color-mix(in srgb, var(--sheet-backdrop) 10%, transparent);
 }
 .new-lead-box > label {
   display: block;
