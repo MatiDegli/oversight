@@ -380,20 +380,21 @@
     border-right: 0;
     border-bottom: 1px solid var(--divider);
   }
-  .chat-agents > header {
+  .chat-shell .chat-agents > header {
     grid-template-columns: minmax(0, 1fr) 228px;
     height: 62px;
     padding-inline: 18px 8px;
     border-bottom: 0;
     gap: 2px 8px;
   }
-  .chat-agents > header h2 {
+  .chat-shell .chat-agents > header h2 {
+    font-size: 14px;
     grid-column: 1;
     grid-row: 1;
     align-self: end;
     margin-left: 0;
   }
-  .chat-agents > header > span {
+  .chat-shell .chat-agents > header > span {
     grid-column: 1;
     grid-row: 2;
     align-self: start;
@@ -422,7 +423,7 @@
   }
   .chat-empty {
     align-items: start;
-    padding: 22px 16px;
+    padding: 20px 16px;
     overflow: visible;
   }
   .chat-empty:not(.new-lead) > div {
@@ -472,7 +473,7 @@
   .chat-lead-option {
     flex-direction: column;
     align-items: start;
-    gap: 8px;
+    gap: 4px;
     margin-top: 10px;
     padding-top: 16px;
   }
