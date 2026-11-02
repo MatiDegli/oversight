@@ -223,7 +223,11 @@ async def test_thread_builds_derived_policy_once_and_passes_its_snapshot(monkeyp
     schemas.assert_called_once_with(limits)
     assert run.limits is tools.limits is limits
     assert run.history.history_chars == 48000
-    assert model.requests[0][0]["content"] == build_lead_prompt(limits)
+    from oversight.agents._prompts import SERVER_NOTICE_PROMPT
+
+    assert (
+        model.requests[0][0]["content"] == build_lead_prompt(limits) + "\n\n" + SERVER_NOTICE_PROMPT
+    )
     assert all(c.args[1] is run.schemas for c in model.complete.await_args_list)
     other = build_lead_tool_schemas(LEAD_LIMITS)
     instance_schemas: Any = run.schemas

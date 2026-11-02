@@ -4237,6 +4237,49 @@ extend this catalog.
 The shared pure event rule supplies attribution for log validation and the later watcher.
 Nothing produces a wake until that watcher front; this field does not change when a lead may
 take a turn. Existing recordings and the bundled replay remain unchanged.
+
+## 2026-11-02 — A lead wakes on its plan's events
+
+Approved plan revision 3, items 2–5, and packet a-1102c, approved by the maintainer on
+2026-11-02, authorize a server-owned watcher per lead. This supersedes the absence of a wake
+producer described above. The closed catalog and event-time attribution remain the shared
+event predicate: combined tests failed/error/timeout, a subtask agent halted, or a plan first
+completed/failed. Completed plans wake for a summary. “Waits for your Approve” stays notice-only;
+neither model nor lead can extend the catalog or acquire approval authority.
+
+The watcher coalesces for five seconds from the first trigger, accumulates during work, and
+admits only an idle open lead under its lock. Only a committed reply's observation horizon
+prunes seen triggers. A person's Send wins until a wake claims working and takes pending
+triggers only after message commitment and the final open checks. The maintainer's resolved
+mixed-turn interpretation is explicit: that reply has the accepted message's `answers_seq`
+only, with `woken_by=None`. Its digest triggers count as seen through the committed
+`through_seq`; they do not get another wake merely to obtain wake correlation. A wake sends
+no human-message event and names all consumed seqs, including omitted digest lines, in sorted
+`woken_by`, with `answers_seq=None`.
+Every runtime reply after the opening one has exactly one of `answers_seq` and `woken_by`.
+Historical null/null replies keep validating; the runtime invariant does not change log validation.
+
+The person-owned run snapshot adds `OVERSIGHT_LEAD_WAKES`: default 3, no configured maximum,
+0 disables wake execution, and invalid or negative values stop configuration. Admission checks
+the existing provider-applicable spending brake and wake cap and preserves the last thread
+turn for the person. An admitted wake spends one wake and one turn. A refusal spends neither;
+while idle and holding the lock through publication, it records an existing lead-status
+revision with `Skipped a wake: <reason>`. A reason is suppressed only after successful
+publication until the next launched turn; failed publication preserves pending work and retry.
+
+Digests are typed server notices delivered as status tool-result pairs, never system instructions,
+the person's speech or a status-event payload. Compact escaped, masked JSON lines identify seq,
+event-time plan and stable subtask number where available; plan-wide events remain plan-wide.
+Each line fits 1,024 characters, with state/outcome, counts and up to three failed test ids instead
+of full payloads. The complete digest fits 4,096 characters, omitting whole lines with a counted
+marker. History trims notices with their exchanges. The new notice instructions participate in
+the existing prompt-version hash. Tools, propose-only authority, lead accounting, per-turn
+budgets and thread-wide plan limits remain unchanged.
+
+The service owns and retains watchers, cancels them at terminalization, and cancels them before
+shutdown gathers while the store remains open. Closing is set before initialization can spawn
+another watcher. Restart is still a fresh run, without restored leads, pending triggers, wakes
+or model calls; the run-local lifetime and per-turn budget decisions above remain in force.
 ## 2026-11-02 — Several leads with person-set limits
 
 K1 was approved by the maintainer on 2026-11-02. This explicitly supersedes the singleton

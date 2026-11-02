@@ -67,3 +67,31 @@ def test_history_exact_cut_and_opening_task_bound_with_injected_budget() -> None
     tiny = LeadHistory("opening task", history_chars=1)
     assert tiny.messages()[0]["content"] == "\n"
     assert tiny.task == "opening task"
+
+
+def test_server_notices_trim_with_exchanges_without_becoming_human() -> None:
+    from oversight.agents._lead_history import ServerNotice
+
+    history = LeadHistory("task", history_chars=60)
+    history.append("Old question", "Old reply", ServerNotice("Old server data", 1, (1,)))
+    history.append(None, "New reply", ServerNotice("New server data", 2, (2,)))
+    messages = history.messages("Human now", reserved=10)
+    assert "Old" not in str(messages)
+    assert messages == [
+        {"role": "user", "content": "task"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": "server_notice_2",
+                    "type": "function",
+                    "function": {"name": "status", "arguments": "{}"},
+                }
+            ],
+        },
+        {"role": "tool", "tool_call_id": "server_notice_2", "content": "New server data"},
+        {"role": "assistant", "content": "New reply"},
+        {"role": "user", "content": "Human now"},
+    ]
+    assert len(history.exchanges) == len(history.notices) == 1
