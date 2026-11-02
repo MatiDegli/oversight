@@ -1,4 +1,10 @@
-import type { AgentStatus, ChangeResolved, CrossReview } from "@contracts";
+import type {
+  AgentStatus,
+  ChangeResolved,
+  CrossReview,
+  LeadStatus,
+  LeadReplyEvent,
+} from "@contracts";
 import { selectRounds, type Round, type RoundStep } from "./rounds";
 import type { State, BudgetMark, ModelWait } from "../../state";
 
@@ -27,6 +33,7 @@ export type ConversationEntry = { seq: number } & (
 );
 
 export interface ConversationHeader {
+  kind?: "agent";
   agentId: string;
   changeId: string;
   slot: AgentStatus["slot"];
@@ -41,7 +48,24 @@ export interface ConversationHeader {
   zonePaths: string[];
 }
 
+export interface LeadHeader extends LeadStatus {
+  kind: "lead";
+  agentId: string;
+  modelLabel: string;
+}
+export type LeadEntry =
+  | Extract<ConversationEntry, { kind: "task" | "message" }>
+  | { kind: "lead-reply"; seq: number; event: LeadReplyEvent }
+  | { kind: "lead-status"; seq: number; ts: string; status: LeadStatus }
+  | { kind: "lead-plan"; seq: number; planId: string; answersSeq: number | null };
+export interface LeadConversation {
+  kind: "lead";
+  header: LeadHeader;
+  entries: LeadEntry[];
+}
+
 export interface Conversation {
+  kind?: "agent";
   header: ConversationHeader;
   entries: ConversationEntry[];
   progress: {
