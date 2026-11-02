@@ -9,6 +9,7 @@ import type { ServerEvent } from "@contracts";
 import type { Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
 
+import { findingScenes } from "./reviewFindings.ts";
 import { assertPanelFrame } from "./framing.ts";
 
 export interface Scene {
@@ -204,6 +205,7 @@ async function openFileView(page: Page): Promise<void> {
 }
 
 export const scenes: readonly Scene[] = [
+  ...findingScenes,
   // Watch mode: the graph and the agents panel, captured once the replay has put a card in it.
   {
     name: "watch",
