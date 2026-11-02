@@ -3817,3 +3817,28 @@ C5 proof exercises production App Settings/tab dispatch in live and replay, usin
 hand-written retained evidence and fixture-only Chat initialization. Targeted
 regressions retain focus, draft, graph camera and scroll ownership. Comparisons
 judge only C5: C2/C3 bodies, C4 composition and C1 TaskBox controls stay outside it.
+## 2026-11-01 — C3 presence starts from the C1 hand-off
+
+C3 uses accepted C1 base `05527f4`, preserving the Usage/replay wiring, Oversight default,
+retained inert graph and shared shell. FilesProvider already carries State; the latest
+focus already includes ranges. Only the work-frame body and Files marks consume this
+front's projection. C1's asynchronous test preparations are already present.
+
+`selectWorkPresence` is the single pure projection for Chat and Files. Current presence
+uses only the latest focus of working/revising agents: ranges survive without a graph,
+known IDs add paths and function names, and the owner's added nodes override main.
+Only a null start line means whole-file focus; a missing end reads "from line N".
+Pause hides focus; working/revising restores the latest focus until a new one arrives.
+Unknown IDs invent nothing. Agent IDs preserve identity even when slots are reused.
+Pending files/counts come only from the current proposal in ready-for-review/conflict;
+approval, rejection and Request changes remove that waiting group. A conflict remains
+pending and names the observed merge/test failure. Current focus wins per agent/path.
+
+C3 uses approved dense body metrics and existing theme roles, overriding Impeccable's
+generic body/card-size and motion suggestions. C1's 15px header stays (sketch: 16px);
+card replaces sketch-only card2. The footer describes files and observed functions,
+with connections on the graph, instead of the sketch's misleading "Files only"; it omits
+C4's graph action. C4 still owns
+hiding the work column in review; proposal events do not infer review navigation.
+DESIGN.md and the coordinated inventory stay unchanged; proposed text and full-frame
+comparison evidence live under `.shots/chat-where/`.
