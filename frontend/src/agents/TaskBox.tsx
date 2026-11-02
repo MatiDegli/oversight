@@ -69,12 +69,12 @@ export function TaskBoxView({
   const canStart = !pending && draft.trim() !== "" && block === null;
   const line = pending ? "Starting the agent." : block;
   return (
-    <section aria-labelledby={`${id}-heading`} className="flex flex-col gap-2.5">
+    <section aria-labelledby={`${id}-heading`} className="task-box flex flex-col gap-2.5">
       {/* The sketch names the box by its placeholder alone; the heading stays for screen readers. */}
       <h3 id={`${id}-heading`} className={`${heading} sr-only`}>
         New agent
       </h3>
-      <div className="flex flex-col gap-3 rounded-card border border-control-edge bg-field p-3 has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-text">
+      <div className="task-box-field flex flex-col gap-3 rounded-card border border-control-edge bg-field p-3 has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-text">
         <textarea
           ref={inputRef}
           aria-label="Task for the new agent"
@@ -96,7 +96,11 @@ export function TaskBoxView({
           className="resize-none bg-transparent p-1 text-(length:--body-size) text-text placeholder:text-faint read-only:text-muted focus:outline-none"
         />
         {slots.length === 2 && (
-          <div role="group" aria-label="Agent slot" className="flex flex-wrap gap-2">
+          <div
+            role="group"
+            aria-label="Agent slot"
+            className="task-box-models flex flex-wrap gap-2"
+          >
             {slots.map(({ slot, label, holder }) => (
               <button
                 key={slot}
@@ -118,7 +122,7 @@ export function TaskBoxView({
             ))}
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="task-box-actions flex flex-wrap items-center gap-1.5">
           {model !== undefined && (
             <span aria-label={`Model: ${model}`} className={chip}>
               <Cpu aria-hidden="true" className="size-4 shrink-0 text-muted" />
@@ -144,7 +148,7 @@ export function TaskBoxView({
           </button>
         </div>
       </div>
-      <p className="text-(length:--caption-size) text-muted">
+      <p className="task-box-hint text-(length:--caption-size) text-muted">
         <kbd className="rounded-keyboard-hint border border-control-edge px-1.5 font-mono">
           {modifier}
         </kbd>

@@ -257,3 +257,191 @@
     height: 192px;
   }
 }
+@media (width <= 1500px) {
+  .chat-agents > header {
+    padding-inline: 10px;
+  }
+}
+@media (width < 768px) {
+  .shell-frame:has(.chat-shell) > .shell-top-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) 44px;
+    height: auto;
+    padding: 8px 16px;
+    gap: 8px;
+  }
+  .shell-frame:has(.chat-shell) > .shell-top-bar > p {
+    min-width: 0;
+    justify-self: end;
+  }
+  .shell-frame:has(.chat-shell) > .shell-top-bar > span[aria-hidden],
+  .shell-frame:has(.chat-shell) > .shell-top-bar > p > span:not(:first-child),
+  .shell-frame:has(.chat-shell) > .shell-top-bar .palette-trigger,
+  .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Spend"],
+  .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Usage"],
+  .shell-frame:has(.chat-shell) > .shell-top-bar [data-practice-entry],
+  .shell-frame:has(.chat-shell) > .narrow-notice {
+    display: none;
+  }
+  .shell-frame:has(.chat-shell) > .shell-top-bar > [aria-label="Settings"] {
+    width: 44px;
+    height: 44px;
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .shell-frame:has(.chat-shell) .view-switch {
+    grid-column: 1 / 3;
+    grid-row: 2;
+    width: max-content;
+    height: 48px;
+  }
+  .shell-frame:has(.chat-shell) .view-switch button {
+    min-height: 44px;
+    padding-inline: 10px;
+  }
+  .shell-frame:has(.chat-shell) [aria-label="Review queue"] {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .shell-frame:has(.chat-shell) [aria-label="Review queue"] button {
+    height: 44px;
+    padding-inline: 8px;
+    font-size: 11.5px;
+  }
+  .shell-frame:has(.chat-shell) .status-line {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: 24px;
+  }
+  .shell-frame:has(.chat-shell) .status-line button {
+    min-height: 44px;
+  }
+  .chat-shell {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .chat-shell > .left-rail,
+  .chat-shell > .shell-sidebar,
+  .chat-shell > .chat-work {
+    display: none;
+  }
+  .chat-shell > .chat-agents {
+    width: 100%;
+    flex-shrink: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--divider);
+  }
+  .chat-agents > header {
+    grid-template-columns: minmax(0, 1fr) 228px;
+    height: 80px;
+    padding-inline: 16px;
+    gap: 2px 8px;
+  }
+  .chat-agents > header h2 {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: end;
+  }
+  .chat-agents > header > span {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    text-align: left;
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+  .chat-start-actions {
+    grid-column: 2;
+    grid-row: 1 / 3;
+  }
+  .chat-start-actions button {
+    flex: none;
+    width: 110px;
+    height: 44px;
+  }
+  .chat-agents .chat-side-body {
+    overflow: visible;
+  }
+  .chat-shell .shell-center {
+    flex: 1 0 auto;
+  }
+  .chat-shell .shell-stage {
+    min-height: 0;
+    flex: 1 0 auto;
+  }
+  .chat-empty {
+    align-items: start;
+    padding: 24px 16px;
+    overflow: visible;
+  }
+  .chat-empty h1 {
+    font-size: 24px;
+  }
+  .chat-start-explanation {
+    margin-bottom: 18px;
+  }
+  .chat-empty .task-box-field {
+    height: 264px;
+  }
+  .chat-empty .task-box-models {
+    flex-wrap: nowrap;
+  }
+  .chat-empty [data-slot-card] {
+    height: 44px;
+    padding: 8px;
+    font-size: 13px;
+  }
+  .chat-empty [data-slot-card]:has(.text-muted) {
+    height: auto;
+    min-height: 44px;
+  }
+  .chat-empty .task-box-actions {
+    gap: 8px;
+  }
+  .chat-empty .task-box-actions > span:not([aria-label], .chat-merge-accessory) {
+    display: none;
+  }
+  .chat-empty .chat-merge-accessory {
+    width: 100%;
+    margin-left: 0;
+  }
+  .chat-shell .chat-empty .chat-merge-chip {
+    width: 189px;
+    height: 44px;
+    gap: 5px;
+    font-size: 13.5px;
+  }
+  .chat-empty .task-box-actions > button {
+    width: 100%;
+    height: 44px;
+    justify-content: center;
+  }
+  .chat-empty .task-box-hint {
+    display: none;
+  }
+  .chat-lead-option {
+    margin-top: 4px;
+    padding-top: 16px;
+  }
+  .chat-lead-option button {
+    min-width: 83px;
+    height: 44px;
+  }
+  .new-lead-instead {
+    flex-wrap: wrap;
+  }
+  .new-lead-instead button,
+  .new-lead-actions > button,
+  .new-lead-model select,
+  .new-lead-model-chip {
+    min-height: 44px;
+  }
+  .new-lead-limit-cards {
+    grid-template-columns: 1fr;
+  }
+  .new-lead-model {
+    width: 100%;
+  }
+}
