@@ -209,6 +209,7 @@ export function TaskBox({
     };
   });
   const modelChoice = new Set(state.run?.slots.map((info) => info.default_model)).size > 1;
+  const showSlotCards = modelChoice && slots.length === 2;
   if (!onStart) {
     return (
       <section aria-label="New agent" className="flex flex-col gap-2.5">
@@ -231,14 +232,14 @@ export function TaskBox({
       block={startBlock(state, selected)}
       model={!modelChoice ? slots[0]?.label : undefined}
       maxSteps={state.run?.limits.max_steps}
-      slots={modelChoice ? slots : []}
+      slots={showSlotCards ? slots : []}
       selected={selected}
       onSlot={(slot) => {
         store.getState().choose(slotChoice(state, slot));
       }}
       onDraft={store.getState().setDraft}
       onStart={() => {
-        void store.getState().start(onStart, modelChoice ? selected : undefined);
+        void store.getState().start(onStart, showSlotCards ? selected : undefined);
       }}
     />
   );

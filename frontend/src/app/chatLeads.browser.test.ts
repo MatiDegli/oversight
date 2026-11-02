@@ -318,6 +318,37 @@ for (const theme of ["dark", "day"])
     }
   });
 
+it("lets the server choose among four slots when no slot cards are shown", async () => {
+  const page = await open("chat-start", 1280, "dark", true, true, true);
+  const calls: unknown[] = [];
+  await page.route("**/agents", async (route) => {
+    calls.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      json: { agent_id: "new-agent", change_id: "new-change", slot: "A" },
+    });
+  });
+  try {
+    const opening = await page.evaluate(() => {
+      const event = window.chatLeadsTest.prefix("leads-two", true)[0];
+      if (!event) throw new Error("Missing run opening");
+      window.chatLeadsTest.deliver([event]);
+      return event;
+    });
+    if (opening.type !== "run.started") throw new Error("Missing run opening");
+    expect(opening.payload.slots.map(({ slot }) => slot)).toEqual(["A", "B", "C", "D"]);
+    expect(new Set(opening.payload.slots.map(({ default_model }) => default_model)).size).toBe(2);
+    await check(page.getByRole("group", { name: "Agent slot" })).toHaveCount(0);
+    const task = page.getByRole("textbox", { name: "Task for the new agent" });
+    await task.fill("Four-slot task");
+    await page.getByRole("button", { name: "Start agent", exact: true }).click();
+    await check(task).toHaveValue("");
+    expect(calls).toEqual([{ task: "Four-slot task" }]);
+  } finally {
+    await page.close();
+  }
+});
+
 it("sends no slot when both cards name the same profile", async () => {
   const page = await open("same-model");
   const calls: unknown[] = [];
