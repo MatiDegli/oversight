@@ -612,8 +612,12 @@ def verify_stage(stage: StagedSource, runtime: Path, deadline: float) -> None:
                 raise refuse("unexpected staging entry")
         if entry is None or (info.st_dev, info.st_ino) != identity:
             raise refuse("owned staging identity changed")
-    if read_entry(stage.manifest, Budget(deadline)) != Entry(
-        0o600, manifest_bytes(stage.selection)
+    manifest = read_entry(stage.manifest, Budget(deadline))
+    # NT chmod preserves only the readonly flag, as in metadata_io._same.
+    if (
+        manifest is None
+        or manifest.mode & stat.S_IWRITE != 0o600 & stat.S_IWRITE
+        or manifest.data != manifest_bytes(stage.selection)
     ):
         raise refuse("staging manifest changed")
     listing = replace(
