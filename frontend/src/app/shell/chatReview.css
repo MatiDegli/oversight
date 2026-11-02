@@ -18,7 +18,7 @@
 .chat-review-panel > .review-panel {
   flex: 1;
 }
-.chat-review-composition.in-chat .chat-review-panel > .review-panel {
+.focus-body .chat-review-panel > .review-panel {
   width: 100%;
   border-right: 0;
 }

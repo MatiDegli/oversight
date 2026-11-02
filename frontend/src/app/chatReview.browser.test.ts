@@ -561,40 +561,74 @@ it.each(["dark", "day"])("distinguishes every evidence result in %s mode", async
     await page.close();
   }
 });
-it("C5's resolved tab opens beside its owner without a proposed-only navigation or graph request", async () => {
-  const { page, requested } = await open();
-  try {
-    await page.evaluate(() => {
-      window.chatReviewTest.merged();
-    });
-    await check(card(page)).not.toContainText("Review is unavailable for this candidate.");
-    await page.getByRole("button", { name: "Open its review", exact: true }).click();
-    await check(page.getByRole("tab", { name: /Review · change-1/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    await check(panel(page).getByText("Merged", { exact: true })).toBeVisible();
-    await check(
-      page.getByRole("region", { name: "Agent A conversation", exact: true }),
-    ).toBeVisible();
-    expect(requested.some((p) => /GraphView|OversightStage/.test(p))).toBe(false);
-  } finally {
-    await page.close();
-  }
-});
-it.each([1920, 1600, 1280])("preserves the Oversight review width at %ipx", async (width) => {
-  const { page } = await open({ width });
-  try {
-    await card(page).getByRole("button", { name: "Review change", exact: true }).click();
-    await check(panel(page).locator(".review-body")).toBeVisible();
-    await layout(page, "Oversight").click();
-    expect(
-      Math.abs(required(await panel(page).boundingBox()).width - Math.min(880, width * 0.46)),
-    ).toBeLessThan(0.02);
-  } finally {
-    await page.close();
-  }
-});
+it.each([1920, 1280])(
+  "C5's resolved tab retains its owner and tab rows at %ipx without a graph request",
+  async (width) => {
+    const { page, requested } = await open({ width });
+    try {
+      await page.evaluate(() => {
+        window.chatReviewTest.merged();
+      });
+      await check(card(page)).not.toContainText("Review is unavailable for this candidate.");
+      await page.getByRole("button", { name: "Open its review", exact: true }).click();
+      await check(page.getByRole("tab", { name: /Review · change-1/ })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await check(panel(page).getByText("Merged", { exact: true })).toBeVisible();
+      const conversation = page.getByRole("region", { name: "Agent A conversation", exact: true });
+      const focusTabs = page.getByRole("tablist", { name: "Open files and changes" });
+      await check(focusTabs).toBeVisible();
+      if (width === 1280) {
+        const tabs = page.getByRole("tablist", { name: "Conversation and review" });
+        const reviewTab = tabs.getByRole("tab", { name: "Review · merged", exact: true });
+        await check(tabs).toBeVisible();
+        await check(reviewTab).toHaveAttribute("aria-selected", "true");
+        await check(conversation).toBeHidden();
+        const upper = required(await focusTabs.boundingBox());
+        const lower = required(await tabs.boundingBox());
+        expect(upper.y + upper.height).toBeLessThanOrEqual(lower.y);
+        expect(lower.height).toBe(40);
+        await tabs.getByRole("tab", { name: "Agent A · conversation", exact: true }).click();
+        await check(conversation).toBeVisible();
+        await check(panel(page)).toBeHidden();
+        await check(focusTabs.getByRole("tab", { name: /Review · change-1/ })).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
+        await reviewTab.click();
+        await check(panel(page).getByText("Merged", { exact: true })).toBeVisible();
+        await check(conversation).toBeHidden();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+      } else await check(conversation).toBeVisible();
+      expect(requested.some((p) => /GraphView|OversightStage/.test(p))).toBe(false);
+    } finally {
+      await page.close();
+    }
+  },
+);
+// Measured on an archive of cbba4cd0 with the recorded change-1 proposal:
+// the aside fills the focus panel's content box (one pixel inside its border).
+it.each([
+  [1920, 880, 879],
+  [1600, 880, 879],
+  [1280, 608, 607],
+])(
+  "preserves the cbba4cd0 Oversight review width at %ipx",
+  async (width, focusWidth, reviewWidth) => {
+    const { page } = await open({ width });
+    try {
+      await card(page).getByRole("button", { name: "Review change", exact: true }).click();
+      await check(panel(page).locator(".review-body")).toBeVisible();
+      await layout(page, "Oversight").click();
+      await check(panel(page)).toBeVisible();
+      expect(required(await page.locator(".focus-panel").boundingBox()).width).toBe(focusWidth);
+      expect(required(await panel(page).boundingBox()).width).toBe(reviewWidth);
+    } finally {
+      await page.close();
+    }
+  },
+);
 it("cold and visited See on graph frame the cone, repeat a fresh frame and retain one graph", async () => {
   const { page } = await open();
   try {

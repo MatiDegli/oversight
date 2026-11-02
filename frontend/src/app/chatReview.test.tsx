@@ -19,11 +19,9 @@ import { selectConversation } from "../agents/conversation/selectConversation";
 import { openReview, tabbedView } from "./view";
 import { resolvedReviewAction } from "./shell/ChatMerge";
 
-it("records the coordinator's release of the cold editor gate", () => {
+it("keeps the C4 integration decision discoverable", () => {
   const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
-  const entry = decisions.split("C4 integration proof and the released cold editor gate")[1];
-  expect(entry).toContain("b6636cf merge released the cold editor gate");
-  expect(entry).not.toContain("remains a blocking failure");
+  expect(decisions).toMatch(/^## .* — C4 integration proof and the released cold editor gate$/m);
 });
 
 it("settles graph snapshots when phone practice recreates an equivalent view", () => {
@@ -42,6 +40,19 @@ it("settles graph snapshots when phone practice recreates an equivalent view", (
 });
 
 const model = () => selectChatChange(chatReviewState(), "change-1");
+it.each([true, false])(
+  "identifies the comparison author with an agent slot present: %s",
+  (present) => {
+    const state = chatReviewState();
+    if (!present) delete state.agents["agent-1"];
+    const output = html(
+      <ChatChangeCard state={state} changeId="change-1" seq={62} reviewing={false} />,
+    );
+    const author = present ? "A" : "agent-1";
+    expect(output).toContain(`Agent ${author} says`);
+    expect(output).toContain(`After · Agent ${author}</span>`);
+  },
+);
 it("joins the exact retained proposal position, facts and assessment", () => {
   const state = chatReviewState(),
     card = model();

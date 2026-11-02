@@ -130,7 +130,7 @@ export function ChatChangeCard({
                         </div>
                         <ArrowRight aria-hidden="true" size={14} />
                         <div>
-                          <span>After · Agent {slot}</span>
+                          <span>After · Agent {slot ?? proposal.agent_id}</span>
                           <code>{caller.example.after}</code>
                         </div>
                       </div>
