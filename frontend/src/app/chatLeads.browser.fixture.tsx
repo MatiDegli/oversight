@@ -111,6 +111,7 @@ export function leadScenario(name: string): ServerEvent[] {
     event("lead.reply", {
       agent_id: "agent-1",
       answers_seq: null,
+      woken_by: null,
       text: "I split validation and its edge-case tests into a focused plan. You can queue it after review.",
       through_seq: 3,
       cut: null,
@@ -336,6 +337,7 @@ function approvedTeams(name: string) {
     event("lead.reply", {
       agent_id: name === "task-direct" ? "agent-3" : name === "lead-switch" ? "agent-2" : "agent-1",
       answers_seq: null,
+      woken_by: null,
       text:
         name === "lead-switch"
           ? "I drafted plan-4, Roll back failed orders. #1 starts first; #2 waits for it. Queue it when you want to start."

@@ -98,7 +98,11 @@ it("retains keyed failures through settlement and edits until retry, success or 
   ]) {
     expect(draftStore.getState()[other]).toBeUndefined();
     setDraft(other, "Other draft");
+    setDraftFailure(other, "Other send failed.");
+    expect(draftStore.getState()[other]?.failure).toBe("Other send failed.");
     expect(beginSend(other)).toBe(true);
+    expect(draftStore.getState()[other]?.failure).toBeUndefined();
+    expect(draftStore.getState()[key]?.failure).toBe(failure);
     clearSentDraft(other, "Other draft");
     finishSend(other);
     expect(draftStore.getState()[other]).toBeUndefined();

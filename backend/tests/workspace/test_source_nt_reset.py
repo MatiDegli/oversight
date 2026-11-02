@@ -187,7 +187,8 @@ async def test_reset_refusal_before_git_or_deletion(
         if ref == "packed":
             await git(workspace.main.root, "pack-refs", "--all", "--prune")
         else:
-            ref_file.write_text(changed + "\n")
+            # Match Git's LF bytes; native Windows text writes would introduce CRLF.
+            ref_file.write_bytes(changed.encode("ascii") + b"\n")
         monkeypatch.delenv("OVERSIGHT_DISCARD_OWN_RUNTIME", raising=False)
         if token == "dotenv":
             env = tmp_path / "settings.env"

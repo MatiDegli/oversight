@@ -195,9 +195,7 @@ it.each(["late", "failed"])(
       await search.focus();
       release();
       if (outcome === "late") {
-        await page.waitForFunction(
-          () => !!document.querySelector('[aria-label="Repository graph"]'),
-        );
+        await drawn(page);
       } else {
         await check(page.locator(".oversight-stage [role=alert]")).toHaveText(
           "This panel could not load. Reload the page to try again.",

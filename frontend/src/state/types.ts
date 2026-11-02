@@ -103,6 +103,8 @@ export interface State {
   changeReads: Record<string, string[]>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
+  /** Accepted run-local calls; null attribution is never assigned to the selected agent. */
+  usageTicks: UsageTick[];
   budgetMarks: BudgetMark[];
   spendUnknown: boolean;
   /**
@@ -142,6 +144,7 @@ export function createInitialState(): State {
     changeReads: {},
     changes: {},
     usage: null,
+    usageTicks: [],
     budgetMarks: [],
     spendUnknown: false,
     agentCosts: {},

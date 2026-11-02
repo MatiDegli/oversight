@@ -152,6 +152,7 @@ async def test_all_ready_slots_are_reserved_or_none_are(
         plan = plan_core.propose(
             plan_core.planning("Two tasks", graph, 1),
             [SubtaskDraft(task=f"task {i}", zone=plan_core.whole_graph(graph)) for i in range(2)],
+            max_subtasks=6,
         ).model_copy(update={"started_by": "agent-99"})
         plan = plan_core.link(plan, 2, "queued-task-1")
         await s.live.plans.save(plan)

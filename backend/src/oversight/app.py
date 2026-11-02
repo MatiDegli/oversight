@@ -83,7 +83,7 @@ from oversight.runtime_plans import PlanService
 from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
-from oversight.settings import REPO_ROOT, Settings, run_time_limits
+from oversight.settings import REPO_ROOT, Settings, build_lead_limits, run_time_limits
 from oversight.setup import missing_settings, offered_profiles
 from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
@@ -235,6 +235,9 @@ class LiveRun:
         reviewer: ReviewerCall | None = None,
     ) -> None:
         self._settings = settings
+        self._lead_limits = build_lead_limits(settings)
+        self._max_leads = settings.max_leads
+        self._lead_history_chars = settings.lead_history_chars
         self._redactor = Redactor(settings.meta_api_key, settings.baseten_api_key)
         self._closing = False
         self._reviewer = reviewer
@@ -336,6 +339,22 @@ class LiveRun:
 
     async def startup(self) -> None:
         settings = self._settings
+        lead = self._lead_limits
+        _log.warning(
+            "Lead capacity: %s active leads. These settings stay fixed for this run.",
+            self._max_leads,
+        )
+        _log.warning(
+            "Lead limits: %s turns per thread; %s tool calls, %s model calls and %s s per turn; "
+            "%s plans per thread; %s subtasks per plan; %s characters per task.",
+            lead.turns,
+            lead.tool_calls,
+            lead.model_calls,
+            str(lead.wall_clock_s).removesuffix(".0"),
+            lead.plans,
+            lead.subtasks,
+            lead.task_chars,
+        )
         _log.warning(
             "Test limit: %s s. Agent time limit: %s s per round. "
             "These settings stay fixed for this run.",
@@ -375,7 +394,12 @@ class LiveRun:
                 merge_mode=MergeModeState(),
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
-                prompt_version=prompt_version(settings.harness_pack, settings.history_prune_tokens),
+                prompt_version=prompt_version(
+                    settings.harness_pack,
+                    settings.history_prune_tokens,
+                    lead_limits=self._lead_limits,
+                ),
+                max_leads=self._max_leads,
                 workspace=self._source.provenance if self._source else TEMPLATE.name,
                 base_commit=base,
                 models=list({profile.id: profile for profile in profiles}.values()),

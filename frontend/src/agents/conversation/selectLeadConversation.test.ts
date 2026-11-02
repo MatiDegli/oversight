@@ -95,6 +95,7 @@ function thread(turns = 3, withPlans = false) {
       payload: {
         agent_id: base.agent_id,
         answers_seq: answer,
+        woken_by: null,
         text: `Lead turn ${String(turn + 1)}`,
         through_seq: turn ? events.length : 0,
         cut: null,

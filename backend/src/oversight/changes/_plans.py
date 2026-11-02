@@ -1,4 +1,4 @@
-"""Pure, immutable plan transitions for one to six subtasks."""
+"""Pure, immutable plan transitions with explicit person-configured limits."""
 
 from collections.abc import Sequence
 from typing import Any, Literal
@@ -22,10 +22,10 @@ def planning(task: str, snapshot: GraphSnapshot, number: int) -> Plan:
     return Plan(plan_id=f"plan-{number}", revision=1, task=task, graph_version=snapshot.version)
 
 
-def propose(plan: Plan, drafts: list[SubtaskDraft]) -> Plan:
+def propose(plan: Plan, drafts: list[SubtaskDraft], max_subtasks: int) -> Plan:
     if plan.state != "planning":
         raise WrongState("only a planning plan can be proposed")
-    return _next(plan, state="proposed", subtasks=_waiting(drafts))
+    return _next(plan, state="proposed", subtasks=_waiting(drafts, max_subtasks))
 
 
 def whole_graph(snapshot: GraphSnapshot) -> PlanZone:
@@ -33,16 +33,23 @@ def whole_graph(snapshot: GraphSnapshot) -> PlanZone:
     return PlanZone(node_ids=[], paths=sorted(paths))
 
 
-def check_limits(drafts: Sequence[SubtaskDraft]) -> None:
-    """Keep runtime admission unchanged until the person can configure plan limits."""
-    if any(dependency > 5 for draft in drafts for dependency in draft.depends_on):
-        raise ValueError("A subtask dependency index must be at most 5.")
-    if not 1 <= len(drafts) <= 6:
-        raise ValueError("A plan has 1 to 6 subtasks.")
+def check_limits(drafts: Sequence[SubtaskDraft], max_subtasks: int) -> None:
+    setting = f"OVERSIGHT_LEAD_MAX_SUBTASKS={max_subtasks}"
+    if any(dependency >= max_subtasks for draft in drafts for dependency in draft.depends_on):
+        raise ValueError(
+            f"A subtask dependency index must be at most {max_subtasks - 1} ({setting})."
+        )
+    if not 1 <= len(drafts) <= max_subtasks:
+        raise ValueError(f"A plan has 1 to {max_subtasks} subtasks ({setting}).")
 
 
-def _waiting(drafts: list[SubtaskDraft]) -> list[PlanSubtask]:
-    check_limits(drafts)
+def check_first_wave(drafts: Sequence[SubtaskDraft], seats: int) -> None:
+    if sum(not draft.depends_on for draft in drafts) > seats:
+        raise ValueError(f"The first wave exceeds OVERSIGHT_MAX_AGENTS={seats}.")
+
+
+def _waiting(drafts: list[SubtaskDraft], max_subtasks: int) -> list[PlanSubtask]:
+    check_limits(drafts, max_subtasks)
     if any(not draft.task.strip() for draft in drafts):
         raise ValueError("subtask tasks must not be empty")
     return [PlanSubtask(**draft.model_dump(), state="waiting") for draft in drafts]
@@ -53,11 +60,11 @@ def editable(plan: Plan, revision: int) -> None:
         raise WrongState("requires an unqueued proposed plan at the observed revision")
 
 
-def update(plan: Plan, request: UpdatePlan) -> Plan:
+def update(plan: Plan, request: UpdatePlan, max_subtasks: int) -> Plan:
     editable(plan, request.revision)
     if request.graph_version != plan.graph_version:
         raise WrongState("the graph version differs from the plan's")
-    return _next(plan, subtasks=_waiting(request.subtasks), detail=None)
+    return _next(plan, subtasks=_waiting(request.subtasks, max_subtasks), detail=None)
 
 
 def link(plan: Plan, revision: int, queued_task_id: str) -> Plan:

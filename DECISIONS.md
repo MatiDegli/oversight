@@ -3831,6 +3831,51 @@ a pointed dimmed module reveals its full name. The neutral decision chip counts 
 conflicting changes touching the group; the top bar counts the entire inbox, including plans
 and questions, so these counts need not match. Exact test-to-module calls supply "tested by";
 tests stay hidden in the product and their name-prefix rule is unit-tested only.
+## 2026-11-01 — C4 proposal evidence and change-local cost
+
+Chat's current proposal card joins the retained proposal position and exact change/revision/head.
+Historical entries keep the built timeline renderer. Candidate facts and assessments never fall
+back to an earlier revision. The six indicators summarize combined_tests, cross_review,
+small_change, small_cone, existing_tests_untouched and known_spend; they count recorded passes,
+preserve failure/unknown and are not an approval gate. Extra rules remain in the shared review.
+Run-local usageTicks retain only accepted events through the existing fold. Cost sums exact
+change_id across agents and roles; absent ticks and any null cost remain unknown, and null
+attribution stays unattributed. Sequence-gap protection and run replacement remain authoritative.
+
+## 2026-11-01 — C4 shares review beside the built Chat thread
+
+Chat supplies only an optional current-proposal renderer to the built timeline. Its review
+composition derives the conversation owner from the retained proposal, including C5's resolved
+review tab. One ReviewFocus adapter retains the built lazy loader, local fallback, capabilities,
+keys and decision controls in both layouts. Desktop reserves 880px for review; at the C1 1500px
+breakpoint real tabs hide and inert either mounted content. Chat-scoped CSS hides the where
+column during review. Normal review scrolling and the built diff/evidence order take precedence
+over the sketch's clipped body. Existing Oversight geometry and its default remain authoritative.
+
+## 2026-11-01 — C4 graph navigation belongs to a click
+
+See on graph captures run/change/revision/head and a fresh framing key, dispatches the existing
+review tab and selects Oversight in that click. No event subscription or lazy completion can
+select a layout or focus a control. Hidden Chat navigation keeps a frozen graph view; an abandoned
+explicit frame uses the existing camera-preserving navigation state while hidden. Replaced runs
+or candidates invalidate the target. The retained stage still awaits optional field preparation,
+and GraphStage/GraphView retain all graph-data, geometry and cone framing responsibilities.
+Frame adds only the hook next to useShell, the FocusPanel callback and the graph-view prop.
+
+## 2026-11-01 — C4 integration proof and the released cold editor gate
+
+The focused C4 fixture uses recorded run/graph data plus explicitly hand-written candidate
+measurements, assessment and change-attributed usage. It never edits a recording or calls a model.
+Proof covers exact evidence joins, unknown cost, shared production App decision targets and
+pointer-only approval, retained draft/comment/answers/diff, narrow tabs, C5 resolved review,
+explicit graph framing, repeated targets, delayed/failed preparation and abandoned intents.
+The shared camera keeps its legibility floor and reports omitted viewport members as Out of view.
+
+The coordinator-authorized b6636cf merge released the cold editor gate: an explicit Chat review
+can finish loading Monaco without requesting the graph, and approval becomes available when the
+existing decision guards pass. The cold production App regression now passes. No gate or assertion
+is weakened. Retained-state captures still visit Oversight explicitly before opening review and
+preserve the normal scrolling built review body.
 
 ## 2026-11-01 — W3 console supervision and staged Windows advisory CI
 
@@ -3948,7 +3993,6 @@ other agents' tests and Approve wait. Stop ends the suite and releases them. Tim
 incomplete observed results and an unknown cause, suggesting a different limit on the next run.
 Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.
 
-
 ## 2026-11-02 — Defaults, not ceilings
 
 Approved by the maintainer on 2026-11-02 (D1–D4): values are defaults the person can change,
@@ -3971,6 +4015,7 @@ both default to null and remain unfilled. `Limits` records the person's values f
 run. The backend retains six-subtask and dependency-index checks, its existing lead budgets
 (including 50 turns per thread), and the person-created single-subtask rule. Existing
 recordings continue to validate; the bundled replay is unchanged.
+
 ## 2026-11-02 — A read-only plan flow before the freeze
 
 The maintainer approved a read-only view of the lead's plan as a flow, inside the plan piece of the decisions
@@ -4007,6 +4052,7 @@ planners, and lead accounting has no plan id.
 `frontend/src/state/teamSelector.parity.test.ts` guard parity through one shared golden fixture,
 using the server's `team_of` as the oracle. K2 Chat with multiple leads and K3 team colors are
 future shared consumers; this front adds no production import or visible change.
+
 ## 2026-11-01 — C2 builds compact Chat agents and conversation selection
 
 C2 fills C1's existing agents frame with coding-agent rows. State is forwarded at the existing
@@ -4159,3 +4205,60 @@ comments and copy:
 ## 2026-11-02 — Chat starts with a direct task; leads join the Agents list
 
 The maintainer approved packet a-1102c on Nov 2 at 13:42 ART. Chat opens on the direct task: the built task box and Start agent come first; a lead is the quieter second option, as New lead in the Agents header and as a link under the box. Leads and direct tasks are peers in one Agents list, in start order; a lead's row carries its team's hue and letter and its agents follow it. The header count stays the slots held; leads hold no slot. Slot cards show the model only; the letter comes from the team rule once the agent starts. Before any lead has started, the New lead form says its limits are set before Oversight starts, with no numbers. No contract, endpoint or event change.
+## 2026-11-02 — A lead reply names what woke it
+
+Approved by the maintainer on 2026-11-02. Contracts 1.17.0 adds nullable `LeadReply.woken_by`:
+a nonempty, unique list of earlier committed event seqs in increasing order, mutually exclusive
+with `answers_seq`. It is null for a person's message or the opening task. The first reply
+cannot name wake events, and a trigger can appear in only one reply in the run.
+
+The catalog is closed: combined tests with a failed, error or timeout suite outcome; an agent
+status with state halted; and a plan entering completed or failed, once per plan. Attribution
+uses `Plan.started_by` on the latest plan update before the event. Combined tests use the
+execution agent's latest earlier status and its server-set `plan_id`; halted statuses use their
+own server-set `plan_id`. Only events belonging to that lead's plans qualify. Later plan
+revisions that stay terminal do not trigger another wake. Neither the lead nor the model can
+extend this catalog.
+
+The shared pure event rule supplies attribution for log validation and the later watcher.
+Nothing produces a wake until that watcher front; this field does not change when a lead may
+take a turn. Existing recordings and the bundled replay remain unchanged.
+## 2026-11-02 — Several leads with person-set limits
+
+K1 was approved by the maintainer on 2026-11-02. This explicitly supersedes the singleton
+sentence in “The lead runs inside one run with fixed limits” (2026-10-31) and the fixed numeric
+limits in “The lead keeps one thread per run” (2026-11-01). Their other authority and safety
+rules remain. Several leads can run concurrently without consuming coding-agent seats.
+
+| Setting | Default | Scope |
+| --- | ---: | --- |
+| `OVERSIGHT_MAX_LEADS` | 6 | Active leads per run, including starting, working and idle |
+| `OVERSIGHT_LEAD_MAX_TURNS` | 50 | Per lead thread, opening task counts as turn 1 |
+| `OVERSIGHT_LEAD_MAX_TOOL_CALLS` | 12 | Per turn |
+| `OVERSIGHT_LEAD_MAX_MODEL_CALLS` | 18 | Per turn, including recovery |
+| `OVERSIGHT_LEAD_MAX_WALL_CLOCK_S` | 300 | Seconds per turn |
+| `OVERSIGHT_LEAD_MAX_PLANS` | 3 | Per lead thread across turns |
+| `OVERSIGHT_LEAD_MAX_SUBTASKS` | 6 | Per requested plan |
+| `OVERSIGHT_LEAD_MAX_TASK_CHARS` | 2000 | Per plan task and subtask instruction |
+| `OVERSIGHT_LEAD_HISTORY_CHARS` | 24000 | Per lead history, retaining whole exchanges |
+
+All values are positive integers with no maximum. They are fixed for the process now: a run
+captures one immutable limits object and each lead retains it, including terminal statuses.
+Per-lead overrides require a later `StartLead` contract; no current command, body or tool can
+set them. Startup prints capacity and limits once. Metadata records the configured capacity,
+limits and prompt version; replay preserves old null fields without reading current settings.
+
+Setup precedes the selected Meta provider's spending brake, then capacity admission. Admission
+counts and registers synchronously before publication; idle occupies capacity, and a stopping
+lead keeps its place until its terminal status commits. Terminal leads release capacity. The
+final allowed turn publishes its reply immediately followed by halted, with no intervening idle.
+Each lead owns its thread, counters, plan allowance, callbacks, accounting, tasks and revisions;
+Stop affects only that lead and preserves its proposals. Shutdown drains every registered lead.
+
+Only the person queues plans. Approval, person-set rules and existing merge authority remain
+unchanged. The first wave refuses excess ready subtasks with `OVERSIGHT_MAX_AGENTS` named; later
+ready dependencies wait for shared coding seats. The repeated-result brake (4 identical results)
+and consecutive-failure brake (6 failures) remain fixed. The global spending brake is a hard
+refusal, neither a person setting nor a queue: every selected Meta lead checks at start, message
+admission and each model-call boundary, with durable ledger accounting before usage publication.
+Baseten keeps its existing accounting and Meta-brake exemption; in-flight call semantics remain.

@@ -33,6 +33,25 @@ it("keeps three requested revisions with distinct identities, plan ids and first
   expect(entries(events, 9)[0]?.identity).toEqual(open[0]?.identity);
 });
 
+it("keeps separate lead revisions requesting the same proposed plan", () => {
+  const shared = events
+    .slice(0, 5)
+    .map((event): ServerEvent =>
+      event.type === "lead.status"
+        ? { ...event, payload: { ...event.payload, requested_plan_id: "plan-1" } }
+        : event,
+    );
+  const open = entries(shared);
+  expect(open.map((entry) => entry.planId)).toEqual(["plan-1", "plan-1"]);
+  expect(new Set(open.map((entry) => entry.id)).size).toBe(2);
+  expect(open.map((entry) => entry.identity)).toEqual([
+    { kind: "lead_plan", agent_id: "agent-1", revision: 2, evidence_seq: 4 },
+    { kind: "lead_plan", agent_id: "agent-1", revision: 3, evidence_seq: 5 },
+  ]);
+  expect(open.map((entry) => entry.firstSeq)).toEqual([4, 5]);
+  expect(open.map((entry) => entry.ts)).toEqual([events[3]?.ts, events[4]?.ts]);
+});
+
 it("starting plan 2 closes only revision 3", () => {
   expect(entries(events, 9).map((entry) => entry.planId)).toEqual(["plan-1", "plan-3"]);
 });

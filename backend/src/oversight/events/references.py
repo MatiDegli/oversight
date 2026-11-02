@@ -3,6 +3,7 @@
 from collections.abc import Mapping
 from typing import Any, cast
 
+from oversight.events.lead_wake import is_lead_wake_trigger
 from oversight_contracts.events import ServerEvent
 
 
@@ -71,6 +72,22 @@ def validate_references(event: ServerEvent, prior: Mapping[int, ServerEvent]) ->
             assert source.type == "agent.message"
             if source.payload.agent_id != reply.agent_id:
                 raise ValueError("answers_seq must address the same lead")
+        if reply.woken_by is not None:
+            earlier_replies = [
+                row.payload
+                for row in prior.values()
+                if row.seq < event.seq and row.type == "lead.reply"
+            ]
+            if not any(row.agent_id == reply.agent_id for row in earlier_replies):
+                raise ValueError("the first lead reply cannot have woken_by")
+            consumed = {seq for row in earlier_replies for seq in row.woken_by or ()}
+            for seq in reply.woken_by:
+                if seq >= event.seq:
+                    raise ValueError("woken_by must be earlier than the reply")
+                if not is_lead_wake_trigger(prior, seq, reply.agent_id):
+                    raise ValueError("woken_by must name a catalog trigger of the same lead")
+                if seq in consumed:
+                    raise ValueError("woken_by event was already named by an earlier reply")
         if reply.through_seq is not None and reply.through_seq >= event.seq:
             raise ValueError("through_seq must be lower than the reply seq")
     walk(event.payload.model_dump(mode="json"))

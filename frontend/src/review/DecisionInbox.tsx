@@ -85,7 +85,7 @@ function InboxRow({
       </div>
       <h3>{heading}</h3>
       {paragraph && paragraph !== heading && <p>{paragraph}</p>}
-      {reasons.length > 0 && (
+      {!question && !change && reasons.length > 0 && (
         <ul className="decision-reasons">
           {reasons.map((reason) => (
             <li key={reason}>{reason}</li>

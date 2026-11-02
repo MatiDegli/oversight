@@ -25,7 +25,13 @@ from live_helpers import (
     write_ledger,
 )
 
-from oversight.agents import MUSE_SPARK_OPEN, STARTING_DETAIL, ScriptedModel, load_script
+from oversight.agents import (
+    LEAD_LIMITS,
+    MUSE_SPARK_OPEN,
+    STARTING_DETAIL,
+    ScriptedModel,
+    load_script,
+)
 from oversight.agents.client import CALL_SCOPE
 from oversight.app import ReplayConfig, create_app
 from oversight.changes import plan_core
@@ -75,6 +81,7 @@ async def test_start_publishes_starting_with_the_limits_and_answers_201(tmp_path
             state="starting",
             step=0,
             detail=STARTING_DETAIL,
+            limits=LEAD_LIMITS,
         )
         assert (
             STARTING_DETAIL
@@ -85,24 +92,24 @@ async def test_start_publishes_starting_with_the_limits_and_answers_201(tmp_path
         assert not s.live._agents and all(v is None for v in s.live._slots.values())
 
 
-async def test_a_second_lead_while_one_is_active_is_409(tmp_path: Path) -> None:
+async def test_capacity_one_refuses_a_second_lead(tmp_path: Path) -> None:
     held = GatedModel()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(two_fakes(tmp_path, max_agents=2), lambda _p, _s: held) as s,
+        live_server(two_fakes(tmp_path, max_leads=1), lambda _p, _s: held) as s,
     ):
         first = await s.client.post("/leads", json={"task": "Coordinate"})
         await held.entered.wait()
         second = await s.client.post("/leads", json={"task": "Another lead"})
         assert first.status_code == 201 and error_code(second) == (409, "wrong_state")
-        assert second.json()["error"]["message"] == "a lead is already active"
+        assert "OVERSIGHT_MAX_LEADS is 1" in second.json()["error"]["message"]
         assert s.live._count == 1
 
 
 async def test_get_lead_reads_the_latest_status_and_agents_route_stays_404(tmp_path: Path) -> None:
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(two_fakes(tmp_path, max_agents=2), lead_factory()) as s,
+        live_server(two_fakes(tmp_path, max_agents=2, max_leads=1), lead_factory()) as s,
     ):
         agent_id = await start_idle(s)
         response = await s.client.get(f"/leads/{agent_id}")

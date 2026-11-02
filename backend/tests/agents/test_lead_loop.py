@@ -2,7 +2,7 @@
 
 import json
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from backend.tests.agents.lead_helpers import call, lead, plan, scripted, setup_tools, turn
@@ -19,6 +19,7 @@ from oversight.agents._lead_tools import LeadProposalError
 from oversight.agents.client import CALL_SCOPE
 from oversight.settings import REPO_ROOT
 from oversight.workspace import FileTooLarge, InvalidPath
+from oversight_contracts.plans import PlanZone
 
 pytestmark = pytest.mark.anyio
 FIXTURES = REPO_ROOT / "fixtures/fake-model"
@@ -58,6 +59,7 @@ async def test_decision_tools_are_unknown_and_change_nothing() -> None:
         "start_agent",
         "start_plan",
         "merge",
+        "set_limits",
     ]
     for name in names:
         outcome = await tools.call(name, "{}")
@@ -140,18 +142,28 @@ async def test_read_errors_are_templates(error: Exception, message: str) -> None
     [
         (
             plan(task=" ", subtasks=[]),
-            "The plan task must be nonblank and at most 2,000 characters.",
+            "The plan task must be nonblank and at most 2,000 characters "
+            "(OVERSIGHT_LEAD_MAX_TASK_CHARS).",
         ),
-        (plan(task="x" * 2001), "The plan task must be nonblank and at most 2,000 characters."),
-        (plan(subtasks=[]), "A plan has 1 to 6 subtasks."),
-        (plan(subtasks=[dict(task="x")] * 7), "A plan has 1 to 6 subtasks."),
+        (
+            plan(task="x" * 2001),
+            "The plan task must be nonblank and at most 2,000 characters "
+            "(OVERSIGHT_LEAD_MAX_TASK_CHARS).",
+        ),
+        (plan(subtasks=[]), "A plan has 1 to 6 subtasks (OVERSIGHT_LEAD_MAX_SUBTASKS)."),
+        (
+            plan(subtasks=[dict(task="x")] * 7),
+            "A plan has 1 to 6 subtasks (OVERSIGHT_LEAD_MAX_SUBTASKS).",
+        ),
         (
             plan(subtasks=[dict(task=" ")]),
-            "Subtask 0: the task must be nonblank and at most 2,000 characters.",
+            "Subtask 0: the task must be nonblank and at most 2,000 characters "
+            "(OVERSIGHT_LEAD_MAX_TASK_CHARS).",
         ),
         (
             plan(subtasks=[dict(task="x" * 2001)]),
-            "Subtask 0: the task must be nonblank and at most 2,000 characters.",
+            "Subtask 0: the task must be nonblank and at most 2,000 characters "
+            "(OVERSIGHT_LEAD_MAX_TASK_CHARS).",
         ),
         (
             plan(subtasks=[dict(task="x", depends_on=[0])]),
@@ -159,7 +171,8 @@ async def test_read_errors_are_templates(error: Exception, message: str) -> None
         ),
         (
             plan(subtasks=[dict(task="x")] * 3),
-            "At most 2 subtasks may have no depends_on: this run offers 2 agent slots.",
+            "At most 2 subtasks may have no depends_on: this run offers 2 agent slots "
+            "(OVERSIGHT_MAX_AGENTS).",
         ),
     ],
 )
@@ -173,7 +186,7 @@ async def test_request_plan_checks_in_order_before_proposing(payload: Any, messa
     tools.plan_ids[:] = ["plan-1", "plan-2", "plan-3"]
     assert (
         await tools.call("request_plan", json.dumps(payload))
-    ).content == "This lead already requested 3 plans; call finish."
+    ).content == "This lead already requested 3 plans (OVERSIGHT_LEAD_MAX_PLANS); call finish."
     propose.assert_not_awaited()
 
 
@@ -193,6 +206,7 @@ async def test_request_plan_fills_the_whole_graph_zone() -> None:
         ("graph", '{"agent":"A"}'),
         ("read_file", '{"path":"x", "start_line":true}'),
         ("request_plan", '{"task":"x","subtasks":[{"task":"y","zone":{}}]}'),
+        ("request_plan", '{"task":"x","subtasks":[],"limits":{"subtasks":99}}'),
     ],
 )
 async def test_arguments_are_strict(name: str, args: str) -> None:
@@ -318,3 +332,113 @@ async def test_scripted_thread_retains_exchanges_and_reads_fresh_status() -> Non
     assert following.reply.through_seq == 10
     assert "I can explain" in str(model.requests[1]) and "Check again" in str(model.requests[1])
     assert not tools.plan_ids
+
+
+@pytest.mark.parametrize("pack", [False, True])
+def test_every_snapshot_value_moves_prompt_version(pack: bool) -> None:
+    from oversight.agents import (
+        LEAD_LIMITS,
+        build_lead_prompt,
+        build_starting_detail,
+        prompt_version,
+    )
+
+    large_clock = LEAD_LIMITS.model_copy(update={"wall_clock_s": 10000000001.0})
+    assert "10000000001 seconds" in build_lead_prompt(large_clock)
+    assert "10000000001 s" in build_starting_detail(large_clock)
+    baseline = prompt_version(pack, 8000, lead_limits=LEAD_LIMITS)
+    assert baseline == prompt_version(pack, 8000, lead_limits=LEAD_LIMITS.model_copy())
+    assert baseline == prompt_version(
+        pack, 8000, lead_limits=LEAD_LIMITS.model_copy(update={"wall_clock_s": 300})
+    )
+    assert prompt_version(pack) == prompt_version(pack, lead_limits=LEAD_LIMITS)
+    assert build_starting_detail(LEAD_LIMITS) == (
+        "Limits: 12 tool calls, 18 model calls, 300 s, 3 plans of up to 6 subtasks, "
+        "2,000 characters per task."
+    )
+    for field, value in LEAD_LIMITS.model_dump().items():
+        changed = LEAD_LIMITS.model_copy(update={field: value + 1})
+        assert prompt_version(pack, 8000, lead_limits=changed) != baseline
+        assert build_lead_prompt(changed) != build_lead_prompt(LEAD_LIMITS)
+        if field != "turns":
+            assert build_starting_detail(changed) != build_starting_detail(LEAD_LIMITS)
+
+
+@pytest.mark.parametrize("count", [1, 5])
+async def test_configured_plan_count_is_thread_wide(count: int) -> None:
+    from oversight.agents import LEAD_LIMITS
+
+    limits = LEAD_LIMITS.model_copy(update={"plans": count})
+    tools, propose = setup_tools(limits=limits, propose=AsyncMock(return_value="plan-n"))
+    run, _, _ = lead(scripted([]), tools, limits=limits)
+    model = scripted([])
+    for index in range(count + 1):
+        model = scripted([turn(call("request_plan", **plan())), dict(text="Ready", usage={})])
+        run.make_client = lambda model=model: model
+        assert (await run.run(None if index == 0 else "Another")).state == "idle"
+    assert propose.await_count == count
+    assert f"{count} plans (OVERSIGHT_LEAD_MAX_PLANS)" in str(model.requests)
+
+
+@pytest.mark.parametrize("chars", [1, 3000])
+@pytest.mark.parametrize("target", ["plan", "subtask"])
+async def test_task_length_schema_prompt_and_refusal_agree(chars, target) -> None:
+    from oversight.agents import LEAD_LIMITS, build_lead_prompt, build_lead_tool_schemas
+
+    limits = LEAD_LIMITS.model_copy(update={"task_chars": chars})
+    tools, propose = setup_tools(limits=limits)
+    schemas: Any = build_lead_tool_schemas(limits)
+    props = schemas[5]["function"]["parameters"]["properties"]
+    assert props["task"]["maxLength"] == chars
+    assert props["subtasks"]["items"]["properties"]["task"]["maxLength"] == chars
+    assert f"at most {chars:,} characters" in build_lead_prompt(limits)
+    for extra in (0, 1):
+        text = "x" * (chars + extra)
+        payload = plan(
+            task=text if target == "plan" else "x",
+            subtasks=[dict(task=text if target == "subtask" else "x")],
+        )
+        result = await tools.call("request_plan", json.dumps(payload))
+        assert result.ok == (extra == 0)
+        if extra:
+            assert f"{chars:,} characters (OVERSIGHT_LEAD_MAX_TASK_CHARS)" in result.content
+    assert propose.await_count == 1
+
+
+@pytest.mark.parametrize("count", [1, 8])
+async def test_subtask_bounds_and_graphs_validate_before_side_effects(count: int) -> None:
+    from oversight.agents import LEAD_LIMITS, build_lead_tool_schemas
+
+    limits = LEAD_LIMITS.model_copy(update={"subtasks": count})
+    zone = Mock()
+    tools, propose = setup_tools(limits=limits, zone=zone)
+    zone.return_value = PlanZone(node_ids=[], paths=[])
+    chain = [dict(task="x", depends_on=[i - 1] if i else []) for i in range(count)]
+    schemas: Any = build_lead_tool_schemas(limits)
+    props = schemas[5]["function"]["parameters"]["properties"]["subtasks"]
+    assert props["maxItems"] == count
+    assert props["items"]["properties"]["depends_on"]["items"]["maximum"] == count - 1
+    assert (await tools.call("request_plan", json.dumps(plan(subtasks=chain)))).ok
+    assert propose.await_count == 1
+    propose.reset_mock()
+    zone.reset_mock()
+    invalid = [
+        [*chain, dict(task="overflow")],
+        [dict(task="x", depends_on=[count])],
+        [dict(task="x", depends_on=[0])],
+    ]
+    if count == 8:
+        invalid += [
+            [dict(task="x", depends_on=[1]), dict(task="x", depends_on=[0])],
+            [dict(task="x", depends_on=[1, 1]), dict(task="x")],
+            [dict(task="x", depends_on=[2]), dict(task="x")],
+            [dict(task="x", depends_on=[-1])],
+            [dict(task="x")] * 3,
+        ]
+        defaults, _ = setup_tools()
+        refusal = await defaults.call("request_plan", json.dumps(plan(subtasks=chain)))
+        assert not refusal.ok and "6 subtasks (OVERSIGHT_LEAD_MAX_SUBTASKS)" in refusal.content
+    for tasks in invalid:
+        assert not (await tools.call("request_plan", json.dumps(plan(subtasks=tasks)))).ok
+    propose.assert_not_awaited()
+    zone.assert_not_called()

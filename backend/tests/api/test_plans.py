@@ -422,11 +422,14 @@ async def test_dispatch_runs_the_edited_revision(tmp_path: Path) -> None:
 async def test_person_count_guard_and_lead_plan_edits_preserve_provenance(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
         plan = await create(s)
-        drafts = edit_body(plan)["subtasks"] * 2
+        drafts = [dict(draft) for draft in edit_body(plan)["subtasks"] * 2]
+        drafts[1]["depends_on"] = [0]
         # Synthetic lead input uses the same generic core; POST /plans never sets started_by.
         from oversight_contracts.commands import UpdatePlan
 
-        multi = plan_core.update(plan, UpdatePlan.model_validate(edit_body(plan, subtasks=drafts)))
+        multi = plan_core.update(
+            plan, UpdatePlan.model_validate(edit_body(plan, subtasks=drafts)), max_subtasks=6
+        )
         await s.live.plans.save(multi)
         assert error_code(
             await s.client.post(
