@@ -668,8 +668,8 @@ gradients belong to theme tokens; control boundaries use control-edge and focus 
   frame sits under it. Below 1280px a notice asks the person to widen the window. Type and radii
   do not shrink to fit. The two-change practice uses the exception in **Phone width** below.
   Target, not built yet: the sidebar becomes an overlay first below 1832px, and below 1552px the
-  focus panel shrinks to `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at
-  1440px and 608px at 1280px. Overlays cover their part without changing these target widths.
+  focus panel shrinks to `min(880px, viewport width - 112px - 560px)`: 823px at 1495px and
+  608px at 1280px. Overlays cover their part without changing these target widths.
 - **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
   restore-graph button. Restoring returns to the same shell; maximize is not used in the video.
 - **Keyboard:** Ctrl K jumps to functions and files and runs commands; Ctrl B toggles the sidebar;
