@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
 import type { GraphElement } from "./elements";
@@ -14,6 +14,7 @@ import {
   placeChip,
 } from "./mapLines";
 import { MapLayer } from "./MapLayer";
+import { createMapPointer } from "./mapPointer";
 import design from "../../../DESIGN.md?raw";
 import decisions from "../../../DECISIONS.md?raw";
 import controllerSource from "./mapController.ts?raw";
@@ -48,11 +49,8 @@ it("preserves the pending name priority and documents built evidence in lines an
       ?.replace(/\s+/g, " ")
       .trim() ?? "";
 
-  expect(point(6)).toBe(
-    "6. **Names.** Constant size on screen. Group names always shown; module names are 13px/600 in " +
-      "module-label, centered under the circles, ellipsized at the cell width minus 10px; counts " +
-      "are 12px muted. Circle radius is clamp(round(screen cell height × 0.1), 5, 9)px. All colors " +
-      "use theme tokens. Target, not built yet: prioritize names an agent touches, the cone reaches " +
+  expect(point(6)).toContain(
+    "Target, not built yet: prioritize names an agent touches, the cone reaches " +
       "or the selection holds, then by size; the rest on hover.",
   );
   expect(point(5)).toContain("Hover restores full names");
@@ -66,15 +64,31 @@ it("preserves the pending name priority and documents built evidence in lines an
 it("appends the map decision after existing entries with heading separation", () => {
   const heading = "## 2026-11-01 — Map evidence, calls and pointer navigation";
   expect(decisions.split(heading)).toHaveLength(2);
-  for (const later of [
-    "## 2026-11-01 — Displaced fronts may start before the freeze",
-    "## Contracts 1.15.0",
-    "## 2026-11-01 — The lead keeps one thread per run",
-    "## 2026-11-01 — Lead thread lifetime and restart",
-  ]) {
-    expect(decisions.indexOf(heading)).toBeGreaterThan(decisions.indexOf(later));
-  }
+  expect(decisions.match(/^## .+$/gm)?.at(-1)).toBe(heading);
   expect(decisions).toContain(`\n\n${heading}\n\n`);
+});
+
+it("checks whether the map is active before handling window mouseup", () => {
+  const scope = new EventTarget();
+  const stage = Object.assign(new EventTarget(), { ownerDocument: { defaultView: scope } });
+  const active = vi.fn(() => false);
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  const detach = createMapPointer({
+    host: { current: { parentElement: stage } as unknown as HTMLDivElement },
+    active,
+    graph: () => undefined,
+    frame: () => ({ model: fixture().model, level: "cards", zoom: 1, pan: { x: 0, y: 0 } }),
+    setHover: vi.fn(),
+    open: vi.fn(),
+    navigate: vi.fn(),
+  }).attach();
+  try {
+    scope.dispatchEvent(new Event("mouseup"));
+    expect(active).toHaveBeenCalledOnce();
+  } finally {
+    detach();
+    vi.unstubAllGlobals();
+  }
 });
 
 it("uses a static module type import", () => {

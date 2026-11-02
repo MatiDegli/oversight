@@ -45,6 +45,7 @@ function mapGestures(options: MapPointerOptions, state: PointerState) {
     state.down = point;
   };
   const mouseup = () => {
+    if (!active()) return;
     state.down = undefined;
   };
   const click = (event: MouseEvent) => {
@@ -124,6 +125,7 @@ export function createMapPointer(options: MapPointerOptions) {
     options.setHover();
   };
   const pointerleave = () => {
+    state.point = undefined;
     if (options.active()) clear();
   };
   return {

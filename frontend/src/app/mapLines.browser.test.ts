@@ -151,6 +151,30 @@ it("shows calls for module/group hover alone, without graph render, camera or fo
     await page.close();
   }
 });
+it("returns from module cards to an unhovered map when Fit is clicked elsewhere", async () => {
+  const page = await setup();
+  try {
+    const fit = page.getByRole("button", { name: "Fit the graph to the view" });
+    await fit.click();
+    await ready(page);
+    const point = await modulePoint(page, "library.module_00");
+    await pointAt(page, point);
+    await check(page.locator("[data-map-line]")).toHaveCount(4);
+    await page.mouse.click(point.x, point.y);
+    await ready(page);
+    expect((await camera(page)).level).toBe("cards");
+    await fit.click();
+    await ready(page);
+    expect((await camera(page)).level).toBe("map");
+    await check(page.locator(".map-layer svg, .map-full-name")).toHaveCount(0);
+    await check(page.locator('[data-map-group="library"]')).not.toHaveAttribute(
+      "style",
+      /border-color/,
+    );
+  } finally {
+    await page.close();
+  }
+});
 it("continues a map drag outside the stage and stops on window mouseup", async () => {
   const page = await setup();
   try {
