@@ -8,7 +8,6 @@ import log from "../../../../fixtures/events/recorded-demo.jsonl?raw";
 import { Frame } from "../Frame";
 import { App } from "../App";
 import { closePanel, surfaceTab, tabbedView, viewReducer, type View } from "../view";
-import { useEscapeCloses } from "../escape";
 
 const params = new URLSearchParams(location.search);
 document.documentElement.dataset.theme = params.get("theme") ?? "dark";
@@ -27,7 +26,6 @@ function Harness() {
   const close = () => {
     setView(closePanel);
   };
-  useEscapeCloses(Boolean(view.activeTab), close);
   return (
     <Frame
       state={state}
