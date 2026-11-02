@@ -25,7 +25,7 @@ export function timeWords(ms: number, bound: number) {
 export function budgetWords(mark: BudgetMark, budget: Budget, unknown: boolean) {
   const blocked = mark.brake === "blocked";
   const percent = blocked
-    ? mark.budget_usd > 0
+    ? !unknown && mark.budget_usd > 0
       ? Math.floor((mark.spent_usd / mark.budget_usd) * 100)
       : null
     : Math.round((budget.warn_at[mark.brake === "warn_50" ? 0 : 1] ?? 0) * 100);

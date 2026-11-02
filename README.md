@@ -135,15 +135,8 @@ static build requires the recording and its receipt; UI tests select their own f
 Depth and scale are two axes. The built **Modules / Functions / Details** control (`bfe7a18`)
 sets how much unfolds. Scale is the zoom: how it is drawn.
 
-The **map is not built**. It would appear automatically when module titles fall below the reading
-floor, replacing each module with a circle at its block's center, with area proportional to its
-function count. Folder groups appear on the map only and are not built either. The earlier middle
-level, function dots inside module frames, is dropped.
-
-See [Scale and depth in DESIGN.md](DESIGN.md#scale-and-depth) for the approved definition and scope:
-the map and folder groups follow the Conversation tab, milestone pulses and life layer part 2,
-with an approved sketch first. See the DECISIONS.md entry “2026-10-31 — Map view and folder groups
-follow the later line B work”.
+The map at rest and folder groups are built.
+See [Scale and depth in DESIGN.md](DESIGN.md#scale-and-depth) for what is built and what remains a target.
 
 ![Earlier sketch of zoom levels](docs/sketches/mockup-zoom-signal-far.png)
 
