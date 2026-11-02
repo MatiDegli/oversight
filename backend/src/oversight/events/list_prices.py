@@ -78,8 +78,9 @@ class _Call:
     kind: Literal["exact", "unpriced", "ranged", "inconsistent"]
 
 
-def _price_call(tick: UsageTick, price: ListPrice | None) -> _Call:
+def price_call(tick: UsageTick, table: PriceTable = LIST_PRICES) -> _Call:
     """Price one receipt's tokens, preserving unknown counts as a lower bound."""
+    price = table.price(tick.model)
     i, c, o = tick.input_tokens, tick.cached_tokens, tick.output_tokens
     if any(count is not None and count < 0 for count in (i, c, o)) or (
         i is not None and c is not None and c > i
@@ -192,7 +193,7 @@ def price_usage(events: Sequence[ServerEvent], table: PriceTable = LIST_PRICES) 
         if event.type == "usage.tick":
             tick = event.payload
             price = table.price(tick.model)
-            call = _price_call(tick, price)
+            call = price_call(tick, table)
             calls.append(call)
             groups[tick.agent_id, tick.role, tick.model].append(call)
             priced += price is not None
