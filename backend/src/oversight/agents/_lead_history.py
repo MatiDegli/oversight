@@ -7,8 +7,9 @@ TASK_TRUNCATED = "\n[Opening task truncated by the server.]"
 
 
 class LeadHistory:
-    def __init__(self, task: str) -> None:
+    def __init__(self, task: str, *, history_chars: int = HISTORY_CHARS) -> None:
         self.task = task
+        self.history_chars = history_chars
         self.exchanges: list[tuple[str | None, str | None]] = []
 
     def append(self, human: str | None, reply: str | None) -> None:
@@ -18,7 +19,7 @@ class LeadHistory:
     def _trim(self, reserved: int) -> None:
         while self.exchanges and (
             len(self.task) + reserved + sum(len(h or "") + len(r or "") for h, r in self.exchanges)
-            > HISTORY_CHARS
+            > self.history_chars
         ):
             self.exchanges.pop(0)
 
@@ -26,7 +27,7 @@ class LeadHistory:
         self._trim(len(human or "") + reserved)
         # Keep the original task on the thread even if an unusually large opening task
         # alone exceeds the model history budget; label its bounded model representation.
-        available = max(0, HISTORY_CHARS - reserved - len(human or ""))
+        available = max(0, self.history_chars - reserved - len(human or ""))
         task = self.task
         if len(task) > available:
             task = task[: max(0, available - len(TASK_TRUNCATED))] + TASK_TRUNCATED[:available]

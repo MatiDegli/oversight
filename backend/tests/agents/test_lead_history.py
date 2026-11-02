@@ -43,3 +43,27 @@ def test_oversized_task_keeps_original_and_labels_bounded_model_representation()
     assert history.task == task
     assert str(messages[0]["content"]).endswith(TASK_TRUNCATED)
     assert sum(len(str(m["content"])) for m in messages) + 2000 == HISTORY_CHARS
+
+
+def test_history_budget_is_per_thread_and_trims_instead_of_refusing() -> None:
+    for budget in (100, 48000):
+        history = LeadHistory("Task", history_chars=budget)
+        for i in range(4):
+            history.append(f"human-{i}" + "h" * 30, f"reply-{i}" + "r" * 30)
+        messages = history.messages("newest", reserved=10)
+        assert sum(len(str(m["content"])) for m in messages) + 10 <= budget
+        assert messages[0]["content"] == "Task" and messages[-1]["content"] == "newest"
+        assert ("human-0" in str(messages)) == (budget == 48000)
+    other = LeadHistory("Task")
+    assert other.history_chars == HISTORY_CHARS and other.exchanges == []
+
+
+def test_history_exact_cut_and_opening_task_bound_with_injected_budget() -> None:
+    history = LeadHistory("task", history_chars=12)
+    history.append("ask", "reply")
+    assert len(history.messages()) == 3
+    assert history.messages(reserved=1) == [{"role": "user", "content": "task"}]
+    assert history.exchanges == []
+    tiny = LeadHistory("opening task", history_chars=1)
+    assert tiny.messages()[0]["content"] == "\n"
+    assert tiny.task == "opening task"

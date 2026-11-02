@@ -24,7 +24,7 @@ def graph() -> GraphSnapshot:
 
 
 def setup_tools(slots: int = 2, **overrides: Any) -> tuple[LeadTools, AsyncMock]:
-    propose = AsyncMock(side_effect=["plan-1", "plan-2", "plan-3"])
+    propose = overrides.get("propose", AsyncMock(side_effect=["plan-1", "plan-2", "plan-3"]))
     values: dict[str, Any] = dict(
         graph=graph,
         tree=AsyncMock(
@@ -90,4 +90,6 @@ def lead(model: Any, tools: LeadTools, **overrides: Any) -> tuple[LeadRun, Async
         on_working=AsyncMock(),
         on_step=step,
     )
+    if "limits" in overrides:
+        tools.limits = overrides["limits"]
     return LeadRun(**(values | overrides)), record, step
