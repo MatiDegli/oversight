@@ -25,25 +25,27 @@ class ThreadModels:
         return model
 
 
-async def idle(s: Any, after: int = 0) -> None:
-    await s.until(is_type("lead.status", agent_id="agent-1", state="idle"), after=after)
+async def idle(s: Any, after: int = 0, agent_id: str = "agent-1") -> None:
+    await s.until(is_type("lead.status", agent_id=agent_id, state="idle"), after=after)
     # Observe the complete turn, including the owned client's cleanup.
-    task = s.live.leads.leads["agent-1"].task
+    task = s.live.leads.leads[agent_id].task
     if task is not None:
         await task
 
 
-async def start_idle(s: Any) -> None:
+async def start_idle(s: Any) -> str:
     response = await s.client.post("/leads", json={"task": "Retained opening task"})
     assert response.status_code == 201, response.text
-    await idle(s)
+    agent_id = response.json()["agent_id"]
+    await idle(s, agent_id=agent_id)
+    return agent_id
 
 
-async def send(s: Any, text: str = "Next question") -> int:
+async def send(s: Any, text: str = "Next question", agent_id: str = "agent-1") -> int:
     after = s.store.last_seq
-    response = await s.client.post("/leads/agent-1/message", json={"text": text})
+    response = await s.client.post(f"/leads/{agent_id}/message", json={"text": text})
     assert response.status_code == 202 and response.content == b"", response.text
-    await idle(s, after)
+    await idle(s, after, agent_id)
     return after
 
 

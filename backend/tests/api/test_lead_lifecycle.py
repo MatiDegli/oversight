@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from backend.tests.api.lead_helpers import start_idle
 from live_helpers import (
     DEADLINE_S,
     GatedModel,
@@ -166,13 +167,14 @@ async def test_the_next_run_has_no_lead_and_calls_no_model(tmp_path: Path) -> No
 
     settings = two_fakes(tmp_path, max_agents=2)
     async with asyncio.timeout(DEADLINE_S), live_server(settings, factory) as s:
-        await s.client.post("/leads", json={"task": "Coordinate"})
-        await s.until(is_type("lead.status", state="working"))
-    assert len(built) == 1
+        for agent_id in ("agent-1", "agent-2"):
+            await s.client.post("/leads", json={"task": "Coordinate"})
+            await s.until(is_type("lead.status", agent_id=agent_id, state="working"))
+    assert len(built) == 2
     async with asyncio.timeout(DEADLINE_S), live_server(settings, factory) as s:
         assert not s.live.leads.leads and not any(e.type == "lead.status" for e in s.events())
         assert error_code(await s.client.get("/leads/agent-1")) == (404, "not_found")
-        assert len(built) == 1
+        assert len(built) == 2
 
 
 async def test_the_brake_blocking_mid_turn_cuts_to_idle(tmp_path: Path) -> None:
@@ -402,6 +404,8 @@ async def test_stop_during_a_failing_ledger_write_reports_one_fatal_error(
         )
 
     async with asyncio.timeout(DEADLINE_S), live_server(meta_settings(tmp_path), factory) as s:
+        companion = await start_idle(s)
+        proposals = dict(s.live.plans.plans)
 
         def fail(_state: Any) -> None:
             entered.set()
@@ -413,7 +417,7 @@ async def test_stop_during_a_failing_ledger_write_reports_one_fatal_error(
             await s.client.post("/leads", json={"task": "Coordinate"})
             assert await asyncio.to_thread(entered.wait, DEADLINE_S)
             response = await s.client.post(
-                "/leads/agent-1/stop", json={"revision": (await current(s))["revision"]}
+                "/leads/agent-2/stop", json={"revision": (await current(s, "agent-2"))["revision"]}
             )
             assert response.status_code == 202
         finally:
@@ -421,9 +425,11 @@ async def test_stop_during_a_failing_ledger_write_reports_one_fatal_error(
         await s.until(is_type("lead.status", state="stopped"))
         errors = [e for e in s.events() if e.type == "error" and e.payload.fatal]
         assert len(errors) == 1
-        assert errors[0].payload.source == "server" and "Lead agent-1" in errors[0].payload.message
+        assert errors[0].payload.source == "server" and "Lead agent-2" in errors[0].payload.message
         assert "settle" in errors[0].payload.message
         assert len(terminal(s)) == 1 and s.live._ledger_lost
+        assert s.live.leads.leads[companion].phase == "idle"
+        assert s.live.plans.plans == proposals
         assert errors[0].seq < next(
             e.seq for e in s.events() if e.type == "lead.status" and e.payload.state == "stopped"
         )
