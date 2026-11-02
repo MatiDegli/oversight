@@ -4132,3 +4132,19 @@ comments and copy:
 6. Use exactly "These calls use the new parameter, so What was compared does not count them."
    as the muted sentence. It explains count separation without suggesting additional measurement
    or an unsupported binding interpretation.
+
+## 2026-11-02 — Map light follows module cells at a fixed screen spread
+
+The map uses the approved October 31 sketch values: `map-light-near` at 30px,
+`map-light-far` at 84px and `map-light-gain` at 0.85, inherited by day mode.
+Each existing emitter projects to its node's containing module cell, including the
+circle, name, function count and agent lines. The original parent chain resolves
+folded functions and nested methods; a working focus can belong to a different
+module from its pending change, while waiting light stays on the changed module.
+
+Reason: at map zoom, scaling the card spreads by zoom collapses the light to a few
+lamps around a tiny rendered card box. The approved broad LED pool needs the drawn
+module cell and fixed screen spreads. The existing transition interpolates effective
+screen profiles when the published map level changes, including interrupted moves.
+Card geometry, zoom scaling, mode gains and all existing source strengths remain
+unchanged, including full working strength and the current 0.5 waiting weight.
