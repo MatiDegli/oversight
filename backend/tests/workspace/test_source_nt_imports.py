@@ -7,7 +7,9 @@ from dataclasses import replace
 
 import pytest
 
+from oversight.workspace import metadata_io
 from oversight.workspace import source_nt as nt
+from oversight.workspace.integrity import remaining
 
 from .test_source_nt_env import environment
 
@@ -187,8 +189,8 @@ def test_path_line_without_top_level_names(tmp_path, layout, entry):
         assert own.roots == (root,)
 
 
-@pytest.mark.parametrize("fault", ["unsafe", "link", "entries", "deadline", "association"])
-def test_path_discovery_is_bounded_and_associated(tmp_path, monkeypatch, fault):
+@pytest.mark.parametrize("fault", ["unsafe", "link", "association"])
+def test_path_discovery_is_bounded_and_associated(tmp_path, fault):
     source, tree, io, site = mapped_environment(tmp_path)
     info = site / "different_distribution-1.dist-info"
     (info / "top_level.txt").unlink()
@@ -198,9 +200,58 @@ def test_path_discovery_is_bounded_and_associated(tmp_path, monkeypatch, fault):
         (root / "bad:name.py").touch()
     elif fault == "link":
         (root / "linked.py").symlink_to(root / "sample/__init__.py")
-    elif fault == "entries":
-        monkeypatch.setattr("oversight.workspace.metadata_io.MAX_ENTRIES", 4)
-    elif fault == "deadline":
-        io.deadline = 0
     with pytest.raises(OSError, match="environment unavailable"):
         nt.prepare_environment(source, tree, io.deadline, io=io)
+
+
+def test_path_discovery_entry_budget(tmp_path, monkeypatch):
+    source, tree, io, site = mapped_environment(tmp_path)
+    info = site / "different_distribution-1.dist-info"
+    (info / "top_level.txt").unlink()
+    (info / "RECORD").write_text("own.pth,,\n")
+    # Five metadata charges plus two visits to sample fit; RECORD alone cannot refuse.
+    monkeypatch.setattr(metadata_io, "MAX_ENTRIES", 8)
+    own = nt.prepare_environment(source, tree, io.deadline, io=io)
+    assert own.guard is not None
+    assert json.loads(own.guard)["packages"] == ["sample"]
+    for index in range(metadata_io.MAX_ENTRIES):
+        # Even ignored immediate entries must consume the shared discovery budget.
+        (tree / "backend/src" / f".ignored_{index}").touch()
+    with pytest.raises(OSError, match="unsupported or unsafe editable metadata"):
+        nt.prepare_environment(source, tree, io.deadline, io=io)
+
+
+def test_path_discovery_deadline(tmp_path, monkeypatch):
+    source, tree, io, site = mapped_environment(tmp_path)
+    info = site / "different_distribution-1.dist-info"
+    (info / "top_level.txt").unlink()
+    (info / "RECORD").write_text("own.pth,,\n")
+    (tree / "backend/src/.ignored").touch()
+    nt.prepare_environment(source, tree, io.deadline, io=io)
+    root_names = nt._root_names
+    discovering = False
+    checks = 0
+
+    def discover(root, io, budget):
+        nonlocal discovering
+        assert root == tree / "backend/src"
+        discovering = True
+        try:
+            return root_names(root, io, budget)
+        finally:
+            discovering = False
+
+    def discovery_remaining(deadline):
+        nonlocal checks
+        if discovering:
+            checks += 1
+            # Expire during enumeration, after its first entry; all other I/O stays valid.
+            if checks == 2:
+                return remaining(0)
+        return remaining(deadline)
+
+    monkeypatch.setattr(nt, "_root_names", discover)
+    monkeypatch.setattr(metadata_io, "remaining", discovery_remaining)
+    with pytest.raises(OSError, match="unsupported or unsafe editable metadata"):
+        nt.prepare_environment(source, tree, io.deadline, io=io)
+    assert checks == 2
