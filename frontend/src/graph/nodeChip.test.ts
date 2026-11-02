@@ -95,3 +95,25 @@ it("keeps two changes on one node in change-id order with neutral agent letters"
     "a 9 of 10 differ",
   ]);
 });
+
+it("projects extensions only onto an existing chip for its exact candidate and node", async () => {
+  // eslint-disable-next-line no-restricted-syntax -- Approved typed fixture exercises the graph/review boundary.
+  const { parameterState } = await import("../review/NewParameterCalls.fixture");
+  const state = parameterState("mixed");
+  const chip = required(selectNodeChips(state, null)[0]);
+  expect(chip).toMatchObject({
+    text: "2 of 6 differ",
+    compared: 6,
+    differing: 2,
+    extension: { run_count: 4, parameters: ["cap_percent"], rejected_before: 2 },
+  });
+  const facts = required(state.changeFacts["change-1"]?.[0]);
+  const extension = required(facts.parameter_extensions?.[0]);
+  facts.parameter_extensions = [{ ...extension, node_id: "other" }];
+  expect(selectNodeChips(state, null)[0]?.extension).toBeUndefined();
+  facts.parameter_extensions = [extension];
+  state.changeFacts["change-1"]?.push({ ...facts, parameter_extensions: [] });
+  expect(selectNodeChips(state, null)[0]?.extension).toBeUndefined();
+  for (const name of ["rejected", "values", "partial", "unavailable"] as const)
+    expect(selectNodeChips(parameterState(name), null)).toEqual([]);
+});

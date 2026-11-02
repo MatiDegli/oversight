@@ -2,6 +2,8 @@ import { ArrowRight } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { State } from "../state";
+// eslint-disable-next-line no-restricted-imports -- Explicit navigation shares the review-owned target identity.
+import { visitParameterEvidence } from "../review/parameterExtensions";
 import { unstableBehaviorSentence } from "./behavior";
 import { selectNodeChips } from "./nodeChip";
 import type { NodeChip } from "./nodeChip";
@@ -112,6 +114,46 @@ function Count({ text }: { text: string }) {
   );
 }
 
+function ParameterEcho({ extension }: { extension: NonNullable<NodeChip["extension"]> }) {
+  const [reviewClosed, setReviewClosed] = useState(false);
+  useEffect(() => {
+    if (!reviewClosed) return;
+    const observer = new MutationObserver(() => {
+      if (
+        document
+          .getElementById(extension.target)
+          ?.closest('.review-body [aria-label="New-parameter calls"]')
+      )
+        setReviewClosed(false);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+    };
+  }, [reviewClosed, extension.target]);
+  return (
+    <p className="mt-2 wrap-anywhere text-muted">
+      {extension.run_count > 0
+        ? `${String(extension.run_count)} call${extension.run_count === 1 ? "" : "s"} using `
+        : "Calls using "}
+      <code>{extension.parameters.join(", ")}</code>;{" "}
+      <button
+        type="button"
+        className="inline-flex cursor-pointer items-center underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[1280px]:min-h-[44px]"
+        onClick={() => {
+          setReviewClosed(!visitParameterEvidence(extension.target));
+        }}
+      >
+        see review
+      </button>
+      .
+      <span role="status" className="block">
+        {reviewClosed ? "The review for these calls is not open." : ""}
+      </span>
+    </p>
+  );
+}
+
 function Popover({ chip, id }: { chip: NodeChip; id: string }) {
   return (
     <section
@@ -150,6 +192,7 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
           </li>
         ))}
       </ol>
+      {chip.extension && <ParameterEcho extension={chip.extension} />}
       {(chip.footer || chip.limitation) && (
         <footer className="mt-2 text-muted">
           {chip.footer && (
@@ -222,7 +265,7 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
             <button
               key={chip.key}
               type="button"
-              className={`h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
+              className={`relative h-[22px] shrink-0 cursor-pointer whitespace-nowrap rounded-(--radius-control) border border-border bg-ground px-2 text-(length:--caption-size) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[1280px]:before:absolute max-[1280px]:before:inset-x-0 max-[1280px]:before:-inset-y-[12px] max-[1280px]:before:content-[''] ${chip.kind === "varied" ? "font-normal text-muted" : "font-(--label-weight) text-text"}`}
               aria-label={`${chip.text}, ${chip.label}`}
               aria-expanded={openKey === chip.key}
               aria-controls={
@@ -239,7 +282,7 @@ export function NodeChips({ state, litIds }: { state: State; litIds: readonly st
           ))}
         </div>
       ))}
-      {open && <Popover chip={open} id={`${id}-${encodeURIComponent(open.key)}`} />}
+      {open && <Popover key={open.key} chip={open} id={`${id}-${encodeURIComponent(open.key)}`} />}
     </div>
   );
 }
