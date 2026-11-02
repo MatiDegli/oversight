@@ -12,7 +12,7 @@ The demo path (`demo-repo/`, `make demo`, `make demo-check`) does not change.
   are worktrees of the person's repository under `.runtime/worktrees/`.
 - When the person commits on their own branch, the session takes it in with the follow-main logic.
 - The graph shows the session plus the person's uncommitted edits as a separate "your edits"
-  layer, drawn as its sketch decides: color stays reserved for agents and states. Approval
+  layer, drawn as its sketch decides: color stays reserved for teams and states. Approval
   warns when an agent's change touches lines the person edited.
 - A file watcher (watchfiles, MIT) only triggers the existing rescan path. It debounces saves,
   skips while a merge or another main write holds the git lease, and emits the usual

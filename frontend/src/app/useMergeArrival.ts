@@ -1,5 +1,5 @@
 // One presentation clock shared by the field, card and pending marks; never reducer state.
-import { useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
+import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 // eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
 import { afterlightOf } from "../graph/field/afterlight";
 // eslint-disable-next-line no-restricted-imports -- C1 uses a pure leaf to isolate graph startup.
@@ -9,6 +9,8 @@ import { selectMerges, selectMilestones } from "../graph/field/life";
 import type { State } from "../state";
 import { getActiveTheme } from "../theme";
 type Starts = ReadonlyMap<string, number>;
+const changeId = (key: string) => key.slice(0, key.lastIndexOf(":"));
+const arrivalDelay = () => mergeArrivalDelay(afterlightOf(getActiveTheme()));
 const sameMap = <T>(a: ReadonlyMap<string, T>, b: ReadonlyMap<string, T>) =>
   a.size === b.size && [...a].every(([key, value]) => b.get(key) === value);
 export function mergeArrivals(
@@ -28,17 +30,17 @@ export function mergeArrivals(
   return sameMap(starts, base) ? base : starts;
 }
 export function mergingChanges(starts: Starts, now: number, reduced: boolean) {
-  const delay = mergeArrivalDelay(afterlightOf(getActiveTheme()));
-  return [...starts]
-    .filter(([, start]) => !reduced && now < start + delay)
-    .map(([key]) => key.slice(0, key.lastIndexOf(":")));
+  const delay = arrivalDelay();
+  return [...starts].flatMap(([key, start]) =>
+    !reduced && now < start + delay ? [changeId(key)] : [],
+  );
 }
 function presentation(
   state: State,
   starts: Starts,
   now: number,
   reduced: boolean,
-  immediate: ReadonlySet<string> = new Set(),
+  immediate: ReadonlySet<string>,
 ) {
   const merging = mergingChanges(starts, now, reduced).filter((id) => !immediate.has(id));
   const labels = new Map<string, "Merging" | "Merged">();
@@ -48,46 +50,62 @@ function presentation(
   return { starts, merging, labels };
 }
 export class ArrivalClock {
-  private starts: Starts;
-  private milestones = new MilestoneLife(getActiveTheme());
+  private milestones!: MilestoneLife;
   private immediate = new Set<string>();
   private listeners = new Set<() => void>();
   private timer?: ReturnType<typeof setTimeout>;
-  private snapshot: ReturnType<typeof presentation>;
-  private reduced =
-    typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  constructor(private state: State) {
-    this.milestones.update(selectMilestones(state), 0, this.reduced, true);
-    this.starts = mergeArrivals(state, new Map(), 0, true);
-    this.snapshot = presentation(state, this.starts, 0, this.reduced);
+  private snapshot!: ReturnType<typeof presentation>;
+  private state!: State;
+  constructor(state: State) {
+    Object.assign(this, this.derive(state, 0, true));
   }
   getSnapshot = () => this.snapshot;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
-    return () => {
-      this.listeners.delete(listener);
-    };
+    return () => this.listeners.delete(listener);
   };
-  update(state: State, reduced = this.reduced) {
-    const now = performance.now();
-    this.milestones.setLook(getActiveTheme());
-    this.milestones.update(selectMilestones(state), now, reduced, false);
-    this.starts = mergeArrivals(state, this.starts, now, false, (key) =>
-      this.milestones.accepted(key),
+  derive(state: State, now = performance.now(), history = false) {
+    const reduced =
+      typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Copy the life data (sets, maps and event records), retaining its prototype. Speculative
+    // renders can run the same acceptance/cap calculation without consuming committed milestones.
+    const milestones = Object.assign(
+      new MilestoneLife(getActiveTheme()),
+      history ? {} : structuredClone(this.milestones),
     );
-    const ids = new Set([...this.starts.keys()].map((key) => key.slice(0, key.lastIndexOf(":"))));
-    this.immediate = new Set([...this.immediate].filter((id) => ids.has(id)));
-    if (reduced) for (const id of ids) this.immediate.add(id);
-    this.state = state;
-    this.reduced = reduced;
-    const next = presentation(state, this.starts, now, reduced, this.immediate);
-    if (next.starts !== this.snapshot.starts || !sameMap(next.labels, this.snapshot.labels)) {
-      this.snapshot = next;
+    milestones.setLook(getActiveTheme());
+    milestones.update(selectMilestones(state), now, reduced, history);
+    const starts = mergeArrivals(
+      state,
+      history ? new Map() : this.snapshot.starts,
+      now,
+      history,
+      (key) => milestones.accepted(key),
+    );
+    const immediate = new Set(
+      [...starts.keys()].map(changeId).filter((id) => reduced || this.immediate.has(id)),
+    );
+    const next = presentation(state, starts, now, reduced, immediate);
+    return {
+      state,
+      milestones,
+      immediate,
+      snapshot:
+        !history && starts === this.snapshot.starts && sameMap(next.labels, this.snapshot.labels)
+          ? this.snapshot
+          : next,
+    };
+  }
+  update(state: State) {
+    const now = performance.now();
+    const previous = this.snapshot;
+    Object.assign(this, this.derive(state, now));
+    if (this.snapshot !== previous) {
       for (const listener of this.listeners) listener();
     }
     clearTimeout(this.timer);
-    const delay = mergeArrivalDelay(afterlightOf(getActiveTheme()));
-    const pending = [...this.starts.values()]
+    const delay = arrivalDelay();
+    const pending = [...this.snapshot.starts.values()]
       .map((start) => start + delay - now)
       .filter((ms) => ms > 0);
     if (pending.length)
@@ -98,30 +116,24 @@ export class ArrivalClock {
         Math.min(...pending),
       );
   }
-  motion(reduced: boolean) {
-    this.update(this.state, reduced);
-  }
   dispose() {
     clearTimeout(this.timer);
   }
 }
 export function useMergeArrival(state: State) {
   const [clock] = useState(() => new ArrivalClock(state));
-  const arrival = useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getSnapshot);
+  useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getSnapshot);
   useLayoutEffect(() => {
     clock.update(state);
-  }, [clock, state]);
-  useEffect(() => {
     const query = matchMedia("(prefers-reduced-motion: reduce)");
-    const changed = () => {
-      clock.motion(query.matches);
+    query.onchange = () => {
+      clock.update(state);
     };
-    query.addEventListener("change", changed);
     return () => {
-      query.removeEventListener("change", changed);
+      query.onchange = null;
       clock.dispose();
     };
-  }, [clock]);
-  return arrival;
+  }, [clock, state]);
+  return clock.derive(state).snapshot;
 }
 export type MergeArrival = ReturnType<typeof useMergeArrival>;

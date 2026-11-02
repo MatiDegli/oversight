@@ -948,7 +948,7 @@ keys, with a Saved line and the repository scope below. Section headings remain 
   color alone; warnings are neutral. The brake refuses new runs above 90%, as ARCHITECTURE.md,
   Usage and the spend brake, specifies.
   Steps per task is a minus/value/plus stepper. Change size and cone limits use numeric inputs
-  with visible units (lines, functions); they do not turn fixed contract limits into editable
+  with visible units (lines, functions); they do not turn current implementation limits into editable
   settings without backing support.
 - **Protected areas:** rows name the path or function, its type and a remove action; an add field
   and Add button follow the list. The row states that an edit waits for the person.

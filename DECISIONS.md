@@ -3889,3 +3889,25 @@ A long limit lets one suite hold main's lock and the Git lease (workspace/core.p
 other agents' tests and Approve wait. Stop ends the suite and releases them. Timeout text reports
 incomplete observed results and an unknown cause, suggesting a different limit on the next run.
 Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.
+
+## 2026-11-02 — A read-only plan flow before the freeze
+
+The maintainer approved a read-only view of the lead's plan as a flow, inside the plan piece of the decisions
+inbox. It shows subtask nodes with their assigned agent, edges for “waits for the merge of #n”, and each
+subtask's fixed gates: the proposal's tests, the person's Approve, and the combined tests when main moved.
+Values no event carries show as unknown. It is drawn in HTML and SVG, not Cytoscape, so it is not a second
+graph, and it adds no events, contracts or endpoints. For this view only, it supersedes “No new graph or map
+work before the freeze” in the entry “Two views of one shell, and the Tauri shell before the native ports”.
+Its sketch is approved before code, at desktop and phone widths, and it is the first thing cut if the freeze
+is at risk. The lock, lead edits, control modes and optional gates stay after the hackathon.
+Reason: it shows that the lead proposes and the person governs, with data the events already carry.
+
+## 2026-11-02 — Color is a team or a state
+
+Color is a team or a state, never alone and never amber; every color comes from a theme token. A team is the
+plan's lead, else the plan, else the agent; a lead's agents carry the lead's color and a label such as A·1.
+A dashed border still means only a pending change, now in its team's color. The six hue tokens A–F name teams;
+a seventh team reuses the hue of the team idle longest among those with no pending change.
+The frontend computes the team from the plan and agent events, with no contract change.
+Reason: one lead runs several agents, and the person reads the work by plan, so per-agent colors split one
+plan into unrelated colors.
