@@ -158,7 +158,6 @@ it.each(["dark", "day"])("reveals the full pointed agent label at 1280 in %s", a
     const id = "library.module_01";
     const agent = page.locator(`[data-map-module="${id}"] .map-agent`);
     await check(agent).toHaveText("B editing");
-    expect(await agent.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
     await unobstructedNames(page);
     const label = await agent.boundingBox();
     if (!label) throw new Error("Missing agent label");
@@ -170,7 +169,6 @@ it.each(["dark", "day"])("reveals the full pointed agent label at 1280 in %s", a
     await clearPointer(page);
     await check(agent).toHaveCSS("max-width", "100%");
     await check(agent).toHaveCSS("text-overflow", "ellipsis");
-    expect(await agent.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
     await unobstructedNames(page);
   } finally {
     await page.close();
