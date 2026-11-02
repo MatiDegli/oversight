@@ -22,11 +22,32 @@ const queueItem: import("@contracts").QueuedTask = {
 import {
   dependencyWords,
   firstWaveSize,
+  planAttemptPending,
   planFits,
   selectPlanEvidence,
   selectPlanQueue,
   selectRetainedPlans,
 } from "./planSelectors";
+
+it("ends a Queue attempt when newer plan evidence leaves it proposed and unlinked", () => {
+  const state = leadActionsBase.reduce(applyEvent, createInitialState());
+  const attempt = {
+    run: state.run,
+    planId: orderPlan.plan_id,
+    action: "queue" as const,
+    revision: 2,
+    phase: "pending" as const,
+  };
+  for (const revision of [1, 2]) {
+    expect(planAttemptPending(state, { ...orderPlan, revision }, undefined, attempt)).toBe(true);
+  }
+  const revised = { ...orderPlan, revision: 3, state: "proposed" as const, queued_task_id: null };
+  expect(planAttemptPending(state, revised, undefined, attempt)).toBe(false);
+  // Superseding a Queue attempt does not settle a pending rejection.
+  expect(planAttemptPending(state, revised, undefined, { ...attempt, action: "reject" })).toBe(
+    true,
+  );
+});
 
 it("selects independent revisions with timestamps, joins only linked queues and retains failures", () => {
   let state = leadActionsBase.reduce(applyEvent, createInitialState());

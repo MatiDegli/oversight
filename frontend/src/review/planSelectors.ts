@@ -104,7 +104,6 @@ export function planAttemptPending(
     );
   }
   if (plan.revision <= attempt.revision) return true;
-  return attempt.action === "reject"
-    ? plan.state !== "rejected"
-    : !plan.queued_task_id && plan.state === "proposed";
+  // New plan evidence supersedes Queue even without a link; retry needs another person action.
+  return attempt.action === "reject" && plan.state !== "rejected";
 }
