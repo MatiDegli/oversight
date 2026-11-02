@@ -1,4 +1,5 @@
 .replay-bar {
+  --replay-focus-glow: var(--focus-glow);
   position: relative;
   display: flex;
   align-items: center;
@@ -226,7 +227,7 @@
 .replay-bar :is(button, [role="slider"]):focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
-  box-shadow: 0 0 6px var(--focus-glow);
+  box-shadow: 0 0 6px var(--replay-focus-glow);
   filter: none;
 }
 @media (min-width: 1600px) {
