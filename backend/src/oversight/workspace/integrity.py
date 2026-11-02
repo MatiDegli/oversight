@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import stat
 import sys
 import time
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 from oversight.limits import SizeLimitError, bounded_text
 from oversight.workspace._platform import executable, is_link_like
 from oversight.workspace.errors import WorkspaceError
+from oversight.workspace.files import gitdir_matches, nt_ambiguous, nt_plain_parents, open_nt
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import ProcessResult, Spawn
 
@@ -62,6 +64,9 @@ class GitIdentity:
     def verify_root_entry(self) -> None:
         """The walk exemption requires the registered kind and exact linked-tree pointer."""
         entry = self.root / ".git"
+        if sys.platform == "win32":
+            self._verify_nt(registration=False)
+            return
         try:
             mode = entry.lstat().st_mode
             valid = (
@@ -76,6 +81,9 @@ class GitIdentity:
 
     def verify_registration(self) -> None:
         """Check the newly server-created checkout once; never discover pins from its pointer."""
+        if sys.platform == "win32":
+            self._verify_nt(registration=True)
+            return
         try:
             if self.directory == self.common:
                 valid = self.directory.is_dir()
@@ -87,6 +95,26 @@ class GitIdentity:
             if not valid or os.path.realpath(self.directory) != str(self.directory):
                 raise IntegrityError("unexpected Git registration", ".git")
         except (OSError, UnicodeError, SizeLimitError) as error:
+            raise IntegrityError("unreadable Git registration", ".git") from error
+
+    def _verify_nt(self, *, registration: bool) -> None:
+        try:
+            nt_plain_parents(self.root)
+            nt_plain_parents(self.directory)
+            nt_plain_parents(self.common)
+            if self.directory == self.common:
+                nt_plain_parents(self.root / ".git")
+                return
+            pointer = _plain_bytes(self.root / ".git", 4096, time.monotonic() + 5).decode("utf-8")
+            valid = gitdir_matches(pointer, self.directory, pointer=True)
+            if registration:
+                named = _plain_bytes(self.directory / "gitdir", 4096, time.monotonic() + 5)
+                valid = valid and gitdir_matches(named.decode("utf-8"), self.root / ".git")
+            if not valid:
+                raise IntegrityError("unexpected Git registration", ".git")
+        except IntegrityError:
+            raise
+        except (OSError, WorkspaceError, UnicodeError) as error:
             raise IntegrityError("unreadable Git registration", ".git") from error
 
     def pins(self) -> dict[str, str]:
@@ -106,6 +134,8 @@ def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: boo
     """
     root = identity.root
     try:
+        if sys.platform == "win32":
+            nt_plain_parents(root)
         if not stat.S_ISDIR(root.lstat().st_mode) or os.path.realpath(root) != str(root):
             raise IntegrityError("linked Git scan root", ".")
     except OSError as error:
@@ -115,16 +145,29 @@ def scan_nested_git(identity: GitIdentity, deadline: float, *, initializing: boo
         remaining(deadline)
         directory = pending.pop()
         try:
+            if sys.platform == "win32":
+                nt_plain_parents(directory)
             with os.scandir(directory) as entries:
                 for entry in entries:
                     remaining(deadline)
                     path = Path(entry.path)
                     relative = path.relative_to(root).as_posix()
-                    if entry.name.casefold() == ".git":
-                        if path != root / ".git" or is_link_like(entry):
+                    if entry.name.casefold() == ".git" or (
+                        sys.platform == "win32" and entry.name.upper() == ".GIT"
+                    ):
+                        if (
+                            path != root / ".git"
+                            or is_link_like(entry)
+                            or (
+                                sys.platform == "win32"
+                                and (entry.name != ".git" or is_link_like(entry, nt=True))
+                            )
+                        ):
                             raise IntegrityError("nested or linked Git entry", relative)
                         continue
-                    if sys.platform == "win32" and is_link_like(entry):
+                    if sys.platform == "win32" and nt_ambiguous(entry.name):
+                        raise IntegrityError("ambiguous Windows entry", relative)
+                    if sys.platform == "win32" and is_link_like(entry, nt=True):
                         continue
                     if entry.is_dir(follow_symlinks=False):
                         pending.append(path)
@@ -200,25 +243,37 @@ def veto_index(output: str) -> None:
             raise IntegrityError("invalid Git index query", ".", code="git_failed")
         if fields[0] == "160000":
             raise IntegrityError("Git links are forbidden", path)
-        if any(part.casefold() == ".gitmodules" for part in path.split("/")):
+        if any(
+            part.casefold() == ".gitmodules"
+            or (sys.platform == "win32" and part.upper() == ".GITMODULES")
+            for part in path.split("/")
+        ):
             raise IntegrityError("Git modules are forbidden", path)
 
 
 def veto_gitmodules(root: Path, deadline: float) -> None:
     """Also reject untracked/ignored .gitmodules, before add can stage it."""
+    if sys.platform == "win32":
+        nt_plain_parents(root)
     pending = [root]
     while pending:
         remaining(deadline)
         directory = pending.pop()
         try:
+            if sys.platform == "win32":
+                nt_plain_parents(directory)
             with os.scandir(directory) as entries:
                 for entry in entries:
                     remaining(deadline)
                     path = Path(entry.path)
-                    if entry.name.casefold() == ".gitmodules":
+                    if entry.name.casefold() == ".gitmodules" or (
+                        sys.platform == "win32" and entry.name.upper() == ".GITMODULES"
+                    ):
                         raise IntegrityError(
                             "Git modules are forbidden", str(path.relative_to(root))
                         )
+                    if sys.platform == "win32" and is_link_like(entry, nt=True):
+                        continue
                     if entry.name.casefold() != ".git" and entry.is_dir(follow_symlinks=False):
                         pending.append(path)
         except OSError as error:
@@ -230,7 +285,20 @@ def veto_gitmodules(root: Path, deadline: float) -> None:
 def _plain_bytes(path: Path, limit: int, deadline: float) -> bytes:
     """Read bounded regular metadata without following the final symlink or opening a FIFO."""
     if sys.platform == "win32":
-        raise IntegrityError("NT merge metadata I/O requires W2", path.name)
+        remaining(deadline)
+        try:
+            with open_nt(path) as handle:
+                if os.fstat(handle.fileno()).st_size > limit:
+                    raise IntegrityError("invalid merge metadata", path.name)
+                data = handle.read(limit + 1)
+            if len(data) > limit:
+                raise IntegrityError("oversized merge metadata", path.name)
+        except IntegrityError:
+            raise
+        except (OSError, WorkspaceError) as error:
+            raise IntegrityError("unreadable merge metadata", path.name) from error
+        remaining(deadline)
+        return data
     remaining(deadline)
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
@@ -365,3 +433,145 @@ async def verify_merge_abort(
     deadline = time.monotonic() + timeout_s
     async with lease_until(workspace.git_lease(), deadline):
         await offload(partial(verify_merge_metadata, tree.git_identity, pre, head, deadline))
+
+
+BYTE_OVERRIDE = b"* -text\n"
+DISABLED_GLOBAL_ATTRIBUTES = "info/disabled-global-attributes"
+
+
+def _policy_bytes(path: Path, shown: str, deadline: float) -> bytes | None:
+    # Local import: metadata_io already uses IntegrityError and remaining from this module.
+    from oversight.workspace.metadata_io import Budget, read_entry
+
+    try:
+        entry = read_entry(path, Budget(deadline))
+        if entry is not None and entry.data is None:
+            raise IntegrityError("attribute policy must be a regular file", shown)
+        return None if entry is None else entry.data
+    except (OSError, WorkspaceError) as error:
+        raise IntegrityError(
+            "unsafe attribute policy; remove links or restore a plain file", shown
+        ) from error
+
+
+def _veto_attributes(data: bytes, relative: str) -> None:
+    if b"\0" in data:
+        raise IntegrityError("NUL in attribute policy; restore a plain attributes file", relative)
+    # Git's attributes are ASCII names even when patterns contain arbitrary filename bytes.
+    # Inspect all tokens conservatively; reject custom macro definitions rather than interpret
+    # recursion, quoting or precedence differently from Git. The built-in binary macro is safe.
+    # Git ends lines only at LF and treats CR as a blank, alongside space and tab.
+    for line in data.removeprefix(b"\xef\xbb\xbf").split(b"\n"):
+        line = line.strip(b" \t\r")
+        if not line or line.startswith(b"#"):
+            continue
+        if line.startswith(b'"'):
+            raise IntegrityError(
+                "quoted attribute patterns unsupported; use an unquoted pattern", relative
+            )
+        tokens = re.split(rb"[ \t\r]+", line)
+        if tokens[0].startswith(b"[attr]"):
+            raise IntegrityError(
+                "attribute macros unsupported; expand the macro explicitly", relative
+            )
+        for token in tokens[1:]:
+            name = token.lstrip(b"-!").split(b"=", 1)[0]
+            if name in {b"filter", b"working-tree-encoding", b"ident"}:
+                raise IntegrityError(
+                    "attribute transform forbidden; remove filter, encoding or ident", relative
+                )
+
+
+def validate_source_byte_policy(
+    root: Path, common: Path, manifest: Sequence[str], deadline: float
+) -> None:
+    """Before copying/reset: validate explicit, already selected source entries, without Git.
+
+    The selector supplies the registered source common directory and complete copy manifest;
+    excluded contents are never walked. No source config, index or working file is changed.
+    """
+    from oversight.workspace.files import split_relative
+    from oversight.workspace.metadata_io import Budget
+
+    budget = Budget(deadline)
+    info = _policy_bytes(common / "info" / "attributes", ".git/info/attributes", deadline)
+    if info:
+        raise IntegrityError(
+            "source info attributes unsupported; move policy into .gitattributes",
+            ".git/info/attributes",
+        )
+    for relative in manifest:
+        budget.charge(0)
+        parts = split_relative(relative, nt=True)
+        if parts[-1].casefold() == ".gitattributes":
+            data = _policy_bytes(root.joinpath(*parts), relative, deadline)
+            if data is None:
+                raise IntegrityError(
+                    "source attribute entry disappeared; retry selection", relative
+                )
+            budget.charge(len(data))
+            _veto_attributes(data, relative)
+
+
+def install_byte_override(identity: GitIdentity, deadline: float) -> None:
+    """Init-only installation, before add; an existing entry is never repaired or replaced."""
+    from oversight.workspace.metadata_io import Entry, replace_file
+
+    path = identity.common / "info" / "attributes"
+    if _policy_bytes(path, ".git/info/attributes", deadline) is not None:
+        raise IntegrityError(
+            "unexpected runtime attributes; restart with a fresh runtime", ".git/info/attributes"
+        )
+    replace_file(path, None, Entry(0o600, BYTE_OVERRIDE), deadline, cas=False)
+    verify_byte_override(identity, deadline)
+
+
+def verify_byte_override(identity: GitIdentity, deadline: float) -> None:
+    # Pin the global layer away from suite-writable HOME, and refuse any created entry.
+    if (
+        _policy_bytes(
+            identity.common / DISABLED_GLOBAL_ATTRIBUTES,
+            f".git/{DISABLED_GLOBAL_ATTRIBUTES}",
+            deadline,
+        )
+        is not None
+    ):
+        raise IntegrityError(
+            "global attributes entry must be absent; restart with a fresh runtime",
+            f".git/{DISABLED_GLOBAL_ATTRIBUTES}",
+        )
+    if (
+        _policy_bytes(identity.common / "info" / "attributes", ".git/info/attributes", deadline)
+        != BYTE_OVERRIDE
+    ):
+        raise IntegrityError(
+            "runtime attributes changed or missing; restart with a fresh runtime",
+            ".git/info/attributes",
+        )
+
+
+def verify_tree_byte_policy(identity: GitIdentity, deadline: float) -> None:
+    """Recheck the relevant runtime tree before every Git spawn, including object-only queries."""
+    from oversight.workspace.metadata_io import Budget, directory
+
+    budget = Budget(deadline)
+    pending = [identity.root]
+    while pending:
+        parent = pending.pop()
+        with directory(parent, deadline) as fd, os.scandir(fd) as entries:
+            for entry in entries:
+                budget.charge(0)
+                if entry.name.casefold() == ".git":
+                    continue
+                path = parent / entry.name
+                if entry.name.casefold() == ".gitattributes":
+                    relative = path.relative_to(identity.root).as_posix()
+                    data = _policy_bytes(path, relative, deadline)
+                    if data is None:
+                        raise IntegrityError(
+                            "attribute entry disappeared; retry operation", relative
+                        )
+                    budget.charge(len(data))
+                    _veto_attributes(data, relative)
+                elif not is_link_like(entry, nt=True) and entry.is_dir(follow_symlinks=False):
+                    pending.append(path)

@@ -1,5 +1,6 @@
 import os
 import stat
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -154,8 +155,10 @@ def test_read_refuses_what_is_not_a_regular_file_and_closes_its_descriptor(
 ) -> None:
     if kind == "directory":
         (tree / "special").mkdir()
-    else:
+    elif sys.platform != "win32":
         os.mkfifo(tree / "special")
+    else:
+        pytest.skip("FIFO is POSIX only")
     for _ in range(5):
         with pytest.raises(InvalidPath, match="not a regular file"):
             read_file(tree, "special")
@@ -370,3 +373,195 @@ def test_only_uuid_probe_checkouts_are_deletable_under_tmp(runtime: Path) -> Non
         with pytest.raises(UnsafeDeletion):
             remove_tree(runtime, target)
         assert target.exists()
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".GIT",
+        ".g\u0131t",
+        ".git.",
+        ".git ",
+        "GIT~1",
+        "a.py:s",
+        "CON",
+        "nul.txt",
+        "COM1",
+        "C:x",
+        "a/../b",
+        "CON/x.py",
+        "NUL/a.py",
+        "COM1/b/",
+        "sub/CON",
+        "CONIN$",
+        "CONOUT$.txt",
+        "LPT1.txt",
+        "COM¹",
+    ],
+)
+def test_nt_path_refusals(path: str) -> None:
+    from oversight.workspace.files import split_relative
+
+    with pytest.raises(InvalidPath):
+        split_relative(path, nt=True)
+
+
+@pytest.mark.parametrize("path", ["missing.py", "a/b/c/missing.py"])
+def test_nt_stale_missing_file_creates_nothing(tree: Path, tmp_path: Path, path: str) -> None:
+    from oversight.workspace.files import _write_nt
+
+    with pytest.raises(StaleFile) as refused:
+        _write_nt(tree, tmp_path / "tmp", path, "new", content_hash(b"old"))
+    assert str(refused.value) == f"{path} no longer exists"
+    assert list(tree.iterdir()) == []
+    assert list((tmp_path / "tmp").iterdir()) == []
+
+
+def test_nt_binary_stale_and_cleanup(tree: Path, tmp_path: Path, monkeypatch) -> None:
+    from oversight.workspace.files import _write_nt, open_file
+
+    monkeypatch.setattr(os, "fchmod", lambda *_: pytest.fail("NT fchmod"))
+    temp = tmp_path / "tmp"
+    data = "a\r\nb\n\x1aé"
+    digest = _write_nt(tree, temp, "pkg/a.py", data, None)
+    with open_file(tree, "pkg/a.py", nt=True) as handle:
+        assert handle.read() == data.encode()
+    assert digest == content_hash((tree / "pkg/a.py").read_bytes())
+    with pytest.raises(StaleFile, match=r"^pkg/a\.py changed since it was read$"):
+        _write_nt(tree, temp, "pkg/a.py", "other", "stale")
+    assert list(temp.iterdir()) == []
+
+
+@pytest.mark.parametrize("where", ["parent", "final"])
+def test_nt_reparse_refused_before_open(tree: Path, tmp_path: Path, monkeypatch, where) -> None:
+    from types import SimpleNamespace
+
+    from oversight.workspace.files import open_file
+
+    (tree / "pkg").mkdir()
+    target = tree / "pkg/a.py"
+    target.write_text("canary")
+    real = os.lstat
+    reparse = target.parent if where == "parent" else target
+
+    def injected(path, *args, **kwargs):
+        info = real(path, *args, **kwargs)
+        if Path(path) == reparse:
+            return SimpleNamespace(st_mode=info.st_mode, st_file_attributes=0x400)
+        return info
+
+    monkeypatch.setattr(os, "lstat", injected)
+    monkeypatch.setattr(os, "open", lambda *_: pytest.fail("reparse reached open"))
+    with pytest.raises(InvalidPath):
+        open_file(tree, "pkg/a.py", nt=True)
+
+
+def test_nt_fresh_identity_and_close(tree: Path, monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from oversight.workspace.files import open_file
+
+    (tree / "a.py").write_text("canary")
+    real_open, real_stat, real_close = os.open, os.fstat, os.close
+    opened, closed = [], []
+
+    def capture(*args):
+        fd = real_open(*args)
+        opened.append(fd)
+        return fd
+
+    def mismatch(fd):
+        info = real_stat(fd)
+        return SimpleNamespace(st_mode=info.st_mode, st_dev=info.st_dev, st_ino=info.st_ino + 1)
+
+    def close(fd):
+        closed.append(fd)
+        real_close(fd)
+
+    monkeypatch.setattr(os, "open", capture)
+    monkeypatch.setattr(os, "fstat", mismatch)
+    monkeypatch.setattr(os, "close", close)
+    with pytest.raises(InvalidPath, match="identity changed"):
+        open_file(tree, "a.py", nt=True)
+    assert closed == opened and len(opened) == 1
+
+
+def test_nt_cross_drive_refusal_and_alias(tree: Path, monkeypatch) -> None:
+    import ntpath
+
+    from oversight.workspace.files import resolve_in
+
+    (tree / "a.py").touch()
+    monkeypatch.setattr(ntpath, "commonpath", lambda _: (_ for _ in ()).throw(ValueError()))
+    with pytest.raises(InvalidPath, match="leaves the workspace"):
+        resolve_in(tree, "a.py", nt=True)
+    # Emulate a DOS alias with no tilde: lookup succeeds, long-name enumeration disagrees.
+    monkeypatch.setattr(os.path, "lexists", lambda _: True)
+    with pytest.raises(InvalidPath, match="DOS alias"):
+        resolve_in(tree, "alias.py", nt=True)
+
+
+def test_nt_exclusive_temp_and_failed_replace(tree: Path, tmp_path: Path, monkeypatch) -> None:
+    from oversight.workspace import files
+
+    (tree / "a.py").write_bytes(b"old")
+    temp = tmp_path / "tmp"
+    monkeypatch.setattr(
+        files, "replace_retry", lambda *_a, **_k: (_ for _ in ()).throw(PermissionError())
+    )
+    with pytest.raises(PermissionError):
+        files._write_nt(tree, temp, "a.py", "new", content_hash(b"old"))
+    assert list(temp.iterdir()) == [] and (tree / "a.py").read_bytes() == b"old"
+
+    class Fixed:
+        hex = "fixed"
+
+    import uuid
+
+    monkeypatch.setattr(uuid, "uuid4", Fixed)
+    (temp / ".write-fixed").write_bytes(b"not owned")
+    with pytest.raises(FileExistsError):
+        files._write_nt(tree, temp, "a.py", "new", content_hash(b"old"))
+    assert (temp / ".write-fixed").read_bytes() == b"not owned"
+
+
+def test_nt_listing_cache_names_and_ambiguous_egress(tree, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace import files
+
+    for name in ("__PYCACHE__", ".PyTest_Cache", "junction"):
+        (tree / name).mkdir()
+        (tree / name / "canary.py").write_text("canary")
+    for name in ("ok.py", ".GIT", "file.", "alias~1.py"):
+        (tree / name).write_text("value")
+    from oversight.workspace._platform import is_link_like
+
+    real = is_link_like
+
+    def reparse(entry, *, nt=None):
+        return (getattr(entry, "name", None) == "junction" and nt is True) or real(entry, nt=nt)
+
+    monkeypatch.setattr(files, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(files, "is_link_like", reparse)
+    assert files.list_files(tree) == ["ok.py"]
+
+
+def test_nt_owned_cleanup_error_is_visible(tree, tmp_path, monkeypatch):
+    from oversight.workspace import files
+
+    def fail(*args, **kwargs):
+        raise PermissionError("owned cleanup failed")
+
+    monkeypatch.setattr(files, "unlink_retry", fail)
+
+    def replace_failure(*args, **kwargs):
+        raise PermissionError("replace failed")
+
+    monkeypatch.setattr(files, "replace_retry", replace_failure)
+    with pytest.raises(PermissionError, match="owned cleanup failed"):
+        files._write_nt(tree, tmp_path / "tmp", "a.py", "new", None)
+    assert not (tree / "a.py").exists()
+    leftovers = list((tmp_path / "tmp").iterdir())
+    assert len(leftovers) == 1
+    leftovers[0].unlink()

@@ -223,13 +223,20 @@ new candidate work waits for the maintainer’s order.
 - A person-approved plan before editing protected areas; item 8's deterministic veto is separate.
 - Person-drawn work zones that limit edits, with a scope-request tool, warn mode and zone growth by approval; item 11's server-computed zones and the reserved `within_zone` rule are separate.
 - A TypeScript graph adapter; another language/dependency needs a separate scope decision.
-- Outside agents reporting through hooks or MCP, after the hackathon's Meta-only product scope.
+- Outside agents reporting through hooks or MCP, low priority because the product scope is Meta-only.
 - Team integrations, evidence attached to pull requests, and exporting any run as a shareable replay.
 - A local model in slot B and named editor cursors. The Tauri shell is decided: see Next.
 - [Repository memory](#repository-memory): what Oversight remembers about a repository that
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.
 - Native candidates from the maintainer (2026-11-01), none queued.
+  - Slash commands in Chat, low priority, not built. Read-only: `/usage` (usage screen), `/status`,
+    `/context` (tokens per call; missing usage is "unknown", never zero), `/export`. Existing routes:
+    `/pause`, `/resume`, `/stop`, `/revert` (only where Revert applies cleanly). Contract decisions,
+    not proposed now: `/goal` (done-condition; status comes from tool calls), `/model` (Muse Spark vs
+    Muse Spark Open), `/compact` (little value with per-run threads lost on server restart; DECISIONS.md,
+    “Lead thread lifetime and restart”). No `/approve`: Approve has no keyboard shortcut; a typed command
+    is the same thing. Chat adds no events, contracts or endpoints today.
   - Standing instructions and lessons from reviews: see Repository memory's refinements below,
     extending the Lead agent and Next's "Text rules attached to areas of the repository".
   - Retrospective: building on item 1's facts from events, a failed run, merge conflict, rejection
@@ -582,8 +589,10 @@ change/role totals and rounds in archived GET /changes/{id} (`bf36052`,
 too (`bf36052`, `0e5305a`). The frontend still keeps agent totals, not the aggregate usage view
 (`frontend/src/state/applyAgentEvent.ts:applyAgentEvent`). Agent-hours (`95e40e5`,
 `events/activity_fold.py:fold_activity`, `tools/run_hours.py`) and dated list-price accounting
-(`56b5f18`, `events/list_prices.py:price_usage`, `tools/run_cost.py`) are built. Team/period grouping
-and aggregate UI remain. E6 emits failed attempts (`06c34a5`); retry-card rendering is built
+(`56b5f18`, `events/list_prices.py:price_usage`, `tools/run_cost.py`) are built. Offline hour/day
+reports exist (`events/usage_periods.py`, `tools/run_periods.py`); live period grouping still needs a
+contract change, and team grouping and aggregate UI remain. E6 emits failed attempts (`06c34a5`);
+retry-card rendering is built
 (`26d59f1`). Live/replay derivation needs no addition;
 optional archived totals/rounds were reserved in `649ff0d`. Unknown usage/unpriced Baseten work stays
 unknown, never free. The cumulative product Meta ledger is separate from the bench ledger.
@@ -612,7 +621,13 @@ A partition heuristic does not prove independence; speed claims wait for the spl
 
 ### Lead agent
 
-The lead runtime landed in `6818b3b` (`runtime_leads.py:LeadService`, live POST /leads and
+L2 adds the run-local lead thread: idle between turns, masked replies, per-turn cuts and
+bounded exchange history, committed-prefix status, and live message admission with serialized
+Stop/shutdown ownership. Three plans remain the thread-wide limit; turn 50 replies then halts.
+L3 remains the Chat composer/navigation, freshness and withheld/cut UI, plan links, graph/focus,
+fixture exclusion, approval keyboard protection, decision-count cost fixture and Playwright work.
+
+The original lead runtime landed in `6818b3b` (`runtime_leads.py:LeadService`, live POST /leads and
 POST /leads/{id}/stop). It reads repository context and requests plans through
 `PlanService.create_and_propose`; it does not start agents, approve plans, review or merge.
 The person starts a proposed plan through plan routes; the server owns dispatch and zones.
@@ -872,6 +887,10 @@ in `9ad1ecf`;
 binds the arm configuration hash.
 Keep charges, unknowns and reservations in one ledger keyed by task, profile, arm and repetition;
 never reset it or change output directories to manufacture another attempt.
+
+Semantic retrieval (RAG): experimental, outside the hackathon, evals only; not queued or built. No product agents
+or daily coordination: grep suffices at this size; the graph is the structured index; stale retrieval yields to
+DECISIONS.md. An index needs a dependency allowed by the license rule and a Meta-only model.
 
 Declare criteria before paid execution. Combined paid bench work has a US$20 ceiling within the
 US$150 budget; agent B's Baseten cost stays unknown until its price per million tokens is set in

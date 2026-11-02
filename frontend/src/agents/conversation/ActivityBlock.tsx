@@ -35,6 +35,25 @@ function FoldToggle({
   );
 }
 
+function ActivityHeader({
+  round,
+  slot,
+}: {
+  round: Extract<ConversationEntry, { kind: "activity" | "round" }>["round"];
+  slot: Slot;
+}) {
+  return (
+    <div className="mb-[9px] flex min-h-6 items-center gap-[10px] text-[14px] text-muted">
+      <LoaderCircle
+        aria-hidden="true"
+        className={`size-[14px] ${agentLook[slot].textClass} ${round.paused ? "" : "animate-spin motion-reduce:animate-none"}`}
+      />
+      <span>{round.paused ? "Paused" : "Working"}</span>
+      <span className="font-mono text-[13px]">{elapsed(round.elapsedMs)}</span>
+    </div>
+  );
+}
+
 export function ActivityBlock({
   entry,
   slot,
@@ -56,16 +75,7 @@ export function ActivityBlock({
 
   return (
     <div className="my-[9px] mr-[22px] ml-[56px]">
-      {!ended && showHeader && (
-        <div className="mb-[9px] flex min-h-6 items-center gap-[10px] text-[14px] text-muted">
-          <LoaderCircle
-            aria-hidden="true"
-            className={`size-[14px] ${agentLook[slot].textClass} ${round.paused ? "" : "animate-spin motion-reduce:animate-none"}`}
-          />
-          <span>{round.paused ? "Paused" : "Working"}</span>
-          <span className="font-mono text-[13px]">{elapsed(round.elapsedMs)}</span>
-        </div>
-      )}
+      {!ended && showHeader && <ActivityHeader round={round} slot={slot} />}
       <div
         className={
           ended && !open

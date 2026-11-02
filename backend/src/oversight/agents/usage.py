@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import os
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -16,6 +17,7 @@ from typing import Literal, cast
 from oversight.agents.client import Usage
 from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_text
 from oversight.telemetry import span
+from oversight.workspace import replace_retry, unlink_retry
 from oversight_contracts.events import UsageTick
 
 _log = logging.getLogger(__name__)
@@ -227,10 +229,16 @@ class LedgerFile:
                 handle.write(text)
                 handle.flush()
                 os.fsync(handle.fileno())
-            os.replace(temp, self.path)
+            if sys.platform == "win32":
+                replace_retry(Path(temp), self.path, nt=True)
+            else:
+                os.replace(temp, self.path)
         except BaseException:
-            with contextlib.suppress(OSError):
-                os.unlink(temp)
+            if sys.platform == "win32":
+                unlink_retry(Path(temp), missing_ok=True, nt=True)
+            else:
+                with contextlib.suppress(OSError):
+                    os.unlink(temp)
             raise
 
     async def load(self) -> LedgerState:

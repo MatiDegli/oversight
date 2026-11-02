@@ -36,10 +36,35 @@
   border-bottom: 1px solid var(--divider);
 }
 .inbox-count {
+  display: none;
+}
+.inbox-heading h2 {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.inbox-row:has(.plan-content) {
+  padding: 12px 22px;
+  position: relative;
+}
+.inbox-row:has(.plan-content) > h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.inbox-row:has(.plan-content) time {
   font-family: var(--code-font);
-  font-size: 64px;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
+}
+.plan-content {
+  margin-top: 8px;
+  color: var(--text);
+}
+.plan-group > h3 {
+  padding: 12px 22px 0;
+  color: var(--muted);
+}
+.plan-group[aria-label="Queued, waiting for slots"] .inbox-row > h3 {
+  padding-right: 160px;
+  overflow-wrap: anywhere;
 }
 .inbox-entries,
 .decision-card-body {

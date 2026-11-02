@@ -107,9 +107,13 @@ describe("live transport", () => {
       decisionEvents: [
         ...before.decisionEvents,
         ...unwired.flatMap((example, index) =>
-          ["change.assessed", "plan.updated", "revert.resolved", "lead.status"].includes(
-            example.type,
-          )
+          [
+            "change.assessed",
+            "plan.updated",
+            "revert.resolved",
+            "queue.updated",
+            "lead.status",
+          ].includes(example.type)
             ? [{ ...example, seq: before.lastSeq + index + 1 }]
             : [],
         ),
@@ -156,6 +160,7 @@ describe("live transport", () => {
             "plan.updated",
             "revert.resolved",
             "lead.status",
+            "queue.updated",
             "change.facts_recorded",
           ].includes(event.type),
         ),

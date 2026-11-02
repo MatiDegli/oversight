@@ -22,7 +22,7 @@ beforeAll(async () => {
   });
   html = await server.transformIndexHtml(
     "/",
-    '<!doctype html><html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import { conversationTest } from "/src/agents/conversation/conversation.browser.fixture.tsx"; window.conversationTest = conversationTest;</script></body></html>',
+    '<!doctype html><html data-theme="dark"><body><script type="module">import "/src/theme/index.css"; import "/src/app/shell/chatShell.css"; import { conversationTest } from "/src/agents/conversation/conversation.browser.fixture.tsx"; window.conversationTest = conversationTest;</script></body></html>',
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
@@ -55,6 +55,28 @@ async function pageFor(
 const box = (page: Page) => page.getByRole("textbox", { name: "Message Agent A" });
 const send = (page: Page) => page.getByRole("button", { name: "Send", exact: true });
 const timeline = (page: Page) => page.getByRole("list", { name: "Conversation timeline" });
+
+it.each([
+  ["Oversight", "dark"],
+  ["Oversight", "day"],
+  ["Chat", "dark"],
+  ["Chat", "day"],
+])("keeps the agent heading at 16/600 in %s (%s)", async (view, theme) => {
+  const page = await pageFor("working", 880, theme);
+  try {
+    await page.evaluate(
+      (chat) => document.body.classList.toggle("chat-shell", chat),
+      view === "Chat",
+    );
+    const heading = page.getByRole("heading", { name: "Agent A", exact: true });
+    await check(page.getByRole("heading")).toHaveCount(1);
+    await check(heading).toHaveCSS("font-size", "16px");
+    await check(heading).toHaveCSS("font-weight", "600");
+    await check(heading).toHaveCSS("line-height", "20.8px");
+  } finally {
+    await page.close();
+  }
+});
 
 it.each([
   "working",
@@ -245,7 +267,9 @@ it.each([608, 304])(
     const page = await pageFor("revising", width);
     try {
       await page.getByRole("button", { name: /^Round 1 ·/ }).click();
-      await page.getByRole("heading").evaluate((node) => {
+      await check(page.getByRole("heading")).toHaveCount(1);
+      await check(page.getByRole("heading")).toHaveText("Agent A");
+      await page.getByRole("heading", { name: "Agent A", exact: true }).evaluate((node) => {
         node.textContent = node.textContent.repeat(4);
       });
       await page.getByText(/^Cross-review ·/).evaluate((node) => {

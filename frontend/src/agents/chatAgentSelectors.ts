@@ -2,7 +2,7 @@ import type { AgentStatus, Plan, Slot } from "@contracts";
 import type { State } from "../state";
 import { costText, matchesNeedsYou } from "../state";
 import { selectAgentCard } from "./selectors";
-export { slotUsage as chatAgentCount } from "./taskBox";
+export { slotUsage as chatAgentCount } from "./taskBoxModel";
 
 const hues: Slot[] = ["A", "B", "C", "D", "E", "F"];
 const labels: Record<AgentStatus["state"], string> = {

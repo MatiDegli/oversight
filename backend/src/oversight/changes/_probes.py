@@ -2,6 +2,7 @@
 
 import ast
 import asyncio
+import sys
 from dataclasses import replace
 
 from oversight.changes._beforeafter import FactKind, RunProblem, TestRun, affected_tests
@@ -153,6 +154,11 @@ async def probe_added_tests(
     outside the process budget, as for ordinary suite evidence. The caller holds
     main/agent locks; interruption keeps partial evidence and runs cleanup.
     """
+    if sys.platform == "win32":
+        return (), (
+            "base_probe unavailable: native Windows isolation is unavailable",
+            "head_probe unavailable: native Windows isolation is unavailable",
+        )
     ids, diagnostics = await asyncio.to_thread(added_cases, rec, revision)
     if not ids:
         return (), diagnostics

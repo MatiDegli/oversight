@@ -55,3 +55,5 @@ One line per day, in Argentina time (ART).
   startup and all guards; forwarded committed runtime review receipts; added fake-only HTTP/SSE
   merge, person Revert and Needs you evidence, a separate validated rules recording, replay
   coverage and three consecutive clean-start rules scenarios with real host isolation C.
+- **2026-11-02:** Renamed frontend helper modules for Windows import resolution and added a
+  repository check for case-insensitive sibling and module-name collisions.

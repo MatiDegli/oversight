@@ -4,13 +4,14 @@ import ast
 import hashlib
 import io
 import os
+import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from oversight.graph._extract import module_name
-from oversight.graph._workspace import python_files
+from oversight.graph._workspace import open_source, python_files, python_paths_nt
 from oversight.limits import SizeLimitError, bounded_read
 
 type FileStatus = Literal["parsed", "size", "syntax", "encoding", "unimportable"]
@@ -24,13 +25,17 @@ class FileCompleteness:
     detail: str = ""
 
 
-def graph_completeness(root: Path) -> tuple[FileCompleteness, ...]:
+def graph_completeness(root: Path, *, nt: bool | None = None) -> tuple[FileCompleteness, ...]:
     """Audit current bytes using the scan's discovery and parsing rules.
 
     Call after scanning an unchanged root. This rereads the files, so a cached last-good
     parse cannot hide a gap. Unimportable paths are separate evidence, not a policy decision.
     I/O errors propagate: unreadable evidence must never attest completeness.
     """
+    if sys.platform == "win32" if nt is None else nt:
+        paths = set(python_files(root, nt=True))
+        paths.update(path for path in python_paths_nt(root) if module_name(path) is None)
+        return tuple(_file_status(root, path, nt=True) for path in sorted(paths))
     paths = set(python_files(root))
     # python_files drops unimportable paths before reading them. Retain those separately,
     # applying the very same traversal exclusions (including hidden file names).
@@ -56,9 +61,9 @@ def graph_completeness(root: Path) -> tuple[FileCompleteness, ...]:
     return tuple(_file_status(root, path) for path in sorted(paths))
 
 
-def _file_status(root: Path, path: str) -> FileCompleteness:
+def _file_status(root: Path, path: str, *, nt: bool | None = None) -> FileCompleteness:
     digest = hashlib.sha256()
-    with (root / path).open("rb") as handle:
+    with open_source(root, path, nt=nt) as handle:
         while chunk := handle.read(65536):
             digest.update(chunk)
         if module_name(path) is None:

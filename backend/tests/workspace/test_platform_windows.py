@@ -293,3 +293,376 @@ async def test_reduced_env_restart(tmp_path, template, monkeypatch):
             (workspace.main.root / "readonly").chmod(0o400)
         finally:
             workspace.release_runtime()
+
+
+async def test_lstat_fstat_identity(tmp_path):
+    import os
+
+    from oversight.workspace.files import open_file
+
+    target = tmp_path / "identity.py"
+    target.write_bytes(b"x\r\n\x1a")
+    with open_file(tmp_path, target.name) as handle:
+        fresh, opened = target.lstat(), os.fstat(handle.fileno())
+        assert fresh.st_ino != 0 and (fresh.st_dev, fresh.st_ino) == (opened.st_dev, opened.st_ino)
+        assert handle.read() == b"x\r\n\x1a"
+
+
+async def test_binary_write_hash(tmp_path):
+    from oversight.workspace.files import content_hash, read_file, write_file
+
+    temp = tmp_path / "temp"
+    temp.mkdir()
+    digest = write_file(tmp_path, temp, "a.py", "x\n\r\n\x1aé", None)
+    assert (tmp_path / "a.py").read_bytes() == "x\n\r\n\x1aé".encode()
+    assert (
+        read_file(tmp_path, "a.py").hash == digest == content_hash((tmp_path / "a.py").read_bytes())
+    )
+    assert list(temp.iterdir()) == []
+
+
+async def test_gitdir_roundtrip(workspace):
+    from oversight.workspace.files import registered_worktree
+
+    tree = await workspace.create_worktree("agent-1")
+    pointer = (tree.root / ".git").read_bytes()
+    assert pointer.startswith(b"gitdir: ") and pointer.endswith(b"\n")
+    tree.git_identity.verify_registration()
+    assert registered_worktree(workspace.runtime_root, workspace.main.root, "agent-1") == tree.root
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".GIT",
+        ".g\u0131t",
+        ".git.",
+        ".git ",
+        "GIT~1",
+        "a.py:s",
+        "CON",
+        "nul.txt",
+        "COM1",
+        "C:x",
+        "a/../b",
+        "CON/x.py",
+        "NUL/a.py",
+        "COM1/b/",
+        "sub/CON",
+        "CONIN$",
+        "CONOUT$.txt",
+        "LPT1.txt",
+        "COM¹",
+    ],
+)
+async def test_nt_path_refusals(tmp_path, path):
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import open_file
+
+    with pytest.raises(InvalidPath):
+        open_file(tmp_path, path)
+
+
+async def test_ads_and_short_names(tmp_path):
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import open_file
+    from oversight.workspace.secret_paths import is_secret_path
+
+    target = tmp_path / "privatecredential.pem"
+    target.write_bytes(b"private")
+    stream = Path(str(target) + ":secret")
+    await asyncio.to_thread(stream.write_bytes, b"ADS canary")
+    assert is_secret_path(target.name + ":secret")
+    with pytest.raises(InvalidPath):
+        open_file(tmp_path, target.name + ":secret")
+
+
+async def test_short_names_support(tmp_path):
+    if sys.platform != "win32":
+        pytest.skip("native Windows proof")
+    import ctypes
+
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import open_file
+
+    target = tmp_path / "longprivatecredential.txt"
+    target.write_bytes(b"canary")
+    result = ctypes.create_unicode_buffer(32768)
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    api.GetShortPathNameW.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint32]
+    assert api.GetShortPathNameW(str(target), result, len(result)), ctypes.get_last_error()
+    alias = Path(result.value).name
+    if alias.casefold() == target.name.casefold():
+        pytest.skip("8.3 names disabled on native test volume")
+    with pytest.raises(InvalidPath):
+        open_file(tmp_path, alias)
+
+
+async def test_junction_site_matrix(tmp_path, monkeypatch):
+    import time
+
+    from oversight.graph import WorkspaceGraph
+    from oversight.graph._completeness import graph_completeness
+    from oversight.workspace import InvalidPath
+    from oversight.workspace.files import (
+        copy_template,
+        list_files,
+        open_file,
+        resolve_in,
+        write_file,
+    )
+    from oversight.workspace.integrity import (
+        GitIdentity,
+        _plain_bytes,
+        scan_nested_git,
+        veto_gitmodules,
+    )
+    from oversight.workspace.metadata_io import Budget, read_entry
+    from oversight.workspace.snapshot import _anchor
+    from oversight.workspace.suite_files import file_stamp
+    from oversight.workspace.tree import walk_tree
+
+    root, outside, temp = tmp_path / "root", tmp_path / "outside", tmp_path / "tmp"
+    for directory in (root, outside, temp):
+        directory.mkdir()
+    (root / ".git").mkdir()
+    (outside / "canary.py").write_bytes(b"secret = True\n")
+    (outside / ".gitmodules").touch()
+    junction = root / "out"
+    result = await run_process(
+        ["cmd.exe", "/c", "mklink", "/J", str(junction), str(outside)], cwd=tmp_path, timeout_s=5
+    )
+    assert result.returncode == 0, result.stderr
+    before = (outside / "canary.py").read_bytes()
+    _forbid_junction_open(monkeypatch, junction)
+    try:
+        for operation in (
+            lambda: resolve_in(root, "out/canary.py"),
+            lambda: open_file(root, "out/canary.py"),
+            lambda: write_file(root, temp, "out/new.py", "bad", None),
+            lambda: copy_template(junction, tmp_path / "copy"),
+        ):
+            with pytest.raises(InvalidPath):
+                operation()
+        assert list_files(root) == []
+        identity = GitIdentity(root, root / ".git", root / ".git")
+        scan_nested_git(identity, time.monotonic() + 5)
+        veto_gitmodules(root, time.monotonic() + 5)
+        assert WorkspaceGraph(root).scan("main").nodes == []
+        assert graph_completeness(root) == ()
+        deadline = time.monotonic() + 5
+        from oversight.workspace import WorkspaceError
+
+        for operation in (
+            lambda: _plain_bytes(junction / "canary.py", 4096, deadline),
+            lambda: _anchor(junction, deadline),
+            lambda: read_entry(junction / "canary.py", Budget(deadline)),
+        ):
+            with pytest.raises((OSError, WorkspaceError)):
+                operation()
+        _, files, _ = walk_tree(root, deadline)
+        assert not any(f.path.startswith("out/") for f in files)
+        try:
+            stamp = file_stamp(root)
+        except (OSError, WorkspaceError):
+            pass
+        else:
+            assert not any(p.startswith("out/") for p in stamp)
+    finally:
+        junction.rmdir()
+    assert (outside / "canary.py").read_bytes() == before
+    await _junction_root_and_probe_registration(tmp_path / "roots")
+
+
+async def test_replace_sharing_retry(tmp_path, monkeypatch):
+    if sys.platform != "win32":
+        pytest.skip("native Windows proof")
+    import ctypes
+    import os
+    import threading
+
+    from oversight.workspace import replace_retry
+
+    source, destination = tmp_path / "source", tmp_path / "destination"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    api = ctypes.WinDLL("kernel32", use_last_error=True)
+    api.CreateFileW.argtypes = [
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    ]
+    api.CreateFileW.restype = ctypes.c_void_p
+    api.CloseHandle.argtypes = [ctypes.c_void_p]
+    handle = api.CreateFileW(str(destination), 0x80000000, 0, None, 3, 0x80, None)
+    assert handle not in (None, ctypes.c_void_p(-1).value), ctypes.get_last_error()
+    blocked = threading.Event()
+    original = os.replace
+
+    def observed(*args):
+        try:
+            return original(*args)
+        except OSError as error:
+            assert getattr(error, "winerror", None) in {5, 32, 33}
+            blocked.set()
+            raise
+
+    monkeypatch.setattr(os, "replace", observed)
+    # No sharing is allowed. Replacement cannot succeed until this handle is released.
+    task = asyncio.create_task(asyncio.to_thread(replace_retry, source, destination))
+    try:
+        assert await asyncio.to_thread(blocked.wait, 5)
+        assert not task.done() and destination.exists()
+    finally:
+        assert api.CloseHandle(handle)
+    await task
+    assert destination.read_bytes() == b"new" and not source.exists()
+
+
+async def test_readonly_and_link_cleanup(tmp_path):
+    from oversight.workspace.files import remove_tree
+
+    runtime, outside = tmp_path / ".runtime", tmp_path / "outside"
+    target = runtime / "workspace"
+    target.mkdir(parents=True)
+    outside.mkdir()
+    sentinel = outside / "canary.py"
+    sentinel.write_bytes(b"outside")
+    readonly = target / "readonly"
+    readonly.write_bytes(b"disposable")
+    readonly.chmod(0o400)
+    result = await run_process(
+        ["cmd.exe", "/c", "mklink", "/J", str(target / "out"), str(outside)],
+        cwd=tmp_path,
+        timeout_s=5,
+    )
+    assert result.returncode == 0
+    remove_tree(runtime, target)
+    assert not target.exists() and sentinel.read_bytes() == b"outside"
+
+
+async def test_native_secret_tools(workspace, monkeypatch):
+    import json
+    from unittest.mock import AsyncMock
+
+    from oversight.agents.tools import Toolbox
+
+    tree = await workspace.create_worktree("agent-1")
+    tools = Toolbox(workspace, tree, test_timeout_s=10)
+    read, ranged, write = AsyncMock(), AsyncMock(), AsyncMock()
+    monkeypatch.setattr(tree, "read_text", read)
+    monkeypatch.setattr(tree, "read_range", ranged)
+    monkeypatch.setattr(tree, "write_text", write)
+    for path in (".ENV", ".env::$DATA", ".env.", ".env /x", ".ENV/private.py", "\u0131d_rsa"):
+        for args in (dict(path=path), dict(path=path, start_line=1, end_line=1)):
+            assert not (await tools.call("read_file", json.dumps(args))).ok
+        assert not (
+            await tools.call("edit_file", json.dumps(dict(path=path, old_text="x", new_text="y")))
+        ).ok
+    for spy in (read, ranged, write):
+        spy.assert_not_awaited()
+
+
+async def test_added_probe_unavailable(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from live_helpers import is_type, live_server, live_settings, start
+
+    from oversight.changes import _probes
+    from oversight.settings import REPO_ROOT
+
+    checkout, run = AsyncMock(), AsyncMock()
+    monkeypatch.setattr(_probes, "base_probe_checkout", checkout)
+    monkeypatch.setattr(_probes, "_run", run)
+    settings = live_settings(
+        tmp_path,
+        cross_review=False,
+        fake_script=REPO_ROOT / "fixtures/fake-model/demo-l2-coupon.json",
+    )
+    async with asyncio.timeout(90), live_server(settings) as server:
+        calls = []
+        original = server.live.workspace.git
+
+        async def capture(tree, *args, **kwargs):
+            calls.append(args)
+            return await original(tree, *args, **kwargs)
+
+        monkeypatch.setattr(server.live.workspace, "git", capture)
+        assert (await start(server)).status_code == 202
+        await server.until(is_type("agent.status", state="ready_for_review"))
+        facts = [e.payload for e in server.events() if e.type == "change.facts_recorded"][-1]
+        assert not facts.added_tests
+        assert any("base_probe unavailable: native Windows" in p for p in facts.problems)
+        assert not any(
+            e.payload.phase.endswith("_probe")
+            for e in server.events()
+            if e.type == "tests.executed"
+        )
+        assert not any(a[0] in {"restore", "checkout"} or "--detach" in a for a in calls)
+        assert not list(settings.runtime_dir.glob("tmp/base-probe-*"))
+    checkout.assert_not_called()
+    run.assert_not_called()
+
+
+async def _junction_root_and_probe_registration(tmp_path):
+    tmp_path.mkdir()
+    import time
+
+    from oversight.workspace import WorkspaceError
+    from oversight.workspace.files import ensure_plain_dir, registered_worktree, verify_tree_root
+    from oversight.workspace.integrity import GitIdentity, _plain_bytes
+    from oversight.workspace.probes import _ProbeTree
+
+    runtime, outside = tmp_path / ".runtime", tmp_path / "outside"
+    outside.mkdir()
+    (outside / "canary").write_bytes(b"outside")
+    for parent, name in (
+        (runtime, "workspace"),
+        (runtime / "worktrees", "agent-1"),
+        (runtime / "tmp", "base-probe-" + "a" * 32),
+    ):
+        parent.mkdir(parents=True, exist_ok=True)
+        link = parent / name
+        result = await run_process(
+            ["cmd.exe", "/c", "mklink", "/J", str(link), str(outside)], cwd=tmp_path, timeout_s=5
+        )
+        assert result.returncode == 0
+        try:
+            with pytest.raises(WorkspaceError):
+                _plain_bytes(link / "canary", 4096, time.monotonic() + 5)
+            with pytest.raises(WorkspaceError):
+                GitIdentity(link, link / ".git", link / ".git").verify_registration()
+            if name == "workspace":
+                with pytest.raises(WorkspaceError):
+                    verify_tree_root(runtime, link)
+                with pytest.raises(WorkspaceError):
+                    ensure_plain_dir(runtime, link)
+            elif name == "agent-1":
+                with pytest.raises(WorkspaceError):
+                    registered_worktree(runtime, runtime / "workspace", name)
+            else:
+                workspace = Workspace(runtime, outside, pytest_pin="9.1.1")
+                with pytest.raises(WorkspaceError):
+                    _ProbeTree(workspace, link, "agent-1", "", "base").verify_root()
+        finally:
+            link.rmdir()
+    assert (outside / "canary").read_bytes() == b"outside"
+
+
+def _forbid_junction_open(monkeypatch, junction):
+    import ntpath
+    import os
+
+    original = os.open
+    refused = ntpath.normcase(str(junction))
+
+    def guarded(path, *args, **kwargs):
+        name = ntpath.normcase(os.fsdecode(path))
+        assert name != refused and not name.startswith(refused + "\\"), "junction opened"
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", guarded)

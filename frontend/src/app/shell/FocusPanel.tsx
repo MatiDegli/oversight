@@ -16,6 +16,7 @@ import { loadReviewPanel, loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
 import { UsageMount } from "../usage/UsageMount";
 import { LivePanel } from "./LivePanel";
+import { ChatMergeChip, ChatMergeReceipt, isRulesMerge, resolvedReviewAction } from "./ChatMerge";
 import { focusRing } from "./shared";
 
 const SettingsPanel = lazy(() =>
@@ -216,7 +217,11 @@ function ConversationFocus({
   onStopAgent,
   onOpenChange,
   canOpenChange,
-}: FrameProps & { agentId: string }) {
+  chat,
+  onOpenSettings,
+  onTabAction,
+  view,
+}: FrameProps & { agentId: string; chat?: boolean }) {
   const conversation = selectConversation(state, agentId, state.messages[agentId] ?? []);
   if (!conversation)
     return <p className="px-3 py-2 text-muted">This agent is not in the current run.</p>;
@@ -224,6 +229,30 @@ function ConversationFocus({
     <LazyPanel key={agentId} frame={<ConversationFrame header={conversation.header} />}>
       <ConversationPanel
         conversation={conversation}
+        renderResolution={
+          chat
+            ? (entry) => {
+                if (!isRulesMerge(entry.resolution)) return null;
+                const action = resolvedReviewAction(state, view, entry);
+                return (
+                  <ChatMergeReceipt
+                    resolution={entry.resolution}
+                    ts={entry.ts}
+                    onReview={
+                      action && onTabAction
+                        ? () => {
+                            onTabAction(action);
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              }
+            : undefined
+        }
+        actionAccessory={
+          chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
+        }
         onSend={onMessageAgent ? (text) => onMessageAgent(agentId, text) : undefined}
         onPause={onPauseAgent ? () => onPauseAgent(agentId) : undefined}
         onResume={onResumeAgent ? () => onResumeAgent(agentId) : undefined}

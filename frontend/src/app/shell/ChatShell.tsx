@@ -3,6 +3,7 @@ import type { State } from "../../state";
 import { ChatAgents } from "./ChatAgents";
 import { slotUsage } from "../../agents";
 import type { ReactNode } from "react";
+import { WhereTheyWork } from "./WhereTheyWork";
 
 export interface ChatAgentSelection {
   selectedAgentId?: string;
@@ -72,7 +73,11 @@ export function ChatShell({
       {active && <ChatAgentsFrame state={state} {...selection} />}
       {children}
       {!active && agents}
-      {active && <ChatWorkFrame />}
+      {active && (
+        <ChatWorkFrame>
+          <WhereTheyWork />
+        </ChatWorkFrame>
+      )}
     </div>
   );
 }

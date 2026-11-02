@@ -56,10 +56,14 @@ from oversight.workspace.files import (
     write_file,
 )
 from oversight.workspace.integrity import (
+    DISABLED_GLOBAL_ATTRIBUTES,
     GitIdentity,
     guarded_git,
+    install_byte_override,
     lease_until,
     remaining,
+    verify_byte_override,
+    verify_tree_byte_policy,
     veto_gitmodules,
     veto_index,
 )
@@ -162,6 +166,11 @@ class Tree:
         self.git_identity = GitIdentity(root, directory, common)
         workspace.git_identities[root] = self.git_identity
 
+    @property
+    def nt_source_bytes(self) -> bool:
+        """Internal own-source policy; selection stays closed until the later startup front."""
+        return self._workspace.nt_source_bytes
+
     def verify_root(self) -> None:
         """`InvalidPath` unless the root is this tree's own plain directory, with no link to it."""
         verify_tree_root(self._workspace.runtime_root, self.root)
@@ -234,6 +243,7 @@ class Workspace:
         demo_python: Path | None = None,
         pytest_targets: tuple[str, ...] = (),
         pytest_options: tuple[str, ...] = (),
+        _nt_source_bytes: bool = False,
     ) -> None:
         validate_runtime_root(runtime_root)
         if sys.platform != "win32" and not shutil.rmtree.avoids_symlink_attacks:
@@ -253,6 +263,11 @@ class Workspace:
             if sys.platform == "win32"
             else GIT_FLAGS
         )
+        if _nt_source_bytes:
+            global_attributes = runtime_root / "workspace/.git" / DISABLED_GLOBAL_ATTRIBUTES
+            self.git_flags += ("-c", f"core.attributesFile={global_attributes}")
+        self.nt_source_bytes = _nt_source_bytes
+        self._byte_bootstrap = False
         self._root = runtime_root
         self._template = template
         self._pytest_pin = pytest_pin
@@ -321,6 +336,26 @@ class Workspace:
 
     def redact(self, text: str) -> str:
         """Remove the runtime directory's location from text that may reach an event."""
+        if sys.platform == "win32":
+            slash = str(self._root).replace("\\", "/")
+            back = slash.replace("/", "\\")
+            variants = (
+                ("file:///" + slash.lstrip("/"), "/"),
+                (back.replace("\\", "\\\\"), "\\\\"),
+                (back, "\\"),
+                (slash, "/"),
+            )
+            for prefix, separator in variants:
+                root, sep = re.escape(prefix), re.escape(separator)
+                text = re.sub(
+                    rf"{root}{sep}(?:workspace|worktrees{sep}agent-[1-9][0-9]*)(?:{sep}|(?![\w-]))",
+                    "",
+                    text,
+                    flags=re.IGNORECASE,
+                )
+                text = re.sub(root + sep, ".runtime/", text, flags=re.IGNORECASE)
+                text = re.sub(root, ".runtime", text, flags=re.IGNORECASE)
+            return text
         root = re.escape(str(self._root))
         text = re.sub(rf"{root}/(?:workspace|worktrees/agent-[1-9][0-9]*)(?:/|(?![\w-]))", "", text)
         return text.replace(f"{self._root}/", ".runtime/").replace(str(self._root), ".runtime")
@@ -343,6 +378,8 @@ class Workspace:
             "GIT_COMMITTER_NAME": who.name,
             "GIT_COMMITTER_EMAIL": who.email,
         }
+        if self.nt_source_bytes:
+            env["GIT_ATTR_NOSYSTEM"] = "1"
         if date:
             env |= {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
         return env | tree.git_identity.pins()
@@ -376,6 +413,8 @@ class Workspace:
             # A caller may have queued before a suite latched uncertainty under the lease.
             self.integrity.before_git()
             tree.verify_root()
+            if self.nt_source_bytes:
+                verify_tree_byte_policy(scan_identity, time.monotonic() + timeout_s)
 
         return await guarded_git(
             tree.git_identity,
@@ -397,6 +436,10 @@ class Workspace:
                 if self._lock_fd is None:
                     raise WorkspaceBusy("Git requires the runtime lock sentinel")
                 await offload(partial(verify_sentinel, self._root / "server.lock", self._lock_fd))
+            if self.nt_source_bytes and not self._byte_bootstrap:
+                await offload(
+                    partial(verify_byte_override, self._main.git_identity, time.monotonic() + 30)
+                )
             yield
 
     async def veto_index(self, tree: Tree, *, timeout_s: float = 30) -> None:
@@ -492,8 +535,18 @@ class Workspace:
                     await offload(partial(remove_tree, self._root, self._root / name))
                 await offload(self._populate)
                 git = self.git_ok
-                await git(self._main, "init", "-q", "-b", "main", "--template=")
+                self._byte_bootstrap = self.nt_source_bytes
+                try:
+                    await git(self._main, "init", "-q", "-b", "main", "--template=")
+                finally:
+                    self._byte_bootstrap = False
                 await offload(self._write_excludes)
+                if self.nt_source_bytes:
+                    await offload(
+                        partial(
+                            install_byte_override, self._main.git_identity, time.monotonic() + 30
+                        )
+                    )
                 await git(self._main, "add", "-A")
                 await git(self._main, "commit", "-q", "-m", INITIAL_MESSAGE, date=INITIAL_DATE)
                 commit = (await git(self._main, "rev-parse", "HEAD")).strip()
