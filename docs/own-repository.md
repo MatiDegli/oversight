@@ -32,7 +32,7 @@ The demo path (`demo-repo/`, `make demo`, `make demo-check`) does not change.
 
 Set `OVERSIGHT_TEST_TIMEOUT_S` before starting an own-repository run (seconds, default 60;
 no policy maximum, with a nine-significant-digit parsing bound). Demo and Boltons keep 60 seconds;
-own repositories become selectable in W4c2. The agent's time limit per round is
+public own-source selection remains closed pending integration and enablement. The agent's time limit per round is
 `max(600, 3*T + 300)` seconds. Both stay fixed for the run; the model cannot change them.
 The console says `Test limit: {T} s. Agent time limit: {W} s per round. These settings stay fixed for this run.`
 For a nondefault setting on demo/Boltons it also says
@@ -53,3 +53,11 @@ after the Tauri shell: a per-OS layer in `backend/src/oversight/workspace/`
 (process-tree cleanup, file locks, no-follow file opens) that runs in the existing
 mode without isolation (network open; rules, Revert and added-test probes disabled).
 Windows isolation also remains after the hackathon.
+
+## Current Windows delivery (2026-11-02)
+
+DECISIONS.md's copied-own residual approval supersedes the older session-only scope above.
+Private startup copies raw bytes, protects prior runtimes and uses only the original venv.
+Public paths still refuse; import/result integration and enablement precede qualification.
+Neither Windows machine has qualified this workflow; advisory CI remains unrequired.
+See [trust, limits and the fake template](workspace-source.md#chosen-repository-template).

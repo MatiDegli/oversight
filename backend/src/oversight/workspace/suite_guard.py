@@ -1,5 +1,7 @@
 """One suite boundary for agents, proposals, combinations and selected-case probes."""
 
+import asyncio
+import sys
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from functools import partial
@@ -10,7 +12,7 @@ from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.isolation import IsolatedRunner
 from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallTarget
-from oversight.workspace.runner import Spawn
+from oversight.workspace.runner import NtCleanupRunner, Spawn
 from oversight.workspace.snapshot import finish_snapshot, take_snapshot
 from oversight.workspace.source_nt import OwnEnvironment
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
@@ -24,6 +26,10 @@ if TYPE_CHECKING:
 def configure_suite(workspace: "Workspace", *, harness_pack: bool) -> None:
     """Select this workspace's output arm at composition time; never inspect process settings."""
     workspace.harness_pack = harness_pack
+
+
+def _nt_cleanup_unverified(runner: Spawn) -> bool:
+    return isinstance(runner, NtCleanupRunner) and not runner.cleanup_complete
 
 
 async def guarded_suite(
@@ -45,7 +51,7 @@ async def guarded_suite(
     """Caller retains main/worktree/lease through capture, namespace death and restoration."""
     state = workspace.integrity
     snapshot = await offload(partial(take_snapshot, tree.git_identity, state, timeout_s))
-    runner = spawn
+    runner: Spawn = NtCleanupRunner(spawn) if sys.platform == "win32" else spawn
     try:
         before = await offload(partial(file_stamp, tree.root))
         tested_tree, tested_commit = await capture_test_tree(
@@ -89,6 +95,28 @@ async def guarded_suite(
             problems=(*run.problems, *problems),
         )
     finally:
+        if _nt_cleanup_unverified(runner):
+            error = workspace.refuse_unverified_cleanup()
+            pending = sys.exception()
+            if isinstance(pending, SuiteInterrupted):
+                pending.run = replace(
+                    pending.run,
+                    result=pending.run.result.model_copy(
+                        update={
+                            "outcome": "error",
+                            "passed": 0,
+                            "failed": 0,
+                            "skipped": 0,
+                            "failed_tests": [],
+                        }
+                    ),
+                    cases=(),
+                    measured=None,
+                    problems=(str(error),),
+                )
+            if isinstance(pending, asyncio.CancelledError):
+                raise pending from error
+            raise error
         if isinstance(runner, IsolatedRunner) and not runner.cleanup_complete:
             error = IntegrityError(
                 "suite namespace cleanup is unverified", ".git", code="main_suspect"

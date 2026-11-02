@@ -3889,3 +3889,20 @@ A long limit lets one suite hold main's lock and the Git lease (workspace/core.p
 other agents' tests and Approve wait. Stop ends the suite and releases them. Timeout text reports
 incomplete observed results and an unknown cause, suggesting a different limit on the next run.
 Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.
+
+## 2026-11-02 — Private Windows own-copy composition before public enablement
+
+Private composition now reuses placement, staging, reset and per-tree environment preparation.
+Public paths still refuse. Lock/Job and prior-runtime protection precede trust/source operations,
+including demo/Boltons restarts; verified staging precedes deletion and journals retain recovery.
+Informational trust metadata keys source/policy/provider union/outside-profile status and grants
+no authority. Per-start notices include destinations, copy/skipped-root policy and recovery.
+Callable lead/planner paths widen the inventory even without credentials; fake authors are insufficient.
+
+Own suites use original-venv preparation under locks/lease and frozen limits; separate readiness
+is nonfatal for an unavailable environment. There is no builder/fallback. Failed NT cleanup retains
+the runtime lock, refuses evidence/restoration/destructive continuation and preserves cancellation.
+Disposable native fixtures/six-run support restrict automatic export/apply/discard to their own
+fixtures; chosen repositories get a fake template and manual recovery. The accepted path-race/ACL
+residuals are unchanged. Both machines' native qualification is uncollected; advisory CI is unrequired.
+Reason: review composition/lifecycle independently before enabling source operations publicly.

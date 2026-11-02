@@ -9,8 +9,10 @@ from live_helpers import live_settings, two_fakes
 from workspace.test_source_nt_copy import fixture, stage
 
 from oversight import app
-from oversight.workspace import InvalidPath, NtSource, OwnSource, core, source_nt
-from oversight_contracts.commands import StartAgent
+from oversight.agents import ScriptedModel, TaskClients, parse_script
+from oversight.workspace import InvalidPath, NtSource, OwnSource, SuiteRun, core, source_nt
+from oversight_contracts.commands import SaveFile, StartAgent
+from oversight_contracts.events import CaseResult, SuiteResult
 
 
 async def selected(tmp_path, monkeypatch, **settings):
@@ -169,7 +171,11 @@ async def test_real_staging_readiness_limits_and_original_preservation(
         assert live._venv is None
         assert live._environment_unavailable is not None
         assert live.store.graph()[1] is not None
-        assert (await live.get_file("new.py", None)).content == "new\r\n"
+        readable = await live.get_file("new.py", None)
+        assert readable.content == "new\r\n"
+        await live.save_file(
+            SaveFile(path="new.py", content="new = 2\r\n", base_hash=readable.hash)
+        )
         assert live._limits.test_timeout_s == limit and live._limits.max_wall_clock_s == wall
         assert live._manager is not None and live._manager._revert is not None
         assert live._manager._revert.service.test_timeout_s == limit
@@ -177,10 +183,50 @@ async def test_real_staging_readiness_limits_and_original_preservation(
         object.__setattr__(live._settings, "test_timeout_s", 1)
         (own.root / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
         assert live._limits.test_timeout_s == limit
+        script = parse_script(
+            '{"task":"Edit the copy","turns":['
+            '{"tool_calls":[{"name":"read_file","arguments":{"path":"new.py"}}]},'
+            '{"tool_calls":[{"name":"edit_file","arguments":{"path":"new.py",'
+            '"old_text":"new = 2\\r\\n","new_text":"new = 3\\r\\n"}}]},'
+            '{"tool_calls":[{"name":"run_tests","arguments":{}}]},'
+            '{"tool_calls":[{"name":"finish","arguments":{"summary":"Edit verified."}}]}]}'
+        )
+        live._client_factory = TaskClients(lambda profile, slot: ScriptedModel(script, profile))
+        calls = []
+
+        async def suite(**kwargs):
+            calls.append((kwargs["tree_root"], kwargs["timeout_s"]))
+            assert kwargs["python"] == own.root / ".venv/Scripts/python.exe"
+            assert kwargs["_own_prepare"] is not None
+            return SuiteRun(
+                SuiteResult(
+                    outcome="passed", passed=1, failed=0, skipped=0, duration_ms=1, failed_tests=[]
+                ),
+                "",
+                cases=(CaseResult(test_id="test_copy.py::test_value", outcome="passed"),),
+                problems=(),
+            )
+
+        monkeypatch.setattr("oversight.workspace.suite_guard.run_suite", suite)
         for slot in ("A", "B"):
             await live.start(StartAgent(task="Inspect this copy", slot=slot))
         assert len(live._agents) == 2
         assert all(agent.task.limits is live._limits for agent in live._agents.values())
+        await asyncio.gather(*list(live._runs.values()))
+        proposals = [
+            e.payload for e in live.store.committed_events() if e.type == "change.proposed"
+        ]
+        assert len(proposals) == 2
+        nested = await live.get_file("nested/code.py", None)
+        await live.save_file(
+            SaveFile(path=nested.path, content="value = 2\r\n", base_hash=nested.hash)
+        )
+        proposal = proposals[0]
+        await live._manager.approve(
+            proposal.change_id, None, revision=proposal.revision, head_commit=proposal.head_commit
+        )
+        assert len(calls) == 5 and calls[-1][0] == live.workspace.main.root
+        assert all(timeout == limit for _, timeout in calls)
         assert (
             caplog.messages.count(
                 f"Test limit: {limit} s. Agent time limit: {wall} s per round. "

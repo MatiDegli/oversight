@@ -5,6 +5,7 @@ virtual environment and the temp directory. `Tree` is main or one agent's worktr
 discard decisions belong to the change manager; this module gives it safe primitives.
 """
 
+import asyncio
 import os
 import re
 import shutil
@@ -58,6 +59,7 @@ from oversight.workspace.files import (
 from oversight.workspace.integrity import (
     DISABLED_GLOBAL_ATTRIBUTES,
     GitIdentity,
+    IntegrityError,
     guarded_git,
     install_byte_override,
     lease_until,
@@ -71,7 +73,14 @@ from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, 
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.ranges import FileRange, read_range
-from oversight.workspace.runner import ProcessResult, Spawn, probe_job_support, run_process
+from oversight.workspace.runner import (
+    NtCleanupError,
+    NtCleanupRunner,
+    ProcessResult,
+    Spawn,
+    probe_job_support,
+    run_process,
+)
 from oversight.workspace.snapshot import IntegrityState
 from oversight.workspace.source import remember_trust
 from oversight.workspace.source_nt import (
@@ -311,6 +320,7 @@ class Workspace:
         self._lock_fd: int | None = None
         self._reset_done = False
         self._reset_destructive = False
+        self._cleanup_unverified = False
 
     # --- Accessors --------------------------------------------------------------------------
 
@@ -504,6 +514,16 @@ class Workspace:
 
     # --- Startup ----------------------------------------------------------------------------
 
+    def refuse_unverified_cleanup(self) -> IntegrityError:
+        self._cleanup_unverified = True
+        error = IntegrityError(
+            "Windows Job cleanup is unverified; exit the server process",
+            ".git",
+            code="main_suspect",
+        )
+        self.integrity.suspend(error, uncertain=True)
+        return error
+
     async def guard_previous_runtime(self) -> None:
         """No source operation, including profile Git, may precede this guard."""
         if self._lock_fd is None:
@@ -514,9 +534,14 @@ class Workspace:
         if self._own_source is None or self._lock_fd is None:
             raise WorkspaceBusy("own-source staging needs selection and runtime lock")
         binary = await offload(partial(executable, "git"))
-        listing = await inventory(self._own_source, git=binary, lock_fd=self._lock_fd)
-        selection = await offload(partial(validate_selection, listing))
-        return await stage_source(selection, git=binary, lock_fd=self._lock_fd)
+        try:
+            listing = await inventory(self._own_source, git=binary, lock_fd=self._lock_fd)
+            selection = await offload(partial(validate_selection, listing))
+            return await stage_source(selection, git=binary, lock_fd=self._lock_fd)
+        except BaseException as error:
+            if isinstance(error, NtCleanupError) or isinstance(error.__cause__, NtCleanupError):
+                self.refuse_unverified_cleanup()
+            raise
 
     async def remember_source_trust(self, providers: tuple[str, ...], outside: bool) -> bool:
         assert self._own_source is not None
@@ -529,6 +554,7 @@ class Workspace:
     async def own_environment_readiness(self) -> str | None:
         """A separate bounded probe; every actual suite prepares again with its own deadline."""
         deadline = time.monotonic() + 10
+        runner = NtCleanupRunner(run_process)
         try:
             async with self.locks(main=True), self._main.section(locked=False), self.git_lease():
                 own = await offload(
@@ -544,13 +570,23 @@ class Workspace:
                     raise OSError("Own-source environment unavailable: missing import guard")
                 env["OVERSIGHT_IMPORT_GUARD"] = own.guard
                 await probe_environment(
-                    own.python, self._main.root, env, deadline, time.monotonic, run_process
+                    own.python, self._main.root, env, deadline, time.monotonic, runner
                 )
+        except NtCleanupError:
+            self.refuse_unverified_cleanup()
+            raise
         except OSError:
             # No arbitrary interpreter/path/plugin output reaches a startup notice.
             return (
                 "Own-source environment unavailable: missing, unsafe or incompatible original venv."
             )
+        finally:
+            if not runner.cleanup_complete:
+                error = self.refuse_unverified_cleanup()
+                pending = sys.exception()
+                if isinstance(pending, asyncio.CancelledError):
+                    raise pending from error
+                raise NtCleanupError("Windows Job cleanup is unverified; exit the server process")
         return None
 
     def _acquire_sync(self) -> None:
@@ -573,10 +609,17 @@ class Workspace:
                     await probe_job_support(self._root)
                 await offload(partial(refuse_orphans, self._root))
             except BaseException:
+                error = sys.exception()
+                if isinstance(error, NtCleanupError) or (
+                    error is not None and isinstance(error.__cause__, NtCleanupError)
+                ):
+                    self.refuse_unverified_cleanup()
                 self.release_runtime()
                 raise
 
     def release_runtime(self) -> None:
+        if self._cleanup_unverified:
+            return  # Retain the sentinel until process exit; descendants may still be alive.
         if self._lock_fd is not None:
             try:
                 release_lock(self._lock_fd)
@@ -604,6 +647,7 @@ class Workspace:
         """Start clean: delete worktrees, main and tmp, copy the template, and make the one initial
         commit, with a fixed author and date so its hash is the same in every take. Server start
         only; returns main's base commit. Runs, ledger and demo venv are kept."""
+        self.integrity.before_git()
         if self._lock_fd is None:
             raise WorkspaceBusy("reset needs the runtime lock: call acquire_runtime first")
         if not self._locks.idle:

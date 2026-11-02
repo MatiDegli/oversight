@@ -66,6 +66,36 @@ class Spawn(Protocol):
     ) -> ProcessResult: ...
 
 
+class NtCleanupError(OSError):
+    """NT leader/Job death could not be confirmed; no evidence or restoration is safe."""
+
+
+class NtCleanupRunner:
+    """Track the existing runner's NT completion signal across probe and pytest calls."""
+
+    def __init__(self, spawn: Spawn) -> None:
+        self.spawn = spawn
+        self.cleanup_complete = True
+
+    async def __call__(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: Mapping[str, str] | None = None,
+        output_cap: int = DEFAULT_OUTPUT_CAP,
+    ) -> ProcessResult:
+        try:
+            return await self.spawn(
+                argv, cwd=cwd, timeout_s=timeout_s, env=env, output_cap=output_cap
+            )
+        except BaseException as error:
+            if isinstance(error, NtCleanupError) or isinstance(error.__cause__, NtCleanupError):
+                self.cleanup_complete = False
+            raise
+
+
 def _resolve(future: "asyncio.Future[None]") -> None:
     if not future.done():
         future.set_result(None)
@@ -187,6 +217,21 @@ async def _reap(
 
 
 async def _reap_nt(
+    transport: asyncio.SubprocessTransport,
+    collector: ProcessCollector,
+    job: int,
+    *,
+    launch_failed: bool = False,
+) -> None:
+    try:
+        await _reap_nt_job(transport, collector, job, launch_failed=launch_failed)
+    except Exception as error:
+        raise NtCleanupError(
+            "Windows job cleanup is unverified; exit the server process"
+        ) from error
+
+
+async def _reap_nt_job(
     transport: asyncio.SubprocessTransport,
     collector: ProcessCollector,
     job: int,
@@ -351,9 +396,12 @@ async def run_process(
     task = asyncio.ensure_future(_execute(argv, cwd, timeout_s, env, output_cap, abort))
     try:
         return await asyncio.shield(task)
-    except asyncio.CancelledError:
+    except asyncio.CancelledError as cancelled:
         abort.set()
         await settle_cleanup(task)
-        if sys.platform == "win32":
+        cleanup_error = None if task.cancelled() else task.exception()
+        if isinstance(cleanup_error, NtCleanupError):
+            cancelled.__cause__ = cleanup_error
+        elif sys.platform == "win32":
             task.result()  # Cleanup failures refuse evidence, including during cancellation.
         raise
