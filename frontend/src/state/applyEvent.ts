@@ -26,7 +26,13 @@ export function applyEvent(state: State, event: ServerEvent): State {
   };
   switch (event.type) {
     case "lead.reply":
-      return next;
+      return {
+        ...next,
+        leadReplies: {
+          ...state.leadReplies,
+          [event.payload.agent_id]: [...(state.leadReplies[event.payload.agent_id] ?? []), event],
+        },
+      };
     case "agent.message":
       return {
         ...next,

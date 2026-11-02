@@ -7,7 +7,9 @@ from dataclasses import replace
 
 import pytest
 
+from oversight.workspace import metadata_io
 from oversight.workspace import source_nt as nt
+from oversight.workspace.integrity import remaining
 
 from .test_source_nt_env import environment
 
@@ -161,3 +163,95 @@ def test_unsupported_or_unsafe_metadata_refuses_without_execution(tmp_path, faul
             pth.write_text("import __editable__own_finder; execute()")
     with pytest.raises(OSError, match="environment unavailable"):
         nt.prepare_environment(source, tree, io.deadline, io=io)
+
+
+@pytest.mark.parametrize("layout", ["src", "lib", "backend/src", "packages/foo/src"])
+@pytest.mark.parametrize("entry", ["package", "module", "namespace"])
+def test_path_line_without_top_level_names(tmp_path, layout, entry):
+    source, main, io, site = mapped_environment(tmp_path, layout)
+    info = site / "different_distribution-1.dist-info"
+    (info / "top_level.txt").unlink()
+    (info / "RECORD").write_text("own.pth,,\n")
+    for tree in (main, source.runtime / "worktrees/a", source.runtime / "tmp/combined"):
+        root = tree / layout
+        root.mkdir(parents=True, exist_ok=True)
+        if tree != main:
+            (root / "sample").mkdir()
+        if entry == "module":
+            (root / "extra.py").write_text("raise RuntimeError('never import')")
+        else:
+            (root / "extra").mkdir()
+            if entry == "package":
+                (root / "extra/__init__.py").write_text("raise RuntimeError('never import')")
+        own = nt.prepare_environment(source, tree, io.deadline, io=io)
+        assert own.guard is not None
+        assert json.loads(own.guard)["packages"] == ["extra", "sample"]
+        assert own.roots == (root,)
+
+
+@pytest.mark.parametrize("fault", ["unsafe", "link", "association"])
+def test_path_discovery_is_bounded_and_associated(tmp_path, fault):
+    source, tree, io, site = mapped_environment(tmp_path)
+    info = site / "different_distribution-1.dist-info"
+    (info / "top_level.txt").unlink()
+    (info / "RECORD").write_text("other.pth,,\n" if fault == "association" else "own.pth,,\n")
+    root = tree / "backend/src"
+    if fault == "unsafe":
+        (root / "bad:name.py").touch()
+    elif fault == "link":
+        (root / "linked.py").symlink_to(root / "sample/__init__.py")
+    with pytest.raises(OSError, match="environment unavailable"):
+        nt.prepare_environment(source, tree, io.deadline, io=io)
+
+
+def test_path_discovery_entry_budget(tmp_path, monkeypatch):
+    source, tree, io, site = mapped_environment(tmp_path)
+    info = site / "different_distribution-1.dist-info"
+    (info / "top_level.txt").unlink()
+    (info / "RECORD").write_text("own.pth,,\n")
+    # Five metadata charges plus two visits to sample fit; RECORD alone cannot refuse.
+    monkeypatch.setattr(metadata_io, "MAX_ENTRIES", 8)
+    own = nt.prepare_environment(source, tree, io.deadline, io=io)
+    assert own.guard is not None
+    assert json.loads(own.guard)["packages"] == ["sample"]
+    for index in range(metadata_io.MAX_ENTRIES):
+        # Even ignored immediate entries must consume the shared discovery budget.
+        (tree / "backend/src" / f".ignored_{index}").touch()
+    with pytest.raises(OSError, match="unsupported or unsafe editable metadata"):
+        nt.prepare_environment(source, tree, io.deadline, io=io)
+
+
+def test_path_discovery_deadline(tmp_path, monkeypatch):
+    source, tree, io, site = mapped_environment(tmp_path)
+    info = site / "different_distribution-1.dist-info"
+    (info / "top_level.txt").unlink()
+    (info / "RECORD").write_text("own.pth,,\n")
+    (tree / "backend/src/.ignored").touch()
+    nt.prepare_environment(source, tree, io.deadline, io=io)
+    root_names = nt._root_names
+    discovering = False
+    checks = 0
+
+    def discover(root, io, budget):
+        nonlocal discovering
+        assert root == tree / "backend/src"
+        discovering = True
+        try:
+            return root_names(root, io, budget)
+        finally:
+            discovering = False
+
+    def discovery_remaining(deadline):
+        nonlocal checks
+        if discovering:
+            checks += 1
+            # Expire during enumeration, after its first entry; all other I/O stays valid.
+            if checks == 2:
+                return remaining(0)
+        return remaining(deadline)
+
+    monkeypatch.setattr(nt, "_root_names", discover)
+    monkeypatch.setattr(metadata_io, "remaining", discovery_remaining)
+    with pytest.raises(OSError, match="unsupported or unsafe editable metadata"):
+        nt.prepare_environment(source, tree, io.deadline, io=io)
+    assert checks == 2

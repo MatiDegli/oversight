@@ -232,6 +232,7 @@ WINDOWS_BACKEND = (
     "workspace/suite_files.py workspace/suite_guard.py agents/tools.py"
 )
 UPLOAD = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2"
+WINDOWS_NATIVE_IF = "${{ !cancelled() && steps.frontend_build.outcome == 'success' }}"
 
 
 def assert_windows_policy(text: str) -> None:
@@ -289,9 +290,22 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         "if-no-files-found: error\nretention-days: 7",
     }
     assert UPLOAD in (WORKFLOWS / "ci.yml").read_text()
-    assert len(items) == 17
+    assert len(items) == 19
+    assert items[7:9] == [
+        {"uses": GITLEAKS},
+        {
+            "name": "Gitleaks version",
+            "run": "gitleaks version | Tee-Object -Append nt-evidence/versions.log",
+        },
+    ]
+    items = items[:7] + items[9:]
     for index, step in enumerate(items[4:-1], 4):
         permitted = {"name", "run"}
+        if index == 7:
+            permitted.add("id")
+        if 8 <= index <= 14:
+            permitted.add("if")
+            assert step.get("if") == WINDOWS_NATIVE_IF
         if index == 13:
             permitted.add("timeout-minutes")
             assert step["timeout-minutes"] == "3"
@@ -299,14 +313,14 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
             permitted.add("if")
             assert step["if"] == "always()"
         assert set(step) <= permitted
-    assert items[5:8] == [
+    assert items[5:7] == [
         {"run": command}
         for command in (
             "uv sync --frozen",
             "pnpm -C frontend install --frozen-lockfile",
-            "pnpm -C frontend build",
         )
     ]
+    assert items[7] == {"id": "frontend_build", "run": "pnpm -C frontend build"}
     files = WINDOWS_TOOLS.split() + ["backend/src/oversight/" + f for f in WINDOWS_BACKEND.split()]
     files += [
         "backend/tests/workspace/test_source_bytes.py",
@@ -316,6 +330,7 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
     ]
     assert items[8] == {
         "name": "Windows target typing for landed sites",
+        "if": WINDOWS_NATIVE_IF,
         "run": "uv run --frozen pyright --pythonplatform Windows " + " ".join(files),
     }
     assert all((WORKFLOWS.parents[1] / path).is_file() for path in files)
@@ -329,6 +344,7 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
     ):
         assert items[index] == {
             "name": name,
+            "if": WINDOWS_NATIVE_IF,
             "run": "|\nuv run --frozen pytest -o timeout_method=thread "
             + file
             + f" -rs -s 2>&1 | Tee-Object nt-evidence/{log}.log\n"
@@ -336,6 +352,7 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
         }
     assert items[11] == {
         "name": "W4b injected and native byte cases",
+        "if": WINDOWS_NATIVE_IF,
         "run": "|\nuv run --frozen pytest -o timeout_method=thread "
         "backend/tests/workspace/test_source_bytes.py "
         "backend/tests/workspace/test_source_bytes_windows.py "
@@ -345,6 +362,7 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
     }
     assert items[12] == {
         "name": "W4a2 injected and native reset cases",
+        "if": WINDOWS_NATIVE_IF,
         "run": "|\nuv run --frozen pytest -o timeout_method=thread "
         "backend/tests/workspace/test_source_nt_copy.py "
         "backend/tests/workspace/test_source_nt_reset.py "
@@ -358,6 +376,7 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
     )
     assert items[14] == {
         "name": "Report unavailable Linux isolation",
+        "if": WINDOWS_NATIVE_IF,
         "run": "|\nuv run --frozen python -m oversight isolation-probe "
         "> nt-evidence/isolation-probe.json\n"
         "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
@@ -390,7 +409,11 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
         ("timeout-minutes: 30", "timeout-minutes: 300"),
         ("persist-credentials: false", "persist-credentials: true"),
         ("uv sync --frozen", "uv sync"),
+        ("      - id: frontend_build\n", "      - id: other_build\n"),
+        ("      - id: frontend_build\n        run:", "      - run:"),
         ("node-version: 24", "node-version: 22"),
+        ("      - uses: ./.github/actions/setup-gitleaks\n", ""),
+        ("gitleaks version", "gitleaks --help"),
         ("--pythonplatform Windows", "--pythonplatform Linux"),
         ("-o timeout_method=thread", ""),
         ("-rs -s", ""),
@@ -408,3 +431,37 @@ def test_windows_rejects_policy_regressions(old: str, new: str) -> None:
     assert old in text
     with pytest.raises(AssertionError):
         assert_windows_policy(text.replace(old, new, 1))
+
+
+@pytest.mark.parametrize("index", range(10, 17))
+@pytest.mark.parametrize(
+    "condition",
+    [
+        None,
+        "success()",
+        "always()",
+        "${{ steps.frontend_build.outcome == 'success' }}",
+        "${{ !cancelled() && steps.frontend_build.outcome == 'failure' }}",
+        "${{ !cancelled() && steps.other_build.outcome == 'success' }}",
+    ],
+)
+def test_windows_rejects_missing_or_changed_native_condition(
+    index: int, condition: str | None
+) -> None:
+    job = mapping(mapping(mapping((WORKFLOWS / "windows.yml").read_text())["jobs"])["windows"])
+    items = steps(job["steps"])
+    if condition is None:
+        del items[index]["if"]
+    else:
+        items[index]["if"] = condition
+    with pytest.raises(AssertionError):
+        assert_windows_steps(items)
+
+
+@pytest.mark.parametrize("index", range(10))
+def test_windows_rejects_native_condition_on_setup(index: int) -> None:
+    job = mapping(mapping(mapping((WORKFLOWS / "windows.yml").read_text())["jobs"])["windows"])
+    items = steps(job["steps"])
+    items[index]["if"] = WINDOWS_NATIVE_IF
+    with pytest.raises(AssertionError):
+        assert_windows_steps(items)

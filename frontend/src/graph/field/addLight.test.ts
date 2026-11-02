@@ -201,7 +201,20 @@ function createLegacyLampField(strongestHue = false) {
     reaching.sort((a, b) => b.light.weight - a.light.weight);
     for (const one of reaching.slice(0, config.limit))
       addLight(config, cols, rows, one, time, work);
-    shadeLamps(config, cols, rows, work, work.data, new Uint8ClampedArray(cols * rows));
+    shadeLamps(
+      config,
+      cols,
+      rows,
+      {
+        strongest: work.strongest ?? work.sum,
+        sum: work.sum,
+        red: work.red,
+        green: work.green,
+        blue: work.blue,
+      },
+      work.data,
+      new Uint8ClampedArray(cols * rows),
+    );
     return { cols, rows, data: work.data };
   };
 }
