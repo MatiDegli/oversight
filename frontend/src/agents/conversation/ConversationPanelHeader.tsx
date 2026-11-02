@@ -14,7 +14,7 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
           <span
             aria-hidden="true"
             style={agentSlotStyle(header.hue)}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-(--slot-graphic) font-bold text-(--slot-text)"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-(--slot-graphic) font-bold text-(--slot-text)"
           >
             {header.letter}
           </span>
@@ -40,12 +40,12 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
     <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
       <div className="flex items-start gap-[10px]">
         <span
-          className={`flex size-(--letter-badge-size) shrink-0 items-center justify-center rounded-label font-bold ${agentLook[header.slot].swatch}`}
+          className={`flex size-(--letter-badge-size) shrink-0 items-center justify-center rounded-label font-bold ${agentLook[header.hue ?? header.slot].swatch}`}
         >
-          {header.slot}
+          {header.letter ?? header.slot}
         </span>
         <h2 className="min-w-0 text-[16px]! leading-[1.3]! font-semibold wrap-anywhere text-text">
-          Agent {header.slot}
+          Agent {header.letter ?? header.slot}
         </h2>
         <span className="shrink-0 rounded-full bg-raised px-[10px] py-[3px] text-[13px] font-semibold text-muted">
           {header.waiting ? "Waiting" : labels[header.state]}

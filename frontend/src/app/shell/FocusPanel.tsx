@@ -3,7 +3,7 @@ import { Maximize2, Minimize2, Settings, Timer, X } from "lucide-react";
 import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
 // eslint-disable-next-line no-restricted-imports -- K2a shares the Chat team identity without extending the agents barrel.
-import { selectChatLeads } from "../../agents/chatLeadSelectors";
+import { selectChatLeads, selectChatRows } from "../../agents/chatLeadSelectors";
 import { selectConversation, loadConversationPanel } from "../../agents";
 import {
   ReviewFrame,
@@ -101,9 +101,10 @@ export function FocusPanel(
               : change
                 ? state.agents[change.agent_id]?.slot
                 : undefined;
-            const lead = tab.conversation
-              ? selectChatLeads(state).find((row) => row.id === tab.conversation)
+            const person = tab.conversation
+              ? selectChatRows(state).find((row) => row.id === tab.conversation)
               : undefined;
+            const lead = person?.kind === "lead" ? person : undefined;
             const title =
               tab.id === "inbox"
                 ? "Decisions"
@@ -117,7 +118,7 @@ export function FocusPanel(
                         ? lead
                           ? `Lead ${lead.letter} · conversation`
                           : slot
-                            ? `Agent ${slot} · conversation`
+                            ? `Agent ${person?.letter ?? slot} · conversation`
                             : "Conversation"
                         : tab.review
                           ? `Review · ${tab.review}`
@@ -128,8 +129,8 @@ export function FocusPanel(
               <div
                 key={tab.id}
                 className={`focus-tab ${view.activeTab === tab.id ? "is-active" : ""}`}
-                data-slot={slot ?? "file"}
-                style={agentSlotStyle(slot)}
+                data-slot={person?.hue ?? slot ?? "file"}
+                style={agentSlotStyle(person?.hue ?? slot)}
               >
                 <button
                   type="button"
@@ -139,7 +140,7 @@ export function FocusPanel(
                   onClick={() => onTabAction?.({ type: "activate", id: tab.id })}
                   className={`min-w-0 truncate px-3 py-2 ${focusRing}`}
                 >
-                  {slot && <span className="mr-2 font-bold">{slot}</span>}
+                  {slot && <span className="mr-2 font-bold">{person?.letter ?? slot}</span>}
                   {tab.id === "settings" && (
                     <Settings aria-hidden="true" className="mr-2 inline size-3.5" />
                   )}

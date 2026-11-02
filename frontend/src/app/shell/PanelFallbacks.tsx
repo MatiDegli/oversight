@@ -72,7 +72,7 @@ export function ConversationFrame({
       aria-label={
         header.kind === "lead"
           ? `Lead ${header.letter} conversation`
-          : `Agent ${header.slot} conversation`
+          : `Agent ${header.letter ?? header.slot} conversation`
       }
       className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >

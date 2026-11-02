@@ -68,7 +68,8 @@ export function teamIdentities(state: State): Map<string, Identity> {
       }
       if (event.type === "lead.status") {
         if (["starting", "working", "idle"].includes(event.payload.state)) team.active.add(id);
-        else if (team.active.delete(id) && !team.active.size) idle.set(team.hue, event.seq);
+        else if ((team.active.delete(id) || team.order === event.seq) && !team.active.size)
+          idle.set(team.hue, event.seq);
         continue;
       }
     }
@@ -93,7 +94,8 @@ export function teamIdentities(state: State): Map<string, Identity> {
       changes.get(event.payload.change_id) ??
       (status?.state !== "done" && status?.state !== "stopped");
     if (held) team.active.add(id);
-    else if (team.active.delete(id) && !team.active.size) idle.set(team.hue, event.seq);
+    else if ((team.active.delete(id) || team.order === event.seq) && !team.active.size)
+      idle.set(team.hue, event.seq);
   }
   return identities;
 }

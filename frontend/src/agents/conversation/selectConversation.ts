@@ -5,6 +5,7 @@ import type {
   LeadStatus,
   LeadReplyEvent,
 } from "@contracts";
+import { teamIdentities } from "../chatAgentSelectors";
 import { selectRounds, type Round, type RoundStep } from "./rounds";
 import type { State, BudgetMark, ModelWait } from "../../state";
 
@@ -34,6 +35,8 @@ export type ConversationEntry = { seq: number } & (
 
 export interface ConversationHeader {
   kind?: "agent";
+  letter?: string;
+  hue?: AgentStatus["slot"];
   agentId: string;
   changeId: string;
   slot: AgentStatus["slot"];
@@ -176,9 +179,12 @@ export function selectConversation(
   }
   groupRounds(entries, rounds, messages);
   const profile = state.run?.models.find((model) => model.id === agent.model);
+  const identity = teamIdentities(state).get(agentId);
   return {
     header: {
       agentId,
+      letter: identity?.letter ?? agent.slot,
+      hue: identity?.hue ?? agent.slot,
       changeId: agent.change_id,
       slot: agent.slot,
       state: agent.state,

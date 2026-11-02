@@ -9,6 +9,7 @@ import {
   status as oldStatus,
 } from "../app/chatAgents.fixture";
 import { selectChatLeads, selectChatRows, selectLeadLimits } from "./chatLeadSelectors";
+import { selectConversation } from "./conversation/selectConversation";
 import { holderReason } from "./taskBoxModel";
 
 const ts = "2026-11-02T18:00:00.000Z";
@@ -143,4 +144,24 @@ it("retains only observed limits across later nulls, with no guessed values", ()
       fold([...seed, lead("agent-1", { limits }), lead("agent-1", { revision: 2 })]),
     ),
   ).toEqual(limits);
+});
+
+it("releases a hue when the first observed status is already terminal", () => {
+  expect(
+    selectChatRows(fold([...seed, lead("agent-1", { state: "stopped" }), lead("agent-2")])).map(
+      (row) => row.letter,
+    ),
+  ).toEqual(["A", "B"]);
+  const state = fold([
+    ...seed,
+    status("agent-1", { state: "done" }),
+    status("agent-2", { state: "done", slot: "B" }),
+    status("agent-3"),
+  ]);
+  expect(selectChatRows(state).map((row) => row.letter)).toEqual(["A", "B", "C"]);
+  expect(selectConversation(state, "agent-3", [])?.header).toMatchObject({
+    slot: "A",
+    letter: "C",
+    hue: "C",
+  });
 });
