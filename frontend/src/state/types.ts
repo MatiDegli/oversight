@@ -15,6 +15,7 @@ import type {
   RunStarted,
   MergeModeState,
   UsageTick,
+  LeadReplyEvent,
 } from "@contracts";
 
 import type { DecisionEvent } from "./decisionProjection";
@@ -86,6 +87,7 @@ export interface State {
   steps: Record<string, AgentStep[]>;
   modelWaits: Record<string, ModelWait>;
   messages: Record<string, AgentMessage[]>;
+  leadReplies: Record<string, LeadReplyEvent[]>;
   /** When each step's event arrived, by agent then step number: the age the card shows. */
   stepTimes: Record<string, Record<number, string>>;
   stepSeqs: Record<string, Record<number, number>>;
@@ -133,6 +135,7 @@ export function createInitialState(): State {
     steps: {},
     modelWaits: {},
     messages: {},
+    leadReplies: {},
     stepTimes: {},
     stepSeqs: {},
     clock: null,

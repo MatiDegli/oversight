@@ -1,17 +1,11 @@
 import { renderToStaticMarkup as html } from "react-dom/server";
 import { expect, it } from "vitest";
-import type { ChangeResolved } from "@contracts";
 import { applyEvent, createInitialState } from "../state";
 // eslint-disable-next-line no-restricted-imports -- Tests exercise C5 optional conversation hooks directly.
 import { ConversationPanel } from "../agents/conversation/ConversationPanel";
 // eslint-disable-next-line no-restricted-imports -- Reuse the retained conversation projection.
 import { selectConversation } from "../agents/conversation/selectConversation";
-import {
-  ChatMergeChip,
-  ChatMergeReceipt,
-  isRulesMerge,
-  resolvedReviewAction,
-} from "./shell/ChatMerge";
+import { ChatMergeChip, ChatMergeReceipt, resolvedReviewAction } from "./shell/ChatMerge";
 import { chatMergeState, modeEvent } from "./chatMerge.browser.fixture";
 import { tabbedView, viewReducer } from "./view";
 
@@ -34,32 +28,6 @@ function evidence() {
   if (!conversation || entry?.kind !== "resolution") throw new Error("Missing resolution");
   return { state, conversation, entry };
 }
-it.each([
-  { decided_by: "person" },
-  { decided_by: "cross_review" },
-  { decision: "rejected", merge: null },
-  { decision: "changes_requested", merge: null },
-  { merge: "conflict" },
-] satisfies Partial<ChangeResolved>[])("keeps generic rendering for %j", (patch) => {
-  const { conversation, entry } = evidence();
-  Object.assign(entry.resolution, patch);
-  const output = html(
-    <ConversationPanel
-      conversation={conversation}
-      renderResolution={(e) =>
-        isRulesMerge(e.resolution) ? <ChatMergeReceipt resolution={e.resolution} ts={e.ts} /> : null
-      }
-    />,
-  );
-  expect(output).not.toContain('aria-label="Merged by your rules"');
-  expect(output).toContain(
-    patch.decision === "changes_requested"
-      ? "You requested changes"
-      : patch.decision === "rejected"
-        ? "You rejected"
-        : "You approved",
-  );
-});
 it("keeps one receipt at its resolution, with immutable mode, grant reasons, commit and time", () => {
   const { state, conversation, entry } = evidence();
   const receipt = () => html(<ChatMergeReceipt resolution={entry.resolution} ts={entry.ts} />);

@@ -117,3 +117,21 @@ it("ignores stale plan revisions, retains opening evidence and uses the fallback
     identity: { evidence_seq: 8 },
   });
 });
+
+it("queue linkage removes only its plan; cancellation restores identity, evidence and event age", () => {
+  const plan = events[5];
+  if (plan?.type !== "plan.updated") throw new Error("Missing plan");
+  const before = selectDecisionInbox(replay(events, 8));
+  const linked = applyEvent(replay(events, 8), {
+    ...plan,
+    seq: 9,
+    payload: { ...plan.payload, revision: 2, queued_task_id: "queue-test" },
+  });
+  expect(selectDecisionInbox(linked).map((e) => e.id)).toEqual([before[0]?.id, before[2]?.id]);
+  const restored = applyEvent(linked, {
+    ...plan,
+    seq: 10,
+    payload: { ...plan.payload, revision: 3, queued_task_id: null },
+  });
+  expect(selectDecisionInbox(restored)).toEqual(before);
+});

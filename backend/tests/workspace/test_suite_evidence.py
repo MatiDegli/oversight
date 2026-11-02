@@ -120,3 +120,72 @@ async def test_dirty_tree_is_recorded_without_changing_staging(
             tree, "show", f"{run.tested_tree}:shop/mod.py"
         )
     assert not list(workspace.tmp_dir.glob("suite-index-*"))
+
+
+@pytest.mark.parametrize("exhaust", [False, True])
+def test_nt_report_cleanup_retries_and_surfaces(tmp_path, monkeypatch, exhaust):
+    import time
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    from oversight.workspace import suite
+
+    monkeypatch.setattr(suite, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    original = Path.unlink
+    calls = []
+
+    def sharing(path, **kwargs):
+        calls.append(path)
+        if exhaust or len(calls) < 3:
+
+            class SharingError(PermissionError):
+                winerror = 32
+
+            raise SharingError("report sharing")
+        original(path, **kwargs)
+
+    target = tmp_path / "report"
+    target.write_text("{}\n")
+    monkeypatch.setattr(Path, "unlink", sharing)
+    if exhaust:
+        with pytest.raises(PermissionError, match="report sharing"):
+            list(suite._take_report(target) or ())
+        assert len(calls) == 7 and target.exists()
+    else:
+        assert list(suite._take_report(target) or ()) == ["{}"]
+        assert len(calls) == 3 and not target.exists()
+    monkeypatch.setattr(Path, "unlink", original)
+    target.unlink(missing_ok=True)
+
+
+@pytest.mark.anyio
+async def test_nt_temporary_index_cleanup_preserves_real_index(workspace, monkeypatch):
+    from types import SimpleNamespace
+
+    from oversight.workspace import test_tree
+
+    tree = workspace.main
+    before = (tree.root / ".git/index").read_bytes()
+    calls = []
+    from oversight.workspace._platform import unlink_retry
+
+    original = unlink_retry
+
+    def capture(path, **kwargs):
+        calls.append(path)
+        return original(path, **kwargs)
+
+    monkeypatch.setattr(test_tree, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(test_tree, "unlink_retry", capture)
+    async with workspace.locks(main=True), workspace.git_lease():
+        await test_tree.capture_test_tree(
+            tree.root,
+            workspace.tmp_dir,
+            env=workspace._git_env(tree, None, None),
+            flags=workspace.git_flags,
+            timeout_s=10,
+        )
+    assert len(calls) == 2 and all(p.name.startswith("suite-index-") for p in calls)
+    assert (tree.root / ".git/index").read_bytes() == before
+    assert not list(workspace.tmp_dir.glob("suite-index-*"))

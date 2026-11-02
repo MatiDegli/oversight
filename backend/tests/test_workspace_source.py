@@ -81,3 +81,23 @@ async def test_wrong_pin_refuses_startup_before_reset(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=BOLTONS.commit):
         await app.state.live.startup()
     assert not (settings.runtime_dir / "workspace").exists()
+
+
+@pytest.mark.parametrize(
+    "source", [r"C:\private\project", "C:/private/project", r"\\host\share\project"]
+)
+def test_public_nt_path_refusal_before_construction(
+    tmp_path: Path, source: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = live_settings(tmp_path, workspace_source=source)
+
+    def forbidden(*args: object, **kwargs: object) -> None:
+        pytest.fail("path selector reached Workspace/EventStore/reset/source Git")
+
+    monkeypatch.setattr("oversight.app.Workspace", forbidden)
+    monkeypatch.setattr("oversight.app.EventStore", forbidden)
+    monkeypatch.setattr("oversight.workspace.source.run_process", forbidden)
+    monkeypatch.setattr("oversight.app.preflight_placement", lambda _: None)
+    monkeypatch.setattr("oversight.app.sys.platform", "win32")
+    with pytest.raises(ValueError, match="OVERSIGHT_WORKSPACE_SOURCE"):
+        create_app(settings)

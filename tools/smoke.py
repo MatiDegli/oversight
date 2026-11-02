@@ -7,6 +7,7 @@ with a seq. The child is stopped by PID on every exit path: success, failure, Ct
 the backend starts and answers; 1 with a one-line reason on stderr otherwise.
 """
 
+import asyncio
 import json
 import os
 import socket
@@ -190,6 +191,11 @@ def child_env(port: int, runtime_dir: Path) -> dict[str, str]:
 
 def run_smoke() -> None:
     """One smoke run: start the backend, check it, stop it. Raises SmokeError with the reason."""
+    if sys.platform == "win32":
+        import demo_check_nt
+
+        asyncio.run(demo_check_nt.run_checks(runs=1, demo=False))
+        return
     port = free_port()
     with tempfile.TemporaryDirectory(prefix="oversight-smoke-") as scratch:
         # The workspace refuses a runtime directory with another name.

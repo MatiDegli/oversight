@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { applyEvent, createInitialState } from "../state";
 import { twoSlotState } from "../taskBox.fixture";
 
-import { createTaskBoxStore } from "./taskBox";
+import { createTaskBoxStore } from "./taskBoxModel";
 import { TaskBox, TaskBoxView } from "./TaskBox";
 import type { TaskBoxViewProps } from "./TaskBox";
 

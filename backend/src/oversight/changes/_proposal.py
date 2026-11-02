@@ -430,7 +430,8 @@ async def run_tests(ctx: ChangeContext, rec: ChangeRecord) -> SuiteResult:
     except (WorkspaceError, OSError) as error:
         if isinstance(error, SuiteUnavailable):
             await publish_suite(ctx, rec, error.run, phase="proposal", revision=rec.revision + 1)
-        await ctx.error("tests", f"The tests could not run: {error}", rec, fatal=False)
+        detail = error.own_source_reason if isinstance(error, SuiteUnavailable) else None
+        await ctx.error("tests", f"The tests could not run: {detail or error}", rec, fatal=False)
         return SuiteResult(
             outcome="error", passed=0, failed=0, skipped=0, duration_ms=0, failed_tests=[]
         )

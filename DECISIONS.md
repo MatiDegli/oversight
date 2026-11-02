@@ -2758,7 +2758,7 @@ mode is activated, the live Merge alone when safe choice presents that refusal.
 
 ## 2026-10-31 — Revert in the merged review footer
 
-Approved in packet B: "Todo como recomendás", at
+Approved by the maintainer: "Todo como recomendás", at
 2026-10-31T15:47:21Z (12:47:21 ART).
 
 The merged review footer offers Revert for a rules merge with its recorded resolution and
@@ -2990,6 +2990,7 @@ rework and the Conversation tab, before milestone pulses if ready before the cut
   stacked panel edges have at least 48px at the drawn zooms and down to 0.2 (49px there).
   Narrow headers wrapping below the drawn zooms may reduce it to the 26px floor at 0.2;
   panels never touch or overlap. This preserves the approved packing values.
+
 ## 2026-10-31 — Progress pieces, part 1: activity blocks and notices
 
 The maintainer approved progress sketch round 2 at 2026-10-31T15:19:19Z. Progress lives as
@@ -3016,6 +3017,7 @@ The earlier "of 30" departure was reverted by the maintainer at 2026-10-31T16:55
 uses run.limits.max_steps and min(step, bound), retaining the largest observed step. There are no
 line counts on edit calls because agent.step has none; retries preserve Revising as the card does.
 Accepted person messages stay between activity segments of the same round; they never fold away.
+
 ## 2026-10-31 — Human confirmation of examples and task carry
 
 The maintainer approved Q1 at 2026-10-31T16:49:39Z (13:49:39 ART): ConfirmExamples carries exactly run_id, evidence_seq, base_commit, action (confirm or edit),
@@ -3331,6 +3333,31 @@ text and a 1.5px press over 70ms ease-out (instant under reduced motion). The ri
 Panel pseudo-elements use a compensated flex row so static and floating roots keep their
 positions and field-mask rectangles; only the agents rail becomes relative, with an absolute
 light that stays outside its row gap. Monaco and the graph host receive neither control effect.
+
+## 2026-11-01 — Lead plan actions preserve evidence and command settlement
+
+Premises: main `6ab92e7`; moved implementation on `54dc64d`. Keep main's oldest-first
+evidence order, including B before A, rather than the sketch's decorative ordering. At 1280,
+retain the existing scroll area and wrapping actions instead of reproducing sketch clipping.
+Use theme roles rather than decorative raw colors; preserve the current shell and life edges.
+An empty 202 is acceptance only: attempts bind run, plan, action and observed revisions and
+remain locked until corresponding event evidence; HTTP refusal retains the comment. No
+automatic revision retry. Queue links exclude decisions without replacing their identity or
+first evidence, so unlinking restores their original age. The sketch omits dispatch failures:
+retain failed requested lead plans read-only with the server's detail, outside decision counts.
+Only proposed-plan Queue/Reject and undispatched queue cancellation are built here; Edit,
+lead lifecycle and the reserved Plan tab's tracking remain follow-up fronts.
+
+## 2026-11-01 — Lead plan actions keep their eager layout within scope
+
+The coordinator ratified `inbox.css` at 17:25 UTC (14:25 ART) on Nov 1 for the eager inbox
+headline, row-title and plan-group layout. Keep those rules in that stylesheet, including
+the loading fallback's plan-content marker. Restore the shared InboxHeading to main's markup
+and hide its separate hero numeral through the eager stylesheet.
+Only the plan piece and controls need the lazy stylesheet; their arrival must not change
+row gutters, titles or group labels.
+Reject opens with focus in the comment; Keep returns it to the original Reject control.
+The caption attributes drafting to the lead only: post-dispatch tracking remains pending.
 
 ## 2026-11-01 — Usage read lifecycle, camera and lower bounds
 
@@ -3685,31 +3712,6 @@ mount, before the graph's asynchronous font/draw preparation completes. Chat-fir
 loads no rendering implementation. Startup accounting includes the controller in both bases.
 File-tab task entry is hidden in Chat because its destination is the Oversight agents panel.
 
-## 2026-11-01 — C5 Chat merge mode uses the shared Settings tab
-
-Chat's empty TaskBox and conversation Composer receive an optional action accessory;
-Oversight supplies none. Both chips navigate through the existing `onOpenSettings`
-callback to the single Merge mode section. Only retained mode evidence labels the
-chip (run metadata is the fallback); missing evidence reads unknown. Replay keeps
-its explanations and command guards; opening Settings grants no command capability.
-
-C5 renders a rules-merge receipt at the projected resolution entry only for an
-approved, merged, rules-authored decision. Other resolutions keep their existing
-renderer. The caption, rule/grant explanation, commit and timestamp belong to that
-immutable envelope; later mode events update only the chips. Missing assessment
-adds no historical claims. No event, retained projection or timeline is added.
-
-The C5 review link dispatches an existing `open` focus-tab action with stable
-`review:<change_id>` identity, preserved selection and empty framing IDs. It requires
-matching retained proposal/resolution identity, revision and envelope position plus
-the current review evidence. Missing evidence or dispatcher leaves a readable
-unavailable explanation. Shared pending-change guards remain unchanged; Chat stays
-selected and FocusPanel loads its existing ReviewPanel and tab history.
-
-C5 proof exercises production App Settings/tab dispatch in live and replay, using
-hand-written retained evidence and fixture-only Chat initialization. Targeted
-regressions retain focus, draft, graph camera and scroll ownership. Comparisons
-judge only C5: C2/C3 bodies, C4 composition and C1 TaskBox controls stay outside it.
 ## 2026-11-01 — The native Windows port moves ahead
 
 The maintainer ranked item 20 immediately after the conversational lead and the Chat view,
@@ -3820,3 +3822,283 @@ can finish loading Monaco without requesting the graph, and approval becomes ava
 existing decision guards pass. The cold production App regression now passes. No gate or assertion
 is weakened. Retained-state captures still visit Oversight explicitly before opening review and
 preserve the normal scrolling built review body.
+
+## 2026-11-01 — W3 console supervision and staged Windows advisory CI
+
+The reviewed W3 scope adds only `tools/demo_check_nt.py` as implementation, using W1's public
+Job facade and preserving Linux supervision and exact graceful exit codes. The tool owns an
+outer process-lifetime kill-on-close Job and assigns console-attached suspended servers to
+per-server Jobs before resume. Retained handles and empty-job/lock evidence guard cleanup;
+CTRL_BREAK requires logging and bounded completion, and fallback is failure. Uvicorn 0.54.0
+gets no new signal handler. `0xC000013A` is a conservative candidate exit status, not an observed
+NT fact: console proof must confirm or correct it before native acceptance.
+
+Three disposable demo starts reuse all existing level 2 checks and one runtime. Hard-kill proof
+observes uv during a cold build before backend death; independent native driver-death proof
+retains no external outer-job handle. Fake A/B, empty source, blank credential overrides and
+cross-review=false prevent credit use, including decision calls (missing credentials refuse).
+Checkout attributes add LF without renormalization, template-byte changes or external attributes.
+
+The new least-privilege Windows workflow is advisory, not required and not continue-on-error.
+W1/W2b-supported checks land now; full driver/cold-build proof awaits both W2a and W2b. Native
+own-source fixtures/qualification and the complete two-machine six-run release proof await W4.
+A skipped proof is not acceptance. Windows retains open mode and no memory cap. Destination
+races and inherited ACLs remain accepted for the disposable demo only, never own repositories.
+Before required status, measure complete installs/build/tests/six runs, set the timeout to
+ceil(1.5 × slowest green duration), and remove PR path filters. No required-status change here.
+
+## 2026-11-01 — Copied own repositories: accepted Windows residuals and internal selection
+
+At 20:18 ART the maintainer accepted, also for copied own repositories, the two residuals
+previously accepted only for the disposable demo: concurrent replacement between a path
+check and open, and inherited folder ACLs on copies/logs that may permit other local users
+to read them. This supersedes the earlier demo-only scope in the W1/W3 entries. It permits
+W4 implementation; it grants neither Windows isolation nor ACL hardening. Future public
+trust disclosure must explain these residuals and child interpreters importing the original
+source outside the import guard. Trusted code and private nonsynced folders remain necessary.
+
+W4a1 uses the already approved `workspace/source_nt.py` module for internal placement and
+read-only Git selection. The public selector still accepts only demo/Boltons and rejects
+all repository paths, including valid local NT paths, until W4c2. Existing profile validation
+and Linux behavior remain unchanged. Lock/server Job, previous-runtime guard and trust must
+precede future source operations; validated staging must precede reset. Production startup
+does not yet implement that own-source order. W4a2 supplies guard/staging; W4c2 wires startup.
+
+## 2026-11-01 — C5 Chat merge mode uses the shared Settings tab
+
+Chat's empty TaskBox and conversation Composer receive an optional action accessory;
+Oversight supplies none. Both chips navigate through the existing `onOpenSettings`
+callback to the single Merge mode section. Only retained mode evidence labels the
+chip (run metadata is the fallback); missing evidence reads unknown. Replay keeps
+its explanations and command guards; opening Settings grants no command capability.
+
+C5 renders a rules-merge receipt at the projected resolution entry only for an
+approved, merged, rules-authored decision. Other resolutions keep their existing
+renderer. The caption, rule/grant explanation, commit and timestamp belong to that
+immutable envelope; later mode events update only the chips. Missing assessment
+adds no historical claims. No event, retained projection or timeline is added.
+
+The C5 review link dispatches an existing `open` focus-tab action with stable
+`review:<change_id>` identity, preserved selection and empty framing IDs. It requires
+matching retained proposal/resolution identity, revision and envelope position plus
+the current review evidence. Missing evidence or dispatcher leaves a readable
+unavailable explanation. Shared pending-change guards remain unchanged; Chat stays
+selected and FocusPanel loads its existing ReviewPanel and tab history.
+
+C5 proof exercises production App Settings/tab dispatch in live and replay, using
+hand-written retained evidence and fixture-only Chat initialization. Targeted
+regressions retain focus, draft, graph camera and scroll ownership. Comparisons
+judge only C5: C2/C3 bodies, C4 composition and C1 TaskBox controls stay outside it.
+
+## 2026-11-01 — C3 presence starts from the C1 hand-off
+
+C3 uses accepted C1 base `05527f4`, preserving the Usage/replay wiring, Oversight default,
+retained inert graph and shared shell. FilesProvider already carries State; the latest
+focus already includes ranges. Only the work-frame body and Files marks consume this
+front's projection. C1's asynchronous test preparations are already present.
+
+`selectWorkPresence` is the single pure projection for Chat and Files. Current presence
+uses only the latest focus of working/revising agents: ranges survive without a graph,
+known IDs add paths and function names, and the owner's added nodes override main.
+Only a null start line means whole-file focus; a missing end reads "from line N".
+Pause hides focus; working/revising restores the latest focus until a new one arrives.
+Unknown IDs invent nothing. Agent IDs preserve identity even when slots are reused.
+Pending files/counts come only from the current proposal in ready-for-review/conflict;
+approval, rejection and Request changes remove that waiting group. A conflict remains
+pending and names the observed merge/test failure. Current focus wins per agent/path.
+
+C3 uses approved dense body metrics and existing theme roles, overriding Impeccable's
+generic body/card-size and motion suggestions. C1's 15px header stays (sketch: 16px);
+card replaces sketch-only card2. The footer describes files and observed functions,
+with connections on the graph, instead of the sketch's misleading "Files only"; it omits
+C4's graph action. C4 still owns
+hiding the work column in review; proposal events do not infer review navigation.
+DESIGN.md and the coordinated inventory stay unchanged; proposed text and full-frame
+comparison evidence live under `.shots/chat-where/`.
+
+## 2026-11-01 — Name the agent above its conversation
+
+The maintainer, Nov 1 at 16:11 ART: a repeated task above the conversation read as a stray message.
+The Conversation heading therefore names the agent at 16px/600, retaining its line height and text
+color, badge, status and chips. The task stays only in the first timeline message, "Task from you".
+Tool rows show their existing summary as a sentence, with the tool name on hover; an empty summary
+falls back to the tool name in body type. Icons, results, milliseconds, errors, View in diff and
+Test output remain. This supersedes the task headline in the approved Conversation sketch.
+
+## 2026-11-02 — The person owns the repository's test limit
+
+The person sets OVERSIGHT_TEST_TIMEOUT_S before startup for their own repository; the model
+cannot set or change it. There is no policy maximum. The default is 60 seconds because it fits
+the demo; demo and Boltons always keep 60. Parsing allows 1–999999999 seconds (at most nine
+significant ASCII digits) solely to keep parsing and timer arithmetic finite. The agent's limit
+per round is max(600, 3*T + 300) seconds. One per-run Limits object carries both fixed values.
+Own-source selection remains W4c2; no tool argument or contract changes.
+
+A long limit lets one suite hold main's lock and the Git lease (workspace/core.py:782–786), so
+other agents' tests and Approve wait. Stop ends the suite and releases them. Timeout text reports
+incomplete observed results and an unknown cause, suggesting a different limit on the next run.
+Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.
+
+## 2026-11-02 — A read-only plan flow before the freeze
+
+The maintainer approved a read-only view of the lead's plan as a flow, inside the plan piece of the decisions
+inbox. It shows subtask nodes with their assigned agent, edges for “waits for the merge of #n”, and each
+subtask's fixed gates: the proposal's tests, the person's Approve, and the combined tests when main moved.
+Values no event carries show as unknown. It is drawn in HTML and SVG, not Cytoscape, so it is not a second
+graph, and it adds no events, contracts or endpoints. For this view only, it supersedes “No new graph or map
+work before the freeze” in the entry “Two views of one shell, and the Tauri shell before the native ports”.
+Its sketch is approved before code, at desktop and phone widths, and it is the first thing cut if the freeze
+is at risk. The lock, lead edits, control modes and optional gates stay after the hackathon.
+Reason: it shows that the lead proposes and the person governs, with data the events already carry.
+
+## 2026-11-02 — Color is a team or a state
+
+Color is a team or a state, never alone and never amber; every color comes from a theme token. A team is the
+plan's lead, else the plan, else the agent; a lead's agents carry the lead's color and a label such as A·1.
+A dashed border still means only a pending change, now in its team's color. The six hue tokens A–F name teams;
+a seventh team reuses the hue of the team idle longest among those with no pending change.
+The frontend computes the team from the plan and agent events, with no contract change.
+Reason: one lead runs several agents, and the person reads the work by plan, so per-agent colors split one
+plan into unrelated colors.
+
+## 2026-11-02 — One shared frontend team identity
+
+`frontend/src/state/teamSelector.ts` is the sole frontend team computation for the graph,
+Chat rail, Chat and inbox to share. The approved rule is the plan's lead when `Plan.started_by`
+names one, otherwise the plan, otherwise the agent itself; a lead belongs to its own team.
+The selector folds the accepted prefix, keeps the first non-null agent plan and latest plan
+ownership in event order, retains every observed lead, and orders resolved teams by first occurrence.
+It does not read ticks: coding-agent ticks omit plan ids, plan-tagged ticks belong to usage-only
+planners, and lead accounting has no plan id.
+
+`backend/tests/events/test_team_selector_parity.py` and
+`frontend/src/state/teamSelector.parity.test.ts` guard parity through one shared golden fixture,
+using the server's `team_of` as the oracle. K2 Chat with multiple leads and K3 team colors are
+future shared consumers; this front adds no production import or visible change.
+
+## 2026-11-01 — C2 builds compact Chat agents and conversation selection
+
+C2 fills C1's existing agents frame with coding-agent rows. State is forwarded at the existing
+Frame call; Oversight, its default, shared conversation identity and lazy graph boundary stay
+unchanged. The first structural child position remains empty for L3's lead row. C3–C6 and L3
+remain pending; DESIGN's coordinated lane remains held beside C1's proposed addition.
+
+The pure Chat projection reuses the card's model, tool/focus/model-wait activity, maximum observed
+step, per-round limit and cumulative per-agent cost. No tick omits a reading; unknown remains
+unknown after priced ticks. Review activity uses a matching retained needs-you reason, otherwise
+"Waiting for your review". "Merged by your rules" requires an approved, merged rules resolution.
+No merge time is shown. The count reuses slotUsage: paused, halted, conflicting and review work
+hold a slot until resolution, so the approved wording is "N of M running"; no metadata means no
+numeric claim. It does not mean agents currently calling a tool.
+
+Teams follow explicit agent origin, else the highest-revision plan's lead, else plan, else agent.
+Allocation and release replay retained sequence order: first coding status introduces a team,
+new teams take the longest-idle A–F hue with A–F ties, and member numbers follow first status.
+Ended rows keep their identities; later statuses and physical slot reuse do not replace them.
+This presentation is Chat-only and resets through the existing new-run reducer.
+
+Native row buttons expose full identity and pressed selection. Modified keys keep their native
+behavior. Tab reaches each row; unmodified Up/Down
+and Home/End move focus only on those keypresses, and Enter/Space activates without moving focus
+away. Without the callback rows are noninteractive groups. Events never select, focus or scroll
+another row. Tests cover the actual reducer and Frame, command targets, replay navigation, layout
+round trips, independent scrolling and team-label wrapping at 1280.
+
+The approved compact geometry and theme tokens replace sketch literals. Ready pills fit beside
+standalone names at 260px; team labels can wrap the line without shrinking or clipping state.
+The fixture's A remains waiting for review after B merges because it has no rules-hold receipt.
+The C2 review capture retains proposed list state and A's conversation; C4's review layout is
+intentionally deferred. Twenty captures and twenty full-reference-size comparisons live under
+`.shots/chat-agents/`; proposed DESIGN text remains uncommitted there. No other-front work lands.
+
+### C2 reference verification
+
+The five required Impeccable references were re-read in full:
+
+- `.agents/skills/impeccable/reference/layout.md`
+- `.agents/skills/impeccable/reference/typeset.md`
+- `.agents/skills/impeccable/reference/harden.md`
+- `.agents/skills/impeccable/reference/clarify.md`
+- `.agents/skills/impeccable/reference/audit.md`
+
+Rendered stress at 1280 showed
+unbroken model text clipping, so row content now permits arbitrary-token wrapping. A row's
+accessible description exposes model, full activity, step and optional cost alongside its
+existing full identity and pressed selection. A browser regression covers Arabic/CJK/emoji,
+long model/activity text, unknown cost and forced-colors focus. Approved geometry, visible
+copy, team allocation, selection and lazy boundaries stay unchanged.
+
+The contrast audit also found team text below 4.5:1 on selected raised rows: dark F and day D/E.
+Badge and active-pill tints now compose over the existing panel token, so selecting or hovering
+cannot reduce their text contrast. This changes no palette token or geometry. A rendered-pixel
+regression checks both identity surfaces for every A–F hue in both themes.
+
+Header markup is covered without screenshot flags for empty, working, proposed, review and
+merged states, absent metadata and a different slot denominator. Default browser coverage also
+checks incoming status, proposal, conflict and merge events with paused and halted slot holders.
+It verifies that two plans from one lead keep member numbers through slot reuse, then that a
+new run clears rows and restarts lettering at A without selecting it. The handwritten harness
+starts event sequence at 1 for a new run, matching the reducer's existing run boundary contract.
+
+### C2 startup and workspace evidence (2026-11-02)
+
+A replay build on the merged tree measures static startup at 153511 → 155067 B gzip
+(delta +1556 B) and effective Oversight-default startup at 381569 → 383135 B gzip
+(delta +1566 B); both remain below 409600 B. The baseline overrides only Frame.tsx and
+ChatShell.tsx with main integration parent `0fa0f274`, keeping the remaining source identical.
+Responses are gzipped separately and counted once. Effective startup includes the requested
+graph closure and replay row; Save-Data excludes post-draw idle Monaco prefetch.
+The following exact chunk names and per-response gzip deltas are retained here as well as in
+uncommitted `.shots/chat-agents/startup-delta.json`.
+
+| Before chunk | After chunk | Before gzip B | After gzip B | Delta B |
+| --- | --- | ---: | ---: | ---: |
+| assets/ConversationPanelHeader-C0YpGoE0.js | assets/ConversationPanelHeader-wjH_7u-q.js | 19867 | 19865 | -2 |
+| assets/DecisionContext-mEKhlscQ.js | assets/DecisionContext-mEKhlscQ.js | 245 | 245 | 0 |
+| assets/FileViewHeader-C0BLzO8r.js | assets/FileViewHeader-C0BLzO8r.js | 2066 | 2066 | 0 |
+| assets/InboxHeader-DmgtEOKr.js | assets/InboxHeader-DmgtEOKr.js | 503 | 503 | 0 |
+| assets/OversightStage-D9q5GUgL.js | assets/OversightStage-xaWriDsM.js | 209245 | 209246 | 1 |
+| assets/ReplayBar-YAV5_9YG.js | assets/ReplayBar-CHgmiHmP.js | 2765 | 2768 | 3 |
+| assets/ReviewHeader-CHzoaaTi.js | assets/ReviewHeader-DBGrQ1G8.js | 13470 | 13470 | 0 |
+| assets/behaviorEvidence-Cd5v8l0y.js | assets/behaviorEvidence-ChBnlueA.js | 654 | 659 | 5 |
+| assets/coneWords-Be6sP8n8.js | assets/coneWords-3nsygrqM.js | 691 | 691 | 0 |
+| assets/controller-OQgxx7vY.js | assets/controller-Bx0IKfQQ.js | 13501 | 13502 | 1 |
+| assets/createLucideIcon-DU7RiFmk.js | assets/createLucideIcon-DU7RiFmk.js | 4405 | 4405 | 0 |
+| assets/editor-ZSm51VOF.js | assets/editor-0B9YQldw.js | 1869 | 1873 | 4 |
+| assets/events-aIBntNdw.js | assets/events-aIBntNdw.js | 420 | 420 | 0 |
+| assets/eye-CWFOLv-v.js | assets/eye-CWFOLv-v.js | 353 | 353 | 0 |
+| assets/firstDraw-B6F0renU.js | assets/firstDraw-B6F0renU.js | 245 | 245 | 0 |
+| assets/index-D8iVTMSQ.js | assets/index-8Jp9VIZ4.js | 96357 | 97901 | 1544 |
+| assets/play-Ct1ERjno.js | assets/play-Ct1ERjno.js | 324 | 324 | 0 |
+| assets/preload-helper-BLdHbfdN.js | assets/preload-helper-BLdHbfdN.js | 797 | 797 | 0 |
+| assets/replayPlayer-Nqlr8BzF.js | assets/replayPlayer-BKT9Noly.js | 1202 | 1202 | 0 |
+| assets/revert-BBUEeJVG.js | assets/revert-_r4_MTMX.js | 507 | 510 | 3 |
+| assets/review-C13GEN1z.js | assets/review-YwYFloKd.js | 750 | 755 | 5 |
+| assets/rolldown-runtime-hePW80VL.js | assets/rolldown-runtime-hePW80VL.js | 428 | 428 | 0 |
+| assets/selectors-D4T75Ftv.js | assets/selectors-D4T75Ftv.js | 773 | 773 | 0 |
+| assets/state-BDWgWLO0.js | assets/state-B8RD2YGb.js | 6142 | 6144 | 2 |
+| assets/theme-DIot6wvK.js | assets/theme-DIot6wvK.js | 3811 | 3811 | 0 |
+| assets/x-ClajOlv0.js | assets/x-ClajOlv0.js | 179 | 179 | 0 |
+
+Static traversal contains all rows except OversightStage, ReplayBar, behaviorEvidence,
+coneWords, controller and replayPlayer; these six immediate chunks add 228058 → 228068 B
+(delta +10 B). Content hashes can change without a response's gzip size changing.
+
+The local proof is `.shots/chat-agents/STATE-WIDTH-THEME.png` (20 captures),
+`.shots/chat-agents/compare/STATE-WIDTH-THEME.png` (20 full-size build-left/reference-right
+comparisons), and `.shots/chat-agents/measurements-delta.json` (40 properties × four
+viewport/theme pairs, with their computed-style source selectors). A gated local-evidence
+regression decodes all 40 images, checks complete reference dimensions and every comparison
+pixel, reconciles all 160 pairs with measured styles, and checks this startup table's sums.
+Captures use handwritten fixture events, not a recording. Coordinator confirmation of the
+workspace artifacts remains required before this evidence closes the blocking review item.
+
+The final C2 slice against main integration parent `0fa0f274` contains
+1762 additions, 9 deletions, 1771 changed lines (exact `git diff --numstat` totals).
+This excludes merge-only changes since accepted C1 `05527f47`; the previous round's
+`147428f9` slice was 1531 additions, 9 deletions, 1540 changed lines.
+This exceeds the 350–450 changed-line estimate because the required selector, row, event-shaped
+fixture, browser interaction, stress, contrast and capture proof accounts for most additions.
+The local evidence regressions additionally guard missing files, wrong comparisons, startup
+chunk accounting and stale slice totals. The work remains within the authorized agents slice;
+C3–C6 and L3 remain pending.

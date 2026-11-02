@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Inbox } from "lucide-react";
+import { slotUsage } from "../agents";
 import type { Plan } from "@contracts";
 import type { DecisionInboxEntry, State } from "../state";
 import { selectDecisionInbox, selectActiveGrants } from "../state";
@@ -10,7 +11,26 @@ import { Example } from "./AnswerChoices";
 import { selectChangeCard, selectInboxSummary, selectPossibleCallersWait } from "./inboxSelectors";
 import { factsForRevision } from "./factsForRevision";
 import { GrantChoice } from "./GrantChoice";
+import { selectPlanEvidence, selectRetainedPlans } from "./planSelectors";
 import "./inbox.css";
+
+const PlanActions = lazy(() => import("./PlanActions"));
+const planPiece = (state: State, plan: Plan) => (
+  <Suspense
+    fallback={
+      <div className="plan-content">
+        <p className="decision-muted">Loading plan…</p>
+      </div>
+    }
+  >
+    <PlanActions
+      key={`${state.run?.run_id ?? ""}:${plan.plan_id}`}
+      state={state}
+      plan={plan}
+      slots={slotUsage(state)}
+    />
+  </Suspense>
+);
 
 function InboxRow({
   state,
@@ -40,11 +60,16 @@ function InboxRow({
             change?.proposal?.task ??
             "Decision needs you"));
   const paragraph = plan
-    ? (plan.detail ?? "Lead plan awaits approval")
+    ? (plan.detail ?? (plan.subtasks ? null : "Lead plan awaits approval"))
     : (change?.proposal?.summary ?? entry.decisions[0]?.reason);
   const reasons = [
     ...new Set(entry.decisions.filter((d) => d.kind !== "change").map((d) => d.reason)),
-  ].filter((reason) => reason !== heading && reason !== paragraph);
+  ].filter(
+    (reason) =>
+      reason !== heading &&
+      reason !== paragraph &&
+      !(plan?.subtasks && reason === "Lead plan awaits approval"),
+  );
   const example =
     question?.example.source === "review_card"
       ? question.example.value
@@ -54,7 +79,7 @@ function InboxRow({
     <article className="inbox-row">
       <div className="decision-heading">
         <span className="decision-muted">
-          {slot ? `Agent ${slot}` : "Decision"} · {eventTime(entry.ts)}
+          {slot ? `Agent ${slot}` : "Decision"} · <time>{eventTime(entry.ts)}</time>
         </span>
         <span className="decision-muted">{entry.age}</span>
       </div>
@@ -67,6 +92,7 @@ function InboxRow({
           ))}
         </ul>
       )}
+      {plan?.subtasks && planPiece(state, plan)}
       {example && <Example row={example} slot={slot ?? undefined} />}
       <InboxAnswer state={state} entry={entry} />
       {change && onReview && (
@@ -150,13 +176,8 @@ export function DecisionInbox({
   const entries = selectDecisionInbox(state);
   const grants = selectActiveGrants(state);
   const { agents, steps, minutes } = selectInboxSummary(state);
-  const plans = new Map<string, Plan>();
-  for (const event of state.decisionEvents) {
-    if (event.type !== "plan.updated") continue;
-    const previous = plans.get(event.payload.plan_id);
-    if (!previous || previous.revision <= event.payload.revision)
-      plans.set(event.payload.plan_id, event.payload);
-  }
+  const { plans } = selectPlanEvidence(state);
+  const retained = selectRetainedPlans(state);
   return (
     <section aria-label="Decisions inbox" className="decisions-inbox">
       <InboxViews count={entries.length} grants={grants.length} view={view} onView={setView} />
@@ -174,12 +195,12 @@ export function DecisionInbox({
                     key={entry.id}
                     state={state}
                     entry={entry}
-                    plan={lead?.planId ? plans.get(lead.planId) : undefined}
+                    plan={lead?.planId ? plans.get(lead.planId)?.payload : undefined}
                     onReview={onReview}
                   />
                 );
               })
-            ) : (
+            ) : retained.queued.length || retained.failed.length ? null : (
               <div className="inbox-empty">
                 <Inbox aria-hidden="true" size={28} />
                 <h3>You can keep watching</h3>
@@ -188,6 +209,36 @@ export function DecisionInbox({
                   agent cards keep showing the run.
                 </p>
               </div>
+            )}
+            {(["queued", "failed"] as const).map(
+              (group) =>
+                retained[group].length > 0 && (
+                  <section
+                    className="plan-group"
+                    aria-label={
+                      group === "queued" ? "Queued, waiting for slots" : "Ended without running"
+                    }
+                    key={group}
+                  >
+                    <h3 className="group-label">
+                      {group === "queued" ? "Queued, waiting for slots" : "Ended without running"}
+                    </h3>
+                    {retained[group].map(({ payload: plan, firstTs }) => (
+                      <article className="inbox-row" key={plan.plan_id}>
+                        <div className="decision-heading">
+                          <span className="decision-muted">
+                            Plan · <time>{eventTime(firstTs)}</time>
+                          </span>
+                        </div>
+                        <h3>{plan.task}</h3>
+                        {group === "queued" && plan.detail && plan.detail !== plan.task && (
+                          <p>{plan.detail}</p>
+                        )}
+                        {planPiece(state, plan)}
+                      </article>
+                    ))}
+                  </section>
+                ),
             )}
           </div>
           <footer className="inbox-footnote">

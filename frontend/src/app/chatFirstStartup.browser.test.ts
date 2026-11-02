@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
@@ -5,7 +8,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
 import type {} from "./chatShell.browser.fixture";
 
-let server: ViteDevServer, browser: Browser, html: string, url: string;
+let server: ViteDevServer, browser: Browser, html: string, url: string, cacheDir: string;
 const harness = `
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -29,9 +32,11 @@ declare global {
   }
 }
 beforeAll(async () => {
+  // Optimized dependencies contain checkout paths: parallel checkouts must never share them.
+  cacheDir = await mkdtemp(join(tmpdir(), "oversight-chat-startup-"));
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: "/tmp/oversight-chat-startup-vite",
+    cacheDir,
     server: { host: "127.0.0.1", port: 0, strictPort: false },
     plugins: [
       {
@@ -60,6 +65,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser.close();
   await server.close();
+  await rm(cacheDir, { recursive: true, force: true });
 });
 
 it.each(["explicit open", "idle prefetch"])(

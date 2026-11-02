@@ -52,6 +52,7 @@ async def guarded_suite(
             env=git_env,
             flags=flags,
             timeout_s=timeout_s,
+            nt_source_bytes=workspace.nt_source_bytes,
         )
         try:
             run = await run_suite(

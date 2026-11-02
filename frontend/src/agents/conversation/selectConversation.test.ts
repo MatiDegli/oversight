@@ -7,6 +7,14 @@ import { selectConversation } from "./selectConversation";
 
 const select = (state = sketchState) => selectConversation(state, "agent-1", sketchMessages);
 describe("selectConversation", () => {
+  it("keeps the task only in the timeline projection", () => {
+    const conversation = select();
+    expect(conversation?.header).not.toHaveProperty("task");
+    expect(conversation?.entries[0]).toMatchObject({
+      kind: "task",
+      text: sketchState.agents["agent-1"]?.task,
+    });
+  });
   it("uses four step events when the status still says step zero", () => {
     const state = recorded
       .trim()

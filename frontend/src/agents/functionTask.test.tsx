@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 import { twoSlotState } from "../taskBox.fixture";
 import { StartAgentHere } from "./StartAgentHere";
 import { functionTask } from "./functionTask";
-import { createTaskBoxStore } from "./taskBox";
+import { createTaskBoxStore } from "./taskBoxModel";
 
 it.each([
   ["function", "shop/pricing.py", "compute_price", "In shop/pricing.py, compute_price: "],

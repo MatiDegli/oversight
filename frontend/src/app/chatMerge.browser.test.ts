@@ -6,6 +6,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
 import type {} from "./chatMerge.browser.fixture";
 import type { GraphProbeHost } from "../graph";
+import type { ChangeResolved } from "@contracts";
 
 let browser: Browser;
 const entries: { server: ViteDevServer; html: string; url: string }[] = [];
@@ -149,9 +150,6 @@ it.each([false, true])(
       ).toBeVisible();
       await check(page.getByRole("tab", { name: /Review · change-3/ })).toHaveCount(0);
       await check(page.getByText("Merged into main", { exact: false }).first()).toBeVisible();
-      await page.getByRole("tab", { name: /Review · change-1/ }).focus();
-      await page.keyboard.press("Enter");
-      await page.keyboard.press("Control+Enter");
       await check(page.getByRole("button", { name: /^Approve/ })).toHaveCount(0);
       await check(layout(page, "Chat")).toHaveAttribute("aria-pressed", "true");
       await page.getByRole("button", { name: /^Close tab Review · change-1/ }).click();
@@ -162,6 +160,55 @@ it.each([false, true])(
     }
   },
 );
+it("does not approve by keyboard after the opened review receives a new proposal", async () => {
+  const { page, mutations } = await open({ app: true });
+  try {
+    await page.route("**/files?*", (route) =>
+      route.fulfill({
+        json: {
+          path: "shop/pricing.py",
+          agent_id: "agent-1",
+          content: "# C5 fixture\n",
+          hash: "a".repeat(64),
+        },
+      }),
+    );
+    await page.route("**/changes/change-1/approve", (route) => route.fulfill({ status: 202 }));
+    await layout(page, "Oversight").click();
+    await page.waitForFunction(
+      () =>
+        !!document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')?.oversightGraph,
+    );
+    await page
+      .getByRole("article", { name: "Agent A", exact: true })
+      .getByRole("button", { name: "Conversation", exact: true })
+      .click();
+    await layout(page, "Chat").click();
+    await receipt(page).getByRole("button", { name: "Open its review" }).click();
+    await check(page.getByRole("tab", { name: /Review · change-1/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await page.evaluate(() => {
+      window.chatMergeTest.repropose();
+    });
+    const approve = page.getByRole("button", { name: "Approve and merge", exact: true });
+    await check(approve).toBeEnabled();
+    await approve.focus();
+    await page.keyboard.press("Enter");
+    await page.keyboard.press("Control+Enter");
+    await check(approve).toBeFocused();
+    await check(
+      page.getByText("Approve with a click: it merges into main", { exact: true }),
+    ).toBeVisible();
+    expect(mutations).toEqual([]);
+    await approve.click();
+    await check.poll(() => mutations.length).toBe(1);
+    expect(mutations[0]).toContain("/changes/change-1/approve");
+  } finally {
+    await page.close();
+  }
+});
 it("keeps Chat-first graph loading, draft identity, focus and scroll ownership", async () => {
   const { page, requests } = await open();
   try {
@@ -217,6 +264,62 @@ it("keeps the receipt readable when matching review evidence is unavailable", as
     });
     await check(receipt(page).getByText("Its review is unavailable.")).toBeVisible();
     await check(receipt(page).getByRole("button")).toHaveCount(0);
+  } finally {
+    await page.close();
+  }
+});
+it.each([
+  { decided_by: "person" },
+  { decided_by: "cross_review" },
+  { decision: "rejected", merge: null },
+  { decision: "changes_requested", merge: null },
+  { merge: "conflict" },
+] satisfies Partial<ChangeResolved>[])(
+  "FocusPanel keeps generic rendering for %j",
+  async (patch) => {
+    const { page } = await open();
+    try {
+      await check(receipt(page)).toHaveCount(1);
+      await page.evaluate((patch) => {
+        window.chatMergeTest.resolve(patch);
+      }, patch);
+      const timeline = page.getByRole("list", { name: "Conversation timeline" });
+      // The original rules receipt stays in sequence; only the new entry is generic.
+      await check(receipt(page)).toHaveCount(1);
+      await check(
+        timeline.getByText(
+          patch.decision === "changes_requested"
+            ? "You requested changes"
+            : patch.decision === "rejected"
+              ? "You rejected the change"
+              : "You approved the change",
+          { exact: false },
+        ),
+      ).toHaveCount(1);
+    } finally {
+      await page.close();
+    }
+  },
+);
+it.each([1920, 1280])("separates the replay caption and chip at %spx", async (width) => {
+  const { page, mutations } = await open({ replay: true, width });
+  try {
+    await check(chip(page)).toBeVisible();
+    const gap = await page.locator(".conversation-composer").evaluate((el) => {
+      const caption = el.querySelector("p"),
+        actions = el.querySelector(".composer-actions");
+      if (!caption || !actions) throw new Error("Missing replay caption or actions");
+      return actions.getBoundingClientRect().top - caption.getBoundingClientRect().bottom;
+    });
+    expect(gap).toBe(8);
+    expect(mutations).toEqual([]);
+    if (process.env.CHAT_MERGE_SHOTS === "1") {
+      await mkdir(`${shots}replay`, { recursive: true });
+      await page.screenshot({
+        path: `${shots}replay/${String(width)}-dark.png`,
+        animations: "disabled",
+      });
+    }
   } finally {
     await page.close();
   }

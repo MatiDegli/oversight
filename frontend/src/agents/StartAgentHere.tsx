@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { useStore } from "zustand";
 
 import type { State } from "../state";
-import { startBlock, taskBoxStore } from "./taskBox";
+import { startBlock, taskBoxStore } from "./taskBoxModel";
 import { functionTask } from "./functionTask";
 
 export function StartAgentHere({

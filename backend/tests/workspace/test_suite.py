@@ -332,3 +332,47 @@ async def test_case_detail_is_redacted_bounded_and_path_free(tmp_path: Path) -> 
     assert details[8] == "assert 1 == 2" and details[9] is None
     assert all(absolute_paths(d) == [] for d in details if d is not None)
     assert all(d is None or len(d) <= 240 for d in details)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("profile", [None, BOLTONS])
+@pytest.mark.parametrize("selected", [False, True])
+async def test_ordinary_environment_and_spawn_argv_are_exact(tmp_path, profile, selected):
+    (tmp_path / "tmp").mkdir()
+    cases = ("tests/test_x.py::test_x",) if selected else ()
+
+    async def spawn(argv, *, cwd, timeout_s, env=None, output_cap=DEFAULT_OUTPUT_CAP):
+        assert env is not None
+        report = Path(env["OVERSIGHT_REPORT"])
+        assert env == {
+            "HOME": str(tmp_path / "tmp/home"),
+            "PYTHONPATH": str(tmp_path / "trusted"),
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONHASHSEED": "0",
+            "OVERSIGHT_REPORT": str(report),
+        }
+        assert cwd == tmp_path and timeout_s == 17
+        assert argv == _pytest_argv(
+            Path("/python"),
+            report.with_suffix(".xml"),
+            cases,
+            profile.pytest_targets if profile else (),
+            profile.pytest_options if profile else (),
+        )
+        await asyncio.to_thread(report.write_text, line("start") + "\n")
+        return ProcessResult(0, "", "", False, False, 1)
+
+    result = await run_suite(
+        python=Path("/python"),
+        plugin_dir=tmp_path / "trusted",
+        runtime_root=tmp_path,
+        tree_root=tmp_path,
+        timeout_s=17,
+        redact=lambda s: s,
+        spawn=spawn,
+        case_ids=cases,
+        pytest_targets=profile.pytest_targets if profile else (),
+        pytest_options=profile.pytest_options if profile else (),
+    )
+    assert result.result.outcome == "passed"

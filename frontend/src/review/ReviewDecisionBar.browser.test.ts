@@ -10,6 +10,8 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 let server: ViteDevServer, browser: Browser, html: string, url: string;
 const shots = fileURLToPath(new URL("../../../.shots/review-bar/", import.meta.url));
 const capture = process.env.REVIEW_BAR_SHOTS === "1";
+// Fresh pages load Monaco and its fonts before the file becomes clean; cold startup can exceed 5 s.
+const editorReady = { timeout: 30_000 };
 const sketchDir = process.env.REVIEW_BAR_SKETCH_DIR;
 const unlocked =
   "If main moved since the agent started, the tests run again on the combined result before the merge.";
@@ -136,6 +138,7 @@ it.each(["dark", "day"])(
       await browserExpect(page.getByLabel("Editable review file")).toHaveAttribute(
         "data-state",
         "clean",
+        editorReady,
       );
       const bar = page.getByRole("region", { name: "Decision", exact: true });
       const comment = bar.getByRole("textbox", { name: "Comment for the agent" });
@@ -263,11 +266,13 @@ it.each(["dark", "day"])(
             .getByRole("button", { name: "Review change" })
             .click();
           await page.getByRole("button", { name: "Yes, keep it" }).first().click();
-        } else
+        } else {
           await browserExpect(page.getByLabel("Editable review file")).toHaveAttribute(
             "data-state",
             "clean",
+            editorReady,
           );
+        }
         await page.evaluate(() => document.fonts.ready);
         const bar = page.getByRole("region", { name: "Decision", exact: true });
         await browserExpect(bar).toHaveCount(1);

@@ -101,3 +101,106 @@ Historical P2-A delivery size review signals (before later runtime additions): `
 policy and preparation live in new small modules. Keeping those additions local avoids
 a refactor of shared files during measured-cone integration. No touched function exceeds
 80 lines.
+
+## Native Windows source boundary (W3)
+
+The PowerShell demo checks in [README](../README.md#native-windows-advisory-checks) explicitly set
+`OVERSIGHT_WORKSPACE_SOURCE=""`. W3 changes checkout text attributes only in Oversight:
+`* text=auto eol=lf`, preserving `DECISIONS.md merge=union`, without renormalizing files or
+changing demo template bytes. It never changes an external source's attributes.
+
+The supported profile list above is unchanged. W3 covers only the empty demo source setting;
+native qualification of the pinned profile, W4's path-based COPY and native own-source
+qualification are pending; do not pass arbitrary repository paths. Demo acceptance requires
+both W2 fronts before read/edit/tests/proposal/Approve and three-start proof. Record raw bytes,
+hashes, Git EOL output and initial/merge commits; do not infer LF from text-mode reads.
+
+## Internal native source handoffs
+
+`workspace/source_nt.py` prepares internal NT placements and a read-only Git inventory.
+Public repository paths still fail before Workspace/EventStore
+construction or source Git. Demo/Boltons selection and pinned-profile `status` validation
+are unchanged. Own-source queries use a separate path: verified HEAD, staged index listing,
+tracked plus untracked-not-ignored listing, and bounded ignored-root listing. No recursive
+walk of ignored trees, filters, status, diff, configuration writes or source mutation occurs.
+Tracked ignored files remain selected; absent tracked files represent working deletions.
+Secrets, `.venv`, caches, `node_modules` and bytecode are excluded before content access.
+
+Placements must be short private local NTFS nonsynced drive paths. UNC/device/relative paths,
+ADS, aliases, unsafe components, reparse/offline/recall entries, SUBST/mapped/network drives,
+ReFS and known sync roots refuse. Outside USERPROFILE warns; unknown sync clients cannot be
+detected. Source/runtime ancestry overlap requires a separate clone; only the existing named
+profile under runtime `sources` is exempt. A source cannot be inside a reset target.
+
+The future startup contract is lexical placement before resolve/constructors/source Git;
+lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
+reset. Current startup does not yet provide this own-source ordering. Public startup wiring
+remains pending. Private staging now pins bounded no-follow HEAD/index stamps and hashes
+around selection and rechecks them after copying and relisting Git paths.
+Selected present files are copied as writable raw bytes under a unique runtime-owned staging
+directory outside `workspace`, `worktrees` and `tmp`. Working deletions create no file.
+A NUL-separated UTF-8 relative-file manifest retains tracked ignored and permitted literal names.
+The independent initial 10-second COPY deadline includes revalidation and relisting; its byte,
+path and query budgets match selection. Attributes policy is checked before any copy or reset.
+Failure preserves the previous runtime; cleanup removes only recorded owned staging identities
+through bounded metadata I/O. Staging, manifest, state and temporary paths join the UTF-16
+projection checks. Manifests and reset records retain W2's 4 MiB per-metadata-file limit
+and refuse before destruction if they exceed it. These are injected internal handoffs, not
+native acceptance or public enablement.
+
+Private reset verifies owned staging again, then records incomplete-reset state outside reset
+targets before deletion. It publishes the tree, installs the shared byte override before
+`git add -f --pathspec-from-file=<absolute-manifest> --pathspec-file-nul`, and limits
+`GIT_LITERAL_PATHSPECS=1` to that add. The initial commit and source/runtime identities are
+atomically persisted before success. Demo/Boltons retain their original copy/add path.
+
+A prior own-source marker or incomplete reset arms protection regardless of the new selector,
+provider or byte switch. Bounded no-follow HEAD and loose/packed main refs are read without Git.
+Any main hash different from the pinned initial commit refuses, including rewind/unrelated refs.
+Only an exact freshly read hash in the process environment `OVERSIGHT_DISCARD_OWN_RUNTIME`
+authorizes discard; booleans, stale hashes and values loaded from an environment file do not.
+Missing, corrupt or unsafe records refuse with preservation guidance. Verifiable interrupted
+resets clean only recorded staging identities and can retry; an unrecorded completed commit is
+ambiguous and preserves the runtime for manual recovery. Nothing serves after a failed reset.
+
+Refusal supplies safely quoted PowerShell paths/hashes and a fresh patch path outside runtime.
+Git writes `diff --binary --full-index --no-ext-diff --no-textconv --no-renames --output=...`
+directly: no text capture or redirection. Run the supplied source `apply --check` before explicit
+apply. Working source bytes must match the imported baseline, including dirty/untracked files;
+otherwise preserve the patch and resolve manually. Export covers committed delta only: preserve
+the entire runtime for uncommitted edits. No automatic source apply, reset or discard occurs.
+Linux injected cases exercise these handoffs; native NTFS/Git cases are separately skipped on
+Linux and remain unverified until run on Windows. Public own-source startup remains pending.
+
+Internal validation rejects links/reparse/special or multiple-link files, casefold or uppercase
+sibling collisions, case-sensitive directories, and named streams (only `::$DATA` is allowed).
+Review `Zone.Identifier` before using `Unblock-File` or `Remove-Item -Stream Zone.Identifier`.
+W2 binary opens and fresh identity checks precede SHA-256 records; working deletions are explicit.
+Source-only limits are 16,384 unique relative selected paths including their ancestors, 128 MiB
+selected bytes, 4 MiB/file and 8 MiB/query output. One initial 10-second deadline covers Git,
+enumeration, validation and hashing; there is no tuning knob. Linux metadata limits are unchanged.
+Source, destination and current agent/Git/probe/report projections refuse at 240 UTF-16 units.
+Later W3 qualification must measure a flat 16,384-file/128 MiB fixture on both Windows machines
+under a qualification-only 120-second cap, then freeze release phase deadlines at
+`max(10 seconds, 1.5 × slowest phase)`. No native timing evidence has been collected here.
+
+Private own-source suite preparation validates the original `.venv/Scripts/python.exe`,
+`pyvenv.cfg`, base interpreter and library placements without copying or installing anything.
+Its reduced environment enables plugin autoload only for this private arm; HOME/TEMP/TMP stay
+under runtime `tmp`. A constant probe pins the trusted report plugin and checks Python >=3.10,
+pytest >=8.2 and pluggy >=1.5. Preparation, probe (at most ten seconds) and pytest share one
+deadline derived from the caller's timeout. Missing, unsafe or incompatible environments yield
+a bounded private unavailable diagnostic. Linux injections exercise these handoffs; production
+interpreter selection, public unavailable propagation and native acceptance remain pending.
+
+Static bounded `.pth`, editable finder literals and editable distribution metadata translate
+original project paths into each tested tree, including nested layouts and namespaces. The server
+never executes mapping code. Metadata alone cannot establish import roots; unsupported or unmapped
+editables refuse privately. PYTHONPATH starts with the trusted plugin directory, tested root and
+translated roots; it never prepends the original source. Child startup removes original editable
+namespace paths once; later path insertions are refused. The trusted plugin checks mapped specs
+and all loaded origins in the probe, session start, collection finish, before test records and
+session finish. Venv library
+dependencies are permitted. Collection emits a successful guard before tests; any later guard
+failure appends a failure record and exits. Report admission and public availability remain future
+wiring; these injected tests do not establish native own-source acceptance.

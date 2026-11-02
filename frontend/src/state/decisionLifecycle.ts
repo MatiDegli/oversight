@@ -82,7 +82,7 @@ export function recordPlanEntries(entries: Entries, state: State): void {
     }
     if (event.type === "plan.updated") {
       const old = plans.get(event.payload.plan_id);
-      if (!old || old.payload.revision <= event.payload.revision)
+      if (!old || old.payload.revision < event.payload.revision)
         plans.set(event.payload.plan_id, event);
     }
     for (const lead of leads.values()) {
@@ -108,7 +108,8 @@ export function recordPlanEntries(entries: Entries, state: State): void {
   for (const [id, entry] of entries) {
     if (entry.identity.kind !== "lead_plan") continue;
     const lead = leads.get(key(entry.identity.agent_id, entry.identity.revision));
-    if (!lead || planFor(lead)?.payload.plan_id !== entry.planId) entries.delete(id);
+    const plan = lead ? planFor(lead)?.payload : undefined;
+    if (!plan || plan.plan_id !== entry.planId || plan.queued_task_id) entries.delete(id);
   }
 }
 

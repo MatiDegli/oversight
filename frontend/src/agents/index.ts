@@ -5,7 +5,7 @@ export { DataWords } from "./AgentCard";
 export type { AgentCardProps } from "./AgentCard";
 export { TaskBox } from "./TaskBox";
 export type { TaskBoxProps } from "./TaskBox";
-export { nextSlot, slotUsage } from "./taskBox";
+export { nextSlot, slotUsage } from "./taskBoxModel";
 export { StartAgentHere } from "./StartAgentHere";
 export { selectAgentCard } from "./selectors";
 export type { ConversationPanelProps } from "./conversation/ConversationPanel";
@@ -15,6 +15,8 @@ export type {
   ConversationHeader,
   ConversationEntry,
   ConversationMessage,
+  LeadConversation,
+  LeadHeader,
 } from "./conversation/selectConversation";
 export type { ConversationControls } from "./conversation/Composer";
 

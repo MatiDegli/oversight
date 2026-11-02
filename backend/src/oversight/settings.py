@@ -11,6 +11,9 @@ from oversight.limits import bounded_text
 from oversight_contracts.commands import SettingName
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+TEST_TIMEOUT_ERROR = (
+    "OVERSIGHT_TEST_TIMEOUT_S must be a whole number of seconds from 1 to 999999999"
+)
 type ParsedSettingName = (
     SettingName | Literal["BASETEN_INPUT_USD_PER_M", "BASETEN_OUTPUT_USD_PER_M"]
 )
@@ -51,6 +54,8 @@ class Settings:
     """OVERSIGHT_MAX_AGENTS: offer the first N letters from A, from 1 through 6."""
     memory_hold_percent: int = 90
     """OVERSIGHT_MEMORY_HOLD_PERCENT: hold new starts at this host-memory percentage."""
+    test_timeout_s: int = 60
+    """OVERSIGHT_TEST_TIMEOUT_S: fixed at startup, for the person's own repository only."""
     agent_model: str = "muse-spark"
     """The profile agents run on: `muse-spark` (Meta), `muse-spark-open` (Baseten), `fake` or
     `fake-b` (scripted models requiring a slot script). OVERSIGHT_AGENT_MODEL."""
@@ -129,6 +134,8 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if type(self.test_timeout_s) is not int or not 1 <= self.test_timeout_s <= 999999999:
+            raise ValueError(TEST_TIMEOUT_ERROR)
         if self.history_prune_tokens is not None and (
             type(self.history_prune_tokens) is not int or self.history_prune_tokens < 8000
         ):
@@ -164,6 +171,7 @@ class Settings:
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
             max_agents=resolve_max_agents(merged),
             memory_hold_percent=resolve_memory_hold_percent(merged),
+            test_timeout_s=resolve_test_timeout(merged),
             agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
             fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
             agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
@@ -272,3 +280,17 @@ def resolve_memory_hold_percent(values: Mapping[str, str]) -> int:
     if not raw.isascii() or not raw.isdecimal() or len(raw) > 3 or not 1 <= int(raw) <= 100:
         raise ValueError("OVERSIGHT_MEMORY_HOLD_PERCENT must be an integer from 1 to 100")
     return int(raw)
+
+
+def resolve_test_timeout(values: Mapping[str, str]) -> int:
+    """Absent or empty means 60; bound ASCII digits before int(), ignoring leading zeros."""
+    raw = (values.get("OVERSIGHT_TEST_TIMEOUT_S") or "60").lstrip("0")
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 9:
+        raise ValueError(TEST_TIMEOUT_ERROR)
+    return int(raw)
+
+
+def run_time_limits(own_source: bool, setting: int) -> tuple[int, int]:
+    """Demo and Boltons stay fixed; own repositories leave room for three suites per round."""
+    timeout = setting if own_source else 60
+    return timeout, max(600, 3 * timeout + 300)

@@ -13,6 +13,13 @@ from oversight import runtime_decisions
 pytestmark = pytest.mark.anyio
 
 
+@pytest.fixture(autouse=True)
+def semantic_worker_budget(monkeypatch):
+    # These tests prove values and publication, not speed. Match the live behavior tests'
+    # import/call allowance under contention; keep real workers, repeats and outer deadlines.
+    monkeypatch.setattr("oversight.workspace.behavior_run.PER_CALL_TIMEOUT_S", 1.0)
+
+
 @pytest.fixture
 async def proposed_cards(tmp_path, monkeypatch):
     api = FakeApi(*(ok(body('{"choice":"cannot_tell"}')) for _ in range(8)))
@@ -30,7 +37,9 @@ async def proposed_cards(tmp_path, monkeypatch):
         rec = await run(server)
         await server.until(final_cards)
         facts = next(event.payload for event in server.events() if final_cards(event))
-        assert facts.review_cards
+        assert facts.review_cards, [
+            (item.node_id, item.reason) for item in rec.behavior_diffs[facts.revision].functions
+        ]
         yield server, rec, facts
 
 
@@ -117,7 +126,9 @@ async def test_recorded_answers_replay_without_worktree_or_decision_client(tmp_p
             card.model_dump(mode="json") | {"answer": "yes", "answered_by": "person"}
             for card in facts.review_cards
         ]
-        assert answers
+        assert answers, [
+            (item.node_id, item.reason) for item in rec.behavior_diffs[facts.revision].functions
+        ]
         response = await server.client.post(
             f"/changes/{rec.change_id}/approve",
             json={"revision": facts.revision, "head_commit": facts.head_commit, "answers": answers},

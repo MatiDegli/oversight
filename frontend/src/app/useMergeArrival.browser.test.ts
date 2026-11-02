@@ -1,10 +1,13 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Browser } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { launchBrowser } from "../browserLaunch.support";
 
-let server: ViteDevServer, browser: Browser, url: string;
+let server: ViteDevServer, browser: Browser, url: string, cacheDir: string;
 const harness = `
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -44,9 +47,11 @@ declare global {
   }
 }
 beforeAll(async () => {
+  // Optimized dependencies contain checkout paths, so each run needs its own cache.
+  cacheDir = await mkdtemp(join(tmpdir(), "oversight-arrival-render-"));
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
-    cacheDir: "/tmp/oversight-arrival-render-vite",
+    cacheDir,
     server: { host: "127.0.0.1", port: 0 },
   });
   await server.listen();
@@ -56,6 +61,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser.close();
   await server.close();
+  await rm(cacheDir, { recursive: true, force: true });
 });
 it("returns Merging and holds the pending mark in the first render receiving a merge", async () => {
   const page = await browser.newPage({ reducedMotion: "no-preference" });

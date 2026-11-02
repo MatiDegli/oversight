@@ -540,7 +540,7 @@ export function shadeLamps(
   config: FieldConfig,
   cols: number,
   rows: number,
-  light: Omit<Accumulated, "strongest"> & { strongest?: Float32Array },
+  light: Accumulated,
   out: Uint8ClampedArray,
   glow: Uint8ClampedArray,
 ) {
@@ -568,7 +568,7 @@ export function shadeLamps(
         continue;
       }
       const share = level / top;
-      const hueWeight = light.strongest?.[k] ?? total;
+      const hueWeight = light.strongest[k] ?? total;
       const red = (light.red[k] ?? 0) / hueWeight;
       const green = (light.green[k] ?? 0) / hueWeight;
       const blue = (light.blue[k] ?? 0) / hueWeight;
