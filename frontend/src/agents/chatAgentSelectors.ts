@@ -1,4 +1,4 @@
-import type { AgentStatus, Plan, Slot } from "@contracts";
+import type { AgentStatus, Slot } from "@contracts";
 import type { State } from "../state";
 import { costText, matchesNeedsYou } from "../state";
 import { selectAgentCard } from "./selectors";
@@ -17,74 +17,54 @@ const labels: Record<AgentStatus["state"], string> = {
 };
 type Identity = { team: string; hue: Slot; letter: string; order: number; member: number };
 
-/** Reconstruct identities from the run-local prefix, independent of slots and render order. */
-function teamOrigins(events: State["decisionEvents"]) {
-  const plans = new Map<string, Plan>();
-  const origins = new Map<string, AgentStatus>();
-  for (const event of events) {
-    if (event.type === "plan.updated") {
-      const plan = event.payload;
-      if (plan.revision > (plans.get(plan.plan_id)?.revision ?? 0)) plans.set(plan.plan_id, plan);
-    }
-    if (event.type === "agent.status") {
-      const agent = event.payload,
-        first = origins.get(agent.agent_id);
-      origins.set(
-        agent.agent_id,
-        first
-          ? {
-              ...first,
-              plan_id: first.plan_id ?? agent.plan_id,
-              started_by: first.started_by ?? agent.started_by,
-            }
-          : agent,
-      );
-    }
+type HueTeam = { hue: Slot; order: number; members: number; active: Set<string> };
+// eslint-disable-next-line no-restricted-imports -- K0's sole team selector has no barrel export; K2a may import it only.
+import { selectTeams } from "../state/teamSelector";
+
+function openTeam(teams: Map<string, HueTeam>, idle: Map<Slot, number>, key: string, seq: number) {
+  let team = teams.get(key);
+  if (!team) {
+    const occupied = new Set([...teams.values()].filter((t) => t.active.size).map((t) => t.hue));
+    const available = hues.filter((hue) => !occupied.has(hue));
+    const hue = (available.length ? available : hues).reduce((a, b) =>
+      (idle.get(a) ?? 0) <= (idle.get(b) ?? 0) ? a : b,
+    );
+    team = { hue, order: seq, members: 0, active: new Set() };
+    teams.set(key, team);
   }
-  return { plans, origins };
+  return team;
 }
 
+/** Hue history follows first status events; membership comes only from selectTeams. */
 export function teamIdentities(state: State): Map<string, Identity> {
-  const events = [...state.decisionEvents].sort((a, b) => a.seq - b.seq);
-  const { plans, origins } = teamOrigins(events);
+  const membership = selectTeams(state).byAgent;
   const identities = new Map<string, Identity>();
-  const teams = new Map<
-    string,
-    { hue: Slot; order: number; members: number; active: Set<string> }
-  >();
+  const teams = new Map<string, HueTeam>();
   const idle = new Map(hues.map((hue) => [hue, 0]));
   const changes = new Map<string, boolean>();
-  for (const event of events) {
-    if (event.type === "agent.status" && !identities.has(event.payload.agent_id)) {
-      const agent = origins.get(event.payload.agent_id);
-      if (!agent) continue;
-      const lead =
-        agent.started_by ?? (agent.plan_id ? plans.get(agent.plan_id)?.started_by : null);
-      const key = lead
-        ? `lead:${lead}`
-        : agent.plan_id
-          ? `plan:${agent.plan_id}`
-          : `agent:${agent.agent_id}`;
-      let team = teams.get(key);
-      if (!team) {
-        const occupied = new Set(
-          [...teams.values()].filter((t) => t.active.size).map((t) => t.hue),
-        );
-        const available = hues.filter((hue) => !occupied.has(hue));
-        const hue = (available.length ? available : hues).reduce((a, b) =>
-          (idle.get(a) ?? 0) <= (idle.get(b) ?? 0) ? a : b,
-        );
-        team = { hue, order: event.seq, members: 0, active: new Set() };
-        teams.set(key, team);
+  for (const event of state.decisionEvents) {
+    if (event.type === "lead.status" || event.type === "agent.status") {
+      const { agent_id: id } = event.payload;
+      const owner = membership[id];
+      if (!owner) continue;
+      const key = `${owner.kind}:${owner.team}`;
+      const team = openTeam(teams, idle, key, event.seq);
+      if (!identities.has(id)) {
+        const member = event.type === "lead.status" ? 0 : ++team.members;
+        identities.set(id, {
+          team: key,
+          hue: team.hue,
+          order: team.order,
+          member,
+          letter:
+            member === 0 || owner.kind === "agent" ? team.hue : `${team.hue}·${String(member)}`,
+        });
       }
-      const member = ++team.members;
-      identities.set(agent.agent_id, {
-        team: key,
-        hue: team.hue,
-        order: team.order,
-        member,
-        letter: agent.plan_id || lead ? `${team.hue}·${String(member)}` : team.hue,
-      });
+      if (event.type === "lead.status") {
+        if (["starting", "working", "idle"].includes(event.payload.state)) team.active.add(id);
+        else if (team.active.delete(id) && !team.active.size) idle.set(team.hue, event.seq);
+        continue;
+      }
     }
     if (event.type === "change.proposed") changes.set(event.payload.change_id, true);
     if (event.type === "change.resolved") {

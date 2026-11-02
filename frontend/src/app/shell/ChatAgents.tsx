@@ -1,7 +1,8 @@
 import type { KeyboardEvent } from "react";
 import type { State } from "../../state";
 // eslint-disable-next-line no-restricted-imports -- C2 owns this Chat-only leaf; the shared agents barrel is outside this slice.
-import { selectChatAgents } from "../../agents/chatAgentSelectors";
+import { selectChatRows } from "../../agents/chatLeadSelectors";
+import { ChatLeadRow } from "./ChatLeadRow";
 import { agentLook, agentSlotStyle } from "../../theme";
 import type { ChatAgentSelection } from "./ChatShell";
 import "./chatAgents.css";
@@ -26,7 +27,7 @@ export function ChatAgents({
   selectedAgentId,
   onOpenConversation,
 }: ChatAgentSelection & { state: State }) {
-  const rows = selectChatAgents(state);
+  const rows = selectChatRows(state);
   if (!rows.length)
     return (
       <p className="chat-agents-empty">
@@ -36,6 +37,16 @@ export function ChatAgents({
   return (
     <ul className="chat-agent-list" aria-label="Coding agents" onKeyDown={navigate}>
       {rows.map((row) => {
+        if (row.kind === "lead")
+          return (
+            <li key={row.id}>
+              <ChatLeadRow
+                row={row}
+                selectedAgentId={selectedAgentId}
+                onOpenConversation={onOpenConversation}
+              />
+            </li>
+          );
         const Row = onOpenConversation ? "button" : "div";
         return (
           <li key={row.id}>

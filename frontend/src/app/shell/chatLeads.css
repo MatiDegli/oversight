@@ -1,0 +1,46 @@
+.chat-lead-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--slot-graphic);
+  border-radius: 50%;
+  color: var(--slot-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+.chat-lead-row {
+  min-height: 136px;
+}
+.chat-lead-row .chat-agent-task {
+  margin-top: 6px;
+}
+.chat-lead-row .chat-agent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chat-lead-team,
+.chat-lead-activity {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.chat-lead-activity {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+}
+@media (height < 900px) {
+  .chat-lead-row {
+    min-height: 111px;
+  }
+  .chat-lead-activity {
+    display: none;
+  }
+}
