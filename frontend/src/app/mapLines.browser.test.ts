@@ -624,6 +624,111 @@ it.each(["dark", "day"])("keeps a broad working module pool at zoom 0.21 in %s",
     await page.close();
   }
 });
+/** Measure the actual GPU pixel beneath each label over its hottest underlying map lamp. */
+async function mapTextContrast(page: Page, id: string, theme: string) {
+  return page.evaluate(
+    ({ id, theme }) => {
+      const canvas = document.querySelector<FieldHost>(
+        '[aria-label="Graph stage"] canvas[aria-hidden]',
+      );
+      const cell = document.querySelector(`[data-map-module="${id}"]`);
+      const field = canvas?.oversightField;
+      if (!canvas || !cell || !field) throw new Error("Missing map contrast evidence");
+      const origin = canvas.getBoundingClientRect();
+      const context = document.createElement("canvas").getContext("2d");
+      if (!context) throw new Error("Missing color resolver");
+      const color = (css: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = css;
+        context.fillRect(0, 0, 1, 1);
+        return [...context.getImageData(0, 0, 1, 1).data];
+      };
+      const ground = color(getComputedStyle(canvas).getPropertyValue("--ground"));
+      const panel = color(
+        getComputedStyle(cell.parentElement?.querySelector(".map-panel") ?? cell).backgroundColor,
+      );
+      const over = (a: number[], b: number[]) =>
+        a
+          .slice(0, 3)
+          .map((c, i) => (c * (a[3] ?? 255)) / 255 + (b[i] ?? 0) * (1 - (a[3] ?? 255) / 255));
+      const luminance = (rgb: number[]) =>
+        rgb.slice(0, 3).reduce((sum, c, i) => {
+          const s = c / 255;
+          return (
+            sum +
+            (s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4) *
+              ([0.2126, 0.7152, 0.0722][i] ?? 0)
+          );
+        }, 0);
+      const contrast = (a: number[], b: number[]) =>
+        (Math.max(luminance(a), luminance(b)) + 0.05) /
+        (Math.min(luminance(a), luminance(b)) + 0.05);
+      return [...cell.querySelectorAll(".map-count, .map-agent")].map((el) => {
+        const bounds = el.getBoundingClientRect();
+        const style = getComputedStyle(el);
+        const foreground = color(style.color);
+        let hottest: { x: number; y: number; color: number[]; level: number } | null = null;
+        const top = (Math.ceil((bounds.top - origin.top) / 7 - 0.5) + 0.5) * 7;
+        const left = (Math.ceil((bounds.left - origin.left) / 7 - 0.5) + 0.5) * 7;
+        const right = bounds.right - origin.left,
+          bottom = bounds.bottom - origin.top;
+        for (let y = top; y < bottom; y += 7)
+          for (let x = left; x < right; x += 7) {
+            const lamp = field.lamp(x, y);
+            if (!lamp?.level) continue;
+            if (
+              !hottest ||
+              (theme === "dark"
+                ? luminance(lamp.color) > luminance(hottest.color)
+                : luminance(lamp.color) < luminance(hottest.color))
+            )
+              hottest = { x, y, ...lamp };
+          }
+        if (!hottest) throw new Error("No lit lamp beneath map text");
+        const pixel = field.pixel(hottest.x, hottest.y);
+        if (!pixel) throw new Error("Missing GPU pixel");
+        return {
+          text: el.textContent,
+          lamp: hottest,
+          unmasked: contrast(foreground, over(panel, hottest.color)),
+          actual: contrast(
+            foreground,
+            over(color(style.backgroundColor), over(panel, over(pixel, ground))),
+          ),
+          unlitDifference: over(color(style.backgroundColor), over(panel, ground)).map((c, i) =>
+            Math.abs(c - (over(panel, ground)[i] ?? 0)),
+          ),
+        };
+      });
+    },
+    { id, theme },
+  );
+}
+it.each(["dark", "day"])("keeps map text at 4.5:1 over the hottest lamp in %s", async (theme) => {
+  const page = await setup(1280, theme, true);
+  try {
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await ready(page);
+    await zoomTo(page, 0.21);
+    await clearPointer(page);
+    expect((await camera(page)).level).toBe("map");
+    const found = await mapTextContrast(
+      page,
+      boltons ? "boltons.strutils" : "library.module_01",
+      theme,
+    );
+    console.log("Map text contrast", theme, found);
+    expect(found).toHaveLength(2);
+    for (const label of found) {
+      expect(label.lamp.level).toBe(3);
+      expect(label.unmasked).toBeLessThan(4.5);
+      expect(label.actual, label.text).toBeGreaterThanOrEqual(4.5);
+      for (const difference of label.unlitDifference) expect(difference).toBeLessThanOrEqual(1);
+    }
+  } finally {
+    await page.close();
+  }
+});
 /** Compare every unmasked card lamp with the pre-existing card spread and mode gain. */
 async function assertCardPool(page: Page, theme: "dark" | "day") {
   const sample = await page.evaluate((real) => {
