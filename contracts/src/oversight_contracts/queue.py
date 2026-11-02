@@ -35,7 +35,7 @@ class QueueSpec(ContractModel):
     agent: QueuedAgentTask | None = None
     """One standalone coding task."""
     plan_id: PlanId | None = None
-    """One proposed plan with one to six subtasks."""
+    """One proposed plan with subtasks."""
     plan_revision: PositiveInt | None = None
     """The exact queued plan revision."""
 
@@ -75,8 +75,8 @@ class QueuedTask(QueueSpec):
             raise ValueError("assigned agents must be distinct")
         if self.state in {"starting", "running", "completed"}:
             if self.plan_id is not None:
-                if not 1 <= len(self.agent_ids) <= 6:
-                    raise ValueError("a dispatched plan requires one to six assigned agents")
+                if not self.agent_ids:
+                    raise ValueError("a dispatched plan requires at least one assigned agent")
             elif len(self.agent_ids) != 1:
                 raise ValueError("a dispatched standalone task requires exactly one agent")
         if self.state in {"queued", "cancelled", "blocked"} and self.agent_ids:

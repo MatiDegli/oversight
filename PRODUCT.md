@@ -89,6 +89,7 @@ the agents' lights, the diff) is where this happens, not the pitch.
 ## Product Principles
 
 - The person decides: a change reaches main only with their approval or by meeting rules they set.
+- Values are defaults the person can change, never ceilings; agents never change their own limits.
 - Never steal focus: the screen changes only when the person acts.
 - Show what may be affected, honestly bounded, rather than claim completeness.
 - What judges see is real and labeled for what it is: a replay of a real recorded run says so;

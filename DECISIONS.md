@@ -3889,3 +3889,27 @@ A long limit lets one suite hold main's lock and the Git lease (workspace/core.p
 other agents' tests and Approve wait. Stop ends the suite and releases them. Timeout text reports
 incomplete observed results and an unknown cause, suggesting a different limit on the next run.
 Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.
+
+
+## 2026-11-02 — Defaults, not ceilings
+
+Approved by the maintainer on 2026-11-02 (D1–D4): values are defaults the person can change,
+never ceilings. No agent changes its own limits, and nothing is refused for a number the
+person cannot change. Runtime checks retain today's limits until later fronts make them
+settings; this contract preparation does not activate new runtime behavior.
+
+The hard rules stay: Meta models only, keys only in `.env`, paths inside the worktree,
+tests on the combined result before main, a deliberate Approve click, and no shell tool.
+The spending brake refuses new runs above 90% of the credits: it is not a setting and does
+not queue refused work. The one structural ceiling left is `OVERSIGHT_MAX_AGENTS` at 1–6
+until `Slot` widens. A slot is a seat representing capacity, not identity; color comes from
+the team.
+
+Contracts 1.16.0 removes the six-subtask ceiling and the fixed dependency-index ceiling
+while retaining nonempty plans and dependency validation within the plan. Dispatch requires
+at least one assigned agent. The optional `LeadStatus.limits` exposes a positive, unbounded
+`LeadLimits` shape, and optional `RunStarted.max_leads` reserves simultaneous lead capacity;
+both default to null and remain unfilled. `Limits` records the person's values fixed for the
+run. The backend retains six-subtask and dependency-index checks, its existing lead budgets
+(including 50 turns per thread), and the person-created single-subtask rule. Existing
+recordings continue to validate; the bundled replay is unchanged.

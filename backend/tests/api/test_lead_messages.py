@@ -20,7 +20,7 @@ from live_helpers import (
     two_fakes,
 )
 
-from oversight.agents import LedgerState
+from oversight.agents import LEAD_LIMITS, LedgerState
 from oversight.app import ReplayConfig, create_app
 from oversight_contracts.events import LeadStatus
 
@@ -194,3 +194,22 @@ async def test_thread_replay_rejects_message_before_parsing_and_rebuilds_events(
             e.model_dump() for e in events if e.type in {"agent.message", "lead.reply"}
         ] == expected
         assert client.get("/leads/agent-2").json()["state"] == "done"
+
+
+async def test_thread_halt_reads_the_contract_limits(tmp_path: Path) -> None:
+    factory = ThreadModels()
+    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), factory) as s:
+        await start_idle(s)
+        lead = s.live.leads.leads["agent-1"]
+        assert lead.run is not None
+        assert type(lead.run.limits) is type(LEAD_LIMITS)
+        lead.run.limits = LEAD_LIMITS.model_copy(update={"turns": 2})
+        after = s.store.last_seq
+        assert (
+            await s.client.post("/leads/agent-1/message", json={"text": "Final turn"})
+        ).status_code == 202
+        await s.until(is_type("lead.status", state="halted"), after)
+        assert s.events()[-1].payload.detail == "Reached the limit of 2 turns."
+        assert len(replies(s)) == 2
+        assert all(e.payload.limits is None for e in s.events() if e.type == "lead.status")
+        assert next(e.payload for e in s.events() if e.type == "run.started").max_leads is None

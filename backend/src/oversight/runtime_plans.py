@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 from oversight.agents import MUSE_SPARK, ModelClient, close_model, run_plan_call
@@ -49,6 +50,13 @@ class PlanService:
     def check_count(plan: Plan, count: int) -> None:
         if plan.started_by is None and count != 1:
             raise ApiError("invalid_request", "person-created plans require exactly one subtask")
+
+    @staticmethod
+    def check_limits(subtasks: Sequence[SubtaskDraft]) -> None:
+        try:
+            plan_core.check_limits(subtasks)
+        except ValueError as error:
+            raise ApiError("invalid_request", str(error)) from None
 
     async def create(self, request: CreatePlan) -> PlanCreated:
         async with self.live.dispatcher.queue_lock:
@@ -122,6 +130,7 @@ class PlanService:
         """Lead-supplied drafts never trigger a model call or enter the queue."""
         async with self.live.dispatcher.queue_lock:
             self._available()
+            self.check_limits(drafts)
             _, snapshot = self.live.store.graph()
             assert snapshot is not None
             self._count += 1
@@ -151,6 +160,7 @@ class PlanService:
             plan = self.get(plan_id)
             try:
                 plan_core.editable(plan, request.revision)
+                self.check_limits(request.subtasks)
                 self.check_count(plan, len(request.subtasks))
                 updated = plan_core.update(plan, request)
                 if plan.started_by is None:
@@ -172,6 +182,7 @@ class PlanService:
         except WrongState as error:
             raise ApiError("wrong_state", str(error)) from None
         assert plan.subtasks is not None
+        self.check_limits(plan.subtasks)
         self.check_count(plan, len(plan.subtasks))
         return plan
 
@@ -179,6 +190,8 @@ class PlanService:
         assert item.plan_id is not None
         assert item.plan_revision is not None
         plan = self.get(item.plan_id)
+        assert plan.subtasks is not None
+        self.check_limits(plan.subtasks)
         original = self.revisions.get((item.plan_id, item.plan_revision))
         if (
             original is None

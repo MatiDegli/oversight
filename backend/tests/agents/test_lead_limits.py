@@ -1,7 +1,7 @@
 """Per-turn budgets cut replies; failures and repetition remain terminal."""
 
 import asyncio
-from dataclasses import replace
+import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -17,13 +17,15 @@ pytestmark = pytest.mark.anyio
 async def test_each_cut_returns_one_nullable_bounded_reply(cut: str, text: str | None) -> None:
     tools, _ = setup_tools()
     model = scripted([dict(text=text, tool_calls=[call("graph")], usage={})])
-    limits = replace(LEAD_LIMITS, tool_calls=1 if cut == "tool_calls" else 12, model_calls=1)
+    limits = LEAD_LIMITS.model_copy(
+        update={"tool_calls": 1 if cut == "tool_calls" else 12, "model_calls": 1}
+    )
     run, _, _ = lead(model, tools, limits=limits, mask=lambda s: s.replace("secret", "MASKED"))
     if cut == "spend_brake":
         run.limits = LEAD_LIMITS
         run.admit = lambda: "brake" if run.turns else None
     if cut == "time":
-        run.limits = replace(LEAD_LIMITS, wall_clock_s=0.01)
+        run.limits = LEAD_LIMITS.model_copy(update={"wall_clock_s": 0.01})
         gate = asyncio.Event()
         original = model.complete
 
@@ -48,7 +50,7 @@ async def test_each_cut_returns_one_nullable_bounded_reply(cut: str, text: str |
 async def test_counters_reset_steps_accumulate_and_tools_do_not_cross_turns(name: str) -> None:
     tools, _ = setup_tools()
     model = scripted([turn(call("graph"))])
-    run, _, _ = lead(model, tools, limits=replace(LEAD_LIMITS, tool_calls=1))
+    run, _, _ = lead(model, tools, limits=LEAD_LIMITS.model_copy(update={"tool_calls": 1}))
     for i in range(7):
         model = scripted([turn(call(name))])
         run.make_client = lambda model=model: model
@@ -84,7 +86,9 @@ async def test_terminal_rules_never_reply_even_with_text(kind: str) -> None:
     run, _, _ = lead(
         model,
         tools,
-        limits=replace(LEAD_LIMITS, model_calls=1, tool_calls=4 if kind == "same" else 6),
+        limits=LEAD_LIMITS.model_copy(
+            update={"model_calls": 1, "tool_calls": 4 if kind == "same" else 6}
+        ),
     )
     end = await run.run()
     assert end.state == "halted" and end.reply is None
@@ -134,3 +138,15 @@ async def test_default_18_model_and_12_tool_limits_are_exact(budget: str) -> Non
         assert run.steps == 12 and end.reply.cut == "tool_calls"
     else:
         assert len(model.requests) == 18 and run.steps == 6 and end.reply.cut == "model_calls"
+
+
+async def test_lead_tool_keeps_its_dependency_index_limit() -> None:
+    tools, propose = setup_tools()
+    outcome = await tools.call(
+        "request_plan", json.dumps(plan(subtasks=[dict(task="Work", depends_on=[6])]))
+    )
+    assert not outcome.ok
+    assert outcome.content == (
+        "Invalid arguments for request_plan: Input should be less than or equal to 5"
+    )
+    propose.assert_not_awaited()
