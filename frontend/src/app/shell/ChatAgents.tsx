@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import type { State } from "../../state";
 // eslint-disable-next-line no-restricted-imports -- C2 owns this Chat-only leaf; the shared agents barrel is outside this slice.
@@ -26,9 +27,10 @@ export function ChatAgents({
   state,
   selectedAgentId,
   onOpenConversation,
-}: ChatAgentSelection & { state: State }) {
+  leadDraft,
+}: ChatAgentSelection & { state: State; leadDraft?: boolean }) {
   const rows = selectChatRows(state);
-  if (!rows.length)
+  if (!rows.length && !leadDraft)
     return (
       <p className="chat-agents-empty">
         No agents yet. Each task you start gets its own letter and color.
@@ -106,6 +108,27 @@ export function ChatAgents({
           </li>
         );
       })}
+      {leadDraft && (
+        <li>
+          <div
+            className="chat-agent-row chat-lead-draft"
+            data-selected="true"
+            role="group"
+            aria-label="New lead draft"
+          >
+            <span className="chat-lead-draft-icon">
+              <Plus size={18} aria-hidden="true" />
+            </span>
+            <span className="chat-agent-content">
+              <span className="chat-agent-heading">
+                <span className="chat-agent-name">New lead</span>
+                <span className="chat-agent-pill">Not started</span>
+              </span>
+              <span className="chat-lead-team">Writing its first task</span>
+            </span>
+          </div>
+        </li>
+      )}
     </ul>
   );
 }

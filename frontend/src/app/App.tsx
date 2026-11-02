@@ -346,6 +346,7 @@ export function App() {
             setView((current) => viewReducer(current, action));
           }}
           onStartAgent={commands?.startAgent}
+          onStartLead={commands?.startLead}
           onStopAgent={commands?.stopAgent}
           onOpenConversation={onOpenConversation}
           onMessageLead={commands ? (id, text) => commands.messageLead(id, { text }) : undefined}

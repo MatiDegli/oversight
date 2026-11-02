@@ -10,6 +10,7 @@ export interface ChatAgentSelection {
   onOpenConversation?: (agentId: string) => void;
 }
 export interface ChatStartActions {
+  leadDraft?: boolean;
   onNewTask?: () => void;
   onNewLead?: () => void;
 }
@@ -23,6 +24,7 @@ export function ChatAgentsFrame({
   children,
   onNewTask,
   onNewLead,
+  leadDraft,
   ...selection
 }: ChatAgentsFrameProps) {
   const count = slotUsage(state);
@@ -52,7 +54,7 @@ export function ChatAgentsFrame({
       </header>
       <div className="chat-side-body">
         {typeof children === "function" ? children(selection) : children}
-        <ChatAgents state={state} {...selection} />
+        <ChatAgents state={state} leadDraft={leadDraft} {...selection} />
       </div>
     </aside>
   );
@@ -78,6 +80,7 @@ export function ChatShell({
   children,
   onNewTask,
   onNewLead,
+  leadDraft,
   ...selection
 }: ChatAgentSelection &
   ChatStartActions & {
@@ -93,7 +96,13 @@ export function ChatShell({
       {rail}
       {sidebar}
       {active && (
-        <ChatAgentsFrame state={state} onNewTask={onNewTask} onNewLead={onNewLead} {...selection} />
+        <ChatAgentsFrame
+          state={state}
+          onNewTask={onNewTask}
+          onNewLead={onNewLead}
+          leadDraft={leadDraft}
+          {...selection}
+        />
       )}
       {children}
       {!active && agents}

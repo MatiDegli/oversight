@@ -1,5 +1,5 @@
-import type { MergeMode, StartAgent } from "@contracts";
-import { lazy, Suspense, type ReactNode } from "react";
+import type { MergeMode, StartAgent, StartLead } from "@contracts";
+import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
@@ -11,6 +11,9 @@ import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
 import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { ChatMergeChip } from "./shell/ChatMerge";
+import { NewLead } from "./shell/NewLead";
+// eslint-disable-next-line no-restricted-imports -- K2a owns the New lead form and its draft transfer.
+import { leadDraftStore } from "../agents/leadDraftModel";
 import { ChatEmpty, ChatShell } from "./shell/ChatShell";
 import { FocusPanel } from "./shell/FocusPanel";
 import { LazyPanel } from "./shell/LazyPanel";
@@ -45,6 +48,7 @@ export interface FrameProps {
   onOpenChange: (changeId: string) => void;
   onClosePanel: () => void;
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
+  onStartLead?: (body: StartLead) => Promise<unknown>;
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
   onStopAgent?: (agentId: string) => Promise<unknown>;
   onOpenConversation?: (agentId: string) => void;
@@ -93,13 +97,31 @@ export function Frame(props: FrameProps) {
           activeTab: "practice",
         }
       : props.view;
+  const [newLead, setNewLead] = useState(false);
+  const leadInput = useRef<HTMLTextAreaElement>(null);
   const open = panelOpen(view);
   const shell = useShell(open, onClosePanel);
+  const showNewLead = newLead && !open && shell.layout === "Chat";
   const task = useFunctionTask(
     state,
     view,
     props.onStartAgent !== undefined && shell.layout === "Oversight",
   );
+  const closeChatPanel = () => {
+    if (!open) return;
+    if (props.onTabAction) props.onTabAction({ type: "watch" });
+    else onClosePanel();
+  };
+  const newTask = () => {
+    setNewLead(false);
+    closeChatPanel();
+    requestAnimationFrame(() => task.inputRef.current?.focus());
+  };
+  const openNewLead = () => {
+    closeChatPanel();
+    setNewLead(true);
+    requestAnimationFrame(() => leadInput.current?.focus());
+  };
   const layoutKey =
     shell.sidebar === null &&
     !shell.dock &&
@@ -125,15 +147,22 @@ export function Frame(props: FrameProps) {
       <ChatShell
         state={state}
         active={shell.layout === "Chat"}
-        selectedAgentId={view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation}
-        onNewTask={() => {
-          if (open) {
-            if (props.onTabAction) props.onTabAction({ type: "watch" });
-            else onClosePanel();
-          }
-          requestAnimationFrame(() => task.inputRef.current?.focus());
-        }}
-        onOpenConversation={props.onOpenConversation}
+        selectedAgentId={
+          showNewLead
+            ? undefined
+            : view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation
+        }
+        onNewTask={newTask}
+        onNewLead={openNewLead}
+        leadDraft={showNewLead}
+        onOpenConversation={
+          props.onOpenConversation
+            ? (id) => {
+                setNewLead(false);
+                props.onOpenConversation?.(id);
+              }
+            : undefined
+        }
         rail={
           <LeftRail
             watching={!open}
@@ -176,8 +205,22 @@ export function Frame(props: FrameProps) {
                 onMaximize={shell.toggleMaximize}
               />
             )}
-            {shell.layout === "Chat" && !open && (
+            {showNewLead && (
+              <NewLead
+                state={state}
+                onStart={props.onStartLead}
+                inputRef={leadInput}
+                onOpenSettings={props.onOpenSettings}
+                onClose={() => setNewLead(false)}
+                onTaskInstead={() => {
+                  leadDraftStore.getState().moveToTask();
+                  newTask();
+                }}
+              />
+            )}
+            {shell.layout === "Chat" && !open && !newLead && (
               <ChatEmpty
+                onNewLead={openNewLead}
                 actionAccessory={
                   <ChatMergeChip state={state} onOpenSettings={props.onOpenSettings} />
                 }
