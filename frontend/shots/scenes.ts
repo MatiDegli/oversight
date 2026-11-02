@@ -205,7 +205,8 @@ async function openFileView(page: Page): Promise<void> {
 }
 
 export const scenes: readonly Scene[] = [
-  ...findingScenes,
+  // Opt in with OVERSIGHT_SHOTS_REVIEW_FINDINGS=1 make shots; keep default captures intact.
+  ...(process.env.OVERSIGHT_SHOTS_REVIEW_FINDINGS === "1" ? findingScenes : []),
   // Watch mode: the graph and the agents panel, captured once the replay has put a card in it.
   {
     name: "watch",

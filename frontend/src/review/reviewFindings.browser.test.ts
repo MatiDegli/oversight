@@ -97,18 +97,35 @@ it.each([1920, 390])(
         await check(page.locator(".parameter-samples")).toHaveAttribute("open", "");
         expect(await scrollRegion.evaluate((node) => node.scrollTop)).toBe(scroll);
       }
-      await page.evaluate(() => {
-        window.reviewFindings.revise();
-      });
-      await check(page.getByRole("region", { name: "Test sequence findings" })).toHaveCount(0);
-      await page.evaluate(() => {
-        window.reviewFindings.replace("all");
-      });
-      await check(page.getByRole("region", { name: "Test sequence findings" })).toHaveCount(1);
-      await check(details).toHaveAttribute("open", "");
     });
   },
 );
+it.each([1920, 390])("starts Details closed after a revision gap at %i", async (width) => {
+  await mounted(width, async (page) => {
+    const details = page.locator(".review-details > details");
+    const summary = details.locator(":scope > summary");
+    await summary.click();
+    await check(details).toHaveAttribute("open", "");
+    await summary.focus();
+    await page.evaluate(() => {
+      window.reviewFindings.revise();
+    });
+    await check(details).toHaveCount(0);
+    await check(page.getByRole("region", { name: "Test sequence findings" })).toHaveCount(0);
+    await check(page.locator("body")).toBeFocused();
+    await page.evaluate(() => {
+      window.reviewFindings.replace("all");
+    });
+    await check(details).not.toHaveAttribute("open");
+    await check(summary).not.toBeFocused();
+    await check(page.locator("body")).toBeFocused();
+    await summary.click();
+    await check(details).toHaveAttribute("open", "");
+    await check(page.getByRole("region", { name: "Test sequence findings" })).toContainText(
+      "test_deleted",
+    );
+  });
+});
 it("mounts findings without comparison and preserves a focused Details during relocation", async () => {
   await mounted(1920, async (page) => {
     await page.locator(".review-details > details > summary").click();
