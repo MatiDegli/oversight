@@ -552,13 +552,23 @@ class Workspace:
             await offload(partial(executable, "uv"))
         with self._locks.track():
             async with self._locks.acquire(main=True):
-                if protected:
-                    await offload(partial(guard_previous, self._root))
+                try:
+                    if protected:
+                        await offload(partial(guard_previous, self._root))
+                except BaseException:
+                    if _nt_stage is not None:
+                        await offload(_nt_stage.cleanup)
+                    raise
                 if _nt_stage is not None and time.monotonic() > _nt_stage.deadline:
                     await offload(_nt_stage.cleanup)
                     raise OSError("Windows source refused: COPY phase deadline exceeded")
                 if protected or _nt_stage is not None:
-                    await offload(partial(begin_reset, self._root, _nt_stage))
+                    try:
+                        await offload(partial(begin_reset, self._root, _nt_stage))
+                    except BaseException:
+                        if _nt_stage is not None:
+                            await offload(_nt_stage.cleanup)
+                        raise
                 for name in ("worktrees", "workspace", "tmp"):
                     await offload(partial(remove_tree, self._root, self._root / name))
                 if _nt_stage is None:

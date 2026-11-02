@@ -5,7 +5,9 @@ guard the previous runtime and disclose trust before calling source Git. Staging
 validate this inventory again before reset. See DECISIONS.md and docs/workspace-source.md.
 """
 
+import ast
 import hashlib
+import json
 import ntpath
 import os
 import re
@@ -16,6 +18,8 @@ from collections.abc import Callable, Generator
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any, cast
+from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 from oversight.workspace._platform import (
@@ -25,6 +29,7 @@ from oversight.workspace._platform import (
     stream_names,
     verify_sentinel,
 )
+from oversight.workspace.errors import InvalidPath
 from oversight.workspace.files import (
     CACHE_DIRS,
     nt_plain_parents,
@@ -41,6 +46,7 @@ from oversight.workspace.metadata_io import (
     Budget,
     Entry,
     make_directory,
+    nt_name,
     nt_token,
     read_entry,
     remove_directory,
@@ -1017,3 +1023,264 @@ def finish_reset(runtime: Path, commit: str, stage: StagedSource | None) -> None
     if stage is not None:
         stage.cleanup()
     store_fields(runtime / "own-reset", None, deadline)
+
+
+@dataclass(frozen=True)
+class OwnEnvironment:
+    python: Path
+    roots: tuple[Path, ...] = ()
+    guard: str | None = None
+
+
+@dataclass
+class EnvironmentIO:
+    """Private forced-NT boundary; injected placements never enable public selection."""
+
+    deadline: float
+    preflight: Callable[[str], None] = preflight_placement
+    bind: Callable[[str], Path] = Path
+    sensitive: Callable[[Path], bool] = case_sensitive_directory
+    streams: Callable[[Path], Generator[str]] = stream_names
+
+    def check(self, path: Path, *, directory: bool) -> None:
+        short_path(str(path))
+        for part in path.parts[1:]:
+            nt_name(part)
+        parent = path if directory else path.parent
+        self.preflight(str(parent))  # Placement validation accepts directories, not executables.
+        existing_parents(parent, sensitive=self.sensitive)
+        check_directory(parent, self.deadline, time.monotonic, self.sensitive, self.streams)
+        if not directory:
+            if getattr(path.lstat(), "st_file_attributes", 0) & (0x1000 | 0x40000 | 0x400000):
+                raise refuse("offline or recall environment file")
+            check_streams(path, self.deadline, time.monotonic, self.streams)
+            with open_nt(path) as handle:
+                opened = os.fstat(handle.fileno())
+                if opened.st_nlink != 1 or nt_token(opened) != nt_token(path.lstat()):
+                    raise refuse("unsafe environment file")
+
+    def read(self, path: Path, budget: Budget) -> bytes:
+        self.check(path, directory=False)
+        entry = read_entry(path, budget)
+        if entry is None or entry.data is None:
+            raise refuse("missing environment metadata")
+        return entry.data
+
+
+def prepare_environment(
+    source: NtSource, tree: Path, deadline: float, *, io: EnvironmentIO | None = None
+) -> OwnEnvironment:
+    """Read only the original venv. No builder, copy, installation or fallback is allowed."""
+    io = io or EnvironmentIO(deadline)
+    io.deadline = min(io.deadline, deadline)
+    mapping = False
+    try:
+        venv = source.root / ".venv"
+        for path in (venv, venv / "Scripts", venv / "Lib", venv / "Lib/site-packages", tree):
+            io.check(path, directory=True)
+        python = venv / "Scripts/python.exe"
+        io.check(python, directory=False)
+        config = io.read(venv / "pyvenv.cfg", Budget(deadline)).decode("utf-8")
+        values: dict[str, str] = {}
+        for line in config.splitlines():
+            key, separator, value = line.partition("=")
+            if separator:
+                if key.strip() in values:
+                    raise ValueError("duplicate venv setting")
+                values[key.strip()] = value.strip()
+        if values.get("include-system-site-packages", "").lower() != "false":
+            raise ValueError("system site-packages are unsupported")
+        home = io.bind(absolute_drive(values["home"]))
+        for path in (home, home / "Lib"):
+            io.check(path, directory=True)
+        io.check(home / "python.exe", directory=False)
+        if "executable" in values:
+            executable_path = io.bind(absolute_drive(values["executable"]))
+            if executable_path != home / "python.exe":
+                raise ValueError("inconsistent base executable")
+            io.check(executable_path, directory=False)
+        mapping = True
+        roots, packages = editable_imports(source, tree, io)
+        guard = json.dumps(
+            dict(
+                source=str(source.root),
+                tree=str(tree),
+                libraries=[str(venv / "Lib")],
+                packages=packages,
+            )
+        )
+        return OwnEnvironment(python, roots, guard)
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        IndexError,
+        RecursionError,
+        IntegrityError,
+        InvalidPath,
+    ):
+        reason = (
+            "unsupported or unsafe editable metadata"
+            if mapping
+            else "missing or unsafe original venv"
+        )
+        raise OSError("Own-source environment unavailable: " + reason) from None
+
+
+def _inside(root: Path, path: Path) -> bool:
+    try:
+        return ntpath.commonpath(
+            [ntpath.normcase(str(root)), ntpath.normcase(str(path))]
+        ) == ntpath.normcase(str(root))
+    except ValueError:
+        return False
+
+
+def _mapped_target(
+    raw: str, source: NtSource, tree: Path, site: Path, io: EnvironmentIO
+) -> Path | None:
+    if ntpath.splitdrive(raw)[0]:
+        raw = absolute_drive(raw)
+        if not _inside(Path(source.source_path), Path(raw)):
+            return None
+        path = io.bind(raw)
+    else:
+        path = Path(os.path.abspath(site / raw))
+    if not _inside(source.root, path) or _inside(source.root / ".venv", path):
+        return None
+    relative = ntpath.relpath(str(path), str(source.root)).replace("\\", "/")
+    mapped = tree if relative == "." else resolve_in(tree, relative, nt=True)
+    for target in (path, mapped):
+        io.check(target, directory=stat.S_ISDIR(target.lstat().st_mode))
+    return mapped
+
+
+def _package_name(name: str) -> str:
+    if not name or any(not part.isidentifier() for part in name.split(".")):
+        raise ValueError("invalid editable package name")
+    return name
+
+
+def editable_imports(
+    source: NtSource, tree: Path, io: EnvironmentIO
+) -> tuple[tuple[Path, ...], tuple[str, ...]]:
+    """Static bounded metadata only. Recompute for this tree, never import a finder here."""
+    site = source.root / ".venv/Lib/site-packages"
+    budget = Budget(io.deadline)
+    children: list[Path] = []
+    for child in site.iterdir():
+        budget.charge(0)
+        children.append(child)
+    roots: set[Path] = set()
+    packages: set[str] = set()
+    expected: set[str] = set()
+    referenced: set[str] = set()
+    own_distribution = False
+    for child in children:
+        if not child.name.endswith(".dist-info"):
+            continue
+        io.check(child, directory=True)
+        url = child / "direct_url.json"
+        if not url.exists():
+            continue
+        data: Any = json.loads(io.read(url, budget))
+        editable = data.get("dir_info", {}).get("editable") is True
+        parsed = urlsplit(str(data["url"]))
+        if (
+            parsed.scheme != "file"
+            or parsed.netloc.lower() not in ("", "localhost")
+            or parsed.query
+            or parsed.fragment
+        ):
+            if editable:
+                raise ValueError("unsupported editable URL")
+            continue
+        raw = unquote(parsed.path)
+        raw = raw[1:] if re.match(r"^/[A-Za-z]:/", raw) else raw
+        if _mapped_target(raw, source, tree, site, io) is None:
+            continue
+        # Installed snapshots of this project also require a translated import mapping.
+        own_distribution = True
+        names = child / "top_level.txt"
+        distribution_names: set[str] = set()
+        if names.exists():
+            distribution_names.update(
+                _package_name(n) for n in io.read(names, budget).decode("utf-8").splitlines() if n
+            )
+        if not editable and not distribution_names:
+            raise ValueError("installed project cannot establish mapped package names")
+        expected.update(distribution_names)
+    for child in children:
+        if not child.name.endswith(".pth"):
+            continue
+        for line in io.read(child, budget).decode("utf-8-sig").splitlines():
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith(("import ", "import\t")):
+                if "__editable__" in line:
+                    match = re.fullmatch(r"import (__editable__\w+);\s*\1\.install\(\)", line)
+                    if match is None:
+                        raise ValueError("unsupported editable hook")
+                    referenced.add(match[1] + ".py")
+                continue
+            mapped = _mapped_target(line, source, tree, site, io)
+            if mapped is not None:
+                io.check(mapped, directory=True)
+                roots.add(mapped)
+    for child in children:
+        if not (child.name.startswith("__editable__") and child.suffix == ".py"):
+            continue
+        try:
+            literals = _finder_literals(io.read(child, budget))
+        except (ValueError, SyntaxError):
+            if child.name in referenced:
+                raise ValueError("unsupported editable finder") from None
+            continue  # An unrelated finder's presence is not a refusal.
+        referenced.discard(child.name)
+        for kind, mapping in literals.items():
+            for name, values in mapping.items():
+                for raw in [values] if kind == "MAPPING" else values:
+                    if not isinstance(raw, str):
+                        raise ValueError("invalid finder target")
+                    mapped = _mapped_target(raw, source, tree, site, io)
+                    if mapped is not None:
+                        packages.add(_package_name(name))
+                        root = mapped.parents[len(name.split(".")) - 1]
+                        if not _inside(tree, root):
+                            raise ValueError("unmapped package parent")
+                        io.check(root, directory=True)
+                        roots.add(root)
+    if referenced:
+        raise ValueError("missing editable finder")
+    for name in expected:
+        targets = [root / name.replace(".", "/") for root in roots]
+        candidates = [
+            p for target in targets for p in (target, target.with_suffix(".py")) if p.exists()
+        ]
+        if not candidates:
+            raise ValueError("unmapped editable package")
+        for target in candidates:
+            io.check(target, directory=stat.S_ISDIR(target.lstat().st_mode))
+        packages.add(name)
+    if (own_distribution or roots) and not packages:
+        raise ValueError("editable metadata alone cannot establish import roots")
+    return tuple(sorted(roots)), tuple(sorted(packages))
+
+
+def _finder_literals(data: bytes) -> dict[str, dict[str, Any]]:
+    literals: dict[str, dict[str, Any]] = {}
+    for statement in ast.parse(data).body:
+        if not isinstance(statement, ast.Assign | ast.AnnAssign) or statement.value is None:
+            continue
+        targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in {"MAPPING", "NAMESPACES"}:
+                value = ast.literal_eval(statement.value)
+                if target.id in literals or not isinstance(value, dict):
+                    raise ValueError("invalid finder mapping")
+                literals[target.id] = cast(dict[str, Any], value)
+    if not literals:
+        raise ValueError("missing finder literals")
+    return literals
