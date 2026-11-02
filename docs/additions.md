@@ -258,6 +258,17 @@ new candidate work waits for the maintainer’s order.
     references, with the reason "mentioned in docs". Deterministic text matching on names flags
     documentation that may have gone stale. These are not call edges and do not change call-edge
     exactness; present them as possibly affected, never as a complete list.
+- Settings proposals in Chat (maintainer, 2026-11-02), not queued; built before the freeze only if
+  time allows, otherwise after the hackathon. Agents suggest; only the person applies, edits then
+  applies, or rejects. It starts with the per-repository test limit, which stays on by default: when
+  it fires, a card shows measured facts (the limit, the time used, the cases that finished) apart from
+  the agent's assessment and a recommended value. Proposals are structured, for a closed list of
+  settings that the server validates; bounds limit only what agents recommend, and the person may set
+  any valid value, as with the settings themselves. Applying is a deliberate click with no keyboard
+  shortcut and takes effect from the next run; proposals and their resolutions stay as receipts in the
+  Decisions inbox and in replay. A first step needs no model: a fixed rule proposes the value.
+  Contracts, agent tools, where the limits are stored and the card's sketches need the maintainer's
+  approval; Chat adds no events, contracts or endpoints today.
 
 ## Next
 
