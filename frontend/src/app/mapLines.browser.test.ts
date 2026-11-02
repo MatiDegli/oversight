@@ -134,6 +134,48 @@ async function unobstructedNames(page: Page) {
   });
   expect(overlaps).toEqual([]);
 }
+async function fullAgentLabel(page: Page, id: string) {
+  const agent = page.locator(`[data-map-module="${id}"] .map-agent`);
+  await check(page.locator(`[data-map-module="${id}"] .map-name`)).toHaveClass(/map-full-name/);
+  await check(agent).toHaveText("Agent B · editing");
+  await check(agent).toHaveCSS("max-width", "none");
+  await check(agent).toHaveCSS("overflow", "visible");
+  await check(agent).toHaveCSS("text-overflow", "clip");
+  expect(await agent.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  expect(await agent.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+    await page
+      .locator(`[data-map-module="${id}"] .map-name`)
+      .evaluate((el) => getComputedStyle(el).backgroundColor),
+  );
+}
+it.each(["dark", "day"])("reveals the full pointed agent label at 1280 in %s", async (theme) => {
+  const page = await setup(1280, theme);
+  try {
+    await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+    await ready(page);
+    await zoomTo(page, 0.21);
+    await clearPointer(page);
+    const id = "library.module_01";
+    const agent = page.locator(`[data-map-module="${id}"] .map-agent`);
+    await check(agent).toHaveText("Agent B · editing");
+    expect(await agent.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    await unobstructedNames(page);
+    const label = await agent.boundingBox();
+    if (!label) throw new Error("Missing agent label");
+    await pointAt(page, { x: label.x + label.width / 2, y: label.y + label.height / 2 });
+    await fullAgentLabel(page, id);
+    await unobstructedNames(page);
+    await pointAt(page, await groupPoint(page, "library"));
+    await fullAgentLabel(page, id);
+    await clearPointer(page);
+    await check(agent).toHaveCSS("max-width", "100%");
+    await check(agent).toHaveCSS("text-overflow", "ellipsis");
+    expect(await agent.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    await unobstructedNames(page);
+  } finally {
+    await page.close();
+  }
+});
 it("shows calls for module/group hover alone, without graph render, camera or focus changes", async () => {
   const page = await setup();
   try {
@@ -458,6 +500,61 @@ it("fits header rows at wrapping boundaries using the rendered borders and type 
     await page.close();
   }
 });
+async function measureEvidence(page: Page) {
+  const measured = await page.evaluate(() => {
+    const size = (selector: string, property: "width" | "height") => {
+      const el = document.querySelector(selector);
+      return el ? el.getBoundingClientRect()[property] : null;
+    };
+    return {
+      ring: size(".map-ring", "width"),
+      chip: size(".map-decision", "height"),
+      line: getComputedStyle(document.querySelector("[data-map-line] line") ?? document.body)
+        .strokeWidth,
+      tested: [...document.querySelectorAll(".map-header")].map((e) => e.textContent),
+    };
+  });
+  expect(measured.ring).toBe(20);
+  expect(measured.chip).toBe(22);
+  expect(measured.line).toBe("1.4px");
+  return measured;
+}
+async function captureCone(
+  page: Page,
+  width: number,
+  id: string,
+  capture: (name: string) => Promise<void>,
+) {
+  await page.evaluate(() => {
+    window.mapLinesTest.review();
+  });
+  await ready(page);
+  await page.getByRole("button", { name: "Fit the graph to the view" }).click();
+  await ready(page);
+  await zoomTo(page, width === 1280 ? 0.2 : 0.3);
+  await clearPointer(page);
+  await check(
+    page.locator(
+      `[data-map-module="${boltons ? "boltons.iterutils" : "library.module_00"}"] [data-map-circle]`,
+    ),
+  ).toBeInViewport();
+  await capture("map-cone");
+  // All real callers of is_iterable are inside its seed module; tests stay hidden.
+  await check(page.locator("[data-map-distance]")).toHaveCount(boltons ? 0 : 3);
+  await check(page.locator('[data-map-line="cone"]')).toHaveCount(boltons ? 0 : 4);
+  await check(
+    page
+      .locator(".map-header")
+      .filter({ hasText: boltons ? "12 of 12 in boltons" : "3 of 3 in tools" }),
+  ).toBeVisible();
+  await check(page.locator(`[data-map-module="${id}"] .map-name`)).toHaveCSS(
+    "visibility",
+    boltons ? "hidden" : "visible",
+  );
+  const badge = boltons ? null : await page.locator("[data-map-distance]").first().boundingBox();
+  if (!boltons) expect(badge?.width).toBe(20);
+  return badge?.width ?? null;
+}
 for (const width of [1920, 1280])
   for (const theme of ["dark", "day"]) {
     it(`captures evidence at ${String(width)} in ${theme}`, async () => {
@@ -469,6 +566,8 @@ for (const width of [1920, 1280])
       try {
         await page.getByRole("button", { name: "Fit the graph to the view" }).click();
         await ready(page);
+        // Give the synthetic capture's expanded agent labels room between columns.
+        if (!boltons && width === 1280) await zoomTo(page, 0.25);
         await clearPointer(page);
         expect((await camera(page)).level).toBe("map");
         await unobstructedNames(page);
@@ -479,23 +578,9 @@ for (const width of [1920, 1280])
         await unobstructedNames(page);
         await capture("map-hover");
         await check(page.locator("[data-map-line]").first()).toBeVisible();
-        const measured = await page.evaluate(() => {
-          const size = (selector: string, property: "width" | "height") => {
-            const el = document.querySelector(selector);
-            return el ? el.getBoundingClientRect()[property] : null;
-          };
-          return {
-            ring: size(".map-ring", "width"),
-            chip: size(".map-decision", "height"),
-            line: getComputedStyle(document.querySelector("[data-map-line] line") ?? document.body)
-              .strokeWidth,
-            tested: [...document.querySelectorAll(".map-header")].map((e) => e.textContent),
-          };
-        });
-        expect(measured.ring).toBe(20);
-        expect(measured.chip).toBe(22);
-        expect(measured.line).toBe("1.4px");
+        const measured = await measureEvidence(page);
         await pointAt(page, await groupPoint(page, group));
+        await fullAgentLabel(page, boltons ? "boltons.strutils" : "library.module_01");
         await capture("map-hover-group");
         const click = await groupPoint(page, group);
         await page.mouse.click(click.x, click.y);
@@ -506,43 +591,14 @@ for (const width of [1920, 1280])
         );
         const groupZoom = (await camera(page)).zoom;
         await capture("group");
-        await page.evaluate(() => {
-          window.mapLinesTest.review();
-        });
-        await ready(page);
-        await page.getByRole("button", { name: "Fit the graph to the view" }).click();
-        await ready(page);
-        await zoomTo(page, width === 1280 ? 0.2 : 0.3);
-        await clearPointer(page);
-        await check(
-          page.locator(
-            `[data-map-module="${boltons ? "boltons.iterutils" : "library.module_00"}"] [data-map-circle]`,
-          ),
-        ).toBeInViewport();
-        await capture("map-cone");
-        // All real callers of is_iterable are inside its seed module; tests stay hidden.
-        await check(page.locator("[data-map-distance]")).toHaveCount(boltons ? 0 : 3);
-        await check(page.locator('[data-map-line="cone"]')).toHaveCount(boltons ? 0 : 4);
-        await check(
-          page
-            .locator(".map-header")
-            .filter({ hasText: boltons ? "12 of 12 in boltons" : "3 of 3 in tools" }),
-        ).toBeVisible();
-        await check(page.locator(`[data-map-module="${id}"] .map-name`)).toHaveCSS(
-          "visibility",
-          boltons ? "hidden" : "visible",
-        );
-        const badge = boltons
-          ? null
-          : await page.locator("[data-map-distance]").first().boundingBox();
-        if (!boltons) expect(badge?.width).toBe(20);
+        const badge = await captureCone(page, width, id, capture);
         if (process.env.MAP_LINES_SHOTS === "1")
           await writeFile(
             `${shots}measurements-${String(width)}-${theme}.json`,
             JSON.stringify(
               {
                 ...measured,
-                badge: badge?.width ?? null,
+                badge,
                 snapshot: boltons ? "boltons" : "synthetic",
                 groupZoom,
               },

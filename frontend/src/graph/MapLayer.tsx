@@ -76,6 +76,12 @@ const mapStyles = `
   white-space: nowrap;
   transform: translateX(-50%);
 }
+.map-agent-full {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  background: color-mix(in srgb, var(--card) 85%, transparent);
+}
 [aria-label="Repository graph"][data-map-level="map"] {
   opacity: 0;
 }
@@ -149,7 +155,10 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                     : "empty"}
                 </div>
                 {module.agents.map(({ slot, text }) => (
-                  <div key={slot} title={text} className={`map-agent ${agentLook[slot].textClass}`}>
+                  <div
+                    key={slot}
+                    className={`map-agent ${full ? "map-agent-full " : ""}${agentLook[slot].textClass}`}
+                  >
                     {text}
                   </div>
                 ))}

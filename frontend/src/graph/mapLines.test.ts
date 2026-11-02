@@ -22,6 +22,8 @@ import layerSource from "./MapLayer.tsx?raw";
 import pointerSource from "./mapPointer.ts?raw";
 import linesSource from "./MapLines.tsx?raw";
 import pureLinesSource from "./mapLines.ts?raw";
+// eslint-disable-next-line no-restricted-imports -- Test source only, for the capture callback size gate.
+import captureSource from "../app/mapLines.browser.test.ts?raw";
 
 it("keeps the map controller and layer functions within the 80-line limit", () => {
   for (const [source, kind] of [
@@ -29,6 +31,7 @@ it("keeps the map controller and layer functions within the 80-line limit", () =
     [layerSource, ts.ScriptKind.TSX],
     [pointerSource, ts.ScriptKind.TS],
     [linesSource, ts.ScriptKind.TSX],
+    [captureSource, ts.ScriptKind.TS],
   ] as const) {
     const file = ts.createSourceFile("map", source, ts.ScriptTarget.Latest, true, kind);
     const functions = file.statements.filter(ts.isFunctionDeclaration);
@@ -38,6 +41,32 @@ it("keeps the map controller and layer functions within the 80-line limit", () =
       const end = file.getLineAndCharacterOfPosition(declaration.getEnd()).line;
       expect(end - start + 1, declaration.name?.text).toBeLessThanOrEqual(80);
     }
+  }
+});
+
+it("keeps the evidence capture callback within the 80-line limit", () => {
+  const file = ts.createSourceFile("captures", captureSource, ts.ScriptTarget.Latest, true);
+  const callbacks: ts.ArrowFunction[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.expression.getText(file) === "it") {
+      const [name, callback] = node.arguments;
+      if (
+        name &&
+        ts.isTemplateExpression(name) &&
+        name.head.text === "captures evidence at " &&
+        callback &&
+        ts.isArrowFunction(callback)
+      )
+        callbacks.push(callback);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  expect(callbacks).toHaveLength(1);
+  for (const callback of callbacks) {
+    const start = file.getLineAndCharacterOfPosition(callback.getStart()).line;
+    const end = file.getLineAndCharacterOfPosition(callback.getEnd()).line;
+    expect(end - start + 1).toBeLessThanOrEqual(80);
   }
 });
 
