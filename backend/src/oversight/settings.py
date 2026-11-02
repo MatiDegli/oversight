@@ -55,8 +55,8 @@ class Settings:
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
     workspace_source: str = ""
-    """OVERSIGHT_WORKSPACE_SOURCE: raw selection; empty demo or pinned profile.
-    Own-copy composition is private; public repository paths still refuse."""
+    """OVERSIGHT_WORKSPACE_SOURCE: empty demo, pinned profile, or a native Windows drive path.
+    Own repositories require validated preparation and staged disposable COPY startup."""
     layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
     """The preset layout, `{node_id: {x, y}}`; a missing or unusable file means the graph has no
     positions. OVERSIGHT_LAYOUT may be relative, and then starts at the repository root, not at the

@@ -222,13 +222,14 @@ The maintainer's acceptance now includes copied own repositories: concurrent pat
 between check and open, and inherited folder ACLs on copies/logs. This supersedes the demo-only
 scope above (see DECISIONS.md). It adds no isolation or ACL hardening. Tests/plugins execute
 trusted code as the user, with network and potential writes outside runtime; child interpreters
-may import original source beyond the future guard. Public trust disclosure remains W4c2 work.
-W4a1 provides internal selection only; every public NT repository path still refuses.
+may import original source beyond the implemented import guard. Public startup discloses these
+residuals. Validated native Windows own-repository COPY is enabled; native qualification remains
+pending.
 
-### Private own-copy lifecycle delivery (2026-11-02)
+### Own-copy lifecycle delivery (2026-11-02)
 
 Failed NT cleanup suspends integrity, refuses evidence/restoration and destructive continuation,
 and retains the runtime lock until process exit. Repeated cancellation still settles cleanup.
 Report finalization preserves all artifacts without reading them while cleanup is unverified.
-Private import guards and result admission are integrated; public paths remain closed.
+Import guards and result admission are integrated with public native Windows COPY startup.
 Native Job/console/grandchild proof remains uncollected; accepted path/ACL residuals are unchanged.

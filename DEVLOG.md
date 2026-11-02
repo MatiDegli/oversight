@@ -64,3 +64,5 @@ One line per day, in Argentina time (ART).
   wake admission after integrating concurrent leads and their captured limits.
   Updated prompt-version goldens, bounded wake summaries, delivered notices as tool data, and
   labeled the synthetic wake attribution fixture with its generator provenance.
+  Enabled validated native Windows own-repository COPY with staged-only reset and shared guarded test
+  environments, retaining original preservation and pending two-machine native qualification.

@@ -1,8 +1,10 @@
 # Pinned workspace source
 
 `OVERSIGHT_WORKSPACE_SOURCE` unset or empty preserves `demo-repo`, its provenance,
-environment and pytest command. The only other supported value is `boltons-d31d821`.
-Unknown names fail startup; this setting never accepts a path or a test command.
+environment and pytest command. The named pinned profile is `boltons-d31d821`.
+Native Windows also accepts validated absolute drive paths through prepared own-repository COPY
+startup. Unknown names and all repository paths on POSIX fail startup; test commands are never
+accepted.
 
 The server-owned profile in `backend/src/oversight/workspace/source.py` names:
 
@@ -109,18 +111,18 @@ The PowerShell demo checks in [README](../README.md#native-windows-advisory-chec
 `* text=auto eol=lf`, preserving `DECISIONS.md merge=union`, without renormalizing files or
 changing demo template bytes. It never changes an external source's attributes.
 
-The supported profile list above is unchanged. W3 covers only the empty demo source setting;
-native qualification of the pinned profile, W4's path-based COPY and native own-source
-qualification are pending; do not pass arbitrary repository paths. Demo acceptance requires
-both W2 fronts before read/edit/tests/proposal/Approve and three-start proof. Record raw bytes,
+W3 covered only the empty demo source setting; the named profile list is unchanged.
+W4c2 now enables validated native Windows path-based COPY. Native qualification of the pinned
+profile and own-source workflow remains pending. Demo acceptance requires
+read/edit/tests/proposal/Approve and three-start proof with both W2 fronts landed. Record raw bytes,
 hashes, Git EOL output and initial/merge commits; do not infer LF from text-mode reads.
 
-## Internal native source handoffs
+## Native own-source COPY startup
 
-`workspace/source_nt.py` prepares internal NT placements and a read-only Git inventory.
-Public repository paths still fail before Workspace/EventStore
-construction or source Git. Demo/Boltons selection and pinned-profile `status` validation
-are unchanged. Own-source queries use a separate path: verified HEAD, staged index listing,
+`workspace/source_nt.py` prepares validated NT placements and a read-only Git inventory.
+Public native Windows drive paths enter this prepared startup; placement validation precedes
+Workspace/EventStore construction and source Git. Demo/Boltons selection and pinned-profile
+`status` validation are unchanged. Own-source queries use a separate path: verified HEAD, staged index listing,
 tracked plus untracked-not-ignored listing, and bounded ignored-root listing. No recursive
 walk of ignored trees, filters, status, diff, configuration writes or source mutation occurs.
 Tracked ignored files remain selected; absent tracked files represent working deletions.
@@ -132,10 +134,11 @@ ReFS and known sync roots refuse. Outside USERPROFILE warns; unknown sync client
 detected. Source/runtime ancestry overlap requires a separate clone; only the existing named
 profile under runtime `sources` is exempt. A source cannot be inside a reset target.
 
-Private startup now checks lexical placement before resolve/constructors/source Git;
-lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
-reset. Public path selection remains closed until guarded-result integration and enablement. Private staging now pins bounded no-follow HEAD/index stamps and hashes
-around selection and rechecks them after copying and relisting Git paths.
+Startup checks all lexical placements before resolve/constructors/source Git; lock/server Job
+and prior-runtime guard precede trust disclosure and source Git. Validated staging precedes
+reset. Staging pins bounded no-follow HEAD/index stamps and hashes around selection and rechecks
+them after copying and relisting Git paths. Guarded-result admission is integrated into public
+native Windows COPY startup; native qualification remains pending.
 Selected present files are copied as writable raw bytes under a unique runtime-owned staging
 directory outside `workspace`, `worktrees` and `tmp`. Working deletions create no file.
 A NUL-separated UTF-8 relative-file manifest retains tracked ignored and permitted literal names.
@@ -144,11 +147,11 @@ path and query budgets match selection. Attributes policy is checked before any 
 Failure preserves the previous runtime; cleanup removes only recorded owned staging identities
 through bounded metadata I/O. Staging, manifest, state and temporary paths join the UTF-16
 projection checks. Manifests and reset records retain W2's 4 MiB per-metadata-file limit
-and refuse before destruction if they exceed it. These are injected internal handoffs, not
-native acceptance or public enablement.
+and refuse before destruction if they exceed it. Injected handoff tests establish no native
+acceptance.
 
-Private reset verifies owned staging again, then records incomplete-reset state outside reset
-targets before deletion. It publishes the tree, installs the shared byte override before
+Own-source reset refuses without a validated stage, verifies owned staging again, then records
+incomplete-reset state outside reset targets before deletion. It publishes the tree, installs the shared byte override before
 `git add -f --pathspec-from-file=<absolute-manifest> --pathspec-file-nul`, and limits
 `GIT_LITERAL_PATHSPECS=1` to that add. The initial commit and source/runtime identities are
 atomically persisted before success. Demo/Boltons retain their original copy/add path.
@@ -169,9 +172,9 @@ apply. Working source bytes must match the imported baseline, including dirty/un
 otherwise preserve the patch and resolve manually. Export covers committed delta only: preserve
 the entire runtime for uncommitted edits. No automatic source apply, reset or discard occurs.
 Linux injected cases exercise these handoffs; native NTFS/Git cases are separately skipped on
-Linux and remain unverified until run on Windows. Public own-source startup remains pending.
+Linux and remain unverified until run on Windows. Public native Windows COPY startup is enabled.
 
-Internal validation rejects links/reparse/special or multiple-link files, casefold or uppercase
+Own-source validation rejects links/reparse/special or multiple-link files, casefold or uppercase
 sibling collisions, case-sensitive directories, and named streams (only `::$DATA` is allowed).
 Review `Zone.Identifier` before using `Unblock-File` or `Remove-Item -Stream Zone.Identifier`.
 W2 binary opens and fresh identity checks precede SHA-256 records; working deletions are explicit.
@@ -183,35 +186,35 @@ Later W3 qualification must measure a flat 16,384-file/128 MiB fixture on both W
 under a qualification-only 120-second cap, then freeze release phase deadlines at
 `max(10 seconds, 1.5 × slowest phase)`. No native timing evidence has been collected here.
 
-Private own-source suite preparation validates the original `.venv/Scripts/python.exe`,
+Own-source suite preparation validates the original `.venv/Scripts/python.exe`,
 `pyvenv.cfg`, base interpreter and library placements without copying or installing anything.
-Its reduced environment enables plugin autoload only for this private arm; HOME/TEMP/TMP stay
-under runtime `tmp`. A constant probe pins the trusted report plugin and checks Python >=3.10,
+Readiness and suites share a reduced environment with plugin autoload for own sources;
+HOME/TEMP/TMP stay under runtime `tmp`. A constant probe pins the trusted report plugin and checks Python >=3.10,
 pytest >=8.2 and pluggy >=1.5. Preparation, probe (at most ten seconds) and pytest share one
 deadline derived from the caller's timeout. Missing, unsafe or incompatible environments yield
-a bounded private unavailable diagnostic. Linux injections exercise these handoffs; production
+a bounded unavailable diagnostic. Linux injections exercise these handoffs; production
 interpreter selection now uses the original environment exclusively. Guarded-result admission is
-integrated privately; public selection and native acceptance remain pending.
+integrated into public native Windows COPY startup; native acceptance remains pending.
 
 Static bounded `.pth`, editable finder literals and editable distribution metadata translate
 original project paths into each tested tree, including nested layouts and namespaces. The server
 never executes mapping code. Metadata alone cannot establish import roots; unsupported or unmapped
-editables refuse privately. PYTHONPATH starts with the trusted plugin directory, tested root and
+editables refuse. PYTHONPATH starts with the trusted plugin directory, tested root and
 translated roots; it never prepends the original source. Child startup removes original editable
 namespace paths once. Later imports resolving through an inserted original path are refused;
 insertion itself is not detected. The trusted plugin checks mapped specs and all loaded origins
 in the probe, session start, collection finish, before test records and session finish. Venv
 library dependencies are permitted. Collection emits a successful guard before tests; any later guard
-failure appends a failure record and exits. Private admission requires the complete successful
+failure appends a failure record and exits. Admission requires the complete successful
 guard/report sequence. If NT cleanup is unverified, the finalizer neither reads nor removes the
 JSONL, JUnit or measured-call artifacts; the wrapper refuses evidence and snapshot restoration.
-Public availability remains pending; injected tests do not establish native own-source acceptance.
+Public native Windows COPY is enabled; injected tests do not establish native own-source acceptance.
 
 Disposable native fixtures provision pytest 9.1.1 and pytest-asyncio 1.3.0 in their original venv.
 An async fixture and marked async test require plugin autoload in both supported fixture layouts,
 and assert that imports resolve inside each tested copy. Production never provisions this venv.
 
-## Private startup delivery and notices
+## Startup delivery and notices
 
 Set `OVERSIGHT_TEST_TIMEOUT_S` before starting: default 60, whole numbers 1–999999999 as a parsing
 bound, with no policy maximum. The model and repository content cannot change this run's frozen
@@ -220,8 +223,8 @@ limits. `W=max(600, 3*T+300)`. The exact per-start line is:
 Demo/Boltons ignore a nondefault setting and add:
 `OVERSIGHT_TEST_TIMEOUT_S applies only to your own repositories; this run keeps 60 s.`
 
-Each start reports provider destinations (authors/reviewer/decisions/planner/lead), skipped roots,
-writable raw bytes, environment readiness, outside-profile warnings and recovery guidance.
+Each start reports offered providers plus the unconditional Meta/Baseten callable-lead union,
+skipped roots, writable raw bytes, environment readiness, outside-profile warnings and recovery guidance.
 Fake authors alone do not establish an all-fake callable union. Inventory constructs no clients.
 Secret-name filtering is not a complete secret detector.
 The informational `own-trust` marker survives reset. Its key is canonical source, policy version,
@@ -232,7 +235,7 @@ A match suppresses only this detail; it grants no permission or discard authorit
 
 ## Chosen-repository template
 
-After public enablement, use a trusted short private local NTFS repository with its original venv.
+Use a trusted short private local NTFS repository with its validated original venv on native Windows.
 Copy `fixtures/fake-model/own-source-edit.json` privately; replace every path and exact unique
 old/new text, preserving read before edit, failing then repairing tests and separate personal Approve.
 

@@ -99,7 +99,7 @@ from oversight.workspace.source_nt import (
     validate_selection,
     verify_stage,
 )
-from oversight.workspace.suite import SuiteRun, SuiteUnavailable
+from oversight.workspace.suite import SuiteRun, SuiteUnavailable, own_source_environment
 from oversight.workspace.suite import (
     _probe_environment as probe_environment,  # pyright: ignore[reportPrivateUsage]
 )
@@ -197,7 +197,7 @@ class Tree:
 
     @property
     def nt_source_bytes(self) -> bool:
-        """Internal own-source policy; selection stays closed until the later startup front."""
+        """Raw-byte policy for a staged disposable own-source copy."""
         return self._workspace.nt_source_bytes
 
     def verify_root(self) -> None:
@@ -574,15 +574,7 @@ class Workspace:
                 own = await offload(
                     partial(self.prepare_own_environment, self._main.root, deadline)
                 )
-                env = {
-                    "HOME": str(self.tmp_dir / "home"),
-                    "PYTHONPATH": ";".join(map(str, (PLUGIN_DIR, self._main.root, *own.roots))),
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                    "OVERSIGHT_TRUSTED_PLUGIN": str(PLUGIN_DIR / "oversight_report.py"),
-                }
-                if not own.guard:
-                    raise OSError("Own-source environment unavailable: missing import guard")
-                env["OVERSIGHT_IMPORT_GUARD"] = own.guard
+                env = own_source_environment(own, PLUGIN_DIR, self._root, self._main.root)
                 await probe_environment(
                     own.python, self._main.root, env, deadline, time.monotonic, runner
                 )
@@ -661,6 +653,8 @@ class Workspace:
         self.integrity.before_git()
         if self._lock_fd is None:
             raise WorkspaceBusy("reset needs the runtime lock: call acquire_runtime first")
+        if self._own_source is not None and _nt_stage is None:
+            raise WorkspaceError("own-source reset requires validated staging")
         if not self._locks.idle:
             raise WorkspaceBusy("an operation is in progress")
         if self._reset_done:
@@ -923,7 +917,11 @@ class Workspace:
         isolation: IsolationPolicy = "best_effort",
         measured_targets: tuple[CallTarget, ...] | None = None,
     ) -> SuiteRun:
-        """Run the source's fixed tests in `tree`, under its lock, in the demo venv."""
+        """Run fixed tests in the disposable `tree` under its lock and a timeout.
+
+        Demo/profiles use the runtime demo venv; own sources use their validated original
+        venv with imports mapped to this copy, without building or installing anything.
+        """
         async with (
             self.locks(main=True, agent_id=tree.agent_id),
             tree.section(locked=False),
