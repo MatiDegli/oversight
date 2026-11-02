@@ -3911,3 +3911,17 @@ a seventh team reuses the hue of the team idle longest among those with no pendi
 The frontend computes the team from the plan and agent events, with no contract change.
 Reason: one lead runs several agents, and the person reads the work by plan, so per-agent colors split one
 plan into unrelated colors.
+## 2026-11-02 — One shared frontend team identity
+
+`frontend/src/state/teamSelector.ts` is the sole frontend team computation for the graph,
+Chat rail, Chat and inbox to share. The approved rule is the plan's lead when `Plan.started_by`
+names one, otherwise the plan, otherwise the agent itself; a lead belongs to its own team.
+The selector folds the accepted prefix, keeps the first non-null agent plan and latest plan
+ownership in event order, retains every observed lead, and orders resolved teams by first occurrence.
+It does not read ticks: coding-agent ticks omit plan ids, plan-tagged ticks belong to usage-only
+planners, and lead accounting has no plan id.
+
+`backend/tests/events/test_team_selector_parity.py` and
+`frontend/src/state/teamSelector.parity.test.ts` guard parity through one shared golden fixture,
+using the server's `team_of` as the oracle. K2 Chat with multiple leads and K3 team colors are
+future shared consumers; this front adds no production import or visible change.
