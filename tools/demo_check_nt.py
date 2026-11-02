@@ -496,6 +496,29 @@ async def fixture_git(root: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def prepare_fixture_git_sentinel(source: Path, module: str) -> None:
+    """Make accidental source Git refreshes observable without running any filter."""
+    scratch = source.parent
+    attributes = scratch / "sentinel.attributes"
+    attributes.write_bytes(b"* filter=sentinel\n")
+    config = source / ".git/config"
+    config.write_bytes(
+        config.read_bytes()
+        + (
+            f'\n[core]\n worktree = "{(scratch / "misleading-worktree").as_posix()}"\n'
+            f' attributesfile = "{attributes.as_posix()}"\n'
+            '[filter "sentinel"]\n clean = echo executed > FILTER_SENTINEL\n'
+        ).encode()
+    )
+    selected = source / module
+    selected.write_bytes(selected.read_bytes() + b"# stat-dirty selected file\n")
+
+
+def check_fixture_filters(scratch: Path) -> None:
+    if any(scratch.rglob("FILTER_SENTINEL")):
+        raise smoke.SmokeError("source clean filter executed in a disposable fixture")
+
+
 async def prepare_own_fixture(scratch: Path, *, layout: str = "packages/foo/src") -> OwnFixture:
     """Test setup only: production never creates/installs the person's environment."""
     source = scratch / "source"
@@ -563,6 +586,7 @@ async def prepare_own_fixture(scratch: Path, *, layout: str = "packages/foo/src"
         .replace("packages/foo/src/sample/__init__.py", module),
         encoding="utf-8",
     )
+    prepare_fixture_git_sentinel(source, module)
     (source / "crlf.py").chmod(stat.S_IREAD)
     _disposable_sources.add(source)
     return OwnFixture(source, scratch / ".runtime", module, script)
@@ -761,11 +785,13 @@ async def run_own_checks(logs: Path, clock: OverallClock) -> None:
         )
         if hashes != after:
             raise smoke.SmokeError("server mutated original source")
+        await asyncio.to_thread(check_fixture_filters, scratch)
         await fixture_recovery(fixture, env, evidence)
         if hashes != {
             p: hashlib.sha256((fixture.source / p).read_bytes()).hexdigest() for p in selected
         }:
             raise smoke.SmokeError("recovery server mutated original source")
+        await asyncio.to_thread(check_fixture_filters, scratch)
         await wait_members(retain_outer(), JOBS, (os.getpid(),))
         await settled(asyncio.to_thread(cleanup, scratch))
     print("NT own: three disposable runs; no original-source apply/discard")

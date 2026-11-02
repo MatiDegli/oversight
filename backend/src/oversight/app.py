@@ -398,7 +398,8 @@ class LiveRun:
                 return await self.workspace.reset(_nt_stage=stage)
             if self._source is not None:
                 assert not isinstance(self._source, OwnSource)
-                await validate_source(self._source, self._settings.runtime_dir)
+                async with self.workspace.guard_nt_cleanup():
+                    await validate_source(self._source, self._settings.runtime_dir)
             return await self.workspace.reset()
         except BaseException:
             self.workspace.release_runtime()
@@ -1220,7 +1221,7 @@ def create_app(
     PR3a does not install a production transport before PR3b accounting is available."""
     settings = settings or Settings.load()
     selection = select_source(settings.workspace_source) if replay is None else None
-    if sys.platform == "win32" and not isinstance(selection, OwnSource):
+    if not isinstance(selection, OwnSource) and sys.platform == "win32":
         preflight_placement(REPO_ROOT)
         preflight_placement(settings.runtime_dir)
     app = (

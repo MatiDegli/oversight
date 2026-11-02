@@ -11,6 +11,124 @@ from oversight.workspace.runner import NtCleanupError, NtCleanupRunner, ProcessR
 pytestmark = pytest.mark.anyio
 
 
+async def test_native_combination_exercise_uses_real_merged_tree(
+    tmp_path, make_workspace, demo_python
+):
+    from types import SimpleNamespace
+
+    from .test_source_nt_windows import assert_combined_failure_then_repair
+
+    source = tmp_path / "combined-template"
+    module = source / "sample/__init__.py"
+    module.parent.mkdir(parents=True)
+    module.write_bytes(b"def value():\n    return 41\n")
+    (source / "test_value.py").write_bytes(
+        b"import sample\ndef test_value():\n    assert sample.value() == 41\n"
+    )
+    (source / "test_async.py").write_bytes(b"def test_async_copy():\n    assert True\n")
+    workspace = make_workspace("combined", source=source, demo_python=demo_python)
+    await workspace.acquire_runtime()
+    await workspace.reset()
+    agent = await workspace.create_worktree("agent-1")
+    await assert_combined_failure_then_repair(
+        workspace, SimpleNamespace(source=source, module="sample/__init__.py"), agent
+    )
+
+
+@pytest.mark.parametrize("mode", ["normal", "cancel"])
+async def test_capture_cleanup_failure_never_restores_snapshot(workspace, monkeypatch, mode):
+    from oversight.workspace.snapshot import finish_snapshot
+
+    entered, finish = asyncio.Event(), asyncio.Event()
+
+    async def execute(*args):
+        entered.set()
+        await finish.wait()
+        raise NtCleanupError("capture Job still alive")
+
+    restored = Mock(wraps=finish_snapshot)
+    monkeypatch.setattr(runner, "_execute", execute)
+    monkeypatch.setattr(suite_guard, "finish_snapshot", restored)
+    task = asyncio.create_task(workspace.run_tests(workspace.main, timeout_s=75))
+    await asyncio.wait_for(entered.wait(), 5)
+    if mode == "cancel":
+        task.cancel("capture stopped")
+        await asyncio.sleep(0)
+        task.cancel("capture stopped again")
+    assert not task.done()
+    finish.set()
+    try:
+        with pytest.raises(
+            asyncio.CancelledError if mode == "cancel" else IntegrityError
+        ) as caught:
+            await task
+        if mode == "cancel":
+            assert str(caught.value) == "capture stopped"
+        restored.assert_not_called()
+        assert workspace.integrity.main_suspect and workspace.integrity.rules_suspended
+        workspace.release_runtime()
+        assert workspace._lock_fd is not None
+        with pytest.raises(IntegrityError):
+            await workspace.reset()
+    finally:
+        workspace._cleanup_unverified = False
+
+
+@pytest.mark.parametrize("mode", ["normal", "cancel"])
+@pytest.mark.parametrize("operation", ["git", "run_ok", "venv_probe"])
+async def test_untracked_cleanup_failure_retains_runtime(workspace, monkeypatch, mode, operation):
+    from oversight.workspace import core
+
+    entered, finish = asyncio.Event(), asyncio.Event()
+
+    async def execute(*args):
+        entered.set()
+        await finish.wait()
+        raise NtCleanupError("untracked Job still alive")
+
+    monkeypatch.setattr(runner, "_execute", execute)
+    if operation == "venv_probe":
+        workspace._demo_python_given = False
+        venv = workspace.runtime_root / "demo-venv"
+        venv.mkdir()
+        (venv / "oversight-stamp").write_text("pytest==9.1.1\n")
+        monkeypatch.setattr(core, "remove_tree", Mock(side_effect=AssertionError("deleted venv")))
+
+    async def run():
+        if operation == "git":
+            async with workspace.locks(main=True):
+                await workspace.git(workspace.main, "rev-parse", "HEAD")
+        elif operation == "run_ok":
+            await workspace._run_ok(["fixture"], cwd=workspace.main.root, timeout_s=75, env={})
+        else:
+            await workspace.ensure_demo_venv()
+
+    task = asyncio.create_task(run())
+    await asyncio.wait_for(entered.wait(), 5)
+    if mode == "cancel":
+        task.cancel("person stopped")
+        await asyncio.sleep(0)
+        task.cancel("stopped again")
+    finish.set()
+    try:
+        with pytest.raises(
+            asyncio.CancelledError if mode == "cancel" else NtCleanupError
+        ) as caught:
+            await task
+        if mode == "cancel":
+            assert str(caught.value) == "person stopped"
+            assert isinstance(caught.value.__cause__, NtCleanupError)
+        assert workspace.integrity.main_suspect and workspace.integrity.rules_suspended
+        workspace.release_runtime()
+        assert workspace._lock_fd is not None
+        with pytest.raises(IntegrityError):
+            await workspace.reset()
+        with pytest.raises(IntegrityError):
+            await run()
+    finally:
+        workspace._cleanup_unverified = False
+
+
 @pytest.mark.parametrize("mode", ["normal", "timeout", "cancel"])
 @pytest.mark.parametrize("verified", [True, False])
 async def test_cleanup_precedes_snapshot_or_retains_runtime(workspace, monkeypatch, mode, verified):

@@ -453,17 +453,18 @@ class Workspace:
             if self.nt_source_bytes:
                 verify_tree_byte_policy(scan_identity, time.monotonic() + timeout_s)
 
-        return await guarded_git(
-            tree.git_identity,
-            args,
-            scan_identity=scan_identity,
-            verify=verify,
-            lease=self.git_lease(),
-            flags=self.git_flags,
-            env=self._git_env(tree, author, date),
-            timeout_s=timeout_s,
-            spawn=run_process,
-        )
+        async with self.guard_nt_cleanup():
+            return await guarded_git(
+                tree.git_identity,
+                args,
+                scan_identity=scan_identity,
+                verify=verify,
+                lease=self.git_lease(),
+                flags=self.git_flags,
+                env=self._git_env(tree, author, date),
+                timeout_s=timeout_s,
+                spawn=run_process,
+            )
 
     @asynccontextmanager
     async def git_lease(self) -> AsyncGenerator[None]:
@@ -508,11 +509,23 @@ class Workspace:
     async def _run_ok(
         self, argv: Sequence[str], *, cwd: Path, timeout_s: float, env: Mapping[str, str]
     ) -> None:
-        result = await run_process(argv, cwd=cwd, timeout_s=timeout_s, env=env)
+        self.integrity.before_git()
+        async with self.guard_nt_cleanup():
+            result = await run_process(argv, cwd=cwd, timeout_s=timeout_s, env=env)
         if result.returncode != 0:
             raise WorkspaceError(f"{argv[0]} failed: {self.redact(result.stderr.strip())[-500:]}")
 
     # --- Startup ----------------------------------------------------------------------------
+
+    @asynccontextmanager
+    async def guard_nt_cleanup(self) -> AsyncGenerator[None]:
+        """Latch failed Job cleanup before a caller can release runtime ownership."""
+        try:
+            yield
+        except BaseException as error:
+            if isinstance(error, NtCleanupError) or isinstance(error.__cause__, NtCleanupError):
+                self.refuse_unverified_cleanup()
+            raise
 
     def refuse_unverified_cleanup(self) -> IntegrityError:
         self._cleanup_unverified = True
@@ -753,6 +766,7 @@ class Workspace:
     async def ensure_demo_venv(self) -> None:
         """Reuse `demo-venv/` if its stamp names the pinned pytest and its python runs; otherwise
         rebuild it. The stamp is written last, so a half-built venv is never reused."""
+        self.integrity.before_git()
         if self._own_source is not None:
             raise WorkspaceError("own sources never build or install a test environment")
         if self._demo_python_given:
@@ -769,12 +783,15 @@ class Workspace:
 
         if await offload(read_stamp) == want:
             try:
-                probe = await run_process(
-                    [str(self._demo_python), "-c", "import pytest"],
-                    cwd=self._root,
-                    timeout_s=60,
-                    env={"HOME": str(self._root / "tmp" / "home")},
-                )
+                async with self.guard_nt_cleanup():
+                    probe = await run_process(
+                        [str(self._demo_python), "-c", "import pytest"],
+                        cwd=self._root,
+                        timeout_s=60,
+                        env={"HOME": str(self._root / "tmp" / "home")},
+                    )
+            except NtCleanupError:
+                raise  # An unverified Job cannot authorize removing/rebuilding the venv.
             except OSError:
                 probe = None  # no interpreter, or a symlink to one that is gone: rebuild
             if probe is not None and probe.returncode == 0:

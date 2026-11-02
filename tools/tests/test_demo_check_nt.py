@@ -644,6 +644,16 @@ async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeyp
     assert (fixture.source / fixture.module).read_text().count(old) == 1
     assert not list((fixture.source / ".venv").rglob("top_level.txt"))
     assert (fixture.source / "crlf.py").read_bytes() == b"line = 1\r\n"
+    config = (fixture.source / ".git/config").read_text()
+    assert '[filter "sentinel"]' in config and "FILTER_SENTINEL" in config
+    assert "worktree = " in config and "misleading-worktree" in config
+    selected = fixture.source / fixture.module
+    # A different size guarantees stat-dirty even on filesystems with coarse timestamps.
+    baseline = await nt.fixture_git(
+        fixture.source, "--work-tree=" + str(fixture.source), "show", "HEAD:" + fixture.module
+    )
+    assert selected.read_bytes() == baseline.encode() + b"\n# stat-dirty selected file\n"
+    assert not (fixture.source / "FILTER_SENTINEL").exists()
 
 
 @pytest.mark.anyio
@@ -654,6 +664,16 @@ async def test_own_recovery_never_accepts_an_arbitrary_repository(tmp_path, monk
     monkeypatch.setattr(nt, "start_server", lambda *args: pytest.fail("started arbitrary recovery"))
     with pytest.raises(smoke.SmokeError, match="restricted to disposable"):
         await nt.fixture_recovery(fixture, {}, tmp_path)
+
+
+@pytest.mark.parametrize("relative", ["source", "runtime/workspace", "runtime/tmp/combined"])
+def test_fixture_filter_evidence_is_never_accepted(tmp_path, relative):
+    nt.check_fixture_filters(tmp_path)
+    sentinel = tmp_path / relative / "FILTER_SENTINEL"
+    sentinel.parent.mkdir(parents=True)
+    sentinel.write_text("executed")
+    with pytest.raises(smoke.SmokeError, match="source clean filter executed"):
+        nt.check_fixture_filters(tmp_path)
 
 
 @pytest.mark.anyio

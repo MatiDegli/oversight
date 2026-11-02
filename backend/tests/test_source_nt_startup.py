@@ -154,6 +154,44 @@ async def test_selector_change_cannot_evade_previous_guard(tmp_path, monkeypatch
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_profile_cleanup_failure_keeps_runtime_lock(tmp_path, monkeypatch, cancelled):
+    from oversight.workspace import IntegrityError, WorkspaceBusy
+    from oversight.workspace.runner import NtCleanupError
+
+    live = app.LiveRun(live_settings(tmp_path, workspace_source="boltons-d31d821"))
+    cleanup = NtCleanupError("profile Job still alive")
+    pending = (
+        asyncio.CancelledError("profile stopped") if cancelled else ValueError("profile failed")
+    )
+
+    async def validate(*args):
+        # validate_source wraps an OSError; run_process chains cancellation to its failure.
+        raise pending from cleanup
+
+    monkeypatch.setattr(app, "validate_source", validate)
+    reset = AsyncMock(side_effect=AssertionError("reset after unverified cleanup"))
+    monkeypatch.setattr(live.workspace, "reset", reset)
+    try:
+        with pytest.raises(type(pending)) as caught:
+            await live._reset_workspace()
+        assert caught.value is pending and caught.value.__cause__ is cleanup
+        reset.assert_not_awaited()
+        assert live.workspace.integrity.main_suspect and live.workspace.integrity.rules_suspended
+        assert live.workspace._lock_fd is not None
+        other = core.Workspace(
+            live.workspace.runtime_root, tmp_path / "template", pytest_pin="9.1.1"
+        )
+        with pytest.raises(WorkspaceBusy):
+            await other.acquire_runtime()
+        with pytest.raises(IntegrityError):
+            live.workspace.integrity.before_git()
+    finally:
+        live.workspace._cleanup_unverified = False
+        live.workspace.release_runtime()
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("limit,wall", [(75, 600), (300, 1200)])
 async def test_real_staging_readiness_limits_and_original_preservation(
     tmp_path, monkeypatch, caplog, limit, wall
