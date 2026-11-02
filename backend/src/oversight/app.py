@@ -83,7 +83,7 @@ from oversight.runtime_plans import PlanService
 from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
-from oversight.settings import REPO_ROOT, Settings, run_time_limits
+from oversight.settings import REPO_ROOT, Settings, build_lead_limits, run_time_limits
 from oversight.setup import missing_settings, offered_profiles
 from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
@@ -235,6 +235,9 @@ class LiveRun:
         reviewer: ReviewerCall | None = None,
     ) -> None:
         self._settings = settings
+        self._lead_limits = build_lead_limits(settings)
+        self._max_leads = settings.max_leads
+        self._lead_history_chars = settings.lead_history_chars
         self._redactor = Redactor(settings.meta_api_key, settings.baseten_api_key)
         self._closing = False
         self._reviewer = reviewer
