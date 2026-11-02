@@ -35,6 +35,12 @@ it.each(parameterStates)("renders supplied values and separated counts: %s", (na
       expect(html).toContain(`Base rejected ${String(entry.rejected_before)} calls.`);
   }
   expect(html).not.toMatch(/Base rejected 0|0 calls run|49|third positional|supplies cap_percent/);
+  if (entries.some((entry) => entry.rows.length > 0)) {
+    expect(html).toContain('data-agent-id="agent-1"');
+    expect(html).toContain("After · Agent A");
+    expect(html).toContain("--slot-graphic:var(--agent-a)");
+    expect(html).not.toContain("[object Object]");
+  }
   if (name === "partial") {
     expect(html).toContain("8 samples shown from 48 calls run.");
     expect(html).toContain("Some calls were not measured: recording budget reached.");

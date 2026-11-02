@@ -2,6 +2,8 @@
 // client only in this e2e build; page.route answers every command, while replay alone changes state.
 import { expect, test } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
+import { applyEvent, createInitialState } from "../src/state";
+import { presentationFor } from "../src/teams/presentation";
 
 import { installRecorder, nodeIds, recorded } from "./graph-support";
 import { engaged, installHolds, release } from "./holds";
@@ -33,6 +35,14 @@ import {
   tapNode,
 } from "./level2-support";
 
+const firstProposal = events.find((event) => event.type === "change.proposed");
+const working = events
+  .filter((event) => event.seq < (firstProposal?.seq ?? 0))
+  .reduce(applyEvent, createInitialState());
+const identityA = presentationFor(working, a.agent_id);
+const identityB = presentationFor(working, b.agent_id);
+if (!identityA || !identityB) throw new Error("Missing recording identity");
+
 test.afterEach(async ({ page }) => removeRoutes(page));
 
 test("level 2 over replay: parallel agents, impact, revisions, edits, spend, stop and discard", async ({
@@ -44,7 +54,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
   test.slow();
   const errors: string[] = [];
   const urls: string[] = [];
-  const colors: Partial<Record<"A" | "B", string>> = {};
+  const colors: Partial<Record<string, string>> = {};
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
@@ -53,8 +63,8 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
   const { sent, unexpected } = await interceptCommands(page);
   await page.addInitScript(installHolds, Object.values(holds));
   await page.addInitScript(installRecorder);
-  const cardA = page.getByRole("article", { name: "Agent A" });
-  const cardB = page.getByRole("article", { name: "Agent B" });
+  const cardA = page.locator(`[data-agent-card="${a.agent_id}"]`);
+  const cardB = page.locator(`[data-agent-card="${b.agent_id}"]`);
   const review = page.getByRole("complementary", { name: "Review panel" });
   const editable = review.getByLabel("Editable review file");
   const approve = review.getByRole("button", { name: "Approve and merge" });
@@ -75,22 +85,22 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
       ).toBe(true);
     }
     await page.goto("/level2");
-    await expect(cardA.getByRole("heading", { name: "Agent A" })).toBeVisible();
-    await expect(cardB.getByRole("heading", { name: "Agent B" })).toBeVisible();
-    for (const [slot, card] of [
-      ["A", cardA],
-      ["B", cardB],
+    await expect(cardA.getByRole("heading", { name: `Agent ${identityA.label}` })).toBeVisible();
+    await expect(cardB.getByRole("heading", { name: `Agent ${identityB.label}` })).toBeVisible();
+    for (const [who, identity, card] of [
+      [a, identityA, cardA],
+      [b, identityB, cardB],
     ] as const) {
       await expect(card.getByText("Working", { exact: true })).toBeVisible();
       const tint = await card
         .locator("header > span")
         .first()
-        .evaluate((lamp, slot) => {
+        .evaluate((lamp, family) => {
           const canvas = document.createElement("canvas");
           const ctx = canvas.getContext("2d");
           if (!ctx) throw new Error("No color reader");
           ctx.fillStyle = getComputedStyle(document.documentElement)
-            .getPropertyValue(`--agent-${slot.toLowerCase()}`)
+            .getPropertyValue(`--${family}`)
             .trim();
           ctx.fillRect(0, 0, 1, 1);
           const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
@@ -98,21 +108,26 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
             actual: getComputedStyle(lamp).borderTopColor,
             expected: `rgb(${String(r)}, ${String(g)}, ${String(b)})`,
           };
-        }, slot);
+        }, identity.family);
       expect(tint.actual).toBe(tint.expected);
-      colors[slot] = tint.expected;
+      colors[who.agent_id] = tint.expected;
       await expect(card.getByRole("list", { name: /steps, newest first/ })).toContainText("Ok");
     }
     await engaged(page, holds.live);
-    for (const slot of ["A", "B"]) {
-      const edited = slot === "A" ? proposal.graph.nodes_modified : bProposal.graph.nodes_modified;
-      expect(await nodeIds(page, `node.focus-edit[paint = "${slot}"]`)).toEqual(edited.toSorted());
+    for (const [identity, change] of [
+      [identityA, proposal],
+      [identityB, bProposal],
+    ] as const) {
+      const edited = change.graph.nodes_modified;
+      expect(await nodeIds(page, `node.focus-edit[paint = "${identity.hue}"]`)).toEqual(
+        edited.toSorted(),
+      );
       // Canvas pixels, not just classes: each edited/read node was painted in its agent's hue.
       await expect
         .poll(async () => {
           const samples = await recorded(page);
           return ["read", "edit"].every((mode) =>
-            samples.some((sample) => (sample.lit[`${slot} ${mode}`]?.length ?? 0) > 0),
+            samples.some((sample) => (sample.lit[`${identity.label} ${mode}`]?.length ?? 0) > 0),
           );
         })
         .toBe(true);
@@ -152,18 +167,18 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
           .evaluate((host: GraphProbeHost) => host.oversightGraph?.animating()),
       )
       .toBe(false);
-    for (const [slot, card, change] of [
-      ["A", cardA, proposal],
-      ["B", cardB, bProposal],
+    for (const [who, card, change] of [
+      [a, cardA, proposal],
+      [b, cardB, bProposal],
     ] as const) {
       await expect(card.getByRole("status")).toHaveText("Ready for review");
-      expect(await nodeIds(page, `node.pending-${slot}`)).toEqual(
+      expect(await nodeIds(page, `node.pending[pendingAgents *= "|${who.agent_id}|"]`)).toEqual(
         change.graph.nodes_modified.toSorted(),
       );
-      const borders = await appearance(page, `node.pending-${slot}`);
+      const borders = await appearance(page, `node.pending[pendingAgents *= "|${who.agent_id}|"]`);
       expect(borders.every((node) => node.borderStyle === "dashed")).toBe(true);
       expect(borders.map((node) => node.borderColor.replaceAll(" ", ""))).toEqual(
-        borders.map(() => colors[slot]?.replaceAll(" ", "")),
+        borders.map(() => colors[who.agent_id]?.replaceAll(" ", "")),
       );
     }
     const nodes = await appearance(page, "node");
@@ -288,7 +303,9 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
 
   await test.step("A revises the same change, disabling editing until the higher revision", async () => {
     await engaged(page, holds.revising);
-    await expect(page.getByRole("group", { name: "Agent A: Revising", exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("group", { name: `Agent ${identityA.label}: Revising`, exact: true }),
+    ).toBeVisible();
     await expect(review.getByText("Read-only while the agent is not ready")).toBeVisible();
     await expect(approve).toBeDisabled();
     await expect(review.getByRole("button", { name: "Save review edits" })).toBeDisabled();

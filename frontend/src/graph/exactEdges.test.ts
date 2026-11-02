@@ -50,7 +50,8 @@ it("keeps internal exact calls hidden during hover, selection and cone or agent 
       }
       edge.addClass("lit");
       expect(edge.style("display")).toBe("none");
-      edge.removeClass("lit quiet").addClass("pending-A");
+      edge.data("paint", "A");
+      edge.removeClass("lit quiet").addClass("pending");
       expect(edge.style("display")).toBe("none");
     }
   } finally {
@@ -171,7 +172,8 @@ for (const [name, graph, exactPairs, faint, exactCalls] of [
             expect(edge.style("display")).toBe("none");
           }
         }
-        edge.removeClass("quiet").addClass("pending-A");
+        edge.data("paint", "A");
+        edge.removeClass("quiet").addClass("pending");
         expect(edge.style("display")).toBe("none");
         edge.addClass("cone-call");
         expect(edge.style("display")).toBe("element");

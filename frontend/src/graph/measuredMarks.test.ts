@@ -145,9 +145,10 @@ it.each(["class", "module"])("keeps agent marks over measured words on a folded 
     e.data.id === "shop.cart:Cart.total"
       ? {
           ...e,
-          classes: `${e.classes} pending pending-A marked`,
+          classes: `${e.classes} pending marked`,
           data: {
             ...e.data,
+            paint: "A" as const,
             marks: {
               word: "changed" as const,
               owner: mark("A", "read"),

@@ -19,7 +19,7 @@ function fixture() {
     },
     {
       group: "nodes",
-      classes: i ? "function focus-B-read" : "function pending-F focus-C-edit pending-A",
+      classes: i ? "function focus-read" : "function pending focus-edit",
       data: {
         id: `${id}:f`,
         kind: "function",
@@ -40,7 +40,7 @@ function fixture() {
   } as unknown as GraphSnapshot;
   return { state, elements, model: mapModel(elements, themes.dark) };
 }
-it("collects pending, read and edit rings once each in slot order", () => {
+it("collects pending, read and edit rings once per represented team in identity order", () => {
   const { state, elements, model } = fixture();
   mapEvidence(model, elements, state);
   expect(model.groups[0]?.rings?.map((r) => r.letter)).toEqual(["A", "B", "C", "F"]);

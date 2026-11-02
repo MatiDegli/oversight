@@ -63,8 +63,8 @@ export function NewParameterCalls({
                           <code>{row.before}</code>
                         </div>
                         <ArrowRight aria-hidden="true" size={16} />
-                        <div data-agent-identity={identity} style={presentationStyle(identity)}>
-                          <span>After</span>
+                        <div data-agent-id={identity?.agentId} style={presentationStyle(identity)}>
+                          <span>After · Agent {identity?.label ?? "unknown"}</span>
                           <code>{row.after}</code>
                         </div>
                       </div>
