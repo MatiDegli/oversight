@@ -83,19 +83,30 @@ it.each([false, true])("shows a sentence and keeps the tool on hover (compact=%s
   expect(html).not.toContain("<code");
 });
 
-it.each([false, true])("falls back to the tool in body type (compact=%s)", (compact) => {
-  const step = sketchState.steps["agent-1"]?.[0];
-  if (!step) throw new Error("Missing step");
+it.each(
+  [false, true].flatMap((compact) =>
+    (["list_files", "read_file", "edit_file", "run_tests", "finish"] as const).map((tool) => ({
+      compact,
+      tool,
+    })),
+  ),
+)("falls back to $tool in body type (compact=$compact)", ({ compact, tool }) => {
+  const fixtureStep = sketchState.steps["agent-1"]?.[0];
+  if (!fixtureStep) throw new Error("Missing step");
+  const step = { ...fixtureStep, tool, summary: "" };
   const html = renderToStaticMarkup(
     <TimelineEntry
       compact={compact}
       changeId="change-1"
-      entry={{ kind: "step", seq: 1, ts: undefined, step: { ...step, summary: "" } }}
+      entry={{ kind: "step", seq: 1, ts: undefined, step }}
     />,
   );
   expect(html.replace(/<[^>]*>/g, "")).toContain(step.tool);
   expect(html).toContain(`title="${step.tool}"`);
-  expect(html).not.toMatch(/<code|font-mono[^>]*>list_files/);
+  expect(html).not.toContain("<code");
+  const title = html.match(new RegExp(`<div class="([^"]*)">${step.tool}<`));
+  expect(title).not.toBeNull();
+  expect(title?.[1]?.split(/\s+/)).not.toContain("font-mono");
 });
 
 beforeEach(() => {

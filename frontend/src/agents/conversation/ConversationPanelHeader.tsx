@@ -15,7 +15,7 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
         >
           {header.slot}
         </span>
-        <h2 className="min-w-0 text-[16px] leading-[1.3] font-semibold wrap-anywhere text-text">
+        <h2 className="min-w-0 text-[16px]! leading-[1.3]! font-semibold wrap-anywhere text-text">
           Agent {header.slot}
         </h2>
         <span className="shrink-0 rounded-full bg-raised px-[10px] py-[3px] text-[13px] font-semibold text-muted">

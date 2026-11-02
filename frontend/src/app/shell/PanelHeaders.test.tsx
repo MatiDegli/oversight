@@ -30,7 +30,6 @@ it.each(["working", "revising"] as const)(
       header: {
         agentId: "agent-1",
         changeId: "change-1",
-        task: "Check the quantity",
         slot: "A",
         state: status,
         modelLabel: "Muse Spark",
@@ -57,6 +56,7 @@ it.each(["working", "revising"] as const)(
     const header = frame.match(/<header[\s\S]*?<\/header>/)?.[0];
     expect(header).toBeDefined();
     expect(panel.match(/<header[\s\S]*?<\/header>/)?.[0]).toBe(header);
+    expect(header).toMatch(/<h2[^>]*>Agent A<\/h2>/);
     expect(header?.replace(/<[^>]*>/g, "")).toContain("Step 30 of 30");
     expect(header).toContain(status === "working" ? "Waiting" : "Revising");
   },

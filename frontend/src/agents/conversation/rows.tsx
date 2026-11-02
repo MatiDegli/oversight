@@ -169,6 +169,7 @@ export function StepRow({
       View in diff
     </button>
   );
+  // The tool hover title deliberately includes the diff action and test output.
   return (
     <div title={step.tool}>
       <Row
