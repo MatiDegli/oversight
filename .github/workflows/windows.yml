@@ -49,7 +49,7 @@ jobs:
           node --version | Tee-Object -Append nt-evidence/versions.log
           pnpm --version | Tee-Object -Append nt-evidence/versions.log
           [System.Environment]::OSVersion.VersionString | Tee-Object -Append nt-evidence/versions.log
-          'W1 + W2 + W3 + W4b byte policy only. Full driver/three starts, cold-uv backend death and six-run/two-machine proof remain pending; own-source startup awaits W4a2 + W4c1 + W4c2. Missing dependencies are not acceptance.' | Set-Content nt-evidence/staging.txt
+          'Private own-copy composition is covered by injections. Public own paths remain closed. Integrated six-run/two-machine qualification remains pending; skips are not acceptance.' | Set-Content nt-evidence/staging.txt
       - run: uv sync --frozen
       - run: pnpm -C frontend install --frozen-lockfile
       - uses: ./.github/actions/setup-gitleaks
@@ -86,6 +86,12 @@ jobs:
         run: |
           uv run --frozen python tools/smoke.py 2>&1 | Tee-Object nt-evidence/smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Private own-copy composition and native fixtures
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
+        run: |
+          uv run --frozen pytest -o timeout_method=thread backend/tests/test_source_nt_startup.py backend/tests/test_source_trust_once.py backend/tests/workspace/test_source_nt_lifecycle.py backend/tests/workspace/test_source_nt_windows.py -n 2 -rs -s 2>&1 | Tee-Object nt-evidence/own-copy-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          'After public enablement, on both Windows machines: uv run --frozen python tools/demo_check_nt.py --own-fixtures. No six-run acceptance collected here.' | Set-Content nt-evidence/own-driver-pending.txt
       - name: Report unavailable Linux isolation
         if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: |
