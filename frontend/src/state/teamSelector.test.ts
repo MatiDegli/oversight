@@ -73,6 +73,7 @@ function lead(id: string): ServerEvent {
       state: "idle",
       step: 0,
       detail: null,
+      limits: null,
       requested_plan_id: null,
     },
   };
@@ -91,6 +92,13 @@ function replay(events: readonly ServerEvent[]) {
 }
 
 const teamsOf = (...tail: ServerEvent[]) => selectTeams(replay(envelopes(...tail)));
+
+it("retains unknown lead limits as null in team evidence", () => {
+  const state = replay(envelopes(lead("agent-1")));
+  const event = state.decisionEvents.find((event) => event.type === "lead.status");
+  expect(event?.payload.limits).toBeNull();
+  expect(selectTeams(state).byAgent["agent-1"]).toEqual({ team: "agent-1", kind: "lead" });
+});
 
 it("has no teams before any identity is observed", () => {
   expect(selectTeams(createInitialState())).toEqual({ byAgent: {}, teamOrder: [] });

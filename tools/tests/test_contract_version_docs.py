@@ -2,7 +2,14 @@
 
 from pathlib import Path
 
+from oversight_contracts import CONTRACT_VERSION
+
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_architecture_states_the_current_contract_version() -> None:
+    architecture = (ROOT / "ARCHITECTURE.md").read_text()
+    assert f"Contracts are at {CONTRACT_VERSION} (" in architecture
 
 
 def test_start_agent_comment_reserves_zones_for_creation_delivery() -> None:
