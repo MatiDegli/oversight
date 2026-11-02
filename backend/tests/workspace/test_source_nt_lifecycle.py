@@ -91,15 +91,17 @@ async def test_capture_cleanup_failure_never_restores_snapshot(
     monkeypatch.setattr(suite_guard, "finish_snapshot", restored)
     unlinks = []
     if masked:
+
+        class SharingViolation(PermissionError):
+            winerror = 32
+
         original_unlink = Path.unlink
         monkeypatch.setattr(test_tree, "sys", SimpleNamespace(platform="win32"))
 
         def unlink(path, *args, **kwargs):
             if path.name.startswith("suite-index-"):
                 unlinks.append(path)
-                error = PermissionError("index sharing violation")
-                error.winerror = 32
-                raise error from None
+                raise SharingViolation("index sharing violation") from None
             return original_unlink(path, *args, **kwargs)
 
         monkeypatch.setattr(Path, "unlink", unlink)
