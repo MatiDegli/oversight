@@ -289,7 +289,15 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         "if-no-files-found: error\nretention-days: 7",
     }
     assert UPLOAD in (WORKFLOWS / "ci.yml").read_text()
-    assert len(items) == 17
+    assert len(items) == 19
+    assert items[7:9] == [
+        {"uses": GITLEAKS},
+        {
+            "name": "Gitleaks version",
+            "run": "gitleaks version | Tee-Object -Append nt-evidence/versions.log",
+        },
+    ]
+    items = items[:7] + items[9:]
     for index, step in enumerate(items[4:-1], 4):
         permitted = {"name", "run"}
         if index == 13:
@@ -391,6 +399,8 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
         ("persist-credentials: false", "persist-credentials: true"),
         ("uv sync --frozen", "uv sync"),
         ("node-version: 24", "node-version: 22"),
+        ("      - uses: ./.github/actions/setup-gitleaks\n", ""),
+        ("gitleaks version", "gitleaks --help"),
         ("--pythonplatform Windows", "--pythonplatform Linux"),
         ("-o timeout_method=thread", ""),
         ("-rs -s", ""),
