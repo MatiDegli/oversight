@@ -350,6 +350,57 @@ async def test_max_manifest_bounded_add(tmp_path: Path) -> None:
         result = await run_process(
             argv, cwd=source.root, env={"GIT_LITERAL_PATHSPECS": "1"}, timeout_s=10
         )
+        if result.timed_out:
+            traced = await run_process(
+                argv,
+                cwd=source.root,
+                env={"GIT_LITERAL_PATHSPECS": "1", "GIT_TRACE": "1", "GIT_TRACE2_PERF": "1"},
+                timeout_s=10,
+            )
+            pytest.fail(f"git add timed out: original={result!r}; traced={traced!r}", pytrace=False)
         assert result.returncode == 0, result.stderr
         assert len(argv) == 5
         assert set((await git(source.root, "ls-files", "-z")).strip("\0").split("\0")) == set(names)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "retry_timed_out,trace",
+    [
+        (False, "trace2: exit elapsed=0.050 code=0"),
+        (True, "trace2: still working"),
+        (True, "trace2: exit elapsed=0.050 code=0"),
+    ],
+)
+async def test_max_manifest_timeout_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, retry_timed_out: bool, trace: str
+) -> None:
+    original = ProcessResult(3221225786, "initial stdout", "LF warning", True, False, 10032)
+    traced = ProcessResult(
+        3221225786 if retry_timed_out else 0,
+        "retry stdout",
+        trace,
+        retry_timed_out,
+        False,
+        10030 if retry_timed_out else 50,
+    )
+    calls = []
+
+    async def observed(argv, *, cwd, env=None, timeout_s, **kwargs):
+        if "add" not in argv:
+            return ProcessResult(0, "", "", False, False, 1)
+        calls.append((list(argv), cwd, dict(env or {}), timeout_s))
+        assert len(calls) <= 2
+        return original if len(calls) == 1 else traced
+
+    monkeypatch.setenv("DIAGNOSTIC_PRIVATE", "must-not-appear-in-evidence")
+    monkeypatch.setattr(sys.modules[__name__], "run_process", observed)
+    with pytest.raises(pytest.fail.Exception) as failure:
+        await test_max_manifest_bounded_add(tmp_path)
+    message = str(failure.value)
+    assert repr(original) in message and repr(traced) in message
+    assert "must-not-appear-in-evidence" not in message
+    assert len(calls) == 2
+    argv, cwd, env, limit = calls[0]
+    assert env == {"GIT_LITERAL_PATHSPECS": "1"} and limit == 10
+    assert calls[1] == (argv, cwd, env | {"GIT_TRACE": "1", "GIT_TRACE2_PERF": "1"}, limit)
