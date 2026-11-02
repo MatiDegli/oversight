@@ -7,6 +7,7 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
+import { scenes } from "../../shots/scenes";
 import type { StartAnswer } from "./taskBox.browser.fixture";
 
 let server: ViteDevServer | undefined;
@@ -80,6 +81,21 @@ const sent = (page: Page, count: number) =>
   page.waitForFunction((expected) => window.taskBoxTest.calls().length === expected, count);
 const focused = (page: Page) =>
   page.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? "none");
+
+it("prepares the two-model braked capture using the visible model names", async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      window.taskBoxTest.twoSlots(true);
+    });
+    const scene = scenes.find(({ name }) => name === "task-two-slots-braked");
+    if (!scene?.enabled || !scene.prepare) throw new Error("Missing braked task capture");
+    await scene.prepare(page, { jsonl: "" });
+    await browserExpect(box(page)).toHaveValue("Add a second task with Muse Spark Open");
+    await browserExpect(page.getByRole("group", { name: "Agent slot" })).toBeVisible();
+    expect((await page.screenshot({ animations: "disabled" })).byteLength).toBeGreaterThan(1000);
+    expect(await calls(page)).toEqual([]);
+  });
+});
 
 it(
   "shows no choice for one slot, then preselects B when A is braked; a manual A sends its slot and shows spend_brake",
