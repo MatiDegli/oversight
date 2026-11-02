@@ -1,19 +1,21 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { ConversationPanelHeader } from "./ConversationPanelHeader";
 import { Composer, type ConversationControls } from "./Composer";
 import { ActivityBlock } from "./ActivityBlock";
 import { BudgetNotice, Notices } from "./Notices";
 import { TimelineEntry } from "./rows";
-import type { Conversation } from "./selectConversation";
+import type { Conversation, ConversationEntry } from "./selectConversation";
 
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation;
+  renderResolution?: (entry: Extract<ConversationEntry, { kind: "resolution" }>) => ReactNode;
   onOpenDiff?: (changeId: string) => void;
 }
 /** The timeline owns scrolling; event arrivals never move keyboard focus. */
 export function ConversationPanel({
   conversation,
   onOpenDiff,
+  renderResolution,
   ...controls
 }: ConversationPanelProps) {
   const { header, entries } = conversation;
@@ -72,7 +74,9 @@ export function ConversationPanel({
               ) : entry.kind === "budget" ? (
                 <BudgetNotice mark={entry.mark} progress={conversation.progress} />
               ) : (
-                <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
+                ((entry.kind === "resolution" ? renderResolution?.(entry) : null) ?? (
+                  <TimelineEntry entry={entry} changeId={header.changeId} onOpenDiff={onOpenDiff} />
+                ))
               )}
             </div>
           ))}

@@ -3686,6 +3686,7 @@ probes. The field controller loads inside the same Oversight boundary and initia
 mount, before the graph's asynchronous font/draw preparation completes. Chat-first still
 loads no rendering implementation. Startup accounting includes the controller in both bases.
 File-tab task entry is hidden in Chat because its destination is the Oversight agents panel.
+
 ## 2026-11-01 — The native Windows port moves ahead
 
 The maintainer ranked item 20 immediately after the conversational lead and the Chat view,
@@ -3791,3 +3792,28 @@ all repository paths, including valid local NT paths, until W4c2. Existing profi
 and Linux behavior remain unchanged. Lock/server Job, previous-runtime guard and trust must
 precede future source operations; validated staging must precede reset. Production startup
 does not yet implement that own-source order. W4a2 supplies guard/staging; W4c2 wires startup.
+## 2026-11-01 — C5 Chat merge mode uses the shared Settings tab
+
+Chat's empty TaskBox and conversation Composer receive an optional action accessory;
+Oversight supplies none. Both chips navigate through the existing `onOpenSettings`
+callback to the single Merge mode section. Only retained mode evidence labels the
+chip (run metadata is the fallback); missing evidence reads unknown. Replay keeps
+its explanations and command guards; opening Settings grants no command capability.
+
+C5 renders a rules-merge receipt at the projected resolution entry only for an
+approved, merged, rules-authored decision. Other resolutions keep their existing
+renderer. The caption, rule/grant explanation, commit and timestamp belong to that
+immutable envelope; later mode events update only the chips. Missing assessment
+adds no historical claims. No event, retained projection or timeline is added.
+
+The C5 review link dispatches an existing `open` focus-tab action with stable
+`review:<change_id>` identity, preserved selection and empty framing IDs. It requires
+matching retained proposal/resolution identity, revision and envelope position plus
+the current review evidence. Missing evidence or dispatcher leaves a readable
+unavailable explanation. Shared pending-change guards remain unchanged; Chat stays
+selected and FocusPanel loads its existing ReviewPanel and tab history.
+
+C5 proof exercises production App Settings/tab dispatch in live and replay, using
+hand-written retained evidence and fixture-only Chat initialization. Targeted
+regressions retain focus, draft, graph camera and scroll ownership. Comparisons
+judge only C5: C2/C3 bodies, C4 composition and C1 TaskBox controls stay outside it.

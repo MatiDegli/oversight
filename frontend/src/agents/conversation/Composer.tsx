@@ -1,5 +1,5 @@
 import { TriangleAlert } from "lucide-react";
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 import { stateStore } from "../../state";
 import { commandFailure } from "../../transport";
@@ -10,6 +10,7 @@ import type { ConversationHeader } from "./selectConversation";
 import { focusRing } from "./rows";
 
 export interface ConversationControls {
+  actionAccessory?: ReactNode;
   onSend?: (text: string) => Promise<unknown>;
   onPause?: () => Promise<unknown>;
   onResume?: () => Promise<unknown>;
@@ -24,6 +25,7 @@ export function Composer({
   onPause,
   onResume,
   onStop,
+  actionAccessory,
 }: { header: ConversationHeader } & ConversationControls) {
   const runId = useStore(stateStore, ({ state }) => state.run?.run_id ?? null);
   const key = draftKey(runId, header.agentId);
@@ -66,12 +68,19 @@ export function Composer({
     });
     return result;
   }
-  if (replay)
-    return (
-      <p className="conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted">
-        Recorded run: messages, pause and stop are off.
-      </p>
+  if (replay) {
+    const caption = "Recorded run: messages, pause and stop are off.";
+    const replayClass =
+      "conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted";
+    return actionAccessory ? (
+      <div className={replayClass}>
+        <p>{caption}</p>
+        <div className="composer-actions flex">{actionAccessory}</div>
+      </div>
+    ) : (
+      <p className={replayClass}>{caption}</p>
     );
+  }
   const paused = header.state === "paused";
   return (
     <div className="conversation-composer shrink-0 border-t border-divider p-[14px]">
@@ -105,10 +114,11 @@ export function Composer({
           />
         )}
         {active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
+        {actionAccessory}
         {onSend && (
           <button
             type="button"
-            className={`${button} ml-auto bg-raised`}
+            className={`${button} ${actionAccessory ? "" : "ml-auto"} bg-raised`}
             aria-disabled={!active || pending || !text.trim()}
             onClick={() => {
               void send();
