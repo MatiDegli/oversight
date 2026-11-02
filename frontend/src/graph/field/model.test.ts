@@ -477,6 +477,7 @@ it("invalidates cached falloff after zoom, box movement, profile and viewport ch
 
 it("requires strongest-source storage on an accumulator", () => {
   expectTypeOf<Accumulated["strongest"]>().toEqualTypeOf<Float32Array>();
+  expectTypeOf<Parameters<typeof shadeLamps>[3]["strongest"]>().toEqualTypeOf<Float32Array>();
 });
 
 it("gives two resting teams a clean edge with unchanged additive brightness", () => {
