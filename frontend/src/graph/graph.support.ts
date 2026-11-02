@@ -69,6 +69,7 @@ const log: ServerEvent[] = [
   event(1, "run.started", {
     run_id: "run-graph-test",
     merge_mode: null,
+    max_leads: null,
     contract_version: "1.0.0",
     prompt_version: "test",
     workspace: "demo-repo",

@@ -1,4 +1,4 @@
-"""Plans schedule one to six stable subtask ids, retaining pre-1.8 payloads."""
+"""Plans schedule stable subtask ids, retaining pre-1.8 payloads."""
 
 from pathlib import Path
 
@@ -77,7 +77,6 @@ def test_three_subtask_chain_progresses_after_merges():
         [task(deps=[-1])],
         [task(deps=[6])],
         [],
-        [task()] * 7,
     ],
 )
 def test_plan_and_update_share_dependency_checks(tasks):
@@ -114,9 +113,12 @@ def test_rejected_prerequisite_cancels_dependents_transitively():
     assert Plan.model_validate(plan(tasks, "rejected")).state == "rejected"
 
 
-@pytest.mark.parametrize("count", [1, 6])
-def test_update_accepts_bounded_lists(count):
+@pytest.mark.parametrize("count", [1, 6, 7, 20])
+def test_plan_and_update_accept_larger_lists(count):
     tasks = [task(deps=[] if i == 0 else [i - 1]) for i in range(count)]
+    parsed = Plan.model_validate(plan(tasks))
+    assert parsed.subtasks is not None
+    assert len(parsed.subtasks) == count
     assert (
         len(
             UpdatePlan.model_validate(
@@ -138,7 +140,7 @@ def test_update_accepts_bounded_lists(count):
         (True, 6, "starting", True),
         (True, 1, "completed", True),
         (True, 0, "running", False),
-        (True, 7, "running", False),
+        (True, 7, "running", True),
         (True, 0, "completed", False),
         (False, 1, "running", True),
         (False, 2, "running", False),

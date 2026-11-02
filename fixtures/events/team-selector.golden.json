@@ -1,0 +1,29 @@
+{
+  "handwritten-lead-plans.jsonl": {
+    "byAgent": {
+      "agent-1": {
+        "kind": "lead",
+        "team": "agent-1"
+      }
+    },
+    "teamOrder": [
+      "agent-1"
+    ]
+  },
+  "recorded-demo.jsonl": {
+    "byAgent": {
+      "agent-1": {
+        "kind": "agent",
+        "team": "agent-1"
+      },
+      "agent-2": {
+        "kind": "agent",
+        "team": "agent-2"
+      }
+    },
+    "teamOrder": [
+      "agent-1",
+      "agent-2"
+    ]
+  }
+}

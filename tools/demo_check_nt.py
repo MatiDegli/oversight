@@ -1,8 +1,8 @@
 """Console-attached Windows supervision; only public W1 workspace primitives are used.
 
 The outer kill-on-close handle is deliberately never closed during this process's life.
-Native console exit evidence is required: the candidate SIGBREAK status below is not a
-claim of Windows acceptance. Linux-injected tests exercise policy, not the NT kernel.
+Shutdown requires the observed CRT SIGBREAK exit code and the completed lifespan log.
+Linux-injected tests exercise policy, not the NT kernel.
 """
 
 import argparse
@@ -53,7 +53,7 @@ BACKEND_BOOTSTRAP = (
 )
 CREATE_FLAGS = 0x00000004 | 0x00000200  # CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP
 CTRL_BREAK = 1  # CTRL_BREAK_EVENT; no CREATE_NO_WINDOW and no signal handler in the server.
-NT_GRACEFUL_EXITS = (0xC000013A,)  # Candidate, must be pinned/confirmed by native console proof.
+NT_GRACEFUL_EXITS = (3,)  # Uvicorn re-raises SIGBREAK through the CRT after lifespan shutdown.
 POLL = 0.02
 
 
@@ -153,7 +153,7 @@ class Server:
                 if time.monotonic() >= end:
                     raise smoke.SmokeError("CTRL_BREAK leader deadline exceeded")
                 await asyncio.sleep(POLL)
-            if time.monotonic() > end:
+            if time.monotonic() >= end:
                 raise smoke.SmokeError("CTRL_BREAK leader completion observed after deadline")
             await wait_members(self.job, self.jobs, deadline_s=deadline_s)
             text = self.log.read_text(encoding="utf-8", errors="replace")

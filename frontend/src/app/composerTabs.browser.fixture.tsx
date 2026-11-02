@@ -13,8 +13,15 @@ import { closePanel, conversationTab, surfaceTab, tabbedView, viewReducer } from
 
 let root: Root | undefined;
 const calls: { command: string; id: string; text?: string }[] = [];
+let deferSend = false;
+const sends: { resolve: () => void; reject: (error: Error) => void }[] = [];
 const control = (command: string) => (id: string, text?: string) => {
   calls.push({ command, id, ...(text === undefined ? {} : { text }) });
+  if (command === "message" && deferSend) {
+    return new Promise<void>((resolve, reject) => {
+      sends.push({ resolve, reject });
+    });
+  }
   return Promise.resolve();
 };
 
@@ -52,9 +59,12 @@ function Harness() {
 }
 
 const composerTabsTest = {
-  mount() {
+  mount(options: { deferSend?: boolean; theme?: "dark" | "day" } = {}) {
     root?.unmount();
     calls.length = 0;
+    sends.length = 0;
+    deferSend = options.deferSend ?? false;
+    document.documentElement.dataset.theme = options.theme ?? "dark";
     draftStore.setState({}, true);
     stateStore.setState({
       state: log
@@ -76,6 +86,12 @@ const composerTabsTest = {
     );
   },
   calls: () => calls,
+  settleSend(outcome: "resolve" | "reject") {
+    const send = sends.shift();
+    if (!send) throw new Error("No pending send");
+    if (outcome === "resolve") send.resolve();
+    else send.reject(new Error("offline"));
+  },
 };
 Object.assign(window, { composerTabsTest });
 declare global {

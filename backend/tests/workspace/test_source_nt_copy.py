@@ -2,10 +2,14 @@
 
 import asyncio
 import os
+import stat
 import sys
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -14,7 +18,9 @@ from oversight.workspace import run_process
 from oversight.workspace import source_nt as nt
 from oversight.workspace._platform import case_sensitive_directory, executable, stream_names
 from oversight.workspace.files import open_nt
+from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
+from oversight.workspace.metadata_io import Budget, Entry, read_entry
 from oversight.workspace.runner import ProcessResult
 
 from .test_source_nt import source_case, unnamed
@@ -249,6 +255,72 @@ async def test_staging_tamper_and_owned_cleanup(tmp_path: Path) -> None:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize(
+    "mutation,reason",
+    [
+        ("none", ""),
+        ("readonly", "staging manifest changed"),
+        ("bytes", "staging manifest changed"),
+        ("swap", "owned staging identity changed"),
+        ("hardlink", "linked"),
+        ("symlink", "linked"),
+        ("tree", "staging bytes changed"),
+    ],
+)
+async def test_staging_windows_manifest_stat(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str, reason: str
+) -> None:
+    """Read real bytes with injected NT modes; retain every staging refusal on Linux."""
+    with source_case(tmp_path) as (source, fd):
+        await fixture(source)
+        copied = await stage(source, fd)
+        identity = copied.manifest.stat()
+        mode, changes = 0o666, {}
+        original_stat, original_fstat = os.stat, os.fstat
+
+        def windows_stat(info: os.stat_result) -> os.stat_result:
+            if (info.st_dev, info.st_ino) != (identity.st_dev, identity.st_ino):
+                return info
+            fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+            fields["st_mode"] = stat.S_IFMT(info.st_mode) | mode
+            fields.update(changes)
+            return cast(os.stat_result, SimpleNamespace(**fields))
+
+        def observed_stat(*args, **kwargs):
+            return windows_stat(original_stat(*args, **kwargs))
+
+        def observed_fstat(fd: int) -> os.stat_result:
+            return windows_stat(original_fstat(fd))
+
+        try:
+            with monkeypatch.context() as patch:
+                patch.setattr(os, "stat", observed_stat)
+                patch.setattr(os, "fstat", observed_fstat)
+                deadline = time.monotonic() + 10
+                actual = read_entry(copied.manifest, Budget(deadline))
+                assert actual == Entry(0o666, nt.manifest_bytes(copied.selection))
+                nt.verify_stage(copied, source.runtime, deadline)
+                if mutation == "none":
+                    return
+                if mutation == "readonly":
+                    mode = 0o444
+                elif mutation == "bytes":
+                    copied.manifest.write_bytes(b"tampered\0")
+                elif mutation == "swap":
+                    changes["st_ino"] = identity.st_ino + 1
+                elif mutation == "hardlink":
+                    changes["st_nlink"] = 2
+                elif mutation == "symlink":
+                    changes["st_mode"] = stat.S_IFLNK | mode
+                elif mutation == "tree":
+                    (copied.tree / "data.bin").write_bytes(b"tampered")
+                with pytest.raises((OSError, IntegrityError), match=reason):
+                    nt.verify_stage(copied, source.runtime, deadline)
+        finally:
+            copied.cleanup()
+
+
+@pytest.mark.anyio
 async def test_max_manifest_bounded_add(tmp_path: Path) -> None:
     import time
 
@@ -278,6 +350,76 @@ async def test_max_manifest_bounded_add(tmp_path: Path) -> None:
         result = await run_process(
             argv, cwd=source.root, env={"GIT_LITERAL_PATHSPECS": "1"}, timeout_s=10
         )
+        if result.timed_out:
+            index_lock = source.root / ".git" / "index.lock"
+            index_lock_exists = index_lock.exists()
+            # The runner has reaped the job; an interrupted add cannot clean up its lock.
+            index_lock.unlink(missing_ok=True)
+            traced = await run_process(
+                argv,
+                cwd=source.root,
+                env={"GIT_LITERAL_PATHSPECS": "1", "GIT_TRACE": "1", "GIT_TRACE2_PERF": "1"},
+                timeout_s=10,
+            )
+            pytest.fail(
+                f"git add timed out: index_lock_exists={index_lock_exists}; "
+                f"original={result!r}; traced={traced!r}",
+                pytrace=False,
+            )
         assert result.returncode == 0, result.stderr
         assert len(argv) == 5
         assert set((await git(source.root, "ls-files", "-z")).strip("\0").split("\0")) == set(names)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("index_lock_exists", [False, True])
+@pytest.mark.parametrize(
+    "retry_timed_out,trace",
+    [
+        (False, "trace2: exit elapsed=0.050 code=0"),
+        (True, "trace2: still working"),
+        (True, "trace2: exit elapsed=0.050 code=0"),
+    ],
+)
+async def test_max_manifest_timeout_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retry_timed_out: bool,
+    trace: str,
+    index_lock_exists: bool,
+) -> None:
+    original = ProcessResult(3221225786, "initial stdout", "LF warning", True, False, 10032)
+    traced = ProcessResult(
+        3221225786 if retry_timed_out else 0,
+        "retry stdout",
+        trace,
+        retry_timed_out,
+        False,
+        10030 if retry_timed_out else 50,
+    )
+    calls = []
+
+    async def observed(argv, *, cwd, env=None, timeout_s, **kwargs):
+        if "add" not in argv:
+            return ProcessResult(0, "", "", False, False, 1)
+        calls.append((list(argv), cwd, dict(env or {}), timeout_s))
+        assert len(calls) <= 2
+        index_lock = cwd / ".git" / "index.lock"
+        if len(calls) == 1 and index_lock_exists:
+            index_lock.write_bytes(b"interrupted git add")
+        elif len(calls) == 2:
+            assert not index_lock.exists(), "retry must not inherit the interrupted git lock"
+        return original if len(calls) == 1 else traced
+
+    monkeypatch.setenv("DIAGNOSTIC_PRIVATE", "must-not-appear-in-evidence")
+    monkeypatch.setattr(sys.modules[__name__], "run_process", observed)
+    with pytest.raises(pytest.fail.Exception) as failure:
+        await test_max_manifest_bounded_add(tmp_path)
+    message = str(failure.value)
+    assert repr(original) in message and repr(traced) in message
+    assert f"index_lock_exists={index_lock_exists}" in message
+    assert "must-not-appear-in-evidence" not in message
+    assert len(calls) == 2
+    argv, cwd, env, limit = calls[0]
+    assert env == {"GIT_LITERAL_PATHSPECS": "1"} and limit == 10
+    assert calls[1] == (argv, cwd, env | {"GIT_TRACE": "1", "GIT_TRACE2_PERF": "1"}, limit)

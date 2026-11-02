@@ -948,7 +948,7 @@ keys, with a Saved line and the repository scope below. Section headings remain 
   color alone; warnings are neutral. The brake refuses new runs above 90%, as ARCHITECTURE.md,
   Usage and the spend brake, specifies.
   Steps per task is a minus/value/plus stepper. Change size and cone limits use numeric inputs
-  with visible units (lines, functions); they do not turn fixed contract limits into editable
+  with visible units (lines, functions); they do not turn current implementation limits into editable
   settings without backing support.
 - **Protected areas:** rows name the path or function, its type and a remove action; an add field
   and Add button follow the list. The row states that an edit waits for the person.
@@ -1139,7 +1139,27 @@ The graph stays visible and keeps positions.
 5. **What was compared:** 14/600 title, then two to four muted 15px lines on 22px lines,
    numbers in text color and Next, 4px below the title. One faint sentence follows, 4px below:
    "Only recorded inputs were compared; others can still differ." Then a closed 44px "Details"
-   row, 8px below, for further samples, method details and test runs. No summary or Details in d/d2.
+   row, 8px below, for further samples, method details and test runs. When current-revision
+   parameter extensions exist, insert a sibling **New-parameter calls** section before Details,
+   with its own divider and 14/600 title on 20px lines. Keep comparison and diff ordering.
+   Without a comparison, show the extension section alone, with no invented summary or Details.
+   Null or empty extensions retain the original comparison and Details structure.
+   Extension prose is 15/22; parameter names and sample values are Mono 15. Show the function,
+   published calls run and positive aggregate base rejections, never discovered totals or per-row
+   rejection flags. No positional-binding explanation is supported by events. Omit zero counters
+   when unavailable. The muted sentence is exactly: "These calls use the new parameter, so What
+   was compared does not count them." Keep mapped limitations beside this evidence with a 16px
+   icon column. Native Samples has a 44px summary, starts closed and retains every supplied row,
+   equal results and published instability included. Show retained-sample/run counts when partial.
+   Before/After cells sit side by side at 1920, stack at 1280 and phone width with a downward
+   arrow and wrapping input text. Counts never enter comparison, caller or question totals.
+   A matching existing node popover may echo "4 calls using cap_percent; see review." using its
+   current candidate's event fields. Only the underlined, focusable "see review" button scrolls
+   the matching section into view, then focuses its tabIndex=-1 target without a second scroll.
+   If that explicit action finds no mounted review, a persistent status region says "The review
+   for these calls is not open." It clears when the matching evidence mounts; arrival does not
+   navigate or move focus. The status region otherwise stays empty.
+   Evidence arrival opens nothing and preserves focus, scroll and user-opened disclosures.
 6. **Decision bar:** pinned, divider above, padding 12px top, 24px sides, 10px bottom. Comment
    box 64px, radius 10px, "Comment for the agent"; buttons 10px below, gap 10px, 40px high,
    14/600, radius 7px: "Approve and merge" (primary, merge icon), "Request changes" (outline),
@@ -1224,6 +1244,10 @@ The first three chips keep "1 file", "+2 −0" and "28 passed". Examples stack B
 with a down arrow and Mono 15 soft-wrapped values. "What was compared" and "Show diff" become
 44px rows with one-line muted previews and chevrons. Dock buttons read "Approve" and "Reject"
 in equal 48px containers.
+New-parameter calls stays outside the phone comparison disclosure, followed by closed Details
+only when a comparison exists. It uses the same scrolling evidence body and 16px gutters.
+The existing graph chip retains its drawn 22px size and anchor; invisible vertical padding
+provides a minimum 44px touch area without overlapping neighboring chip targets.
 
 - **f:** graph caption "possible call, not followed"; fourth chip "No exact callers". Lead
   "2 choices need you" / "1 of 2 answered"; the answered row wraps fully, and the three answers
@@ -1496,7 +1520,7 @@ This definition sits beside graph structure and folding because depth controls h
 while scale controls how it is drawn. It refines [Layout](#layout)'s **Opening a change** readability
 floor, **The preset's arrangement** and fit behavior, together with the folding rules above.
 The Modules / Functions / Details depth control, folder packing and map at rest are built.
-Group-header signals, hover, cone lines and clicks below remain targets, not built yet.
+Group-header evidence, hover, cone lines and the two pointer clicks below are built.
 The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
 
 1. **Two axes.** Depth is the Modules / Functions / Details control: how much unfolds. Scale is
@@ -1534,30 +1558,46 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    without touching or overlap. Panels in a row share their top edge.
 4. **Group summary.** Name and module count are built in a wrapping header strip, with 8px/12px
    padding and a divider, on a quiet panel: card surface at 60%, node border, 12px radius and
-   top highlight. Targets, not built yet: a ring in the color of each team working inside
-   (color means a team, per the separate team-color decision); pending decisions, neutral; how
-   much of the cone reaches it, for example "3 of 9 in billing"; and "tested by N calls".
-   These belong to `frontend/map-lines`. A module's dashed agent ring is built only for that
+   top highlight. Solid 20px agent rings include pending changes and current read/edit focus,
+   in slot order. A neutral 22px chip counts ready or conflicting changes ("1 decision" or
+   "N decisions"); "tested by N calls" counts exact calls from tests, hidden at zero and on
+   the tests group. In a cone, "N of M in group" counts its entries instead. These are built.
+   A module's dashed agent ring is built only for that
    agent's pending change, never a read; below its count, "Agent A · N changed" or
    "Agent B · editing" names the state and agent.
-5. **Lines.** No call lines, counts or edge labels at rest. Targets in `frontend/map-lines`:
-   cone lines from the changed module to the modules it possibly affects, and the pointed
-   module's incoming and outgoing exact calls with counts plus faint possible calls, following
-   the call-visibility rules
-   ([DESIGN.md "Call visibility"](#graph-nodes-and-their-states-signature-component)).
+5. **Lines.** Built: no call lines, counts or edge labels at rest. On hover, exact module
+   pairs show incoming/outgoing arrows at the callee and ×N when N > 1; group hover includes
+   only boundary pairs. Possible-only pairs are faint, without arrows or counts, only when
+   restPossible permits and no exact call joins the pair in either direction. Cone lines
+   reverse exact calls between cone modules, callee to caller, in lit-edge. A shared pair is
+   drawn once, as a cone line. Chips try .5, .4, .6, .3, .7, .2, .8, .12, .88, avoiding names,
+   circles and earlier chips; a chip with no room disappears. Hover uses neutral edge.
+   Hover restores full names; cone and hover names have an 85% card backing.
+   Outside-cone circles without agent marks use dim-node; their names hide with visibility,
+   retaining their boxes so circles do not move. Pointing at one reveals its name. Non-seed
+   cone modules without agent marks show the smallest entry distance in a ground badge.
+   The cone remains only "possibly affected".
    Nothing invented. With no lines at rest, the LED field and the contours carry the texture.
 6. **Names.** Constant size on screen. Group names always shown; module names are 13px/600 in
    module-label, centered under the circles, ellipsized at the cell width minus 10px; counts
    are 12px muted. Circle radius is clamp(round(screen cell height × 0.1), 5, 9)px. All colors
    use theme tokens. Target, not built yet: prioritize names an agent touches, the cone reaches
    or the selection holds, then by size; the rest on hover.
-7. **Interaction.** Target, not built yet: clicking a group zooms to frame it, and the cards
-   come back. Clicking a circle brings that module to 100%. The built map at rest takes no
-   taps, drags or user selection; difference chips are hidden. No event changes level, moves
-   the camera, opens a panel, selects a node or takes focus. Hover and the cone remain targets.
+7. **Interaction.** Built: a group click centers its card boxes in the clear area, clamping
+   the fit to [68.75%, 100%]; oversized groups show their center and scroll for the rest.
+   A module block click unfolds only a folded card and centers it at 100%. Both return cards
+   in one camera move, a cut under reduced motion. The map accepts pointer clicks and drags
+   for panning, without node selection or focus changes; difference chips remain hidden.
+   Hover, events and the cone never change the camera, level, panels, selection or focus.
+   Keyboard users retain Fit and the zoom buttons; the layer remains aria-hidden.
 8. **Scope.** Built after the review panel rework and the Conversation tab; if ready before
    the cut line, the map launches before milestone pulses. Folder packing, map layer, Fit,
    crossfade, pending module rings and overlays follow the approved sketch linked above.
+   Header strips measure every flex item once: 37px for one line, 60px for two, then 23px
+   per additional line; a row shares its tallest strip. The 22px decision chip overhangs the
+   20px text line by 1px above and below. Group-click zoom is clamped to 68.75%–100%.
+   Cone distance badges are 20px; panels without members use 0.5 opacity.
+   The sketch's Boltons group fit is 47.1% at 1920 and 31.8% at 1280, both raised to 68.75%.
    The proof 2 repository, Boltons `d31d821`, has 66 modules by top folder in
    [its preset](fixtures/layouts/boltons-d31d821.json): boltons 30, tests 32, misc 3, docs 1.
    With tests hidden, the product shows boltons and misc panels; docs, with one module, draws

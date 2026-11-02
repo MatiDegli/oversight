@@ -5,7 +5,15 @@ import { stateStore } from "../../state";
 import { commandFailure } from "../../transport";
 import { PauseControl } from "../PauseControl";
 import { StopControl } from "../StopControl";
-import { beginSend, clearSentDraft, draftKey, draftStore, finishSend, setDraft } from "./drafts";
+import {
+  beginSend,
+  clearSentDraft,
+  draftKey,
+  draftStore,
+  finishSend,
+  setDraft,
+  setDraftFailure,
+} from "./drafts";
 import type { ConversationHeader, LeadHeader } from "./selectConversation";
 import { focusRing } from "./rows";
 import { selectLeadConversation } from "./selectLeadConversation";
@@ -32,7 +40,7 @@ export function Composer({
   const key = draftKey(runId, header.agentId);
   const text = useStore(draftStore, (drafts) => drafts[key]?.text ?? "");
   const pending = useStore(draftStore, (drafts) => drafts[key]?.pending ?? false);
-  const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
+  const failure = useStore(draftStore, (drafts) => drafts[key]?.failure);
   const failedControl = useRef(false);
   const [controlKey, setControlKey] = useState(0);
   const captionId = useId();
@@ -61,25 +69,24 @@ export function Composer({
       !beginSend(key)
     )
       return;
-    setFailure(null);
     clearControlFailure();
     try {
       await onSend(text);
       if (!lead || stateStore.getState().state.run?.run_id === runId) clearSentDraft(key, text);
     } catch (error) {
       clearControlFailure();
-      setFailure({ key, message: commandFailure(lead ? "Message the lead" : "Send", error) });
+      setDraftFailure(key, commandFailure(lead ? "Message the lead" : "Send", error));
     } finally {
       finishSend(key);
     }
   }
   function control(command: (() => Promise<unknown>) | undefined) {
-    setFailure(null);
+    setDraftFailure(key, undefined);
     failedControl.current = false;
     const result = command?.() ?? Promise.resolve();
     void result.catch(() => {
       failedControl.current = true;
-      setFailure(null);
+      setDraftFailure(key, undefined);
     });
     return result;
   }
@@ -154,14 +161,14 @@ export function Composer({
           </button>
         )}
       </div>
-      {failure && (!lead || failure.key === key) && (
+      {failure && (
         <p
           role="alert"
-          title={failure.message}
+          title={failure}
           className="mt-[6px] flex min-w-0 gap-2 text-[14px] text-muted"
         >
           <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-          <span className={lead ? "wrap-anywhere" : "truncate"}>{failure.message}</span>
+          <span className={lead ? "wrap-anywhere" : "truncate"}>{failure}</span>
         </p>
       )}
     </div>

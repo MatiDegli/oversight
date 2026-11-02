@@ -502,3 +502,27 @@ export function fitPanelCamera(
   if (target) moveCamera(cy, target, reduceMotion);
   return target;
 }
+
+/** Center all selected card boxes even when the readability floor clips their outer rows. */
+export function centerMapCards(
+  cy: Core,
+  ids: readonly string[],
+  reduceMotion: boolean,
+  area?: Box,
+  module = false,
+): Camera | null {
+  const nodes = ids.flatMap((id) => {
+    const node = cy.getElementById(id);
+    return node.empty()
+      ? []
+      : [{ id, ...node.boundingBox({ includeLabels: true, includeOverlays: false }) }];
+  });
+  const target = frameBox(nodes, { width: cy.width(), height: cy.height() }, Infinity, {
+    padding: PADDING,
+    area,
+    minZoom: module ? 1 : changeZoom(getActiveTheme()).min,
+    maxZoom: 1,
+  });
+  if (target) moveCamera(cy, target, reduceMotion);
+  return target;
+}

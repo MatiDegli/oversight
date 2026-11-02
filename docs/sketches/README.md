@@ -98,6 +98,6 @@ Approved map sketch of 2026-10-31.
 | [layout-dark.png](map-r1/layout-dark.png) | Today's preset beside the grouped one, same zoom | Target | `frontend/map-rest` |
 | [map-groups-dark.png](map-r1/map-groups-dark.png) | Groups named by Oversight; tests, misc and docs stay folders, dark | Target | `frontend/map-rest` (named groups: seam only) |
 | [map-groups-day.png](map-r1/map-groups-day.png) | Groups named by Oversight; tests, misc and docs stay folders, day | Target | `frontend/map-rest` (named groups: seam only) |
-| [map-hover-dark.png](map-r1/map-hover-dark.png) | Pointer on typeutils.py: incoming and outgoing calls with counts; its panel lifts | Target | `frontend/map-lines` |
-| [map-cone-dark.png](map-r1/map-cone-dark.png) | A's cone: changed module to modules reached, badges, other names hidden | Target | `frontend/map-lines` |
-| [group-dark.png](map-r1/group-dark.png) | After a boltons group click: cards | Target | `frontend/map-lines` |
+| [map-hover-dark.png](map-r1/map-hover-dark.png) | Pointer on typeutils.py: incoming and outgoing calls with counts; its panel lifts | Built | `frontend/map-lines` |
+| [map-cone-dark.png](map-r1/map-cone-dark.png) | A's cone: changed module to modules reached, badges, other names hidden | Built | `frontend/map-lines` |
+| [group-dark.png](map-r1/group-dark.png) | After a boltons group click: cards | Built | `frontend/map-lines` |
