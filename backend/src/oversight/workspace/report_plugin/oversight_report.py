@@ -11,6 +11,7 @@ import ntpath
 import os
 import sys
 from collections.abc import Generator
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -30,12 +31,46 @@ def _append(record: dict[str, object]) -> None:
             handle.write(json.dumps(record) + "\n")
 
 
-def _within(root: str, path: str) -> bool:
-    root, path = (ntpath.normcase(os.path.realpath(p)) for p in (root, path))
+def _normalized(path: str) -> str:
+    return ntpath.normcase(os.path.realpath(path))
+
+
+def _contains(root: str, path: str) -> bool:
     try:
         return ntpath.commonpath([root, path]) == root
     except ValueError:
         return False
+
+
+def _within(root: str, path: str) -> bool:
+    return _contains(_normalized(root), _normalized(path))
+
+
+class _ImportPolicy:
+    def __init__(self, raw: str) -> None:
+        policy = json.loads(raw)
+        self.tree = _normalized(policy["tree"])
+        self.source = _normalized(policy["source"])
+        self.libraries = tuple(_normalized(lib) for lib in policy["libraries"])
+        self.packages: list[str] = policy["packages"]
+        self.verified: set[str] = set()
+
+    def allows_location(self, path: str) -> bool:
+        if path in self.verified:
+            return True
+        resolved = _normalized(path)
+        if _contains(self.source, resolved) and not any(
+            _contains(lib, resolved) for lib in self.libraries
+        ):
+            return False
+        self.verified.add(path)
+        return True
+
+
+@lru_cache(maxsize=1)
+def _import_policy(raw: str) -> _ImportPolicy:
+    # A changed policy discards all verified locations, including between tested trees.
+    return _ImportPolicy(raw)
 
 
 def import_problem() -> str | None:
@@ -44,7 +79,7 @@ def import_problem() -> str | None:
     if raw is None:
         return None
     try:
-        policy = json.loads(raw)
+        policy = _import_policy(raw)
         trusted = os.environ["OVERSIGHT_TRUSTED_PLUGIN"]
         if (
             os.path.normcase(os.path.realpath(__file__)) != os.path.normcase(trusted)
@@ -53,13 +88,13 @@ def import_problem() -> str | None:
             or os.path.normcase(os.path.realpath(__spec__.origin)) != os.path.normcase(trusted)
         ):
             return "trusted report plugin shadowed"
-        for name in policy["packages"]:
+        for name in policy.packages:
             spec = importlib.util.find_spec(name)
             locations = (
                 [] if spec is None or spec.origin in (None, "built-in", "frozen") else [spec.origin]
             )
             locations += list(spec.submodule_search_locations or ()) if spec else []
-            if not locations or any(not _within(policy["tree"], p) for p in locations):
+            if not locations or any(not _contains(policy.tree, _normalized(p)) for p in locations):
                 return "mapped package outside tested tree"
         for module in tuple(sys.modules.values()):
             spec = getattr(module, "__spec__", None)
@@ -67,12 +102,7 @@ def import_problem() -> str | None:
             locations += list(getattr(module, "__path__", ()))
             locations += list(getattr(spec, "submodule_search_locations", ()) or ())
             for path in locations:
-                if (
-                    path
-                    and path not in ("built-in", "frozen")
-                    and _within(policy["source"], path)
-                    and not any(_within(lib, path) for lib in policy["libraries"])
-                ):
+                if path and path not in ("built-in", "frozen") and not policy.allows_location(path):
                     return "loaded module reaches original project"
     except Exception:
         return "import guard could not verify origins"

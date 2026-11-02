@@ -128,10 +128,28 @@ async def test_probe_and_conftest_path_insertion_are_refused(tmp_path, conftest)
 
 
 @pytest.mark.anyio
-async def test_asyncio_autoload_and_agent_combined_edits_import_copies(tmp_path):
-    pytest.importorskip(
-        "pytest_asyncio", reason="real pytest-asyncio needed for injected autoload proof"
+async def test_injected_entry_point_autoload(tmp_path):
+    source, tree, io, _ = mapped_environment(tmp_path)
+    (source.runtime / "tmp").mkdir()
+    info = tree / "copy_autoload_probe-1.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: copy-autoload-probe\nVersion: 1\n")
+    (info / "entry_points.txt").write_text(
+        "[pytest11]\noversight_copy_autoload = copy_autoload_probe\n"
     )
+    (tree / "copy_autoload_probe.py").write_text(
+        "import pytest\n@pytest.fixture\ndef autoload_value(): return 41\n"
+    )
+    (tree / "test_autoload.py").write_text(
+        "def test_autoload(autoload_value): assert autoload_value == 41\n"
+    )
+    result = await copied_suite(source, tree, io)
+    assert result.result.outcome == "passed", result.output
+    assert result.result.passed == 1
+
+
+@pytest.mark.anyio
+async def test_agent_combined_edits_import_copies_and_preserve_original(tmp_path):
     source, main, io, _ = mapped_environment(tmp_path)
     await git(source.root, "init", "-q", "--template=")
     await git(source.root, "add", "backend")
@@ -147,14 +165,54 @@ async def test_asyncio_autoload_and_agent_combined_edits_import_copies(tmp_path)
         package.mkdir(parents=True, exist_ok=True)
         (package / "__init__.py").write_text(f"value = {value}\n")
         (tree / "test_value.py").write_text(
-            "import asyncio, pytest, sample\n@pytest.mark.asyncio\n"
-            "async def test_value():\n    await asyncio.sleep(0)\n    assert sample.value == 1\n"
+            "import sample\ndef test_value(): assert sample.value == 1\n"
         )
 
         result = await copied_suite(source, tree, io)
         assert result.result.outcome == ("passed" if value == 1 else "failed"), result.output
         assert result.result.failed == (0 if value == 1 else 1)
     assert before == {p: p.read_bytes() for p in source.root.rglob("*") if p.is_file()}
+
+
+def test_guard_caches_roots_and_verified_locations_but_rechecks_specs(tmp_path, monkeypatch):
+    source, tree, plugin, _ = guarded(tmp_path, monkeypatch)
+    module = ModuleType("dependency")
+    location = str(source.root / ".venv/Lib/site-packages/dependency.py")
+    module.__file__ = location
+    module.__spec__ = importlib.machinery.ModuleSpec("dependency", None, origin=location)
+    module.__path__ = [location]
+    module.__spec__.submodule_search_locations = [location]
+    monkeypatch.setitem(sys.modules, "dependency", module)
+    resolved = []
+    realpath = os.path.realpath
+
+    def resolve(path):
+        resolved.append(path)
+        return realpath(path)
+
+    monkeypatch.setattr(plugin.os.path, "realpath", resolve)
+    assert plugin.import_problem() is None
+    checked = resolved.count(location)
+    spec_location = str(tree / "backend/src/sample/__init__.py")
+    spec_checks = resolved.count(spec_location)
+    assert checked == 1
+    assert spec_checks > 0
+    for _ in range(3):
+        assert plugin.import_problem() is None
+    for root in (source.root, tree, source.root / ".venv/Lib"):
+        assert resolved.count(str(root)) == 1
+    assert resolved.count(location) == checked
+    assert resolved.count(spec_location) == spec_checks * 4
+    module.__file__ = str(source.root / "late.py")
+    assert plugin.import_problem() == "loaded module reaches original project"
+    # Cached loaded-module locations must not conceal a changed mapped package spec.
+    module.__file__ = location
+    monkeypatch.setattr(
+        plugin.importlib.util,
+        "find_spec",
+        lambda _: importlib.machinery.ModuleSpec("sample", None, origin=location),
+    )
+    assert plugin.import_problem() == "mapped package outside tested tree"
 
 
 async def copied_suite(source, tree, io, *, missing=False):

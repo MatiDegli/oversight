@@ -1177,7 +1177,7 @@ def editable_imports(
     packages: set[str] = set()
     expected: set[str] = set()
     referenced: set[str] = set()
-    own_editable = False
+    own_distribution = False
     for child in children:
         if not child.name.endswith(".dist-info"):
             continue
@@ -1186,8 +1186,7 @@ def editable_imports(
         if not url.exists():
             continue
         data: Any = json.loads(io.read(url, budget))
-        if data.get("dir_info", {}).get("editable") is not True:
-            continue
+        editable = data.get("dir_info", {}).get("editable") is True
         parsed = urlsplit(str(data["url"]))
         if (
             parsed.scheme != "file"
@@ -1195,17 +1194,24 @@ def editable_imports(
             or parsed.query
             or parsed.fragment
         ):
-            raise ValueError("unsupported editable URL")
+            if editable:
+                raise ValueError("unsupported editable URL")
+            continue
         raw = unquote(parsed.path)
         raw = raw[1:] if re.match(r"^/[A-Za-z]:/", raw) else raw
         if _mapped_target(raw, source, tree, site, io) is None:
             continue
-        own_editable = True
+        # Installed snapshots of this project also require a translated import mapping.
+        own_distribution = True
         names = child / "top_level.txt"
+        distribution_names: set[str] = set()
         if names.exists():
-            expected.update(
+            distribution_names.update(
                 _package_name(n) for n in io.read(names, budget).decode("utf-8").splitlines() if n
             )
+        if not editable and not distribution_names:
+            raise ValueError("installed project cannot establish mapped package names")
+        expected.update(distribution_names)
     for child in children:
         if not child.name.endswith(".pth"):
             continue
@@ -1258,7 +1264,7 @@ def editable_imports(
         for target in candidates:
             io.check(target, directory=stat.S_ISDIR(target.lstat().st_mode))
         packages.add(name)
-    if (own_editable or roots) and not packages:
+    if (own_distribution or roots) and not packages:
         raise ValueError("editable metadata alone cannot establish import roots")
     return tuple(sorted(roots)), tuple(sorted(packages))
 

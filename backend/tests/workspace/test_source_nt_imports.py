@@ -78,6 +78,57 @@ def test_namespace_literals_and_unrelated_finder_are_supported(tmp_path):
     assert names == ("ns", "ns.child", "sample")
 
 
+@pytest.mark.parametrize("layout", ["src", "lib", "backend/src", "packages/foo/src"])
+@pytest.mark.parametrize("details", [{"dir_info": {"editable": False}}, {}, {"archive_info": {}}])
+def test_noneditable_project_snapshot_without_mapping_is_unavailable(tmp_path, layout, details):
+    source, tree, io, site = mapped_environment(tmp_path, layout)
+    (site / "own.pth").unlink()
+    (site / "different_distribution-1.dist-info/direct_url.json").write_text(
+        json.dumps({"url": "file:///C:/source%20project", **details})
+    )
+    snapshot = site / "sample"
+    snapshot.mkdir()
+    (snapshot / "__init__.py").write_text("value = 'installed snapshot'\n")
+    before = {p: p.read_bytes() for p in source.root.rglob("*") if p.is_file()}
+    with pytest.raises(OSError, match="unsupported or unsafe editable metadata"):
+        nt.prepare_environment(source, tree, io.deadline, io=io)
+    assert before == {p: p.read_bytes() for p in source.root.rglob("*") if p.is_file()}
+
+
+def test_noneditable_project_requires_mapping_but_dependencies_do_not(tmp_path):
+    source, tree, io, site = mapped_environment(tmp_path)
+    (site / "different_distribution-1.dist-info/direct_url.json").write_text(
+        json.dumps({"url": "file:///C:/source%20project/backend"})
+    )
+    for name, url in (
+        ("remote", "https://example.invalid/dependency.whl"),
+        ("external", "file:///D:/dependency"),
+        ("venv", "file:///C:/source%20project/.venv/Lib/site-packages"),
+    ):
+        info = site / (name + "-1.dist-info")
+        info.mkdir()
+        (info / "direct_url.json").write_text(json.dumps({"url": url}))
+        (info / "top_level.txt").write_text("unrelated_dependency\n")
+    own = nt.prepare_environment(source, tree, io.deadline, io=io)
+    assert own.roots == (tree / "backend/src",)
+    assert own.guard is not None
+    assert json.loads(own.guard)["packages"] == ["sample"]
+
+
+@pytest.mark.parametrize("names", [None, "", "other_package\n"])
+def test_other_mapping_cannot_hide_unmapped_project_snapshot(tmp_path, names):
+    source, tree, io, site = mapped_environment(tmp_path)
+    info = site / "other_distribution-1.dist-info"
+    info.mkdir()
+    (info / "direct_url.json").write_text(
+        json.dumps({"url": "file:///C:/source%20project/backend"})
+    )
+    if names is not None:
+        (info / "top_level.txt").write_text(names)
+    with pytest.raises(OSError, match="unsupported or unsafe editable metadata"):
+        nt.prepare_environment(source, tree, io.deadline, io=io)
+
+
 @pytest.mark.parametrize(
     "fault",
     ["url-only", "unmapped", "dynamic", "malformed", "oversized", "link", "hook", "target-link"],
