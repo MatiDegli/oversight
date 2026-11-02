@@ -351,19 +351,28 @@ async def test_max_manifest_bounded_add(tmp_path: Path) -> None:
             argv, cwd=source.root, env={"GIT_LITERAL_PATHSPECS": "1"}, timeout_s=10
         )
         if result.timed_out:
+            index_lock = source.root / ".git" / "index.lock"
+            index_lock_exists = index_lock.exists()
+            # The runner has reaped the job; an interrupted add cannot clean up its lock.
+            index_lock.unlink(missing_ok=True)
             traced = await run_process(
                 argv,
                 cwd=source.root,
                 env={"GIT_LITERAL_PATHSPECS": "1", "GIT_TRACE": "1", "GIT_TRACE2_PERF": "1"},
                 timeout_s=10,
             )
-            pytest.fail(f"git add timed out: original={result!r}; traced={traced!r}", pytrace=False)
+            pytest.fail(
+                f"git add timed out: index_lock_exists={index_lock_exists}; "
+                f"original={result!r}; traced={traced!r}",
+                pytrace=False,
+            )
         assert result.returncode == 0, result.stderr
         assert len(argv) == 5
         assert set((await git(source.root, "ls-files", "-z")).strip("\0").split("\0")) == set(names)
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("index_lock_exists", [False, True])
 @pytest.mark.parametrize(
     "retry_timed_out,trace",
     [
@@ -373,7 +382,11 @@ async def test_max_manifest_bounded_add(tmp_path: Path) -> None:
     ],
 )
 async def test_max_manifest_timeout_evidence(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, retry_timed_out: bool, trace: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    retry_timed_out: bool,
+    trace: str,
+    index_lock_exists: bool,
 ) -> None:
     original = ProcessResult(3221225786, "initial stdout", "LF warning", True, False, 10032)
     traced = ProcessResult(
@@ -391,6 +404,11 @@ async def test_max_manifest_timeout_evidence(
             return ProcessResult(0, "", "", False, False, 1)
         calls.append((list(argv), cwd, dict(env or {}), timeout_s))
         assert len(calls) <= 2
+        index_lock = cwd / ".git" / "index.lock"
+        if len(calls) == 1 and index_lock_exists:
+            index_lock.write_bytes(b"interrupted git add")
+        elif len(calls) == 2:
+            assert not index_lock.exists(), "retry must not inherit the interrupted git lock"
         return original if len(calls) == 1 else traced
 
     monkeypatch.setenv("DIAGNOSTIC_PRIVATE", "must-not-appear-in-evidence")
@@ -399,6 +417,7 @@ async def test_max_manifest_timeout_evidence(
         await test_max_manifest_bounded_add(tmp_path)
     message = str(failure.value)
     assert repr(original) in message and repr(traced) in message
+    assert f"index_lock_exists={index_lock_exists}" in message
     assert "must-not-appear-in-evidence" not in message
     assert len(calls) == 2
     argv, cwd, env, limit = calls[0]
