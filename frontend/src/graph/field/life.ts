@@ -5,7 +5,7 @@ import type { GraphSnapshot } from "@contracts";
 
 import { parseNeedsYou, type State } from "../../state";
 import type { Milestone } from "./milestones";
-import { agentLook } from "../../theme";
+import { presentationFor } from "../../teams/presentation";
 import type { FieldMerge, FieldModule } from "./lights";
 
 /** The node a change's light sits on: its first modified or added node. */
@@ -27,12 +27,15 @@ export function selectMerges(state: State): FieldMerge[] {
     if (!merged && change.resolution?.decision !== "rejected") continue;
     const agent = state.agents[change.agent_id];
     const id = changeLightNode(change);
-    if (!agent || id === undefined) continue;
+    const identity = presentationFor(state, agent?.agent_id);
+    if (!agent || !identity || id === undefined) continue;
     const decided = Date.parse(change.resolutionEvent?.ts ?? "");
     merges.push({
       key: `${change.change_id}:${String(change.resolutionEvent?.seq ?? change.resolutionSeq ?? 0)}`,
-      slot: agent.slot,
-      source: agentLook[agent.slot].family,
+      agentId: agent.agent_id,
+      label: identity.label,
+      team: identity.team,
+      source: identity.family,
       id,
       pulse: merged,
       age: Number.isFinite(now) && Number.isFinite(decided) ? Math.max(0, now - decided) : 0,
@@ -58,13 +61,16 @@ export function selectMilestones(state: State): Milestone[] {
     const change = changeId ? state.changes[changeId] : undefined;
     const agent = change && state.agents[change.agent_id];
     const id = change && changeLightNode(change);
-    if (!agent || !id) continue;
+    const identity = presentationFor(state, agent?.agent_id);
+    if (!agent || !identity || !id) continue;
     const age = now - Date.parse(event.ts);
     result.push({
       key: `${String(changeId)}:${String(event.seq)}`,
       kind,
-      slot: agent.slot,
-      source: agentLook[agent.slot].family,
+      agentId: agent.agent_id,
+      label: identity.label,
+      team: identity.team,
+      source: identity.family,
       id,
       age: Number.isFinite(age) ? Math.max(0, age) : 0,
     });

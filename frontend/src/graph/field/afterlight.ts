@@ -139,7 +139,7 @@ export class MergeLife {
       const had = Math.max(
         0,
         ...before
-          .filter((light) => light.id === merge.id && light.source === merge.source)
+          .filter((light) => light.id === merge.id && light.agentId === merge.agentId)
           .map((light) => light.weight),
       );
       // A rejection has no pulse, so it has nothing to show when its change had no light.
@@ -195,6 +195,9 @@ export class MergeLife {
       lights.push({
         id: run.merge.id,
         source: run.merge.source,
+        agentId: run.merge.agentId,
+        team: run.merge.team,
+        label: run.merge.label,
         weight: run.level * coming * fadeShare(fading / duration, curve),
         pulses: false,
         steady: true,

@@ -6,7 +6,7 @@ import { agentLook } from "../theme";
 import type { MapModel, MapGroup, MapModule as Module } from "./mapModel";
 import { MapLines } from "./MapLines";
 import { decisionsLabel, testedLabel } from "./mapEvidence";
-import { moduleLayout, panelBox } from "./mapModel";
+import { moduleLayout, panelBox, ringClearance } from "./mapModel";
 import { distanceBadge, pointed } from "./mapLinesModel";
 import type { MapCall, MapHover } from "./mapLinesModel";
 import type { MapLevel } from "./mapLevel";
@@ -154,10 +154,10 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                     ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
                     : "empty"}
                 </div>
-                {module.agents.map(({ slot, text }) => (
+                {module.agents.map(({ agentId, hue, text }) => (
                   <div
-                    key={slot}
-                    className={`map-agent ${full ? "map-agent-full " : ""}${agentLook[slot].textClass}`}
+                    key={agentId}
+                    className={`map-agent ${full ? "map-agent-full " : ""}${agentLook[hue].textClass}`}
                   >
                     {text}
                   </div>
@@ -196,12 +196,12 @@ function MapPanel({ group, frame }: { group: MapGroup; frame: MapFrame }) {
         <span>{group.modules.length} modules</span>
         {!!group.rings?.length && (
           <span className="map-rings">
-            {group.rings.map((slot) => (
+            {group.rings.map(({ team, hue, letter }) => (
               <span
-                key={slot}
-                className={`map-ring ${agentLook[slot].border} ${agentLook[slot].textClass}`}
+                key={team}
+                className={`map-ring ${agentLook[hue].border} ${agentLook[hue].textClass}`}
               >
-                {slot}
+                {letter}
               </span>
             ))}
           </span>
@@ -230,7 +230,10 @@ type CircleProps = { module: Module; radius: number; dim: boolean };
 function MapModuleCircle({ module, radius, dim }: CircleProps) {
   const badge = distanceBadge(module);
   return (
-    <div className="relative mx-auto" style={{ width: radius * 2, height: radius * 2 }}>
+    <div
+      className="relative mx-auto"
+      style={{ width: radius * 2, height: radius * 2, marginBottom: ringClearance(module) }}
+    >
       <div
         data-map-circle
         className="map-circle absolute inset-0 rounded-full"
@@ -248,13 +251,18 @@ function MapModuleCircle({ module, radius, dim }: CircleProps) {
           {badge}
         </div>
       )}
-      {module.agents.map(({ slot }) => (
-        <div
-          key={slot}
-          className={`absolute rounded-full border-2 border-dashed ${agentLook[slot].border}`}
-          style={{ inset: -5 }}
-        />
-      ))}
+      {module.agents
+        .flatMap((agent) => [
+          ...(agent.work ? [{ ...agent, pending: false, key: `${agent.agentId}:work` }] : []),
+          ...(agent.pending ? [{ ...agent, pending: true, key: `${agent.agentId}:pending` }] : []),
+        ])
+        .map(({ key, hue, pending }, index) => (
+          <div
+            key={key}
+            className={`absolute rounded-full border-2 ${pending ? "border-dashed" : "border-solid"} ${agentLook[hue].border}`}
+            style={{ inset: -5 - index * 4 }}
+          />
+        ))}
     </div>
   );
 }

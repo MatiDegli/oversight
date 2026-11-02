@@ -1,27 +1,9 @@
-import type { Slot } from "@contracts";
-
 import { getActiveTheme } from "../theme";
 
 import type { GraphElement } from "./elements";
 import { foldPositions } from "./foldPositions";
 import { nodeGeometry } from "./geometry";
-import type { NodeMarks, Word } from "./layers";
-
-const strength: Record<Word, number> = { editing: 3, changed: 2, new: 2, read: 1 };
-function combinedMarks(nodes: GraphElement[]): NodeMarks | undefined {
-  const marks = nodes.flatMap((n) => (n.data.marks ? [n.data.marks] : []));
-  const strongest = [...marks].sort(
-    (a, b) => strength[b.word] - strength[a.word] || (a.slot < b.slot ? -1 : 1),
-  )[0];
-  if (!strongest) return undefined;
-  return {
-    ...strongest,
-    badges: (["A", "B"] as Slot[]).flatMap((slot) => {
-      const badges = marks.flatMap((m) => m.badges).filter((b) => b.slot === slot);
-      return badges.length ? [{ slot, filled: badges.some((b) => b.filled) }] : [];
-    }),
-  };
-}
+import { combineMarks, marksPaint } from "./agentMarks";
 
 /** Folded rows represent descendants' reads, changes, nearest cone distance and merged call edges. */
 export function foldElements(
@@ -57,7 +39,7 @@ export function foldElements(
       Infinity,
       ...group.flatMap((e) => (e.data.distance === undefined ? [] : [e.data.distance])),
     );
-    const marks = combinedMarks(group);
+    const marks = combineMarks(group.flatMap((node) => node.data.marks?.badges ?? []));
     if (marks) classes.add("marked");
     if (distance !== Infinity) classes.add("cone");
     const measured = folded
@@ -84,7 +66,7 @@ export function foldElements(
               h: nodeGeometry(theme).headerHeight,
             }
           : {}),
-        ...(marks ? { marks } : {}),
+        ...(marks ? { marks, ...marksPaint(marks) } : {}),
         ...(distance !== Infinity ? { distance } : {}),
       },
       classes: [...classes].join(" "),
@@ -128,6 +110,10 @@ export function foldElements(
       classes.delete("dimmed");
     if (previous && (!previous.classes.includes("quiet") || !edge.classes.includes("quiet")))
       classes.delete("quiet");
+    const marks = combineMarks([
+      ...(previous?.data.marks?.badges ?? []),
+      ...(edge.data.marks?.badges ?? []),
+    ]);
     merged.set(id, {
       ...edge,
       data: {
@@ -135,6 +121,7 @@ export function foldElements(
         id,
         source,
         target,
+        ...(marks ? { marks, ...marksPaint(marks) } : {}),
         ...(edge.data.kind === "calls"
           ? {
               exactCount:

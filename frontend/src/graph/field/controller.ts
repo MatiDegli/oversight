@@ -270,8 +270,8 @@ class FieldRuntime implements FieldController {
         this.theme,
         lights.map((light) => ({
           ...light,
-          weight: light.weight * this.milestones.gain(light.source, now),
-          pulseWeight: (light.pulseWeight ?? 1) * this.milestones.gain(light.source, now),
+          weight: light.weight * this.milestones.gain(light.team, now),
+          pulseWeight: (light.pulseWeight ?? 1) * this.milestones.gain(light.team, now),
         })),
         boxes,
       );
@@ -378,7 +378,7 @@ class FieldRuntime implements FieldController {
         const target = targets.get(pulse.merge.id);
         if (!target) continue;
         const agent = [
-          ...document.querySelectorAll<HTMLElement>(`[data-agent-origin="${pulse.merge.slot}"]`),
+          ...document.querySelectorAll<HTMLElement>(`[data-agent-origin="${pulse.merge.agentId}"]`),
         ]
           .map((element) => ({ element, rect: element.getBoundingClientRect() }))
           .find(({ rect }) => rect.width > 0);
@@ -388,9 +388,9 @@ class FieldRuntime implements FieldController {
               y: agent.rect.top + agent.rect.height / 2 - origin.top,
             }
           : { x: width, y: (target.y1 + target.y2) / 2 };
-        // AgentCard carries data-slot; the folded rail letter deliberately omits it.
+        // Expanded cards carry data-agent-card; a rail tile has its own center.
         // Both expose data-agent-origin: clamp the card, depart from the actual rail letter.
-        if (agent?.element.hasAttribute("data-slot")) {
+        if (agent?.element.hasAttribute("data-agent-card")) {
           start.x = clamp(start.x, 0, width);
           start.y = clamp(start.y, 0, height);
         }

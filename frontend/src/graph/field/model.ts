@@ -145,7 +145,7 @@ export function placeLights(
     const box = boxes.get(lightBoxKey(light));
     if (!box) continue;
     // Folded methods have distinct ids but share the class row's rendered bounds.
-    const key = [light.source, box.x1, box.y1, box.x2, box.y2].join(":");
+    const key = [light.agentId ?? light.source, box.x1, box.y1, box.x2, box.y2].join(":");
     const known = placed.get(key);
     if (!known || light.weight > known.weight) {
       placed.set(key, {

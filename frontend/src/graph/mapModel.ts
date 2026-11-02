@@ -1,4 +1,6 @@
-import type { Slot } from "@contracts";
+import type { AgentMark } from "./agentMarks";
+import { combineMarks } from "./agentMarks";
+import type { AgentPresentation } from "../teams/presentation";
 import { displayName } from "./mapEvidence";
 import type { GraphElement } from "./elements";
 import { foldPositions } from "./foldPositions";
@@ -15,13 +17,13 @@ export interface MapModule {
   x: number;
   y: number;
   functions: number;
-  agents: { slot: Slot; text: string }[];
+  agents: (AgentMark & { text: string })[];
 }
 export interface MapGroup {
   headerWidth?: number;
   headerItemWidths?: number[];
   headerLines?: number;
-  rings?: Slot[];
+  rings?: AgentPresentation[];
   decisions?: number;
   tested?: number;
   coneCount?: number;
@@ -87,7 +89,7 @@ export function mapModel(elements: readonly GraphElement[], theme: GeometryToken
     descendants.set(root.data.id, [...(descendants.get(root.data.id) ?? []), node]);
   }
   const cellWidth = widestCard(elements, g) + g.gutter;
-  const cellHeight = g.headerHeight + 150;
+  const cellHeight = Math.max(g.headerHeight + 150, 350);
   const groups = new Map<string, MapGroup>();
   for (const root of roots) {
     const p = positions.get(root.data.id);
@@ -104,17 +106,12 @@ export function mapModel(elements: readonly GraphElement[], theme: GeometryToken
       height: 0,
     };
     const nodes = descendants.get(root.data.id) ?? [];
-    const agents = (["A", "B", "C", "D", "E", "F"] as const).flatMap((slot) => {
-      const pending = nodes.filter((n) => n.classes.split(" ").includes(`pending-${slot}`));
-      if (!pending.length) return [];
-      const editing = pending.some((n) => n.classes.split(" ").includes(`focus-${slot}-edit`));
-      return [
-        {
-          slot,
-          text: `Agent ${slot} · ${editing ? "editing" : `${String(pending.length)} changed`}`,
-        },
-      ];
-    });
+    const agents = (
+      combineMarks(nodes.flatMap((node) => node.data.marks?.badges ?? []))?.badges ?? []
+    ).map((mark) => ({
+      ...mark,
+      text: `${mark.label} ${mark.work === "edit" ? "editing" : mark.ready ? "ready" : mark.work === "read" ? "reading" : mark.word}`,
+    }));
     group.modules.push({
       id: root.data.id,
       ...displayName(root.data.title ?? root.data.id, id),
@@ -182,6 +179,15 @@ export function headerLines(group: MapGroup, zoom: number) {
   return lines;
 }
 
+/** Leave two pixels between the outer ownership ring and the module's name. */
+export function ringClearance(module: MapModule) {
+  const rings = module.agents.reduce(
+    (count, agent) => count + Number(!!agent.work) + Number(agent.pending),
+    0,
+  );
+  return rings ? 4 * rings : 0;
+}
+
 /** The block's retained text boxes keep its circle stationary when names are hidden. */
 export function moduleLayout(
   module: MapModule,
@@ -190,7 +196,7 @@ export function moduleLayout(
   pan: { x: number; y: number },
 ) {
   const radius = Math.max(5, Math.min(9, Math.round(model.cellHeight * zoom * 0.1)));
-  const height = 2 * radius + 3 + 15.6 + 14.4 * (1 + module.agents.length);
+  const height = 2 * radius + 3 + 15.6 + 14.4 * (1 + module.agents.length) + ringClearance(module);
   const x = module.x * zoom + pan.x,
     top = module.y * zoom + pan.y - height / 2;
   const width = model.cellWidth * zoom - 10;

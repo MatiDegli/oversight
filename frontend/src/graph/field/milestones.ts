@@ -1,5 +1,5 @@
 // One finite event on the existing lamp field, independent of the eight persistent emitters.
-import type { LightSource, FieldMerge } from "./lights";
+import type { FieldMerge } from "./lights";
 import type { PulseLight } from "./pulseLights";
 import {
   afterlightOf,
@@ -83,7 +83,7 @@ export class MilestoneLife {
       const start = now - event.age;
       const same = [...this.runs.values()].filter(
         (run) =>
-          run.event.source === event.source &&
+          run.event.team === event.team &&
           Math.abs(start - run.start) < this.theme["milestone-coalesce"],
       );
       if (
@@ -105,7 +105,7 @@ export class MilestoneLife {
           event.kind !== "merged" &&
           run.event.kind !== "merged" &&
           run.event.id === event.id &&
-          run.event.source !== event.source &&
+          run.event.team !== event.team &&
           run.end > start,
       );
       for (const run of other)
@@ -149,10 +149,11 @@ export class MilestoneLife {
         : [];
     });
   }
-  gain(source: LightSource, now: number): number {
+  gain(team: string | undefined, now: number): number {
     const run = [...this.runs.values()].findLast(
       (run) =>
-        run.event.source === source &&
+        team !== undefined &&
+        run.event.team === team &&
         run.event.kind !== "merged" &&
         this.visible(run.event.key, now),
     );
@@ -214,6 +215,9 @@ export class MergeLife {
         ? [
             {
               id: run.merge.id,
+              agentId: run.merge.agentId,
+              team: run.merge.team,
+              label: run.merge.label,
               source: run.merge.source,
               weight: run.level,
               pulses: false,
@@ -255,7 +259,7 @@ export class MergeLife {
       const had = Math.max(
         0,
         ...before
-          .filter((light) => light.id === merge.id && light.source === merge.source)
+          .filter((light) => light.id === merge.id && light.agentId === merge.agentId)
           .map((light) => light.weight),
       );
       if (had <= 0 && !merge.pulse) continue;

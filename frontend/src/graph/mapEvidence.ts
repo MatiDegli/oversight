@@ -1,9 +1,9 @@
-import type { ImpactCone, Slot } from "@contracts";
+import type { ImpactCone } from "@contracts";
 import type { State } from "../state";
 import type { GraphElement } from "./elements";
+import { identityOrder } from "./agentMarks";
 import type { MapModel } from "./mapModel";
 
-export const slots: readonly Slot[] = ["A", "B", "C", "D", "E", "F"];
 export const decisionsLabel = (n: number) =>
   n ? `${String(n)} ${n === 1 ? "decision" : "decisions"}` : undefined;
 export const testedLabel = (n: number, tests = false) =>
@@ -45,10 +45,9 @@ export function mapEvidence(
     const belongs = (id: string) => ids.has(owners.get(id) ?? id);
     const marks = elements
       .filter((e) => e.group === "nodes" && belongs(e.data.id))
-      .flatMap((e) => e.classes.split(" "));
-    group.rings = slots.filter((s) =>
-      marks.some((c) => c === `pending-${s}` || c === `focus-${s}-read` || c === `focus-${s}-edit`),
-    );
+      .flatMap((e) => e.data.marks?.badges ?? [])
+      .sort(identityOrder);
+    group.rings = [...new Map(marks.map((mark) => [mark.team, mark])).values()];
     group.decisions = Object.values(state.changes).filter(
       (c) =>
         (c.status === "ready_for_review" || c.status === "conflict") &&

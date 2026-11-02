@@ -10,7 +10,7 @@ export interface GroupBox {
   height: number;
 }
 
-/** Nine slots per column; open cards grow their slot without changing module order. */
+/** Six rows keep full work labels legible at the map floor; open cards grow their cell. */
 export function groupPack(
   roots: readonly GraphElement[],
   full: ReadonlyMap<string, GroupBox>,
@@ -23,7 +23,8 @@ export function groupPack(
       g.rowWidth + g.outer.module.left + g.outer.module.right,
       ...roots.map((r) => full.get(r.data.id)?.width ?? 0),
     ) + g.gutter;
-  const cellHeight = g.headerHeight + 150;
+  // Full agent labels and a state word need 70px of vertical pitch at the 20% floor.
+  const cellHeight = Math.max(g.headerHeight + 150, 350);
   const buckets = new Map<string, GraphElement[]>();
   for (const root of roots) {
     const id = root.data.group;
@@ -48,16 +49,16 @@ export function groupPack(
     );
     const local = new Map<string, Point>();
     let bottom = 0;
-    for (let column = 0; column * 9 < modules.length; column += 1) {
+    for (let column = 0; column * 6 < modules.length; column += 1) {
       let y = 0;
-      for (const module of modules.slice(column * 9, column * 9 + 9)) {
+      for (const module of modules.slice(column * 6, column * 6 + 6)) {
         const height = heights.get(module.data.id) ?? g.headerHeight;
         local.set(module.data.id, { x: (column + 0.5) * cellWidth, y: y + height / 2 });
         y += Math.max(cellHeight, height + 150);
       }
       bottom = Math.max(bottom, y);
     }
-    return { id, local, width: Math.ceil(modules.length / 9) * cellWidth, height: bottom };
+    return { id, local, width: Math.ceil(modules.length / 6) * cellWidth, height: bottom };
   });
   const band = Math.max(...ordered.map((group) => group.height));
   let x = 0,
