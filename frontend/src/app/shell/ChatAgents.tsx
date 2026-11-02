@@ -7,6 +7,7 @@ import type { ChatAgentSelection } from "./ChatShell";
 import "./chatAgents.css";
 
 function navigate(event: KeyboardEvent<HTMLUListElement>) {
+  if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
   const rows = Array.from(event.currentTarget.querySelectorAll("button"));
   const index = rows.indexOf(event.target as HTMLButtonElement);
   if (index < 0) return;

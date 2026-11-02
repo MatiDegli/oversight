@@ -1,7 +1,6 @@
-import { TaskBox, type TaskBoxProps } from "../../agents";
+import { TaskBox, slotUsage, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
 import { ChatAgents } from "./ChatAgents";
-import { slotUsage } from "../../agents";
 import type { ReactNode } from "react";
 import { WhereTheyWork } from "./WhereTheyWork";
 

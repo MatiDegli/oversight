@@ -245,6 +245,24 @@ it("activates A/B conversations and command targets, with focus separate from se
     await a.press("Shift+Tab");
     await page.keyboard.press("Tab");
     await check(a).toBeFocused();
+    for (const target of [a, b]) {
+      await target.focus();
+      for (const modifier of ["ctrlKey", "altKey", "metaKey", "shiftKey"])
+        for (const key of ["Home", "End", "ArrowUp", "ArrowDown"]) {
+          const prevented = await target.evaluate(
+            (el, init) => {
+              const options = { bubbles: true, cancelable: true };
+              const event = new KeyboardEvent("keydown", { ...options, ...init });
+              el.dispatchEvent(event);
+              return event.defaultPrevented;
+            },
+            { key, [modifier]: true },
+          );
+          expect(prevented).toBe(false);
+          await check(target).toBeFocused();
+        }
+    }
+    await a.focus();
     await a.press("End");
     await check(b).toBeFocused();
     await b.press("Home");
