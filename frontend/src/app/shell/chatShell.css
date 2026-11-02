@@ -238,9 +238,9 @@
 .chat-lead-option {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   margin-top: 28px;
-  padding-top: 14px;
+  padding-top: 20px;
   border-top: 1px solid var(--divider);
   color: var(--muted);
   font-size: 14px;
@@ -289,6 +289,9 @@
 @media (height < 900px) {
   .chat-empty:not(.new-lead) > div {
     padding-bottom: 0;
+  }
+  .chat-lead-option {
+    margin-top: 18px;
   }
 }
 @media (width < 768px) {
@@ -409,7 +412,7 @@
   .chat-agents .chat-side-body {
     overflow: visible;
   }
-  .chat-agents-empty {
+  .chat-shell .chat-agents-empty {
     margin: 4px 8px 12px;
     padding: 0 10px;
   }

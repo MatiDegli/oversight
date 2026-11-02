@@ -64,8 +64,8 @@ it("keeps direct work first and focuses only after New task or New lead", async 
   try {
     await check(page.locator(".chat-agent-name")).toHaveText([
       "Lead A",
-      "Agent A·1",
-      "Agent A·2",
+      "A·1",
+      "A·2",
       "Lead B",
       "Agent C",
     ]);

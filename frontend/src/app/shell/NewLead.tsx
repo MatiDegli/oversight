@@ -12,34 +12,38 @@ import "./chatLeads.css";
 
 function LeadLimits({ state }: { state: State }) {
   const limits = selectLeadLimits(state);
-  const n = (value: number) => value.toLocaleString("en-US", { maximumSignificantDigits: 21 });
+  const n = (value: number) => (
+    <span className="font-mono">
+      {value.toLocaleString("en-US", { maximumSignificantDigits: 21 })}
+    </span>
+  );
   return (
     <div className="new-lead-limits">
-      <Info size={16} aria-hidden="true" />
-      <div>
+      <div className="new-lead-limit-heading">
+        <Info size={13} aria-hidden="true" />
         {limits && <h2>It starts with these limits</h2>}
         <p>Set before Oversight starts; every lead gets the same.</p>
-        {limits && (
-          <div className="new-lead-limit-cards">
-            <div>
-              <h3>This lead</h3>
-              <p>{n(limits.turns)} turns</p>
-              <p>{n(limits.plans)} plans</p>
-            </div>
-            <div>
-              <h3>Each turn</h3>
-              <p>{n(limits.tool_calls)} tool calls</p>
-              <p>{n(limits.model_calls)} model calls</p>
-              <p>{n(limits.wall_clock_s)} s</p>
-            </div>
-            <div>
-              <h3>Each plan</h3>
-              <p>{n(limits.subtasks)} subtasks</p>
-              <p>{n(limits.task_chars)} characters a task</p>
-            </div>
-          </div>
-        )}
       </div>
+      {limits && (
+        <div className="new-lead-limit-cards">
+          <div>
+            <h3>This lead</h3>
+            <p>{n(limits.turns)} turns</p>
+            <p>{n(limits.plans)} plans</p>
+          </div>
+          <div>
+            <h3>Each turn</h3>
+            <p>{n(limits.tool_calls)} tool calls</p>
+            <p>{n(limits.model_calls)} model calls</p>
+            <p>{n(limits.wall_clock_s)} s</p>
+          </div>
+          <div>
+            <h3>Each plan</h3>
+            <p>{n(limits.subtasks)} subtasks</p>
+            <p>{n(limits.task_chars)} characters a task</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -94,7 +98,7 @@ export function NewLead({
           />
           <div className="new-lead-actions">
             <label className="new-lead-model">
-              <span>Model</span>
+              <span className="sr-only">Model</span>
               {(state.run?.models.length ?? 0) > 1 ? (
                 <select
                   aria-label="Model"

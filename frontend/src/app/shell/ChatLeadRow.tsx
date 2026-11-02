@@ -13,6 +13,7 @@ export function ChatLeadRow({
   const Row = onOpenConversation ? "button" : "div";
   const Icon =
     row.status.state === "done" ? Check : row.status.state === "halted" ? OctagonX : CircleStop;
+  const attention = row.teamLine?.match(/\d+ (?:plans? )?(?:need|needs) you$/)?.[0];
   return (
     <Row
       className="chat-agent-row chat-lead-row"
@@ -37,12 +38,27 @@ export function ChatLeadRow({
         <span className="chat-agent-heading">
           <span className="chat-agent-name">Lead {row.letter}</span>
           <span className="chat-agent-pill">
-            {row.done && <Icon size={12} aria-hidden="true" />}
+            {row.done ? (
+              <Icon size={12} aria-hidden="true" />
+            ) : (
+              <span className="chat-lead-status-dot" aria-hidden="true" />
+            )}
             {row.label}
           </span>
         </span>
         <span className="chat-agent-task">{row.status.task}</span>
-        {row.teamLine && <span className="chat-lead-team">{row.teamLine}</span>}
+        {row.teamLine && (
+          <span className="chat-lead-team">
+            {attention ? (
+              <>
+                {row.teamLine.slice(0, -attention.length)}
+                <strong>{attention}</strong>
+              </>
+            ) : (
+              row.teamLine
+            )}
+          </span>
+        )}
         <span className="chat-lead-activity" title={row.activity}>
           {row.activity}
         </span>

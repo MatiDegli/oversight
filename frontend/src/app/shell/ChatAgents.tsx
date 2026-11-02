@@ -30,6 +30,7 @@ export function ChatAgents({
   leadDraft,
 }: ChatAgentSelection & { state: State; leadDraft?: boolean }) {
   const rows = selectChatRows(state);
+  const leadTeams = new Set(rows.filter((row) => row.kind === "lead").map((row) => row.team));
   if (!rows.length && !leadDraft)
     return (
       <p className="chat-agents-empty">
@@ -49,6 +50,7 @@ export function ChatAgents({
               />
             </li>
           );
+        const member = leadTeams.has(row.team);
         const Row = onOpenConversation ? "button" : "div";
         return (
           <li key={row.id}>
@@ -59,6 +61,7 @@ export function ChatAgents({
               data-selected={selectedAgentId === row.id}
               data-ended={row.done}
               data-review={row.ready}
+              data-member={member}
               {...(onOpenConversation
                 ? {
                     type: "button" as const,
@@ -79,12 +82,14 @@ export function ChatAgents({
                 .join("; ")}
             >
               <span className={`chat-agent-badge ${agentLook[row.hue].tint}`} aria-hidden="true">
-                {row.letter}
+                {member ? row.hue : row.letter}
                 <span className="chat-agent-lamp" />
               </span>
               <span className="chat-agent-content">
                 <span className="chat-agent-heading">
-                  <span className="chat-agent-name">Agent {row.letter}</span>
+                  <span className="chat-agent-name">
+                    {member ? row.letter : `Agent ${row.letter}`}
+                  </span>
                   <span className="chat-agent-pill">{row.label}</span>
                 </span>
                 <span className="chat-agent-model">{row.model}</span>

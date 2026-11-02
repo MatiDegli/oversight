@@ -120,7 +120,13 @@ export function Frame(props: FrameProps) {
   const openNewLead = () => {
     closeChatPanel();
     setNewLead(true);
-    requestAnimationFrame(() => leadInput.current?.focus());
+    requestAnimationFrame(() => {
+      leadInput.current?.focus();
+      const list = leadInput.current
+        ?.closest(".shell-frame")
+        ?.querySelector<HTMLElement>(".chat-agents .chat-side-body");
+      if (list) list.scrollTop = list.scrollHeight;
+    });
   };
   const layoutKey =
     shell.sidebar === null &&
