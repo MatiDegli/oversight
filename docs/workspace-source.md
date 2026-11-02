@@ -132,10 +132,9 @@ ReFS and known sync roots refuse. Outside USERPROFILE warns; unknown sync client
 detected. Source/runtime ancestry overlap requires a separate clone; only the existing named
 profile under runtime `sources` is exempt. A source cannot be inside a reset target.
 
-The future startup contract is lexical placement before resolve/constructors/source Git;
+Private startup now checks lexical placement before resolve/constructors/source Git;
 lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
-reset. Current startup does not yet provide this own-source ordering. Public startup wiring
-remains pending. Private staging now pins bounded no-follow HEAD/index stamps and hashes
+reset. Public path selection remains closed until guarded-result integration and enablement. Private staging now pins bounded no-follow HEAD/index stamps and hashes
 around selection and rechecks them after copying and relisting Git paths.
 Selected present files are copied as writable raw bytes under a unique runtime-owned staging
 directory outside `workspace`, `worktrees` and `tmp`. Working deletions create no file.
@@ -191,16 +190,63 @@ under runtime `tmp`. A constant probe pins the trusted report plugin and checks 
 pytest >=8.2 and pluggy >=1.5. Preparation, probe (at most ten seconds) and pytest share one
 deadline derived from the caller's timeout. Missing, unsafe or incompatible environments yield
 a bounded private unavailable diagnostic. Linux injections exercise these handoffs; production
-interpreter selection, public unavailable propagation and native acceptance remain pending.
+interpreter selection now uses the original environment exclusively. Guarded-result admission is
+integrated privately; public selection and native acceptance remain pending.
 
 Static bounded `.pth`, editable finder literals and editable distribution metadata translate
 original project paths into each tested tree, including nested layouts and namespaces. The server
 never executes mapping code. Metadata alone cannot establish import roots; unsupported or unmapped
 editables refuse privately. PYTHONPATH starts with the trusted plugin directory, tested root and
 translated roots; it never prepends the original source. Child startup removes original editable
-namespace paths once; later path insertions are refused. The trusted plugin checks mapped specs
-and all loaded origins in the probe, session start, collection finish, before test records and
-session finish. Venv library
-dependencies are permitted. Collection emits a successful guard before tests; any later guard
-failure appends a failure record and exits. Report admission and public availability remain future
-wiring; these injected tests do not establish native own-source acceptance.
+namespace paths once. Later imports resolving through an inserted original path are refused;
+insertion itself is not detected. The trusted plugin checks mapped specs and all loaded origins
+in the probe, session start, collection finish, before test records and session finish. Venv
+library dependencies are permitted. Collection emits a successful guard before tests; any later guard
+failure appends a failure record and exits. Private admission requires the complete successful
+guard/report sequence. If NT cleanup is unverified, the finalizer neither reads nor removes the
+JSONL, JUnit or measured-call artifacts; the wrapper refuses evidence and snapshot restoration.
+Public availability remains pending; injected tests do not establish native own-source acceptance.
+
+Disposable native fixtures provision pytest 9.1.1 and pytest-asyncio 1.3.0 in their original venv.
+An async fixture and marked async test require plugin autoload in both supported fixture layouts,
+and assert that imports resolve inside each tested copy. Production never provisions this venv.
+
+## Private startup delivery and notices
+
+Set `OVERSIGHT_TEST_TIMEOUT_S` before starting: default 60, whole numbers 1–999999999 as a parsing
+bound, with no policy maximum. The model and repository content cannot change this run's frozen
+limits. `W=max(600, 3*T+300)`. The exact per-start line is:
+`Test limit: {T} s. Agent time limit: {W} s per round. These settings stay fixed for this run.`
+Demo/Boltons ignore a nondefault setting and add:
+`OVERSIGHT_TEST_TIMEOUT_S applies only to your own repositories; this run keeps 60 s.`
+
+Each start reports provider destinations (authors/reviewer/decisions/planner/lead), skipped roots,
+writable raw bytes, environment readiness, outside-profile warnings and recovery guidance.
+Fake authors alone do not establish an all-fake callable union. Inventory constructs no clients.
+Secret-name filtering is not a complete secret detector.
+The informational `own-trust` marker survives reset. Its key is canonical source, policy version,
+sorted provider union and outside-profile flag. Unsafe metadata is neither followed nor replaced.
+A match suppresses only this detail; it grants no permission or discard authority:
+
+> Approval changes only this disposable copy. Tests/plugins run your code as your user, with network and no filesystem sandbox; they may write outside runtime. Windows path checks have concurrent-swap races; copies/logs inherit folder ACLs, possibly readable by others. Child Python with -I/cleared environment can import original source undetected. Use trusted code/private folders.
+
+## Chosen-repository template
+
+After public enablement, use a trusted short private local NTFS repository with its original venv.
+Copy `fixtures/fake-model/own-source-edit.json` privately; replace every path and exact unique
+old/new text, preserving read before edit, failing then repairing tests and separate personal Approve.
+
+```powershell
+$env:META_API_KEY=""; $env:BASETEN_API_KEY=""; $env:OVERSIGHT_CROSS_REVIEW="false"
+$env:OVERSIGHT_AGENT_MODEL="fake"; $env:OVERSIGHT_AGENT_MODEL_B="fake"
+$env:OVERSIGHT_WORKSPACE_SOURCE="C:\private\chosen-repository"
+$env:OVERSIGHT_FAKE_SCRIPT="C:\private\chosen-task.json"
+$env:OVERSIGHT_TEST_TIMEOUT_S="75"
+$env:OVERSIGHT_DISCARD_OWN_RUNTIME=""
+uv run --frozen python -m oversight serve
+```
+
+Retain original HEAD/index/config/selected-file hashes before/after server operations. Follow
+restart refusal's binary export/check guidance before explicit apply; this workflow never supplies
+automatic apply or discard. Only driver-owned disposable fixtures permit automatic separate-target
+apply/exact-hash discard. Named unavailable-volume skips and large-fixture timing remain evidence.

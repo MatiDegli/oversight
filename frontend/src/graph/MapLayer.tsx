@@ -65,6 +65,13 @@ const mapStyles = `
 .map-count {
   color: var(--muted);
 }
+/* Match the unlit surface; expanded hover labels retain their existing backing. */
+.map-count, .map-agent:not(.map-agent-full) {
+  background: var(--ground);
+}
+.map-panel ~ [data-map-module] :is(.map-count, .map-agent:not(.map-agent-full)) {
+  background: color-mix(in srgb, var(--card) 60%, var(--ground));
+}
 .map-agent {
   font-weight: 600;
   position: relative;

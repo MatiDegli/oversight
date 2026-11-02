@@ -5,6 +5,7 @@ virtual environment and the temp directory. `Tree` is main or one agent's worktr
 discard decisions belong to the change manager; this module gives it safe primitives.
 """
 
+import asyncio
 import os
 import re
 import shutil
@@ -58,6 +59,7 @@ from oversight.workspace.files import (
 from oversight.workspace.integrity import (
     DISABLED_GLOBAL_ATTRIBUTES,
     GitIdentity,
+    IntegrityError,
     guarded_git,
     install_byte_override,
     lease_until,
@@ -71,18 +73,36 @@ from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, 
 from oversight.workspace.locks import Locks, offload
 from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.ranges import FileRange, read_range
-from oversight.workspace.runner import ProcessResult, Spawn, probe_job_support, run_process
+from oversight.workspace.runner import (
+    NtCleanupError,
+    NtCleanupRunner,
+    ProcessResult,
+    Spawn,
+    nt_cleanup_failed,
+    probe_job_support,
+    run_process,
+)
 from oversight.workspace.snapshot import IntegrityState
+from oversight.workspace.source import remember_trust
 from oversight.workspace.source_nt import (
+    NtSource,
+    OwnEnvironment,
     StagedSource,
     begin_reset,
     finish_reset,
     guard_previous,
+    inventory,
+    prepare_environment,
     publish_stage,
     record_populated_reset,
+    stage_source,
+    validate_selection,
     verify_stage,
 )
 from oversight.workspace.suite import SuiteRun, SuiteUnavailable
+from oversight.workspace.suite import (
+    _probe_environment as probe_environment,  # pyright: ignore[reportPrivateUsage]
+)
 from oversight.workspace.suite_guard import guarded_suite
 from oversight_contracts.common import AgentId
 
@@ -253,7 +273,10 @@ class Workspace:
         pytest_targets: tuple[str, ...] = (),
         pytest_options: tuple[str, ...] = (),
         _nt_source_bytes: bool = False,
+        own_source: NtSource | None = None,
     ) -> None:
+        if own_source is not None and not _nt_source_bytes:
+            raise ValueError("own source requires the raw-byte policy")
         validate_runtime_root(runtime_root)
         if sys.platform != "win32" and not shutil.rmtree.avoids_symlink_attacks:
             raise UnsafeDeletion("this platform's rmtree follows symbolic links; refusing to run")
@@ -276,6 +299,7 @@ class Workspace:
             global_attributes = runtime_root / "workspace/.git" / DISABLED_GLOBAL_ATTRIBUTES
             self.git_flags += ("-c", f"core.attributesFile={global_attributes}")
         self.nt_source_bytes = _nt_source_bytes
+        self._own_source = own_source
         self._byte_bootstrap = False
         self._literal_initial_add = False
         self._root = runtime_root
@@ -296,6 +320,8 @@ class Workspace:
         self._trees: dict[str, Tree] = {}
         self._lock_fd: int | None = None
         self._reset_done = False
+        self._reset_destructive = False
+        self._cleanup_unverified = False
 
     # --- Accessors --------------------------------------------------------------------------
 
@@ -428,17 +454,18 @@ class Workspace:
             if self.nt_source_bytes:
                 verify_tree_byte_policy(scan_identity, time.monotonic() + timeout_s)
 
-        return await guarded_git(
-            tree.git_identity,
-            args,
-            scan_identity=scan_identity,
-            verify=verify,
-            lease=self.git_lease(),
-            flags=self.git_flags,
-            env=self._git_env(tree, author, date),
-            timeout_s=timeout_s,
-            spawn=run_process,
-        )
+        async with self.guard_nt_cleanup():
+            return await guarded_git(
+                tree.git_identity,
+                args,
+                scan_identity=scan_identity,
+                verify=verify,
+                lease=self.git_lease(),
+                flags=self.git_flags,
+                env=self._git_env(tree, author, date),
+                timeout_s=timeout_s,
+                spawn=run_process,
+            )
 
     @asynccontextmanager
     async def git_lease(self) -> AsyncGenerator[None]:
@@ -483,11 +510,98 @@ class Workspace:
     async def _run_ok(
         self, argv: Sequence[str], *, cwd: Path, timeout_s: float, env: Mapping[str, str]
     ) -> None:
-        result = await run_process(argv, cwd=cwd, timeout_s=timeout_s, env=env)
+        self.integrity.before_git()
+        async with self.guard_nt_cleanup():
+            result = await run_process(argv, cwd=cwd, timeout_s=timeout_s, env=env)
         if result.returncode != 0:
             raise WorkspaceError(f"{argv[0]} failed: {self.redact(result.stderr.strip())[-500:]}")
 
     # --- Startup ----------------------------------------------------------------------------
+
+    @asynccontextmanager
+    async def guard_nt_cleanup(self) -> AsyncGenerator[None]:
+        """Latch failed Job cleanup before a caller can release runtime ownership."""
+        try:
+            yield
+        except BaseException as error:
+            if nt_cleanup_failed(error):
+                self.refuse_unverified_cleanup()
+            raise
+
+    def refuse_unverified_cleanup(self) -> IntegrityError:
+        self._cleanup_unverified = True
+        error = IntegrityError(
+            "Windows Job cleanup is unverified; exit the server process",
+            ".git",
+            code="main_suspect",
+        )
+        self.integrity.suspend(error, uncertain=True)
+        return error
+
+    async def guard_previous_runtime(self) -> None:
+        """No source operation, including profile Git, may precede this guard."""
+        if self._lock_fd is None:
+            raise WorkspaceBusy("previous-runtime guard needs the runtime lock")
+        await offload(partial(guard_previous, self._root))
+
+    async def stage_own_source(self) -> StagedSource:
+        if self._own_source is None or self._lock_fd is None:
+            raise WorkspaceBusy("own-source staging needs selection and runtime lock")
+        binary = await offload(partial(executable, "git"))
+        try:
+            listing = await inventory(self._own_source, git=binary, lock_fd=self._lock_fd)
+            selection = await offload(partial(validate_selection, listing))
+            return await stage_source(selection, git=binary, lock_fd=self._lock_fd)
+        except BaseException as error:
+            if nt_cleanup_failed(error):
+                self.refuse_unverified_cleanup()
+            raise
+
+    async def remember_source_trust(self, providers: tuple[str, ...], outside: bool) -> bool:
+        assert self._own_source is not None
+        return await offload(partial(remember_trust, self._own_source, providers, outside))
+
+    def prepare_own_environment(self, tree: Path, deadline: float) -> OwnEnvironment:
+        assert self._own_source is not None
+        return prepare_environment(self._own_source, tree, deadline)
+
+    async def own_environment_readiness(self) -> str | None:
+        """A separate bounded probe; every actual suite prepares again with its own deadline."""
+        deadline = time.monotonic() + 10
+        runner = NtCleanupRunner(run_process)
+        try:
+            async with self.locks(main=True), self._main.section(locked=False), self.git_lease():
+                own = await offload(
+                    partial(self.prepare_own_environment, self._main.root, deadline)
+                )
+                env = {
+                    "HOME": str(self.tmp_dir / "home"),
+                    "PYTHONPATH": ";".join(map(str, (PLUGIN_DIR, self._main.root, *own.roots))),
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                    "OVERSIGHT_TRUSTED_PLUGIN": str(PLUGIN_DIR / "oversight_report.py"),
+                }
+                if not own.guard:
+                    raise OSError("Own-source environment unavailable: missing import guard")
+                env["OVERSIGHT_IMPORT_GUARD"] = own.guard
+                await probe_environment(
+                    own.python, self._main.root, env, deadline, time.monotonic, runner
+                )
+        except NtCleanupError:
+            self.refuse_unverified_cleanup()
+            raise
+        except OSError:
+            # No arbitrary interpreter/path/plugin output reaches a startup notice.
+            return (
+                "Own-source environment unavailable: missing, unsafe or incompatible original venv."
+            )
+        finally:
+            if not runner.cleanup_complete:
+                error = self.refuse_unverified_cleanup()
+                pending = sys.exception()
+                if isinstance(pending, asyncio.CancelledError):
+                    raise pending from error
+                raise NtCleanupError("Windows Job cleanup is unverified; exit the server process")
+        return None
 
     def _acquire_sync(self) -> None:
         self._root.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
@@ -508,11 +622,15 @@ class Workspace:
                     await offload(ensure_lifetime_job)
                     await probe_job_support(self._root)
                 await offload(partial(refuse_orphans, self._root))
-            except BaseException:
+            except BaseException as error:
+                if nt_cleanup_failed(error):
+                    self.refuse_unverified_cleanup()
                 self.release_runtime()
                 raise
 
     def release_runtime(self) -> None:
+        if self._cleanup_unverified:
+            return  # Retain the sentinel until process exit; descendants may still be alive.
         if self._lock_fd is not None:
             try:
                 release_lock(self._lock_fd)
@@ -529,9 +647,18 @@ class Workspace:
         (info / "exclude").write_text(CACHE_EXCLUDES, encoding="utf-8")
 
     async def reset(self, *, _nt_stage: StagedSource | None = None) -> str:
+        try:
+            return await self._reset(_nt_stage=_nt_stage)
+        except BaseException:
+            if _nt_stage is not None and not self._reset_destructive:
+                await offload(_nt_stage.cleanup)
+            raise
+
+    async def _reset(self, *, _nt_stage: StagedSource | None = None) -> str:
         """Start clean: delete worktrees, main and tmp, copy the template, and make the one initial
         commit, with a fixed author and date so its hash is the same in every take. Server start
         only; returns main's base commit. Runs, ledger and demo venv are kept."""
+        self.integrity.before_git()
         if self._lock_fd is None:
             raise WorkspaceBusy("reset needs the runtime lock: call acquire_runtime first")
         if not self._locks.idle:
@@ -549,7 +676,8 @@ class Workspace:
                 raise
         if sys.platform == "win32":
             await offload(partial(executable, "git"))
-            await offload(partial(executable, "uv"))
+            if self._own_source is None:
+                await offload(partial(executable, "uv"))
         with self._locks.track():
             async with self._locks.acquire(main=True):
                 try:
@@ -564,6 +692,7 @@ class Workspace:
                     raise OSError("Windows source refused: COPY phase deadline exceeded")
                 if protected or _nt_stage is not None:
                     try:
+                        self._reset_destructive = True
                         await offload(partial(begin_reset, self._root, _nt_stage))
                     except BaseException:
                         if _nt_stage is not None:
@@ -635,6 +764,9 @@ class Workspace:
     async def ensure_demo_venv(self) -> None:
         """Reuse `demo-venv/` if its stamp names the pinned pytest and its python runs; otherwise
         rebuild it. The stamp is written last, so a half-built venv is never reused."""
+        self.integrity.before_git()
+        if self._own_source is not None:
+            raise WorkspaceError("own sources never build or install a test environment")
         if self._demo_python_given:
             return
         venv = self._root / "demo-venv"
@@ -649,12 +781,15 @@ class Workspace:
 
         if await offload(read_stamp) == want:
             try:
-                probe = await run_process(
-                    [str(self._demo_python), "-c", "import pytest"],
-                    cwd=self._root,
-                    timeout_s=60,
-                    env={"HOME": str(self._root / "tmp" / "home")},
-                )
+                async with self.guard_nt_cleanup():
+                    probe = await run_process(
+                        [str(self._demo_python), "-c", "import pytest"],
+                        cwd=self._root,
+                        timeout_s=60,
+                        env={"HOME": str(self._root / "tmp" / "home")},
+                    )
+            except NtCleanupError:
+                raise  # An unverified Job cannot authorize removing/rebuilding the venv.
             except OSError:
                 probe = None  # no interpreter, or a symlink to one that is gone: rebuild
             if probe is not None and probe.returncode == 0:
@@ -805,7 +940,11 @@ class Workspace:
                 return await guarded_suite(
                     self,
                     tree,
-                    python=self._demo_python,
+                    python=(
+                        self._own_source.root / ".venv/Scripts/python.exe"
+                        if self._own_source is not None
+                        else self._demo_python
+                    ),
                     plugin_dir=PLUGIN_DIR,
                     flags=self.git_flags,
                     git_env=self._git_env(tree, None, None),
@@ -815,6 +954,9 @@ class Workspace:
                     pytest_options=self._pytest_options,
                     spawn=runner,
                     measured_targets=measured_targets,
+                    _own_prepare=(
+                        self.prepare_own_environment if self._own_source is not None else None
+                    ),
                 )
             except SuiteUnavailable as error:
                 if isinstance(error.cause, IsolationUnavailable):

@@ -2,7 +2,7 @@ import cytoscape, { type Core } from "cytoscape";
 import { useRef } from "react";
 import type { RefObject } from "react";
 import { stateStore } from "../state";
-import { decisionsLabel, mapEvidence, testedLabel } from "./mapEvidence";
+import { decisionsLabel, mapEvidence, moduleOwners, testedLabel } from "./mapEvidence";
 import { getActiveTheme } from "../theme";
 import {
   centerMapCards,
@@ -85,6 +85,7 @@ interface MapRuntime {
   latest: RefObject<GraphViewProps>;
   cy?: Core;
   frame: MapFrame;
+  owners: ReadonlyMap<string, string>;
   listeners: Set<() => void>;
   pannable: Set<string>;
   clickApi?: {
@@ -244,6 +245,7 @@ function createMapController(
       pan: { x: 0, y: 0 },
       level: "cards",
     },
+    owners: new Map(),
     listeners: new Set(),
     pannable: new Set(),
   };
@@ -271,7 +273,8 @@ function createMapController(
   return {
     ...commands,
     getFrame: () => runtime.frame,
-    level: () => runtime.frame.level,
+    moduleOwners: () => runtime.owners,
+    level: () => (latest.current.map ? runtime.frame.level : "cards"),
     subscribe: (listener: () => void) => {
       runtime.listeners.add(listener);
       return () => {
@@ -292,6 +295,7 @@ function createMapController(
     },
     sync(elements: readonly GraphElement[]) {
       if (!latest.current.map) return;
+      runtime.owners = moduleOwners(elements);
       const model = mapEvidence(
         mapModel(elements, getActiveTheme()),
         elements,

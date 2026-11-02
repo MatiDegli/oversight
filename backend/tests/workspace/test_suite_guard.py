@@ -128,3 +128,45 @@ async def test_profile_targets_and_recording_keep_guard_and_selected_case_argv(
         assert not list(workspace.tmp_dir.glob("*.calls*"))
     finally:
         workspace.release_runtime()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("exceptional", [False, True])
+async def test_own_callback_per_tested_tree_deadline_and_exception_identity(
+    workspace, monkeypatch, exceptional
+):
+    import time
+
+    from oversight.workspace import SuiteUnavailable
+    from oversight.workspace.source_nt import NtSource
+    from oversight.workspace.suite import run_suite
+
+    source = NtSource(workspace.main.root, workspace.runtime_root, "C:/source", "C:/runtime")
+    workspace._own_source = source
+    seen = []
+
+    def prepare(source, root, deadline):
+        assert 0 < deadline - time.monotonic() <= 75
+        seen.append(root)
+        raise OSError("injected environment unavailable")
+
+    monkeypatch.setattr("oversight.workspace.core.prepare_environment", prepare)
+
+    async def suite(**kwargs):
+        assert workspace.operations.holds(main=True)
+        assert kwargs["python"] == source.root / ".venv/Scripts/python.exe"
+        if exceptional:
+            return await run_suite(**kwargs)
+        kwargs["_own_prepare"](kwargs["tree_root"], time.monotonic() + 75)
+
+    monkeypatch.setattr("oversight.workspace.suite_guard.run_suite", suite)
+    agent = await workspace.create_worktree("agent-1")
+    for tree in (workspace.main, agent, workspace.main):
+        with pytest.raises(SuiteUnavailable if exceptional else OSError) as caught:
+            await workspace.run_tests(tree, timeout_s=75)
+        if exceptional:
+            assert isinstance(caught.value, SuiteUnavailable)
+            assert caught.value.run.tested_tree is not None
+            assert caught.value.run.tested_commit is not None
+            assert caught.value.run.problems
+    assert seen == [workspace.main.root, agent.root, workspace.main.root]
