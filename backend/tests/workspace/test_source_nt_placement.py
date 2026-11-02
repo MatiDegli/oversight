@@ -24,7 +24,7 @@ from oversight.workspace.errors import InvalidPath
 from oversight.workspace.source import BOLTONS
 from oversight.workspace.source_nt import overlaps, prepare_source, validate_selection
 
-from .test_source_nt import listing, source_case
+from .test_source_nt import listing, source_case, unnamed
 
 
 @pytest.mark.parametrize(
@@ -136,6 +136,39 @@ def test_ancestor_evidence(attributes: int) -> None:
             synced=[],
             lstat=lambda _: info,
         )
+
+
+@pytest.mark.parametrize(
+    "attributes", [0x1000, 0x40000, 0x400000], ids=["offline", "recall-open", "recall-data"]
+)
+@pytest.mark.parametrize("entry", ["file", "directory", "root"])
+def test_selected_offline_or_recall_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, attributes: int, entry: str
+) -> None:
+    with source_case(tmp_path) as (source, _):
+        directory = source.root / "sub"
+        directory.mkdir()
+        target = directory / "a.py"
+        target.write_bytes(b"original\r\n")
+        affected = {"file": target, "directory": directory, "root": source.root}[entry]
+        original_lstat = Path.lstat
+
+        def lstat(path: Path) -> os.stat_result:
+            info = original_lstat(path)
+            if path != affected:
+                return info
+            fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
+            fields["st_file_attributes"] = attributes
+            return cast(os.stat_result, SimpleNamespace(**fields))
+
+        monkeypatch.setattr(Path, "lstat", lstat)
+        with pytest.raises(OSError, match="offline or recall"):
+            validate_selection(
+                listing(source, ("sub/a.py",)),
+                sensitive=lambda _: False,
+                streams=unnamed,
+                clock=lambda: 0,
+            )
 
 
 @pytest.mark.parametrize(
