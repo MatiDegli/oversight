@@ -126,6 +126,13 @@ export function Frame(props: FrameProps) {
         state={state}
         active={shell.layout === "Chat"}
         selectedAgentId={view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation}
+        onNewTask={() => {
+          if (open) {
+            if (props.onTabAction) props.onTabAction({ type: "watch" });
+            else onClosePanel();
+          }
+          requestAnimationFrame(() => task.inputRef.current?.focus());
+        }}
         onOpenConversation={props.onOpenConversation}
         rail={
           <LeftRail
