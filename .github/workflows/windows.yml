@@ -87,7 +87,7 @@ jobs:
           uv run --frozen python tools/smoke.py 2>&1 | Tee-Object nt-evidence/smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Private own-copy composition and native fixtures
-        # Advisory evidence only; final six-run proof follows public enablement.
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: |
           uv run --frozen pytest -o timeout_method=thread backend/tests/test_source_nt_startup.py backend/tests/test_source_trust_once.py backend/tests/workspace/test_source_nt_lifecycle.py backend/tests/workspace/test_source_nt_windows.py -n 2 -rs -s 2>&1 | Tee-Object nt-evidence/own-copy-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

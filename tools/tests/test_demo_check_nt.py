@@ -648,12 +648,45 @@ async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeyp
     assert '[filter "sentinel"]' in config and "FILTER_SENTINEL" in config
     assert "worktree = " in config and "misleading-worktree" in config
     selected = fixture.source / fixture.module
-    # A different size guarantees stat-dirty even on filesystems with coarse timestamps.
     baseline = await nt.fixture_git(
         fixture.source, "--work-tree=" + str(fixture.source), "show", "HEAD:" + fixture.module
     )
-    assert selected.read_bytes() == baseline.encode() + b"\n# stat-dirty selected file\n"
+    assert selected.read_bytes() == baseline.encode() + b"\n"
     assert not (fixture.source / "FILTER_SENTINEL").exists()
+
+
+@pytest.mark.anyio
+async def test_stat_dirty_sentinel_preserves_export_apply_bytes(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    module = "sample.py"
+    selected = source / module
+    original = b"def value():\n    return 41\n"
+    selected.write_bytes(original)
+    await nt.fixture_git(source, "init", "-q", "--template=", "-b", "main")
+    await nt.fixture_git(source, "add", module)
+    await nt.fixture_git(source, "commit", "-qm", "Fixture base")
+    indexed_stat = selected.stat()
+    nt.prepare_fixture_git_sentinel(source, module)
+
+    # Match the driver's raw-byte staging, then export a change against that base.
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    (runtime / module).write_bytes(selected.read_bytes())
+    await nt.fixture_git(runtime, "init", "-q", "--template=", "-b", "main")
+    await nt.fixture_git(runtime, "add", module)
+    await nt.fixture_git(runtime, "commit", "-qm", "Runtime base")
+    (runtime / module).write_bytes(selected.read_bytes().replace(b"return 41", b"return 42"))
+    patch = tmp_path / "own.patch"
+    await nt.fixture_git(runtime, "diff", "--binary", "--full-index", f"--output={patch}", "HEAD")
+    target = tmp_path / "apply-target"
+    await nt.fixture_git(source, "clone", "--no-hardlinks", str(source), str(target))
+    await nt.fixture_git(target, "apply", "--check", str(patch))
+    await nt.fixture_git(target, "apply", str(patch))
+    assert (target / module).read_bytes() == (runtime / module).read_bytes()
+    assert selected.read_bytes() == original
+    assert selected.stat().st_mtime_ns >= indexed_stat.st_mtime_ns + 5_000_000_000
+    nt.check_fixture_filters(tmp_path)
 
 
 @pytest.mark.anyio

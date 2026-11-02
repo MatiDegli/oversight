@@ -290,7 +290,7 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         "if-no-files-found: error\nretention-days: 7",
     }
     assert UPLOAD in (WORKFLOWS / "ci.yml").read_text()
-    assert len(items) == 19
+    assert len(items) == 20
     assert items[7:9] == [
         {"uses": GITLEAKS},
         {
@@ -303,13 +303,13 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         permitted = {"name", "run"}
         if index == 7:
             permitted.add("id")
-        if 8 <= index <= 14:
+        if 8 <= index <= 15:
             permitted.add("if")
             assert step.get("if") == WINDOWS_NATIVE_IF
         if index == 13:
             permitted.add("timeout-minutes")
             assert step["timeout-minutes"] == "3"
-        if index == 15:
+        if index == 16:
             permitted.add("if")
             assert step["if"] == "always()"
         assert set(step) <= permitted
@@ -375,6 +375,20 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
         "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
     )
     assert items[14] == {
+        "name": "Private own-copy composition and native fixtures",
+        "if": WINDOWS_NATIVE_IF,
+        "run": "|\nuv run --frozen pytest -o timeout_method=thread "
+        "backend/tests/test_source_nt_startup.py backend/tests/test_source_trust_once.py "
+        "backend/tests/workspace/test_source_nt_lifecycle.py "
+        "backend/tests/workspace/test_source_nt_windows.py -n 2 -rs -s 2>&1 | "
+        "Tee-Object nt-evidence/own-copy-tests.log\n"
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+        "'After public enablement, on both Windows machines: "
+        "uv run --frozen python tools/demo_check_nt.py --own-fixtures. "
+        "No six-run acceptance collected here.' | "
+        "Set-Content nt-evidence/own-driver-pending.txt",
+    }
+    assert items[15] == {
         "name": "Report unavailable Linux isolation",
         "if": WINDOWS_NATIVE_IF,
         "run": "|\nuv run --frozen python -m oversight isolation-probe "
@@ -387,11 +401,13 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
     versions = items[4]["run"]
     assert "[System.Environment]::OSVersion.VersionString" in versions
     assert all(f"{tool} --version" in versions for tool in ("uv", "git", "node", "pnpm"))
-    assert "W1 + W2 + W3 + W4b byte policy only" in versions
-    assert "awaits W4a2 + W4c1 + W4c2" in versions and "not acceptance" in versions
+    assert "Private own-copy composition is covered by injections." in versions
+    assert "Public own paths remain closed." in versions
+    assert "Integrated six-run/two-machine qualification remains pending;" in versions
+    assert "skips are not acceptance" in versions
     assert "Set-Content nt-evidence/staging.txt" in versions
-    assert "platform.python_version(), type(loop).__name__" in items[15]["run"]
-    assert "Tee-Object nt-evidence/python-loop.log" in items[15]["run"]
+    assert "platform.python_version(), type(loop).__name__" in items[16]["run"]
+    assert "Tee-Object nt-evidence/python-loop.log" in items[16]["run"]
 
 
 def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> None:
@@ -420,8 +436,15 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
         ("exit $LASTEXITCODE", "Write-Output ignored"),
         ("$probe.status -ne 'unavailable'", "$probe.status -eq 'failed'"),
         ("if: always()", "if: failure()"),
-        ("W4b byte policy only", "ready"),
-        ("awaits W4a2 + W4c1 + W4c2", "ready"),
+        ("Private own-copy composition is covered by injections.", "ready"),
+        ("Public own paths remain closed.", "ready"),
+        ("Integrated six-run/two-machine qualification remains pending;", "ready"),
+        ("skips are not acceptance", "ready"),
+        ("backend/tests/test_source_nt_startup.py ", ""),
+        ("backend/tests/test_source_trust_once.py ", ""),
+        ("backend/tests/workspace/test_source_nt_lifecycle.py ", ""),
+        ("backend/tests/workspace/test_source_nt_windows.py ", ""),
+        ("No six-run acceptance collected here.", "ready"),
         ("tools/tests/test_smoke.py", "tools/tests"),
         ("uses: actions/checkout@", "uses: untrusted/checkout@"),
     ],
@@ -433,7 +456,7 @@ def test_windows_rejects_policy_regressions(old: str, new: str) -> None:
         assert_windows_policy(text.replace(old, new, 1))
 
 
-@pytest.mark.parametrize("index", range(10, 17))
+@pytest.mark.parametrize("index", range(10, 18))
 @pytest.mark.parametrize(
     "condition",
     [

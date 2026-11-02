@@ -511,7 +511,10 @@ def prepare_fixture_git_sentinel(source: Path, module: str) -> None:
         ).encode()
     )
     selected = source / module
-    selected.write_bytes(selected.read_bytes() + b"# stat-dirty selected file\n")
+    before = selected.stat()
+    selected.write_bytes(selected.read_bytes())
+    # Force an index stat mismatch even with coarse timestamps, preserving clone parity.
+    os.utime(selected, ns=(before.st_atime_ns, before.st_mtime_ns + 5_000_000_000))
 
 
 def check_fixture_filters(scratch: Path) -> None:

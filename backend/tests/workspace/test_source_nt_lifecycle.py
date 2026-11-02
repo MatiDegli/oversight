@@ -11,6 +11,38 @@ from oversight.workspace.runner import NtCleanupError, NtCleanupRunner, ProcessR
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize("mode", ["normal", "cancel"])
+async def test_cleanup_diagnostic_survives_nt_signal_and_cancellation(tmp_path, monkeypatch, mode):
+    entered, finish = asyncio.Event(), asyncio.Event()
+    failure = OSError("membership unknown")
+
+    async def reap(*args, **kwargs):
+        entered.set()
+        await finish.wait()
+        raise failure
+
+    async def execute(*args):
+        await runner._reap_nt(Mock(), runner.ProcessCollector(100), 101)
+
+    monkeypatch.setattr(runner, "_reap_nt_job", reap)
+    monkeypatch.setattr(runner, "_execute", execute)
+    task = asyncio.create_task(runner.run_process(["fixture"], cwd=tmp_path, timeout_s=1))
+    await asyncio.wait_for(entered.wait(), 5)
+    if mode == "cancel":
+        task.cancel("person stopped")
+        await asyncio.sleep(0)
+    finish.set()
+    with pytest.raises(asyncio.CancelledError if mode == "cancel" else NtCleanupError) as caught:
+        await task
+    cleanup = caught.value.__cause__ if mode == "cancel" else caught.value
+    assert isinstance(cleanup, NtCleanupError)
+    assert "membership unknown" in str(cleanup)
+    assert "cleanup is unverified" in str(cleanup)
+    assert cleanup.__cause__ is failure
+    if mode == "cancel":
+        assert str(caught.value) == "person stopped"
+
+
 async def test_native_combination_exercise_uses_real_merged_tree(
     tmp_path, make_workspace, demo_python
 ):

@@ -227,7 +227,7 @@ async def _reap_nt(
         await _reap_nt_job(transport, collector, job, launch_failed=launch_failed)
     except Exception as error:
         raise NtCleanupError(
-            "Windows job cleanup is unverified; exit the server process"
+            f"Windows job cleanup is unverified; exit the server process: {error}"
         ) from error
 
 
