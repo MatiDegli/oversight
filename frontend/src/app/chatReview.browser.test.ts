@@ -122,6 +122,111 @@ async function openAppReview(page: Page) {
     .click();
   await check(panel(page)).toBeVisible();
 }
+async function camera(page: Page) {
+  return page.locator('[aria-label="Repository graph"]').evaluate((host: GraphProbeHost) => {
+    const graph = host.oversightGraph;
+    if (!graph) throw new Error("Missing graph");
+    return { pan: graph.pan(), zoom: graph.zoom() };
+  });
+}
+async function waitForColdGraph(page: Page) {
+  await page.waitForFunction(() => {
+    const graph = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    return !!graph && !graph.animating();
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+}
+async function abandonedCamera() {
+  const { page } = await open();
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/OversightStage.tsx*", async (route) => {
+    await gate;
+    await route.continue();
+  });
+  try {
+    await layout(page, "Oversight").click();
+    await check(page.getByText("Loading repository graph…", { exact: true })).toBeVisible();
+    await layout(page, "Chat").click();
+    release();
+    await waitForColdGraph(page);
+    return await camera(page);
+  } finally {
+    release();
+    await page.close();
+  }
+}
+async function framingEvidence(page: Page) {
+  return page.locator('[aria-label="Repository graph"]').evaluate((host: GraphProbeHost) => {
+    const graph = host.oversightGraph;
+    if (!graph) throw new Error("Missing graph");
+    const viewport = host.getBoundingClientRect();
+    const state = window.chatReviewTest.state();
+    const proposal = state.changes["change-1"]?.proposal;
+    if (!proposal) throw new Error("Missing proposal");
+    const overlay = document
+      .querySelector('[aria-label="Possibly affected"]')
+      ?.getBoundingClientRect();
+    const clear = document.querySelector("[data-graph-clear-area]")?.getBoundingClientRect();
+    const pan = graph.pan(),
+      zoom = graph.zoom(),
+      bounds = graph.nodeBounds();
+    const visible = (id: string) => {
+      const box = bounds.find((b) => b.id === graph.representative(id));
+      if (!box) return false;
+      const x1 = box.x1 * zoom + pan.x,
+        x2 = box.x2 * zoom + pan.x;
+      const y1 = box.y1 * zoom + pan.y,
+        y2 = box.y2 * zoom + pan.y;
+      return (
+        x1 >= -1 &&
+        y1 >= -1 &&
+        x2 <= viewport.width + 1 &&
+        y2 <= (clear ? clear.bottom - viewport.top : viewport.height) + 1 &&
+        (!overlay ||
+          x2 <= overlay.left - viewport.left + 1 ||
+          x1 >= overlay.right - viewport.left - 1 ||
+          y2 <= overlay.top - viewport.top + 1 ||
+          y1 >= overlay.bottom - viewport.top - 1)
+      );
+    };
+    const rows = [...document.querySelectorAll('[aria-label="Possibly affected"] li[title]')];
+    const measured = state.changeFacts["change-1"]?.at(-1)?.measured_cone ?? [];
+    for (const { node_id } of measured) {
+      if (!bounds.some((box) => box.id === graph.representative(node_id)))
+        throw new Error(`Missing measured caller on canvas: ${node_id}`);
+    }
+    return {
+      seeds: proposal.impact.seeds
+        .filter((id) =>
+          [
+            ...(state.graph?.nodes ?? []),
+            ...(state.changes["change-1"]?.graph.nodes_added ?? []),
+          ].some((node) => node.id === id && !node.is_test),
+        )
+        .map((id) => ({ id, visible: visible(id) })),
+      measured: measured.map(({ node_id }) => ({ id: node_id, visible: visible(node_id) })),
+      callers: proposal.impact.entries.map(({ node_id }) => ({
+        id: node_id,
+        visible: visible(node_id),
+        reportedVisible: !rows
+          .find((row) => row.getAttribute("title") === node_id)
+          ?.textContent.includes("Out of view"),
+      })),
+      pan,
+      zoom,
+    };
+  });
+}
 async function framed(page: Page) {
   await page.waitForFunction(() => {
     const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
@@ -133,42 +238,28 @@ async function framed(page: Page) {
       host.getBoundingClientRect().width > 0
     );
   });
-  await page.waitForFunction(() =>
-    document.querySelector('[aria-label="Possibly affected"]')?.textContent.includes("Out of view"),
+  // Read canvas geometry independently; the UI's omission label is checked afterwards.
+  await check
+    .poll(async () => (await framingEvidence(page)).seeds.every((s) => s.visible))
+    .toBe(true);
+  const result = await framingEvidence(page);
+  expect(result.seeds.length).toBeGreaterThan(0);
+  expect(result.measured).toHaveLength(3);
+  expect(result.measured).toEqual([
+    { id: "shop.cart:Cart.quote_add", visible: false },
+    { id: "shop.cart:Cart.subtotals", visible: false },
+    { id: "shop.models:Customer.quote", visible: false },
+  ]);
+  expect(result.callers.find((caller) => caller.id === "shop.pricing:price_breaks")?.visible).toBe(
+    true,
   );
-  const result = await page
-    .locator('[aria-label="Repository graph"]')
-    .evaluate((host: GraphProbeHost) => {
-      const graph = host.oversightGraph;
-      if (!graph) throw new Error("Missing graph");
-      const viewport = host.getBoundingClientRect();
-      const proposal = window.chatReviewTest.state().changes["change-1"]?.proposal;
-      if (!proposal) throw new Error("Missing proposal");
-      const rows = [...document.querySelectorAll('[aria-label="Possibly affected"] li[title]')];
-      const visibleCallers = proposal.impact.entries.filter(
-        (e) =>
-          !rows
-            .find((row) => row.getAttribute("title") === e.node_id)
-            ?.textContent.includes("Out of view"),
-      );
-      const ids = [...proposal.impact.seeds, ...visibleCallers.map((e) => e.node_id)];
-      const boxes = [...new Set(ids.map((id) => graph.representative(id)))]
-        .map((id) => graph.renderedBox(id))
-        .filter((b) => !!b);
-      return {
-        count: boxes.length,
-        boxes,
-        viewport: { width: viewport.width, height: viewport.height },
-        visible: boxes.every(
-          (b) =>
-            b.x1 >= -1 && b.y1 >= -1 && b.x2 <= viewport.width + 1 && b.y2 <= viewport.height + 1,
-        ),
-        pan: graph.pan(),
-        zoom: graph.zoom(),
-      };
-    });
-  expect(result.count).toBeGreaterThan(0);
-  expect(result).toMatchObject({ visible: true });
+  await check
+    .poll(async () =>
+      (await framingEvidence(page)).callers.every(
+        (caller) => caller.visible === caller.reportedVisible,
+      ),
+    )
+    .toBe(true);
   return result;
 }
 it.each([1920, 1280])(
@@ -424,12 +515,30 @@ it("C5's resolved tab opens beside its owner without a proposed-only navigation 
     await page.evaluate(() => {
       window.chatReviewTest.merged();
     });
+    await check(card(page)).not.toContainText("Review is unavailable for this candidate.");
     await page.getByRole("button", { name: "Open its review", exact: true }).click();
+    await check(page.getByRole("tab", { name: /Review · change-1/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await check(panel(page).getByText("Merged", { exact: true })).toBeVisible();
     await check(
       page.getByRole("region", { name: "Agent A conversation", exact: true }),
     ).toBeVisible();
     expect(requested.some((p) => /GraphView|OversightStage/.test(p))).toBe(false);
+  } finally {
+    await page.close();
+  }
+});
+it.each([1920, 1600, 1280])("preserves the Oversight review width at %ipx", async (width) => {
+  const { page } = await open({ width });
+  try {
+    await card(page).getByRole("button", { name: "Review change", exact: true }).click();
+    await check(panel(page).locator(".review-body")).toBeVisible();
+    await layout(page, "Oversight").click();
+    expect(
+      Math.abs((await panel(page).boundingBox())!.width - Math.min(880, width * 0.46)),
+    ).toBeLessThan(0.02);
   } finally {
     await page.close();
   }
@@ -463,6 +572,10 @@ it("cold and visited See on graph frame the cone, repeat a fresh frame and retai
 it.each(["stage", "field", "field failure", "failure", "abandoned", "replacement", "run"])(
   "handles %s during cold framing without late navigation or focus",
   async (scenario) => {
+    const before =
+      scenario === "abandoned" || scenario === "replacement"
+        ? await abandonedCamera()
+        : { pan: { x: 0, y: 0 }, zoom: 1 };
     const { page } = await open();
     let release = () => {};
     const gate = new Promise<void>((r) => {
@@ -521,6 +634,9 @@ it.each(["stage", "field", "field failure", "failure", "abandoned", "replacement
         );
         await check(layout(page, "Chat")).toHaveAttribute("aria-pressed", "true");
         await check(layout(page, "Chat")).toBeFocused();
+        await waitForColdGraph(page);
+        // Same cold startup as ordinary abandoned entry; no discarded cone camera.
+        expect(await camera(page)).toEqual(before);
       }
     } finally {
       release();

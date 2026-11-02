@@ -153,9 +153,9 @@ export function ChatChangeCard({
                   <Eye aria-hidden="true" size={16} />
                   Review change
                 </button>
-              ) : (
+              ) : card.waiting ? (
                 <span>Review is unavailable for this candidate.</span>
-              )}
+              ) : null}
               <span>{card.waiting ? "Waiting for a decision." : "Decision recorded."}</span>
             </footer>
           </>

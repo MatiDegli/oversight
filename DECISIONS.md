@@ -3806,7 +3806,7 @@ or candidates invalidate the target. The retained stage still awaits optional fi
 and GraphStage/GraphView retain all graph-data, geometry and cone framing responsibilities.
 Frame adds only the hook next to useShell, the FocusPanel callback and the graph-view prop.
 
-## 2026-11-01 — C4 integration proof and the held cold editor gate
+## 2026-11-01 — C4 integration proof and the released cold editor gate
 
 The focused C4 fixture uses recorded run/graph data plus explicitly hand-written candidate
 measurements, assessment and change-attributed usage. It never edits a recording or calls a model.
@@ -3815,10 +3815,8 @@ pointer-only approval, retained draft/comment/answers/diff, narrow tabs, C5 reso
 explicit graph framing, repeated targets, delayed/failed preparation and abandoned intents.
 The shared camera keeps its legibility floor and reports omitted viewport members as Out of view.
 
-A cold Chat review exposes an existing C1 dependency: editor/loader.ts waits for first graph draw
-before evaluating Monaco, including an explicit review open. With no explicit Oversight entry,
-review correctly requests no graph but cannot finish loading its editor; approval stays disabled.
-This also reproduces with cbba4cd0's original source files. The C4 regression requires the editor
-to become clean without requesting a graph and remains a blocking failure until the coordinator
-releases the loader lane. No gate or assertion is weakened. Retained-state captures visit
-Oversight explicitly before opening review, and preserve the normal scrolling built review body.
+The coordinator-authorized b6636cf merge released the cold editor gate: an explicit Chat review
+can finish loading Monaco without requesting the graph, and approval becomes available when the
+existing decision guards pass. The cold production App regression now passes. No gate or assertion
+is weakened. Retained-state captures still visit Oversight explicitly before opening review and
+preserve the normal scrolling built review body.

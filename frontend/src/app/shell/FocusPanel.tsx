@@ -55,7 +55,14 @@ export function FocusPanel(
   const Icon = props.maximized ? Minimize2 : Maximize2;
   return (
     <section className="focus-panel" aria-label="Focus panel">
-      <div className="focus-tabs" hidden={props.chat && Boolean(owner)}>
+      <div
+        className="focus-tabs"
+        hidden={
+          props.chat &&
+          Boolean(owner) &&
+          (!view.review || state.changes[view.review]?.resolution?.merge !== "merged")
+        }
+      >
         <div
           ref={tablist}
           role="tablist"

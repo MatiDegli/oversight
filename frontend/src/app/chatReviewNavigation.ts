@@ -50,6 +50,7 @@ export function useChatReviewNavigation(
   const [snapshot, setSnapshot] = useState({
     runId: state.run?.run_id,
     view,
+    viewKey: JSON.stringify(view),
     layout: shell.layout,
   });
   const replaced = snapshot.runId !== state.run?.run_id;
@@ -67,12 +68,15 @@ export function useChatReviewNavigation(
       : shell.layout === "Oversight"
         ? view
         : frozen;
+  // Phone practice derives a fresh View on each render. Snapshot navigation values,
+  // rather than object identity, so the render-phase adjustment can settle.
+  const viewKey = JSON.stringify(graphView);
   if (
     replaced ||
     snapshot.layout !== shell.layout ||
-    (shell.layout === "Oversight" && snapshot.view !== graphView)
+    (shell.layout === "Oversight" && snapshot.viewKey !== viewKey)
   ) {
-    setSnapshot({ runId: state.run?.run_id, view: graphView, layout: shell.layout });
+    setSnapshot({ runId: state.run?.run_id, view: graphView, viewKey, layout: shell.layout });
   }
   return {
     graphView,

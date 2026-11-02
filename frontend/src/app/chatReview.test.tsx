@@ -3,12 +3,14 @@ function required<T>(value: T | null | undefined): T {
   return value;
 }
 import { renderToStaticMarkup as html } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { useState } from "react";
 import { expect, it } from "vitest";
 import type { ServerEvent } from "@contracts";
 import { applyEvent, createInitialState } from "../state";
 import { chatReviewState } from "./chatReview.browser.fixture";
 import { changeCost, selectChatChange } from "./chatReviewSelectors";
-import { graphReviewAction } from "./chatReviewNavigation";
+import { graphReviewAction, useChatReviewNavigation } from "./chatReviewNavigation";
 import { ChatChangeCard } from "./shell/ChatChangeCard";
 // eslint-disable-next-line no-restricted-imports -- Exercise only the optional timeline seam.
 import { ConversationPanel } from "../agents/conversation/ConversationPanel";
@@ -16,6 +18,28 @@ import { ConversationPanel } from "../agents/conversation/ConversationPanel";
 import { selectConversation } from "../agents/conversation/selectConversation";
 import { openReview, tabbedView } from "./view";
 import { resolvedReviewAction } from "./shell/ChatMerge";
+
+it("records the coordinator's release of the cold editor gate", () => {
+  const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
+  const entry = decisions.split("C4 integration proof and the released cold editor gate")[1];
+  expect(entry).toContain("b6636cf merge released the cold editor gate");
+  expect(entry).not.toContain("remains a blocking failure");
+});
+
+it("settles graph snapshots when phone practice recreates an equivalent view", () => {
+  const state = chatReviewState();
+  function RecreatedView() {
+    const [entered, setEntered] = useState(false);
+    const navigation = useChatReviewNavigation(
+      state,
+      { ...tabbedView, activeTab: entered ? "practice" : null },
+      { layout: "Oversight", setLayout: () => {} },
+    );
+    if (!entered) setEntered(true);
+    return <span>{navigation.graphView.activeTab}</span>;
+  }
+  expect(html(<RecreatedView />)).toBe("<span>practice</span>");
+});
 
 const model = () => selectChatChange(chatReviewState(), "change-1");
 it("joins the exact retained proposal position, facts and assessment", () => {
