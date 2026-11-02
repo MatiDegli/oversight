@@ -14,7 +14,7 @@ import {
   slotUsage,
   startBlock,
   startFailure,
-} from "./taskBox";
+} from "./taskBoxModel";
 
 // The level 1 log: agent A starts at seq 3, proposes at 19, is ready at 20, approved and merged at
 // 21, done at 23.

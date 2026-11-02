@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { applyEvent, createInitialState } from "../state";
-import { selectMeasuredCallers } from "./measuredCallers";
+import { selectMeasuredCallers } from "./measuredCallerFacts";
 import {
   availableFacts,
   firstCaller,

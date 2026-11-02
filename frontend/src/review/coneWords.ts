@@ -1,7 +1,7 @@
 import type { ChangeFacts } from "@contracts";
 import type { State } from "../state";
 import { factsForRevision } from "./factsForRevision";
-import { selectMeasuredCallers } from "./measuredCallers";
+import { selectMeasuredCallers } from "./measuredCallerFacts";
 
 export type ConeWord = "differs" | "same" | "varied" | "not measured";
 
