@@ -288,7 +288,11 @@ class Toolbox:
         except (ToolError, WorkspaceError) as error:
             message = self._workspace.redact(str(error))
         except SuiteUnavailable as error:
-            message = f"cannot access the file: {error.strerror or type(error.cause).__name__}"
+            message = (
+                f"tests unavailable: {error.own_source_reason}"
+                if error.own_source_reason is not None
+                else f"cannot access the file: {error.strerror or type(error.cause).__name__}"
+            )
             return ToolOutcome(
                 content=f"Error: {message}",
                 ok=False,

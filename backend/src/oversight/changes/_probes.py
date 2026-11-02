@@ -198,6 +198,9 @@ async def probe_added_tests(
                 if isinstance(error, TimeoutError)
                 else f"added tests: {phase} unavailable"
             )
+            if isinstance(error, SuiteUnavailable) and error.own_source_reason is not None:
+                detail += ": " + error.own_source_reason
+                await publish_suite(ctx, rec, error.run, phase=phase, revision=revision)
             if isinstance(error, IsolationUnavailable):
                 detail += ": " + ctx.workspace.redact(str(error))
             problems.append(detail)
@@ -251,6 +254,8 @@ async def _run(
             tree, timeout_s=rec.task.limits.test_timeout_s, case_ids=ids, isolation="required"
         )
     except SuiteUnavailable as error:
+        if error.own_source_reason is not None:
+            raise
         return error.run
     except SuiteInterrupted as error:
         if not deadline.expired():

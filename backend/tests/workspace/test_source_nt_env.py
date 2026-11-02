@@ -20,6 +20,17 @@ from oversight.workspace.suite import (
 )
 
 
+def guard_policy(tree, source=None):
+    return json.dumps(
+        dict(
+            tree=str(tree),
+            source=str(source or tree / "original"),
+            libraries=[str(Path(sys.prefix) / ("Lib" if sys.platform == "win32" else "lib"))],
+            packages=[],
+        )
+    )
+
+
 def environment(tmp_path: Path):
     source = nt.NtSource(tmp_path / "source", tmp_path / "runtime", "C:/source", "C:/runtime")
     base, tree = tmp_path / "base", source.runtime / "workspace"
@@ -138,7 +149,7 @@ async def test_own_environment_and_one_deadline(tmp_path, monkeypatch, budget, e
     def prepare(tree, deadline):
         assert tree == tmp_path and deadline == 100 + budget
         now[0] += 0.5  # preparation consumes the same allowance
-        return nt.OwnEnvironment(python, (tmp_path / "backend/src",))
+        return nt.OwnEnvironment(python, (tmp_path / "backend/src",), guard_policy(tmp_path))
 
     async def spawn(argv, *, cwd, timeout_s, env=None, output_cap=262144):
         assert env is not None and cwd == tmp_path and argv[0] == str(python)
@@ -151,6 +162,7 @@ async def test_own_environment_and_one_deadline(tmp_path, monkeypatch, budget, e
             "PYTHONHASHSEED": "0",
             "OVERSIGHT_REPORT": env["OVERSIGHT_REPORT"],
             "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+            "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
         }
         calls.append((argv, timeout_s))
         if argv[1] == "-c":
@@ -158,7 +170,9 @@ async def test_own_environment_and_one_deadline(tmp_path, monkeypatch, budget, e
             now[0] += elapsed
             return ProcessResult(0, '{"ok":true}', "", False, False, 1)
         assert timeout_s == budget - 0.5 - elapsed
-        await asyncio.to_thread(Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"start"}\n')
+        await asyncio.to_thread(
+            Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"guard","ok":true}\n'
+        )
         return ProcessResult(0, "", "", False, False, 1)
 
     async def suite():
@@ -194,7 +208,9 @@ async def test_probe_failure_is_bounded_and_cleanup_runs(tmp_path, fault):
 
     async def spawn(argv, *, env=None, **kwargs):
         assert env is not None
-        await asyncio.to_thread(Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"start"}\n')
+        await asyncio.to_thread(
+            Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"guard","ok":true}\n'
+        )
         if fault == "launch":
             raise OSError("secret C:/private")
         if fault == "cancel":
@@ -225,10 +241,16 @@ async def test_probe_failure_is_bounded_and_cleanup_runs(tmp_path, fault):
             timeout_s=7,
             redact=lambda s: s,
             spawn=spawn,
-            _own_prepare=lambda *_: nt.OwnEnvironment(Path(sys.executable)),
+            _own_prepare=lambda *_: nt.OwnEnvironment(
+                Path(sys.executable), guard=guard_policy(tmp_path)
+            ),
         )
     if isinstance(error.value, SuiteUnavailable):
-        assert "private" not in str(error.value.cause) and len(str(error.value.cause)) < 200
+        if fault == "launch":
+            assert error.value.own_source_reason is None
+            assert str(error.value.cause) == "secret C:/private"
+        else:
+            assert "private" not in str(error.value.cause) and len(str(error.value.cause)) < 200
         if fault not in {"garbage", "launch"}:
             assert "python=3.9.9, pytest=7.0, pluggy=missing" in str(error.value.cause)
     assert not list((tmp_path / "tmp").iterdir())
@@ -240,6 +262,7 @@ async def test_real_probe_pins_trusted_plugin(tmp_path):
     env = {
         "PYTHONPATH": str(plugin),
         "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+        "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
     }
     await _probe_environment(
         Path(sys.executable), tmp_path, env, time.monotonic() + 5, time.monotonic, run_process
@@ -288,8 +311,76 @@ async def test_probe_checks_actual_injected_versions(tmp_path, name, version):
             {
                 "PYTHONPATH": str(plugin),
                 "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+                "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
             },
             time.monotonic() + 5,
             time.monotonic,
             injected,
         )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("raw", [None, "", "{}", "null", "{", '{"libraries":[]}'])
+async def test_invalid_guard_never_launches(tmp_path, raw):
+    async def forbidden(*args, **kwargs):
+        pytest.fail("invalid guard launched a process")
+
+    with pytest.raises(SuiteUnavailable):
+        await run_suite(
+            python=Path("unused"),
+            plugin_dir=tmp_path,
+            runtime_root=tmp_path,
+            tree_root=tmp_path,
+            timeout_s=3,
+            redact=lambda s: s,
+            spawn=forbidden,
+            _own_prepare=lambda *_: nt.OwnEnvironment(Path(sys.executable), guard=raw),
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("name", ["oversight_calls", "pytest", "pluggy"])
+async def test_probe_refuses_shadow_before_import(tmp_path, name):
+    plugin = Path(__file__).parents[2] / "src/oversight/workspace/report_plugin"
+    marker = tmp_path / "executed"
+    (tmp_path / (name + ".py")).write_text(f"open({str(marker)!r}, 'w').close()")
+    with pytest.raises(OSError, match="probe failed"):
+        await _probe_environment(
+            Path(sys.executable),
+            tmp_path,
+            {
+                "PYTHONPATH": str(plugin),
+                "OVERSIGHT_TRUSTED_PLUGIN": str(plugin / "oversight_report.py"),
+                "OVERSIGHT_IMPORT_GUARD": guard_policy(tmp_path),
+            },
+            time.monotonic() + 5,
+            time.monotonic,
+            run_process,
+        )
+    assert not marker.exists()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("field", ["source", "tree", "libraries", "wrong-tree"])
+async def test_guard_locations_refuse_before_probe(tmp_path, field):
+    policy = json.loads(guard_policy(tmp_path))
+    if field == "wrong-tree":
+        policy["tree"] = str(tmp_path / "another-tree")
+    else:
+        policy[field] = ["relative"] if field == "libraries" else "relative"
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("invalid policy location launched a process")
+
+    with pytest.raises(SuiteUnavailable) as error:
+        await run_suite(
+            python=Path("unused"),
+            plugin_dir=tmp_path,
+            runtime_root=tmp_path,
+            tree_root=tmp_path,
+            timeout_s=7,
+            redact=lambda s: s,
+            spawn=forbidden,
+            _own_prepare=lambda *_: nt.OwnEnvironment(Path("original"), guard=json.dumps(policy)),
+        )
+    assert error.value.own_source_reason == "invalid import guard policy"
