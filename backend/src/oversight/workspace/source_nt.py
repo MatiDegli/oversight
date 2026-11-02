@@ -466,14 +466,17 @@ def validate_selection(
             raise refuse(relative + ": exceeds 4 MiB; move the asset out or use smaller source")
         check_streams(path, listing.deadline, clock, streams)
         with open_nt(path) as handle:
-            if nt_token(os.fstat(handle.fileno())) != nt_token(info):
+            opened = os.fstat(handle.fileno())
+            if nt_token(opened) != nt_token(info):
                 raise refuse(relative + ": changed before read")
             data = handle.read(MAX_FILE + 1)
             remaining(listing.deadline, clock)
             if len(data) > MAX_FILE or total + len(data) > MAX_TOTAL:
                 raise refuse(relative + ": selected bytes exceed budget")
+            after = os.fstat(handle.fileno())
             if (
-                nt_token(os.fstat(handle.fileno())) != nt_token(info)
+                nt_token(after) != nt_token(info)
+                or after.st_ctime_ns != opened.st_ctime_ns
                 or nt_token(path.lstat()) != nt_token(info)
                 or len(data) != info.st_size
             ):
@@ -651,9 +654,13 @@ def copy_selection(stage: StagedSource, deadline: float, clock: Callable[[], flo
             continue
         path = stage.selection.inventory.source.root / entry.path
         with open_nt(path) as handle:
+            opened = os.fstat(handle.fileno())
             data = handle.read(MAX_FILE + 1)
+            after = os.fstat(handle.fileno())
             if (
-                nt_token(os.fstat(handle.fileno())) != entry.identity
+                nt_token(opened) != entry.identity
+                or nt_token(after) != entry.identity
+                or after.st_ctime_ns != opened.st_ctime_ns
                 or nt_token(path.lstat()) != entry.identity
                 or len(data) != entry.size
                 or hashlib.sha256(data).hexdigest() != entry.hash
