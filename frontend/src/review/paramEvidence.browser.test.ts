@@ -76,6 +76,35 @@ async function mounted(
 const chip = (page: Page) => page.locator("[data-chip-node] button");
 const section = (page: Page) => page.locator(".parameter-calls > section");
 const samples = (page: Page) => page.locator(".parameter-samples");
+it.each(["dark", "day"])(
+  "colors phone After evidence without ancestor slot styles in %s",
+  async (theme) => {
+    await mounted(390, theme, "mixed", async (page) => {
+      await samples(page).locator("summary").click();
+      const after = page.locator(".parameter-pair > [data-agent-slot]");
+      await check(after).toHaveCount(4);
+      for (const cell of await after.all()) {
+        const colors = await cell.evaluate((el) => {
+          const reference = document.createElement("div");
+          reference.style.cssText =
+            "border-color:var(--agent-a);background:var(--agent-a-tint);color:var(--agent-a-text)";
+          document.body.append(reference);
+          const expected = getComputedStyle(reference);
+          const actual = getComputedStyle(el);
+          const label = el.querySelector("span");
+          if (!label) throw new Error("Missing After label");
+          const result = {
+            actual: [actual.borderTopColor, actual.backgroundColor, getComputedStyle(label).color],
+            expected: [expected.borderTopColor, expected.backgroundColor, expected.color],
+          };
+          reference.remove();
+          return result;
+        });
+        expect(colors.actual).toEqual(colors.expected);
+      }
+    });
+  },
+);
 async function frameReport(page: Page, filename: string, errors: string[]) {
   const overflow = await page.evaluate(() => ({
     page: document.documentElement.scrollWidth - innerWidth,

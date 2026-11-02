@@ -1,5 +1,6 @@
 import { ArrowRight, ChevronRight, CircleAlert } from "lucide-react";
 import type { Slot } from "@contracts";
+import { agentSlotStyle } from "../theme";
 import { unstableBehaviorSentence } from "./behaviorEvidence";
 import { evidenceWords } from "./evidenceWords";
 import type { parameterExtensions } from "./parameterExtensions";
@@ -63,7 +64,7 @@ export function NewParameterCalls({
                           <code>{row.before}</code>
                         </div>
                         <ArrowRight aria-hidden="true" size={16} />
-                        <div data-agent-slot={slot}>
+                        <div data-agent-slot={slot} style={agentSlotStyle(slot)}>
                           <span>After</span>
                           <code>{row.after}</code>
                         </div>

@@ -13,7 +13,6 @@ import { PhoneReview, preparePhoneReview } from "../app/challenge/PhoneReview";
 import { NodeChips } from "../graph/NodeChips";
 import { GraphView } from "../graph";
 import { stateStore } from "../state";
-import { agentSlotStyle } from "../theme";
 import { approvalLocked, approvalLockedCaption, candidateKey, useAnswers } from "./answers";
 import { parameterState, nodeId } from "./NewParameterCalls.fixture";
 import { visitParameterEvidence } from "./parameterExtensions";
@@ -36,7 +35,7 @@ function Harness() {
   const proposal = state.changes["change-1"]?.proposal;
   if (innerWidth < 1280)
     return (
-      <div className="phone-practice" style={agentSlotStyle("A")}>
+      <div className="phone-practice">
         <header className="pp-topbar">
           <strong>Oversight</strong>
           <span>demo-repo</span>
