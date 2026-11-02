@@ -15,6 +15,8 @@ export type {
   ConversationHeader,
   ConversationEntry,
   ConversationMessage,
+  LeadConversation,
+  LeadHeader,
 } from "./conversation/selectConversation";
 export type { ConversationControls } from "./conversation/Composer";
 

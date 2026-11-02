@@ -140,6 +140,10 @@ async def combined_tests_pass(
             run = await ctx.workspace.run_tests(main, timeout_s=rec.task.limits.test_timeout_s)
     except (SuiteInterrupted, SuiteUnavailable) as error:
         await publish_suite(ctx, rec, error.run, phase="combined", revision=rec.revision)
+        if isinstance(error, SuiteUnavailable) and error.own_source_reason is not None:
+            await ctx.error(
+                "tests", f"The tests could not run: {error.own_source_reason}", rec, fatal=False
+            )
         raise
     run = await verify_run(ctx, rec, run, phase="combined")
     if run.result.outcome == "passed":

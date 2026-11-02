@@ -10,7 +10,7 @@ const ts = "2026-11-01T17:04:57.000Z";
 
 describe("lead thread compatibility", () => {
   it.each([null, "tool_calls", "model_calls", "time", "spend_brake"] as const)(
-    "consumes reply envelopes with cut %s without adding observations or UI",
+    "retains reply envelopes with cut %s separately from other observations",
     (cut) => {
       const before = seeded();
       for (const text of ["Reply", null]) {
@@ -22,11 +22,26 @@ describe("lead thread compatibility", () => {
           payload: { agent_id: "agent-1", answers_seq: null, text, through_seq: null, cut },
         };
         const after = applyEvent(before, event);
-        expect(after).toEqual({ ...before, lastSeq: event.seq, clock: ts });
+        expect(after).toEqual({
+          ...before,
+          lastSeq: event.seq,
+          clock: ts,
+          leadReplies: { [event.payload.agent_id]: [event] },
+        });
         for (const key of Object.keys(before) as (keyof typeof before)[]) {
-          if (key !== "lastSeq" && key !== "clock") expect(after[key]).toBe(before[key]);
+          if (!["lastSeq", "clock", "leadReplies"].includes(key))
+            expect(after[key]).toBe(before[key]);
         }
         expect(applyEvent(after, event)).toEqual({ ...after, gap: true });
+        expect(applyEvent(before, { ...event, seq: event.seq + 1 }).leadReplies).toBe(
+          before.leadReplies,
+        );
+        const start = log[0];
+        if (start?.type !== "run.started") throw new Error("Missing run");
+        expect(
+          applyEvent(after, { ...start, payload: { ...start.payload, run_id: "replacement" } })
+            .leadReplies,
+        ).toEqual({});
       }
     },
   );

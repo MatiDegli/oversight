@@ -466,14 +466,17 @@ def validate_selection(
             raise refuse(relative + ": exceeds 4 MiB; move the asset out or use smaller source")
         check_streams(path, listing.deadline, clock, streams)
         with open_nt(path) as handle:
-            if nt_token(os.fstat(handle.fileno())) != nt_token(info):
+            opened = os.fstat(handle.fileno())
+            if nt_token(opened) != nt_token(info):
                 raise refuse(relative + ": changed before read")
             data = handle.read(MAX_FILE + 1)
             remaining(listing.deadline, clock)
             if len(data) > MAX_FILE or total + len(data) > MAX_TOTAL:
                 raise refuse(relative + ": selected bytes exceed budget")
+            after = os.fstat(handle.fileno())
             if (
-                nt_token(os.fstat(handle.fileno())) != nt_token(info)
+                nt_token(after) != nt_token(info)
+                or after.st_ctime_ns != opened.st_ctime_ns
                 or nt_token(path.lstat()) != nt_token(info)
                 or len(data) != info.st_size
             ):
@@ -651,9 +654,13 @@ def copy_selection(stage: StagedSource, deadline: float, clock: Callable[[], flo
             continue
         path = stage.selection.inventory.source.root / entry.path
         with open_nt(path) as handle:
+            opened = os.fstat(handle.fileno())
             data = handle.read(MAX_FILE + 1)
+            after = os.fstat(handle.fileno())
             if (
-                nt_token(os.fstat(handle.fileno())) != entry.identity
+                nt_token(opened) != entry.identity
+                or nt_token(after) != entry.identity
+                or after.st_ctime_ns != opened.st_ctime_ns
                 or nt_token(path.lstat()) != entry.identity
                 or len(data) != entry.size
                 or hashlib.sha256(data).hexdigest() != entry.hash
@@ -1163,6 +1170,23 @@ def _package_name(name: str) -> str:
     return name
 
 
+def _root_names(root: Path, io: EnvironmentIO, budget: Budget) -> set[str]:
+    """Only immediate import entries; no module execution or recursive content scan."""
+    names: set[str] = set()
+    for child in root.iterdir():
+        budget.charge(0)
+        nt_name(child.name)
+        if child.name.startswith(".") or child.name == "__pycache__":
+            continue
+        directory = stat.S_ISDIR(child.lstat().st_mode)
+        if not directory and child.suffix != ".py":
+            continue
+        io.check(child, directory=directory)
+        name = child.name if directory else child.stem
+        names.add(_package_name(name))
+    return names
+
+
 def editable_imports(
     source: NtSource, tree: Path, io: EnvironmentIO
 ) -> tuple[tuple[Path, ...], tuple[str, ...]]:
@@ -1177,7 +1201,10 @@ def editable_imports(
     packages: set[str] = set()
     expected: set[str] = set()
     referenced: set[str] = set()
+    finder_paths: dict[str, set[Path]] = {}
     own_distribution = False
+    unnamed: list[tuple[Path, Path]] = []
+    path_mappings: dict[Path, set[Path]] = {}
     for child in children:
         if not child.name.endswith(".dist-info"):
             continue
@@ -1199,7 +1226,8 @@ def editable_imports(
             continue
         raw = unquote(parsed.path)
         raw = raw[1:] if re.match(r"^/[A-Za-z]:/", raw) else raw
-        if _mapped_target(raw, source, tree, site, io) is None:
+        project = _mapped_target(raw, source, tree, site, io)
+        if project is None:
             continue
         # Installed snapshots of this project also require a translated import mapping.
         own_distribution = True
@@ -1211,6 +1239,8 @@ def editable_imports(
             )
         if not editable and not distribution_names:
             raise ValueError("installed project cannot establish mapped package names")
+        if not distribution_names:
+            unnamed.append((child, project))
         expected.update(distribution_names)
     for child in children:
         if not child.name.endswith(".pth"):
@@ -1224,11 +1254,14 @@ def editable_imports(
                     if match is None:
                         raise ValueError("unsupported editable hook")
                     referenced.add(match[1] + ".py")
+                    finder_paths.setdefault(match[1] + ".py", set()).add(child)
                 continue
             mapped = _mapped_target(line, source, tree, site, io)
             if mapped is not None:
                 io.check(mapped, directory=True)
                 roots.add(mapped)
+                path_mappings.setdefault(child, set()).add(mapped)
+                packages.update(_root_names(mapped, io, budget))
     for child in children:
         if not (child.name.startswith("__editable__") and child.suffix == ".py"):
             continue
@@ -1252,8 +1285,22 @@ def editable_imports(
                             raise ValueError("unmapped package parent")
                         io.check(root, directory=True)
                         roots.add(root)
+                        for pth in finder_paths.get(child.name, ()):
+                            path_mappings.setdefault(pth, set()).add(root)
     if referenced:
         raise ValueError("missing editable finder")
+    for distribution, project in unnamed:
+        # RECORD associates a nameless distribution with its own path-line mapping.
+        # A different distribution's valid mapping cannot certify this installation.
+        record = distribution / "RECORD"
+        associated: set[Path] = set()
+        if record.exists():
+            for row in io.read(record, budget).decode("utf-8").splitlines():
+                filename = row.split(",", 1)[0]
+                if filename.endswith(".pth") and "/" not in filename and "\\" not in filename:
+                    associated.update(path_mappings.get(site / filename, ()))
+        if not any(_inside(project, root) and _root_names(root, io, budget) for root in associated):
+            raise ValueError("unassociated editable mapping")
     for name in expected:
         targets = [root / name.replace(".", "/") for root in roots]
         candidates = [

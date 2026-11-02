@@ -669,8 +669,8 @@ gradients belong to theme tokens; control boundaries use control-edge and focus 
   frame sits under it. Below 1280px a notice asks the person to widen the window. Type and radii
   do not shrink to fit. The two-change practice uses the exception in **Phone width** below.
   Target, not built yet: the sidebar becomes an overlay first below 1832px, and below 1552px the
-  focus panel shrinks to `min(880px, viewport width - 112px - 560px)`: 823px at 1495px, 768px at
-  1440px and 608px at 1280px. Overlays cover their part without changing these target widths.
+  focus panel shrinks to `min(880px, viewport width - 112px - 560px)`: 823px at 1495px and
+  608px at 1280px. Overlays cover their part without changing these target widths.
 - **Maximize:** an explicit focus-panel control fills the work area and hides the graph behind a
   restore-graph button. Restoring returns to the same shell; maximize is not used in the video.
 - **Keyboard:** Ctrl K jumps to functions and files and runs commands; Ctrl B toggles the sidebar;
@@ -948,7 +948,7 @@ keys, with a Saved line and the repository scope below. Section headings remain 
   color alone; warnings are neutral. The brake refuses new runs above 90%, as ARCHITECTURE.md,
   Usage and the spend brake, specifies.
   Steps per task is a minus/value/plus stepper. Change size and cone limits use numeric inputs
-  with visible units (lines, functions); they do not turn fixed contract limits into editable
+  with visible units (lines, functions); they do not turn current implementation limits into editable
   settings without backing support.
 - **Protected areas:** rows name the path or function, its type and a remove action; an add field
   and Add button follow the list. The row states that an edit waits for the person.

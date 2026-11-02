@@ -52,31 +52,42 @@ jobs:
           'W1 + W2 + W3 + W4b byte policy only. Full driver/three starts, cold-uv backend death and six-run/two-machine proof remain pending; own-source startup awaits W4a2 + W4c1 + W4c2. Missing dependencies are not acceptance.' | Set-Content nt-evidence/staging.txt
       - run: uv sync --frozen
       - run: pnpm -C frontend install --frozen-lockfile
-      - run: pnpm -C frontend build
+      - uses: ./.github/actions/setup-gitleaks
+      - name: Gitleaks version
+        run: gitleaks version | Tee-Object -Append nt-evidence/versions.log
+      - id: frontend_build
+        run: pnpm -C frontend build
       - name: Windows target typing for landed sites
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: uv run --frozen pyright --pythonplatform Windows tools/demo_check_nt.py tools/demo_check.py tools/smoke.py tools/tests/test_demo_check_nt.py tools/tests/test_demo_check.py tools/tests/test_smoke.py tools/tests/test_pages_workflow.py tools/tests/test_verify_workflow.py backend/src/oversight/__main__.py backend/src/oversight/api/static.py backend/src/oversight/app.py backend/src/oversight/events/store.py backend/src/oversight/workspace/__init__.py backend/src/oversight/workspace/_platform.py backend/src/oversight/workspace/capability.py backend/src/oversight/workspace/core.py backend/src/oversight/workspace/files.py backend/src/oversight/workspace/integrity.py backend/src/oversight/workspace/isolation.py backend/src/oversight/workspace/metadata_io.py backend/src/oversight/workspace/runner.py backend/src/oversight/workspace/source.py backend/src/oversight/workspace/test_tree.py backend/src/oversight/workspace/tree.py backend/src/oversight/workspace/snapshot.py backend/src/oversight/workspace/suite_files.py backend/src/oversight/workspace/suite_guard.py backend/src/oversight/agents/tools.py backend/tests/workspace/test_source_bytes.py backend/tests/workspace/test_source_bytes_windows.py backend/tests/agents/test_tools_nt_bytes.py backend/tests/api/test_files.py
       - name: W1 native cases
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: |
           uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_platform_windows.py -rs -s 2>&1 | Tee-Object nt-evidence/w1-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: W3 injected and native cases
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: |
           uv run --frozen pytest -o timeout_method=thread tools/tests/test_demo_check_nt.py -rs -s 2>&1 | Tee-Object nt-evidence/w3-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: W4b injected and native byte cases
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: |
           uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_source_bytes.py backend/tests/workspace/test_source_bytes_windows.py backend/tests/agents/test_tools_nt_bytes.py -n 2 -rs -s 2>&1 | Tee-Object nt-evidence/w4b-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: W4a2 injected and native reset cases
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: |
           uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_source_nt_copy.py backend/tests/workspace/test_source_nt_reset.py backend/tests/workspace/test_source_nt_reset_windows.py -n 2 -rs -s 2>&1 | Tee-Object nt-evidence/w4a2-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Smoke with retained jobs
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         timeout-minutes: 3
         run: |
           uv run --frozen python tools/smoke.py 2>&1 | Tee-Object nt-evidence/smoke.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Report unavailable Linux isolation
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
         run: |
           uv run --frozen python -m oversight isolation-probe > nt-evidence/isolation-probe.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

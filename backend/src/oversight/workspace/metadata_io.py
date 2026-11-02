@@ -57,6 +57,8 @@ def nt_guard(path: Path, deadline: float, *, working: bool = False) -> os.stat_r
 
 
 def nt_token(info: os.stat_result) -> tuple[int, ...]:
+    # CPython 3.12 NT lstat uses creation time for ctime, while fstat uses ChangeTime.
+    # Birth time is comparable across both. Readers check handle ChangeTime separately.
     return (
         info.st_dev,
         info.st_ino,
@@ -64,7 +66,7 @@ def nt_token(info: os.stat_result) -> tuple[int, ...]:
         info.st_nlink,
         info.st_size,
         info.st_mtime_ns,
-        info.st_ctime_ns,
+        getattr(info, "st_birthtime_ns", info.st_ctime_ns),
     )
 
 
@@ -210,7 +212,12 @@ def collect(
 
 
 def _same(fd: int | Path, path: Path, expected: Entry | None, deadline: float) -> None:
-    if read_at(fd, path.name, path, Budget(deadline)) != expected:
+    actual = read_at(fd, path.name, path, Budget(deadline))
+    if isinstance(fd, Path) and actual is not None and expected is not None:
+        # Windows chmod represents only the readonly flag, not POSIX group/other modes.
+        actual = Entry(actual.mode & stat.S_IWRITE, actual.data)
+        expected = Entry(expected.mode & stat.S_IWRITE, expected.data)
+    if actual != expected:
         raise IntegrityError("metadata compare-and-swap failed", str(path))
 
 
