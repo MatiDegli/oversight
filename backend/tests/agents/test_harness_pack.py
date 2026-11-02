@@ -248,7 +248,9 @@ async def test_off_preserves_failed_test_output(
     from oversight.agents._observations import test_observation
 
     run = await small_tree[0].run_tests(small_tree[1], timeout_s=60)
-    assert test_observation(run, 4000) == "Tests passed: 1 passed, 0 failed, 0 skipped."
+    assert test_observation(run, 4000, test_timeout_s=60) == (
+        "Tests passed: 1 passed, 0 failed, 0 skipped."
+    )
     await put(
         small_tree[1], "tests/test_mod.py", "def test_failure():\n    assert False, 'x' * 12000\n"
     )
