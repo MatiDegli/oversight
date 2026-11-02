@@ -42,13 +42,15 @@ DESIGN.md (every visual rule), DECISIONS.md (each decision with its reason; it w
   missing token usage is unknown, never zero; the spending brake refuses new runs above 90% of the credits.
 - Frontend: Cytoscape.js and fcose without a React wrapper; Monaco from the local package, never a CDN; one pure event
   reducer shared by live runs and replay. The static build plays a bundled recorded run, always labeled as real.
-- The product's agents work in worktrees of .runtime/workspace/ (a fresh copy of demo-repo/), never in worktrees of
-  this repository.
+- The product's agents work in worktrees under .runtime/worktrees/, on a disposable copy of demo-repo/, a pinned
+  profile or the person's selected repository; never in worktrees of this repository or in the selected original.
 
 ## Product agent safety
 - Tools are list_files, read_file, search, edit_file, run_tests and finish. There is no shell tool.
 - Every path is validated inside the agent's worktree; no tool returns the content of an obvious secret file.
-- run_tests runs one fixed command, with a timeout, in the demo repo's own virtual environment.
+- run_tests runs one fixed command, with a timeout, in the disposable tested tree: in the demo's own virtual
+  environment, or for a selected own repository on native Windows, in its validated .venv with imports mapped to the
+  copy. The person sets that repository's test limit at startup (OVERSIGHT_TEST_TIMEOUT_S); the model never changes it.
 - An agent's status comes from its tool calls, never from its text. Runs without progress stop.
 
 ## UI invariants

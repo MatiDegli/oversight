@@ -809,12 +809,10 @@ agent B running locally on the person's GPU (Muse Glimmer, Meta's other open mod
 candidate if it is smaller than Muse Spark Open), "possible" call edges drawn thinner and
 grey, and inheritance edges.
 
-After level 2, once the cut line is drawn and only if time remains, opening the person's
-own repository keeps its place. After the hackathon, the Tauri shell comes first, with
-the backend inside WSL; the native Windows and macOS backend ports follow it, including
-item 20's minimal native Windows port. The full rules, including the per-OS layer and
-the later Windows isolation, are in
-[Opening the person's own repository](own-repository.md).
+The minimal native Windows backend and validated own-repository COPY startup are implemented;
+native qualification remains pending. Tauri, broader platform ports, macOS and native Windows
+isolation remain later work. See [Opening the person's own repository](own-repository.md) for the
+current COPY boundary and later session design.
 
 A level is done when its demo runs three times in a row from a clean start, with one command
 and no manual fixes.

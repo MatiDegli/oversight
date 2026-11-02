@@ -85,7 +85,7 @@ from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings, build_lead_limits, run_time_limits
-from oversight.setup import missing_settings, offered_profiles, resolve_profile
+from oversight.setup import missing_settings, offered_profiles
 from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
 from oversight.workspace import (
@@ -351,21 +351,15 @@ class LiveRun:
     # --- Startup and shutdown -----------------------------------------------------------------
 
     def _own_source(self) -> bool:
-        """Private injected own selection; public repository paths still refuse."""
+        """Own selection uses the prepared native Windows COPY startup path."""
         return isinstance(self._source, OwnSource)
 
     def _source_providers(self) -> tuple[str, ...]:
         """Conservative callable union, from configuration only, even without credentials."""
         profiles = offered_profiles(self._settings)
         providers = {profile.provider for profile in profiles.values()}
-        if self._settings.cross_review:
-            with contextlib.suppress(ValueError):
-                providers.add(resolve_profile(self._settings.review_model).provider)
-        if self._settings.decision_model == "muse-spark-open":
-            providers.add("baseten")
-        if profiles["A"].provider != "fake":
-            providers.add("meta")  # Planner chooses Spark for any non-fake A.
         # LeadService accepts explicit Spark and Spark Open independently of author slots.
+        # This union already covers reviewer, decision and planner destinations.
         providers.update(("meta", "baseten"))
         return tuple(sorted(providers))
 

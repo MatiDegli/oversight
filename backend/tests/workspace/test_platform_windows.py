@@ -171,6 +171,7 @@ async def test_console_shutdown(tmp_path, monkeypatch):
     import os
     import signal
 
+    from oversight.settings import REPO_ROOT
     from oversight.workspace.runner import ProcessCollector, child_env, wait_done
 
     if sys.platform != "win32":
@@ -182,6 +183,9 @@ async def test_console_shutdown(tmp_path, monkeypatch):
     runtime = tmp_path / ".runtime"
     monkeypatch.setenv("OVERSIGHT_RUNTIME_DIR", str(runtime))
     monkeypatch.setenv("OVERSIGHT_AGENT_MODEL", "fake")
+    monkeypatch.setenv(
+        "OVERSIGHT_FAKE_SCRIPT", str(REPO_ROOT / "fixtures/fake-model/demo-l2-coupon.json")
+    )
     monkeypatch.setenv("OVERSIGHT_WORKSPACE_SOURCE", "")
     collector = ProcessCollector(262144)
     transport, _ = await asyncio.get_running_loop().subprocess_exec(

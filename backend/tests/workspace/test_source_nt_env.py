@@ -1,4 +1,4 @@
-"""Private original-venv policy and deadline injections; no native acceptance."""
+"""Original-venv policy and deadline injections; no native acceptance."""
 
 import asyncio
 import json
@@ -7,6 +7,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -18,6 +19,80 @@ from oversight.workspace.suite import (
     _probe_environment,
     run_suite,
 )
+
+from .test_source_nt_reset import opened
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(("platform", "separator"), [("win32", ";"), ("linux", ":")])
+async def test_readiness_suite_environment_agreement(tmp_path, monkeypatch, platform, separator):
+    from oversight.workspace import core, runner, suite
+
+    for name in ("META_API_KEY", "baseten_api_key", "ARBITRARY_CREDENTIAL"):
+        monkeypatch.setenv(name, "must not inherit")
+    async with opened(tmp_path) as (workspace, source, _):
+        monkeypatch.setattr(suite, "sys", SimpleNamespace(platform=platform))
+        monkeypatch.setattr(runner, "sys", SimpleNamespace(platform=platform))
+        # Separate readiness/suite deadlines; retain a real epoch for Git integrity leases.
+        now = time.monotonic()
+        monkeypatch.setattr(core, "time", SimpleNamespace(monotonic=lambda: now))
+        workspace._own_source = source
+        tree = workspace.main.root
+        own = nt.OwnEnvironment(
+            source.root / ".venv/Scripts/python.exe", (tree / "backend/src",), guard_policy(tree)
+        )
+        deadlines, environments = [], []
+
+        def prepare(root, deadline):
+            assert root == tree
+            deadlines.append(deadline)
+            return own
+
+        async def spawn(argv, *, cwd, timeout_s, env=None, **kwargs):
+            assert env is not None
+            assert cwd == tree and argv[0] == str(own.python)
+            assert not any("credential" in k.lower() or "api_key" in k.lower() for k in env)
+            assert not any(
+                "credential" in k.lower() or "api_key" in k.lower() for k in runner.child_env(env)
+            )
+            environments.append(dict(env))
+            if argv[1] == "-c":
+                assert timeout_s == 10
+                return ProcessResult(0, '{"ok":true}', "", False, False, 1)
+            assert timeout_s == 27
+            await asyncio.to_thread(
+                Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"guard","ok":true}\n'
+            )
+            return ProcessResult(0, "", "", False, False, 1)
+
+        monkeypatch.setattr(workspace, "prepare_own_environment", prepare)
+        monkeypatch.setattr(core, "run_process", spawn)
+        assert await workspace.own_environment_readiness() is None
+        result = await run_suite(
+            python=Path("unused"),
+            plugin_dir=core.PLUGIN_DIR,
+            runtime_root=source.runtime,
+            tree_root=tree,
+            timeout_s=27,
+            redact=lambda s: s,
+            spawn=spawn,
+            _own_prepare=prepare,
+            _clock=lambda: now,
+        )
+        assert result.result.outcome == "passed"
+        assert deadlines == [now + 10, now + 27]
+        readiness, probe, execution = environments
+        assert probe == execution
+        assert probe.pop("OVERSIGHT_REPORT")
+        assert readiness == probe
+        assert readiness["PYTHONPATH"] == separator.join(
+            map(str, (core.PLUGIN_DIR, tree, *own.roots))
+        )
+        assert readiness["HOME"] == readiness["TEMP"] == readiness["TMP"]
+        assert readiness["PYTHONHASHSEED"] == "0"
+        assert readiness["OVERSIGHT_IMPORT_GUARD"] == own.guard
+        assert readiness["OVERSIGHT_TRUSTED_PLUGIN"] == str(core.PLUGIN_DIR / "oversight_report.py")
+        assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD" not in readiness
 
 
 def guard_policy(tree, source=None):

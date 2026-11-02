@@ -1,4 +1,4 @@
-"""Server-owned workspace profiles. Selection and startup validation never fetch a source."""
+"""Workspace source selection. Profiles and prepared own-copy startup never fetch a source."""
 
 import hashlib
 import ntpath
@@ -30,7 +30,7 @@ TRUST_NOTICE = (
 
 @dataclass(frozen=True)
 class OwnSource:
-    """Private composition value. Public selection stays closed until qualification wiring."""
+    """Native Windows selection; prepare, stage and guarded suites remain mandatory."""
 
     raw: str
     provenance: str = "own-repository (disposable copy)"
@@ -128,16 +128,22 @@ BOLTONS = SourceProfile(
 
 
 def select_source(name: str) -> SourceProfile | OwnSource | None:
-    """Empty means the existing demo; no paths or model-provided argv are accepted."""
+    """Select demo/profile first; native Windows paths require prepared COPY startup.
+
+    OwnSource is a raw selection, never permission to bypass preparation, validated staging
+    or guarded suites. Arbitrary names and repository paths on POSIX remain refused.
+    """
     if not name:
         return None
     profiles = {BOLTONS.name: BOLTONS}
-    if name not in profiles:
-        raise ValueError(
-            "OVERSIGHT_WORKSPACE_SOURCE must be empty (demo-repo) or one of "
-            f"{', '.join(profiles)}; got {name!r}"
-        )
-    return profiles[name]
+    if name in profiles:
+        return profiles[name]
+    if sys.platform == "win32" and (ntpath.splitdrive(name)[0] or name.startswith(("/", "\\"))):
+        return OwnSource(name)
+    raise ValueError(
+        "OVERSIGHT_WORKSPACE_SOURCE must be empty (demo-repo), one of "
+        f"{', '.join(profiles)}, or an absolute drive path on native Windows; got {name!r}"
+    )
 
 
 async def validate_source(

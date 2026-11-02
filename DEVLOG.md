@@ -57,4 +57,6 @@ One line per day, in Argentina time (ART).
   coverage and three consecutive clean-start rules scenarios with real host isolation C.
 - **2026-11-02:** Renamed frontend helper modules for Windows import resolution and added a
   repository check for case-insensitive sibling and module-name collisions; added the person-owned
-  test limit, derived per-round agent deadline and explicit incomplete timeout observations.
+  test limit, derived per-round agent deadline and explicit incomplete timeout observations; enabled
+  validated native Windows own-repository COPY with staged-only reset and shared guarded test
+  environments, retaining original preservation and pending two-machine native qualification.

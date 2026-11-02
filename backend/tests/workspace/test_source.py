@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,7 +13,7 @@ from oversight.settings import Settings
 from oversight.workspace import Workspace, run_process
 from oversight.workspace.core import INITIAL_DATE, PLUGIN_DIR
 from oversight.workspace.runner import ProcessResult
-from oversight.workspace.source import BOLTONS, select_source, validate_source
+from oversight.workspace.source import BOLTONS, OwnSource, select_source, validate_source
 
 pytestmark = pytest.mark.anyio
 
@@ -235,18 +236,15 @@ async def test_source_suite_argv_and_collection(tmp_path: Path, case_ids: tuple[
         workspace.release_runtime()
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        r"C:\private\project",
-        "C:/private/project",
-        r"\\host\share\project",
-        r"\\?\C:\project",
-        "C:project",
-    ],
-)
-async def test_public_nt_paths_remain_closed(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("oversight.workspace.source.sys.platform", "win32")
+@pytest.mark.parametrize("path", [r"C:\private\project", "C:/private/project"])
+async def test_public_nt_drive_selection(path: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("oversight.workspace.source.sys", SimpleNamespace(platform="win32"))
+    assert select_source(path) == OwnSource(path)
+    assert select_source("") is None and select_source(BOLTONS.name) == BOLTONS
+
+
+@pytest.mark.parametrize("path", ["/private/project", r"C:\private\project", "C:/private/project"])
+async def test_posix_paths_still_refuse(path, monkeypatch):
+    monkeypatch.setattr("oversight.workspace.source.sys", SimpleNamespace(platform="linux"))
     with pytest.raises(ValueError, match="OVERSIGHT_WORKSPACE_SOURCE"):
         select_source(path)
-    assert select_source("") is None and select_source(BOLTONS.name) == BOLTONS
