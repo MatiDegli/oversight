@@ -58,3 +58,5 @@ One line per day, in Argentina time (ART).
 - **2026-11-02:** Renamed frontend helper modules for Windows import resolution and added a
   repository check for case-insensitive sibling and module-name collisions; added the person-owned
   test limit, derived per-round agent deadline and explicit incomplete timeout observations.
+  Added per-lead committed-event watchers, fixed wake coalescing, locked admission/refusal,
+  bounded server notices and reply correlation, with fake-only race and lifecycle evidence.

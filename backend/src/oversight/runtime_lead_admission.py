@@ -56,9 +56,56 @@ async def _publish(service: LeadService, lead: _Lead, masked: str) -> None:
             await service._status(lead, "working", None)
             if not _open(service, lead):
                 return
-            service._launch(lead, masked, committed.seq)
+            notice = lead.watcher.take() if lead.watcher is not None else None
+            service._launch(lead, masked, committed.seq, notice=notice)
     except Exception:
         async with lead.lock:
             if _open(service, lead):
                 lead.phase = "idle"
+                if lead.watcher is not None:
+                    lead.watcher.changed.set()
         raise ApiError("internal", "could not record the lead message") from None
+
+
+async def wake(service: LeadService, lead: _Lead) -> None:
+    """Decide and durably publish a refusal under the same idle claim lock."""
+    async with lead.lock:
+        watcher = lead.watcher
+        if not _open(service, lead) or service.live._manager is None or lead.phase != "idle":
+            return
+        if watcher is None or service.policy.wakes == 0:
+            return
+        watcher.sync()
+        if (
+            not watcher.pending
+            or watcher.deadline is None
+            or watcher.clock.now() < watcher.deadline
+        ):
+            return
+        reason = None
+        if lead.profile.provider == "meta" and service.live.brake_reason():
+            reason = "the spending brake is active."
+        elif lead.wakes >= service.policy.wakes:
+            reason = "the thread's wake limit was reached."
+        elif service.policy.limits.turns - lead.turns <= 1:
+            reason = "the last turn is reserved for the person."
+        if reason is not None:
+            if reason not in lead.refusals:
+                await service.live._finish(
+                    service._status(lead, "idle", f"Skipped a wake: {reason}")
+                )
+                lead.refusals.add(reason)
+            return
+        lead.phase = "working"
+        try:
+            await service.live._finish(service._status(lead, "working", None))
+        except Exception:
+            if _open(service, lead):
+                lead.phase = "idle"
+            raise
+        if not _open(service, lead):
+            return
+        notice = watcher.take()
+        assert notice is not None
+        lead.wakes += 1
+        service._launch(lead, notice=notice, woken_by=list(notice.triggers))
