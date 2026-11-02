@@ -46,7 +46,8 @@ export function NewParameterCalls({
                 </summary>
                 {entry.rows.length < entry.run_count && (
                   <p className="parameter-retained">
-                    {entry.rows.length} samples shown from {entry.run_count} calls run.
+                    {entry.rows.length} sample{entry.rows.length === 1 ? "" : "s"} shown from{" "}
+                    {calls(entry.run_count)} run.
                   </p>
                 )}
                 <ol>

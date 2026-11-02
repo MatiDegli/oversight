@@ -1129,6 +1129,9 @@ The graph stays visible and keeps positions.
    A matching existing node popover may echo "4 calls using cap_percent; see review." using its
    current candidate's event fields. Only the underlined, focusable "see review" button scrolls
    the matching section into view, then focuses its tabIndex=-1 target without a second scroll.
+   If that explicit action finds no mounted review, a persistent status region says "The review
+   for these calls is not open." It clears when the matching evidence mounts; arrival does not
+   navigate or move focus. The status region otherwise stays empty.
    Evidence arrival opens nothing and preserves focus, scroll and user-opened disclosures.
 6. **Decision bar:** pinned, divider above, padding 12px top, 24px sides, 10px bottom. Comment
    box 64px, radius 10px, "Comment for the agent"; buttons 10px below, gap 10px, 40px high,

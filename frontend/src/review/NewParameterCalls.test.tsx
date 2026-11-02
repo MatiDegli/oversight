@@ -114,6 +114,16 @@ it("singularizes one call and rejection and never exposes unknown limitations", 
   expect(html).toContain("Some calls were not measured.");
   expect(html).not.toMatch(/1 calls|internal_unknown_probe_reason/);
 });
+it("singularizes one retained sample from multiple calls", () => {
+  const first = parameterExtensions(parameterState("partial"), "change-1")[0];
+  if (!first) throw new Error("Missing extension");
+  const html = renderToStaticMarkup(
+    <NewParameterCalls
+      entries={[{ ...first, run_count: 5, rejected_before: 1, rows: first.rows.slice(0, 1) }]}
+    />,
+  );
+  expect(html).toContain("1 sample shown from 5 calls run.");
+});
 it("retains every entry and equal or unstable row, escaping event text", () => {
   const entries = parameterExtensions(parameterState("values"), "change-1");
   const first = entries[0];

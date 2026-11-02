@@ -114,8 +114,47 @@ function Count({ text }: { text: string }) {
   );
 }
 
-function Popover({ chip, id }: { chip: NodeChip; id: string }) {
+function ParameterEcho({ extension }: { extension: NonNullable<NodeChip["extension"]> }) {
   const [reviewClosed, setReviewClosed] = useState(false);
+  useEffect(() => {
+    if (!reviewClosed) return;
+    const observer = new MutationObserver(() => {
+      if (
+        document
+          .getElementById(extension.target)
+          ?.closest('.review-body [aria-label="New-parameter calls"]')
+      )
+        setReviewClosed(false);
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      observer.disconnect();
+    };
+  }, [reviewClosed, extension.target]);
+  return (
+    <p className="mt-2 wrap-anywhere text-muted">
+      {extension.run_count > 0
+        ? `${String(extension.run_count)} call${extension.run_count === 1 ? "" : "s"} using `
+        : "Calls using "}
+      <code>{extension.parameters.join(", ")}</code>;{" "}
+      <button
+        type="button"
+        className="inline-flex cursor-pointer items-center underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[1280px]:min-h-[44px]"
+        onClick={() => {
+          setReviewClosed(!visitParameterEvidence(extension.target));
+        }}
+      >
+        see review
+      </button>
+      .
+      <span role="status" className="block">
+        {reviewClosed ? "The review for these calls is not open." : ""}
+      </span>
+    </p>
+  );
+}
+
+function Popover({ chip, id }: { chip: NodeChip; id: string }) {
   return (
     <section
       id={id}
@@ -153,29 +192,7 @@ function Popover({ chip, id }: { chip: NodeChip; id: string }) {
           </li>
         ))}
       </ol>
-      {chip.extension && (
-        <p className="mt-2 wrap-anywhere text-muted">
-          {chip.extension.run_count > 0
-            ? `${String(chip.extension.run_count)} call${chip.extension.run_count === 1 ? "" : "s"} using `
-            : "Calls using "}
-          <code>{chip.extension.parameters.join(", ")}</code>;{" "}
-          <button
-            type="button"
-            className="inline-flex cursor-pointer items-center underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text max-[1280px]:min-h-[44px]"
-            onClick={() => {
-              if (chip.extension) setReviewClosed(!visitParameterEvidence(chip.extension.target));
-            }}
-          >
-            see review
-          </button>
-          .
-          {reviewClosed && (
-            <span role="status" className="block">
-              The review for these calls is not open.
-            </span>
-          )}
-        </p>
-      )}
+      {chip.extension && <ParameterEcho extension={chip.extension} />}
       {(chip.footer || chip.limitation) && (
         <footer className="mt-2 text-muted">
           {chip.footer && (

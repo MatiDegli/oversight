@@ -180,9 +180,12 @@ it("keeps focus, scroll, and user disclosures when evidence arrives and updates"
     const control = page.getByRole("textbox", { name: "Comment for the agent" });
     await control.focus();
     const before = await page.locator(".review-body").evaluate((el) => {
+      // Bound the fixture's viewport so this assertion exercises actual scrolling.
+      (el as HTMLElement).style.maxHeight = "240px";
       el.scrollTop = 80;
       return el.scrollTop;
     });
+    expect(before).toBeGreaterThan(0);
     await page.evaluate(() => {
       window.paramEvidence.update("rejected");
     });
@@ -225,6 +228,9 @@ it.each([390, 900, 1279])(
       await check(button).toBeFocused();
       await check(button).toHaveCSS("outline-style", "solid");
       await check(button).toHaveCSS("outline-width", "2px");
+      await button.press("Enter");
+      await check(section(page)).toBeFocused();
+      expect(await page.locator(".pp-main").evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
       await page.keyboard.press("Escape");
       await page.evaluate(() => {
         window.paramEvidence.neighbor();
@@ -260,12 +266,21 @@ it("reports a closed review when its explicit navigation has no mounted target",
     await check(section(page)).toHaveCount(0);
     await chip(page).click();
     const button = page.getByRole("button", { name: "see review", exact: true });
+    const status = page.locator('[data-chip-popover] [role="status"]');
+    await check(status).toHaveCount(1);
+    await check(status).toBeEmpty();
+    const statusNode = await status.elementHandle();
     await button.click();
-    await check(
-      page.getByRole("status").filter({ hasText: "The review for these calls is not open." }),
-    ).toBeVisible();
+    await check(status).toHaveText("The review for these calls is not open.");
     await check(button).toBeFocused();
     await check(section(page)).toHaveCount(0);
+    // Open the real review without an outside pointer closing the popover first.
+    await page.getByRole("button", { name: "Review change", exact: true }).evaluate((el) => {
+      if (el instanceof HTMLElement) el.click();
+    });
+    await check(section(page)).toHaveCount(1);
+    await check(status).toBeEmpty();
+    expect(await statusNode.evaluate((el) => el.isConnected)).toBe(true);
   });
 });
 
@@ -335,5 +350,21 @@ it("preserves a focused Details summary through relocation and refuses stale nav
     }, target);
     await check(section(page)).toHaveCount(0);
     await check(page.getByRole("button", { name: "see review", exact: true })).toHaveCount(0);
+  });
+});
+it("does not restore Details focus after the person clicks blank text", async () => {
+  await mounted(1280, "dark", "none", async (page) => {
+    const summary = page.locator(".review-details > details > summary");
+    await summary.click();
+    await check(summary).toBeFocused();
+    await page.locator(".review-agent-note > p").first().click();
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    await page.evaluate(() => {
+      window.paramEvidence.update("rejected");
+    });
+    await check(section(page)).toHaveCount(1);
+    await check(summary).not.toBeFocused();
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    await check(page.locator(".review-details > details")).toHaveAttribute("open", "");
   });
 });

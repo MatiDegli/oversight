@@ -50,9 +50,24 @@ export function ReviewBody({
           ? { element: target, index: nodes.indexOf(target) }
           : null;
     };
+    const blur = (event: FocusEvent) => {
+      const target = event.target;
+      // Chromium emits focusout before removeChild detaches a relocated summary.
+      // Check after that removal so only a blur from a still-mounted control clears it.
+      queueMicrotask(() => {
+        if (
+          target instanceof HTMLElement &&
+          target.isConnected &&
+          focusedDetail.current?.element === target
+        )
+          focusedDetail.current = null;
+      });
+    };
     element?.addEventListener("focusin", focus);
+    element?.addEventListener("focusout", blur);
     return () => {
       element?.removeEventListener("focusin", focus);
+      element?.removeEventListener("focusout", blur);
     };
   }, []);
   useLayoutEffect(() => {
