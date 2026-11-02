@@ -27,7 +27,14 @@ afterAll(async () => {
   await browser.close();
   await server.close();
 });
-async function open(name = "chat-start", width = 1920, theme = "dark", live = true, app = false) {
+async function open(
+  name = "chat-start",
+  width = 1920,
+  theme = "dark",
+  live = true,
+  app = false,
+  approved = false,
+) {
   const page = await browser.newPage({
     viewport: { width, height: width === 1920 ? 1080 : width === 390 ? 844 : 800 },
     reducedMotion: "reduce",
@@ -39,11 +46,11 @@ async function open(name = "chat-start", width = 1920, theme = "dark", live = tr
   await page.goto(url);
   await page.waitForFunction(() => !!window.chatLeadsTest);
   await page.evaluate(
-    ({ name, theme, live, app }) => {
+    ({ name, theme, live, app, approved }) => {
       document.documentElement.dataset.theme = theme;
-      window.chatLeadsTest.mount(name, live, app);
+      window.chatLeadsTest.mount(name, live, app, approved);
     },
-    { name, theme, live, app },
+    { name, theme, live, app, approved },
   );
   await page.evaluate(() => document.fonts.ready);
   return page;
@@ -333,6 +340,64 @@ it("sends no slot when both cards name the same profile", async () => {
   }
 });
 
+it.each([1920, 1280])(
+  "keeps the approved lead, member and direct row density at %s",
+  async (width) => {
+    const page = await open("leads-two", width, "day", true, false, true);
+    try {
+      await check(page.locator(".chat-agent-name")).toHaveText([
+        "Lead A",
+        "A·1",
+        "A·2",
+        "A·3",
+        "Lead B",
+        "Agent C",
+      ]);
+      await check(page.locator(".chat-agents > header")).toContainText("3 of 4 running");
+      await check(leadRow(page, "A")).toContainText("3 agents · 1 working, 1 needs you");
+      await check(leadRow(page, "B")).toContainText("1 plan needs you");
+      const sizes = await page.evaluate(() =>
+        [
+          ".chat-lead-row",
+          '.chat-agent-row[data-member="true"]',
+          '.chat-agent-row[data-member="false"]',
+        ].map((selector) => document.querySelector(selector)?.getBoundingClientRect().height),
+      );
+      for (const [i, target] of (width === 1920 ? [136, 107, 139] : [111, 62, 115]).entries()) {
+        expect(Math.abs((sizes[i] ?? 0) - target)).toBeLessThanOrEqual(4);
+      }
+      await leadRow(page, "B").click();
+      await check(page.getByRole("textbox", { name: "Message Lead B" })).toBeEditable();
+    } finally {
+      await page.close();
+    }
+  },
+);
+it.each([1920, 1280])(
+  "shows the first-task field, observed limits and selected draft at %s",
+  async (width) => {
+    const page = await open("lead-new", width, "dark", true, false, true);
+    try {
+      await startForm(page);
+      await check(page.locator(".chat-lead-draft")).toBeVisible();
+      await check(page.locator(".chat-lead-draft")).toHaveAttribute("data-selected", "true");
+      await check(page.getByRole("textbox", { name: "First task" })).toBeFocused();
+      const model = page.getByRole("combobox", { name: "Model" });
+      await check(model).toHaveValue("muse-spark");
+      await check(model.locator("option")).toHaveText([
+        "Muse Spark · low",
+        "Muse Spark Open · low",
+      ]);
+      await check(page.locator(".new-lead-limit-cards")).toContainText("2,000 characters a task");
+      const field = await page.locator(".new-lead-box textarea").boundingBox();
+      expect(field?.width).toBe(width === 1920 ? 734 : 630);
+      expect(field?.height).toBe(width === 1920 ? 112 : 76);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
 const shots = fileURLToPath(new URL("../../../.shots/chat-leads/", import.meta.url));
 const captureStates = ["chat-start", "task-direct", "leads-two", "lead-switch", "lead-new"];
 for (const name of captureStates)
@@ -341,9 +406,26 @@ for (const name of captureStates)
       it.skipIf(process.env.CHAT_LEADS_SHOTS !== "1")(
         `captures ${name}-${String(width)}-${theme}`,
         async () => {
-          const page = await open(name, width, theme);
+          const page = await open(name, width, theme, true, false, true);
           try {
-            if (name === "lead-new") await startForm(page);
+            if (name === "lead-new") {
+              await startForm(page);
+              await page
+                .getByRole("textbox", { name: "First task" })
+                .fill(
+                  "Give premium customers free shipping: change shipping_cost and cover it in tests/test_pricing.py.",
+                );
+              await page
+                .getByRole("heading", { name: "What should the new lead work on?" })
+                .click();
+            }
+            if (name === "task-direct") {
+              await check(page.getByRole("textbox", { name: "Message Agent C" })).toBeVisible();
+              await check(page.getByLabel("Agent C conversation", { exact: true })).toBeVisible();
+              await check(page.locator(".conversation-entries")).toContainText(
+                "Round prices to two decimals in Item.total",
+              );
+            }
             if (name === "leads-two" || name === "lead-switch")
               await check(
                 page.getByRole("textbox", {
@@ -359,7 +441,7 @@ for (const name of captureStates)
     }
 for (const theme of ["dark", "day"])
   it.skipIf(process.env.CHAT_LEADS_SHOTS !== "1")(`captures start-phone-390-${theme}`, async () => {
-    const page = await open("chat-start", 390, theme);
+    const page = await open("chat-start", 390, theme, true, false, true);
     try {
       await capture(page, "start-phone", 390, theme);
     } finally {
@@ -389,7 +471,14 @@ async function capture(page: Page, name: string, width: number, theme: string) {
         ".chat-merge-chip",
         ".chat-lead-option button",
         ".chat-lead-row",
-        ".chat-agent-row:not(.chat-lead-row)",
+        '.chat-agent-row[data-member="false"]',
+        '.chat-agent-row[data-member="true"]',
+        ".chat-empty h1",
+        ".chat-start-explanation",
+        ".chat-lead-option",
+        ".new-lead-box",
+        ".new-lead-box textarea",
+        ".new-lead-limits",
         ".conversation-entries",
         ".conversation-header h2",
         ".shell-top-bar",
@@ -418,7 +507,7 @@ async function capture(page: Page, name: string, width: number, theme: string) {
     `${shots}events-${name}.json`,
     JSON.stringify(
       await page.evaluate(
-        (name) => window.chatLeadsTest.prefix(name === "start-phone" ? "chat-start" : name),
+        (name) => window.chatLeadsTest.prefix(name === "start-phone" ? "chat-start" : name, true),
         name,
       ),
     ),
