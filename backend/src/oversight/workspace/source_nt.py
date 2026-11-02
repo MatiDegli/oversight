@@ -920,7 +920,12 @@ def guard_previous(runtime: Path, *, recover: bool = False) -> bool:
                 StagedSource.cleanup_owned(owned)
         return True
     except (OSError, IntegrityError, ValueError) as exc:
-        if str(exc).startswith("Windows source refused: main "):
+        if str(exc).startswith(
+            (
+                "Windows source refused: main ",
+                "Windows source refused: ambiguous interrupted reset; preserve runtime",
+            )
+        ):
             raise
         raise refuse(
             f"unsafe, missing or corrupt reset state/ref; preserve {ps_quote(runtime)} "

@@ -541,7 +541,11 @@ class Workspace:
         if _nt_stage is not None:
             if not self.nt_source_bytes:
                 raise WorkspaceError("staged NT source needs the byte policy")
-            await offload(partial(verify_stage, _nt_stage, self._root, time.monotonic() + 10))
+            try:
+                await offload(partial(verify_stage, _nt_stage, self._root, time.monotonic() + 10))
+            except BaseException:
+                await offload(_nt_stage.cleanup)
+                raise
         if sys.platform == "win32":
             await offload(partial(executable, "git"))
             await offload(partial(executable, "uv"))
@@ -549,10 +553,11 @@ class Workspace:
             async with self._locks.acquire(main=True):
                 if protected:
                     await offload(partial(guard_previous, self._root))
+                if _nt_stage is not None and time.monotonic() > _nt_stage.deadline:
+                    await offload(_nt_stage.cleanup)
+                    raise OSError("Windows source refused: COPY phase deadline exceeded")
                 if protected or _nt_stage is not None:
                     await offload(partial(begin_reset, self._root, _nt_stage))
-                if _nt_stage is not None and time.monotonic() > _nt_stage.deadline:
-                    raise OSError("Windows source refused: COPY phase deadline exceeded")
                 for name in ("worktrees", "workspace", "tmp"):
                     await offload(partial(remove_tree, self._root, self._root / name))
                 if _nt_stage is None:

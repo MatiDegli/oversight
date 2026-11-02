@@ -73,6 +73,17 @@ async def restart(workspace: Workspace, source: nt.NtSource, *, own: bool = Fals
     return new
 
 
+async def clone_baseline(source: nt.NtSource, target: Path, files: dict[str, bytes]) -> None:
+    await git(target.parent, "clone", "-q", "--no-hardlinks", str(source.root), str(target))
+    (target / "gone.py").unlink()
+    for name, data in files.items():
+        (target / name).write_bytes(data)
+    assert await git(target, "rev-parse", "HEAD") == await git(source.root, "rev-parse", "HEAD")
+    assert await git(target, "show", "HEAD:a.py") == "x=1"
+    assert (target / "a.py").read_bytes() == b"dirty\r\n"
+    assert not await git(target, "ls-files", "new.py")
+
+
 async def test_manifest_reset_index_agent_and_export(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -94,6 +105,9 @@ async def test_manifest_reset_index_agent_and_export(
             assert calls[0][-1] == "--pathspec-file-nul"
             patch.undo()
             initial = await workspace.main.head()
+            imported = dict(files)
+            target = tmp_path / "baseline-clone"
+            await clone_baseline(source, target, imported)
             assert nt.guard_previous(source.runtime)
             agent = await workspace.create_worktree("agent-1")
             for name, data in files.items():
@@ -108,11 +122,12 @@ async def test_manifest_reset_index_agent_and_export(
             (workspace.main.root / "new.py").unlink()
             files.pop("new.py")
             files |= {
+                "a.py": b"changed dirty baseline\r\n",
                 "data.bin": b"\x00\xfe\r\n",
                 "added.txt": b"added\r\n",
                 "nested/code.py": b"value = 2\r\n",
             }
-            for name in ("data.bin", "added.txt", "nested/code.py"):
+            for name in ("a.py", "data.bin", "added.txt", "nested/code.py"):
                 (workspace.main.root / name).write_bytes(files[name])
             await git(workspace.main.root, "add", "-A")
             await git(workspace.main.root, "commit", "-qm", "Runtime delta")
@@ -139,14 +154,15 @@ async def test_manifest_reset_index_agent_and_export(
                 initial,
                 "main",
             )
-            # This source still has its imported dirty and untracked baseline bytes.
-            before = (source.root / "data.bin").read_bytes()
-            await git(source.root, "apply", "--check", str(patch_file))
-            assert (source.root / "data.bin").read_bytes() == before
-            await git(source.root, "apply", str(patch_file))
+            assert b"diff --git a/a.py b/a.py" in await offload(patch_file.read_bytes)
+            # Apply only to the clone with the imported dirty/untracked working bytes.
+            await git(target, "apply", "--check", str(patch_file))
+            assert {name: (target / name).read_bytes() for name in imported} == imported
+            await git(target, "apply", str(patch_file))
             for name, data in files.items():
-                assert (source.root / name).read_bytes() == data
-            assert not (source.root / "new.py").exists()
+                assert (target / name).read_bytes() == data
+            assert not (target / "new.py").exists()
+            assert {name: (source.root / name).read_bytes() for name in imported} == imported
             assert (workspace.main.root / "uncommitted").exists()
             assert nt.main_ref(source.runtime, time.monotonic() + 10) == current
 
@@ -277,12 +293,62 @@ async def test_interrupted_reset(
             if phase == "before":
                 assert nt.main_ref(source.runtime, time.monotonic() + 10)
             if phase == "committed":
-                with pytest.raises(OSError, match="preserve"):
+                with pytest.raises(
+                    OSError,
+                    match="Windows source refused: ambiguous interrupted reset; preserve runtime",
+                ):
                     nt.guard_previous(source.runtime, recover=True)
             else:
                 assert nt.guard_previous(source.runtime, recover=True)
                 assert not staged.root.exists()
                 await new.reset(_nt_stage=await stage(source, new._lock_fd))
                 assert nt.guard_previous(source.runtime)
+        finally:
+            new.release_runtime()
+
+
+@pytest.mark.parametrize("fault", ["bytes", "manifest", "deadline"])
+async def test_stage_refusal_cleans_before_journaling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
+) -> None:
+    async with opened(tmp_path) as (workspace, source, _):
+        new = await restart(workspace, source, own=True)
+        try:
+            assert new._lock_fd is not None
+            staged = await stage(source, new._lock_fd)
+            before = {
+                name: (source.runtime / name).read_bytes() for name in ("own-source", "own-runtime")
+            }
+            sibling = source.runtime / "source-stage-unowned"
+            sibling.mkdir()
+            (sibling / "keep").write_bytes(b"unowned")
+            reason = "staging bytes changed" if fault == "bytes" else "staging manifest changed"
+            if fault == "deadline":
+                verify = nt.verify_stage
+
+                def expire_after_verification(*args):
+                    verify(*args)
+                    staged.deadline = 0
+
+                monkeypatch.setattr(core, "verify_stage", expire_after_verification)
+                reason = "COPY phase deadline exceeded"
+            else:
+                path = staged.tree / "a.py" if fault == "bytes" else staged.manifest
+                path.write_bytes(b"tampered")
+            spawn = AsyncMock(side_effect=AssertionError("runtime Git before refusal"))
+            deletion = AsyncMock(side_effect=AssertionError("deletion before refusal"))
+            monkeypatch.setattr(core, "run_process", spawn)
+            monkeypatch.setattr(core, "remove_tree", deletion)
+            with pytest.raises(OSError, match=reason):
+                await new.reset(_nt_stage=staged)
+            spawn.assert_not_awaited()
+            deletion.assert_not_called()
+            assert not new._reset_done
+            assert not (source.runtime / "own-reset").exists()
+            assert before == {name: (source.runtime / name).read_bytes() for name in before}
+            assert not staged.root.exists()
+            assert (workspace.main.root / "a.py").read_bytes() == b"dirty\r\n"
+            assert (sibling / "keep").read_bytes() == b"unowned"
+            assert nt.guard_previous(source.runtime)
         finally:
             new.release_runtime()
