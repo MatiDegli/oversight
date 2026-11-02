@@ -3,17 +3,20 @@ import type { RefObject } from "react";
 
 import type { BoxSource } from "./boxSource";
 import type { FieldController, FieldHost, FieldInput } from "./controller";
+import { loadFieldController } from "./controllerLoader";
 
 let createController: typeof import("./controller").createFieldController | undefined;
 let preparation: Promise<void> | undefined;
 
 /** The stage awaits optional code before mounting; standalone fields handle failure too. */
 export function prepareDotField(): Promise<void> {
-  return (preparation ??= import("./controller")
+  return (preparation ??= loadFieldController()
     .then((module) => {
       createController = module.createFieldController;
     })
-    .catch(() => undefined));
+    .catch(() => {
+      preparation = undefined;
+    }));
 }
 
 export interface DotFieldProps extends FieldInput {
