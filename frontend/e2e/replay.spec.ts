@@ -231,7 +231,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
     await expect(newAgent).not.toContainText(/recorded run/i);
   });
 
-  const card = page.getByRole("article", { name: `Agent ${slot}` });
+  const card = page.locator(`[data-agent-card="${payloads("agent.status")[0]?.agent_id ?? ""}"]`);
   const stepList = card.getByRole("list", { name: /steps, newest first/ });
   await test.step("the agent's card shows its status and steps", async () => {
     const first = steps[0];
@@ -252,7 +252,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
           .map(([name, ids]) => `${name}:${ids.join(",")}`),
       );
     await expect.poll(lit).toEqual(lighting);
-    expect(await nodeIds(page, `node.focus-${slot}-edit`)).toEqual([changedNode]);
+    expect(await nodeIds(page, `node.focus-edit[paint = "${slot}"]`)).toEqual([changedNode]);
     // The canvas drew it: around every lit node there is agent A's token color, and none of B's.
     // (Read lights are the only color on the graph while they last; a node's class alone is not.)
     const painted = async () => {

@@ -1,3 +1,5 @@
+import { mark } from "./marks.testSupport";
+import { combineMarks } from "./agentMarks";
 import { expect, it } from "vitest";
 import type { GraphSnapshot, ImpactCone } from "@contracts";
 import { createChange, createInitialState } from "../state";
@@ -18,7 +20,12 @@ function fixture() {
     {
       group: "nodes",
       classes: i ? "function focus-B-read" : "function pending-F focus-C-edit pending-A",
-      data: { id: `${id}:f`, kind: "function", parent: id },
+      data: {
+        id: `${id}:f`,
+        kind: "function",
+        parent: id,
+        marks: combineMarks(i ? [mark("B", "read")] : [mark("F"), mark("C", "editing"), mark("A")]),
+      },
       position: { x: i * 500, y: 100 },
     },
   ]);
@@ -36,8 +43,8 @@ function fixture() {
 it("collects pending, read and edit rings once each in slot order", () => {
   const { state, elements, model } = fixture();
   mapEvidence(model, elements, state);
-  expect(model.groups[0]?.rings).toEqual(["A", "B", "C", "F"]);
-  expect(model.groups[1]?.rings).toEqual(["B"]);
+  expect(model.groups[0]?.rings?.map((r) => r.letter)).toEqual(["A", "B", "C", "F"]);
+  expect(model.groups[1]?.rings?.map((r) => r.letter)).toEqual(["B"]);
 });
 it("counts ready and conflict changes once per group, including added and removed nodes", () => {
   const { state, elements, model } = fixture();

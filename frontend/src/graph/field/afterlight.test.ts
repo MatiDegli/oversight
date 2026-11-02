@@ -8,7 +8,9 @@ const look = afterlightOf(themes.dark);
 const arrival = look.delay + look.travel;
 const merge = (key: string, age = 0): FieldMerge => ({
   key,
-  slot: "A",
+  agentId: "agent-A",
+  team: "team-A",
+  label: "A",
   source: "agent-a",
   id: "shop.pricing:compute_price",
   pulse: true,
@@ -17,6 +19,9 @@ const merge = (key: string, age = 0): FieldMerge => ({
 /** The light a change had on its node just before its decision: working, or waiting. */
 const had = (weight: number, id = "shop.pricing:compute_price"): FieldLight => ({
   id,
+  agentId: "agent-A",
+  team: "team-A",
+  label: "A",
   source: "agent-a",
   weight,
   pulses: false,

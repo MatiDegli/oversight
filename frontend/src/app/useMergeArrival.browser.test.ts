@@ -83,7 +83,7 @@ it("returns Merging and holds the pending mark in the first render receiving a m
     expect(first?.label).toBe("Merging");
     expect(first?.merging).toEqual(["change-1"]);
     expect(first?.word).toBe("changed");
-    expect(first?.classes).toContain("pending-A");
+    expect(first?.classes).toContain("pending");
   } finally {
     await page.close();
   }

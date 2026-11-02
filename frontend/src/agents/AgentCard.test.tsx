@@ -133,7 +133,7 @@ describe("AgentCard over the level 1 fixture", () => {
     expect(lamp(render(through(20)))).not.toContain("bg-card");
   });
 
-  it("renders an error step and the halted reason, and identifies slot B in words and color", () => {
+  it("renders an error step and the halted reason, and keeps team identity after a capacity slot changes", () => {
     let state = through(10);
     const previous = state.steps["agent-1"]?.[1];
     const agent = state.agents["agent-1"];
@@ -155,8 +155,8 @@ describe("AgentCard over the level 1 fixture", () => {
     expect(html).toContain("Step limit reached");
     expect(html).toContain("Error: File changed; read it again");
     expect(html).toContain("text-failed-text");
-    expect(html).toContain('aria-label="Agent B"');
-    expect(html).toContain("text-agent-b-text");
+    expect(html).toContain('aria-label="Agent A"');
+    expect(html).toContain("text-agent-a-text");
     expect(html).not.toContain("Ready for review");
   });
 
@@ -246,13 +246,14 @@ describe("AgentCard over the level 1 fixture", () => {
     );
   });
 
-  it("offers Review change in the agent's color only when the change is ready and can be opened", () => {
+  it("offers a neutral Review change only when the change is ready and can be opened", () => {
     expect(render(through(20))).not.toContain("Review change");
     const ready = render(through(20), () => undefined);
     const button = /<button [^>]*>.*?<\/button>/s.exec(ready)?.[0] ?? "";
     expect(button).toContain("Review change");
-    expect(button).toContain("bg-agent-a");
-    expect(button).toContain("text-on-agent");
+    expect(button).toContain("text-text");
+    expect(button).not.toContain("bg-agent-a");
+    expect(button).not.toContain("text-on-agent");
     expect(button).toContain("lucide-eye");
     expect(render(through(19), () => undefined)).not.toContain("Review change");
   });

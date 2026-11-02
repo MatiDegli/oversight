@@ -391,7 +391,7 @@ it(
         )?.oversightGraph;
         return {
           representative: probe?.representative("shop.cart:Cart.add"),
-          read: probe?.nodeCenters(".class.focus-A-read").map((n) => n.id),
+          read: probe?.nodeCenters(".class.focus-read").map((n) => n.id),
           methods: probe?.nodeCenters(".method").length,
         };
       });

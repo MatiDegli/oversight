@@ -1,3 +1,4 @@
+import { selectPresentation } from "../teams/presentation";
 import { expect, it } from "vitest";
 import type { AgentStatus, ServerEvent } from "@contracts";
 import { applyEvent, createInitialState } from "../state";
@@ -19,28 +20,21 @@ import { chatAgentCount, selectChatAgents } from "./chatAgentSelectors";
 
 const letters = (events: ServerEvent[]) =>
   selectChatAgents(fold(events)).map((r) => [r.id, r.letter]);
-it("joins plans by lead, highest revision and explicit origin, with stable member order", () => {
-  const events = [
+it("consumes the shared team selector, ignoring status.started_by and slot paint", () => {
+  const state = fold([
     ...seed,
-    plan("p", "lead", 3),
-    plan("p", "obsolete", 1),
-    plan("q", "lead"),
-    status("two", { plan_id: "p" }),
+    plan("p", "lead"),
+    status("two", { plan_id: "p", slot: "F" }),
     status("solo"),
-    status("one", { plan_id: "q", slot: "B" }),
-    status("explicit", { plan_id: "p", started_by: "other" }),
-    status("person", { plan_id: "person-plan" }),
-    status("two", { state: "paused" }),
-    plan("p", "obsolete", 2),
-  ];
-  expect(letters(events)).toEqual([
-    ["two", "A·1"],
-    ["one", "A·2"],
-    ["solo", "B"],
-    ["explicit", "C·1"],
-    ["person", "D·1"],
+    status("explicit", { plan_id: "p", started_by: "other", slot: "C" }),
   ]);
-  const state = fold(events);
+  const presentation = selectPresentation(state).byAgent;
+  for (const row of selectChatAgents(state)) {
+    expect(row.letter).toBe(presentation[row.id]?.label);
+    expect(row.hue).toBe(presentation[row.id]?.hue);
+  }
+  expect(presentation.two?.team).toBe("lead");
+  expect(presentation.explicit?.team).toBe("lead");
   expect(
     selectChatAgents({
       ...state,
@@ -48,16 +42,18 @@ it("joins plans by lead, highest revision and explicit origin, with stable membe
     }),
   ).toEqual(selectChatAgents(state));
 });
-it("reuses the longest-idle hue, preserves ended identities and ignores physical slots", () => {
+it("keeps letters beyond six independent of shared hues and capacity reuse", () => {
   const events = [
     ...seed,
     ...Array.from({ length: 6 }, (_, i) => status(`a${String(i)}`)),
-    resolved("a1"),
-    resolved("a0"),
+    { ...resolved("a1"), ts: "2026-11-01T18:53:00Z" },
+    { ...resolved("a0"), ts: "2026-11-01T18:54:00Z" },
     status("new"),
     status("next"),
   ];
-  expect(letters(events).map((r) => r[1])).toEqual(["A", "B", "C", "D", "E", "F", "B", "A"]);
+  const rows = selectChatAgents(fold(events));
+  expect(rows.map((row) => row.letter)).toEqual(["A", "B", "C", "D", "E", "F", "G", "H"]);
+  expect(rows.slice(-2).map((row) => row.hue)).toEqual(["B", "B"]);
   expect(
     letters([
       ...seed,
@@ -192,7 +188,23 @@ it("keeps member numbers after plan agents finish and a physical slot is reused"
   expect(
     letters([
       ...seed,
-      plan("p"),
+      event("plan.updated", {
+        plan_id: "p",
+        revision: 1,
+        started_by: null,
+        task: "Two tasks",
+        graph_version: "fixture",
+        state: "running",
+        detail: null,
+        queued_task_id: null,
+        subtasks: ["first", "second"].map((agent_id) => ({
+          agent_id,
+          task: "Subtask",
+          zone: { node_ids: [], paths: [] },
+          depends_on: [],
+          state: "running",
+        })),
+      }),
       status("first", { plan_id: "p" }),
       resolved("first"),
       status("second", { plan_id: "p" }),

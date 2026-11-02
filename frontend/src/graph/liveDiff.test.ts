@@ -19,11 +19,11 @@ it("keeps a live read's look at full opacity beside the cone while review suppre
   const live = graphElements(state, false, new Set([id]), null, true).find(
     (element) => element.data.id === id,
   );
-  expect(live?.classes).toContain("focus-A-read");
+  expect(live?.classes).toContain("focus-read");
   expect(live?.classes).not.toContain("dimmed");
   expect(live?.data.marks?.word).toBe("read");
   const review = graphElements(state, false, new Set([id])).find(
     (element) => element.data.id === id,
   );
-  expect(review?.classes).not.toContain("focus-A-read");
+  expect(review?.classes).not.toContain("focus-read");
 });

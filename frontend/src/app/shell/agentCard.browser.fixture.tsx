@@ -21,6 +21,14 @@ state = {
     "agent-2": { ...a, agent_id: "agent-2", slot: "B", change_id: "change-2" },
   },
 };
+const second = state.agents["agent-2"];
+if (!second) throw new Error("Missing second card");
+state = applyEvent(state, {
+  type: "agent.status",
+  seq: state.lastSeq + 1,
+  ts: state.clock ?? events[0]?.ts ?? "",
+  payload: second,
+});
 const host = document.createElement("div");
 host.style.height = "100vh";
 document.body.replaceChildren(host);
@@ -86,7 +94,9 @@ export const readyTest = {
     render();
   },
   ready() {
-    state = events.filter((event) => event.seq > 18 && event.seq <= 20).reduce(applyEvent, state);
+    state = events
+      .filter((event) => event.seq > 18 && event.seq <= 20)
+      .reduce((next, event) => applyEvent(next, { ...event, seq: next.lastSeq + 1 }), state);
     render();
   },
 };

@@ -44,20 +44,18 @@ async function clickChangedNode(page: Page, panel: string): Promise<string> {
     const host = document.querySelector<GraphProbeHost>(selector);
     const node = host?.oversightGraph?.nodeCenters("node.pending")[0];
     if (!host || !node) return null;
-    const slot = ["A", "B"].find((slot) =>
-      host.oversightGraph?.nodeBounds(`node.pending-${slot}`).some((bound) => bound.id === node.id),
-    );
-    if (!slot) return null;
+    const agentId = node.agents?.find((agent) => agent.pending)?.agentId;
+    if (!agentId) return null;
     const box = host.getBoundingClientRect();
-    return { id: node.id, x: box.left + node.x, y: box.top + node.y, slot };
+    return { id: node.id, x: box.left + node.x, y: box.top + node.y, agentId };
   }, graph);
-  const { id, x, y, slot } = (await handle.jsonValue()) as {
+  const { id, x, y, agentId } = (await handle.jsonValue()) as {
     id: string;
     x: number;
     y: number;
-    slot: string;
+    agentId: string;
   };
-  const pending = `node.pending-${slot}`;
+  const pending = `node.pending[pendingAgents *= "|${agentId}|"]`;
   await page.mouse.click(x, y);
   await page.locator(`[aria-label="${panel}"] .line-insert`).first().waitFor();
   await page.waitForFunction((selector) => {
@@ -351,8 +349,8 @@ export const scenes: readonly Scene[] = [
       await page
         .getByLabel("Task for the new agent")
         .fill("Add a second task with Muse Spark Open");
-      const a = page.getByRole("button", { name: "A Muse Spark", exact: true });
-      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      const a = page.getByRole("button", { name: /(?:^| )Muse Spark$/ });
+      const b = page.getByRole("button", { name: /(?:^| )Muse Spark Open$/ });
       assert.equal(await a.getAttribute("aria-disabled"), "false");
       assert.equal(await b.getAttribute("aria-pressed"), "true");
     },

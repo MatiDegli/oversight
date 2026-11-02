@@ -181,9 +181,9 @@ describe("graph mapping", () => {
   });
 
   it.each(["A", "B"] as const)("prioritizes %s editing over the other agent reading", (slot) => {
-    const other = slot === "A" ? "B" : "A";
     const target = render(initial()).getElementById("billing:fee");
-    target.classes(`function focus-${slot}-edit focus-${other}-read focus-both`);
+    target.data("paint", slot);
+    target.classes("function focus-edit focus-read");
     expect(target.style("border-color")).toBe(rgb(theme[agents[slot]]));
     expect(Number(target.style("background-opacity"))).toBe(theme[`${agents[slot]}-node`].alpha);
     expect(target.style("background-color")).toBe(rgb(theme[`${agents[slot]}-node`].color));

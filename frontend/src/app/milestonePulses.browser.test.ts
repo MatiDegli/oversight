@@ -31,13 +31,10 @@ window.milestones = {
     for (const [i, slot] of ['B', 'C', 'D', 'E'].entries()) {
       const id = 'crowd-' + slot;
       const original = state.changes['change-1'];
-      state = { ...state, agents: { ...state.agents, [id]: { ...state.agents['agent-1'], agent_id: id, slot, change_id: id } },
-        changes: { ...state.changes, [id]: { ...original, change_id: id, agent_id: id, resolution: null,
-          graph: { ...original.graph, nodes_modified: ['crowd-node-' + slot] } } },
-        decisionEvents: [...state.decisionEvents, { seq: 30 + i, ts: state.clock, type: 'error', payload: {
-          source: 'git', agent_id: id, change_id: id, fatal: false,
-          message: 'Needs you — revision=1; head=abc; code=main_moved; reason=Main moved'
-        }}] };
+      state = applyEvent(state, {type: 'agent.status', seq: state.lastSeq + 1, ts: state.clock, payload: {...state.agents['agent-1'], agent_id: id, change_id: id, slot, state: 'done'}});
+      state = {...state, changes: {...state.changes, [id]: {...original, change_id: id, agent_id: id, status: 'ready_for_review', resolution: null, graph: {...original.graph, nodes_modified: ['crowd-node-' + slot]}}}};
+      state = applyEvent(state, {seq: state.lastSeq + 1, ts: state.clock, type: 'error', payload: {source: 'git', agent_id: id, change_id: id, fatal: false, message: 'Needs you — revision=1; head=abc; code=main_moved; reason=Main moved'}});
+
     }
     show();
   },

@@ -1,3 +1,4 @@
+import { mark } from "./marks.testSupport";
 import type { ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 import log from "../../../fixtures/events/handwritten-measured-cone.jsonl?raw";
@@ -149,8 +150,8 @@ it.each(["class", "module"])("keeps agent marks over measured words on a folded 
             ...e.data,
             marks: {
               word: "changed" as const,
-              slot: "A" as const,
-              badges: [{ slot: "A" as const, filled: true }],
+              owner: mark("A", "read"),
+              badges: [mark("A")],
             },
           },
         }

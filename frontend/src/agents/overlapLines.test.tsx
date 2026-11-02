@@ -1,3 +1,4 @@
+import { presentationFor } from "../teams/presentation";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 // eslint-disable-next-line no-restricted-imports -- Shared test fixture, never a product dependency.
@@ -12,7 +13,12 @@ it.each([
 ] as const)("uses the specified words and full title for %s names", (count, short, full) => {
   const data = required(selectAgentCard(readMoment(), "agent-2"));
   const nodes = ["x", "y", "z", "w"].slice(0, count).map((name) => ({ id: name, name }));
-  const entry = { agentId: "agent-1", slot: "A" as const, nodes };
+  const entry = {
+    agentId: "agent-1",
+    slot: "A" as const,
+    presentation: presentationFor(readMoment(), "agent-1"),
+    nodes,
+  };
   data.overlap = { sharedEdits: [entry], readOfOthers: [entry] };
   for (const state of ["working", "ready_for_review"] as const) {
     const html = renderToStaticMarkup(

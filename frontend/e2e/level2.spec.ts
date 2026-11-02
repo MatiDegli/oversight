@@ -106,7 +106,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await engaged(page, holds.live);
     for (const slot of ["A", "B"]) {
       const edited = slot === "A" ? proposal.graph.nodes_modified : bProposal.graph.nodes_modified;
-      expect(await nodeIds(page, `node.focus-${slot}-edit`)).toEqual(edited.toSorted());
+      expect(await nodeIds(page, `node.focus-edit[paint = "${slot}"]`)).toEqual(edited.toSorted());
       // Canvas pixels, not just classes: each edited/read node was painted in its agent's hue.
       await expect
         .poll(async () => {
@@ -177,8 +177,10 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     expect((await appearance(page, "edge.possible")).every((e) => e.lineStyle === "solid")).toBe(
       true,
     );
-    expect((await appearance(page, "node.pending-A"))[0]?.borderColor).not.toBe(
-      (await appearance(page, "node.pending-B"))[0]?.borderColor,
+    expect(
+      (await appearance(page, "node.pending[pendingAgents *= '|agent-1|']"))[0]?.borderColor,
+    ).not.toBe(
+      (await appearance(page, "node.pending[pendingAgents *= '|agent-2|']"))[0]?.borderColor,
     );
     await expect(page.getByRole("status", { name: "Review queue" })).toContainText("Decisions · 2");
     await expect(review).toHaveCount(0);
@@ -406,7 +408,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
       .poll(() => sent.at(-1))
       .toEqual({ path: `/agents/${b.agent_id}/stop`, method: "POST", body: null });
     await expect(cardB.getByText("Stopping: waiting for the discarded change.")).toBeVisible();
-    expect(await nodeIds(page, "node.pending-B")).toEqual(
+    expect(await nodeIds(page, "node.pending[pendingAgents *= '|agent-2|']")).toEqual(
       bProposal.graph.nodes_modified.toSorted(),
     );
     await release(page, holds.stop);
@@ -415,8 +417,8 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect(cardB.getByRole("button", { name: "Stop and discard", exact: true })).toHaveCount(
       0,
     );
-    expect(await nodeIds(page, "node.pending-B")).toEqual([]);
-    expect(await nodeIds(page, "node.pending-A")).not.toEqual([]);
+    expect(await nodeIds(page, "node.pending[pendingAgents *= '|agent-2|']")).toEqual([]);
+    expect(await nodeIds(page, "node.pending[pendingAgents *= '|agent-1|']")).not.toEqual([]);
     await cardA.getByRole("button", { name: "Review change" }).click();
     await expect(editable).toHaveAttribute("data-state", "clean");
     await expect(approve).toBeEnabled();

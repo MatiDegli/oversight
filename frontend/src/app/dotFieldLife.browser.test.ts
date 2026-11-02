@@ -171,7 +171,9 @@ it("sends a merge's pulse along the graph to its node, then lights it and fades 
     const start = await page.evaluate(() => {
       const { field } = window.fieldTest.elements();
       const origin = field.getBoundingClientRect();
-      const card = document.querySelector('[data-agent-origin="A"][data-slot="A"]');
+      const card = document.querySelector(
+        '[data-agent-origin="agent-1"][data-agent-card="agent-1"]',
+      );
       if (!card) throw new Error("No open agent A card");
       const rect = card.getBoundingClientRect();
       // Watch keeps the original graph-box clamp, even when the card is outside the canvas.

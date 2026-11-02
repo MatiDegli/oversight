@@ -61,7 +61,7 @@ it("opens colored agent tabs beside the persistent graph and folds cards into th
     const graph = await page.locator('[aria-label="Repository graph"]').elementHandle();
     await conversation(page);
     await check(tabA(page)).toHaveAttribute("aria-selected", "true");
-    await check(page.locator('.focus-tab[data-slot="A"]')).toBeVisible();
+    await check(page.locator('.focus-tab[data-agent-id="agent-1"]')).toBeVisible();
     await check(page.locator(".agents-expanded")).toHaveCount(0);
     await check(page.getByRole("complementary", { name: "Agents", exact: true })).toBeVisible();
     expect(

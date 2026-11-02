@@ -116,7 +116,7 @@ it("renders live counts, named failure icons and Mono data without moving focus 
     await check(panel).toContainText("Approved · merged · change-1");
     await check(panel).toContainText("Error · tools");
     await check(panel).toContainText("No time");
-    await check(panel.locator('.dock-letter[data-slot="A"]')).toHaveCount(3);
+    await check(panel.locator('.dock-letter[data-agent-label="A"]')).toHaveCount(3);
   });
 });
 

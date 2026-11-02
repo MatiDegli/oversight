@@ -57,7 +57,7 @@ function Harness() {
           className="pp-main"
           style={{ overflowY: "auto", overflowAnchor: "none", flex: 1, minHeight: 0 }}
         >
-          <PhoneReview state={state} changeId="change-1" slot="A" title={proposal?.task ?? ""} />
+          <PhoneReview state={state} changeId="change-1" title={proposal?.task ?? ""} />
         </div>
         <footer className="pp-dock">
           {approvalLocked(state.changeFacts["change-1"]?.at(-1)?.review_cards ?? [], answers) && (

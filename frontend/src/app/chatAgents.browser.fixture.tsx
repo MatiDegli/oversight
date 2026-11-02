@@ -7,7 +7,7 @@ import { stateStore } from "../state";
 import { Frame } from "./Frame";
 import { InitialShellLayout } from "./shell/useShell";
 import { conversationTab, tabbedView, viewReducer } from "./view";
-import { fold, scenario, status, required } from "./chatAgents.fixture";
+import { fold, scenario, status, required, event } from "./chatAgents.fixture";
 
 let root: Root | undefined;
 const calls: { id: string; text: string }[] = [];
@@ -82,14 +82,31 @@ export const chatAgentsTest = {
     });
   },
   longTeam() {
-    this.deliver(
-      Array.from({ length: 12 }, (_, i) =>
+    this.deliver([
+      event("plan.updated", {
+        plan_id: "long-team",
+        revision: 1,
+        task: "Twelve sequential subtasks",
+        graph_version: "fixture",
+        state: "running",
+        started_by: null,
+        detail: null,
+        queued_task_id: null,
+        subtasks: Array.from({ length: 12 }, (_, i) => ({
+          task: "Subtask",
+          agent_id: `member-${String(i)}`,
+          zone: { node_ids: [], paths: [] },
+          depends_on: [],
+          state: "running",
+        })),
+      }),
+      ...Array.from({ length: 12 }, (_, i) =>
         status(`member-${String(i)}`, {
           plan_id: "long-team",
           state: i === 11 ? "ready_for_review" : "working",
         }),
       ),
-    );
+    ]);
   },
   calls: () => calls,
 };

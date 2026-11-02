@@ -110,7 +110,7 @@ describe("review's impact graph", () => {
       expect(svg).not.toContain(theme["agent-a"]);
     }
     const seed = cy.getElementById(changed);
-    expect(seed.hasClass("pending-A")).toBe(true);
+    expect(seed.hasClass("pending")).toBe(true);
     expect(seed.hasClass("cone")).toBe(false);
     expect(seed.data("distance")).toBeUndefined();
     expect(seed.style("border-style")).toBe("dashed");
@@ -196,11 +196,11 @@ describe("review's impact graph", () => {
       },
     };
     const watch = graphElements(focused);
-    expect(watch.find((node) => node.data.id === caller)?.classes).toContain("focus-A-read");
+    expect(watch.find((node) => node.data.id === caller)?.classes).toContain("focus-read");
     const review = graphElements(focused, false, lit, cone);
     for (const id of [caller, unrelated]) {
       const node = review.find((node) => node.data.id === id);
-      expect(node?.classes).not.toContain("focus-A-read");
+      expect(node?.classes).not.toContain("focus-read");
       expect(node?.data.label).not.toContain("A read");
       expect(node?.classes.includes("dimmed")).toBe(id === unrelated);
     }

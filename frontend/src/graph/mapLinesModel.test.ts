@@ -1,3 +1,4 @@
+import { mark } from "./marks.testSupport";
 import { expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
@@ -315,7 +316,7 @@ it("badges exclude seeds and agent marks and hiding text retains circle centers"
   const before = moduleLayout(m, frame.model, 1, frame.pan);
   m.inCone = false;
   expect(moduleLayout(m, frame.model, 1, frame.pan)).toEqual(before);
-  m.agents = [{ slot: "A", text: "Agent A · 1 changed" }];
+  m.agents = [{ ...mark("A"), text: "Agent A · 1 changed" }];
   expect(distanceBadge(m)).toBeUndefined();
 });
 it("tries chip fractions in order, avoids text/circles/chips and drops a trapped chip", () => {

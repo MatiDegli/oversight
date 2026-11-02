@@ -1,3 +1,4 @@
+import { agentEvidence } from "../teams/evidence.testSupport";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import type { State } from "../state";
@@ -49,7 +50,9 @@ describe("the field's scope follows what the person has open", () => {
     expect(decided.merges).toEqual([
       {
         key: "change-1:21",
-        slot: "A",
+        agentId: "agent-1",
+        team: "agent-1",
+        label: "A",
         source: "agent-a",
         id: "shop.pricing:compute_price",
         pulse: true,
@@ -78,7 +81,7 @@ describe("the field's scope follows what the person has open", () => {
     "keeps a waiting change's steady light whatever the person opens or clicks: %j",
     (view) => {
       const state = awaiting();
-      const kept = fieldInput(state, view).lights;
+      const kept = fieldInput(agentEvidence(state), view).lights;
       expect(kept).toEqual(fieldInput(state, initialView).lights);
       expect(kept.map(({ id, source, pulses }) => [id, source, pulses])).toEqual([
         ["shop.pricing:compute_price", "agent-a", false],
@@ -146,7 +149,7 @@ it.each([initialView, watching, reviewing, reading])(
       node_ids: ["current-b", "extra-b"],
     };
     state.lastReads = { "agent-1": "last-a", "agent-2": "last-b" };
-    const lights = fieldInput(state, view).lights;
+    const lights = fieldInput(agentEvidence(state), view).lights;
     expect(lights.map(({ id, source, weight }) => [id, source, weight])).toEqual([
       ["current-a", "agent-a", 1],
       ["current-b", "agent-b", 1],

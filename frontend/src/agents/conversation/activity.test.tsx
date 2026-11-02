@@ -29,7 +29,13 @@ it("renders a single call without a hidden fold row or an extra divider", () => 
     ...activity,
     round: { ...activity.round, steps: [activity.round.steps[0]] },
   };
-  const html = renderToStaticMarkup(<ActivityBlock entry={entry} slot="A" changeId="change-1" />);
+  const html = renderToStaticMarkup(
+    <ActivityBlock
+      entry={entry}
+      presentation={conversation?.header.presentation}
+      changeId="change-1"
+    />,
+  );
   expect(html).toContain('title="read_file"');
   expect(html.replace(/<[^>]*>/g, "")).toContain(entry.round.steps[0]?.step.summary);
   expect(html.replace(/<[^>]*>/g, "")).not.toContain("read_file");

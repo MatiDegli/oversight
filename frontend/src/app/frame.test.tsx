@@ -1,3 +1,4 @@
+import { agentEvidence } from "../teams/evidence.testSupport";
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -88,7 +89,7 @@ describe("the frame over the level 1 fixture", () => {
         model: "muse-spark-open",
       },
     };
-    const markup = (view: View) => render(20, view, { state });
+    const markup = (view: View) => render(20, view, { state: agentEvidence(state) });
     const card = markup(initialView);
     const bCard = card.slice(card.indexOf('<article aria-label="Agent B"'));
     // The card names the model as the run does ("Muse Spark Open"), not by its id.

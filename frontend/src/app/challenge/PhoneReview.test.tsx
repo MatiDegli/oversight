@@ -11,7 +11,7 @@ it("keeps cold task rows behind the phone frame until their evidence is ready", 
   if (!entry) throw new Error("Missing case");
   const panel = (
     <Suspense fallback={<section aria-label="Phone frame" />}>
-      <PhoneReview state={practice.cut} changeId={entry.changeId} title={entry.title} slot="B" />
+      <PhoneReview state={practice.cut} changeId={entry.changeId} title={entry.title} />
     </Suspense>
   );
   const pending = renderToStaticMarkup(panel);

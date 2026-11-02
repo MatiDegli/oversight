@@ -34,7 +34,8 @@ describe("graph mapping", () => {
     expect(target.style("font-family")).toBe(custom["text-font"]);
     expect(target.style("font-size")).toBe(custom["node-name-size"]);
     expect(Number(target.style("background-opacity"))).toBe(custom["node-opacity"]);
-    target.classes("function focus-B-edit");
+    target.data("paint", "B");
+    target.classes("function focus-edit");
     expect(target.style("background-color")).toBe(rgb(custom["agent-b-node"].color));
     expect(Number(target.style("background-opacity"))).toBe(custom["agent-b-node"].alpha);
   });
@@ -62,7 +63,7 @@ describe("graph mapping", () => {
     expect(exact.style("line-color")).toBe(rgb(theme["lit-edge"]));
     expect(exact.style("target-arrow-color")).toBe(rgb(theme["lit-edge"]));
     expect(exact.style("width")).toBe(theme["lit-edge-width"]);
-    const possible = graph.getElementById("edge-calls").addClass("pending-B lit");
+    const possible = graph.getElementById("edge-calls").data("paint", "B").addClass("pending lit");
     expect(possible.style("line-color")).toBe(rgb(theme["edge-possible"]));
     expect(possible.style("target-arrow-color")).toBe(rgb(theme["edge-possible"]));
     expect(possible.style("width")).toBe(theme["possible-edge-width"]);
@@ -180,28 +181,28 @@ describe("graph mapping", () => {
     ].reduce(applyEvent, initial());
     const graph = render(state);
     const lit = graph.getElementById("billing:fee");
-    expect(lit.hasClass("focus-A-read")).toBe(true);
-    expect(lit.hasClass("focus-B-edit")).toBe(true);
+    expect(lit.hasClass("focus-read")).toBe(true);
+    expect(lit.hasClass("focus-edit")).toBe(true);
     expect(lit.data("label")).toBe("billing:fee");
-    expect(lit.data("marks")).toEqual({
+    expect(lit.data("marks")).toMatchObject({
       word: "editing",
-      slot: "B",
+      owner: { label: "B" },
       badges: [
-        { slot: "A", filled: false },
-        { slot: "B", filled: true },
+        { label: "A", filled: false },
+        { label: "B", filled: true },
       ],
     });
-    expect(lit.hasClass("focus-both")).toBe(true);
+    expect((lit.data("marks") as { badges: unknown[] }).badges).toHaveLength(2);
     expect(lit.style("background-fill")).toBe("solid");
     expect(lit.style("background-color")).toBe(rgb(theme["agent-b-node"].color));
     expect(lit.style("border-color")).toBe(rgb(theme["agent-b"]));
     expect(Number.parseFloat(String(lit.style("pie-1-background-size")))).toBe(0);
-    expect(lit.style("border-style")).toBe("dashed");
+    expect(lit.style("border-style")).toBe("solid");
     updateGraph(
       graph,
       graphElements(applyEvent(state, event(7, "agent.status", { ...a, state: "done" }))),
     );
-    expect(lit.hasClass("focus-A-read")).toBe(false);
+    expect(lit.hasClass("focus-read")).toBe(false);
     expect(lit.hasClass("focus-both")).toBe(false);
     expect(lit.style("background-color")).toBe(rgb(theme["agent-b-node"].color));
     expect(lit.style("background-fill")).toBe("solid");
@@ -213,21 +214,20 @@ describe("graph mapping", () => {
     for (const slot of ["A", "B"] as const) {
       const agent = agents[slot];
       const fill = theme[`${agent}-node`];
-      target.classes(`function focus-${slot}-read`);
+      target.data("paint", slot);
+      target.classes("function focus-read");
       expect(target.style("background-color")).toBe(rgb(theme.card));
       expect(Number(target.style("background-opacity"))).toBe(theme["node-opacity"]);
       expect(target.style("border-color")).toBe(rgb(theme[agent]));
       expect(target.style("border-width")).toBe(theme["agent-border-width"]);
       expect(target.style("border-style")).toBe("solid");
-      target.classes(`function focus-${slot}-edit`);
+      target.data("paint", slot);
+      target.classes("function focus-edit");
       expect(target.style("background-color")).toBe(rgb(fill.color));
       expect(Number(target.style("background-opacity"))).toBe(fill.alpha);
       expect(target.style("border-color")).toBe(rgb(theme[agent]));
       expect(target.style("border-width")).toBe(theme["agent-border-width"]);
-      expect(target.style("border-style")).toBe("dashed");
-      expect(target.style("border-dash-pattern")).toEqual(
-        [theme["pending-dash-length"], theme["pending-dash-gap"]].map(Number.parseFloat).join(" "),
-      );
+      expect(target.style("border-style")).toBe("solid");
       expect(Number.parseFloat(String(target.style("pie-1-background-size")))).toBe(0);
     }
   });
@@ -246,26 +246,22 @@ describe("graph mapping", () => {
       "kind",
       "label",
       "marks",
+      "paint",
       "parent",
+      "pendingAgents",
       "w",
     ]);
     // A edits and has the change pending (editing outranks changed); B only reads.
-    expect(target.data.marks).toEqual({
+    expect(target.data.marks).toMatchObject({
       word: "editing",
-      slot: "A",
+      owner: { label: "A" },
       badges: [
-        { slot: "A", filled: true },
-        { slot: "B", filled: false },
+        { label: "A", filled: true },
+        { label: "B", filled: false },
       ],
     });
     expect(target.classes.split(" ")).toEqual(
-      expect.arrayContaining([
-        "pending",
-        "pending-A",
-        "focus-A-edit",
-        "focus-B-read",
-        "focus-both",
-      ]),
+      expect.arrayContaining(["pending", "pending", "focus-edit", "focus-read"]),
     );
     expect(target.data.label).toBe("billing:fee");
     const unknown = { ...state, agents: {} };
@@ -281,17 +277,17 @@ describe("graph mapping", () => {
     const graph = render(state);
     for (const id of ["billing:discount", "billing:fee", "billing:Bill.total"]) {
       const pending = graph.getElementById(id);
-      expect(pending.hasClass("pending-A")).toBe(true);
+      expect(pending.hasClass("pending")).toBe(true);
       expect(pending.style("border-style")).toBe("dashed");
       expect(pending.style("border-color")).toBe(rgb(theme["agent-a"]));
       const fill = id === "billing:discount" ? theme["agent-a-node-new"] : theme["agent-a-node"];
       expect(pending.style("background-color")).toBe(rgb(fill.color));
       expect(Number(pending.style("background-opacity"))).toBe(fill.alpha);
       // Added is new; modified and removed are changed.
-      expect(pending.data("marks")).toEqual({
+      expect(pending.data("marks")).toMatchObject({
         word: id === "billing:discount" ? "new" : "changed",
-        slot: "A",
-        badges: [{ slot: "A", filled: true }],
+        owner: { label: "A" },
+        badges: [{ label: "A", filled: true }],
       });
     }
     expect(graph.getElementById("billing").style("border-style")).toBe("solid");
@@ -331,7 +327,7 @@ describe("graph mapping", () => {
     state.changes[b.change_id] = { ...change, change_id: b.change_id, agent_id: b.agent_id };
     const graph = render(state);
     const target = graph.getElementById("billing:fee");
-    expect(target.hasClass("pending-both")).toBe(true);
+    expect((target.data("marks") as { badges: unknown[] }).badges).toHaveLength(2);
     expect(target.hasClass("focus-both")).toBe(false);
     expect(target.style("background-fill")).toBe("solid");
     expect(target.style("background-color")).toBe(rgb(theme["agent-a-node"].color));
@@ -339,12 +335,12 @@ describe("graph mapping", () => {
     expect(target.style("border-style")).toBe("dashed");
     expect(target.style("border-color")).toBe(rgb(theme["agent-a"]));
     // Both agents changed it: one word, in A's color on a tie, and a filled badge for each.
-    expect(target.data("marks")).toEqual({
+    expect(target.data("marks")).toMatchObject({
       word: "changed",
-      slot: "A",
+      owner: { label: "A" },
       badges: [
-        { slot: "A", filled: true },
-        { slot: "B", filled: true },
+        { label: "A", filled: true },
+        { label: "B", filled: true },
       ],
     });
   });
@@ -364,7 +360,7 @@ describe("graph mapping", () => {
     };
     const target = render(state).getElementById(source.id);
     expect(target.data("label")).toBe(source.name);
-    expect(target.data("marks")).toMatchObject({ word: "editing", slot: "B" });
+    expect(target.data("marks")).toMatchObject({ word: "editing", owner: { label: "B" } });
     // The name is cut with an ellipsis where it would meet the marks, never wrapped under them.
     expect(target.style("text-wrap")).toBe("ellipsis");
     const room = Number.parseFloat(String(target.style("text-max-width")));

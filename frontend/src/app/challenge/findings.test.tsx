@@ -1,3 +1,4 @@
+import { presentationFor } from "../../teams/presentation";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { PracticePanel, freshAttempt } from "./PracticePanel";
@@ -114,7 +115,9 @@ it("derives future case titles and slots from decision-time data", () => {
   const decision = renderToStaticMarkup(
     <PracticePanel practice={future} attempt={attempt} {...handlers} />,
   );
-  expect(decision).toContain("normalize_cart, Agent A");
+  expect(decision).toContain(
+    `normalize_cart, Agent ${presentationFor(future.cut, item.proposal.agent_id)?.label ?? "unavailable"}`,
+  );
   expect(decision).not.toContain("Inventory, Agent B");
   const findings = renderToStaticMarkup(
     <PracticePanel practice={future} attempt={{ ...attempt, revealed: true }} {...handlers} />,

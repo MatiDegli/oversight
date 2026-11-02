@@ -1,3 +1,4 @@
+import { mark } from "./marks.testSupport";
 import { describe, expect, it } from "vitest";
 
 import { themes } from "../theme";
@@ -12,8 +13,8 @@ const svgOf = (image: string) => decodeURIComponent(image.slice("data:image/svg+
 /** The SVG without the embedded fonts, whose base64 would drown the assertions. */
 const drawn = (image: string) => svgOf(image).replace(/<style>.*?<\/style>/, "");
 
-const changed: NodeMarks = { word: "changed", slot: "A", badges: [{ slot: "A", filled: true }] };
-const read: NodeMarks = { word: "read", slot: "B", badges: [{ slot: "B", filled: false }] };
+const changed: NodeMarks = { word: "changed", owner: mark("A"), badges: [mark("A", "changed")] };
+const read: NodeMarks = { word: "read", owner: mark("B"), badges: [mark("B", "read")] };
 
 describe("marksLayer", () => {
   it("says the word in the agent's text color and fills the badge for a change", () => {
@@ -35,11 +36,8 @@ describe("marksLayer", () => {
   it("puts one badge per agent, A before B, the last at the right padding", () => {
     const both: NodeMarks = {
       word: "editing",
-      slot: "B",
-      badges: [
-        { slot: "A", filled: false },
-        { slot: "B", filled: true },
-      ],
+      owner: mark("B"),
+      badges: [mark("A", "read"), mark("B", "changed")],
     };
     const svg = drawn(marksLayer(theme, both, leaf).image);
     expect(svg.indexOf(">A</text>")).toBeLessThan(svg.indexOf(">B</text>"));
@@ -143,11 +141,8 @@ describe("headerLayers for a frame an agent touches", () => {
     // Two badges make a wider cluster and so a narrower title.
     const both: NodeMarks = {
       word: "editing",
-      slot: "A",
-      badges: [
-        { slot: "A", filled: true },
-        { slot: "B", filled: false },
-      ],
+      owner: mark("A"),
+      badges: [mark("A", "changed"), mark("B", "read")],
     };
     const two = headerLayers(theme, "pricing.py", "", narrow, "module", both);
     expect((two[1]?.width ?? 0) - cluster).toBe(26 + 6);

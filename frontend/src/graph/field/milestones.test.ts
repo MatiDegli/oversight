@@ -12,7 +12,16 @@ const event = (
   kind: Milestone["kind"] = "ready",
   source: Milestone["source"] = "agent-a",
   id = "node",
-): Milestone => ({ key, kind, source, slot: source === "agent-a" ? "A" : "B", id, age: 0 });
+): Milestone => ({
+  key,
+  kind,
+  source,
+  agentId: `agent-${source}`,
+  team: source,
+  label: source,
+  id,
+  age: 0,
+});
 const start = (events: Milestone[]) => {
   const life = new MilestoneLife(theme);
   life.update([], 0, false, true);
@@ -136,7 +145,15 @@ describe("milestone rings", () => {
     expect(timed.halos(1500, 550)[0]?.progress).toBe(0);
     expect(timed.halos(1775, 550)[0]?.progress).toBe(0.5);
     timed.update([{ ...merge, key: "no-pulse", pulse: false }], 1000, false, false, [
-      { id: merge.id, source: merge.source, weight: custom.weight, pulses: false },
+      {
+        id: merge.id,
+        agentId: merge.agentId,
+        team: merge.team,
+        label: merge.label,
+        source: merge.source,
+        weight: custom.weight,
+        pulses: false,
+      },
     ]);
     expect(timed.halos(1500, 550)).toEqual([]);
     expect(timed.lights(46_000)[0]?.weight).toBeCloseTo(custom.weight * 0.5 ** 1.6, 10);

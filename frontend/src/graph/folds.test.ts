@@ -1,3 +1,4 @@
+import { mark } from "./marks.testSupport";
 import { readFileSync } from "node:fs";
 
 import type { GraphSnapshot, ServerEvent } from "@contracts";
@@ -138,11 +139,11 @@ describe("fold projection", () => {
               distance: 2,
               marks: {
                 word: "read" as const,
-                slot: "B" as const,
-                badges: [{ slot: "B" as const, filled: false }],
+                owner: mark("B", "read"),
+                badges: [mark("B", "read")],
               },
             },
-            classes: `${e.classes} cone focus-B-read marked`,
+            classes: `${e.classes} cone focus-read marked`,
           }
         : e,
     );
@@ -155,9 +156,9 @@ describe("fold projection", () => {
     const projected = foldElements(elements, new Set());
     const row = projected.elements.find((e) => e.data.id === cart);
     expect(row?.data.distance).toBe(1);
-    expect(row?.data.marks?.badges).toEqual([{ slot: "B", filled: false }]);
+    expect(row?.data.marks?.badges).toEqual([mark("B", "read")]);
     expect(row?.classes).toContain("folded");
-    expect(row?.classes).toContain("focus-B-read");
+    expect(row?.classes).toContain("focus-read");
   });
 
   it("merges edges to methods of one folded class into one row edge", () => {

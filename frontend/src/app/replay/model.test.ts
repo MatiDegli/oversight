@@ -26,7 +26,7 @@ describe("replay navigation", () => {
   it("derives future marks, identities, tests, counts and only successful merge hashes", () => {
     const marks = replayMarks(events, offsets);
     expect(marks.map((mark) => [mark.id, mark.kind, mark.letters])).toEqual([
-      ["start", "start", "AB"],
+      ["start", "start", "A, B"],
       ["56", "proposal", "B"],
       ["62", "proposal", "A"],
       ["64", "merge", "A"],
