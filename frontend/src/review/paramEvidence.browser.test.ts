@@ -190,6 +190,7 @@ it.each(["pointer", "Enter", "Space"])(
         await button.press(activation);
       }
       await check(section(page)).toBeFocused();
+      await check(section(page)).toHaveAccessibleName("compute_price");
       expect(await page.evaluate(() => Reflect.get(window, "navigationOrder") as string[])).toEqual(
         ["scroll", "focus:true"],
       );
