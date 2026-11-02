@@ -812,7 +812,7 @@ def identity_field(value: str) -> tuple[int, int]:
 
 
 def ps_quote(value: str | Path) -> str:
-    return "'" + str(value).replace("'", "''") + "'"
+    return "'" + re.sub("['\u2018\u2019\u201a\u201b]", lambda match: match[0] * 2, str(value)) + "'"
 
 
 def recovery(runtime: Path, baseline: list[str], current: str) -> str:

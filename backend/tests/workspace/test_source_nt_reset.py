@@ -21,6 +21,31 @@ from .test_source_nt_copy import fixture, git, stage
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize(
+    ("name", "escaped"),
+    [
+        ("Ana's", "Ana''s"),
+        ("Ana\u2018s", "Ana\u2018\u2018s"),
+        ("Ana\u2019s", "Ana\u2019\u2019s"),
+        ("Ana\u201as", "Ana\u201a\u201as"),
+        ("Ana\u201bs", "Ana\u201b\u201bs"),
+    ],
+)
+async def test_recovery_quotes_powershell_paths(name: str, escaped: str) -> None:
+    runtime = Path(f"C:/Users/{name}/runtime")
+    source = Path(f"D:/Users/{name}/source")
+    initial, current = "a" * 40, "b" * 40
+    message = nt.recovery(runtime, [initial, str(source)], current)
+    expected_runtime = Path(f"C:/Users/{escaped}/runtime")
+    expected_source = Path(f"D:/Users/{escaped}/source")
+    assert f"git -C '{expected_runtime / 'workspace'}' diff --binary" in message
+    assert f"git -C '{expected_source}' apply --check '" in message
+    assert f"then explicitly git -C '{expected_source}' apply '" in message
+    patch = rf"{re.escape(str(expected_runtime.parent))}[/\\]oversight-export-[0-9a-f]{{32}}\.patch"
+    assert re.search(rf"'--output={patch}' {initial} main", message)
+    assert len(re.findall(rf"apply(?: --check)? '{patch}'", message)) == 2
+
+
 @asynccontextmanager
 async def opened(tmp_path: Path) -> AsyncGenerator[tuple[Workspace, nt.NtSource, dict[str, bytes]]]:
     root, runtime = tmp_path / "source", tmp_path / ".runtime"

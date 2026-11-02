@@ -1,5 +1,6 @@
 """Private COPY handoffs: real Git on Linux and native NT, with no public selector."""
 
+import asyncio
 import os
 import sys
 from collections.abc import Mapping, Sequence
@@ -158,12 +159,19 @@ async def test_source_copy_matrix(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("mutation", ["file", "directory", "hash", "index", "HEAD", "selection"])
+@pytest.mark.parametrize(
+    "mutation", ["file", "directory", "hash", "index", "HEAD", "selection", "ref"]
+)
 async def test_copy_mutation_preserves_runtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
     with source_case(tmp_path) as (source, fd):
         await fixture(source)
+        await git(source.root, "branch", "-M", "main")
+        new_head = await git(
+            source.root, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "New ref"
+        )
+        loop = asyncio.get_running_loop()
         prior = source.runtime / "workspace"
         prior.mkdir()
         (prior / "keep").write_bytes(b"prior")
@@ -177,6 +185,14 @@ async def test_copy_mutation_preserves_runtime(
             elif mutation in {"index", "HEAD"}:
                 path = source.root / ".git" / mutation
                 path.write_bytes(path.read_bytes() + b"changed")
+            elif mutation == "ref":
+                asyncio.run_coroutine_threadsafe(
+                    git(source.root, "update-ref", "refs/heads/main", new_head), loop
+                ).result(timeout=10)
+                assert (
+                    nt.source_metadata(source.root, deadline, clock)
+                    == copy.selection.inventory.metadata
+                )
             else:
                 path = source.root / ("extra.py" if mutation == "selection" else "data.bin")
                 if mutation == "file":
@@ -184,7 +200,8 @@ async def test_copy_mutation_preserves_runtime(
                 path.write_bytes(b"mutation")
 
         monkeypatch.setattr(nt, "copy_selection", changed)
-        with pytest.raises(OSError, match="Windows source refused:"):
+        reason = "HEAD/index/selection changed during copy" if mutation == "ref" else ""
+        with pytest.raises(OSError, match="Windows source refused: " + reason):
             await stage(source, fd)
         assert (prior / "keep").read_bytes() == b"prior"
         assert not list(source.runtime.glob("source-stage-*"))
