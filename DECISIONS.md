@@ -3875,3 +3875,17 @@ color, badge, status and chips. The task stays only in the first timeline messag
 Tool rows show their existing summary as a sentence, with the tool name on hover; an empty summary
 falls back to the tool name in body type. Icons, results, milliseconds, errors, View in diff and
 Test output remain. This supersedes the task headline in the approved Conversation sketch.
+
+## 2026-11-02 — The person owns the repository's test limit
+
+The person sets OVERSIGHT_TEST_TIMEOUT_S before startup for their own repository; the model
+cannot set or change it. There is no policy maximum. The default is 60 seconds because it fits
+the demo; demo and Boltons always keep 60. Parsing allows 1–999999999 seconds (at most nine
+significant ASCII digits) solely to keep parsing and timer arithmetic finite. The agent's limit
+per round is max(600, 3*T + 300) seconds. One per-run Limits object carries both fixed values.
+Own-source selection remains W4c2; no tool argument or contract changes.
+
+A long limit lets one suite hold main's lock and the Git lease (workspace/core.py:782–786), so
+other agents' tests and Approve wait. Stop ends the suite and releases them. Timeout text reports
+incomplete observed results and an unknown cause, suggesting a different limit on the next run.
+Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.

@@ -486,13 +486,20 @@ class Toolbox:
         run = await self._workspace.run_tests(self._tree, timeout_s=self._test_timeout_s)
         result = run.result
         if result.outcome == "timeout":
-            headline = f"Ran tests: timed out after {self._test_timeout_s:g} s"
+            headline = (
+                f"Tests reached the {int(self._test_timeout_s)} s limit. Results are incomplete."
+            )
         elif result.outcome == "error" and result.passed + result.failed == 0:
             headline = "Ran tests: the suite could not run"
         else:
             headline = f"Ran tests: {result.passed} of {result.passed + result.failed} pass"
         return ToolOutcome(
-            content=test_observation(run, MAX_TEST_OUTPUT, harness_pack=self._harness.enabled),
+            content=test_observation(
+                run,
+                MAX_TEST_OUTPUT,
+                harness_pack=self._harness.enabled,
+                test_timeout_s=self._test_timeout_s,
+            ),
             ok=True,
             summary=headline,
             tests=result,

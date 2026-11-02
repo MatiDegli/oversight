@@ -7,6 +7,27 @@ from oversight.workspace import SuiteRun
 from oversight_contracts.events import SuiteResult
 
 
+@pytest.mark.parametrize("harness_pack", [False, True])
+def test_timeout_observation_preserves_failures_and_output(harness_pack: bool) -> None:
+    run = SuiteRun(
+        SuiteResult(
+            outcome="timeout",
+            passed=3,
+            failed=2,
+            skipped=1,
+            duration_ms=75000,
+            failed_tests=["tests/test_a.py::test_first"],
+        ),
+        "traceback",
+    )
+    assert observation(run, 1000, harness_pack=harness_pack, test_timeout_s=75) == (
+        "Tests reached the 75 s limit. Observed: 3 passed, 2 failed, 1 skipped. "
+        "Results are incomplete. The cause is unknown. "
+        "Set a different test limit when starting the next run.\n"
+        "Failed tests: tests/test_a.py::test_first\n\ntraceback"
+    )
+
+
 @pytest.mark.parametrize("failure_header", [False, True])
 def test_note_only_claims_a_first_failure_when_retained(failure_header: bool) -> None:
     first = (
