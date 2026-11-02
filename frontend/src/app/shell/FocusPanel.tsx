@@ -2,6 +2,8 @@ import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, Settings, Timer, X } from "lucide-react";
 import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
+// eslint-disable-next-line no-restricted-imports -- K2a shares the Chat team identity without extending the agents barrel.
+import { selectChatLeads, selectChatRows } from "../../agents/chatLeadSelectors";
 import { selectConversation, loadConversationPanel } from "../../agents";
 import { InboxFrame, ConversationFrame, FileFrame, SettingsFrame } from "./PanelFallbacks";
 import { LazyPanel } from "./LazyPanel";
@@ -23,6 +25,33 @@ const DecisionInbox = lazy(() => loadDecisionInbox().then((m) => ({ default: m.D
 const ConversationPanel = lazy(() =>
   loadConversationPanel().then((m) => ({
     default: m.ConversationPanel,
+  })),
+);
+
+const LeadConversationFocus = lazy(() =>
+  loadConversationPanel().then((module) => ({
+    default: ({
+      state,
+      agentId,
+      onMessageLead,
+      chat,
+      onOpenSettings,
+    }: Pick<FrameProps, "state" | "onMessageLead" | "onOpenSettings"> & {
+      agentId: string;
+      chat?: boolean;
+    }) => {
+      const conversation = module.selectLeadConversation(state, agentId);
+      if (!conversation) return null;
+      return (
+        <module.ConversationPanel
+          conversation={conversation}
+          actionAccessory={
+            chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
+          }
+          onSend={onMessageLead ? (text) => onMessageLead(agentId, text) : undefined}
+        />
+      );
+    },
   })),
 );
 
@@ -77,6 +106,10 @@ export function FocusPanel(
               : change
                 ? state.agents[change.agent_id]?.slot
                 : undefined;
+            const person = tab.conversation
+              ? selectChatRows(state).find((row) => row.id === tab.conversation)
+              : undefined;
+            const lead = person?.kind === "lead" ? person : undefined;
             const title =
               tab.id === "inbox"
                 ? "Decisions"
@@ -87,9 +120,11 @@ export function FocusPanel(
                     : tab.id === "practice"
                       ? "Two-change practice"
                       : tab.conversation
-                        ? slot
-                          ? `Agent ${slot} · conversation`
-                          : "Conversation"
+                        ? lead
+                          ? `Lead ${lead.letter} · conversation`
+                          : slot
+                            ? `Agent ${person?.letter ?? slot} · conversation`
+                            : "Conversation"
                         : tab.review
                           ? `Review · ${tab.review}`
                           : tab.diff
@@ -99,8 +134,8 @@ export function FocusPanel(
               <div
                 key={tab.id}
                 className={`focus-tab ${view.activeTab === tab.id ? "is-active" : ""}`}
-                data-slot={slot ?? "file"}
-                style={agentSlotStyle(slot)}
+                data-slot={person?.hue ?? slot ?? "file"}
+                style={agentSlotStyle(person?.hue ?? slot)}
               >
                 <button
                   type="button"
@@ -110,7 +145,7 @@ export function FocusPanel(
                   onClick={() => onTabAction?.({ type: "activate", id: tab.id })}
                   className={`min-w-0 truncate px-3 py-2 ${focusRing}`}
                 >
-                  {slot && <span className="mr-2 font-bold">{slot}</span>}
+                  {slot && <span className="mr-2 font-bold">{person?.letter ?? slot}</span>}
                   {tab.id === "settings" && (
                     <Settings aria-hidden="true" className="mr-2 inline size-3.5" />
                   )}
@@ -203,6 +238,7 @@ function ConversationFocus({
   state,
   agentId,
   onMessageAgent,
+  onMessageLead,
   onPauseAgent,
   onResumeAgent,
   onStopAgent,
@@ -217,8 +253,38 @@ function ConversationFocus({
   onGraph,
 }: FrameProps & { agentId: string; chat?: boolean; onGraph?: (id: string) => void }) {
   const conversation = selectConversation(state, agentId, state.messages[agentId] ?? []);
-  if (!conversation)
+  if (!conversation) {
+    const lead = selectChatLeads(state).find((row) => row.id === agentId);
+    if (lead)
+      return (
+        <LazyPanel
+          key={agentId}
+          frame={
+            <ConversationFrame
+              header={{
+                ...lead.status,
+                kind: "lead",
+                agentId,
+                hue: lead.hue,
+                letter: lead.letter,
+                modelLabel:
+                  state.run?.models.find((model) => model.id === lead.status.model)?.label ??
+                  lead.status.model,
+              }}
+            />
+          }
+        >
+          <LeadConversationFocus
+            state={state}
+            agentId={agentId}
+            onMessageLead={onMessageLead}
+            chat={chat}
+            onOpenSettings={onOpenSettings}
+          />
+        </LazyPanel>
+      );
     return <p className="px-3 py-2 text-muted">This agent is not in the current run.</p>;
+  }
   return (
     <LazyPanel key={agentId} frame={<ConversationFrame header={conversation.header} />}>
       <ConversationPanel

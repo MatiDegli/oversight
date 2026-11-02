@@ -224,6 +224,80 @@ it("sums exact change costs across roles and agents; preserves missing and null"
   expect(reset.usageTicks).toEqual([]);
   expect(createInitialState().usageTicks).toEqual([]);
 });
+it("folds change costs without mutating earlier state or arrays", () => {
+  let state = chatReviewState();
+  const tick = required(state.usage);
+  state = { ...state, usageTicks: [] };
+  for (const [change_id, agent_id, role, cost_usd] of [
+    ["change-1", "agent-1", "agent", 0.01],
+    ["change-2", "agent-1", "plan", 0],
+    [null, "agent-1", "lead", 8],
+    ["change-1", "reviewer", "review", 0.02],
+    [null, "planner", "plan", 2],
+  ] as const)
+    state = applyEvent(state, {
+      seq: state.lastSeq + 1,
+      ts: required(state.clock),
+      type: "usage.tick",
+      payload: { ...tick, change_id, agent_id, role, cost_usd },
+    });
+  const before = state;
+  const array = before.usageTicks;
+  const entries = [...array];
+  const snapshot = structuredClone(before);
+  const arraySnapshot = structuredClone(array);
+  const incoming: Extract<ServerEvent, { type: "usage.tick" }> = {
+    seq: before.lastSeq + 1,
+    ts: required(before.clock),
+    type: "usage.tick",
+    payload: {
+      ...tick,
+      change_id: "change-1",
+      agent_id: "agent-2",
+      role: "review",
+      cost_usd: 0.04,
+    },
+  };
+  const payloadSnapshot = structuredClone(incoming.payload);
+  array.forEach(Object.freeze);
+  Object.freeze(array);
+  Object.freeze(before);
+  Object.freeze(incoming.payload);
+  Object.freeze(incoming);
+  state = applyEvent(before, incoming);
+  expect(before.usageTicks).toBe(array);
+  expect(before).toEqual(snapshot);
+  expect(array).toEqual(arraySnapshot);
+  entries.forEach((entry, index) => {
+    expect(array[index]).toBe(entry);
+  });
+  expect(incoming.payload).toEqual(payloadSnapshot);
+  expect(state).not.toBe(before);
+  expect(state.usageTicks).not.toBe(array);
+  expect(state.usage).toBe(incoming.payload);
+  expect(state.lastSeq).toBe(incoming.seq);
+  expect(state.gap).toBe(false);
+  expect(state.usageTicks).toHaveLength(3);
+  expect(state.usageTicks.map((entry) => entry.change_id)).toEqual(["change-2", null, "change-1"]);
+  expect(state.usageTicks.at(-1)).toEqual({ ...incoming.payload, cost_usd: 0.07 });
+  expect(state.usageTicks.find((entry) => entry.change_id === null)?.cost_usd).toBe(10);
+  expect(changeCost(before, "change-1")).toBeCloseTo(0.03);
+  expect(changeCost(state, "change-1")).toBeCloseTo(0.07);
+  expect(changeCost(state, "change-2")).toBe(0);
+  expect(changeCost(state, "missing")).toBeNull();
+  for (const change_id of ["change-1", null])
+    for (const cost_usd of [null, 0, 0.5]) {
+      state = applyEvent(state, {
+        ...incoming,
+        seq: state.lastSeq + 1,
+        payload: { ...incoming.payload, change_id, cost_usd },
+      });
+      expect(state.usageTicks).toHaveLength(3);
+      expect(state.usageTicks.at(-1)).toEqual({ ...incoming.payload, change_id, cost_usd: null });
+      expect(changeCost(state, "change-1")).toBeNull();
+      expect(changeCost(state, "change-2")).toBe(0);
+    }
+});
 it("only an exact final resolution settles this candidate; conflict keeps waiting", () => {
   const state = chatReviewState(),
     p = required(required(state.changes["change-1"]).proposal);

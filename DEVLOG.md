@@ -57,6 +57,12 @@ One line per day, in Argentina time (ART).
   coverage and three consecutive clean-start rules scenarios with real host isolation C.
 - **2026-11-02:** Renamed frontend helper modules for Windows import resolution and added a
   repository check for case-insensitive sibling and module-name collisions; added the person-owned
-  test limit, derived per-round agent deadline and explicit incomplete timeout observations; enabled
-  validated native Windows own-repository COPY with staged-only reset and shared guarded test
+  test limit, derived per-round agent deadline and explicit incomplete timeout observations.
+  Added per-lead committed-event watchers, fixed wake coalescing, locked admission/refusal,
+  bounded server notices and reply correlation, with fake-only race and lifecycle evidence.
+  Verified exclusive reply correlation across human, autonomous and mixed turns, and isolated
+  wake admission after integrating concurrent leads and their captured limits.
+  Updated prompt-version goldens, bounded wake summaries, delivered notices as tool data, and
+  labeled the synthetic wake attribution fixture with its generator provenance.
+  Enabled validated native Windows own-repository COPY with staged-only reset and shared guarded test
   environments, retaining original preservation and pending two-machine native qualification.

@@ -368,7 +368,7 @@ Events arrive only through SSE at `/events`; the data flow above specifies start
 gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text to a coding agent or lead, masked before storage.
 Contracts 1.17.0 defines `lead.reply {agent_id, answers_seq, woken_by, text, through_seq, cut}`,
-produced by L2. `woken_by` names committed catalog triggers for that lead; nothing produces a wake yet.
+produced by the lead runtime. `woken_by` names committed catalog triggers consumed by an autonomous wake.
 `answers_seq` is null for the opening task or a wake, or names an earlier `agent.message` to the same lead.
 `through_seq` is null or a nonnegative horizon strictly below the reply's seq, with no target-type
 requirement. Non-null reply text is nonblank and at most 4,096 characters, masked before storage
@@ -401,6 +401,42 @@ Admission checks the brake and claims working under the lead lock before publica
 Shutdown awaits retained publication tasks and every turn/client cleanup, including idle leads.
 The thread is run-local and lost on restart; L3 presents Chat. Persistence remains a later step.
 
+`LeadService` retains a watcher per lead, with a committed subscription replayed from its cursor
+and the prefix required by `events.is_lead_wake_trigger`. Only that shared predicate classifies
+and attributes catalog events: combined test failure/error/timeout, halted subtask agents, and
+plans first entering completed or failed. Waiting for Approve never wakes. Triggers collect for
+five seconds from the first arrival, without sliding the deadline, including while a turn runs.
+Admission and settlement prune triggers at or below the previous committed reply's non-null
+`through_seq`. Queued events and uncommitted replies do not advance that observation boundary.
+
+Before an autonomous claim, a human Send claims working synchronously; only after its masked
+`agent.message` commits and open checks pass does launch consume the pending digest. A failed
+publication preserves pending work. Mixed turns correlate only with `answers_seq`, leaving
+`woken_by` null; the digest advances their committed reply horizon so it cannot wake again.
+Autonomous turns emit no `agent.message`, have sorted server-selected `woken_by` and null
+`answers_seq`, and use the same tool loop, accounting role and per-turn budgets. A typed
+`ServerNotice` retains the fenced, masked digest separately from human exchanges and delivers it
+as a status tool-result pair, never as system instructions. Compact summaries carry trigger seq,
+event-time plan/subtask scope, state or outcome, counts and up to three failed test ids. Each line
+fits 1,024 characters; labels, fences and omission counts fit 4,096 characters together. Whole
+overflow lines are omitted and still correlate.
+
+The run policy captures `OVERSIGHT_LEAD_WAKES` once: default 3, nonnegative integers without a
+configured maximum, with 0 disabling autonomous execution. A wake counts as one turn and one
+admitted wake. Under the lead lock, while open and idle, admission checks the same provider's
+spending brake, the thread wake allowance, and at least two remaining turns. The last turn is
+reserved for the person. A refusal increments neither counter and publishes an unchanged-state
+`lead.status` revision with `Skipped a wake: <reason>` while retaining the lock throughout
+durable publication. Each reason appears at most once until another turn launches; failed
+publication neither consumes pending work nor suppresses retry. Send during any wake returns
+the existing 409 wrong-state response.
+
+Terminal leads cancel their retained watchers and await subscription cleanup. Shutdown sets
+closing first and cancels watchers before gathering initialization, admission and turn tasks;
+an initialization racing shutdown cannot create another watcher. Store closure is unnecessary
+for cleanup. Restart creates a new run with no restored lead, pending triggers, wake counts or
+model call. No persistence, new event transport or frontend behavior is introduced.
+
 Several leads run concurrently, independently of coding seats. `OVERSIGHT_MAX_LEADS` defaults to 6;
 starting, working and idle leads hold capacity through Stop until terminal. Admission checks setup,
 the selected Meta provider's spending brake, then capacity, reserving before any publication await.
@@ -416,7 +452,8 @@ merge authority is unchanged. Shared spend still hard-refuses Meta calls; Basete
 Masked replies fit 4,096 characters; `OVERSIGHT_LEAD_HISTORY_CHARS` defaults to 24000, keeping whole
 exchanges without old tools. Like the other lead settings, it is process-fixed and has no maximum.
 status folds one committed prefix, fences escaped fields at 200 characters and omits whole entries
-within 20,000 characters; through_seq is the maximum status S read this turn, or null.
+within 20,000 characters; through_seq is the maximum committed status or server-digest horizon
+observed this turn, or null.
 L3 owns Chat/composer, freshness/cut/withheld UI, plan links, graph/focus, fixture exclusion,
 approval keyboard protection, the 50-turn cost fixture and separate Playwright coverage.
 

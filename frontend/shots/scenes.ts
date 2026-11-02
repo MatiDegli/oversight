@@ -351,8 +351,8 @@ export const scenes: readonly Scene[] = [
       await page
         .getByLabel("Task for the new agent")
         .fill("Add a second task with Muse Spark Open");
-      const a = page.getByRole("button", { name: "A Muse Spark", exact: true });
-      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      const a = page.getByRole("button", { name: "Muse Spark", exact: true });
+      const b = page.getByRole("button", { name: "Muse Spark Open", exact: true });
       assert.equal(await a.getAttribute("aria-disabled"), "false");
       assert.equal(await b.getAttribute("aria-pressed"), "true");
     },

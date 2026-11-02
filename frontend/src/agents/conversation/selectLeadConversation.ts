@@ -1,6 +1,7 @@
 import type { LeadStatusEvent } from "@contracts";
 import type { State } from "../../state";
 import { selectPlanEvidence } from "../../review";
+import { teamIdentities } from "../chatAgentSelectors";
 import type { LeadConversation, LeadEntry } from "./selectConversation";
 
 /** Status revisions belong to the lead; envelope order places evidence within each turn. */
@@ -37,7 +38,8 @@ export function selectLeadConversation(state: State, leadId: string): LeadConver
       });
     }
   }
-  if (!current) return undefined;
+  const identity = teamIdentities(state).get(leadId);
+  if (!current || !identity) return undefined;
   entries.push(...messages.map((message) => ({ ...message, kind: "message" as const })));
   entries.push(
     ...replies.map((event) => ({
@@ -50,6 +52,8 @@ export function selectLeadConversation(state: State, leadId: string): LeadConver
     kind: "lead",
     header: {
       ...current.payload,
+      hue: identity.hue,
+      letter: identity.letter,
       kind: "lead",
       agentId: leadId,
       modelLabel:

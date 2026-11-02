@@ -7,6 +7,7 @@ import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 
+import { scenes } from "../../shots/scenes";
 import type { StartAnswer } from "./taskBox.browser.fixture";
 
 let server: ViteDevServer | undefined;
@@ -81,6 +82,21 @@ const sent = (page: Page, count: number) =>
 const focused = (page: Page) =>
   page.evaluate(() => document.activeElement?.tagName.toLowerCase() ?? "none");
 
+it("prepares the two-model braked capture using the visible model names", async () => {
+  await withPage(async (page) => {
+    await page.evaluate(() => {
+      window.taskBoxTest.twoSlots(true);
+    });
+    const scene = scenes.find(({ name }) => name === "task-two-slots-braked");
+    if (!scene?.enabled || !scene.prepare) throw new Error("Missing braked task capture");
+    await scene.prepare(page, { jsonl: "" });
+    await browserExpect(box(page)).toHaveValue("Add a second task with Muse Spark Open");
+    await browserExpect(page.getByRole("group", { name: "Agent slot" })).toBeVisible();
+    expect((await page.screenshot({ animations: "disabled" })).byteLength).toBeGreaterThan(1000);
+    expect(await calls(page)).toEqual([]);
+  });
+});
+
 it(
   "shows no choice for one slot, then preselects B when A is braked; a manual A sends its slot and shows spend_brake",
   { timeout: 40_000 },
@@ -92,8 +108,8 @@ it(
       await page.evaluate(() => {
         window.taskBoxTest.twoSlots(true);
       });
-      const a = page.getByRole("button", { name: "A Muse Spark", exact: true });
-      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      const a = page.getByRole("button", { name: "Muse Spark", exact: true });
+      const b = page.getByRole("button", { name: "Muse Spark Open", exact: true });
       await browserExpect(a).toHaveAttribute("aria-pressed", "false");
       await browserExpect(b).toHaveAttribute("aria-pressed", "true");
       await browserExpect(a).toHaveAttribute("aria-disabled", "false");
@@ -134,8 +150,8 @@ it(
       await page.evaluate(() => {
         window.taskBoxTest.twoSlots();
       });
-      const a = page.getByRole("button", { name: /^A Muse Spark/ });
-      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      const a = page.getByRole("button", { name: /^Muse Spark(?! Open)/ });
+      const b = page.getByRole("button", { name: "Muse Spark Open", exact: true });
       await browserExpect(a).toHaveAttribute("aria-pressed", "true");
       await b.click();
       await box(page).fill("Second task");

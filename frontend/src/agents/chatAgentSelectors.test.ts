@@ -19,7 +19,7 @@ import { chatAgentCount, selectChatAgents } from "./chatAgentSelectors";
 
 const letters = (events: ServerEvent[]) =>
   selectChatAgents(fold(events)).map((r) => [r.id, r.letter]);
-it("joins plans by lead, highest revision and explicit origin, with stable member order", () => {
+it("joins plans by lead, accepted plan ownership and the sole shared team rule, with stable member order", () => {
   const events = [
     ...seed,
     plan("p", "lead", 3),
@@ -35,9 +35,9 @@ it("joins plans by lead, highest revision and explicit origin, with stable membe
   ];
   expect(letters(events)).toEqual([
     ["two", "A·1"],
-    ["one", "A·2"],
+    ["explicit", "A·2"],
     ["solo", "B"],
-    ["explicit", "C·1"],
+    ["one", "C·1"],
     ["person", "D·1"],
   ]);
   const state = fold(events);

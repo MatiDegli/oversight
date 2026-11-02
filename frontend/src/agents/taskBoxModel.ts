@@ -3,6 +3,7 @@ import { createStore } from "zustand/vanilla";
 
 import { selectSpend } from "../state";
 import type { State } from "../state";
+import { teamIdentities } from "./chatAgentSelectors";
 import { CommandError } from "../transport";
 
 /** What an agent that still holds its slot is doing, in the words of the one-line reason. */
@@ -41,8 +42,8 @@ export function slotUsage(state: State): { held: number; total: number } | null 
   return { held: slots.filter((slot) => slotHolder(state, slot)).length, total: slots.length };
 }
 
-export const holderReason = (agent: AgentStatus) =>
-  `Agent ${agent.slot} is ${holding[agent.state]}.`;
+export const holderReason = (state: State, agent: AgentStatus) =>
+  `Agent ${teamIdentities(state).get(agent.agent_id)?.letter ?? agent.slot} is ${holding[agent.state]}.`;
 
 /** The server's first free, unbraked slot; if all free slots are braked, let it explain why. */
 export function nextSlot(state: State): Slot | null {
@@ -94,7 +95,7 @@ export function startBlock(state: State, slot?: Slot | null): string | null {
   if (!state.run) return "Waiting for the server.";
   if (slot) {
     const holder = slotHolder(state, slot);
-    return holder ? holderReason(holder) : null;
+    return holder ? holderReason(state, holder) : null;
   }
   const slots = state.run.slots.map((info) => info.slot);
   if (slots.length === 0) return "The server offers no agent slot.";
@@ -103,7 +104,7 @@ export function startBlock(state: State, slot?: Slot | null): string | null {
     .sort((a, b) => a.slot.localeCompare(b.slot));
   const heldSlots = new Set(held.map((agent) => agent.slot));
   if (slots.some((slot) => !heldSlots.has(slot))) return null;
-  return held.map(holderReason).join(" ");
+  return held.map((agent) => holderReason(state, agent)).join(" ");
 }
 
 /** What the person reads under the box when a start fails. */

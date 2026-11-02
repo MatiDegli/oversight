@@ -15,17 +15,8 @@ import { sendDecision } from "../review";
 import type { DecisionAction, DecisionAttempt } from "../review";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
-import { useEscapeCloses } from "./escape";
 import { Frame } from "./Frame";
-import {
-  clickNode,
-  closePanel,
-  initialView,
-  nextReview,
-  openChange,
-  openReview,
-  panelOpen,
-} from "./view";
+import { clickNode, closePanel, initialView, nextReview, openChange, openReview } from "./view";
 import type { View } from "./view";
 
 const events = log
@@ -65,7 +56,6 @@ function Harness({ recorded }: { recorded: boolean }) {
   const close = useCallback(() => {
     setView(closePanel);
   }, []);
-  useEscapeCloses(panelOpen(view), close);
   return (
     <Frame
       state={state}

@@ -6,7 +6,7 @@ import { agentSlotStyle } from "../../theme";
 import { selectDecisionInbox, selectActiveGrants } from "../../state";
 import type { State } from "../../state";
 import { ConversationPanelHeader } from "../../agents";
-import type { ConversationHeader } from "../../agents";
+import type { ConversationHeader, LeadHeader } from "../../agents";
 import {
   ReviewHeader,
   InboxViews,
@@ -64,12 +64,16 @@ export function ConversationFrame({
   header,
   children,
 }: {
-  header: ConversationHeader;
+  header: ConversationHeader | LeadHeader;
   children?: ReactNode;
 }) {
   return (
     <section
-      aria-label={`Agent ${header.slot} conversation`}
+      aria-label={
+        header.kind === "lead"
+          ? `Lead ${header.letter} conversation`
+          : `Agent ${header.letter ?? header.slot} conversation`
+      }
       className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >
       <ConversationPanelHeader header={header} />

@@ -308,6 +308,17 @@ async def test_reply_failures_use_templates(kind: str, expected: str) -> None:
     assert (await run.run()).detail == expected
 
 
+def test_server_notice_paragraph_moves_prompt_versions(monkeypatch: pytest.MonkeyPatch) -> None:
+    from oversight.agents import LEAD_LIMITS
+
+    versions = [_prompts.prompt_version(pack, lead_limits=LEAD_LIMITS) for pack in (False, True)]
+    monkeypatch.setattr(_prompts, "SERVER_NOTICE_PROMPT", "Changed server notice instructions")
+    assert all(
+        _prompts.prompt_version(pack, lead_limits=LEAD_LIMITS) != versions[index]
+        for index, pack in enumerate((False, True))
+    )
+
+
 def test_the_lead_prompt_and_schemas_move_both_prompt_versions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
