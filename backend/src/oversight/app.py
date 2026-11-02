@@ -83,7 +83,7 @@ from oversight.runtime_plans import PlanService
 from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
-from oversight.settings import REPO_ROOT, Settings
+from oversight.settings import REPO_ROOT, Settings, run_time_limits
 from oversight.setup import missing_settings, offered_profiles
 from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
@@ -266,6 +266,12 @@ class LiveRun:
             )
         self.layout = read_layout(settings.layout)
         self._source = select_source(settings.workspace_source)
+        own_source = self._own_source()
+        timeout, wall_clock = run_time_limits(own_source, settings.test_timeout_s)
+        self._limits = LIMITS.model_copy(
+            update={"test_timeout_s": timeout, "max_wall_clock_s": wall_clock}
+        )
+        self._test_timeout_ignored = not own_source and settings.test_timeout_s != 60
         self.workspace = Workspace(
             settings.runtime_dir,
             self._source.checkout(settings.runtime_dir) if self._source else TEMPLATE,
@@ -324,8 +330,23 @@ class LiveRun:
 
     # --- Startup and shutdown -----------------------------------------------------------------
 
+    def _own_source(self) -> bool:
+        """W4c2 flips this predicate when own repositories become selectable."""
+        return False
+
     async def startup(self) -> None:
         settings = self._settings
+        _log.warning(
+            "Test limit: %s s. Agent time limit: %s s per round. "
+            "These settings stay fixed for this run.",
+            self._limits.test_timeout_s,
+            self._limits.max_wall_clock_s,
+        )
+        if self._test_timeout_ignored:
+            _log.warning(
+                "OVERSIGHT_TEST_TIMEOUT_S applies only to your own repositories; "
+                "this run keeps 60 s."
+            )
         if self._source is not None:
             await validate_source(self._source, settings.runtime_dir)
         await self.workspace.acquire_runtime()  # a second server fails here with WorkspaceBusy
@@ -362,7 +383,7 @@ class LiveRun:
                     SlotInfo(slot=slot, default_model=profile.id)
                     for slot, profile in self._slot_profiles.items()
                 ],
-                limits=LIMITS,
+                limits=self._limits,
                 budget=Budget(
                     budget_usd=budget, spent_usd=spent, warn_at=list(WARN_AT), block_at=BLOCK_AT
                 ),
@@ -396,7 +417,7 @@ class LiveRun:
                 self._settings.review_card_total_s,
             ),
             run_id=self.run_id,
-            revert_test_timeout_s=LIMITS.test_timeout_s,
+            revert_test_timeout_s=self._limits.test_timeout_s,
             spend_ledger=self.ledger,
             rules_evidence=self._rules_evidence,
             spend_lost=lambda: self._ledger_lost,
@@ -679,7 +700,7 @@ class LiveRun:
             profile,
             base_url=PROVIDER_URLS[profile.provider],
             api_key=key,
-            max_output_tokens=LIMITS.max_output_tokens,
+            max_output_tokens=self._limits.max_output_tokens,
         )
 
     def brake_reason(self) -> str | None:
@@ -830,7 +851,7 @@ class LiveRun:
             change_id=f"change-{self._count}",
             slot=slot,
             task=request.task,
-            limits=LIMITS,
+            limits=self._limits,
             answering=request.answering,
         )
         return Admission(task, profile, queued_task_id, plan_id, request.zone if plan_id else None)

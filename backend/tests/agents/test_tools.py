@@ -261,15 +261,18 @@ async def test_a_cancelled_scan_keeps_the_lock_until_its_thread_ends(
 
 
 @pytest.mark.parametrize("outcome", ["failed", "timeout", "error"])
+@pytest.mark.parametrize("harness_pack", [False, True])
 async def test_suite_summary_precedes_large_output(
     small_tree: Opened,
     monkeypatch: pytest.MonkeyPatch,
     outcome: Literal["passed", "failed", "timeout", "error"],
+    harness_pack: bool,
 ) -> None:
     from oversight.workspace import SuiteRun
     from oversight_contracts.events import SuiteResult
 
     async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+        assert timeout_s == 75
         return SuiteRun(
             result=SuiteResult(
                 outcome=outcome,
@@ -283,11 +286,30 @@ async def test_suite_summary_precedes_large_output(
         )
 
     monkeypatch.setattr(Workspace, "run_tests", run_tests)
-    result = await call(await toolbox(small_tree), "run_tests")
+    tools = Toolbox(*small_tree, test_timeout_s=75, harness_pack=harness_pack)
+    result = await call(tools, "run_tests")
     assert result.ok  # running the tool succeeded even when the suite failed
     assert result.suite_run is not None and result.suite_run.result == result.tests
     assert result.suite_run.output.startswith("early traceback\n")
-    assert result.content.startswith(f"Suite outcome: {outcome}; 3 passed, 2 failed, 1 skipped")
+    prefix = f"Suite outcome: {outcome}; 3 passed, 2 failed, 1 skipped"
+    if outcome == "timeout":
+        assert result.summary == "Tests reached the 75 s limit. Results are incomplete."
+        prefix = (
+            "Tests reached the 75 s limit. Observed: 3 passed, 2 failed, 1 skipped. "
+            "Results are incomplete. The cause is unknown. "
+            "Set a different test limit when starting the next run."
+        )
+    else:
+        assert result.summary == "Ran tests: 3 of 5 pass"
+    assert result.content == (
+        prefix + "\nFailed tests: tests/test_a.py::test_first, tests/test_b.py::test_second"
+        "\nOutput truncated: showing the last 4000 characters.\n\n"
+        + result.suite_run.output[-4000:]
+    )
+    refused = await call(tools, "run_tests", test_timeout_s=900)
+    assert not refused.ok and refused.content == (
+        "Error: invalid arguments (unknown: test_timeout_s; missing: none); expected run_tests()"
+    )
     assert result.content.index("tests/test_a.py::test_first") < result.content.index(
         "Output truncated"
     )
