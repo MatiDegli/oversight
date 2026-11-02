@@ -182,7 +182,8 @@ describe("the recorded braked log", () => {
   });
 
   it("keeps B held, so A is preselected, while its change is unresolved", () => {
-    expect(startBlock(upTo(4), "B")).toBe("Agent B is working.");
+    // The first team is A even though its agent occupies slot B.
+    expect(startBlock(upTo(4), "B")).toBe("Agent A is working.");
     expect(nextSlot(upTo(4))).toBe("A");
   });
 });

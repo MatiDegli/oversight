@@ -44,7 +44,7 @@ function teamOrigins(events: State["decisionEvents"]) {
   return { plans, origins };
 }
 
-function teamIdentities(state: State): Map<string, Identity> {
+export function teamIdentities(state: State): Map<string, Identity> {
   const events = [...state.decisionEvents].sort((a, b) => a.seq - b.seq);
   const { plans, origins } = teamOrigins(events);
   const identities = new Map<string, Identity>();

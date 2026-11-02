@@ -92,8 +92,8 @@ it(
       await page.evaluate(() => {
         window.taskBoxTest.twoSlots(true);
       });
-      const a = page.getByRole("button", { name: "A Muse Spark", exact: true });
-      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      const a = page.getByRole("button", { name: "Muse Spark", exact: true });
+      const b = page.getByRole("button", { name: "Muse Spark Open", exact: true });
       await browserExpect(a).toHaveAttribute("aria-pressed", "false");
       await browserExpect(b).toHaveAttribute("aria-pressed", "true");
       await browserExpect(a).toHaveAttribute("aria-disabled", "false");
@@ -134,8 +134,8 @@ it(
       await page.evaluate(() => {
         window.taskBoxTest.twoSlots();
       });
-      const a = page.getByRole("button", { name: /^A Muse Spark/ });
-      const b = page.getByRole("button", { name: "B Muse Spark Open", exact: true });
+      const a = page.getByRole("button", { name: /^Muse Spark(?! Open)/ });
+      const b = page.getByRole("button", { name: "Muse Spark Open", exact: true });
       await browserExpect(a).toHaveAttribute("aria-pressed", "true");
       await b.click();
       await box(page).fill("Second task");

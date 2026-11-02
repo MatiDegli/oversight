@@ -1,5 +1,3 @@
-import { agentSlotStyle } from "../theme";
-import { agentLook } from "../theme";
 import type { Slot, StartAgent } from "@contracts";
 import { Check, Cpu, X } from "lucide-react";
 import { useId } from "react";
@@ -103,7 +101,6 @@ export function TaskBoxView({
               <button
                 key={slot}
                 data-slot-card={slot}
-                style={agentSlotStyle(slot)}
                 type="button"
                 aria-pressed={selected === slot}
                 aria-disabled={pending || holder !== null}
@@ -112,7 +109,7 @@ export function TaskBoxView({
                 }}
                 className={`min-w-0 flex-1 rounded-control border border-control-edge p-2 text-left text-(length:--caption-size) aria-pressed:bg-raised aria-disabled:cursor-not-allowed ${selected === slot ? "aria-pressed:border-text" : ""} ${focusRing}`}
               >
-                <span className={agentLook[slot].textClass}>{slot}</span> {label}
+                {label}
                 {selected === slot && (
                   <Check aria-hidden="true" className="ml-1 inline-block size-4 text-text" />
                 )}
@@ -204,9 +201,10 @@ export function TaskBox({
       label:
         state.run?.models.find((model) => model.id === info.default_model)?.label ??
         info.default_model,
-      holder: holder ? holderReason(holder) : null,
+      holder: holder ? holderReason(state, holder) : null,
     };
   });
+  const modelChoice = new Set(state.run?.slots.map((info) => info.default_model)).size > 1;
   if (!onStart) {
     return (
       <section aria-label="New agent" className="flex flex-col gap-2.5">
@@ -227,16 +225,16 @@ export function TaskBox({
       pending={pending}
       failure={failure}
       block={startBlock(state, selected)}
-      model={slots.length === 1 ? slots[0]?.label : undefined}
+      model={!modelChoice ? slots[0]?.label : undefined}
       maxSteps={state.run?.limits.max_steps}
-      slots={slots}
+      slots={modelChoice ? slots : []}
       selected={selected}
       onSlot={(slot) => {
         store.getState().choose(slotChoice(state, slot));
       }}
       onDraft={store.getState().setDraft}
       onStart={() => {
-        void store.getState().start(onStart, slots.length === 2 ? selected : undefined);
+        void store.getState().start(onStart, modelChoice ? selected : undefined);
       }}
     />
   );
