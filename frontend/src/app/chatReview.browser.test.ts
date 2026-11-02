@@ -850,6 +850,19 @@ it("incoming proposal, assessment, usage and resolution never select a layout, t
     await page.close();
   }
 });
+it("keeps the proposal card top highlight in both themes and desktop widths", async () => {
+  for (const width of [1920, 1280])
+    for (const theme of ["dark", "day"]) {
+      const { page } = await open({ width, theme });
+      try {
+        await check(card(page)).toBeVisible();
+        const shadow = await card(page).evaluate((element) => getComputedStyle(element).boxShadow);
+        expect.soft(shadow, `${theme} at ${String(width)}px`).not.toBe("none");
+      } finally {
+        await page.close();
+      }
+    }
+});
 it.runIf(process.env.CHAT_REVIEW_SHOTS === "1")(
   "captures eight retained C4 states and computed geometry",
   async () => {
