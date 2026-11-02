@@ -81,6 +81,23 @@ it("uses singular labels for 1 agent and 1 step", () => {
   expect(html).not.toContain("1 steps");
 });
 
+it("keeps the exact inbox header after a highest-revision lead resend", () => {
+  const current = leadEvents.findLast((event) => event.type === "lead.status");
+  if (current?.type !== "lead.status") throw new Error("Missing current lead");
+  const before = leadEvents.reduce(applyEvent, createInitialState());
+  const after = applyEvent(before, {
+    ...current,
+    seq: before.lastSeq + 1,
+    payload: { ...current.payload, step: 99 },
+  });
+  const sentence = "1 agent took 4 steps in 0 min. These 1 need a person.";
+  for (const value of [before, after]) {
+    const html = renderToStaticMarkup(<DecisionInbox state={value} />);
+    const header = html.match(/<header class="inbox-heading">.*?<\/header>/s)?.[0];
+    expect(header?.match(/<p class="decision-muted">(.*?)<\/p>/s)?.[1]).toBe(sentence);
+  }
+});
+
 function rowContaining(html: string, text: string): string {
   const row = html
     .match(/<article class="inbox-row">.*?<\/article>/gs)
