@@ -17,7 +17,7 @@ from oversight_contracts.plans import PlanZone, SubtaskDraft, validate_dependenc
 from oversight_contracts.queue import QueueSnapshot
 
 if TYPE_CHECKING:
-    from oversight.agents._lead import LeadLimits
+    from oversight_contracts.events import LeadLimits
 
 # The schema builder is shared inside agents, without widening its public facade.
 # pyright: reportPrivateUsage=false

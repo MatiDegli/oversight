@@ -156,11 +156,11 @@ class PlanService:
 
     async def update(self, plan_id: str, request: UpdatePlan) -> None:
         async with self.live.dispatcher.queue_lock:
+            self.check_limits(request.subtasks)
             self._available()
             plan = self.get(plan_id)
             try:
                 plan_core.editable(plan, request.revision)
-                self.check_limits(request.subtasks)
                 self.check_count(plan, len(request.subtasks))
                 updated = plan_core.update(plan, request)
                 if plan.started_by is None:

@@ -19,7 +19,6 @@ from oversight.agents._lead import (
     LEDGER_DETAIL,
     STARTING_DETAIL,
     LeadEnd,
-    LeadLimits,
     LeadRun,
 )
 from oversight.agents._lead_tools import LEAD_TOOL_SCHEMAS, LeadProposalError, LeadTools
@@ -98,6 +97,7 @@ from oversight.agents.usage import (
     UsageLedger,
     validate_usage_tick,
 )
+from oversight_contracts.events import LeadLimits
 
 __all__ = [
     "BASETEN_BASE_URL",

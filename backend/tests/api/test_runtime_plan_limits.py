@@ -11,6 +11,7 @@ from live_helpers import DEADLINE_S, error_code, live_settings
 from plan_helpers import plan_server
 
 from oversight.api import ApiError
+from oversight.changes import plan_core
 from oversight_contracts.commands import UpdatePlan
 from oversight_contracts.plans import Plan, PlanSubtask, PlanZone, SubtaskDraft
 from oversight_contracts.queue import QueuedTask
@@ -87,6 +88,37 @@ async def test_person_edit_of_lead_plan_refuses_runtime_limits(
                 await update(plan.plan_id, request)
             assert caught.value.code == "invalid_request"
             assert caught.value.message == message(dependency)
+        assert s.store.last_seq == before and s.live.plans.get(plan.plan_id) == plan
+
+
+@pytest.mark.parametrize("dependency", [False, True])
+@pytest.mark.parametrize("conflict", ["stale", "unknown", "queued", "rejected", "closing"])
+async def test_http_edit_limits_take_precedence_over_plan_and_run_state(
+    tmp_path: Path,
+    dependency: bool,
+    conflict: str,
+) -> None:
+    async with asyncio.timeout(DEADLINE_S), plan_server(live_settings(tmp_path)) as s:
+        plan = proposed(drafts(False)[:1])
+        if conflict == "queued":
+            plan = plan_core.link(plan, plan.revision, "queued-task-1")
+        elif conflict == "rejected":
+            plan = plan_core.reject(plan, plan.revision, None)
+        await s.live.plans.save(plan)
+        request = UpdatePlan(
+            revision=1 if conflict == "stale" else plan.revision,
+            graph_version=plan.graph_version,
+            subtasks=drafts(dependency),
+        )
+        plan_id = "missing-plan" if conflict == "unknown" else plan.plan_id
+        before = s.store.last_seq
+        s.live._closing = conflict == "closing"
+        try:
+            response = await s.client.put(f"/plans/{plan_id}", json=request.model_dump())
+        finally:
+            s.live._closing = False
+        assert error_code(response) == (422, "invalid_request")
+        assert response.json()["error"]["message"] == message(dependency)
         assert s.store.last_seq == before and s.live.plans.get(plan.plan_id) == plan
 
 
