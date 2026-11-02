@@ -26,7 +26,14 @@ def test_reply_event_round_trip(answers_seq: int | None, cut: str | None, text: 
     )
     event = LeadReplyEvent(seq=4, ts="2026-11-01T17:04:57.000Z", type="lead.reply", payload=reply)
     assert EVENTS.validate_json(EVENTS.dump_json(event)) == event
-    assert set(reply.model_dump()) == {"agent_id", "answers_seq", "text", "through_seq", "cut"}
+    assert set(reply.model_dump()) == {
+        "agent_id",
+        "answers_seq",
+        "woken_by",
+        "text",
+        "through_seq",
+        "cut",
+    }
 
 
 @pytest.mark.parametrize("state", ["idle", "done"])
@@ -109,7 +116,7 @@ def test_withholding_context_is_explicit_and_never_overrides_live() -> None:
 
     body = dict(agent_id="agent-1", answers_seq=None, text=None, through_seq=None, cut=None)
     reply = LeadReply.model_validate(body, context={"message_text_withheld": True})
-    assert reply.model_dump() == body
+    assert reply.model_dump() == {**body, "woken_by": None}
     assert (
         LeadReply.model_validate_json(
             reply.model_dump_json(), context={"message_text_withheld": True}
@@ -131,3 +138,50 @@ def test_existing_message_whitespace_shape_is_preserved() -> None:
 
     assert AgentMessage(text="  ").text == "  "
     assert AgentMessageSent(agent_id="agent-1", text="  ").text == "  "
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [
+        {"woken_by": []},
+        {"woken_by": [1, 1]},
+        {"woken_by": [2, 1]},
+        {"woken_by": [0]},
+        {"woken_by": [-1]},
+        {"woken_by": [1], "answers_seq": 2},
+    ],
+)
+def test_wake_rejects_invalid_references(patch: dict[str, object]) -> None:
+    from pydantic import ValidationError
+
+    body = dict(agent_id="agent-1", answers_seq=None, text="Reply", through_seq=3, cut=None)
+    with pytest.raises(ValidationError):
+        LeadReply.model_validate(body | patch)
+
+
+@pytest.mark.parametrize("woken_by", [None, [1], [1, 3]])
+def test_wake_round_trip(woken_by: list[int] | None) -> None:
+    reply = LeadReply.model_validate(
+        dict(
+            agent_id="agent-1",
+            answers_seq=None,
+            woken_by=woken_by,
+            text="Reply",
+            through_seq=3,
+            cut=None,
+        )
+    )
+    assert reply.woken_by == woken_by
+    assert LeadReply.model_validate_json(reply.model_dump_json()) == reply
+
+
+def test_v1_15_and_v1_16_replies_default_woken_by_to_null() -> None:
+    # Both versions have the same LeadReply wire shape, retained in this historical fixture.
+    lines = (ROOT / "fixtures/events/handwritten-lead-thread.jsonl").read_text().splitlines()
+    replies = [json.loads(line) for line in lines if json.loads(line)["type"] == "lead.reply"]
+    assert replies
+    for raw in replies:
+        assert "woken_by" not in raw["payload"]
+        event = EVENTS.validate_python(raw)
+        assert event.type == "lead.reply" and event.payload.woken_by is None
+        assert event.payload.model_dump()["woken_by"] is None

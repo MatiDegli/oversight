@@ -364,8 +364,9 @@ every few hundred milliseconds and SQLite writes are batched.
 Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
 gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text to a coding agent or lead, masked before storage.
-Contracts 1.15.0 defines `lead.reply {agent_id, answers_seq, text, through_seq, cut}`, produced by L2.
-`answers_seq` is null for the opening task, or names an earlier `agent.message` to the same lead.
+Contracts 1.17.0 defines `lead.reply {agent_id, answers_seq, woken_by, text, through_seq, cut}`,
+produced by L2. `woken_by` names committed catalog triggers for that lead; nothing produces a wake yet.
+`answers_seq` is null for the opening task or a wake, or names an earlier `agent.message` to the same lead.
 `through_seq` is null or a nonnegative horizon strictly below the reply's seq, with no target-type
 requirement. Non-null reply text is nonblank and at most 4,096 characters, masked before storage
 like messages. `cut` is `tool_calls`, `model_calls`, `time`, `spend_brake` or null. Null text requires
@@ -486,7 +487,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.16.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.17.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

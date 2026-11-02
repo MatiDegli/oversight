@@ -3993,7 +3993,6 @@ other agents' tests and Approve wait. Stop ends the suite and releases them. Tim
 incomplete observed results and an unknown cause, suggesting a different limit on the next run.
 Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.
 
-
 ## 2026-11-02 — Defaults, not ceilings
 
 Approved by the maintainer on 2026-11-02 (D1–D4): values are defaults the person can change,
@@ -4016,6 +4015,7 @@ both default to null and remain unfilled. `Limits` records the person's values f
 run. The backend retains six-subtask and dependency-index checks, its existing lead budgets
 (including 50 turns per thread), and the person-created single-subtask rule. Existing
 recordings continue to validate; the bundled replay is unchanged.
+
 ## 2026-11-02 — A read-only plan flow before the freeze
 
 The maintainer approved a read-only view of the lead's plan as a flow, inside the plan piece of the decisions
@@ -4201,3 +4201,22 @@ comments and copy:
 6. Use exactly "These calls use the new parameter, so What was compared does not count them."
    as the muted sentence. It explains count separation without suggesting additional measurement
    or an unsupported binding interpretation.
+
+## 2026-11-02 — A lead reply names what woke it
+
+Approved by the maintainer on 2026-11-02. Contracts 1.17.0 adds nullable `LeadReply.woken_by`:
+a nonempty, unique list of earlier committed event seqs in increasing order, mutually exclusive
+with `answers_seq`. It is null for a person's message or the opening task. The first reply
+cannot name wake events, and a trigger can appear in only one reply in the run.
+
+The catalog is closed: combined tests with a failed, error or timeout suite outcome; an agent
+status with state halted; and a plan entering completed or failed, once per plan. Attribution
+uses `Plan.started_by` on the latest plan update before the event. Combined tests use the
+execution agent's latest earlier status and its server-set `plan_id`; halted statuses use their
+own server-set `plan_id`. Only events belonging to that lead's plans qualify. Later plan
+revisions that stay terminal do not trigger another wake. Neither the lead nor the model can
+extend this catalog.
+
+The shared pure event rule supplies attribution for log validation and the later watcher.
+Nothing produces a wake until that watcher front; this field does not change when a lead may
+take a turn. Existing recordings and the bundled replay remain unchanged.
