@@ -2,6 +2,7 @@
 
 import hashlib
 import re
+import shutil
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -13,6 +14,7 @@ import pytest
 from oversight.settings import Settings
 from oversight.workspace import Workspace, core, run_process
 from oversight.workspace import source_nt as nt
+from oversight.workspace.files import remove_tree
 from oversight.workspace.integrity import BYTE_OVERRIDE
 from oversight.workspace.locks import offload
 
@@ -263,13 +265,23 @@ async def test_unsafe_state_preserves_runtime(tmp_path: Path, damage: str) -> No
 
 @pytest.mark.parametrize(
     "phase",
-    ["before", "deleted", "published", "committed", "baseline", "unstaged-init"],
+    [
+        "before",
+        "partial-delete",
+        "deleted",
+        "published",
+        "committed",
+        "baseline",
+        "unstaged-delete",
+        "unstaged-populate",
+        "unstaged-init",
+    ],
 )
 async def test_interrupted_reset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, phase: str
 ) -> None:
     async with opened(tmp_path) as (workspace, source, _):
-        own = phase != "unstaged-init"
+        own = not phase.startswith("unstaged-")
         new = await restart(workspace, source, own=own)
         try:
             assert new._lock_fd is not None
@@ -278,11 +290,30 @@ async def test_interrupted_reset(
             def fail(*args, **kwargs):
                 raise OSError("interrupted reset")
 
+            def partial_delete(root: Path, target: Path) -> None:
+                if target == new.main.root:
+                    # Runtime Git objects may carry the Windows read-only attribute.
+                    for path in (target / ".git").rglob("*"):
+                        if path.is_file():
+                            path.chmod(0o600)
+                    shutil.rmtree(target / ".git")
+                    fail()
+                remove_tree(root, target)
+
+            def partial_populate(template: Path, destination: Path) -> None:
+                destination.mkdir(exist_ok=True)
+                (destination / "partial.py").write_bytes(b"partial copy\n")
+                fail()
+
             spawn = AsyncMock(side_effect=fail)
             with monkeypatch.context() as patch:
                 if phase == "baseline":
                     assert staged is not None
                     patch.setattr(staged, "cleanup", fail)
+                elif phase in {"partial-delete", "unstaged-delete"}:
+                    patch.setattr(core, "remove_tree", partial_delete)
+                elif phase == "unstaged-populate":
+                    patch.setattr(core, "copy_template", partial_populate)
                 else:
                     target = {
                         "before": "remove_tree",
@@ -294,22 +325,27 @@ async def test_interrupted_reset(
                     patch.setattr(core, target, spawn if target == "run_process" else fail)
                 with pytest.raises(OSError, match="interrupted reset"):
                     await new.reset(_nt_stage=staged)
-                if not own:
+                if phase == "unstaged-init":
                     spawn.assert_awaited_once()
                     assert spawn.call_args is not None and "init" in spawn.call_args.args[0]
             assert not new._reset_done
-            if not own:
-                assert (new.main.root / "demo.py").read_bytes() == b"demo = True\n"
+            if phase in {"partial-delete", "unstaged-delete", "unstaged-populate", "unstaged-init"}:
                 assert not (new.main.root / ".git").exists()
-                new = await restart(new, source)
+                new = await restart(new, source, own=own)
+            if phase == "unstaged-populate":
+                assert (new.main.root / "partial.py").read_bytes() == b"partial copy\n"
             if phase == "before":
                 assert nt.main_ref(source.runtime, time.monotonic() + 10)
             if phase == "committed":
                 with pytest.raises(
                     OSError,
                     match="Windows source refused: ambiguous interrupted reset; preserve runtime",
-                ):
+                ) as refused:
                     nt.guard_previous(source.runtime, recover=True)
+                assert nt.ps_quote(source.runtime) in str(refused.value)
+                assert "recover its files and ownership records manually before restarting" in str(
+                    refused.value
+                )
             else:
                 assert nt.guard_previous(source.runtime, recover=True)
                 if staged is not None:
@@ -324,6 +360,26 @@ async def test_interrupted_reset(
                     assert not (source.runtime / "own-runtime").exists()
         finally:
             new.release_runtime()
+
+
+@pytest.mark.parametrize("changed_after_journal", [False, True])
+async def test_journal_pins_authorized_pre_deletion_main(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changed_after_journal: bool
+) -> None:
+    async with opened(tmp_path) as (workspace, source, _):
+        await git(workspace.main.root, "commit", "--allow-empty", "-qm", "Authorized delta")
+        authorized = await workspace.main.head()
+        monkeypatch.setenv("OVERSIGHT_DISCARD_OWN_RUNTIME", authorized)
+        assert nt.guard_previous(source.runtime)
+        nt.begin_reset(source.runtime, None)
+        monkeypatch.delenv("OVERSIGHT_DISCARD_OWN_RUNTIME")
+        if changed_after_journal:
+            await git(workspace.main.root, "commit", "--allow-empty", "-qm", "Unexpected delta")
+            with pytest.raises(OSError, match=r"main .* differs from initial"):
+                nt.guard_previous(source.runtime, recover=True)
+        else:
+            assert nt.guard_previous(source.runtime, recover=True)
+        assert nt.main_ref(source.runtime, time.monotonic() + 10) == await workspace.main.head()
 
 
 @pytest.mark.parametrize("fault", ["bytes", "manifest", "deadline"])

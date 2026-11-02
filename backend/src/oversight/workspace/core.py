@@ -562,9 +562,10 @@ class Workspace:
                 for name in ("worktrees", "workspace", "tmp"):
                     await offload(partial(remove_tree, self._root, self._root / name))
                 if _nt_stage is None:
-                    await offload(self._populate)
                     if protected:
+                        self._main.root.mkdir(mode=DIR_MODE)
                         await offload(partial(record_populated_reset, self._root))
+                    await offload(self._populate)
                 else:
                     await offload(partial(publish_stage, _nt_stage, self._root))
                     (self._root / "tmp" / "home").mkdir(mode=DIR_MODE, parents=True)

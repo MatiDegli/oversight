@@ -862,6 +862,8 @@ def guard_previous(runtime: Path, *, recover: bool = False) -> bool:
     deadline = time.monotonic() + PHASE_SECONDS
     baseline: list[str] | None = None
     verified_main: str | None = None
+    current: str | None = None
+    interrupted = False
     try:
         baseline = state_fields(runtime / "own-source", deadline)
         journal = state_fields(runtime / "own-reset", deadline)
@@ -883,16 +885,6 @@ def guard_previous(runtime: Path, *, recover: bool = False) -> bool:
         owned = journal_owned(runtime, journal) if journal is not None else []
         tree = runtime / "workspace"
         tree_id = directory_id(tree, deadline) if os.path.lexists(tree) else "-"
-        if baseline is not None and tree_id == baseline[4]:
-            current = main_ref(runtime, deadline, width=len(baseline[0]))
-            if (
-                current != baseline[0]
-                and os.environ.get("OVERSIGHT_DISCARD_OWN_RUNTIME") != current
-            ):
-                raise refuse(recovery(runtime, baseline, current or ""))
-            verified_main = current
-        elif journal is None:
-            raise refuse("baseline workspace identity changed")
         if journal is not None:
             for value in (journal[2], journal[7]):
                 if value != "-":
@@ -904,18 +896,43 @@ def guard_previous(runtime: Path, *, recover: bool = False) -> bool:
             for value in (journal[1], journal[3], journal[6]):
                 if value != "-":
                     identity_field(value)
+            interrupted = tree_id == "-"
             if tree_id != "-":
-                current = main_ref(runtime, deadline, unborn=tree_id == journal[3])
+                current = main_ref(
+                    runtime,
+                    deadline,
+                    width=len(baseline[0]) if baseline else None,
+                    unborn=tree_id in {journal[1], journal[3]},
+                )
                 expected = (
                     journal[7]
                     if journal[7] != "-"
                     else (journal[2] if tree_id == journal[1] and journal[2] != "-" else None)
                 )
-                # A published baseline takes precedence over a leftover journal.
-                if (tree_id not in {journal[1], journal[3]} or current != expected) and (
-                    baseline is None or tree_id != baseline[4] or current != verified_main
+                # Deletion can remove .git before the journaled old tree itself.
+                interrupted = tree_id in {journal[1], journal[3]} and (
+                    current == expected or (tree_id == journal[1] and current is None)
+                )
+        if baseline is not None and tree_id == baseline[4]:
+            if not interrupted:
+                current = main_ref(runtime, deadline, width=len(baseline[0]))
+                if (
+                    current != baseline[0]
+                    and os.environ.get("OVERSIGHT_DISCARD_OWN_RUNTIME") != current
                 ):
-                    raise refuse("ambiguous interrupted reset; preserve runtime")
+                    raise refuse(recovery(runtime, baseline, current or ""))
+                verified_main = current
+        elif journal is None:
+            raise refuse("baseline workspace identity changed")
+        if journal is not None:
+            # A published baseline takes precedence over a leftover journal.
+            if not interrupted and (
+                baseline is None or tree_id != baseline[4] or current != verified_main
+            ):
+                raise refuse(
+                    f"ambiguous interrupted reset; preserve runtime {ps_quote(runtime)} "
+                    "and recover its files and ownership records manually before restarting"
+                )
             if recover:
                 StagedSource.cleanup_owned(owned)
         return True
@@ -963,7 +980,7 @@ def begin_reset(runtime: Path, stage: StagedSource | None) -> None:
 
 
 def record_populated_reset(runtime: Path) -> None:
-    """Pin the populated template identity before runtime Git can be interrupted."""
+    """Pin the template tree identity before copying or runtime Git can be interrupted."""
     deadline = time.monotonic() + PHASE_SECONDS
     journal = state_fields(runtime / "own-reset", deadline)
     if journal is None:
