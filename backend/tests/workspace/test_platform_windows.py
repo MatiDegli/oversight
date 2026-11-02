@@ -594,7 +594,7 @@ async def test_added_probe_unavailable(tmp_path, monkeypatch):
             return await original(tree, *args, **kwargs)
 
         monkeypatch.setattr(server.live.workspace, "git", capture)
-        assert (await start(server)).status_code == 202
+        assert (await start(server)).status_code == 201
         await server.until(is_type("agent.status", state="ready_for_review"))
         facts = [e.payload for e in server.events() if e.type == "change.facts_recorded"][-1]
         assert not facts.added_tests
