@@ -4239,6 +4239,8 @@ only, with `woken_by=None`. Its digest triggers count as seen through the commit
 `through_seq`; they do not get another wake merely to obtain wake correlation. A wake sends
 no human-message event and names all consumed seqs, including omitted digest lines, in sorted
 `woken_by`, with `answers_seq=None`.
+Every runtime reply after the opening one has exactly one of `answers_seq` and `woken_by`.
+Historical null/null replies keep validating; the runtime invariant does not change log validation.
 
 The person-owned run snapshot adds `OVERSIGHT_LEAD_WAKES`: default 3, no configured maximum,
 0 disables wake execution, and invalid or negative values stop configuration. Admission checks
@@ -4259,3 +4261,42 @@ The service owns and retains watchers, cancels them at terminalization, and canc
 shutdown gathers while the store remains open. Closing is set before initialization can spawn
 another watcher. Restart is still a fresh run, without restored leads, pending triggers, wakes
 or model calls; the run-local lifetime and per-turn budget decisions above remain in force.
+## 2026-11-02 — Several leads with person-set limits
+
+K1 was approved by the maintainer on 2026-11-02. This explicitly supersedes the singleton
+sentence in “The lead runs inside one run with fixed limits” (2026-10-31) and the fixed numeric
+limits in “The lead keeps one thread per run” (2026-11-01). Their other authority and safety
+rules remain. Several leads can run concurrently without consuming coding-agent seats.
+
+| Setting | Default | Scope |
+| --- | ---: | --- |
+| `OVERSIGHT_MAX_LEADS` | 6 | Active leads per run, including starting, working and idle |
+| `OVERSIGHT_LEAD_MAX_TURNS` | 50 | Per lead thread, opening task counts as turn 1 |
+| `OVERSIGHT_LEAD_MAX_TOOL_CALLS` | 12 | Per turn |
+| `OVERSIGHT_LEAD_MAX_MODEL_CALLS` | 18 | Per turn, including recovery |
+| `OVERSIGHT_LEAD_MAX_WALL_CLOCK_S` | 300 | Seconds per turn |
+| `OVERSIGHT_LEAD_MAX_PLANS` | 3 | Per lead thread across turns |
+| `OVERSIGHT_LEAD_MAX_SUBTASKS` | 6 | Per requested plan |
+| `OVERSIGHT_LEAD_MAX_TASK_CHARS` | 2000 | Per plan task and subtask instruction |
+| `OVERSIGHT_LEAD_HISTORY_CHARS` | 24000 | Per lead history, retaining whole exchanges |
+
+All values are positive integers with no maximum. They are fixed for the process now: a run
+captures one immutable limits object and each lead retains it, including terminal statuses.
+Per-lead overrides require a later `StartLead` contract; no current command, body or tool can
+set them. Startup prints capacity and limits once. Metadata records the configured capacity,
+limits and prompt version; replay preserves old null fields without reading current settings.
+
+Setup precedes the selected Meta provider's spending brake, then capacity admission. Admission
+counts and registers synchronously before publication; idle occupies capacity, and a stopping
+lead keeps its place until its terminal status commits. Terminal leads release capacity. The
+final allowed turn publishes its reply immediately followed by halted, with no intervening idle.
+Each lead owns its thread, counters, plan allowance, callbacks, accounting, tasks and revisions;
+Stop affects only that lead and preserves its proposals. Shutdown drains every registered lead.
+
+Only the person queues plans. Approval, person-set rules and existing merge authority remain
+unchanged. The first wave refuses excess ready subtasks with `OVERSIGHT_MAX_AGENTS` named; later
+ready dependencies wait for shared coding seats. The repeated-result brake (4 identical results)
+and consecutive-failure brake (6 failures) remain fixed. The global spending brake is a hard
+refusal, neither a person setting nor a queue: every selected Meta lead checks at start, message
+admission and each model-call boundary, with durable ledger accounting before usage publication.
+Baseten keeps its existing accounting and Meta-brake exemption; in-flight call semantics remain.

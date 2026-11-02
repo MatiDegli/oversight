@@ -43,11 +43,13 @@ class LeadTurn:
             on_working=self.working,
             on_step=self.step,
             mask=self.live._redactor,
+            limits=lead.limits,
             history_chars=service.policy.history_chars,
         )
         lead.run = self.run
         self.run.make_client, self.run.record = self.make_client, self.accounting.record
         self.run.on_working, self.run.on_step = self.working, self.step
+        self.run.admit = self.admit
 
     def check(self) -> None:
         if self.service._closing or self.live._closing or self.lead.stopping:

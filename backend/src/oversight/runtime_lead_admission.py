@@ -97,7 +97,7 @@ async def wake(service: LeadService, lead: _Lead) -> None:
             reason = "the spending brake is active."
         elif lead.wakes >= service.policy.wakes:
             reason = "the thread's wake limit was reached."
-        elif service.policy.limits.turns - lead.turns <= 1:
+        elif lead.limits.turns - lead.turns <= 1:
             reason = "the last turn is reserved for the person."
         if reason is not None:
             if reason not in lead.refusals:

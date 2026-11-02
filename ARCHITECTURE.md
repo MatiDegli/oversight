@@ -431,10 +431,20 @@ an initialization racing shutdown cannot create another watcher. Store closure i
 for cleanup. Restart creates a new run with no restored lead, pending triggers, wake counts or
 model call. No persistence, new event transport or frontend behavior is introduced.
 
+Several leads run concurrently, independently of coding seats. `OVERSIGHT_MAX_LEADS` defaults to 6;
+starting, working and idle leads hold capacity through Stop until terminal. Admission checks setup,
+the selected Meta provider's spending brake, then capacity, reserving before any publication await.
+The process snapshots capacity and all lead limits once; environment changes apply to the next run.
+`run.started.max_leads`, each `lead.status.limits`, prompts and schemas describe those snapshots.
 Turns return idle after a reply or a tool/model/time/brake cut; failures and Stop remain terminal.
-Limits reset per turn (12 tools, 18 calls, 300 s); cumulative steps and three plans last per thread.
-Reply 50 is followed by halted without idle. finish(reply) needs no plan; ordinary text also replies.
-Masked replies fit 4,096 characters; history keeps whole exchanges within 24,000, without old tools.
+`OVERSIGHT_LEAD_MAX_` settings default to TURNS=50 per thread, TOOL_CALLS=12, MODEL_CALLS=18 and
+WALL_CLOCK_S=300 per turn, PLANS=3 per thread, SUBTASKS=6 per plan and TASK_CHARS=2000 per instruction.
+All are positive integers without a maximum. The final allowed turn replies then halts without idle.
+Each lead owns history, counters, plan budget, accounting callbacks, revisions, Stop and cleanup.
+finish(reply) needs no plan; ordinary text also replies. Only the person queues proposed plans;
+merge authority is unchanged. Shared spend still hard-refuses Meta calls; Baseten stays exempt.
+Masked replies fit 4,096 characters; `OVERSIGHT_LEAD_HISTORY_CHARS` defaults to 24000, keeping whole
+exchanges without old tools. Like the other lead settings, it is process-fixed and has no maximum.
 status folds one committed prefix, fences escaped fields at 200 characters and omits whole entries
 within 20,000 characters; through_seq is the maximum committed status or server-digest horizon
 observed this turn, or null.

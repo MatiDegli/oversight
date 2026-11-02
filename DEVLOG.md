@@ -60,3 +60,5 @@ One line per day, in Argentina time (ART).
   test limit, derived per-round agent deadline and explicit incomplete timeout observations.
   Added per-lead committed-event watchers, fixed wake coalescing, locked admission/refusal,
   bounded server notices and reply correlation, with fake-only race and lifecycle evidence.
+  Verified exclusive reply correlation across human, autonomous and mixed turns, and isolated
+  wake admission after integrating concurrent leads and their captured limits.

@@ -1,7 +1,13 @@
 import type { State } from "../state";
 // eslint-disable-next-line no-restricted-imports -- Shared current-candidate evidence and target identity; the review index does not export them.
-import { parameterExtensions } from "../review/parameterExtensions";
+import {
+  parameterEvidenceSelector,
+  parameterExtensions,
+  visitParameterEvidence,
+} from "../review/parameterExtensions";
 import { selectGraphBehavior, selectGraphBehaviorNode } from "./behavior";
+
+export { parameterEvidenceSelector, visitParameterEvidence };
 
 /** Direct behavior evidence only; measured callers never create chips. */
 export function selectNodeChips(state: State, litIds: readonly string[] | null) {
