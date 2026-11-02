@@ -4155,3 +4155,7 @@ comments and copy:
 6. Use exactly "These calls use the new parameter, so What was compared does not count them."
    as the muted sentence. It explains count separation without suggesting additional measurement
    or an unsupported binding interpretation.
+
+## 2026-11-02 — Chat starts with a direct task; leads join the Agents list
+
+The maintainer approved packet a-1102c on Nov 2 at 13:42 ART. Chat opens on the direct task: the built task box and Start agent come first; a lead is the quieter second option, as New lead in the Agents header and as a link under the box. Leads and direct tasks are peers in one Agents list, in start order; a lead's row carries its team's hue and letter and its agents follow it. The header count stays the slots held; leads hold no slot. Slot cards show the model only; the letter comes from the team rule once the agent starts. Before any lead has started, the New lead form says its limits are set before Oversight starts, with no numbers. No contract, endpoint or event change.
