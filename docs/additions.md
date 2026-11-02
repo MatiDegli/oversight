@@ -205,7 +205,8 @@ new candidate work waits for the maintainer’s order.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
 - A dependency guard for package existence, license and vulnerability evidence.
 - Native workflow candidates from the maintainer (2026-10-29); memory admission below is built,
-  and the remaining candidates are not queued. The cut line comes before considering the remainder.
+  and the remaining candidates are not queued. The cut line, drawn once the checkpoint list is on main,
+  comes before considering the remainder.
   - Resource admission: the person's cap on running agents stays the limit. Memory can only hold
     a new start below that cap; the spending brake refuses new runs above 90% of credits. Both are built.
     `OVERSIGHT_MAX_AGENTS` defaults to four (1–6); `OVERSIGHT_MEMORY_HOLD_PERCENT` defaults to 90 (1–100).
@@ -234,17 +235,28 @@ new candidate work waits for the maintainer’s order.
   search and the graph cannot give. A candidate from the maintainer, not queued; nothing is built
   before the freeze.
 - Native candidates from the maintainer (2026-11-01), none queued.
-  - **The plan as a flow with a lock.** After the hackathon, not queued. Draw the [Lead agent](#lead-agent)'s
-    [plan (item 11)](#11-one-plan-server-computed-zones-and-task-queue) as agent nodes beside action nodes from a closed catalog: tests, review, a pause for the person, Approve and combined tests.
-    The person locks the whole flow or one block; Oversight enforces the lock on plan edits and queueing, not in the prompt. Modes: observe, guided and strict.
-    Prerequisites: subtask ids that survive edits (`depends_on` holds revision-local indices today), action nodes with their own identity,
-    and a separate decision on whether the lead may edit plans at all: today it only proposes (DECISIONS.md, “The lead runs inside one run with fixed limits”).
-    Hard rules are drawn and can never be removed: combined tests before main and a deliberate click on Approve.
-  - **The graph optional by configuration.** After the hackathon, not queued. Keep it on by default; when off,
-    Cytoscape, fcose and the WebGL field never load, and the [Files tree](../DESIGN.md#layout) and panels stand in for the graph.
+  - **The plan as a flow with a lock.** Controls are not queued. Its read-only view is decided before the
+    freeze ([decision](../DECISIONS.md#2026-11-02--a-read-only-plan-flow-before-the-freeze)); the lock, lead
+    edits, modes and optional action nodes come after the hackathon. Draw the [Lead agent](#lead-agent)'s
+    [plan (item 11)](#11-one-plan-server-computed-zones-and-task-queue) as agent nodes beside action nodes
+    from a closed catalog: tests, review, a pause for the person, Approve and combined tests. The person locks
+    the whole flow or one block; Oversight enforces the lock on plan edits and queueing, not in the prompt.
+    Modes: observe, guided and strict. Prerequisites: subtask ids that survive edits (`depends_on` holds
+    revision-local indices today), action nodes with their own identity, and a separate decision on whether
+    the lead may edit plans at all: today it only proposes (DECISIONS.md, “The lead runs inside one run
+    with fixed limits”).
+    Hard rules are drawn and can never be removed: combined tests before main and a deliberate click on
+    Approve. Later still: several workflows by context, where the lead picks the one that fits the task,
+    or one workflow whose optional nodes switch on by context; a library of saved workflows (see
+    [Saved agent flows](#saved-agent-flows)); and after that a public workshop or marketplace where people
+    publish workflows for others to see and use. A shared workflow uses only nodes from the closed catalog
+    and never removes a hard rule.
+  - **The graph optional by configuration.** After the hackathon, not queued. Keep it on by default;
+    when off, Cytoscape, fcose and the WebGL field never load, and the [Files tree](../DESIGN.md#layout)
+    and panels stand in for the graph.
     Replacing AGENTS.md's “One graph, always visible” requires the maintainer's entry in DECISIONS.md first.
-    Prerequisites: the editor loader currently waits for `whenFirstGraphDrawn()`; node selection, the impact cone,
-    the palette's graph commands and both practice graphs need paths that work with the graph off.
+    Prerequisites: the editor loader currently waits for `whenFirstGraphDrawn()`; node selection, the impact
+    cone, the palette's graph commands and both practice graphs need paths that work with the graph off.
   - Slash commands in Chat, low priority, not built. Read-only: `/usage` (usage screen), `/status`,
     `/context` (tokens per call; missing usage is "unknown", never zero), `/export`. Existing routes:
     `/pause`, `/resume`, `/stop`, `/revert` (only where Revert applies cleanly). Contract decisions,
