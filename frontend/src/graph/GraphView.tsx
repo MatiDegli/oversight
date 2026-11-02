@@ -16,6 +16,7 @@ import { elementSnapshot } from "./elementSnapshot";
 import type { GraphElement, MeasuredWord } from "./elements";
 import { foldController } from "./foldController";
 import { createBoxSource, DotField } from "./field";
+import { createMapSource } from "./field/mapSource";
 import type { FieldInput } from "./field";
 import { exposeProbe } from "./probe";
 import { showNodeHover, showSelection } from "./selection";
@@ -107,10 +108,10 @@ export function GraphView({
 }: GraphViewProps = {}) {
   const container = useRef<HTMLDivElement>(null);
   // What the dot field reads of the graph: the rendered boxes of the nodes it lights.
-  const boxes = useRef(createBoxSource());
   const graph = useRef<Core | undefined>(undefined);
   const latest = useRef<GraphViewProps>({});
   const mapControl = useMapController(container, latest);
+  const boxes = useRef(createMapSource(createBoxSource(), mapControl));
   const resync = useRef<(() => void) | undefined>(undefined);
   const framedFor = useRef(panelOpen);
   const framedKey = useRef(frameKey);

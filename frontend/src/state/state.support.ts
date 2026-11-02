@@ -27,6 +27,7 @@ function event<K extends ServerEvent["type"]>(
 const run: RunStarted = {
   run_id: "run-1",
   merge_mode: null,
+  max_leads: null,
   contract_version: "1.0.0",
   prompt_version: "test-prompt",
   workspace: "demo-repo",

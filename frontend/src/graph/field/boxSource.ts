@@ -14,6 +14,8 @@ import { observeFirstGraphDraw } from "../firstDraw";
 export interface BoxSource {
   attach(cy: Core): void;
   zoom?(): number;
+  /** Published product level; absent on card-only graph mounts. */
+  level?(): "map" | "cards";
   /** The actual rendered edge in travel order, or null when there is no edge. */
   route?(from: string, to: string): XY[] | null;
   /**

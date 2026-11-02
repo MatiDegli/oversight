@@ -1,6 +1,7 @@
 """Injected NT policy runs on Linux; kernel/console proofs are explicitly native only."""
 
 import asyncio
+import ctypes
 import errno
 import json
 import os
@@ -8,6 +9,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import Mock
 
 import pytest
 
@@ -412,6 +414,129 @@ async def test_native_nested_jobs_console_code_and_released_lock(capsys):
     assert "NT smoke: run 1: ok" in output
 
 
+class ProcessEntry32(ctypes.Structure):
+    _fields_ = [
+        ("dwSize", ctypes.c_uint32),
+        ("cntUsage", ctypes.c_uint32),
+        ("th32ProcessID", ctypes.c_uint32),
+        ("th32DefaultHeapID", ctypes.c_size_t),
+        ("th32ModuleID", ctypes.c_uint32),
+        ("cntThreads", ctypes.c_uint32),
+        ("th32ParentProcessID", ctypes.c_uint32),
+        ("pcPriClassBase", ctypes.c_int32),
+        ("dwFlags", ctypes.c_uint32),
+        ("szExeFile", ctypes.c_wchar * 260),
+    ]
+
+
+def member_images(api, last_error) -> dict[int, str]:
+    """Use a process snapshot so an unopenable member still has an image name."""
+    api.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
+    api.CreateToolhelp32Snapshot.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+    for name in ("Process32FirstW", "Process32NextW"):
+        operation = getattr(api, name)
+        operation.restype = ctypes.c_int
+        operation.argtypes = [ctypes.c_void_p, ctypes.POINTER(ProcessEntry32)]
+    snapshot = api.CreateToolhelp32Snapshot(2, 0)  # TH32CS_SNAPPROCESS
+    assert snapshot and snapshot != ctypes.c_void_p(-1).value, f"snapshot error={last_error()}"
+    try:
+        entry = ProcessEntry32()
+        entry.dwSize = ctypes.sizeof(entry)
+        images = {}
+        present = api.Process32FirstW(snapshot, ctypes.byref(entry))
+        while present:
+            images[entry.th32ProcessID] = entry.szExeFile
+            present = api.Process32NextW(snapshot, ctypes.byref(entry))
+        error = last_error()
+        assert error == 18, f"process snapshot incomplete: error={error}"  # ERROR_NO_MORE_FILES
+        return images
+    finally:
+        api.CloseHandle(snapshot)
+
+
+def open_driver_members(api, members, required, handles, last_error) -> None:
+    images = member_images(api, last_error)
+    opened, evidence = [], []
+    for pid in sorted(members):
+        handle = api.OpenProcess(0x1000, False, pid)  # No outer job handle is retained.
+        error = last_error() if not handle else 0
+        opened.append((pid, handle, error))
+        evidence.append({"pid": pid, "image": images.get(pid, "gone"), "error": error})
+        if handle:
+            handles.append(handle)
+    assert required <= members, f"missing required members={required - members}; {evidence}"
+    for pid, handle, error in opened:
+        if not handle and pid not in required and error == 87:  # ERROR_INVALID_PARAMETER
+            continue  # An optional member already stopped before OpenProcess.
+        assert handle, evidence
+
+
+@pytest.mark.parametrize(
+    "errors,refused",
+    [
+        ({}, False),
+        ({30: 87}, False),
+        ({10: 87}, True),
+        ({20: 87}, True),
+        ({30: 5}, True),
+        ({30: 87, 40: 5}, True),
+    ],
+)
+def test_driver_member_open_evidence(errors, refused):
+    images = {10: "server.exe", 20: "sleeper.exe", 30: "launcher.exe"}
+    records, last = iter(images.items()), [0]
+
+    def enumerate_processes(snapshot, pointer):
+        assert snapshot == 77
+        entry = ctypes.cast(pointer, ctypes.POINTER(ProcessEntry32)).contents
+        assert entry.dwSize == ctypes.sizeof(ProcessEntry32)
+        row = next(records, None)
+        if row is None:
+            last[0] = 18
+            return False
+        entry.th32ProcessID, entry.szExeFile = row
+        return True
+
+    def open_process(access, inherit, pid):
+        assert access == 0x1000 and not inherit
+        last[0] = errors.get(pid, 0)
+        return None if pid in errors else pid + 1000
+
+    api = SimpleNamespace(
+        CreateToolhelp32Snapshot=Mock(return_value=77),
+        Process32FirstW=Mock(side_effect=enumerate_processes),
+        Process32NextW=Mock(side_effect=enumerate_processes),
+        CloseHandle=Mock(),
+        OpenProcess=Mock(side_effect=open_process),
+    )
+    handles, members = [], {10, 20, 30, 40}
+    if refused:
+        with pytest.raises(AssertionError) as failure:
+            open_driver_members(api, members, {10, 20}, handles, lambda: last[0])
+        for pid in sorted(members):
+            assert str(
+                {"pid": pid, "image": images.get(pid, "gone"), "error": errors.get(pid, 0)}
+            ) in str(failure.value)
+    else:
+        open_driver_members(api, members, {10, 20}, handles, lambda: last[0])
+    assert handles == [pid + 1000 for pid in sorted(members - errors.keys())]
+    api.CreateToolhelp32Snapshot.assert_called_once_with(2, 0)
+    api.CloseHandle.assert_called_once_with(77)
+    assert api.OpenProcess.call_count == len(members)
+
+
+def test_member_snapshot_error_is_not_reported_as_gone():
+    api = SimpleNamespace(
+        CreateToolhelp32Snapshot=Mock(return_value=77),
+        Process32FirstW=Mock(return_value=False),
+        Process32NextW=Mock(),
+        CloseHandle=Mock(),
+    )
+    with pytest.raises(AssertionError, match="snapshot incomplete: error=5"):
+        member_images(api, lambda: 5)
+    api.CloseHandle.assert_called_once_with(77)
+
+
 @NATIVE
 @pytest.mark.anyio
 async def test_native_driver_death_without_an_external_outer_handle(tmp_path):
@@ -434,8 +559,10 @@ async def main():
         demo_check.server_env(port, Path({str(runtime)!r})), Path({str(tmp_path / "server.log")!r}),
     )
     await asyncio.to_thread(smoke.wait_for_health, smoke.base_url(port), 30, server.child)
-    subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(120)'])
-    Path({str(marker)!r}).write_text(json.dumps(nt.JOBS.pids(outer)))
+    sleeper = subprocess.Popen([sys.executable, '-c', 'import time;time.sleep(120)'])
+    Path({str(marker)!r}).write_text(json.dumps({{
+        'members': nt.JOBS.pids(outer), 'sleeper': sleeper.pid, 'server': server.child.pid,
+    }}))
     await asyncio.sleep(120)
 asyncio.run(main())
 """
@@ -451,12 +578,12 @@ asyncio.run(main())
             while not marker.exists():
                 assert driver.returncode is None
                 await asyncio.sleep(nt.POLL)
-        members = set(json.loads(marker.read_text())) - {driver.pid}
+        recorded = json.loads(marker.read_text())
+        members = set(recorded["members"]) - {driver.pid}
         assert len(members) >= 2  # real backend (including any launcher) and sleeper
-        for pid in members:
-            handle = api.OpenProcess(0x1000, False, pid)  # process only, no outer job handle
-            assert handle
-            handles.append(handle)
+        required = {recorded["sleeper"], recorded["server"]}
+        assert len(required) == 2
+        open_driver_members(api, members, required, handles, ctypes.get_last_error)
         driver.kill()
         await asyncio.wait_for(driver.wait(), nt.STOP_DEADLINE)
         async with asyncio.timeout(nt.STOP_DEADLINE):

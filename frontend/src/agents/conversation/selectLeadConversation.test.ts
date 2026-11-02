@@ -41,6 +41,7 @@ const base: LeadStatus = {
   state: "starting",
   step: 0,
   detail: null,
+  limits: null,
   requested_plan_id: null,
 };
 function thread(turns = 3, withPlans = false) {
@@ -94,6 +95,7 @@ function thread(turns = 3, withPlans = false) {
       payload: {
         agent_id: base.agent_id,
         answers_seq: answer,
+        woken_by: null,
         text: `Lead turn ${String(turn + 1)}`,
         through_seq: turn ? events.length : 0,
         cut: null,
@@ -109,6 +111,10 @@ const project = (events: ServerEvent[]) => {
   if (!conversation) throw new Error("Missing lead");
   return conversation;
 };
+
+it("retains unknown lead limits as null in the conversation header", () => {
+  expect(project(thread(1)).header.limits).toBeNull();
+});
 
 it("loads the lead selector only through the lazy conversation boundary", async () => {
   vi.resetModules();

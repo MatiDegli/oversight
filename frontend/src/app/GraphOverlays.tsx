@@ -61,6 +61,7 @@ export function Legend({ state, map = false }: { state: State; map?: boolean }) 
           />
           A ring: an agent works inside
         </li>
+        <li className="map-legend-hint">Click a group to frame it, a module to open it at 100%</li>
       </ul>
     );
   return (

@@ -101,6 +101,7 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
       return {
         ...next,
         usage: tick,
+        usageTicks: [...state.usageTicks, tick],
         budgetMarks,
         modelWaits,
         agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },

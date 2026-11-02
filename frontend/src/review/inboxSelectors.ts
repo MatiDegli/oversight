@@ -74,7 +74,7 @@ export function selectInboxSummary(state: State) {
   for (const event of state.decisionEvents) {
     if (event.type !== "lead.status") continue;
     const previous = leads.get(event.payload.agent_id);
-    if (!previous || previous.revision <= event.payload.revision)
+    if (!previous || previous.revision < event.payload.revision)
       leads.set(event.payload.agent_id, event.payload);
   }
   const agents = new Set([...Object.keys(state.agents), ...leads.keys()]).size;

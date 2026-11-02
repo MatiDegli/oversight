@@ -19,12 +19,22 @@ const render = (state: ReturnType<typeof parameterState>, phone = false) =>
       phone={phone}
     />,
   );
+it("names the inner evidence focus target for its function", () => {
+  const state = parameterState("values");
+  const entry = parameterExtensions(state, "change-1")[0];
+  if (!entry) throw new Error("Missing extension");
+  const target = render(state)
+    .match(/<section\b[^>]*>/g)
+    ?.find((tag) => tag.includes(`id="${entry.target}"`));
+  expect(target).toContain('aria-label="compute_price"');
+});
 it.each(parameterStates)("renders supplied values and separated counts: %s", (name) => {
   const state = parameterState(name),
     entries = parameterExtensions(state, "change-1");
   const html = render(state);
   for (const entry of entries) {
     expect(html).toContain(entry.node_id.split(":").at(-1));
+    expect(html).toContain("<p>compute_price");
     for (const sample of entry.rows) {
       expect(html).toContain(sample.inputs);
       expect(html).toContain(sample.after);

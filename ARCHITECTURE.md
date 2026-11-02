@@ -364,8 +364,9 @@ every few hundred milliseconds and SQLite writes are batched.
 Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
 gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text to a coding agent or lead, masked before storage.
-Contracts 1.15.0 defines `lead.reply {agent_id, answers_seq, text, through_seq, cut}`, produced by L2.
-`answers_seq` is null for the opening task, or names an earlier `agent.message` to the same lead.
+Contracts 1.17.0 defines `lead.reply {agent_id, answers_seq, woken_by, text, through_seq, cut}`,
+produced by L2. `woken_by` names committed catalog triggers for that lead; nothing produces a wake yet.
+`answers_seq` is null for the opening task or a wake, or names an earlier `agent.message` to the same lead.
 `through_seq` is null or a nonnegative horizon strictly below the reply's seq, with no target-type
 requirement. Non-null reply text is nonblank and at most 4,096 characters, masked before storage
 like messages. `cut` is `tool_calls`, `model_calls`, `time`, `spend_brake` or null. Null text requires
@@ -397,10 +398,20 @@ Admission checks the brake and claims working under the lead lock before publica
 Shutdown awaits retained publication tasks and every turn/client cleanup, including idle leads.
 The thread is run-local and lost on restart; L3 presents Chat. Persistence remains a later step.
 
+Several leads run concurrently, independently of coding seats. `OVERSIGHT_MAX_LEADS` defaults to 6;
+starting, working and idle leads hold capacity through Stop until terminal. Admission checks setup,
+the selected Meta provider's spending brake, then capacity, reserving before any publication await.
+The process snapshots capacity and all lead limits once; environment changes apply to the next run.
+`run.started.max_leads`, each `lead.status.limits`, prompts and schemas describe those snapshots.
 Turns return idle after a reply or a tool/model/time/brake cut; failures and Stop remain terminal.
-Limits reset per turn (12 tools, 18 calls, 300 s); cumulative steps and three plans last per thread.
-Reply 50 is followed by halted without idle. finish(reply) needs no plan; ordinary text also replies.
-Masked replies fit 4,096 characters; history keeps whole exchanges within 24,000, without old tools.
+`OVERSIGHT_LEAD_MAX_` settings default to TURNS=50 per thread, TOOL_CALLS=12, MODEL_CALLS=18 and
+WALL_CLOCK_S=300 per turn, PLANS=3 per thread, SUBTASKS=6 per plan and TASK_CHARS=2000 per instruction.
+All are positive integers without a maximum. The final allowed turn replies then halts without idle.
+Each lead owns history, counters, plan budget, accounting callbacks, revisions, Stop and cleanup.
+finish(reply) needs no plan; ordinary text also replies. Only the person queues proposed plans;
+merge authority is unchanged. Shared spend still hard-refuses Meta calls; Baseten stays exempt.
+Masked replies fit 4,096 characters; `OVERSIGHT_LEAD_HISTORY_CHARS` defaults to 24000, keeping whole
+exchanges without old tools. Like the other lead settings, it is process-fixed and has no maximum.
 status folds one committed prefix, fences escaped fields at 200 characters and omits whole entries
 within 20,000 characters; through_seq is the maximum status S read this turn, or null.
 L3 owns Chat/composer, freshness/cut/withheld UI, plan links, graph/focus, fixture exclusion,
@@ -486,7 +497,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.11.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.17.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

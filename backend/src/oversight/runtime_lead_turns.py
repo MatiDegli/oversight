@@ -42,10 +42,13 @@ class LeadTurn:
             on_working=self.working,
             on_step=self.step,
             mask=self.live._redactor,
+            limits=lead.limits,
+            history_chars=self.live._lead_history_chars,
         )
         lead.run = self.run
         self.run.make_client, self.run.record = self.make_client, self.accounting.record
         self.run.on_working, self.run.on_step = self.working, self.step
+        self.run.admit = self.admit
 
     def check(self) -> None:
         if self.service._closing or self.live._closing or self.lead.stopping:
@@ -114,6 +117,7 @@ class LeadTurn:
                 await live._finish(live.store.publish(end.reply))
                 if lead.stopping or service._closing or live._closing:
                     state, detail = service._ending(lead)
-                elif lead.turns >= 50:
-                    state, detail = "halted", "Reached the limit of 50 turns."
+                elif lead.turns >= self.run.limits.turns:
+                    state = "halted"
+                    detail = f"Reached the limit of {self.run.limits.turns} turns."
             await live._finish(service._status(lead, state, detail, step=self.run.steps))

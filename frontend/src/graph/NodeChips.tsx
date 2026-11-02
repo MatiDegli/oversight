@@ -2,10 +2,8 @@ import { ArrowRight } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { State } from "../state";
-// eslint-disable-next-line no-restricted-imports -- Explicit navigation shares the review-owned target identity.
-import { visitParameterEvidence } from "../review/parameterExtensions";
 import { unstableBehaviorSentence } from "./behavior";
-import { selectNodeChips } from "./nodeChip";
+import { parameterEvidenceSelector, selectNodeChips, visitParameterEvidence } from "./nodeChip";
 import type { NodeChip } from "./nodeChip";
 import type { GraphProbeHost } from "./probe";
 
@@ -119,11 +117,7 @@ function ParameterEcho({ extension }: { extension: NonNullable<NodeChip["extensi
   useEffect(() => {
     if (!reviewClosed) return;
     const observer = new MutationObserver(() => {
-      if (
-        document
-          .getElementById(extension.target)
-          ?.closest('.review-body [aria-label="New-parameter calls"]')
-      )
+      if (document.getElementById(extension.target)?.closest(parameterEvidenceSelector))
         setReviewClosed(false);
     });
     observer.observe(document.body, { childList: true, subtree: true });

@@ -190,6 +190,7 @@ it.each(["pointer", "Enter", "Space"])(
         await button.press(activation);
       }
       await check(section(page)).toBeFocused();
+      await check(section(page)).toHaveAccessibleName("compute_price");
       expect(await page.evaluate(() => Reflect.get(window, "navigationOrder") as string[])).toEqual(
         ["scroll", "focus:true"],
       );
@@ -284,6 +285,121 @@ it.each([390, 900, 1279])(
         await neighbor.click({ position: { x: 5, y: -10 }, force: true });
         await check(neighbor).toHaveAttribute("aria-expanded", "true");
         await neighbor.press("Escape");
+      }
+    });
+  },
+);
+
+it.each([1280, 1920])(
+  "retains desktop chip and action geometry with neighbors at %i",
+  async (width) => {
+    await mounted(width, "day", "mixed", async (page) => {
+      await check(chip(page)).toBeVisible();
+      const geometry = await chip(page).evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        return {
+          height: rect.height,
+          before: getComputedStyle(el, "::before").content,
+          outside: document.elementFromPoint(rect.x + rect.width / 2, rect.y - 10) === el,
+        };
+      });
+      expect(geometry).toEqual({ height: 22, before: "none", outside: false });
+      await chip(page).click({ position: { x: 20, y: -10 }, force: true });
+      await check(chip(page)).toHaveAttribute("aria-expanded", "false");
+      await check(page.locator("[data-chip-popover]")).toHaveCount(0);
+    });
+    await mounted(width, "day", "mixed", async (page) => {
+      await chip(page).click();
+      const button = page.getByRole("button", { name: "see review", exact: true });
+      expect(
+        await button.evaluate((el) => {
+          const rect = el.getBoundingClientRect(),
+            css = getComputedStyle(el);
+          return {
+            height: rect.height,
+            minHeight: css.minHeight,
+            display: css.display,
+            decoration: css.textDecorationLine,
+            offset: css.textUnderlineOffset,
+            padding: css.padding,
+            border: css.borderWidth,
+            before: getComputedStyle(el, "::before").content,
+            after: getComputedStyle(el, "::after").content,
+            outside: document.elementFromPoint(rect.x + rect.width / 2, rect.y - 10) === el,
+          };
+        }),
+      ).toEqual({
+        height: 19.5,
+        minHeight: "0px",
+        display: "inline-flex",
+        decoration: "underline",
+        offset: "2px",
+        padding: "0px",
+        border: "0px",
+        before: "none",
+        after: "none",
+        outside: false,
+      });
+      await page.keyboard.press("Tab");
+      await check(button).toBeFocused();
+      await check(button).toHaveCSS("outline-style", "solid");
+      await check(button).toHaveCSS("outline-width", "2px");
+      await button.press("Enter");
+      await check(section(page)).toBeFocused();
+      await check(page.locator(".review-body")).toHaveCSS("overflow-y", "auto");
+      expect(await page.locator(".review-body").evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+      await page.keyboard.press("Escape");
+      await check(section(page)).toBeFocused();
+      await page.evaluate(() => {
+        window.paramEvidence.neighbor();
+      });
+      await check(chip(page)).toHaveCount(2);
+      const stage = page.getByRole("main", { name: "Graph stage" });
+      for (let i = 0; i < 3 && !(await chip(page).nth(1).isVisible()); i++)
+        await stage.getByRole("button", { name: "Zoom in", exact: true }).click();
+      // Keep both chips inside the desktop graph's clipped viewport after zooming.
+      await page.mouse.move(width - 130, 150);
+      await page.mouse.down();
+      await page.mouse.move(width - 400, 150, { steps: 10 });
+      await page.mouse.up();
+      for (const [index, neighbor] of (await chip(page).all()).entries()) {
+        await check(neighbor).toBeVisible();
+        await check
+          .poll(() =>
+            neighbor.evaluate((el) => {
+              const rect = el.getBoundingClientRect();
+              return (
+                rect.height === 22 &&
+                getComputedStyle(el, "::before").content === "none" &&
+                [rect.x + 3, rect.right - 3].every(
+                  (x) =>
+                    document.elementFromPoint(x, rect.y + rect.height / 2)?.closest("button") ===
+                    el,
+                )
+              );
+            }),
+          )
+          .toBe(true);
+        await neighbor.click({ position: { x: 5, y: 11 } });
+        await check(neighbor).toHaveAttribute("aria-expanded", "true");
+        await check(page.locator("[data-chip-popover]")).toHaveAttribute(
+          "id",
+          (await neighbor.getAttribute("aria-controls")) ?? "",
+        );
+        await neighbor.press("Escape");
+        await check(page.locator("[data-chip-popover]")).toHaveCount(0);
+        await check(neighbor).toBeFocused();
+        await neighbor.click({ position: { x: 5, y: 11 } });
+        await button.click();
+        if (index === 0) await check(section(page)).toBeFocused();
+        else {
+          await check(page.locator('[data-chip-popover] [role="status"]')).toHaveText(
+            "The review for these calls is not open.",
+          );
+          await check(button).toBeFocused();
+        }
+        await page.keyboard.press("Escape");
+        await check(page.locator("[data-chip-popover]")).toHaveCount(0);
       }
     });
   },

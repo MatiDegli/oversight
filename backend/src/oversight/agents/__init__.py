@@ -15,14 +15,18 @@ from oversight.agents._examples_validate import (
 )
 from oversight.agents._lead import (
     BRAKE_DETAIL,
-    LEAD_LIMITS,
     LEDGER_DETAIL,
     STARTING_DETAIL,
     LeadEnd,
-    LeadLimits,
     LeadRun,
 )
-from oversight.agents._lead_tools import LEAD_TOOL_SCHEMAS, LeadProposalError, LeadTools
+from oversight.agents._lead_policy import LEAD_LIMITS, build_lead_prompt, build_starting_detail
+from oversight.agents._lead_tools import (
+    LEAD_TOOL_SCHEMAS,
+    LeadProposalError,
+    LeadTools,
+    build_lead_tool_schemas,
+)
 from oversight.agents._lifecycle import TaskClients, close_model
 from oversight.agents._plan_call import run_plan_call
 from oversight.agents._prompts import prompt_version, system_prompt
@@ -98,6 +102,7 @@ from oversight.agents.usage import (
     UsageLedger,
     validate_usage_tick,
 )
+from oversight_contracts.events import LeadLimits
 
 __all__ = [
     "BASETEN_BASE_URL",
@@ -172,6 +177,9 @@ __all__ = [
     "UnverifiedProfile",
     "Usage",
     "UsageLedger",
+    "build_lead_prompt",
+    "build_lead_tool_schemas",
+    "build_starting_detail",
     "canonical_json",
     "classify_difference",
     "close_model",

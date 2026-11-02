@@ -22,6 +22,7 @@ export function scaleLog(snapshot: GraphSnapshot, positions?: GraphSnapshot["pos
         workspace: "hand-written scale fixture",
         base_commit: snapshot.commit,
         merge_mode: null,
+        max_leads: null,
         models: [
           {
             id: "fake",

@@ -1,4 +1,5 @@
 import type { Slot } from "@contracts";
+import { displayName } from "./mapEvidence";
 import type { GraphElement } from "./elements";
 import { foldPositions } from "./foldPositions";
 import { nodeGeometry } from "./geometry";
@@ -7,6 +8,10 @@ import type { GeometryTokens } from "./geometry";
 export interface MapModule {
   id: string;
   name: string;
+  fullName?: string;
+  nameWidth?: number;
+  inCone?: boolean;
+  distance?: number;
   x: number;
   y: number;
   functions: number;
@@ -14,6 +19,13 @@ export interface MapModule {
 }
 export interface MapGroup {
   headerWidth?: number;
+  headerItemWidths?: number[];
+  headerLines?: number;
+  rings?: Slot[];
+  decisions?: number;
+  tested?: number;
+  coneCount?: number;
+  coneTotal?: number;
   id: string;
   label: string;
   panel: boolean;
@@ -105,7 +117,7 @@ export function mapModel(elements: readonly GraphElement[], theme: GeometryToken
     });
     group.modules.push({
       id: root.data.id,
-      name: root.data.title ?? root.data.id,
+      ...displayName(root.data.title ?? root.data.id, id),
       x: p.x,
       y: p.y + (cellHeight - g.headerHeight) / 2,
       functions: nodes.filter((n) => n.data.kind === "function" || n.data.kind === "method").length,
@@ -140,7 +152,7 @@ export function panelBox(group: MapGroup, zoom: number, groups: readonly MapGrou
     ? Math.max(
         ...groups
           .filter((g) => g.panel && g.y === group.y)
-          .map((g) => (g.width * zoom + 12 < (g.headerWidth ?? 180) ? 60 : 37)),
+          .map((g) => 37 + 23 * (headerLines(g, zoom) - 1)),
       )
     : 0;
   return {
@@ -149,5 +161,53 @@ export function panelBox(group: MapGroup, zoom: number, groups: readonly MapGrou
     y1: group.y - header / zoom,
     x2: group.x + group.width + 6 / zoom,
     y2: group.y + group.height + 6 / zoom,
+  };
+}
+
+/** Flex items retain their measured widths while the screen-sized strip wraps. */
+export function headerLines(group: MapGroup, zoom: number) {
+  if (!group.headerItemWidths)
+    return group.headerLines ?? (group.width * zoom + 12 < (group.headerWidth ?? 180) ? 2 : 1);
+  let lines = 1,
+    used = 0;
+  // The panel adds 12px outside the ground, then loses 24px padding and 2px border.
+  const width = group.width * zoom - 14;
+  for (const item of group.headerItemWidths) {
+    if (used && used + 10 + item > width) {
+      lines++;
+      used = 0;
+    }
+    used += (used ? 10 : 0) + item;
+  }
+  return lines;
+}
+
+/** The block's retained text boxes keep its circle stationary when names are hidden. */
+export function moduleLayout(
+  module: MapModule,
+  model: MapModel,
+  zoom: number,
+  pan: { x: number; y: number },
+) {
+  const radius = Math.max(5, Math.min(9, Math.round(model.cellHeight * zoom * 0.1)));
+  const height = 2 * radius + 3 + 15.6 + 14.4 * (1 + module.agents.length);
+  const x = module.x * zoom + pan.x,
+    top = module.y * zoom + pan.y - height / 2;
+  const width = model.cellWidth * zoom - 10;
+  return {
+    x,
+    y: top + radius,
+    radius,
+    outerRadius: radius + (module.agents.length ? 5 : 0),
+    x1: x - width / 2,
+    y1: top,
+    x2: x + width / 2,
+    y2: top + height,
+    name: {
+      x1: x - Math.min(width, module.nameWidth ?? width) / 2,
+      y1: top + 2 * radius + 3,
+      x2: x + Math.min(width, module.nameWidth ?? width) / 2,
+      y2: top + height,
+    },
   };
 }

@@ -11,6 +11,7 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     NonNegativeInt,
+    PositiveFloat,
     PositiveInt,
     ValidationInfo,
     model_validator,
@@ -63,6 +64,8 @@ class SlotInfo(ContractModel):
 
 
 class Limits(ContractModel):
+    """The person's values, fixed for the run."""
+
     max_steps: int
     """Tool calls per round; Request changes starts a new round with the same budget."""
     max_output_tokens: int
@@ -96,6 +99,8 @@ class RunStarted(ContractModel):
     models: list[ModelProfile]
     slots: list[SlotInfo]
     limits: Limits
+    max_leads: PositiveInt | None = None
+    """How many leads may be active at once; null in older runs."""
     budget: Budget
     merge_mode: MergeModeState | None = None
     """Initial server merge mode; null in recordings without mode metadata."""
@@ -505,6 +510,25 @@ class SuiteExecution(ContractModel):
     """The server-observed test result."""
 
 
+class LeadLimits(ContractModel):
+    """The person's lead limits, supplied by the server."""
+
+    turns: PositiveInt
+    """Maximum turns per thread."""
+    tool_calls: PositiveInt
+    """Maximum public-command tool calls per turn."""
+    model_calls: PositiveInt
+    """Maximum model calls per turn, including recovery calls."""
+    wall_clock_s: PositiveFloat
+    """Maximum elapsed seconds per turn."""
+    plans: PositiveInt
+    """Maximum requested plans per thread."""
+    subtasks: PositiveInt
+    """Maximum subtasks per plan requested in the thread."""
+    task_chars: PositiveInt
+    """Maximum characters per plan or subtask instruction in the thread."""
+
+
 class LeadStatus(ContractModel):
     """The server-owned coordination lead state."""
 
@@ -522,6 +546,8 @@ class LeadStatus(ContractModel):
     """Completed public-command tool calls."""
     detail: str | None
     """The lifecycle explanation."""
+    limits: LeadLimits | None = None
+    """The server-owned lead limits; null in older runs."""
     requested_plan_id: PlanId | None = None
     """The plan this revision's step requested, or null."""
 
@@ -532,13 +558,26 @@ class LeadReply(ContractModel):
     agent_id: AgentId
     """The lead replying."""
     answers_seq: PositiveInt | None
-    """An earlier agent.message to this lead; null answers the opening task."""
+    """An earlier agent.message to this lead; null answers the opening task or a wake."""
+    woken_by: list[PositiveInt] | None = None
+    """Committed plan events that woke this lead, in seq order; null when a person's message or
+    the opening task started the turn.
+    """
     text: Annotated[str, Field(min_length=1, max_length=4096, pattern=r"\S")] | None
     """Nonblank text, masked before storage like messages; null with a cut or withheld export."""
     through_seq: NonNegativeInt | None
     """The observed horizon, strictly lower than this reply's envelope seq, or null."""
     cut: Literal["tool_calls", "model_calls", "time", "spend_brake"] | None
     """The turn limit that cut the reply short, or null."""
+
+    @model_validator(mode="after")
+    def _wake_references(self) -> Self:
+        if self.woken_by is not None:
+            if not self.woken_by or self.woken_by != sorted(set(self.woken_by)):
+                raise ValueError("woken_by must be nonempty, unique and in seq order")
+            if self.answers_seq is not None:
+                raise ValueError("woken_by and answers_seq are mutually exclusive")
+        return self
 
     @model_validator(mode="after")
     def _reply_text(self, info: ValidationInfo) -> Self:

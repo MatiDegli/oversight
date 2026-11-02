@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.15.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.17.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -2139,7 +2139,7 @@
             }
           ],
           "default": null,
-          "description": "One proposed plan with one to six subtasks."
+          "description": "One proposed plan with subtasks."
         },
         "plan_revision": {
           "anyOf": [
@@ -3473,6 +3473,58 @@
       "title": "LeadCreated",
       "type": "object"
     },
+    "LeadLimits": {
+      "additionalProperties": false,
+      "description": "The person's lead limits, supplied by the server.",
+      "properties": {
+        "turns": {
+          "description": "Maximum turns per thread.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "tool_calls": {
+          "description": "Maximum public-command tool calls per turn.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "model_calls": {
+          "description": "Maximum model calls per turn, including recovery calls.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "wall_clock_s": {
+          "description": "Maximum elapsed seconds per turn.",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "plans": {
+          "description": "Maximum requested plans per thread.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "subtasks": {
+          "description": "Maximum subtasks per plan requested in the thread.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "task_chars": {
+          "description": "Maximum characters per plan or subtask instruction in the thread.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "turns",
+        "tool_calls",
+        "model_calls",
+        "wall_clock_s",
+        "plans",
+        "subtasks",
+        "task_chars"
+      ],
+      "title": "LeadLimits",
+      "type": "object"
+    },
     "LeadPlanDecisionRef": {
       "additionalProperties": false,
       "description": "One entry per (agent_id, revision) of the lead status whose plan awaits approval.\n\nThis names a lead-status revision, not a plan_id. evidence_seq is the event that raised it.",
@@ -3519,7 +3571,23 @@
               "type": "null"
             }
           ],
-          "description": "An earlier agent.message to this lead; null answers the opening task."
+          "description": "An earlier agent.message to this lead; null answers the opening task or a wake."
+        },
+        "woken_by": {
+          "anyOf": [
+            {
+              "items": {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Committed plan events that woke this lead, in seq order; null when a person's message or\nthe opening task started the turn."
         },
         "text": {
           "anyOf": [
@@ -3568,6 +3636,7 @@
       "required": [
         "agent_id",
         "answers_seq",
+        "woken_by",
         "text",
         "through_seq",
         "cut"
@@ -3650,6 +3719,18 @@
           ],
           "description": "The lifecycle explanation."
         },
+        "limits": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LeadLimits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The server-owned lead limits; null in older runs."
+        },
         "requested_plan_id": {
           "anyOf": [
             {
@@ -3671,6 +3752,7 @@
         "state",
         "step",
         "detail",
+        "limits",
         "requested_plan_id"
       ],
       "title": "LeadStatus",
@@ -3708,6 +3790,7 @@
     },
     "Limits": {
       "additionalProperties": false,
+      "description": "The person's values, fixed for the run.",
       "properties": {
         "max_steps": {
           "description": "Tool calls per round; Request changes starts a new round with the same budget.",
@@ -4390,7 +4473,7 @@
     },
     "Plan": {
       "additionalProperties": false,
-      "description": "The complete versioned state of a plan with one to six subtasks.",
+      "description": "The complete versioned state of a plan with subtasks.",
       "properties": {
         "plan_id": {
           "$ref": "#/$defs/PlanId"
@@ -4424,7 +4507,6 @@
               "items": {
                 "$ref": "#/$defs/PlanSubtask"
               },
-              "maxItems": 6,
               "minItems": 1,
               "type": "array"
             },
@@ -4530,7 +4612,6 @@
         "depends_on": {
           "description": "Stable zero-based subtask ids; subtasks are not reordered within a revision.",
           "items": {
-            "maximum": 5,
             "minimum": 0,
             "type": "integer"
           },
@@ -4807,7 +4888,7 @@
             }
           ],
           "default": null,
-          "description": "One proposed plan with one to six subtasks."
+          "description": "One proposed plan with subtasks."
         },
         "plan_revision": {
           "anyOf": [
@@ -5723,6 +5804,19 @@
         "limits": {
           "$ref": "#/$defs/Limits"
         },
+        "max_leads": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many leads may be active at once; null in older runs."
+        },
         "budget": {
           "$ref": "#/$defs/Budget"
         },
@@ -5748,6 +5842,7 @@
         "models",
         "slots",
         "limits",
+        "max_leads",
         "budget",
         "merge_mode"
       ],
@@ -6218,7 +6313,6 @@
         "depends_on": {
           "description": "Stable zero-based subtask ids; subtasks are not reordered within a revision.",
           "items": {
-            "maximum": 5,
             "minimum": 0,
             "type": "integer"
           },
@@ -6682,7 +6776,7 @@
     },
     "UpdatePlan": {
       "additionalProperties": false,
-      "description": "Replace the one to six proposed subtasks using the expected plan revision.",
+      "description": "Replace the proposed subtasks using the expected plan revision.",
       "properties": {
         "revision": {
           "exclusiveMinimum": 0,
@@ -6695,7 +6789,6 @@
           "items": {
             "$ref": "#/$defs/SubtaskDraft"
           },
-          "maxItems": 6,
           "minItems": 1,
           "type": "array"
         }

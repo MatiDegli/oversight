@@ -1519,7 +1519,7 @@ export interface EnqueueTask {
    */
   agent?: QueuedAgentTask | null;
   /**
-   * One proposed plan with one to six subtasks.
+   * One proposed plan with subtasks.
    */
   plan_id?: PlanId | null;
   /**
@@ -1777,6 +1777,10 @@ export interface RunStarted {
   models: ModelProfile[];
   slots: SlotInfo[];
   limits: Limits;
+  /**
+   * How many leads may be active at once; null in older runs.
+   */
+  max_leads: number | null;
   budget: Budget;
   /**
    * Initial server merge mode; null in recordings without mode metadata.
@@ -1809,6 +1813,9 @@ export interface SlotInfo {
    */
   default_model: string;
 }
+/**
+ * The person's values, fixed for the run.
+ */
 export interface Limits {
   /**
    * Tool calls per round; Request changes starts a new round with the same budget.
@@ -1949,7 +1956,7 @@ export interface PlanUpdatedEvent {
   payload: Plan;
 }
 /**
- * The complete versioned state of a plan with one to six subtasks.
+ * The complete versioned state of a plan with subtasks.
  */
 export interface Plan {
   plan_id: PlanId;
@@ -2104,7 +2111,7 @@ export interface QueuedTask {
    */
   agent: QueuedAgentTask | null;
   /**
-   * One proposed plan with one to six subtasks.
+   * One proposed plan with subtasks.
    */
   plan_id: PlanId | null;
   /**
@@ -2172,9 +2179,46 @@ export interface LeadStatus {
    */
   detail: string | null;
   /**
+   * The server-owned lead limits; null in older runs.
+   */
+  limits: LeadLimits | null;
+  /**
    * The plan this revision's step requested, or null.
    */
   requested_plan_id: PlanId | null;
+}
+/**
+ * The person's lead limits, supplied by the server.
+ */
+export interface LeadLimits {
+  /**
+   * Maximum turns per thread.
+   */
+  turns: number;
+  /**
+   * Maximum public-command tool calls per turn.
+   */
+  tool_calls: number;
+  /**
+   * Maximum model calls per turn, including recovery calls.
+   */
+  model_calls: number;
+  /**
+   * Maximum elapsed seconds per turn.
+   */
+  wall_clock_s: number;
+  /**
+   * Maximum requested plans per thread.
+   */
+  plans: number;
+  /**
+   * Maximum subtasks per plan requested in the thread.
+   */
+  subtasks: number;
+  /**
+   * Maximum characters per plan or subtask instruction in the thread.
+   */
+  task_chars: number;
 }
 /**
  * The lead.reply envelope.
@@ -2194,9 +2238,14 @@ export interface LeadReplyEvent {
 export interface LeadReply {
   agent_id: AgentId;
   /**
-   * An earlier agent.message to this lead; null answers the opening task.
+   * An earlier agent.message to this lead; null answers the opening task or a wake.
    */
   answers_seq: number | null;
+  /**
+   * Committed plan events that woke this lead, in seq order; null when a person's message or
+   * the opening task started the turn.
+   */
+  woken_by: number[] | null;
   /**
    * Nonblank text, masked before storage like messages; null with a cut or withheld export.
    */
@@ -2437,7 +2486,7 @@ export interface TreeResponse {
   truncated: boolean;
 }
 /**
- * Replace the one to six proposed subtasks using the expected plan revision.
+ * Replace the proposed subtasks using the expected plan revision.
  */
 export interface UpdatePlan {
   revision: number;
@@ -2618,4 +2667,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.15.0";
+export const CONTRACT_VERSION = "1.17.0";

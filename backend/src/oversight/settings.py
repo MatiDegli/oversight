@@ -9,11 +9,24 @@ from typing import Literal
 
 from oversight.limits import bounded_text
 from oversight_contracts.commands import SettingName
+from oversight_contracts.events import LeadLimits
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 TEST_TIMEOUT_ERROR = (
     "OVERSIGHT_TEST_TIMEOUT_S must be a whole number of seconds from 1 to 999999999"
 )
+LEAD_SETTING_DEFAULTS = {
+    "max_leads": 6,
+    "lead_max_turns": 50,
+    "lead_max_tool_calls": 12,
+    "lead_max_model_calls": 18,
+    "lead_max_wall_clock_s": 300,
+    "lead_max_plans": 3,
+    "lead_max_subtasks": 6,
+    "lead_max_task_chars": 2000,
+    "lead_history_chars": 24000,
+}
+
 type ParsedSettingName = (
     SettingName | Literal["BASETEN_INPUT_USD_PER_M", "BASETEN_OUTPUT_USD_PER_M"]
 )
@@ -52,6 +65,15 @@ class Settings:
     baseten_api_key: str | None = field(default=None, repr=False)
     max_agents: int = 4
     """OVERSIGHT_MAX_AGENTS: offer the first N letters from A, from 1 through 6."""
+    max_leads: int = 6
+    lead_max_turns: int = 50
+    lead_max_tool_calls: int = 12
+    lead_max_model_calls: int = 18
+    lead_max_wall_clock_s: int = 300
+    lead_max_plans: int = 3
+    lead_max_subtasks: int = 6
+    lead_max_task_chars: int = 2000
+    lead_history_chars: int = 24000
     memory_hold_percent: int = 90
     """OVERSIGHT_MEMORY_HOLD_PERCENT: hold new starts at this host-memory percentage."""
     test_timeout_s: int = 60
@@ -134,6 +156,10 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        for name in LEAD_SETTING_DEFAULTS:
+            value = getattr(self, name)
+            if type(value) is not int or value < 1:
+                raise ValueError(f"OVERSIGHT_{name.upper()} must be a positive whole number")
         if type(self.test_timeout_s) is not int or not 1 <= self.test_timeout_s <= 999999999:
             raise ValueError(TEST_TIMEOUT_ERROR)
         if self.history_prune_tokens is not None and (
@@ -170,6 +196,15 @@ class Settings:
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
             max_agents=resolve_max_agents(merged),
+            max_leads=resolve_lead_setting(merged, "max_leads"),
+            lead_max_turns=resolve_lead_setting(merged, "lead_max_turns"),
+            lead_max_tool_calls=resolve_lead_setting(merged, "lead_max_tool_calls"),
+            lead_max_model_calls=resolve_lead_setting(merged, "lead_max_model_calls"),
+            lead_max_wall_clock_s=resolve_lead_setting(merged, "lead_max_wall_clock_s"),
+            lead_max_plans=resolve_lead_setting(merged, "lead_max_plans"),
+            lead_max_subtasks=resolve_lead_setting(merged, "lead_max_subtasks"),
+            lead_max_task_chars=resolve_lead_setting(merged, "lead_max_task_chars"),
+            lead_history_chars=resolve_lead_setting(merged, "lead_history_chars"),
             memory_hold_percent=resolve_memory_hold_percent(merged),
             test_timeout_s=resolve_test_timeout(merged),
             agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
@@ -294,3 +329,30 @@ def run_time_limits(own_source: bool, setting: int) -> tuple[int, int]:
     """Demo and Boltons stay fixed; own repositories leave room for three suites per round."""
     timeout = setting if own_source else 60
     return timeout, max(600, 3 * timeout + 300)
+
+
+def resolve_lead_setting(values: Mapping[str, str], field: str) -> int:
+    """Positive ASCII decimals, with no policy maximum or interpreter digit ceiling."""
+    name = f"OVERSIGHT_{field.upper()}"
+    raw = (values.get(name) or str(LEAD_SETTING_DEFAULTS[field])).lstrip("0")
+    if not raw.isascii() or not raw.isdecimal():
+        raise ValueError(f"{name} must be a positive whole number")
+    # Convert bounded chunks so Python's decimal-string safety limit adds no setting cap.
+    result = 0
+    for offset in range(0, len(raw), 9):
+        chunk = raw[offset : offset + 9]
+        result = result * 10 ** len(chunk) + int(chunk)
+    return result
+
+
+def build_lead_limits(settings: Settings) -> LeadLimits:
+    """Capture the seven public lead limits without reading configuration again."""
+    return LeadLimits(
+        turns=settings.lead_max_turns,
+        tool_calls=settings.lead_max_tool_calls,
+        model_calls=settings.lead_max_model_calls,
+        wall_clock_s=settings.lead_max_wall_clock_s,
+        plans=settings.lead_max_plans,
+        subtasks=settings.lead_max_subtasks,
+        task_chars=settings.lead_max_task_chars,
+    )

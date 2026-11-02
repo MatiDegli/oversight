@@ -21,7 +21,12 @@ export function NewParameterCalls({
       {entries.map((entry, index) => {
         const limitation = evidenceWords(entry.not_probed);
         return (
-          <section id={entry.target} tabIndex={-1} key={`${entry.target}-${String(index)}`}>
+          <section
+            id={entry.target}
+            tabIndex={-1}
+            key={`${entry.target}-${String(index)}`}
+            aria-label={entry.node_id.split(":").at(-1)}
+          >
             <p>
               {entry.node_id.split(":").at(-1)}
               {entry.run_count > 0 && (

@@ -158,28 +158,24 @@ def test_cards_sharing_a_node_keep_their_question_evidence_and_candidate(update:
     assert other.model_dump(mode="json")["answering"] == {**CARD, **update}
 
 
-def test_save_file_unchanged_and_plan_cardinality_is_one_to_six() -> None:
+def test_save_file_unchanged_and_plan_cardinality_has_no_ceiling() -> None:
     from oversight_contracts.commands import SaveFile, UpdatePlan
     from oversight_contracts.plans import SubtaskDraft
 
     with pytest.raises(ValidationError):
         SaveFile.model_validate(dict(path="a.py", content="new", base_hash=None))
     subtask = dict(task="work", zone=dict(node_ids=[], paths=[]))
-    for count in (0, 7):
-        with pytest.raises(ValidationError):
-            UpdatePlan.model_validate(
-                dict(revision=1, graph_version="v1", subtasks=[subtask] * count)
-            )
+    with pytest.raises(ValidationError):
+        UpdatePlan.model_validate(dict(revision=1, graph_version="v1", subtasks=[]))
     assert (
         len(
             UpdatePlan.model_validate(
-                dict(revision=1, graph_version="v1", subtasks=[subtask] * 2)
+                dict(revision=1, graph_version="v1", subtasks=[subtask] * 7)
             ).subtasks
         )
-        == 2
+        == 7
     )
-    with pytest.raises(ValidationError):
-        SubtaskDraft.model_validate({**subtask, "depends_on": [6]})
+    assert SubtaskDraft.model_validate({**subtask, "depends_on": [6]}).depends_on == [6]
 
 
 @pytest.mark.anyio
@@ -225,6 +221,7 @@ def test_schema_changes_only_approved_attachments() -> None:
         "AgentMessageEvent",
         "AgentMessageSent",
         "MessageText",
+        "LeadLimits",
         "LeadReply",
         "LeadReplyEvent",
         "UsageCoverage",
@@ -293,6 +290,7 @@ def test_schema_changes_only_approved_attachments() -> None:
             continue
         if name == "Limits":
             updated = deepcopy(current[name])
+            assert updated.pop("description") == "The person's values, fixed for the run."
             descriptions = {
                 "max_steps": (
                     "Tool calls per round; Request changes starts a new round with the same budget."
@@ -317,8 +315,20 @@ def test_schema_changes_only_approved_attachments() -> None:
             updated["required"].remove("stages")
             assert updated == definition
             continue
+        if name == "RunStarted":
+            updated = deepcopy(current[name])
+            field = updated["properties"].pop("max_leads")
+            assert field["default"] is None
+            assert field["anyOf"] == [{"exclusiveMinimum": 0, "type": "integer"}, {"type": "null"}]
+            updated["required"].remove("max_leads")
+            assert updated == definition
+            continue
         if name == "LeadStatus":
             updated = deepcopy(current[name])
+            limits = updated["properties"].pop("limits")
+            assert limits["default"] is None
+            assert limits["anyOf"] == [{"$ref": "#/$defs/LeadLimits"}, {"type": "null"}]
+            updated["required"].remove("limits")
             field = updated["properties"].pop("requested_plan_id")
             assert field["default"] is None
             assert field["anyOf"] == [{"$ref": "#/$defs/PlanId"}, {"type": "null"}]

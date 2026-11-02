@@ -1,4 +1,4 @@
-"""Reserved one-to-six-subtask planning states; no generation, assignment or workspace effects."""
+"""Reserved planning states; no generation, assignment or workspace effects."""
 
 from collections.abc import Sequence
 from typing import Annotated, Literal, Self
@@ -28,7 +28,7 @@ class SubtaskDraft(ContractModel):
 
     task: NonEmptyText
     zone: PlanZone
-    depends_on: list[Annotated[int, Field(ge=0, le=5)]] = Field(default_factory=list[int])
+    depends_on: list[Annotated[int, Field(ge=0)]] = Field(default_factory=list[int])
     """Stable zero-based subtask ids; subtasks are not reordered within a revision."""
 
 
@@ -70,7 +70,7 @@ def validate_dependencies(subtasks: Sequence[SubtaskDraft]) -> None:
 
 
 class Plan(ContractModel):
-    """The complete versioned state of a plan with one to six subtasks."""
+    """The complete versioned state of a plan with subtasks."""
 
     plan_id: PlanId
     revision: PositiveInt
@@ -79,7 +79,7 @@ class Plan(ContractModel):
     state: Literal[
         "planning", "proposed", "starting", "running", "completed", "rejected", "failed"
     ] = "planning"
-    subtasks: list[PlanSubtask] | None = Field(default=None, min_length=1, max_length=6)
+    subtasks: list[PlanSubtask] | None = Field(default=None, min_length=1)
     detail: str | None = None
 
     started_by: AgentId | None = None

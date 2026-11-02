@@ -45,7 +45,7 @@ def with_defaults(raw: Any) -> Any:
     if "failed_tests" in result:
         result = {"cases": None, "cases_complete": None, **result}
     defaults = {
-        "run.started": {"merge_mode": None},
+        "run.started": {"merge_mode": None, "max_leads": None},
         "change.proposed": {"examples": None},
         "change.facts_recorded": {
             "summary": None,
@@ -65,7 +65,8 @@ def with_defaults(raw: Any) -> Any:
             "examples": None,
             "answering": None,
         },
-        "lead.status": {"requested_plan_id": None},
+        "lead.status": {"requested_plan_id": None, "limits": None},
+        "lead.reply": {"woken_by": None},
         "agent.step": {"error_kind": None},
         "usage.tick": {"role": None, "change_id": None, "plan_id": None},
         "change.resolved": {
@@ -137,7 +138,7 @@ def test_all_older_recordings_validate_and_get_serialized_defaults(log: Path) ->
 
 
 def test_defaults_and_request_response_shapes() -> None:
-    assert CONTRACT_VERSION == "1.15.0"
+    assert CONTRACT_VERSION == "1.17.0"
     assert MergeModeState().model_dump() == {"mode": "ask_me", "revision": 0}
     assert SetMergeMode(mode="ask_me", revision=0).model_dump() == {"mode": "ask_me", "revision": 0}
     assert CreatePlan(task="Split this").task == "Split this"
@@ -360,7 +361,7 @@ def test_generated_schema_keeps_defaults_and_request_optional_fields() -> None:
     assert definitions["UpdatePlan"]["required"] == ["revision", "graph_version", "subtasks"]
 
 
-def test_generated_types_keep_bounded_subtasks_as_arrays() -> None:
+def test_generated_types_keep_subtasks_as_arrays_without_a_ceiling() -> None:
     typescript = (ROOT / "contracts/generated/contracts.ts").read_text()
     assert "subtasks: PlanSubtask[] | null;" in typescript
     assert "subtasks: SubtaskDraft[];" in typescript
@@ -368,6 +369,6 @@ def test_generated_types_keep_bounded_subtasks_as_arrays() -> None:
         "$defs"
     ]
     subtasks = definitions["Plan"]["properties"]["subtasks"]["anyOf"][0]
-    assert subtasks["minItems"] == 1 and subtasks["maxItems"] == 6
+    assert subtasks["minItems"] == 1 and "maxItems" not in subtasks
     assert subtasks["items"] == {"$ref": "#/$defs/PlanSubtask"}
     assert "prefixItems" not in subtasks

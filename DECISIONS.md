@@ -698,6 +698,7 @@ tests exercise both `git merge` and `git merge-tree --write-tree` in temporary r
 Union also keeps both sides when two branches edit the same existing line, reporting no
 conflict even when the decisions disagree. Reviewers must check edits to old entries for
 duplicates or contradictions; a clean merge does not establish agreement.
+
 ## Cross-review authority and maintainer decisions (Oct 27, 22:17 ART)
 
 The maintainer accepted package 2 decisions 6a–6c on October 27 at 22:17 ART (UTC−3):
@@ -753,6 +754,7 @@ the captured target and reviewer identity. It never marks or halts the author, a
 the failed tick as persisted. Concurrent cancellation propagates after the error is recorded.
 The existing 12,288-token provisional review budget and frozen 1.4.0 contracts remain unchanged;
 reducer/UI projection belongs to PR4, and frontend review-cost separation remains a follow-up.
+
 ## 2026-10-28 — Incremental graph presentation
 
 Guard Cytoscape data, class and interaction-state writes: even equal writes trigger expensive
@@ -799,6 +801,7 @@ The tuple check now compares against the byte-exact 1.4.0 baseline, retaining th
 and negative controls. Baseline snapshots count toward the commit line limit; an indivisible
 snapshot requires the existing Commit-Exception trailer. Pydantic/JSON Schema enforce list bounds
 while TypeScript keeps ordinary arrays; the existing explicit two-slot tuples remain tuples.
+
 ## 2026-10-28 — Release-age exception for certifi
 
 certifi 2026.7.22 bundled the emSign root CAs whose intermediate keys were compromised
@@ -811,6 +814,7 @@ Nov 1, when the release passes 14 days on its own.
 Audit blind spot: `make audit` exports only the Python runtime closure (`--no-dev`), so dev-only
 certifi is outside its pip-audit coverage. Dependabot detected GHSA-6q48-6c7w-9gw2; the exception
 affects development and tests, not runtime TLS. A dev-inclusive audit remains follow-up work.
+
 ## 2026-10-28 — One inventory beyond level 2
 
 Make [docs/additions.md](docs/additions.md) the single inventory: decided queue with main/branch
@@ -1202,6 +1206,7 @@ an answer without log-probability content.
 
 Under D6's probe-first rule, the decision probability is not built because the required log
 probabilities were unavailable. What replaces the threshold remains a pending maintainer decision.
+
 ## 2026-10-28 — A decisions inbox is the form of Needs you
 
 The maintainer decided that the decisions inbox is the form of item 9's Needs you state, not a
@@ -1374,6 +1379,7 @@ with no new contract field: "asked for" only from the classification, which neve
 the person" from a card answered Yes by the person. The summary and proof 3's counts keep them apart. A card's
 kind is read from its server-authored question, one of two fixed texts. When pinned examples exist (item 13), a
 Yes on a could-not-tell question is the one offered as "keep as example".
+
 ## 2026-10-29 — The inbox header count lands on the maintainer's approval of its captures
 
 The card and inbox shots gate holds every card or inbox front until the maintainer approves its
@@ -1514,6 +1520,7 @@ opaque `panel` plates to mask lines behind their text. Other graph overlays reta
 Screenshot logs use .events rather than .jsonl so generated cuts do not enter the repository-wide
 recording validation. This required tooling deviation touches `frontend/shots/run.sh` and
 `frontend/shots/capture.ts` outside the original `frontend/src` and design-document scope.
+
 ## 2026-10-29 — Count final decisions per change and keep their entry point visible
 
 The maintainer approved one inbox entry for the latest pending revision of each change, containing
@@ -1648,6 +1655,7 @@ refused, and startup capability remains closed. Source capture/loading, settings
 migration, activation and any future waivable-hit semantics require separate work.
 
 Superseded by 2026-10-31 Item 8 F4b: protected paths join rules authority atomically; `_assessment.py` selects safe-merge-paths-v1 and captures proposal paths, while `_mode.py` RULES_ACTIVATION stays false.
+
 ## 2026-10-29 — Internal object-only preflight for a rules merge's inverse
 
 `changes._revert_preflight.preflight` accepts a server-supplied resolution event (or its stored
@@ -1673,6 +1681,7 @@ No refs, real index, checkout files, operation markers or worktree registrations
 only unreachable Git objects may be created. There is no mutating fallback. A clean result proves
 textual applicability against captured H, not semantic correctness or authorization for a later
 effect. A later Revert transaction must establish its own current evidence and authorization.
+
 ## 2026-10-29 — Witnessed assertion-loosening run findings
 
 Package 5 now publishes only `kind="loosened"`: a resolved individual integrity fact,
@@ -1741,6 +1750,7 @@ Amended 2026-10-31 (Phone practice reviews with the panel's evidence): Possibly 
 
 Source profiles separate `pytest_options` from positional `pytest_targets`, so selected case
 reruns retain collection options while replacing only the targets (including Boltons doctests).
+
 ## 2026-10-29 — Scale and depth are separate axes; the map waits for a sketch
 
 The maintainer approved the [Scale and depth definition](DESIGN.md#scale-and-depth) on 2026-10-29.
@@ -1769,6 +1779,7 @@ define now, then sketch with real Boltons and demo data, and the proof 2 reposit
 The sketch shows Boltons fitted with and without tests and identifies the resulting level.
 Whether to build is decided with that sketch in view, never before the Saturday checkpoint;
 approval of the definition does not approve the build.
+
 ## 2026-10-29 — Behavior inputs follow unique module aliases and require opaque arguments
 
 Behavior seed discovery accepts a direct module-level `name = module.function` or
@@ -1813,6 +1824,7 @@ cumulative spend. Detect-1 retains its byte-identical v1 configuration, fingerpr
 pilot. Frozen patches and labels do not change: b09 Inventory.reserve, b14 Customer.email
 setter, b17 Cart.add and b19 Product.label remain unprobed questions by D9, in both denominators.
 No paid run or provider probe is part of this change.
+
 ## 2026-10-29 — Life layer, part 1: contours at rest, light only while acting, merge travel
 
 The maintainer approved the life-layer look on 2026-10-29, after the sketches in
@@ -2218,6 +2230,7 @@ Reason: Oversight records when each agent works, so measured intervals replace a
 lead must not inflate the hours. A stored price table needs no contract change; recording a price in
 run.started was the rejected alternative. The coverage, grouping and comparison rules come from prior
 work in the maintainer's projects, rewritten for Oversight; no code was copied.
+
 ## Contracts 1.8.0 — approved by the maintainer, 2026-10-30
 
 E6 adds server-owned model.attempt_failed, once per failed attempt before its wait, including the
@@ -2295,6 +2308,7 @@ remain within US$25. P6: queuing keeps the execution constraints; per-check resu
 questions keyed by decision identity; agent-hours from elapsed run intervals; parallelism as the
 concurrent-agent count over time, wall time apart. Reason: freeze tasks, definitions and reporting before
 seeing results; later rules are marked added after run start.
+
 ## 2026-10-30 — Merge authority: the person's approval or rules they set
 
 The maintainer set PRODUCT.md's success sentence, which item 8 of docs/additions.md required before rules mode
@@ -2599,6 +2613,7 @@ invalid table pins and missing or evicted proposal receipts fail closed without 
 F1's production activation latch remains closed. These checks add deterministic authority
 constraints; they do not enable rules merges, expand Revert to old probes-profile merges,
 or add filesystem monitoring or a sandbox.
+
 ## 2026-10-31 — Start with the whole graph when it fits legibly; keep graph controls clear of the floating agents panel
 
 The maintainer approved starting with the whole graph when its Fit zoom is between the shared
@@ -2627,6 +2642,7 @@ their bounded settlement before the event store closes.
 Reason: a client cannot supply authority through an event body or an unacknowledged row.
 Immediate refusals keep 202 meaningful, while cancellation lets the tested inverse recovery
 path settle a suite whose 60-second bound exceeds the service's 30-second shutdown budget.
+
 ## 2026-10-31 — Item 10 agent-hours come from a fold over the committed log
 
 Reason: pure activity accounting reads only status, review, lead, step and usage-attribution
@@ -2635,6 +2651,7 @@ or after the previous review of that change, whichever comes later. Open interva
 at the committed prefix's last event. Lead and plan work leave the total unavailable rather
 than estimating their hours. Team grouping and hour/day periods come later, together with the
 team definition.
+
 ## 2026-10-31 — Item 10 list prices: a stored dated table applied to each call's tokens
 
 Reason: the stored table records its source and retrieval date; only Muse Spark has a listed
@@ -2799,6 +2816,7 @@ requested plan id only on the working step that produced that plan. Every other 
 null attachment. It ends after requesting plans, without waiting or replanning. Stop preserves
 all proposals. Shutdown halts the lead, closes its client, and a new run contains no lead and
 makes no model call until the person starts one. Lead-plan answering remains unavailable as on main.
+
 ## 2026-10-31 — A person's decision preempts rules before authorization starts
 
 Reason: a long rules suite must not keep the person waiting through repeated 409s.
@@ -2886,6 +2904,7 @@ separators=(",", ":"), ensure_ascii=True, allow_nan=False)`. E3 preview and E4 c
 share it; integer `1` and float `1.0` remain distinct. The examples prompt stays in
 `agents/examples.py`, outside `_prompts.py` and `prompt_version()` until E2 decides how a run
 reports it. E2 runtime admission, E3 human confirmation and E4 execution remain separate fronts.
+
 ## 2026-10-31 — Ask instead of repeating an unchanged failure
 
 Before the cross-review automatic revision, a pure verdict reads the committed event log and
@@ -3066,6 +3085,7 @@ Residual risks outside this front: run_tests output may expose secrets (up to 4,
 the reviewer's git diff may expose one if something outside a tool changes a secret file;
 the person's own PUT /files may write one into change evidence; and secrets with non-obvious
 names remain readable. This is a name policy, not content detection or output redaction.
+
 ## 2026-10-31 — Item 12 E4: inert deterministic criteria and candidate checks
 
 Q3 remains as decided at 13:49:39 ART: v1 criteria call synchronous top-level functions with
@@ -3114,6 +3134,7 @@ measured cone is unavailable. These readers keep their existing conservative com
 E4 does not certify a report that its required criteria could not verify. The real-harness
 test_proposal_suite_normalized_and_consistent now asserts all four effects for every covered
 normalization code, including preserved observed parameter ids and no measured probe suites.
+
 ## 2026-10-31 — Pure structural shape comparison
 
 The shape producer compares base and head graph snapshots without I/O or approval effects.
@@ -3131,6 +3152,7 @@ functions and under TYPE_CHECKING; the wording says "imports" because these edge
 execution at import time. Git-tree evidence identifies the captured source; a complete empty
 result means checked with no observations, not a safety certification. Wiring and duplicate
 logic remain separate fronts.
+
 ## 2026-10-31 — Observe newly duplicated function structure
 
 The shape duplicate producer compares only non-test function and method graph nodes against
@@ -3157,6 +3179,7 @@ runtime behavior; and a single binding table across nested scopes does not prove
 semantic equivalence. These are accepted because the result is a neutral question for the
 person, never a reuse mandate, approval gate or claim that extraction is safe. This front
 only produces evidence; capturing and wiring it into change facts remain separate work.
+
 ## 2026-10-31 — Bounded initial-task context builder, pending its bench
 
 The pure internal builder in `changes/_initial_context.py` takes a graph snapshot,
@@ -3203,6 +3226,7 @@ changing them invalidates the recorded paid pilots. They also remain at two site
 `backend/src/oversight/changes/_proposal.py`, with the same texts as two sites here,
 while open fronts edit that file. A later front words them when the bench fingerprints
 may change.
+
 ## 2026-10-31 — Queued rules attempts follow verified main after settlement
 
 Per-record attempt keys `(revision, head, main, mode_revision)` decide admission; an exact
@@ -3424,6 +3448,7 @@ and no static import of the player. The guard still imports the emitted entry an
 the exact recording bytes, provenance hash, label and run identity, and still refuses a
 missing recording or receipt. Writing and importing the emitted ES modules replaces the
 single-chunk data URL, which cannot resolve relative chunk imports.
+
 ## 2026-10-31 — Time per stage for each change
 
 Packet A 1031d, item 2, was approved at 2026-10-31T18:25:03Z under the maintainer's
@@ -3579,6 +3604,7 @@ docs/own-repository.md and docs/proposal.md, and AGENTS.md's "always visible" fo
 
 Reason: the lead becomes the person's first conversation, and the Tauri shell needs no native
 port because its backend runs inside WSL.
+
 ## 2026-11-01 — Deferred SHOULD-FIX findings on every front
 
 The maintainer approved this extension in chat on 2026-11-01. It extends the 2026-10-26 review
@@ -3595,6 +3621,7 @@ and adds the event log to the areas that keep the full rule.
 
 Reason: findings that are not really problematic are documented as residual risk and merged
 anyway, for pace before the freeze.
+
 ## 2026-10-29/30 — Milestone pulses and merge arrival
 
 Approved Oct 29 about 22:18 ART (Oct 30 01:18 UTC), answers about 22:35 ART; confirmed
@@ -3638,6 +3665,7 @@ than the sketch-only picker, counts or explanatory cards. Built conversation row
 recorded-source wording remain authoritative. C2–C6 and L3 remain pending; C6 owns any
 default change after the Nov 2, 23:00 ART gate. DESIGN's proposed addition is held under
 `.shots/chat-shell/design-md.md` until the coordinator releases that document's lane.
+
 ## 2026-11-01 — Displaced fronts may start before the freeze
 The maintainer allowed the fronts the Chat plan had moved past the freeze to start before it, each when a writer slot
 is free and behind the Chat and lead fronts: lead actions slices 2 and 4, item 10 (team and period grouping), the
@@ -3777,6 +3805,77 @@ Reason: approval and delivered prerequisites allow explicit rules selection, whi
 proof, committed receipts and repeatable clean starts establish the activation path without
 spending provider credits or relaxing any authority condition.
 
+## 2026-11-01 — Map evidence, calls and pointer navigation
+
+Group hover draws one line per module pair crossing its boundary, including both directions,
+so the reader sees actual callers and callees rather than an invented group hub. Hover exact
+arrows end at the callee. Cone arrows run from callee to caller for exact pairs whose modules
+are both members, showing how a change may propagate; a shared hover/cone pair draws once.
+The bounded cone remains possibly affected, without a second omission message.
+
+Group clicks fit card boxes in the clear area, clamped to [68.75%, 100%]: the readability
+floor returns cards and oversized groups remain centered for scrolling. Module clicks center
+at 100%. "Open" means unfold, only when folded; visiting an open module cannot fold it.
+The map keeps drag panning, distinguishing drags from clicks. Cytoscape explicitly blurs on
+mousedown, so map gestures are handled on the stage before its canvas to preserve focus.
+Clicks are pointer-only because the map layer is aria-hidden and accepts no events; keyboard
+users retain Fit and zoom buttons. Neither click selects a node or opens a panel.
+
+Hover uses edge, which reads against both panel surfaces in captures; map-line-hover was not
+needed. Possible calls stay faint, without arrows or chips. All colors remain theme tokens.
+Headers measure every flex item once, then wrap to 37px, 60px and 23px per additional line;
+rows share the tallest header to preserve their ground. The 22px chip overhangs its 20px line
+by 1px above and below, preserving the existing one-line strip. Rings include current reads.
+Names hide with visibility in the cone, keeping their layout boxes and circle positions;
+a pointed dimmed module reveals its full name. The neutral decision chip counts ready or
+conflicting changes touching the group; the top bar counts the entire inbox, including plans
+and questions, so these counts need not match. Exact test-to-module calls supply "tested by";
+tests stay hidden in the product and their name-prefix rule is unit-tested only.
+## 2026-11-01 — C4 proposal evidence and change-local cost
+
+Chat's current proposal card joins the retained proposal position and exact change/revision/head.
+Historical entries keep the built timeline renderer. Candidate facts and assessments never fall
+back to an earlier revision. The six indicators summarize combined_tests, cross_review,
+small_change, small_cone, existing_tests_untouched and known_spend; they count recorded passes,
+preserve failure/unknown and are not an approval gate. Extra rules remain in the shared review.
+Run-local usageTicks retain only accepted events through the existing fold. Cost sums exact
+change_id across agents and roles; absent ticks and any null cost remain unknown, and null
+attribution stays unattributed. Sequence-gap protection and run replacement remain authoritative.
+
+## 2026-11-01 — C4 shares review beside the built Chat thread
+
+Chat supplies only an optional current-proposal renderer to the built timeline. Its review
+composition derives the conversation owner from the retained proposal, including C5's resolved
+review tab. One ReviewFocus adapter retains the built lazy loader, local fallback, capabilities,
+keys and decision controls in both layouts. Desktop reserves 880px for review; at the C1 1500px
+breakpoint real tabs hide and inert either mounted content. Chat-scoped CSS hides the where
+column during review. Normal review scrolling and the built diff/evidence order take precedence
+over the sketch's clipped body. Existing Oversight geometry and its default remain authoritative.
+
+## 2026-11-01 — C4 graph navigation belongs to a click
+
+See on graph captures run/change/revision/head and a fresh framing key, dispatches the existing
+review tab and selects Oversight in that click. No event subscription or lazy completion can
+select a layout or focus a control. Hidden Chat navigation keeps a frozen graph view; an abandoned
+explicit frame uses the existing camera-preserving navigation state while hidden. Replaced runs
+or candidates invalidate the target. The retained stage still awaits optional field preparation,
+and GraphStage/GraphView retain all graph-data, geometry and cone framing responsibilities.
+Frame adds only the hook next to useShell, the FocusPanel callback and the graph-view prop.
+
+## 2026-11-01 — C4 integration proof and the released cold editor gate
+
+The focused C4 fixture uses recorded run/graph data plus explicitly hand-written candidate
+measurements, assessment and change-attributed usage. It never edits a recording or calls a model.
+Proof covers exact evidence joins, unknown cost, shared production App decision targets and
+pointer-only approval, retained draft/comment/answers/diff, narrow tabs, C5 resolved review,
+explicit graph framing, repeated targets, delayed/failed preparation and abandoned intents.
+The shared camera keeps its legibility floor and reports omitted viewport members as Out of view.
+
+The coordinator-authorized b6636cf merge released the cold editor gate: an explicit Chat review
+can finish loading Monaco without requesting the graph, and approval becomes available when the
+existing decision guards pass. The cold production App regression now passes. No gate or assertion
+is weakened. Retained-state captures still visit Oversight explicitly before opening review and
+preserve the normal scrolling built review body.
 
 ## 2026-11-01 — W3 console supervision and staged Windows advisory CI
 
@@ -3818,6 +3917,7 @@ all repository paths, including valid local NT paths, until W4c2. Existing profi
 and Linux behavior remain unchanged. Lock/server Job, previous-runtime guard and trust must
 precede future source operations; validated staging must precede reset. Production startup
 does not yet implement that own-source order. W4a2 supplies guard/staging; W4c2 wires startup.
+
 ## 2026-11-01 — C5 Chat merge mode uses the shared Settings tab
 
 Chat's empty TaskBox and conversation Composer receive an optional action accessory;
@@ -3843,6 +3943,7 @@ C5 proof exercises production App Settings/tab dispatch in live and replay, usin
 hand-written retained evidence and fixture-only Chat initialization. Targeted
 regressions retain focus, draft, graph camera and scroll ownership. Comparisons
 judge only C5: C2/C3 bodies, C4 composition and C1 TaskBox controls stay outside it.
+
 ## 2026-11-01 — C3 presence starts from the C1 hand-off
 
 C3 uses accepted C1 base `05527f4`, preserving the Usage/replay wiring, Oversight default,
@@ -3868,6 +3969,7 @@ C4's graph action. C4 still owns
 hiding the work column in review; proposal events do not infer review navigation.
 DESIGN.md and the coordinated inventory stay unchanged; proposed text and full-frame
 comparison evidence live under `.shots/chat-where/`.
+
 ## 2026-11-01 — Name the agent above its conversation
 
 The maintainer, Nov 1 at 16:11 ART: a repeated task above the conversation read as a stray message.
@@ -3891,6 +3993,29 @@ other agents' tests and Approve wait. Stop ends the suite and releases them. Tim
 incomplete observed results and an unknown cause, suggesting a different limit on the next run.
 Test paths wait for a field marking a partial run, so partial evidence cannot imply a full suite.
 
+## 2026-11-02 — Defaults, not ceilings
+
+Approved by the maintainer on 2026-11-02 (D1–D4): values are defaults the person can change,
+never ceilings. No agent changes its own limits, and nothing is refused for a number the
+person cannot change. Runtime checks retain today's limits until later fronts make them
+settings; this contract preparation does not activate new runtime behavior.
+
+The hard rules stay: Meta models only, keys only in `.env`, paths inside the worktree,
+tests on the combined result before main, a deliberate Approve click, and no shell tool.
+The spending brake refuses new runs above 90% of the credits: it is not a setting and does
+not queue refused work. The one structural ceiling left is `OVERSIGHT_MAX_AGENTS` at 1–6
+until `Slot` widens. A slot is a seat representing capacity, not identity; color comes from
+the team.
+
+Contracts 1.16.0 removes the six-subtask ceiling and the fixed dependency-index ceiling
+while retaining nonempty plans and dependency validation within the plan. Dispatch requires
+at least one assigned agent. The optional `LeadStatus.limits` exposes a positive, unbounded
+`LeadLimits` shape, and optional `RunStarted.max_leads` reserves simultaneous lead capacity;
+both default to null and remain unfilled. `Limits` records the person's values fixed for the
+run. The backend retains six-subtask and dependency-index checks, its existing lead budgets
+(including 50 turns per thread), and the person-created single-subtask rule. Existing
+recordings continue to validate; the bundled replay is unchanged.
+
 ## 2026-11-02 — A read-only plan flow before the freeze
 
 The maintainer approved a read-only view of the lead's plan as a flow, inside the plan piece of the decisions
@@ -3912,6 +4037,7 @@ a seventh team reuses the hue of the team idle longest among those with no pendi
 The frontend computes the team from the plan and agent events, with no contract change.
 Reason: one lead runs several agents, and the person reads the work by plan, so per-agent colors split one
 plan into unrelated colors.
+
 ## 2026-11-02 — One shared frontend team identity
 
 `frontend/src/state/teamSelector.ts` is the sole frontend team computation for the graph,
@@ -3926,6 +4052,7 @@ planners, and lead accounting has no plan id.
 `frontend/src/state/teamSelector.parity.test.ts` guard parity through one shared golden fixture,
 using the server's `team_of` as the oracle. K2 Chat with multiple leads and K3 team colors are
 future shared consumers; this front adds no production import or visible change.
+
 ## 2026-11-01 — C2 builds compact Chat agents and conversation selection
 
 C2 fills C1's existing agents frame with coding-agent rows. State is forwarded at the existing
@@ -4082,3 +4209,78 @@ The maintainer requested design directly in code without a sketch round. This ov
 Impeccable shape's brief-confirmation stop for this work. Findings follow the built Details
 and New-parameter calls typography and disclosure anatomy; DESIGN.md governs their layout,
 neutral evidence language and phone behavior.
+## 2026-11-02 — A lead reply names what woke it
+
+Approved by the maintainer on 2026-11-02. Contracts 1.17.0 adds nullable `LeadReply.woken_by`:
+a nonempty, unique list of earlier committed event seqs in increasing order, mutually exclusive
+with `answers_seq`. It is null for a person's message or the opening task. The first reply
+cannot name wake events, and a trigger can appear in only one reply in the run.
+
+The catalog is closed: combined tests with a failed, error or timeout suite outcome; an agent
+status with state halted; and a plan entering completed or failed, once per plan. Attribution
+uses `Plan.started_by` on the latest plan update before the event. Combined tests use the
+execution agent's latest earlier status and its server-set `plan_id`; halted statuses use their
+own server-set `plan_id`. Only events belonging to that lead's plans qualify. Later plan
+revisions that stay terminal do not trigger another wake. Neither the lead nor the model can
+extend this catalog.
+
+The shared pure event rule supplies attribution for log validation and the later watcher.
+Nothing produces a wake until that watcher front; this field does not change when a lead may
+take a turn. Existing recordings and the bundled replay remain unchanged.
+## 2026-11-02 — Several leads with person-set limits
+
+K1 was approved by the maintainer on 2026-11-02. This explicitly supersedes the singleton
+sentence in “The lead runs inside one run with fixed limits” (2026-10-31) and the fixed numeric
+limits in “The lead keeps one thread per run” (2026-11-01). Their other authority and safety
+rules remain. Several leads can run concurrently without consuming coding-agent seats.
+
+| Setting | Default | Scope |
+| --- | ---: | --- |
+| `OVERSIGHT_MAX_LEADS` | 6 | Active leads per run, including starting, working and idle |
+| `OVERSIGHT_LEAD_MAX_TURNS` | 50 | Per lead thread, opening task counts as turn 1 |
+| `OVERSIGHT_LEAD_MAX_TOOL_CALLS` | 12 | Per turn |
+| `OVERSIGHT_LEAD_MAX_MODEL_CALLS` | 18 | Per turn, including recovery |
+| `OVERSIGHT_LEAD_MAX_WALL_CLOCK_S` | 300 | Seconds per turn |
+| `OVERSIGHT_LEAD_MAX_PLANS` | 3 | Per lead thread across turns |
+| `OVERSIGHT_LEAD_MAX_SUBTASKS` | 6 | Per requested plan |
+| `OVERSIGHT_LEAD_MAX_TASK_CHARS` | 2000 | Per plan task and subtask instruction |
+| `OVERSIGHT_LEAD_HISTORY_CHARS` | 24000 | Per lead history, retaining whole exchanges |
+
+All values are positive integers with no maximum. They are fixed for the process now: a run
+captures one immutable limits object and each lead retains it, including terminal statuses.
+Per-lead overrides require a later `StartLead` contract; no current command, body or tool can
+set them. Startup prints capacity and limits once. Metadata records the configured capacity,
+limits and prompt version; replay preserves old null fields without reading current settings.
+
+Setup precedes the selected Meta provider's spending brake, then capacity admission. Admission
+counts and registers synchronously before publication; idle occupies capacity, and a stopping
+lead keeps its place until its terminal status commits. Terminal leads release capacity. The
+final allowed turn publishes its reply immediately followed by halted, with no intervening idle.
+Each lead owns its thread, counters, plan allowance, callbacks, accounting, tasks and revisions;
+Stop affects only that lead and preserves its proposals. Shutdown drains every registered lead.
+
+Only the person queues plans. Approval, person-set rules and existing merge authority remain
+unchanged. The first wave refuses excess ready subtasks with `OVERSIGHT_MAX_AGENTS` named; later
+ready dependencies wait for shared coding seats. The repeated-result brake (4 identical results)
+and consecutive-failure brake (6 failures) remain fixed. The global spending brake is a hard
+refusal, neither a person setting nor a queue: every selected Meta lead checks at start, message
+admission and each model-call boundary, with durable ledger accounting before usage publication.
+Baseten keeps its existing accounting and Meta-brake exemption; in-flight call semantics remain.
+## 2026-11-02 — Map light follows module cells at a fixed screen spread
+
+The map uses the approved October 31 sketch values: `map-light-near` at 30px,
+`map-light-far` at 84px and `map-light-gain` at 0.85, inherited by day mode.
+Each existing emitter projects to its node's containing module cell, including the
+circle, name, function count and agent lines. The original parent chain resolves
+folded functions and nested methods; a working focus can belong to a different
+module from its pending change, while waiting light stays on the changed module.
+
+Reason: at map zoom, scaling the card spreads by zoom collapses the light to a few
+lamps around a tiny rendered card box. The approved broad LED pool needs the drawn
+module cell and fixed screen spreads. The existing transition interpolates effective
+screen profiles when the published map level changes, including interrupted moves.
+Card geometry, zoom scaling, mode gains and all existing source strengths remain
+unchanged, including full working strength and the current 0.5 waiting weight.
+Map counts and resting agent labels use opaque plates matching the group panel resolved over
+ground (or ground without a panel) to keep text above 4.5:1 over stronger pools without adding
+a visible box to unlit cells; expanded agent labels retain their existing hover backing.
