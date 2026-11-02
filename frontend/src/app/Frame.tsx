@@ -211,7 +211,9 @@ export function Frame(props: FrameProps) {
                 onStart={props.onStartLead}
                 inputRef={leadInput}
                 onOpenSettings={props.onOpenSettings}
-                onClose={() => setNewLead(false)}
+                onClose={() => {
+                  setNewLead(false);
+                }}
                 onTaskInstead={() => {
                   leadDraftStore.getState().moveToTask();
                   newTask();

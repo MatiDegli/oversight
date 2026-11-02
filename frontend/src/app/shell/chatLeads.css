@@ -12,6 +12,7 @@
   font-weight: 700;
 }
 .chat-lead-row {
+  padding-block: 10px;
   min-height: 136px;
 }
 .chat-lead-row .chat-agent-task {
@@ -30,6 +31,12 @@
   font-size: 13px;
   line-height: 1.4;
 }
+.chat-lead-team {
+  font-size: 11.5px;
+}
+.chat-agent-list:has(.chat-lead-row) .chat-agent-row:not(.chat-lead-row, .chat-lead-draft) {
+  padding-block: 10px;
+}
 .chat-lead-activity {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -40,7 +47,8 @@
   .chat-lead-row {
     min-height: 111px;
   }
-  .chat-lead-activity {
+  .chat-lead-activity,
+  .chat-agent-list:has(.chat-lead-row) .chat-agent-activity {
     display: none;
   }
 }

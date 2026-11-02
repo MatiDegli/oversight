@@ -37,7 +37,7 @@ export function ChatAgents({
       </p>
     );
   return (
-    <ul className="chat-agent-list" aria-label="Coding agents" onKeyDown={navigate}>
+    <ul className="chat-agent-list" aria-label="Agents" onKeyDown={navigate}>
       {rows.map((row) => {
         if (row.kind === "lead")
           return (

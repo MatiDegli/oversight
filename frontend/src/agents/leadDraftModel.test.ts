@@ -45,7 +45,7 @@ it.each([409, 503, "network"])("keeps the first task and explains a %s refusal",
         Promise.reject(
           status === "network"
             ? new TypeError()
-            : new CommandError(status, "wrong_state", "Lead refused"),
+            : new CommandError(Number(status), "wrong_state", "Lead refused"),
         ),
       "muse-spark",
     );

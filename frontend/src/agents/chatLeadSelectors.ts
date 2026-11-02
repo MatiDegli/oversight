@@ -67,13 +67,15 @@ export function selectChatLeads(state: State) {
     // A null detail does not erase the latest detail within the current status.
     let detail: string | null = null;
     let previous: LeadStatus["state"] | undefined;
+    let revision = 0;
     for (const event of state.decisionEvents) {
       if (
         event.type !== "lead.status" ||
         event.payload.agent_id !== id ||
-        event.payload.revision > status.revision
+        event.payload.revision <= revision
       )
         continue;
+      revision = event.payload.revision;
       if (previous !== event.payload.state) detail = null;
       previous = event.payload.state;
       detail = event.payload.detail ?? detail;

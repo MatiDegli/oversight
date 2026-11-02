@@ -1,4 +1,4 @@
-import { Plus, Workflow } from "lucide-react";
+import { Plus, Waypoints } from "lucide-react";
 import { TaskBox, slotUsage, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
 import { ChatAgents } from "./ChatAgents";
@@ -47,7 +47,7 @@ export function ChatAgentsFrame({
             New task
           </button>
           <button type="button" onClick={onNewLead}>
-            <Workflow size={15} aria-hidden="true" />
+            <Waypoints size={15} aria-hidden="true" />
             New lead
           </button>
         </div>
@@ -129,7 +129,7 @@ export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActio
             When work is worth splitting across several agents, a lead proposes plans you queue.
           </p>
           <button type="button" onClick={onNewLead}>
-            <Workflow size={15} aria-hidden="true" />
+            <Waypoints size={15} aria-hidden="true" />
             New lead
           </button>
         </div>

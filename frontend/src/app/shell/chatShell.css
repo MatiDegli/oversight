@@ -300,9 +300,11 @@
     padding-inline: 10px;
   }
   .shell-frame:has(.chat-shell) [aria-label="Review queue"] {
-    grid-column: 3;
+    grid-column: 2 / 4;
     grid-row: 2;
     justify-self: end;
+    width: max-content;
+    margin: 0;
   }
   .shell-frame:has(.chat-shell) [aria-label="Review queue"] button {
     height: 44px;
@@ -417,6 +419,9 @@
     width: 100%;
     height: 44px;
     justify-content: center;
+  }
+  .chat-empty .task-box > [role="status"]:empty {
+    min-height: 0;
   }
   .chat-empty .task-box-hint {
     display: none;

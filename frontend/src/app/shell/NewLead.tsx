@@ -12,7 +12,7 @@ import "./chatLeads.css";
 
 function LeadLimits({ state }: { state: State }) {
   const limits = selectLeadLimits(state);
-  const n = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const n = (value: number) => value.toLocaleString("en-US", { maximumSignificantDigits: 21 });
   return (
     <div className="new-lead-limits">
       <Info size={16} aria-hidden="true" />
@@ -88,7 +88,9 @@ export function NewLead({
             ref={inputRef}
             value={draft}
             readOnly={pending || !onStart}
-            onChange={(event) => leadDraftStore.getState().setDraft(event.target.value)}
+            onChange={(event) => {
+              leadDraftStore.getState().setDraft(event.target.value);
+            }}
           />
           <div className="new-lead-actions">
             <label className="new-lead-model">
@@ -98,9 +100,9 @@ export function NewLead({
                   aria-label="Model"
                   value={model?.id ?? ""}
                   aria-disabled={pending}
-                  onChange={(event) =>
-                    leadDraftStore.getState().choose(event.target.value, state.run?.run_id)
-                  }
+                  onChange={(event) => {
+                    leadDraftStore.getState().choose(event.target.value, state.run?.run_id);
+                  }}
                 >
                   {state.run?.models.map((profile) => (
                     <option key={profile.id} value={profile.id}>

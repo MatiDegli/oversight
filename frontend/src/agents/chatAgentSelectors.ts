@@ -1,6 +1,8 @@
 import type { AgentStatus, Slot } from "@contracts";
 import type { State } from "../state";
 import { costText, matchesNeedsYou } from "../state";
+// eslint-disable-next-line no-restricted-imports -- K0's sole team selector has no barrel export; K2a may import it only.
+import { selectTeams } from "../state/teamSelector";
 import { selectAgentCard } from "./selectors";
 export { slotUsage as chatAgentCount } from "./taskBoxModel";
 
@@ -18,8 +20,6 @@ const labels: Record<AgentStatus["state"], string> = {
 type Identity = { team: string; hue: Slot; letter: string; order: number; member: number };
 
 type HueTeam = { hue: Slot; order: number; members: number; active: Set<string> };
-// eslint-disable-next-line no-restricted-imports -- K0's sole team selector has no barrel export; K2a may import it only.
-import { selectTeams } from "../state/teamSelector";
 
 function openTeam(teams: Map<string, HueTeam>, idle: Map<Slot, number>, key: string, seq: number) {
   let team = teams.get(key);
@@ -42,7 +42,13 @@ export function teamIdentities(state: State): Map<string, Identity> {
   const teams = new Map<string, HueTeam>();
   const idle = new Map(hues.map((hue) => [hue, 0]));
   const changes = new Map<string, boolean>();
+  const leadRevisions = new Map<string, number>();
   for (const event of state.decisionEvents) {
+    if (event.type === "lead.status") {
+      const lead = event.payload;
+      if (lead.revision <= (leadRevisions.get(lead.agent_id) ?? 0)) continue;
+      leadRevisions.set(lead.agent_id, lead.revision);
+    }
     if (event.type === "lead.status" || event.type === "agent.status") {
       const { agent_id: id } = event.payload;
       const owner = membership[id];

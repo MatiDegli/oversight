@@ -24,7 +24,9 @@ export function ChatLeadRow({
         ? {
             type: "button" as const,
             "aria-pressed": selectedAgentId === row.id,
-            onClick: () => onOpenConversation(row.id),
+            onClick: () => {
+              onOpenConversation(row.id);
+            },
           }
         : { role: "group" })}
     >
