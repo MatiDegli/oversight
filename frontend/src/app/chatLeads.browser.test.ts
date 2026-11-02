@@ -522,6 +522,7 @@ it("stops the observed lead once, keeps 202 pending across switches and preserve
     await check(page.locator(".conversation-composer")).toHaveText(
       "Stopped by the person.Start a new lead to continue.",
     );
+    await check(page.locator(".lead-header")).not.toContainText("Stopped by the person.");
     await check(page.locator(".conversation-composer :is(button, textarea)")).toHaveCount(0);
     expect(await page.evaluate(() => window.chatLeadsTest.work())).toEqual(preserved);
     expect(calls).toHaveLength(1);
@@ -567,8 +568,8 @@ it("does not retry a rejected Stop and uses the newly rendered revision only on 
     await page.close();
   }
 });
-it("guards both cap entry points and an open draft, releasing admission on terminal status", async () => {
-  const page = await open("lead-cap", 1280, "dark", true, false, true);
+it.each([1280, 640, 390])("guards cap entry points and an open draft at %i", async (width) => {
+  const page = await open("lead-cap", width, "dark", true, false, true);
   const starts: unknown[] = [];
   await page.route("**/leads", async (route) => {
     starts.push(route.request().postDataJSON());
@@ -579,6 +580,24 @@ it("guards both cap entry points and an open draft, releasing admission on termi
       .locator(".chat-start-actions")
       .getByRole("button", { name: "New lead · 2 of 2", exact: true });
     await check(action).toHaveAttribute("aria-disabled", "true");
+    expect(
+      await action.evaluate((button) => {
+        const bounds = button.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(button);
+        return [...range.getClientRects()].every(
+          (r) =>
+            r.left >= bounds.left &&
+            r.right <= bounds.right &&
+            r.top >= bounds.top &&
+            r.bottom <= bounds.bottom,
+        );
+      }),
+    ).toBe(true);
+    if (process.env.CHAT_LEADS_SHOTS === "1" && width === 390) {
+      await check(page.locator(".lead-header")).toBeVisible();
+      await capture(page, "lead-cap", width, "dark");
+    }
     await action.evaluate((button: HTMLButtonElement) => {
       button.click();
     });
@@ -654,6 +673,7 @@ it.each(["dark", "day"])(
       await check(page.locator(".conversation-composer")).toHaveText(
         "Reached the limit of 50 turns.Start a new lead to continue.",
       );
+      await check(page.locator(".lead-header")).not.toContainText("Reached the limit of 50 turns.");
       await check(page.locator(".conversation-composer :is(button, textarea)")).toHaveCount(0);
     } finally {
       await page.close();

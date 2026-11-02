@@ -9,6 +9,7 @@ export const leadNumber = (value: number) =>
 
 export function LeadHeaderView({ header }: { header: LeadHeader }) {
   const { limits } = header;
+  const ended = ["stopped", "halted", "done"].includes(header.state);
   const Icon =
     header.state === "stopped"
       ? CircleStop
@@ -58,7 +59,7 @@ export function LeadHeaderView({ header }: { header: LeadHeader }) {
           ? `Limits: ${leadNumber(limits.turns)} turns · ${leadNumber(limits.tool_calls)} tool calls per turn · ${leadNumber(limits.model_calls)} model calls per turn · ${leadNumber(limits.wall_clock_s)} s per turn · ${leadNumber(limits.plans)} plans · ${leadNumber(limits.subtasks)} subtasks per plan · ${leadNumber(limits.task_chars)} characters per task.`
           : "Limits not recorded."}
       </p>
-      {header.detail !== null && (
+      {header.detail !== null && !ended && (
         <p className="mt-2 text-[14px] text-muted wrap-anywhere">{header.detail}</p>
       )}
     </header>

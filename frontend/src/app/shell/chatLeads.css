@@ -344,6 +344,27 @@
   color: var(--faint);
   cursor: not-allowed;
 }
+@media (width < 768px) {
+  .chat-shell .chat-agents > header:has([aria-disabled="true"]) {
+    grid-template-columns: auto minmax(0, 1fr);
+    height: auto;
+    padding-block: 10px;
+  }
+  .chat-shell .chat-agents > header:has([aria-disabled="true"]) > span {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
+  .chat-shell .chat-agents > header:has([aria-disabled="true"]) .chat-start-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .chat-shell .chat-start-actions:has([aria-disabled="true"]) button {
+    width: auto;
+    flex: 1 1 auto;
+    padding-inline: 8px;
+  }
+}
 @media (width <= 600px) {
   .chat-agent-list .chat-agent-row.chat-lead-row {
     min-height: 59px;

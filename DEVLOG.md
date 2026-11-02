@@ -65,4 +65,5 @@ One line per day, in Argentina time (ART).
   Updated prompt-version goldens, bounded wake summaries, delivered notices as tool data, and
   labeled the synthetic wake attribution fixture with its generator provenance. Added K2b's event-derived
   lead header, observed-revision Stop, ended composer, default-only lead start, cap guards and
-  compact lead rows with fake-only lifecycle and responsive capture proof.
+  compact lead rows with fake-only lifecycle and responsive capture proof. Rechecked the layout and
+  clarify references in full, fixed the 390px capped-action overflow, and removed duplicate ended copy.
