@@ -154,14 +154,14 @@ export function Composer({
           </button>
         )}
       </div>
-      {failure?.key === key && (
+      {failure && (!lead || failure.key === key) && (
         <p
           role="alert"
           title={failure.message}
           className="mt-[6px] flex min-w-0 gap-2 text-[14px] text-muted"
         >
           <TriangleAlert aria-hidden="true" className="size-4 shrink-0" />
-          <span className="wrap-anywhere">{failure.message}</span>
+          <span className={lead ? "wrap-anywhere" : "truncate"}>{failure.message}</span>
         </p>
       )}
     </div>
