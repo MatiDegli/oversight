@@ -34,12 +34,15 @@ afterAll(async () => {
 });
 async function ready(page: Page) {
   await check
-    .poll(() =>
-      page.evaluate(() =>
-        document
-          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
-          ?.oversightGraph?.animating(),
-      ),
+    .poll(
+      () =>
+        page.evaluate(() =>
+          document
+            .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+            ?.oversightGraph?.animating(),
+        ),
+      // Software rendering can delay even an idle probe after review Fit.
+      { timeout: 15_000 },
     )
     .toBe(false);
   await page.evaluate(async () => {
