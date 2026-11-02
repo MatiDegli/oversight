@@ -147,6 +147,30 @@ projection checks. Manifests and reset records retain W2's 4 MiB per-metadata-fi
 and refuse before destruction if they exceed it. These are injected internal handoffs, not
 native acceptance or public enablement.
 
+Private reset verifies owned staging again, then records incomplete-reset state outside reset
+targets before deletion. It publishes the tree, installs the shared byte override before
+`git add -f --pathspec-from-file=<absolute-manifest> --pathspec-file-nul`, and limits
+`GIT_LITERAL_PATHSPECS=1` to that add. The initial commit and source/runtime identities are
+atomically persisted before success. Demo/Boltons retain their original copy/add path.
+
+A prior own-source marker or incomplete reset arms protection regardless of the new selector,
+provider or byte switch. Bounded no-follow HEAD and loose/packed main refs are read without Git.
+Any main hash different from the pinned initial commit refuses, including rewind/unrelated refs.
+Only an exact freshly read hash in the process environment `OVERSIGHT_DISCARD_OWN_RUNTIME`
+authorizes discard; booleans, stale hashes and values loaded from an environment file do not.
+Missing, corrupt or unsafe records refuse with preservation guidance. Verifiable interrupted
+resets clean only recorded staging identities and can retry; an unrecorded completed commit is
+ambiguous and preserves the runtime for manual recovery. Nothing serves after a failed reset.
+
+Refusal supplies safely quoted PowerShell paths/hashes and a fresh patch path outside runtime.
+Git writes `diff --binary --full-index --no-ext-diff --no-textconv --no-renames --output=...`
+directly: no text capture or redirection. Run the supplied source `apply --check` before explicit
+apply. Working source bytes must match the imported baseline, including dirty/untracked files;
+otherwise preserve the patch and resolve manually. Export covers committed delta only: preserve
+the entire runtime for uncommitted edits. No automatic source apply, reset or discard occurs.
+Linux injected cases exercise these handoffs; native NTFS/Git cases are separately skipped on
+Linux and remain unverified until run on Windows. Public own-source startup remains pending.
+
 Internal validation rejects links/reparse/special or multiple-link files, casefold or uppercase
 sibling collisions, case-sensitive directories, and named streams (only `::$DATA` is allowed).
 Review `Zone.Identifier` before using `Unblock-File` or `Remove-Item -Stream Zone.Identifier`.

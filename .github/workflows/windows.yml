@@ -67,6 +67,10 @@ jobs:
         run: |
           uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_source_bytes.py backend/tests/workspace/test_source_bytes_windows.py backend/tests/agents/test_tools_nt_bytes.py -n 2 -rs -s 2>&1 | Tee-Object nt-evidence/w4b-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: W4a2 injected and native reset cases
+        run: |
+          uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_source_nt_copy.py backend/tests/workspace/test_source_nt_reset.py backend/tests/workspace/test_source_nt_reset_windows.py -n 2 -rs -s 2>&1 | Tee-Object nt-evidence/w4a2-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Smoke with retained jobs
         timeout-minutes: 3
         run: |

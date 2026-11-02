@@ -729,3 +729,259 @@ async def stage_source(
     except BaseException:
         await offload(stage.cleanup)
         raise
+
+
+def object_id(value: str, width: int | None = None) -> str:
+    if (
+        re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value) is None
+        or (width and len(value) != width)
+        or not value.strip("0")
+    ):
+        raise refuse("invalid pinned object ID")
+    return value
+
+
+def metadata_bytes(path: Path, deadline: float) -> bytes | None:
+    entry = read_entry(path, Budget(deadline))
+    if entry is not None and entry.data is None:
+        raise refuse("metadata is a directory")
+    return entry.data if entry else None
+
+
+def main_ref(
+    runtime: Path, deadline: float, *, width: int | None = None, unborn: bool = False
+) -> str | None:
+    common = runtime / "workspace/.git"
+    paths = (common / "HEAD", common / "refs/heads/main", common / "packed-refs")
+    head, loose, packed = snapshot = tuple(metadata_bytes(p, deadline) for p in paths)
+    if head != b"ref: refs/heads/main\n" and not (unborn and head is None):
+        raise refuse("runtime HEAD missing or not symbolic main")
+    if loose is not None and (not loose.endswith(b"\n") or loose.count(b"\n") != 1):
+        raise refuse("malformed loose main ref")
+    if snapshot != tuple(metadata_bytes(p, deadline) for p in paths):
+        raise refuse("runtime refs changed during read")
+    found: dict[str, str] = {}
+    for line in (packed or b"").decode("ascii").splitlines():
+        if line.startswith("#"):
+            continue
+        if line.startswith("^"):
+            object_id(line[1:], width)
+            continue
+        oid, separator, name = line.partition(" ")
+        object_id(oid, width)
+        if separator != " " or not name.startswith("refs/") or name in found:
+            raise refuse("corrupt packed refs")
+        found[name] = oid
+    value = (
+        loose.decode("ascii").removesuffix("\n")
+        if loose is not None
+        else found.get("refs/heads/main")
+    )
+    if value is None and unborn:
+        return None
+    return object_id(value or "", width)
+
+
+def directory_id(path: Path, deadline: float) -> str:
+    with safe_directory(path, deadline):
+        info = path.lstat()
+        return f"{info.st_dev}:{info.st_ino}"
+
+
+def state_fields(path: Path, deadline: float) -> list[str] | None:
+    data = metadata_bytes(path, deadline)
+    if data is None:
+        return None
+    if not data.endswith(b"\0"):
+        raise refuse("corrupt reset state")
+    return data[:-1].decode("utf-8").split("\0")
+
+
+def store_fields(path: Path, fields: list[str] | None, deadline: float) -> None:
+    before = read_entry(path, Budget(deadline))
+    wanted = bounded_metadata(("\0".join(fields) + "\0").encode()) if fields is not None else None
+    if before is not None or wanted is not None:
+        replace_file(path, before, wanted, deadline, cas=False)
+
+
+def identity_field(value: str) -> tuple[int, int]:
+    if re.fullmatch(r"[0-9]+:[0-9]+", value) is None:
+        raise refuse("corrupt identity in reset state")
+    dev, ino = value.split(":")
+    return int(dev), int(ino)
+
+
+def ps_quote(value: str | Path) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def recovery(runtime: Path, baseline: list[str], current: str) -> str:
+    patch = runtime.parent / ("oversight-export-" + uuid4().hex + ".patch")
+    initial, source = baseline[:2]
+    return (
+        f"main {current} differs from initial {initial}. Preserve the entire runtime "
+        f"{ps_quote(runtime)} for uncommitted edits; export covers committed delta only. "
+        f"In a private folder, run: git -C {ps_quote(runtime / 'workspace')} diff --binary "
+        f"--full-index --no-ext-diff --no-textconv --no-renames "
+        f"{ps_quote('--output=' + str(patch))} "
+        f"{initial} main ; then git -C {ps_quote(source)} apply --check {ps_quote(patch)} ; "
+        f"then explicitly git -C {ps_quote(source)} apply {ps_quote(patch)}. Source working bytes "
+        "must match the imported baseline, including dirty/untracked files; otherwise preserve "
+        "the patch and resolve manually. Export never applies or discards automatically. "
+        f"Only to explicitly discard, set $env:OVERSIGHT_DISCARD_OWN_RUNTIME = {ps_quote(current)} "
+        "in this process and retry; no .env setting is read."
+    )
+
+
+def journal_owned(runtime: Path, journal: list[str]) -> list[tuple[Path, tuple[int, int]]]:
+    if len(journal) < 8 or (len(journal) - 8) % 2:
+        raise refuse("corrupt incomplete reset")
+    if journal[4] == "-":
+        if len(journal) != 8:
+            raise refuse("unexpected staging records")
+        return []
+    if re.fullmatch(r"source-stage-[0-9a-f]{32}", journal[4]) is None:
+        raise refuse("unowned recovery staging")
+    root = runtime / journal[4]
+    owned: list[tuple[Path, tuple[int, int]]] = []
+    if len(journal[8:]) // 2 > MAX_PATHS + 3:
+        raise refuse("oversized staging state")
+    for relative, identity in zip(journal[8::2], journal[9::2], strict=True):
+        if relative:
+            split_relative(relative, nt=True)
+            if relative != "manifest" and relative != "tree" and not relative.startswith("tree/"):
+                raise refuse("unowned recovery entry")
+        owned.append((root / relative, identity_field(identity)))
+    if not owned or owned[0][0] != root:
+        raise refuse("missing staging root identity")
+    return owned
+
+
+def guard_previous(runtime: Path, *, recover: bool = False) -> bool:
+    """No Git. Call before source Git at future startup, regardless of selector/provider."""
+    deadline = time.monotonic() + PHASE_SECONDS
+    baseline: list[str] | None = None
+    verified_main: str | None = None
+    try:
+        baseline = state_fields(runtime / "own-source", deadline)
+        journal = state_fields(runtime / "own-reset", deadline)
+        marker = state_fields(runtime / "own-runtime", deadline)
+        if marker not in (None, ["own-runtime-v1"]) or (
+            marker and baseline is None and journal is None
+        ):
+            raise refuse("missing baseline or unsafe own-runtime marker")
+        if baseline is None and journal is None:
+            return False
+        root_id = directory_id(runtime, deadline)
+        if baseline is not None:
+            if len(baseline) != 5 or baseline[3] != root_id or not Path(baseline[1]).is_absolute():
+                raise refuse("invalid baseline identity")
+            short_path(baseline[1])
+            object_id(baseline[0])
+            for value in baseline[2:]:
+                identity_field(value)
+        owned = journal_owned(runtime, journal) if journal is not None else []
+        tree = runtime / "workspace"
+        tree_id = directory_id(tree, deadline) if os.path.lexists(tree) else "-"
+        if baseline is not None and tree_id == baseline[4]:
+            current = main_ref(runtime, deadline, width=len(baseline[0]))
+            if (
+                current != baseline[0]
+                and os.environ.get("OVERSIGHT_DISCARD_OWN_RUNTIME") != current
+            ):
+                raise refuse(recovery(runtime, baseline, current or ""))
+            verified_main = current
+        elif journal is None:
+            raise refuse("baseline workspace identity changed")
+        if journal is not None:
+            for value in (journal[2], journal[7]):
+                if value != "-":
+                    object_id(value, len(baseline[0]) if baseline else None)
+            if journal[4] != "-" and not Path(journal[5]).is_absolute():
+                raise refuse("invalid incomplete source path")
+            if journal[0] != root_id:
+                raise refuse("incomplete reset runtime identity changed")
+            for value in (journal[1], journal[3], journal[6]):
+                if value != "-":
+                    identity_field(value)
+            if tree_id != "-":
+                current = main_ref(runtime, deadline, unborn=tree_id == journal[3])
+                expected = (
+                    journal[7]
+                    if journal[7] != "-"
+                    else (journal[2] if tree_id == journal[1] and journal[2] != "-" else None)
+                )
+                # A published baseline takes precedence over a leftover journal.
+                if (tree_id not in {journal[1], journal[3]} or current != expected) and (
+                    baseline is None or tree_id != baseline[4] or current != verified_main
+                ):
+                    raise refuse("ambiguous interrupted reset; preserve runtime")
+            if recover:
+                StagedSource.cleanup_owned(owned)
+        return True
+    except (OSError, IntegrityError, ValueError) as exc:
+        if str(exc).startswith("Windows source refused: main "):
+            raise
+        raise refuse(
+            f"unsafe, missing or corrupt reset state/ref; preserve {ps_quote(runtime)} "
+            "and recover its files and ownership records manually before restarting"
+        ) from None
+
+
+def begin_reset(runtime: Path, stage: StagedSource | None) -> None:
+    deadline = time.monotonic() + PHASE_SECONDS
+    previous = (
+        directory_id(runtime / "workspace", deadline)
+        if os.path.lexists(runtime / "workspace")
+        else "-"
+    )
+    old = main_ref(runtime, deadline, unborn=True) if previous != "-" else None
+    fields = [directory_id(runtime, deadline), previous, old or "-", "-", "-", "-", "-", "-"]
+    if stage is not None:
+        source = stage.selection.inventory.source.root
+        fields[3:7] = [
+            directory_id(stage.tree, deadline),
+            stage.root.name,
+            str(source),
+            ":".join(str(n) for n in dict(stage.selection.directories)[""][:2]),
+        ]
+        for path, identity in stage.owned:
+            fields.extend(
+                [
+                    path.relative_to(stage.root).as_posix() if path != stage.root else "",
+                    f"{identity[0]}:{identity[1]}",
+                ]
+            )
+    store_fields(runtime / "own-reset", fields, deadline)
+    if stage is not None:
+        store_fields(runtime / "own-runtime", ["own-runtime-v1"], deadline)
+
+
+def finish_reset(runtime: Path, commit: str, stage: StagedSource | None) -> None:
+    deadline = time.monotonic() + PHASE_SECONDS
+    journal = state_fields(runtime / "own-reset", deadline)
+    if journal is None:
+        raise refuse("incomplete reset state missing")
+    object_id(commit)
+    if main_ref(runtime, deadline, width=len(commit)) != commit:
+        raise refuse("initial ref changed before baseline publication")
+    if stage is not None:
+        store_fields(
+            runtime / "own-source",
+            [
+                commit,
+                journal[5],
+                journal[6],
+                journal[0],
+                directory_id(runtime / "workspace", deadline),
+            ],
+            deadline,
+        )
+    else:
+        journal[3], journal[7] = directory_id(runtime / "workspace", deadline), commit
+        store_fields(runtime / "own-reset", journal, deadline)
+        store_fields(runtime / "own-source", None, deadline)
+        store_fields(runtime / "own-runtime", None, deadline)
+    if stage is not None:
+        stage.cleanup()
+    store_fields(runtime / "own-reset", None, deadline)

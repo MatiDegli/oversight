@@ -73,6 +73,14 @@ from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import ProcessResult, Spawn, probe_job_support, run_process
 from oversight.workspace.snapshot import IntegrityState
+from oversight.workspace.source_nt import (
+    StagedSource,
+    begin_reset,
+    finish_reset,
+    guard_previous,
+    publish_stage,
+    verify_stage,
+)
 from oversight.workspace.suite import SuiteRun, SuiteUnavailable
 from oversight.workspace.suite_guard import guarded_suite
 from oversight_contracts.common import AgentId
@@ -268,6 +276,7 @@ class Workspace:
             self.git_flags += ("-c", f"core.attributesFile={global_attributes}")
         self.nt_source_bytes = _nt_source_bytes
         self._byte_bootstrap = False
+        self._literal_initial_add = False
         self._root = runtime_root
         self._template = template
         self._pytest_pin = pytest_pin
@@ -380,6 +389,8 @@ class Workspace:
         }
         if self.nt_source_bytes:
             env["GIT_ATTR_NOSYSTEM"] = "1"
+        if self._literal_initial_add:
+            env["GIT_LITERAL_PATHSPECS"] = "1"
         if date:
             env |= {"GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
         return env | tree.git_identity.pins()
@@ -516,7 +527,7 @@ class Workspace:
         info.mkdir(parents=True, exist_ok=True)
         (info / "exclude").write_text(CACHE_EXCLUDES, encoding="utf-8")
 
-    async def reset(self) -> str:
+    async def reset(self, *, _nt_stage: StagedSource | None = None) -> str:
         """Start clean: delete worktrees, main and tmp, copy the template, and make the one initial
         commit, with a fixed author and date so its hash is the same in every take. Server start
         only; returns main's base commit. Runs, ledger and demo venv are kept."""
@@ -526,14 +537,29 @@ class Workspace:
             raise WorkspaceBusy("an operation is in progress")
         if self._reset_done:
             raise WorkspaceBusy("reset already ran; it is for server start only")
+        protected = await offload(partial(guard_previous, self._root, recover=True))
+        if _nt_stage is not None:
+            if not self.nt_source_bytes:
+                raise WorkspaceError("staged NT source needs the byte policy")
+            await offload(partial(verify_stage, _nt_stage, self._root, time.monotonic() + 10))
         if sys.platform == "win32":
             await offload(partial(executable, "git"))
             await offload(partial(executable, "uv"))
         with self._locks.track():
             async with self._locks.acquire(main=True):
+                if protected:
+                    await offload(partial(guard_previous, self._root))
+                if protected or _nt_stage is not None:
+                    await offload(partial(begin_reset, self._root, _nt_stage))
+                if _nt_stage is not None and time.monotonic() > _nt_stage.deadline:
+                    raise OSError("Windows source refused: COPY phase deadline exceeded")
                 for name in ("worktrees", "workspace", "tmp"):
                     await offload(partial(remove_tree, self._root, self._root / name))
-                await offload(self._populate)
+                if _nt_stage is None:
+                    await offload(self._populate)
+                else:
+                    await offload(partial(publish_stage, _nt_stage, self._root))
+                    (self._root / "tmp" / "home").mkdir(mode=DIR_MODE, parents=True)
                 git = self.git_ok
                 self._byte_bootstrap = self.nt_source_bytes
                 try:
@@ -547,9 +573,32 @@ class Workspace:
                             install_byte_override, self._main.git_identity, time.monotonic() + 30
                         )
                     )
-                await git(self._main, "add", "-A")
-                await git(self._main, "commit", "-q", "-m", INITIAL_MESSAGE, date=INITIAL_DATE)
+                if _nt_stage is None:
+                    await git(self._main, "add", "-A")
+                else:
+                    self._literal_initial_add = True
+                    try:
+                        await git(
+                            self._main,
+                            "add",
+                            "-f",
+                            f"--pathspec-from-file={_nt_stage.manifest}",
+                            "--pathspec-file-nul",
+                        )
+                    finally:
+                        self._literal_initial_add = False
+                await git(
+                    self._main,
+                    "commit",
+                    "-q",
+                    "-m",
+                    INITIAL_MESSAGE,
+                    *(("--allow-empty",) if _nt_stage is not None else ()),
+                    date=INITIAL_DATE,
+                )
                 commit = (await git(self._main, "rev-parse", "HEAD")).strip()
+                if protected or _nt_stage is not None:
+                    await offload(partial(finish_reset, self._root, commit, _nt_stage))
                 self._trees.clear()
                 self.git_identities.clear()
                 self.git_identities[self._main.root] = self._main.git_identity
