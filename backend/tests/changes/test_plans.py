@@ -1,5 +1,6 @@
 """Plan lifecycle, readiness and failure policy without a runtime or model."""
 
+import re
 from typing import Any
 
 import pytest
@@ -31,6 +32,7 @@ def proposed(count: int, *, chain: bool = False) -> Plan:
             SubtaskDraft(task=f"task {i}", zone=ZONE, depends_on=[i - 1] if i and chain else [])
             for i in range(count)
         ],
+        max_subtasks=6,
     )
 
 
@@ -67,7 +69,9 @@ def test_rejected_prerequisite_cancels_transitively_even_out_of_order(count: int
         for i, t in enumerate(plan.subtasks)
     ]
     plan = core.update(
-        plan, UpdatePlan(revision=plan.revision, graph_version=plan.graph_version, subtasks=drafts)
+        plan,
+        UpdatePlan(revision=plan.revision, graph_version=plan.graph_version, subtasks=drafts),
+        max_subtasks=6,
     )
     plan = core.launched(plan, count - 1, "agent-1")
     plan = core.resolved(plan, "agent-1", "rejected")
@@ -91,6 +95,7 @@ def test_join_waits_for_all_prerequisites_and_request_changes_has_no_resolution(
                 for i, t in enumerate(plan.subtasks)
             ],
         ),
+        max_subtasks=6,
     )
     with pytest.raises(WrongState):
         core.launched(plan, 2, "agent-3")
@@ -109,15 +114,15 @@ def test_freeze_unlink_revision_checks_and_started_by_preserved() -> None:
         graph_version=plan.graph_version,
         subtasks=[SubtaskDraft(task="Edited", zone=ZONE)],
     )
-    edited = core.update(plan, request)
+    edited = core.update(plan, request, max_subtasks=6)
     assert edited.started_by == "agent-99" and edited.revision == 3
     with pytest.raises(WrongState):
-        core.update(edited, request)
+        core.update(edited, request, max_subtasks=6)
     with pytest.raises(WrongState):
-        core.update(plan, request.model_copy(update={"graph_version": "wrong"}))
+        core.update(plan, request.model_copy(update={"graph_version": "wrong"}), max_subtasks=6)
     linked = core.link(edited, 3, "queued-task-1")
     with pytest.raises(WrongState):
-        core.update(linked, request.model_copy(update={"revision": 4}))
+        core.update(linked, request.model_copy(update={"revision": 4}), max_subtasks=6)
     unlinked = core.unlink(linked)
     assert unlinked.revision == 5 and unlinked.state == "proposed"
     assert unlinked.queued_task_id is None and core.content_matches(unlinked, edited)
@@ -177,21 +182,49 @@ def test_partial_initial_launch_refusals_and_ready_dependents_keep_priority() ->
 
 @pytest.mark.parametrize("transition", ["propose", "update"])
 @pytest.mark.parametrize("dependency", [False, True])
-def test_plan_transitions_keep_runtime_bounds(transition: str, dependency: bool) -> None:
+@pytest.mark.parametrize("limit", [6, 2])
+def test_plan_transitions_keep_runtime_bounds(
+    transition: str, dependency: bool, limit: int
+) -> None:
     plan = proposed(1)
     drafts = [
-        SubtaskDraft(task=f"task {i}", zone=ZONE, depends_on=[6] if dependency and i == 0 else [])
-        for i in range(7)
+        SubtaskDraft(
+            task=f"task {i}", zone=ZONE, depends_on=[limit] if dependency and i == 0 else []
+        )
+        for i in range(limit + 1)
     ]
     message = (
-        "A subtask dependency index must be at most 5."
+        f"A subtask dependency index must be at most {limit - 1} "
+        f"(OVERSIGHT_LEAD_MAX_SUBTASKS={limit})."
         if dependency
-        else "A plan has 1 to 6 subtasks."
+        else f"A plan has 1 to {limit} subtasks (OVERSIGHT_LEAD_MAX_SUBTASKS={limit})."
     )
-    with pytest.raises(ValueError, match=message):
+    with pytest.raises(ValueError, match=re.escape(message)):
         if transition == "propose":
-            core.propose(plan.model_copy(update={"state": "planning"}), drafts)
+            core.propose(plan.model_copy(update={"state": "planning"}), drafts, max_subtasks=limit)
         else:
             core.update(
-                plan, UpdatePlan(revision=2, graph_version=plan.graph_version, subtasks=drafts)
+                plan,
+                UpdatePlan(revision=2, graph_version=plan.graph_version, subtasks=drafts),
+                max_subtasks=limit,
             )
+
+
+@pytest.mark.parametrize("transition", ["propose", "update"])
+def test_plan_transitions_accept_raised_limit_and_keep_nonempty(transition: str) -> None:
+    plan = proposed(1)
+    drafts = [
+        SubtaskDraft(task=f"task {i}", zone=ZONE, depends_on=[i - 1] if i else []) for i in range(8)
+    ]
+
+    def apply(drafts: list[SubtaskDraft]) -> Plan:
+        if transition == "propose":
+            return core.propose(plan.model_copy(update={"state": "planning"}), drafts, 8)
+        return core.update(
+            plan, UpdatePlan(revision=2, graph_version=plan.graph_version, subtasks=drafts), 8
+        )
+
+    result = apply(drafts)
+    assert result.subtasks and result.subtasks[7].depends_on == [6]
+    with pytest.raises(ValueError):
+        apply([])
