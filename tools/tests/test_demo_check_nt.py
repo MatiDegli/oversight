@@ -586,12 +586,15 @@ def test_cli_retains_outer_before_either_mode(monkeypatch, tmp_path, mode):
 
 
 @pytest.mark.anyio
-async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeypatch):
+@pytest.mark.parametrize("layout", ["packages/foo/src", "backend/src"])
+async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeypatch, layout):
     original = nt.run_process
+    setup_calls = []
 
     async def setup(argv, **kwargs):
         if argv[0] != "uv":
             return await original(argv, **kwargs)
+        setup_calls.append(argv)
         (tmp_path / "source/.venv/Lib/site-packages").mkdir(parents=True, exist_ok=True)
         from oversight.workspace import ProcessResult
 
@@ -599,13 +602,32 @@ async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeyp
 
     monkeypatch.setattr(nt, "run_process", setup)
     monkeypatch.setenv("OVERSIGHT_DISCARD_OWN_RUNTIME", "inherited-authority")
-    fixture = await nt.prepare_own_fixture(tmp_path, layout="backend/src")
+    fixture = await nt.prepare_own_fixture(tmp_path, layout=layout)
+    assert setup_calls == [
+        ["uv", "--no-config", "venv", "--python", "3.12", str(fixture.source / ".venv")],
+        [
+            "uv",
+            "--no-config",
+            "pip",
+            "install",
+            "--python",
+            str(fixture.source / ".venv/Scripts/python.exe"),
+            "pytest==9.1.1",
+            "pytest-asyncio==1.3.0",
+        ],
+    ]
+    asynchronous = (fixture.source / "test_async.py").read_text()
+    assert "@pytest_asyncio.fixture\nasync def copied_module" in asynchronous
+    assert "@pytest.mark.asyncio\nasync def test_async_copy" in asynchronous
+    assert "await asyncio.sleep(0)" in asynchronous
+    assert "copied_module.is_relative_to(Path.cwd())" in asynchronous
     env = nt.own_fixture_env(8000, fixture)
     assert env["OVERSIGHT_WORKSPACE_SOURCE"] == str(fixture.source)
     assert env["OVERSIGHT_TEST_TIMEOUT_S"] == "75"
     assert env["OVERSIGHT_DISCARD_OWN_RUNTIME"] == ""
     assert env["META_API_KEY"] == env["BASETEN_API_KEY"] == ""
     assert env["OVERSIGHT_AGENT_MODEL"] == env["OVERSIGHT_AGENT_MODEL_B"] == "fake"
+    assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD" not in env
     script = json.loads(fixture.script.read_text())
     tools = [turn["tool_calls"][0] for turn in script["turns"]]
     assert [t["name"] for t in tools] == [

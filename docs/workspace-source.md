@@ -190,8 +190,8 @@ under runtime `tmp`. A constant probe pins the trusted report plugin and checks 
 pytest >=8.2 and pluggy >=1.5. Preparation, probe (at most ten seconds) and pytest share one
 deadline derived from the caller's timeout. Missing, unsafe or incompatible environments yield
 a bounded private unavailable diagnostic. Linux injections exercise these handoffs; production
-interpreter selection now uses the original environment exclusively. Guarded-result integration,
-public selection and native acceptance remain pending.
+interpreter selection now uses the original environment exclusively. Guarded-result admission is
+integrated privately; public selection and native acceptance remain pending.
 
 Static bounded `.pth`, editable finder literals and editable distribution metadata translate
 original project paths into each tested tree, including nested layouts and namespaces. The server
@@ -202,8 +202,14 @@ namespace paths once. Later imports resolving through an inserted original path 
 insertion itself is not detected. The trusted plugin checks mapped specs and all loaded origins
 in the probe, session start, collection finish, before test records and session finish. Venv
 library dependencies are permitted. Collection emits a successful guard before tests; any later guard
-failure appends a failure record and exits. Report admission and public availability remain future
-wiring; these injected tests do not establish native own-source acceptance.
+failure appends a failure record and exits. Private admission requires the complete successful
+guard/report sequence. If NT cleanup is unverified, the finalizer neither reads nor removes the
+JSONL, JUnit or measured-call artifacts; the wrapper refuses evidence and snapshot restoration.
+Public availability remains pending; injected tests do not establish native own-source acceptance.
+
+Disposable native fixtures provision pytest 9.1.1 and pytest-asyncio 1.3.0 in their original venv.
+An async fixture and marked async test require plugin autoload in both supported fixture layouts,
+and assert that imports resolve inside each tested copy. Production never provisions this venv.
 
 ## Private startup delivery and notices
 

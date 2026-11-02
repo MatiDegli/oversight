@@ -229,4 +229,6 @@ W4a1 provides internal selection only; every public NT repository path still ref
 
 Failed NT cleanup suspends integrity, refuses evidence/restoration and destructive continuation,
 and retains the runtime lock until process exit. Repeated cancellation still settles cleanup.
+Report finalization preserves all artifacts without reading them while cleanup is unverified.
+Private import guards and result admission are integrated; public paths remain closed.
 Native Job/console/grandchild proof remains uncollected; accepted path/ACL residuals are unchanged.

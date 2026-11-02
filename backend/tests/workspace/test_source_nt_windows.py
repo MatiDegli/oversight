@@ -24,10 +24,6 @@ pytestmark = [
 
 
 @pytest.mark.parametrize("layout", ["packages/foo/src", "backend/src"])
-@pytest.mark.skipif(
-    not hasattr(SuiteUnavailable, "own_source_reason"),
-    reason="guarded-result integration must land before native import qualification",
-)
 async def test_original_venv_each_copy_and_guard_admission(tmp_path, monkeypatch, layout):
     tmp_path = Path(tempfile.mkdtemp(prefix="ov-"))
     fixture = await driver.prepare_own_fixture(tmp_path, layout=layout)
@@ -47,16 +43,20 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, monkeypatch
         module.write_bytes(b"def value():\n    return -1\n")
         failed = await live.workspace.run_tests(agent, timeout_s=75)
         assert failed.result.outcome == "failed" and failed.result.failed == 1
+        assert failed.result.passed == 1  # the autoloaded async test still runs
         module.write_bytes(b"def value():\n    return 41\n")
         repaired = await live.workspace.run_tests(agent, timeout_s=75)
         combined = await live.workspace.run_tests(live.workspace.main, timeout_s=75)
         assert repaired.result.outcome == combined.result.outcome == "passed"
+        for run in (repaired, combined):
+            assert run.result.passed == 2
+            assert any(case.test_id == "test_async.py::test_async_copy" for case in run.cases)
         assert repaired.tested_tree != failed.tested_tree
         assert not repaired.problems and not combined.problems
         assert before == {p: (fixture.source / p).read_bytes() for p in before}
         print(
             "native source HEAD/index/config/selected bytes unchanged; "
-            "original venv; copied imports"
+            "original venv; copied imports; pytest-asyncio autoload"
         )
     finally:
         await live.shutdown()

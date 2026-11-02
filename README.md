@@ -153,9 +153,9 @@ MIT. See [LICENSE](LICENSE).
 
 ## Native Windows advisory checks
 
-Startup/lifetime, native metadata/tree I/O, demo tools and private own-copy composition
-are implemented. Public own-source paths still refuse; guarded-result integration and the
-final enabling change precede own-source qualification. The separate `windows advisory` workflow is unrequired; failures still fail its job.
+Startup/lifetime, native metadata/tree I/O, demo tools, private own-copy composition and guarded
+results are implemented. Public own-source paths still refuse; the final enabling change precedes
+own-source qualification. The separate `windows advisory` workflow is unrequired; failures still fail its job.
 Its logs distinguish injected tests, native tests and skipped proofs. Linux/WSL remains the
 verified development path. Windows runs open mode with OPEN_NOTICE: no network isolation,
 rules, Revert, behavior or measured evidence, and no memory cap (`memwatch` needs `/proc`).
@@ -206,7 +206,7 @@ separately with `uv run --frozen python -m oversight replay fixtures/events/hand
 --allow-fake-provider`; UI proof uses live serve. No model credits are used.
 
 No Windows make/bash/reload or native browser suite is supplied. Public own-repository paths
-still refuse. After guarded-result integration and public enablement, run the same driver on
+still refuse. After public enablement, run the same driver on
 the maintainer's Windows machine and windows-latest:
 
 ```powershell
@@ -215,7 +215,7 @@ uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_sou
 ```
 
 This adds three disposable own-source runs to the three demo runs. It retains source hashes,
-copy-specific failed/repaired and combined-suite evidence, restart refusal, binary full-index
+copy-specific failed/repaired and combined-suite evidence, pytest-asyncio autoload, restart refusal, binary full-index
 export, explicit apply/check to a separate disposable target, byte parity and exact-hash discard.
 Neither Windows machine has qualified this path yet; Linux injections/skips are not acceptance.
 Use [the chosen-repository fake template](docs/workspace-source.md#chosen-repository-template)

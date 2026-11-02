@@ -512,6 +512,14 @@ async def prepare_own_fixture(scratch: Path, *, layout: str = "packages/foo/src"
             b"    assert Path(sample.__file__).resolve().is_relative_to(Path.cwd())\n"
             b"    assert tmp_path.is_dir()\n"
         ),
+        "test_async.py": (
+            b"import asyncio\nfrom pathlib import Path\nimport pytest\nimport pytest_asyncio\n"
+            b"import sample\n"
+            b"@pytest_asyncio.fixture\nasync def copied_module():\n"
+            b"    await asyncio.sleep(0)\n    return Path(sample.__file__).resolve()\n"
+            b"@pytest.mark.asyncio\nasync def test_async_copy(copied_module):\n"
+            b"    await asyncio.sleep(0)\n    assert copied_module.is_relative_to(Path.cwd())\n"
+        ),
         ".gitignore": b".venv/\n__pycache__/\n.pytest_cache/\n",
         "pyproject.toml": b'[tool.uv.workspace]\nmembers = ["packages/*"]\n',
     }
@@ -525,7 +533,16 @@ async def prepare_own_fixture(scratch: Path, *, layout: str = "packages/foo/src"
     python = source / ".venv/Scripts/python.exe"
     for argv in (
         ["uv", "--no-config", "venv", "--python", "3.12", str(python.parent.parent)],
-        ["uv", "--no-config", "pip", "install", "--python", str(python), "pytest==9.1.1"],
+        [
+            "uv",
+            "--no-config",
+            "pip",
+            "install",
+            "--python",
+            str(python),
+            "pytest==9.1.1",
+            "pytest-asyncio==1.3.0",
+        ],
     ):
         result = await run_process(argv, cwd=scratch, timeout_s=300)
         if result.returncode != 0 or result.timed_out:

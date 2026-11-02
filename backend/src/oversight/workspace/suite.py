@@ -24,7 +24,7 @@ from oversight.workspace._platform import unlink_retry
 from oversight.workspace.junit import MAX_XML_BYTES, parse_junit
 from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallReport, CallTarget, read_calls
-from oversight.workspace.runner import ProcessResult, Spawn
+from oversight.workspace.runner import NtCleanupRunner, ProcessResult, Spawn
 from oversight.workspace.source_nt import OwnEnvironment
 from oversight_contracts.events import CaseResult, SuiteExecution, SuiteResult
 
@@ -435,23 +435,32 @@ async def run_suite(
         failure = error
         process = ProcessResult(None, "", "", isinstance(error, asyncio.CancelledError), False, 0)
     finally:
-        take_tally = _take_tally if _own_prepare is None else _take_own_tally
-        tally, report_found, report_error = await offload(lambda: take_tally(report))
-        cases, problems = await offload(lambda: _take_cases(junit, redact))
-        measured = None
-        if measured_targets is not None:
-            try:
-                measured = await offload(lambda: read_calls(recording, measured_targets))
-            finally:
-                if sys.platform == "win32":
-                    try:
-                        await offload(lambda: unlink_retry(request, missing_ok=True, nt=True))
-                    finally:
-                        await offload(lambda: unlink_retry(recording, missing_ok=True, nt=True))
-                else:
-                    await offload(
-                        lambda: (request.unlink(missing_ok=True), recording.unlink(missing_ok=True))
-                    )
+        if isinstance(spawn, NtCleanupRunner) and not spawn.cleanup_complete:
+            # Live descendants may still write these artifacts. Keep them for recovery;
+            # the wrapper will refuse evidence and restoration while retaining its locks.
+            tally, report_found, report_error = Tally(), False, "Windows Job cleanup is unverified"
+            cases, problems, measured = (), (report_error,), None
+        else:
+            take_tally = _take_tally if _own_prepare is None else _take_own_tally
+            tally, report_found, report_error = await offload(lambda: take_tally(report))
+            cases, problems = await offload(lambda: _take_cases(junit, redact))
+            measured = None
+            if measured_targets is not None:
+                try:
+                    measured = await offload(lambda: read_calls(recording, measured_targets))
+                finally:
+                    if sys.platform == "win32":
+                        try:
+                            await offload(lambda: unlink_retry(request, missing_ok=True, nt=True))
+                        finally:
+                            await offload(lambda: unlink_retry(recording, missing_ok=True, nt=True))
+                    else:
+                        await offload(
+                            lambda: (
+                                request.unlink(missing_ok=True),
+                                recording.unlink(missing_ok=True),
+                            )
+                        )
     unavailable = None
     if _own_prepare is not None:
         if isinstance(failure, OwnSourceTestsUnavailable):
