@@ -1,5 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { expect as check, type Browser, type Locator, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -214,6 +216,7 @@ it("keeps every team badge and active pill above AA contrast on selected rows in
         }
       }
     }
+
     if (process.env.CHAT_AGENTS_SHOTS === "1") {
       const directory = new URL("../../../.shots/chat-agents/", import.meta.url);
       await mkdir(fileURLToPath(directory), { recursive: true });
@@ -498,3 +501,174 @@ for (const name of ["empty", "working", "proposed", "review", "merged"])
         },
       );
     }
+
+// Local evidence is deliberately uncommitted; run after captures and the comparison script.
+const evidence = process.env.CHAT_AGENTS_EVIDENCE === "1";
+const evidenceRoot = new URL("../../../.shots/chat-agents/", import.meta.url);
+const decisionsUrl = new URL("../../../DECISIONS.md", import.meta.url);
+it.runIf(evidence)(
+  "verifies all 20 full-size capture-left/reference-right comparisons",
+  async () => {
+    const page = await browser.newPage();
+    try {
+      for (const state of ["empty", "working", "proposed", "review", "merged"])
+        for (const width of [1920, 1280])
+          for (const theme of ["dark", "day"]) {
+            const name = `${state}-${String(width)}-${theme}`;
+            const reference = `${state}-${width === 1920 ? "" : "1280-"}${theme}.png`;
+            const sources = await Promise.all(
+              [
+                new URL(`${name}.png`, evidenceRoot),
+                new URL(`../chat-r1-reference/${reference}`, evidenceRoot),
+                new URL(`compare/${name}.png`, evidenceRoot),
+              ].map(
+                async (path) =>
+                  `data:image/png;base64,${(await readFile(path)).toString("base64")}`,
+              ),
+            );
+            const result = await page.evaluate(async (sources) => {
+              const images = await Promise.all(
+                sources.map(async (src) => {
+                  const image = new Image();
+                  image.src = src;
+                  await image.decode();
+                  return image;
+                }),
+              );
+              const [capture, reference, comparison] = images;
+              if (!capture || !reference || !comparison) throw new Error("Missing image");
+              const canvas = document.createElement("canvas");
+              canvas.width = comparison.width;
+              canvas.height = comparison.height;
+              const context = canvas.getContext("2d", { willReadFrequently: true });
+              if (!context) throw new Error("Missing evidence canvas");
+              context.drawImage(capture, 0, 0);
+              context.drawImage(reference, capture.width, 0);
+              const expected = context.getImageData(0, 0, canvas.width, canvas.height).data;
+              context.clearRect(0, 0, canvas.width, canvas.height);
+              context.drawImage(comparison, 0, 0);
+              const actual = context.getImageData(0, 0, canvas.width, canvas.height).data;
+              return {
+                dimensions: images.map((image) => [image.width, image.height]),
+                same: expected.every((value, index) => value === actual[index]),
+              };
+            }, sources);
+            const height = width === 1920 ? 1080 : 800;
+            expect(result, name).toEqual({
+              dimensions: [
+                [width, height],
+                [width, height],
+                [width * 2, height],
+              ],
+              same: true,
+            });
+            const measured = JSON.parse(
+              await readFile(new URL(`${name}.json`, evidenceRoot), "utf8"),
+            ) as Record<string, { width: number; height: number }>;
+            expect(measured[".chat-agents"]?.width).toBe(width === 1920 ? 280 : 260);
+            expect(measured[".chat-agents > header"]?.height).toBe(56);
+          }
+    } finally {
+      await page.close();
+    }
+  },
+  60_000,
+);
+
+it.runIf(evidence)("verifies the 160 measured pairs against fresh computed styles", async () => {
+  const measurements = JSON.parse(
+    await readFile(new URL("measurements.json", evidenceRoot), "utf8"),
+  ) as Record<string, Record<string, Record<string, string | number>>>;
+  const table = JSON.parse(
+    await readFile(new URL("measurements-delta.json", evidenceRoot), "utf8"),
+  ) as {
+    measurements: {
+      viewport: string;
+      pairs: {
+        selector: string;
+        key: string;
+        approved: string | number;
+        build: string | number;
+        delta: number;
+      }[];
+    }[];
+  };
+  expect(table.measurements.map(({ viewport }) => viewport).sort()).toEqual([
+    "1280-dark",
+    "1280-day",
+    "1920-dark",
+    "1920-day",
+  ]);
+  for (const { viewport, pairs } of table.measurements) {
+    expect(pairs).toHaveLength(40);
+    for (const pair of pairs) {
+      expect(pair.build).toBe(measurements[viewport]?.[pair.selector]?.[pair.key]);
+      const numeric = (value: string | number) => Number.parseFloat(String(value));
+      const expected =
+        pair.approved === pair.build || String(pair.build).includes(String(pair.approved))
+          ? 0
+          : numeric(pair.build) - numeric(pair.approved);
+      expect(pair.delta).toBe(expected);
+    }
+  }
+});
+
+it.runIf(evidence)("verifies documented per-chunk startup deltas and both caps", async () => {
+  const startup = JSON.parse(
+    await readFile(new URL("startup-delta.json", evidenceRoot), "utf8"),
+  ) as {
+    before: { static: number; effective: number };
+    after: { static: number; effective: number };
+    chunks: {
+      beforeFile: string;
+      afterFile: string;
+      beforeGzip: number;
+      afterGzip: number;
+      delta: number;
+      scope: string;
+    }[];
+  };
+  const decisions = (await readFile(decisionsUrl, "utf8")).split("## 2026-11-01 — C2 ")[1] ?? "";
+  expect(startup.chunks).toHaveLength(26);
+  for (const chunk of startup.chunks) {
+    expect(chunk.delta).toBe(chunk.afterGzip - chunk.beforeGzip);
+    const row = `| ${chunk.beforeFile} | ${chunk.afterFile} | ${String(chunk.beforeGzip)} | ${String(chunk.afterGzip)} | ${String(chunk.delta)} |`;
+    expect(decisions.includes(row), `Missing chunk readings: ${chunk.afterFile}`).toBe(true);
+  }
+  for (const scope of ["static", "effective"] as const) {
+    const chunks = startup.chunks.filter(
+      (chunk) => scope === "effective" || chunk.scope === "static",
+    );
+    expect(chunks.reduce((sum, chunk) => sum + chunk.beforeGzip, 0)).toBe(startup.before[scope]);
+    expect(chunks.reduce((sum, chunk) => sum + chunk.afterGzip, 0)).toBe(startup.after[scope]);
+    expect(startup.before[scope]).toBeLessThanOrEqual(409_600);
+    expect(startup.after[scope]).toBeLessThanOrEqual(409_600);
+  }
+});
+
+it.runIf(evidence)("keeps the documented C2 slice totals current after the merge", async () => {
+  // Git runs in an asyncio subprocess with a timeout, including in this evidence check.
+  const { stdout } = await promisify(execFile)(
+    "python3",
+    [
+      "-c",
+      `
+import asyncio
+async def main():
+    process = await asyncio.create_subprocess_exec(
+        'git', 'diff', '--numstat', '0fa0f274',
+        stdout=asyncio.subprocess.PIPE)
+    output, _ = await asyncio.wait_for(process.communicate(), 30)
+    if process.returncode: raise RuntimeError('git diff failed')
+    counts = [line.split('\\t')[:2] for line in output.decode().splitlines()]
+    print(sum(int(a) for a, _ in counts), sum(int(d) for _, d in counts))
+asyncio.run(main())
+  `,
+    ],
+    { cwd: fileURLToPath(new URL("../../../", import.meta.url)), timeout: 35_000 },
+  );
+  const [added = 0, deleted = 0] = stdout.trim().split(" ").map(Number);
+  const decisions = await readFile(decisionsUrl, "utf8");
+  const totals = `${String(added)} additions, ${String(deleted)} deletions, ${String(added + deleted)} changed lines`;
+  expect(decisions.includes(totals), `Missing current slice: ${totals}`).toBe(true);
+});
