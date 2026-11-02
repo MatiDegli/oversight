@@ -1,5 +1,6 @@
-import type { ChangeProposed, ServerEvent, Slot } from "@contracts";
-import { selectPendingChanges } from "../../state";
+import { presentationFor, type AgentPresentation } from "../../teams/presentation";
+import type { ChangeProposed, ServerEvent } from "@contracts";
+import { applyEvent, createInitialState, selectPendingChanges } from "../../state";
 import type { State } from "../../state";
 import { viewReducer } from "../view";
 import type { FocusTab, View } from "../view";
@@ -8,7 +9,7 @@ export interface ReplayMark {
   id: string;
   offset: number;
   letters: string;
-  slot?: Slot;
+  presentation?: AgentPresentation;
   kind: "start" | "proposal" | "merge";
   title: string;
   proposal?: ChangeProposed;
@@ -22,38 +23,46 @@ export function replayMarks(
   events: readonly ServerEvent[],
   offsets: readonly number[],
 ): ReplayMark[] {
-  const agents = new Map<string, Slot>();
+  const agents = new Set<string>();
+  let state = createInitialState();
   const marks: ReplayMark[] = [];
   for (const [index, event] of events.entries()) {
+    state = applyEvent(state, event);
     const offset = offsets[index] ?? 0;
+    const identity =
+      "agent_id" in event.payload ? presentationFor(state, event.payload.agent_id) : undefined;
     if (event.type === "agent.status" && !agents.has(event.payload.agent_id)) {
-      agents.set(event.payload.agent_id, event.payload.slot);
+      agents.add(event.payload.agent_id);
       const start = marks.find((mark) => mark.kind === "start");
-      if (start) start.letters += event.payload.slot;
+      if (start) start.letters += `, ${identity?.label ?? "?"}`;
       else
         marks.push({
           id: "start",
           offset,
-          letters: event.payload.slot,
+          letters: identity?.label ?? "?",
           kind: "start",
           title: "Agents started",
         });
     }
     if (event.type !== "change.proposed" && event.type !== "change.resolved") continue;
-    const slot = agents.get(event.payload.agent_id);
-    const common = { id: String(event.seq), offset, letters: slot ?? "?", slot };
+    const common = {
+      id: String(event.seq),
+      offset,
+      letters: identity?.label ?? "?",
+      presentation: identity,
+    };
     if (event.type === "change.proposed")
       marks.push({
         ...common,
         kind: "proposal",
-        title: `Agent ${slot ?? "?"} · Ready for review`,
+        title: `Agent ${identity?.label ?? "unknown"} · Ready for review`,
         proposal: event.payload,
       });
     else if (event.payload.decision === "approved" && event.payload.merge === "merged")
       marks.push({
         ...common,
         kind: "merge",
-        title: `Agent ${slot ?? "?"} · Merged`,
+        title: `Agent ${identity?.label ?? "unknown"} · Merged`,
         hash: event.payload.merge_commit ?? undefined,
       });
   }

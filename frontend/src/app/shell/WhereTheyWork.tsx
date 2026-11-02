@@ -1,6 +1,6 @@
 import { Fragment } from "react";
 import { Eye, File, Pencil } from "lucide-react";
-import { agentSlotStyle } from "../../theme";
+import { presentationStyle } from "../../teams/presentation";
 import { useFilesNavigation } from "../FilesContext";
 import { selectWorkPresence, type WorkGroup } from "../workPresence";
 import "./whereTheyWork.css";
@@ -68,14 +68,14 @@ export function WhereTheyWork() {
           {i > 0 && <hr className="work-divider" />}
           <section
             className="work-group"
-            style={agentSlotStyle(group.slot)}
+            style={presentationStyle(group.presentation)}
             data-agent-id={group.agentId}
             data-mode={group.mode}
           >
             <h3>
-              <span className="work-badge">{group.slot}</span>
+              <span className="work-badge">{group.presentation?.label ?? "?"}</span>
               <span className="work-agent">
-                Agent {group.slot}
+                Agent {group.presentation?.label ?? "?"}
                 {group.mode === "pending" &&
                   (group.conflict === "merge"
                     ? " · merge conflicts with main"

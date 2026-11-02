@@ -30,7 +30,7 @@ export function ChatAgents({
   if (!rows.length)
     return (
       <p className="chat-agents-empty">
-        No agents yet. Each task you start gets its own letter and color.
+        No agents yet. Team hue and agent labels follow each task.
       </p>
     );
   return (
@@ -43,6 +43,7 @@ export function ChatAgents({
               role={onOpenConversation ? undefined : "group"}
               className="chat-agent-row"
               style={agentSlotStyle(row.hue)}
+              data-agent-origin={row.id}
               data-selected={selectedAgentId === row.id}
               data-ended={row.done}
               data-review={row.ready}
@@ -57,6 +58,7 @@ export function ChatAgents({
                 : {})}
               aria-label={`Agent ${row.letter}: ${row.task}. ${row.label}. ${row.id}`}
               aria-description={[
+                row.planId ? `Plan ${row.planId}` : undefined,
                 row.model,
                 row.activity,
                 `Step ${String(row.step)} of ${String(row.maxSteps)}`,
@@ -71,7 +73,9 @@ export function ChatAgents({
               </span>
               <span className="chat-agent-content">
                 <span className="chat-agent-heading">
-                  <span className="chat-agent-name">Agent {row.letter}</span>
+                  <span className="chat-agent-name" title={row.planId ?? undefined}>
+                    Agent {row.letter}
+                  </span>
                   <span className="chat-agent-pill">{row.label}</span>
                 </span>
                 <span className="chat-agent-model">{row.model}</span>

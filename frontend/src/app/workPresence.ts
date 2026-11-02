@@ -1,4 +1,5 @@
-import type { FocusRange, Slot } from "@contracts";
+import { presentationFor, type AgentPresentation } from "../teams/presentation";
+import type { FocusRange } from "@contracts";
 import type { State } from "../state";
 
 export interface WorkFile {
@@ -10,7 +11,7 @@ export interface WorkFile {
 }
 export interface WorkGroup {
   agentId: string;
-  slot: Slot;
+  presentation?: AgentPresentation;
   mode: "read" | "edit" | "pending";
   changeId?: string;
   conflict?: "merge" | "tests";
@@ -59,7 +60,10 @@ export function selectWorkPresence(state: State) {
     (a, b) => a.slot.localeCompare(b.slot) || a.agent_id.localeCompare(b.agent_id),
   );
   for (const agent of agents) {
-    const identity = { agentId: agent.agent_id, slot: agent.slot };
+    const identity = {
+      agentId: agent.agent_id,
+      presentation: presentationFor(state, agent.agent_id),
+    };
     if (agent.state === "working" || agent.state === "revising") {
       const files = currentFiles(state, agent.agent_id);
       const focus = state.focus[agent.agent_id];

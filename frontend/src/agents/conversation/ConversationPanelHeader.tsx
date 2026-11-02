@@ -1,4 +1,4 @@
-import { agentLook } from "../../theme";
+import { presentationLook } from "../../teams/badge";
 import { costText } from "../../state";
 import { labels } from "../AgentCard";
 import type { ConversationHeader, LeadHeader } from "./selectConversation";
@@ -31,12 +31,13 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
     <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
       <div className="flex items-start gap-[10px]">
         <span
-          className={`flex size-(--letter-badge-size) shrink-0 items-center justify-center rounded-label font-bold ${agentLook[header.slot].swatch}`}
+          title={header.presentation?.planId ?? undefined}
+          className={`flex min-w-(--letter-badge-size) h-(--letter-badge-size) px-1.5 shrink-0 items-center justify-center rounded-label font-bold ${presentationLook(header.presentation).swatch}`}
         >
-          {header.slot}
+          {header.presentation?.label ?? "unknown"}
         </span>
         <h2 className="min-w-0 text-[16px]! leading-[1.3]! font-semibold wrap-anywhere text-text">
-          Agent {header.slot}
+          Agent {header.presentation?.label ?? "unknown"}
         </h2>
         <span className="shrink-0 rounded-full bg-raised px-[10px] py-[3px] text-[13px] font-semibold text-muted">
           {header.waiting ? "Waiting" : labels[header.state]}

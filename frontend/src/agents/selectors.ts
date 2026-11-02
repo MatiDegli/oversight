@@ -1,4 +1,5 @@
 import { selectAgentCard as selectBaseCard, selectOverlap } from "../state";
+import { presentationFor } from "../teams/presentation";
 import type { State } from "../state";
 
 /** The latest completed tool is authoritative; focus supplies a location before the first step.
@@ -22,7 +23,17 @@ export function selectAgentCard(state: State, agentId: string) {
       : "Waiting for the first tool call.");
   return {
     ...data,
-    overlap: selectOverlap(state, agentId),
+    presentation: presentationFor(state, agentId),
+    overlap: {
+      sharedEdits: selectOverlap(state, agentId).sharedEdits.map((peer) => ({
+        ...peer,
+        presentation: presentationFor(state, peer.agentId),
+      })),
+      readOfOthers: selectOverlap(state, agentId).readOfOthers.map((peer) => ({
+        ...peer,
+        presentation: presentationFor(state, peer.agentId),
+      })),
+    },
     activity: wait
       ? `Waiting for model (retry ${String(wait.attempt + 1)}/${String(wait.max_attempts)})`
       : activity,

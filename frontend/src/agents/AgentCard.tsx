@@ -1,5 +1,5 @@
-import { agentSlotStyle } from "../theme";
-import { agentLook as look } from "../theme";
+import { presentationStyle } from "../teams/presentation";
+import { presentationLook } from "../teams/badge";
 import type { AgentStatus, SuiteResult } from "@contracts";
 import { Check, CircleCheck, CircleX, Eye, FileDiff, MessagesSquare, X } from "lucide-react";
 import { useLayoutEffect, useRef } from "react";
@@ -73,10 +73,13 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
 
 /** What the agent finished with: tests, change, steps and cost, each from its own event. */
 function Summary({ data }: { data: AgentCardDetail }) {
-  const { agent, step, maxSteps, proposal, cost } = data;
+  const { step, maxSteps, proposal, cost } = data;
   const tests = proposal ? testsLine(proposal.tests) : undefined;
   return (
-    <dl aria-label={`Agent ${agent.slot} summary`} className="grid grid-cols-2 gap-x-4 gap-y-3">
+    <dl
+      aria-label={`Agent ${data.presentation?.label ?? "unknown"} summary`}
+      className="grid grid-cols-2 gap-x-4 gap-y-3"
+    >
       {proposal && tests && (
         <>
           <Fact label="Tests">
@@ -141,7 +144,7 @@ export function AgentCard({
   onResume,
 }: AgentCardProps) {
   const { agent, readyForReview } = data;
-  const own = look[agent.slot];
+  const own = presentationLook(data.presentation);
   // Keep the person's focus when what holds it leaves the card. The step list and Live diff go when
   // the change is proposed, and a removed element takes focus to the page; the card is where it
   // was, so it takes it, and only if the focus was inside it. Nothing else here moves focus.
@@ -157,7 +160,7 @@ export function AgentCard({
 
   return (
     <article
-      aria-label={`Agent ${agent.slot}`}
+      aria-label={`Agent ${data.presentation?.label ?? "unknown"}`}
       ref={card}
       tabIndex={-1}
       onFocus={() => {
@@ -166,9 +169,9 @@ export function AgentCard({
       onBlur={() => {
         inside.current = false;
       }}
-      data-slot={agent.slot}
-      data-agent-origin={agent.slot}
-      style={agentSlotStyle(agent.slot)}
+      data-agent-card={agent.agent_id}
+      data-agent-origin={agent.agent_id}
+      style={presentationStyle(data.presentation)}
       className={`agent-card min-w-0 shrink-0 rounded-card border bg-card p-3.5 text-text ${border} ${focusRing}`}
     >
       <CardHeader data={data} mergeLabel={mergeLabel} />
@@ -197,7 +200,7 @@ export function AgentCard({
 /** Quiet card facts: full names remain available when the single line is truncated. */
 function OverlapLines({ overlap }: { overlap: AgentCardDetail["overlap"] }) {
   return (["sharedEdits", "readOfOthers"] as const).flatMap((kind) =>
-    overlap[kind].map(({ agentId, slot, nodes }) => {
+    overlap[kind].map(({ agentId, presentation, nodes }) => {
       const names = nodes.map((node) => node.name);
       const words = (all: string[]) =>
         all.length <= 2
@@ -205,8 +208,8 @@ function OverlapLines({ overlap }: { overlap: AgentCardDetail["overlap"] }) {
           : `${all.slice(0, 2).join(", ")} and ${String(all.length - 2)} more`;
       const sentence = (text: string) =>
         kind === "sharedEdits"
-          ? `Also changed by Agent ${slot}: ${text}`
-          : `Read ${text}, which Agent ${slot} is changing`;
+          ? `Also changed by Agent ${presentation?.label ?? "unknown"}: ${text}`
+          : `Read ${text}, which Agent ${presentation?.label ?? "unknown"} is changing`;
       const full =
         names.length <= 2
           ? names.join(" and ")
@@ -238,13 +241,13 @@ function RunningBody({ data }: { data: AgentCardDetail }) {
       )}
       <div
         role="progressbar"
-        aria-label={`Agent ${agent.slot} steps`}
+        aria-label={`Agent ${data.presentation?.label ?? "unknown"} steps`}
         aria-valuenow={current}
         aria-valuemax={maxSteps}
         className="mt-3 h-1 shrink-0 overflow-hidden rounded-full bg-raised"
       >
         <div
-          className={`h-full ${look[agent.slot].fill}`}
+          className={`h-full ${presentationLook(data.presentation).fill}`}
           style={{ width: `${String(maxSteps > 0 ? Math.min(100, (step / maxSteps) * 100) : 0)}%` }}
         />
       </div>
@@ -264,10 +267,10 @@ function RunningBody({ data }: { data: AgentCardDetail }) {
 }
 
 export function StepHistory({ data }: { data: AgentCardDetail }) {
-  const { agent, steps, stepTimes, now } = data;
+  const { steps, stepTimes, now } = data;
   return (
     <ol
-      aria-label={`Agent ${agent.slot} steps, newest first`}
+      aria-label={`Agent ${data.presentation?.label ?? "unknown"} steps, newest first`}
       tabIndex={0}
       className={`mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain [overflow-anchor:none] [scrollbar-gutter:stable] ${focusRing}`}
     >
@@ -313,7 +316,7 @@ function CardHeader({
   mergeLabel?: "Merging" | "Merged";
 }) {
   const { agent, modelLabel, readyForReview } = data;
-  const own = look[agent.slot];
+  const own = presentationLook(data.presentation);
   const lamp = readyForReview
     ? own.fill
     : `bg-card ${agent.state === "working" ? "animate-pulse [animation-duration:var(--status-lamp-duration)] motion-reduce:animate-none" : ""}`;
@@ -323,7 +326,12 @@ function CardHeader({
         aria-hidden="true"
         className={`size-(--status-lamp-size) shrink-0 rounded-full border-(length:--agent-border-width) ${own.border} ${lamp}`}
       />
-      <h3 className="shrink-0 text-(length:--title-size) font-bold">Agent {agent.slot}</h3>
+      <h3
+        title={data.presentation?.planId ?? undefined}
+        className="shrink-0 text-(length:--title-size) font-bold"
+      >
+        Agent {data.presentation?.label ?? "Agent unknown"}
+      </h3>
       <span title={modelLabel} className="min-w-0 truncate text-sm text-muted">
         {modelLabel}
       </span>
@@ -347,8 +355,7 @@ function CardActions({
   onResume,
 }: AgentCardProps) {
   const { agent, readyForReview } = data;
-  const own = look[agent.slot];
-  const reviewClass = `inline-flex h-(--button-primary-height) min-w-0 items-center gap-(--spacing-xs) rounded-control px-(--spacing-xs) text-(length:--label-size) font-semibold whitespace-nowrap text-on-agent hover:brightness-110 [&>svg]:shrink-0 ${own.fill} ${focusRing}`;
+  const reviewClass = compactSecondaryButtonClass;
   return (
     <footer className="mt-3 flex min-h-10 flex-col gap-2">
       <div className="flex min-w-0 flex-nowrap gap-(--spacing-xs) has-[[data-pausing]]:flex-wrap">

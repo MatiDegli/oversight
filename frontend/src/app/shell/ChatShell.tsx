@@ -23,11 +23,7 @@ export function ChatAgentsFrame({ state, children, ...selection }: ChatAgentsFra
     >
       <header>
         <h2>Agents</h2>
-        {count && (
-          <span>
-            {count.held} of {count.total} running
-          </span>
-        )}
+        {count && <span>{count.held} running</span>}
       </header>
       <div className="chat-side-body">
         {/* Reserved first structural position for L3’s lead; empty in C2. */}

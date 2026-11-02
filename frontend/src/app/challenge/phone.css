@@ -63,17 +63,17 @@
     line-height: 1.35;
     font-weight: 700;
   }
-  .phone-practice [data-slot="A"] {
-    --pp-agent: var(--agent-a);
-    --pp-agent-text: var(--agent-a-text);
-    --pp-tint: var(--agent-a-tint);
-    --pp-node: var(--agent-a-node);
+  .phone-practice {
+    --pp-agent: var(--slot-graphic, var(--muted));
+    --pp-agent-text: var(--slot-text, var(--text));
+    --pp-tint: var(--slot-tint, var(--raised));
+    --pp-node: var(--slot-tint, var(--card));
   }
-  .phone-practice [data-slot="B"] {
-    --pp-agent: var(--agent-b);
-    --pp-agent-text: var(--agent-b-text);
-    --pp-tint: var(--agent-b-tint);
-    --pp-node: var(--agent-b-node);
+  .phone-practice [style] {
+    --pp-agent: var(--slot-graphic, var(--muted));
+    --pp-agent-text: var(--slot-text, var(--text));
+    --pp-tint: var(--slot-tint, var(--raised));
+    --pp-node: var(--slot-tint, var(--card));
   }
   .pp-chrome {
     background: var(--shell);

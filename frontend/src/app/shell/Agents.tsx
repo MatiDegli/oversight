@@ -1,9 +1,11 @@
+import { presentationFor } from "../../teams/presentation";
+import { presentationLook } from "../../teams/badge";
 import { AgentCard, selectAgentCard, slotUsage, TaskBox } from "../../agents";
 import type { TaskBoxProps } from "../../agents";
 import { selectAgents } from "../../state";
 import type { State } from "../../state";
 import type { FrameProps } from "../Frame";
-import { agentLook, stateWords } from "./shared";
+import { stateWords } from "./shared";
 export function AgentsPanel({
   state,
   canOpenChange,
@@ -45,11 +47,7 @@ export function AgentsPanel({
     >
       <div className="flex items-baseline gap-2.5 px-3.5 pt-3.5 pb-2.5">
         <h2 className="group-label font-bold">Agents</h2>
-        {slots && (
-          <span className="text-sm text-muted">
-            {slots.held} of {slots.total} {slots.total === 1 ? "slot" : "slots"}
-          </span>
-        )}
+        {slots && <span className="text-sm text-muted">{slots.held} running</span>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 pb-3.5">
         {cards.map((data) => {
@@ -90,7 +88,8 @@ export function AgentsRail({ state }: { state: State }) {
       className="agents-rail flex w-(--agents-rail-width) shrink-0 flex-col items-center gap-3.5 border-l border-divider bg-shell py-3.5"
     >
       {selectAgents(state).map((agent) => {
-        const look = agentLook[agent.slot];
+        const identity = presentationFor(state, agent.agent_id);
+        const look = presentationLook(identity);
         const [label, caption] = stateWords[agent.state];
         const lamp =
           agent.state === "ready_for_review"
@@ -100,14 +99,14 @@ export function AgentsRail({ state }: { state: State }) {
           <div
             key={agent.agent_id}
             role="group"
-            aria-label={`Agent ${agent.slot}: ${label}`}
+            aria-label={`Agent ${identity?.label ?? "unknown"}: ${label}`}
             className="flex flex-col items-center gap-1.5"
           >
             <span
-              data-agent-origin={agent.slot}
+              data-agent-origin={agent.agent_id}
               className={`relative grid size-(--letter-avatar-size) place-items-center rounded-card border-(length:--agent-border-width) text-(length:--letter-avatar-font-size) font-bold ${look.border} ${look.tint}`}
             >
-              {agent.slot}
+              {identity?.label ?? "?"}
               <span
                 aria-hidden="true"
                 className={`absolute -top-1 -right-1 size-(--status-lamp-size) rounded-full border-(length:--agent-border-width) ${look.border} ${lamp}`}

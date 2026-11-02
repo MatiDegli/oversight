@@ -1,3 +1,4 @@
+import { presentationFor } from "../../teams/presentation";
 import { impactText, omittedText, sentenceList } from "./evidenceCopy";
 import { RecordedEvidence, absenceNote } from "./RecordedEvidence";
 import type { EvidencePractice as Practice } from "./caseEvidence";
@@ -88,7 +89,7 @@ function Decision({ practice, attempt, onAnswer, onNext, onReveal }: PanelProps)
     <>
       <h2 className="font-semibold">
         {caseTitle(proposal.task)}, Agent{" "}
-        {practice.cut.agents[proposal.agent_id]?.slot ?? "unavailable"}
+        {presentationFor(practice.cut, proposal.agent_id)?.label ?? "unavailable"}
       </h2>
       <section aria-label="Task">
         <h3 className="mb-2 font-semibold">Task</h3>

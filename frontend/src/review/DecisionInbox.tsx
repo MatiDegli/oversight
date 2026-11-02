@@ -1,3 +1,5 @@
+import { AgentBadge } from "../teams/badge";
+import { presentationFor } from "../teams/presentation";
 import { lazy, Suspense, useState } from "react";
 import { Inbox } from "lucide-react";
 import { slotUsage } from "../agents";
@@ -74,12 +76,13 @@ function InboxRow({
     question?.example.source === "review_card"
       ? question.example.value
       : facts?.behavior_diff?.flatMap((b) => b.rows).find((r) => r.before !== r.after);
-  const slot = change ? state.agents[change.agent_id]?.slot : entry.decisions[0]?.slot;
+  const identity = presentationFor(state, change?.agent_id ?? entry.decisions[0]?.agentId);
   return (
     <article className="inbox-row">
       <div className="decision-heading">
         <span className="decision-muted">
-          {slot ? `Agent ${slot}` : "Decision"} · <time>{eventTime(entry.ts)}</time>
+          {identity ? <AgentBadge identity={identity} /> : "Decision"} ·{" "}
+          <time>{eventTime(entry.ts)}</time>
         </span>
         <span className="decision-muted">{entry.age}</span>
       </div>
@@ -93,7 +96,7 @@ function InboxRow({
         </ul>
       )}
       {plan?.subtasks && planPiece(state, plan)}
-      {example && <Example row={example} slot={slot ?? undefined} />}
+      {example && <Example row={example} identity={identity} />}
       <InboxAnswer state={state} entry={entry} />
       {change && onReview && (
         <button

@@ -1,6 +1,5 @@
 import { ArrowRight, ChevronRight, CircleAlert } from "lucide-react";
-import type { Slot } from "@contracts";
-import { agentSlotStyle } from "../theme";
+import { presentationStyle, type AgentPresentation } from "../teams/presentation";
 import { unstableBehaviorSentence } from "./behaviorEvidence";
 import { evidenceWords } from "./evidenceWords";
 import type { parameterExtensions } from "./parameterExtensions";
@@ -9,10 +8,10 @@ const calls = (count: number) => `${String(count)} call${count === 1 ? "" : "s"}
 
 export function NewParameterCalls({
   entries,
-  slot,
+  identity,
 }: {
   entries: ReturnType<typeof parameterExtensions>;
-  slot?: Slot;
+  identity?: AgentPresentation;
 }) {
   if (!entries.length) return null;
   return (
@@ -64,7 +63,7 @@ export function NewParameterCalls({
                           <code>{row.before}</code>
                         </div>
                         <ArrowRight aria-hidden="true" size={16} />
-                        <div data-agent-slot={slot} style={agentSlotStyle(slot)}>
+                        <div data-agent-identity={identity} style={presentationStyle(identity)}>
                           <span>After</span>
                           <code>{row.after}</code>
                         </div>

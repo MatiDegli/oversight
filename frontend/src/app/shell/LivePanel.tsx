@@ -1,9 +1,11 @@
+import { presentationFor } from "../../teams/presentation";
+import { presentationLook } from "../../teams/badge";
 import { X } from "lucide-react";
 import { LiveDiff } from "../../editor";
 import { selectLiveDiff } from "../../state";
 import type { State } from "../../state";
 import type { View } from "../view";
-import { agentLook, focusRing, stateWords } from "./shared";
+import { focusRing, stateWords } from "./shared";
 export function LivePanel({
   state,
   view,
@@ -16,6 +18,7 @@ export function LivePanel({
   const target = view.diff;
   const data = target ? selectLiveDiff(state, target.changeId, target.path) : undefined;
   const agent = data ? state.agents[data.agentId] : undefined;
+  const identity = presentationFor(state, agent?.agent_id);
   return (
     <aside
       aria-label="Live diff panel"
@@ -26,11 +29,11 @@ export function LivePanel({
           <>
             <span
               aria-hidden="true"
-              className={`size-3 shrink-0 rounded-label ${agentLook[agent.slot].fill}`}
+              className={`size-3 shrink-0 rounded-label ${presentationLook(identity).fill}`}
             />
-            <span className="shrink-0 font-bold">Agent {agent.slot}</span>
+            <span className="shrink-0 font-bold">Agent {identity?.label ?? "unknown"}</span>
             <span
-              className={`shrink-0 rounded-full px-2 py-1 text-sm ${agentLook[agent.slot].tint}`}
+              className={`shrink-0 rounded-full px-2 py-1 text-sm ${presentationLook(identity).tint}`}
             >
               {stateWords[agent.state][0]}
             </span>

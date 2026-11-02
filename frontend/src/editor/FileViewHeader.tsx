@@ -8,6 +8,7 @@ export const fileControl =
 
 export function FileViewHeader({
   target,
+  agentLabel,
   files,
   onClose,
   startAgentAction,
@@ -15,7 +16,7 @@ export function FileViewHeader({
   state = { dirty: false, canSave: false, phase: "loading" },
   onSave,
   onDiscard,
-}: Pick<FileViewProps, "target" | "files" | "onClose" | "startAgentAction"> & {
+}: Pick<FileViewProps, "target" | "files" | "onClose" | "startAgentAction" | "agentLabel"> & {
   inert?: boolean;
   state?: Pick<FileState, "dirty" | "canSave" | "phase">;
   onSave?: () => void;
@@ -38,7 +39,7 @@ export function FileViewHeader({
           <LockKeyhole aria-hidden="true" className="size-4" />
           {files.readOnly
             ? "Read-only · Recorded file"
-            : `Read-only · Agent ${target.agentId ?? ""}`}
+            : `Read-only · Agent ${agentLabel ?? "unknown"}`}
         </span>
       ) : (
         <>

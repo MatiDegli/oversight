@@ -1,4 +1,4 @@
-import { agentSlotStyle } from "../../theme";
+import { presentationStyle } from "../../teams/presentation";
 import { ChevronDown, ChevronRight, File, FileCode2, Folder, FolderOpen } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
@@ -205,13 +205,12 @@ function TreeEntry({
             key={mark.agentId}
             data-agent-id={mark.agentId}
             className="file-agent-mark"
-            data-slot={mark.slot}
-            style={agentSlotStyle(mark.slot)}
+            style={presentationStyle(mark.presentation)}
             data-mode={mark.mode}
-            aria-label={`Agent ${mark.slot} · ${mark.mode === "pending" ? "Pending change" : mark.mode === "edit" ? "Editing" : "Reading"}`}
-            title={`Agent ${mark.slot} · ${mark.mode === "pending" ? "Pending change" : mark.mode === "edit" ? "Editing" : "Reading"}`}
+            aria-label={`Agent ${mark.presentation?.label ?? "unknown"} · ${mark.mode === "pending" ? "Pending change" : mark.mode === "edit" ? "Editing" : "Reading"}`}
+            title={`Agent ${mark.presentation?.label ?? "unknown"} · ${mark.mode === "pending" ? "Pending change" : mark.mode === "edit" ? "Editing" : "Reading"}`}
           >
-            {mark.slot}
+            {mark.presentation?.label ?? "?"}
           </span>
         ))}
       </span>

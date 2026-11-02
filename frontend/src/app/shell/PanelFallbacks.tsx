@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { FileViewProps } from "../../editor";
 import { FileViewHeader } from "../../editor";
-import { agentSlotStyle } from "../../theme";
+import { presentationFor, presentationStyle } from "../../teams/presentation";
 import { selectDecisionInbox, selectActiveGrants } from "../../state";
 import type { State } from "../../state";
 import { ConversationPanelHeader } from "../../agents";
@@ -35,7 +35,7 @@ export function ReviewFrame({
     <aside
       aria-label="Review panel"
       className="review-panel flex w-[min(var(--review-panel-width),46vw)] min-h-0 min-w-0 shrink-0 flex-col bg-page"
-      style={agentSlotStyle(change ? state.agents[change.agent_id]?.slot : undefined)}
+      style={presentationStyle(presentationFor(state, change?.agent_id))}
     >
       <ReviewHeader
         inert
@@ -69,7 +69,7 @@ export function ConversationFrame({
 }) {
   return (
     <section
-      aria-label={`Agent ${header.slot} conversation`}
+      aria-label={`Agent ${header.presentation?.label ?? "unknown"} conversation`}
       className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >
       <ConversationPanelHeader header={header} />
@@ -124,7 +124,7 @@ export function PracticeFrame({
   );
 }
 
-export function FileFrame({ target, files, onClose, startAgentAction }: FileViewProps) {
+export function FileFrame({ target, files, onClose, startAgentAction, agentLabel }: FileViewProps) {
   return (
     <aside
       aria-label="File view"
@@ -133,6 +133,7 @@ export function FileFrame({ target, files, onClose, startAgentAction }: FileView
       <FileViewHeader
         inert
         target={target}
+        agentLabel={agentLabel}
         files={files}
         onClose={onClose}
         startAgentAction={startAgentAction}

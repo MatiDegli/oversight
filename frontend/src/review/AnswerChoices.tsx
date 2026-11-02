@@ -1,9 +1,9 @@
-import type { BehaviorDiffRow, ReviewCard, Slot } from "@contracts";
+import type { BehaviorDiffRow, ReviewCard } from "@contracts";
 import { Fragment } from "react";
 import { flushSync } from "react-dom";
 import type { BehaviorNodeView } from "./behaviorEvidence";
 import { ArrowRight } from "lucide-react";
-import { agentSlotStyle } from "../theme";
+import { presentationStyle, type AgentPresentation } from "../teams/presentation";
 
 export type Answers = Record<string, ReviewCard["answer"]>;
 export const cardKey = (card: ReviewCard) =>
@@ -16,10 +16,10 @@ const labels = {
   unsure: "Unsure, decide later",
 } satisfies Record<NonNullable<ReviewCard["answer"]>, string>;
 
-export function Example({ row, slot }: { row: BehaviorDiffRow; slot?: Slot }) {
+export function Example({ row, identity }: { row: BehaviorDiffRow; identity?: AgentPresentation }) {
   if (row.before === row.after) return null;
   return (
-    <div className="choice-example" style={agentSlotStyle(slot)}>
+    <div className="choice-example" style={presentationStyle(identity)}>
       <code>{row.inputs}</code>
       <div className="example-pair">
         <div>
@@ -28,7 +28,7 @@ export function Example({ row, slot }: { row: BehaviorDiffRow; slot?: Slot }) {
         </div>
         <ArrowRight aria-hidden="true" size={18} />
         <div className="example-after">
-          <span>After · Agent {slot ?? "?"}</span>
+          <span>After · Agent {identity?.label ?? "unknown"}</span>
           <code>{row.after}</code>
         </div>
       </div>
@@ -42,10 +42,10 @@ type ChoiceProps = {
   index: number;
   answers: Answers;
   onAnswer: (key: string, answer: ReviewCard["answer"]) => void;
-  slot?: Slot;
+  identity?: AgentPresentation;
   panelComparisons?: BehaviorNodeView[];
 };
-function AnswerChoice({ card, index, answers, onAnswer, slot, panelComparisons }: ChoiceProps) {
+function AnswerChoice({ card, index, answers, onAnswer, identity, panelComparisons }: ChoiceProps) {
   const key = cardKey(card);
   const answer = cardAnswer(card, answers);
   const comparison = panelComparisons?.find((b) => b.node_id === card.node_id);
@@ -95,7 +95,7 @@ function AnswerChoice({ card, index, answers, onAnswer, slot, panelComparisons }
             </p>
           )}
           {card.example ? (
-            <Example row={card.example} slot={slot} />
+            <Example row={card.example} identity={identity} />
           ) : (
             <p className="decision-muted">No example was recorded for this question.</p>
           )}

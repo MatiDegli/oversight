@@ -1,3 +1,4 @@
+import { presentationFor, type AgentPresentation } from "../../teams/presentation";
 import type {
   AgentStatus,
   ChangeResolved,
@@ -36,7 +37,7 @@ export interface ConversationHeader {
   kind?: "agent";
   agentId: string;
   changeId: string;
-  slot: AgentStatus["slot"];
+  presentation?: AgentPresentation;
   state: AgentStatus["state"];
   modelLabel: string;
   reasoning: string | null;
@@ -178,7 +179,7 @@ export function selectConversation(
     header: {
       agentId,
       changeId: agent.change_id,
-      slot: agent.slot,
+      presentation: presentationFor(state, agentId),
       state: agent.state,
       modelLabel: profile?.label ?? agent.model,
       reasoning: profile?.reasoning ?? null,

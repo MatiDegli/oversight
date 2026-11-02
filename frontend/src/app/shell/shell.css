@@ -114,7 +114,7 @@
   color: var(--text);
   background: var(--page);
 }
-.focus-tab.is-active[data-slot]:not([data-slot="file"]) {
+.focus-tab.is-active[data-agent-id] {
   border-top-color: var(--slot-graphic);
 }
 .focus-body {

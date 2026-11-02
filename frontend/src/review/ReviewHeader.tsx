@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import { selectAgentCard } from "../agents";
 import { costText } from "../state";
 import type { ChangeState, State } from "../state";
-import { agentSlotStyle } from "../theme";
+import { presentationFor, presentationStyle } from "../teams/presentation";
 import { ChangeFactsRow } from "./ChangeFactsRow";
 import "./reviewHeader.css";
 
@@ -32,14 +32,15 @@ export function ReviewHeader({
   const change = state.changes[changeId];
   const card = change ? selectAgentCard(state, change.agent_id) : undefined;
   const agent = card?.agent;
+  const identity = presentationFor(state, change?.agent_id);
   const base = change?.proposal?.base_commit || agent?.base_commit;
   const task = change?.proposal?.task ?? agent?.task ?? "Change";
   return (
-    <header inert={inert} className="review-header" style={agentSlotStyle(agent?.slot)}>
+    <header inert={inert} className="review-header" style={presentationStyle(identity)}>
       <div className="flex items-center gap-3">
-        {agent && (
-          <span role="img" aria-label={`Agent ${agent.slot}`} className="review-header-badge">
-            {agent.slot}
+        {identity && (
+          <span role="img" aria-label={`Agent ${identity.label}`} className="review-header-badge">
+            {identity.label}
           </span>
         )}
         <h2 title={task} className="min-w-0 wrap-anywhere text-xl leading-7 font-bold">
@@ -61,7 +62,8 @@ export function ReviewHeader({
         )}
       </div>
       <p className="mt-1.5 wrap-anywhere text-[13px] leading-5 text-muted">
-        {agent ? `Agent ${agent.slot}` : "Agent unknown"} · {card?.modelLabel ?? "Model unknown"} ·{" "}
+        {identity ? `Agent ${identity.label}` : "Agent unknown"} ·{" "}
+        {card?.modelLabel ?? "Model unknown"} ·{" "}
         {card?.cost == null ? "cost unknown" : costText(card.cost)} ·{" "}
         {card ? `step ${String(card.step)} of ${String(card.maxSteps)}` : "steps unknown"} ·
         worktree{" "}
