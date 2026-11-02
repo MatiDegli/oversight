@@ -228,8 +228,7 @@ WINDOWS_BACKEND = (
     "__main__.py api/static.py app.py events/store.py workspace/__init__.py "
     "workspace/_platform.py workspace/capability.py workspace/core.py workspace/files.py "
     "workspace/integrity.py workspace/isolation.py workspace/metadata_io.py workspace/runner.py "
-    "workspace/source.py workspace/source_nt.py workspace/test_tree.py workspace/tree.py "
-    "workspace/snapshot.py "
+    "workspace/source.py workspace/test_tree.py workspace/tree.py workspace/snapshot.py "
     "workspace/suite_files.py workspace/suite_guard.py agents/tools.py"
 )
 UPLOAD = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2"
@@ -312,9 +311,6 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
     files += [
         "backend/tests/workspace/test_source_bytes.py",
         "backend/tests/workspace/test_source_bytes_windows.py",
-        "backend/tests/workspace/test_source_nt_copy.py",
-        "backend/tests/workspace/test_source_nt_reset.py",
-        "backend/tests/workspace/test_source_nt_reset_windows.py",
         "backend/tests/agents/test_tools_nt_bytes.py",
         "backend/tests/api/test_files.py",
     ]
