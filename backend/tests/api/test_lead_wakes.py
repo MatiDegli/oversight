@@ -287,8 +287,13 @@ async def test_refusal_decision_and_publish_hold_idle_lock(tmp_path: Path, monke
         sending = asyncio.create_task(
             s.client.post("/leads/agent-1/message", json={"text": "Human"})
         )
-        await asyncio.sleep(0)
-        assert owned(s).lock.locked() and owned(s).phase == "idle" and not sending.done()
+        await spin(lambda: owned(s).humans_waiting == 1)
+        assert (
+            owned(s).lock.locked()
+            and owned(s).phase == "idle"
+            and owned(s).humans_waiting == 1
+            and not sending.done()
+        )
         assert len(factory.built) == 1 and not any(e.type == "agent.message" for e in s.events())
         assert owned(s).revision == revision
         assert (owned(s).turns, owned(s).wakes) == counters
