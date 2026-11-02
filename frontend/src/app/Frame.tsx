@@ -99,9 +99,11 @@ export function Frame(props: FrameProps) {
         }
       : props.view;
   const [newLead, setNewLead] = useState(false);
+  const [hiddenChatView, setHiddenChatView] = useState<View | null>(null);
   const leadInput = useRef<HTMLTextAreaElement>(null);
-  const open = panelOpen(view);
-  const shell = useShell(open, onClosePanel);
+  const shell = useShell(panelOpen(view), onClosePanel);
+  // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
+  const open = panelOpen(view) && (shell.layout !== "Chat" || hiddenChatView !== view);
   const showNewLead = newLead && !open && shell.layout === "Chat";
   const chatReview = useChatReviewNavigation(state, view, shell, props.onTabAction);
   const task = useFunctionTask(
@@ -109,18 +111,13 @@ export function Frame(props: FrameProps) {
     view,
     props.onStartAgent !== undefined && shell.layout === "Oversight",
   );
-  const closeChatPanel = () => {
-    if (!open) return;
-    if (props.onTabAction) props.onTabAction({ type: "watch" });
-    else onClosePanel();
-  };
   const newTask = () => {
     setNewLead(false);
-    closeChatPanel();
+    setHiddenChatView(view);
     requestAnimationFrame(() => task.inputRef.current?.focus());
   };
   const openNewLead = () => {
-    closeChatPanel();
+    setHiddenChatView(view);
     setNewLead(true);
     requestAnimationFrame(() => {
       leadInput.current?.focus();
@@ -156,7 +153,7 @@ export function Frame(props: FrameProps) {
         state={state}
         active={shell.layout === "Chat"}
         selectedAgentId={
-          showNewLead
+          !open || showNewLead
             ? undefined
             : view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation
         }
