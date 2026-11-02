@@ -108,10 +108,18 @@ async function modulePoint(page: Page, id: string) {
 async function groupPoint(page: Page, id: string) {
   const box = await page.locator(`[data-map-group="${id}"] .map-header`).boundingBox();
   if (!box) throw new Error(`Missing group ${id}`);
-  // At 1280 the summary plate overlaps the header's top line after zooming.
-  // Point inside the lower part of the header so the graph stage receives the event.
-  return { x: box.x + 10, y: box.y + box.height - 10 };
+  return { x: box.x + 10, y: box.y + 10 };
 }
+it("keeps the shared group pointer ten pixels inside the top edge", async () => {
+  const page = await setup();
+  try {
+    const box = await page.locator('[data-map-group="library"] .map-header').boundingBox();
+    if (!box) throw new Error("Missing library header");
+    expect(await groupPoint(page, "library")).toEqual({ x: box.x + 10, y: box.y + 10 });
+  } finally {
+    await page.close();
+  }
+});
 async function pointAt(page: Page, point: { x: number; y: number }) {
   await page.mouse.move(point.x, point.y);
   await page.waitForTimeout(40);

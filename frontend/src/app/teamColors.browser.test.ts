@@ -79,6 +79,14 @@ for (const width of [1920, 1280])
             await check(
               page.getByText("Handwritten events over Boltons d31d821", { exact: true }),
             ).toBeVisible();
+            if (scene === "graph-busy") {
+              await check(page.getByRole("region", { name: "New agent" })).toContainText(
+                "Replay of a handwritten event log over Boltons d31d821",
+              );
+              const module = page.locator('[data-map-module="boltons.strutils"]');
+              await check(module.locator(".map-agent")).toHaveText("A·2 editing");
+              await check(module.locator(".map-count")).toHaveCSS("visibility", "hidden");
+            }
             await page.evaluate(() => document.fonts.ready);
             await check
               .poll(() =>

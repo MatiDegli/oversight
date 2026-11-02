@@ -33,10 +33,10 @@ import {
   tapNode,
 } from "./level2-support";
 
-// This recording starts two unrelated, person-started agents in this order.
+// The recording observes slot B before slot A; team letters follow that event order.
 // Keep expected paint independent of the product reducer and its browser-only module graph.
-const identityA = { label: "A", hue: "A", family: "agent-a" } as const;
-const identityB = { label: "B", hue: "B", family: "agent-b" } as const;
+const identityA = { label: "B", hue: "B", family: "agent-b" } as const;
+const identityB = { label: "A", hue: "A", family: "agent-a" } as const;
 
 test.afterEach(async ({ page }) => removeRoutes(page));
 
