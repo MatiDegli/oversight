@@ -225,6 +225,8 @@ async def test_hooks_disabled(tmp_path, template, shadow):
         marker = tmp_path / "hook-ran"
         hook = f"#!/bin/sh\nprintf bad > '{marker.as_posix()}'\nexit 1\n"
         normal = workspace.main.root / ".git/hooks"
+        # reset() initializes Git without templates, so hooks need not exist yet.
+        normal.mkdir(exist_ok=True)
         (normal / "pre-commit").write_text(hook)
         (workspace.main.root / "changed.py").write_text("value = 1\n")
         assert await workspace.main.commit_all("Plain hooks fixture", workspace.user_author())
