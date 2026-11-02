@@ -10,6 +10,7 @@ import asyncio
 import json
 import re
 import sys
+import time
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field, replace
@@ -23,10 +24,81 @@ from oversight.workspace.junit import MAX_XML_BYTES, parse_junit
 from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallReport, CallTarget, read_calls
 from oversight.workspace.runner import ProcessResult, Spawn
+from oversight.workspace.source_nt import OwnEnvironment
 from oversight_contracts.events import CaseResult, SuiteExecution, SuiteResult
 
 OUTPUT_TAIL = 8192
 FAILED_CAP = 20
+
+# Constant child program: neither project metadata nor finder code is evaluated by the server.
+_OWN_PROBE = """
+import importlib.util, json, os, platform, re
+from importlib.metadata import version, PackageNotFoundError
+versions = {'python': platform.python_version()}
+for name in ('pytest', 'pluggy'):
+    try:
+        versions[name] = version(name)
+    except PackageNotFoundError:
+        versions[name] = 'missing'
+def compatible(name, minimum):
+    parts = re.match(r'^(\\d+)\\.(\\d+)', versions[name])
+    return parts is not None and tuple(map(int, parts.groups())) >= minimum
+ok = (compatible('python', (3, 10)) and compatible('pytest', (8, 2))
+      and compatible('pluggy', (1, 5)))
+try:
+    spec = importlib.util.find_spec('oversight_report')
+    expected = os.environ['OVERSIGHT_TRUSTED_PLUGIN']
+    ok = ok and spec is not None and spec.origin is not None
+    ok = ok and os.path.normcase(os.path.realpath(spec.origin)) == os.path.normcase(expected)
+    if ok:
+        import pytest, oversight_report
+        origin = os.path.normcase(os.path.realpath(oversight_report.__file__))
+        ok = origin == os.path.normcase(expected)
+except Exception:
+    ok = False
+print(json.dumps(dict(versions, ok=ok)))
+"""
+
+
+async def _probe_environment(
+    python: Path,
+    tree: Path,
+    env: dict[str, str],
+    deadline: float,
+    clock: Callable[[], float],
+    spawn: Spawn,
+) -> None:
+    left = deadline - clock()
+    if left <= 0:
+        raise OSError("Own-source environment unavailable: suite deadline expired")
+    try:
+        result = await spawn(
+            [str(python), "-c", _OWN_PROBE],
+            cwd=tree,
+            env=env,
+            timeout_s=min(left, 10),
+            output_cap=4096,
+        )
+    except OSError:
+        raise OSError("Own-source environment unavailable: probe launch failed") from None
+    try:
+        payload = json.loads(result.stdout)
+        if (
+            result.returncode != 0
+            or result.timed_out
+            or result.truncated
+            or payload["ok"] is not True
+        ):
+            raise ValueError
+    except (ValueError, KeyError, TypeError):
+        # Never echo child text or paths, even when a launcher/plugin fails before the probe.
+        versions: list[str] = []
+        for name in ("python", "pytest", "pluggy"):
+            match = re.search(r'"' + name + r'":\s*"(missing|[0-9.]{1,32})"', result.stdout[:4096])
+            versions.append(name + "=" + (match[1] if match else "unknown"))
+        raise OSError(
+            "Own-source environment unavailable: probe failed (" + ", ".join(versions) + ")"
+        ) from None
 
 
 @dataclass(frozen=True)
@@ -199,7 +271,10 @@ async def run_suite(
     pytest_options: tuple[str, ...] = (),
     harness_pack: bool = False,
     measured_targets: tuple[CallTarget, ...] | None = None,
+    _own_prepare: Callable[[Path, float], OwnEnvironment] | None = None,
+    _clock: Callable[[], float] = time.monotonic,
 ) -> SuiteRun:
+    deadline = _clock() + timeout_s if _own_prepare is not None else None
     report = runtime_root / "tmp" / f"{uuid.uuid4().hex}.jsonl"
     junit = report.with_suffix(".xml")
     env = {
@@ -216,10 +291,29 @@ async def run_suite(
     argv = _pytest_argv(python, junit, case_ids, pytest_targets, pytest_options)
     failure: OSError | asyncio.CancelledError | None = None
     try:
+        if _own_prepare is not None:
+            assert deadline is not None
+            own = await offload(lambda: _own_prepare(tree_root, deadline))
+            python = own.python
+            env.pop("PYTEST_DISABLE_PLUGIN_AUTOLOAD")
+            env.update(
+                PYTHONPATH=(";" if sys.platform == "win32" else ":").join(
+                    map(str, (plugin_dir, tree_root, *own.roots))
+                ),
+                TEMP=env["HOME"],
+                TMP=env["HOME"],
+                OVERSIGHT_TRUSTED_PLUGIN=str(plugin_dir / "oversight_report.py"),
+            )
+            await _probe_environment(python, tree_root, env, deadline, _clock, spawn)
+            argv = _pytest_argv(python, junit, case_ids, pytest_targets, pytest_options)
         if measured_targets is not None:
             await offload(
                 lambda: request.write_text(json.dumps([asdict(t) for t in measured_targets]))
             )
+        if deadline is not None:
+            timeout_s = deadline - _clock()
+            if timeout_s <= 0:
+                raise OSError("Own-source environment unavailable: suite deadline expired")
         process = await spawn(argv, cwd=tree_root, timeout_s=timeout_s, env=env)
     except (OSError, asyncio.CancelledError) as error:
         failure = error

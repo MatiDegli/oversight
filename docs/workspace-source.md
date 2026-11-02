@@ -134,8 +134,9 @@ profile under runtime `sources` is exempt. A source cannot be inside a reset tar
 
 The future startup contract is lexical placement before resolve/constructors/source Git;
 lock/server Job and prior-runtime guard, then trust disclosure, then validated staging before
-reset. Current startup does not yet provide this own-source ordering. Public startup wiring remains pending. Private staging now pins bounded no-follow HEAD/index
-stamps and hashes around selection and rechecks them after copying and relisting Git paths.
+reset. Current startup does not yet provide this own-source ordering. Public startup wiring
+remains pending. Private staging now pins bounded no-follow HEAD/index stamps and hashes
+around selection and rechecks them after copying and relisting Git paths.
 Selected present files are copied as writable raw bytes under a unique runtime-owned staging
 directory outside `workspace`, `worktrees` and `tmp`. Working deletions create no file.
 A NUL-separated UTF-8 relative-file manifest retains tracked ignored and permitted literal names.
@@ -182,3 +183,12 @@ Source, destination and current agent/Git/probe/report projections refuse at 240
 Later W3 qualification must measure a flat 16,384-file/128 MiB fixture on both Windows machines
 under a qualification-only 120-second cap, then freeze release phase deadlines at
 `max(10 seconds, 1.5 × slowest phase)`. No native timing evidence has been collected here.
+
+Private own-source suite preparation validates the original `.venv/Scripts/python.exe`,
+`pyvenv.cfg`, base interpreter and library placements without copying or installing anything.
+Its reduced environment enables plugin autoload only for this private arm; HOME/TEMP/TMP stay
+under runtime `tmp`. A constant probe pins the trusted report plugin and checks Python >=3.10,
+pytest >=8.2 and pluggy >=1.5. Preparation, probe (at most ten seconds) and pytest share one
+deadline derived from the caller's timeout. Missing, unsafe or incompatible environments yield
+a bounded private unavailable diagnostic. Linux injections exercise these handoffs; production
+interpreter selection, public unavailable propagation and native acceptance remain pending.

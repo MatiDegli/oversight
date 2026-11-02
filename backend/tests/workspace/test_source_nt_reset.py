@@ -164,6 +164,7 @@ async def test_manifest_reset_index_agent_and_export(
             for name, data in files.items():
                 assert (target / name).read_bytes() == data
             assert not (target / "new.py").exists()
+            assert not (target / "uncommitted").exists()
             assert {name: (source.root / name).read_bytes() for name in imported} == imported
             assert (workspace.main.root / "uncommitted").exists()
             assert nt.main_ref(source.runtime, time.monotonic() + 10) == current
@@ -382,7 +383,7 @@ async def test_journal_pins_authorized_pre_deletion_main(
         assert nt.main_ref(source.runtime, time.monotonic() + 10) == await workspace.main.head()
 
 
-@pytest.mark.parametrize("fault", ["bytes", "manifest", "deadline"])
+@pytest.mark.parametrize("fault", ["bytes", "manifest", "deadline", "second-guard", "begin-reset"])
 async def test_stage_refusal_cleans_before_journaling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
@@ -398,7 +399,26 @@ async def test_stage_refusal_cleans_before_journaling(
             sibling.mkdir()
             (sibling / "keep").write_bytes(b"unowned")
             reason = "staging bytes changed" if fault == "bytes" else "staging manifest changed"
-            if fault == "deadline":
+            if fault in {"second-guard", "begin-reset"}:
+                guard = nt.guard_previous
+                calls = 0
+
+                def second_guard(*args, **kwargs):
+                    nonlocal calls
+                    calls += 1
+                    if calls == 2:
+                        raise OSError("second-guard refusal")
+                    return guard(*args, **kwargs)
+
+                def begin_refusal(*args):
+                    raise OSError("begin-reset refusal")
+
+                if fault == "second-guard":
+                    monkeypatch.setattr(core, "guard_previous", second_guard)
+                else:
+                    monkeypatch.setattr(core, "begin_reset", begin_refusal)
+                reason = fault + " refusal"
+            elif fault == "deadline":
                 verify = nt.verify_stage
 
                 def expire_after_verification(*args):

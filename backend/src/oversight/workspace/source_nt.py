@@ -25,6 +25,7 @@ from oversight.workspace._platform import (
     stream_names,
     verify_sentinel,
 )
+from oversight.workspace.errors import InvalidPath
 from oversight.workspace.files import (
     CACHE_DIRS,
     nt_plain_parents,
@@ -41,6 +42,7 @@ from oversight.workspace.metadata_io import (
     Budget,
     Entry,
     make_directory,
+    nt_name,
     nt_token,
     read_entry,
     remove_directory,
@@ -1017,3 +1019,81 @@ def finish_reset(runtime: Path, commit: str, stage: StagedSource | None) -> None
     if stage is not None:
         stage.cleanup()
     store_fields(runtime / "own-reset", None, deadline)
+
+
+@dataclass(frozen=True)
+class OwnEnvironment:
+    python: Path
+    roots: tuple[Path, ...] = ()
+
+
+@dataclass
+class EnvironmentIO:
+    """Private forced-NT boundary; injected placements never enable public selection."""
+
+    deadline: float
+    preflight: Callable[[str], None] = preflight_placement
+    bind: Callable[[str], Path] = Path
+    sensitive: Callable[[Path], bool] = case_sensitive_directory
+    streams: Callable[[Path], Generator[str]] = stream_names
+
+    def check(self, path: Path, *, directory: bool) -> None:
+        short_path(str(path))
+        for part in path.parts[1:]:
+            nt_name(part)
+        parent = path if directory else path.parent
+        self.preflight(str(parent))  # Placement validation accepts directories, not executables.
+        existing_parents(parent, sensitive=self.sensitive)
+        check_directory(parent, self.deadline, time.monotonic, self.sensitive, self.streams)
+        if not directory:
+            if getattr(path.lstat(), "st_file_attributes", 0) & (0x1000 | 0x40000 | 0x400000):
+                raise refuse("offline or recall environment file")
+            check_streams(path, self.deadline, time.monotonic, self.streams)
+            with open_nt(path) as handle:
+                opened = os.fstat(handle.fileno())
+                if opened.st_nlink != 1 or nt_token(opened) != nt_token(path.lstat()):
+                    raise refuse("unsafe environment file")
+
+    def read(self, path: Path, budget: Budget) -> bytes:
+        self.check(path, directory=False)
+        entry = read_entry(path, budget)
+        if entry is None or entry.data is None:
+            raise refuse("missing environment metadata")
+        return entry.data
+
+
+def prepare_environment(
+    source: NtSource, tree: Path, deadline: float, *, io: EnvironmentIO | None = None
+) -> OwnEnvironment:
+    """Read only the original venv. No builder, copy, installation or fallback is allowed."""
+    io = io or EnvironmentIO(deadline)
+    try:
+        venv = source.root / ".venv"
+        for path in (venv, venv / "Scripts", venv / "Lib", venv / "Lib/site-packages", tree):
+            io.check(path, directory=True)
+        python = venv / "Scripts/python.exe"
+        io.check(python, directory=False)
+        config = io.read(venv / "pyvenv.cfg", Budget(deadline)).decode("utf-8")
+        values: dict[str, str] = {}
+        for line in config.splitlines():
+            key, separator, value = line.partition("=")
+            if separator:
+                if key.strip() in values:
+                    raise ValueError("duplicate venv setting")
+                values[key.strip()] = value.strip()
+        if values.get("include-system-site-packages", "").lower() != "false":
+            raise ValueError("system site-packages are unsupported")
+        home = io.bind(absolute_drive(values["home"]))
+        for path in (home, home / "Lib"):
+            io.check(path, directory=True)
+        io.check(home / "python.exe", directory=False)
+        if "executable" in values:
+            executable_path = io.bind(absolute_drive(values["executable"]))
+            if executable_path != home / "python.exe":
+                raise ValueError("inconsistent base executable")
+            io.check(executable_path, directory=False)
+        return OwnEnvironment(python)
+    except (OSError, ValueError, KeyError, IntegrityError, InvalidPath):
+        raise OSError(
+            "Own-source environment unavailable: missing or unsafe original venv"
+        ) from None
