@@ -48,6 +48,7 @@ export interface FrameProps {
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
   onStopAgent?: (agentId: string) => Promise<unknown>;
   onOpenConversation?: (agentId: string) => void;
+  onMessageLead?: (agentId: string, text: string) => Promise<unknown>;
   onMessageAgent?: (agentId: string, text: string) => Promise<unknown>;
   onPauseAgent?: (agentId: string) => Promise<unknown>;
   onResumeAgent?: (agentId: string) => Promise<unknown>;

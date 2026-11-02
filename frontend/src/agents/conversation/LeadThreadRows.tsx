@@ -28,7 +28,7 @@ export default function LeadThreadRows({
           <>
             <div className="px-[22px] py-[9px]">
               <div className="flex justify-between gap-3 text-[15px]">
-                <strong>Lead</strong>
+                <strong>Lead {conversation.header.letter}</strong>
                 <EventTime ts={entry.event.ts} />
               </div>
               <p className="mt-[6px] text-[15px] leading-[1.55] whitespace-pre-wrap wrap-anywhere">

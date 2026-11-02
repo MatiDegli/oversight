@@ -49,6 +49,8 @@ export interface ConversationHeader {
 }
 
 export interface LeadHeader extends LeadStatus {
+  letter: string;
+  hue: AgentStatus["slot"];
   kind: "lead";
   agentId: string;
   modelLabel: string;

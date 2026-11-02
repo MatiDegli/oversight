@@ -348,6 +348,7 @@ export function App() {
           onStartAgent={commands?.startAgent}
           onStopAgent={commands?.stopAgent}
           onOpenConversation={onOpenConversation}
+          onMessageLead={commands ? (id, text) => commands.messageLead(id, { text }) : undefined}
           onMessageAgent={commands ? (id, text) => commands.messageAgent(id, { text }) : undefined}
           onPauseAgent={commands?.pauseAgent}
           onResumeAgent={commands?.resumeAgent}
