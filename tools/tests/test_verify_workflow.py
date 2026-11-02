@@ -289,13 +289,13 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         "if-no-files-found: error\nretention-days: 7",
     }
     assert UPLOAD in (WORKFLOWS / "ci.yml").read_text()
-    assert len(items) == 16
+    assert len(items) == 17
     for index, step in enumerate(items[4:-1], 4):
         permitted = {"name", "run"}
-        if index == 12:
+        if index == 13:
             permitted.add("timeout-minutes")
             assert step["timeout-minutes"] == "3"
-        if index == 14:
+        if index == 15:
             permitted.add("if")
             assert step["if"] == "always()"
         assert set(step) <= permitted
@@ -343,11 +343,20 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
         "Tee-Object nt-evidence/w4b-tests.log\n"
         "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
     }
-    assert items[12]["run"] == (
+    assert items[12] == {
+        "name": "W4a2 injected and native reset cases",
+        "run": "|\nuv run --frozen pytest -o timeout_method=thread "
+        "backend/tests/workspace/test_source_nt_copy.py "
+        "backend/tests/workspace/test_source_nt_reset.py "
+        "backend/tests/workspace/test_source_nt_reset_windows.py -n 2 -rs -s 2>&1 | "
+        "Tee-Object nt-evidence/w4a2-tests.log\n"
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+    }
+    assert items[13]["run"] == (
         "|\nuv run --frozen python tools/smoke.py 2>&1 | Tee-Object nt-evidence/smoke.log\n"
         "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
     )
-    assert items[13] == {
+    assert items[14] == {
         "name": "Report unavailable Linux isolation",
         "run": "|\nuv run --frozen python -m oversight isolation-probe "
         "> nt-evidence/isolation-probe.json\n"
@@ -362,8 +371,8 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
     assert "W1 + W2 + W3 + W4b byte policy only" in versions
     assert "awaits W4a2 + W4c1 + W4c2" in versions and "not acceptance" in versions
     assert "Set-Content nt-evidence/staging.txt" in versions
-    assert "platform.python_version(), type(loop).__name__" in items[14]["run"]
-    assert "Tee-Object nt-evidence/python-loop.log" in items[14]["run"]
+    assert "platform.python_version(), type(loop).__name__" in items[15]["run"]
+    assert "Tee-Object nt-evidence/python-loop.log" in items[15]["run"]
 
 
 def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> None:
