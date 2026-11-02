@@ -1,4 +1,4 @@
-import type { ChangeProposed, RuleId } from "@contracts";
+import type { ChangeProposed, RuleAssessment, RuleId } from "@contracts";
 import type { State } from "../state";
 // eslint-disable-next-line no-restricted-imports -- Pure evidence leaves preserve the lazy review boundary.
 import { factsForRevision } from "../review/factsForRevision";
@@ -56,14 +56,16 @@ export function selectChatChange(state: State, changeId: string, seq?: number) {
       sameCandidate(event.payload, proposal) &&
       event.payload.agent_id === proposal.agent_id,
   );
-  const rules = summaryRules.map((rule) => ({
-    rule,
-    label: ruleWords[rule][1],
-    result:
-      assessment?.type === "change.assessed"
-        ? (assessment.payload.rules.find((r) => r.rule === rule)?.result ?? "unknown")
-        : "unknown",
-  }));
+  const rules = summaryRules.map(
+    (rule): { rule: RuleId; label: string; result: RuleAssessment["result"] | "absent" } => ({
+      rule,
+      label: ruleWords[rule][1],
+      result:
+        assessment?.type === "change.assessed"
+          ? (assessment.payload.rules.find((r) => r.rule === rule)?.result ?? "absent")
+          : "absent",
+    }),
+  );
   const settled = state.decisionEvents.some(
     (event) =>
       event.type === "change.resolved" &&

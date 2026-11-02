@@ -71,16 +71,18 @@ it.each(["revision", "head_commit"] as const)(
     const card = selectChatChange(next, "change-1");
     expect(card?.facts).toBeUndefined();
     expect(card?.passes).toBe(0);
+    expect(card?.rules.every((rule) => rule.result === "absent")).toBe(true);
     expect(card?.callers.measured).toBe(0);
     expect(card?.examples).toEqual([]);
     expect(card?.waiting).toBe(true);
   },
 );
-it("keeps six results, failures and unknown without counting additional rules", () => {
+it("keeps six results, failures, unknown and absent without counting extra rules", () => {
   const state = chatReviewState();
   const assessment = state.decisionEvents.findLast((e) => e.type === "change.assessed");
   if (assessment?.type !== "change.assessed") throw new Error("Missing assessment");
   required(assessment.payload.rules[0]).result = "fail";
+  assessment.payload.rules.splice(1, 1);
   assessment.payload.rules.push({
     rule: "protected_paths",
     result: "pass",
@@ -90,19 +92,34 @@ it("keeps six results, failures and unknown without counting additional rules", 
   });
   const card = selectChatChange(state, "change-1");
   expect(card?.rules).toHaveLength(6);
-  expect(card?.passes).toBe(4);
+  expect(card?.passes).toBe(3);
   expect(card?.rules.map((r) => r.result)).toEqual([
     "fail",
-    "pass",
+    "absent",
     "pass",
     "pass",
     "pass",
     "unknown",
   ]);
   assessment.payload.rules = [];
-  expect(selectChatChange(state, "change-1")?.rules.every((r) => r.result === "unknown")).toBe(
-    true,
+  const empty = selectChatChange(state, "change-1");
+  expect(empty?.rules.every((r) => r.result === "absent")).toBe(true);
+  expect(empty?.passes).toBe(0);
+});
+it("labels every rule not assessed when no assessment has been recorded", () => {
+  const state = chatReviewState();
+  state.decisionEvents = state.decisionEvents.filter((event) => event.type !== "change.assessed");
+  const card = selectChatChange(state, "change-1");
+  expect(card?.rules).toHaveLength(6);
+  expect(card?.rules.every((rule) => rule.result === "absent")).toBe(true);
+  expect(card?.passes).toBe(0);
+  const output = html(
+    <ChatChangeCard state={state} changeId="change-1" seq={62} reviewing={false} />,
   );
+  expect(output.match(/data-result="absent"/g)).toHaveLength(6);
+  expect(output).toContain('title="Tests on the combined result: not assessed"');
+  expect(output).toContain("Known spend: not assessed</span>");
+  expect(output).not.toContain('data-result="unknown"');
 });
 it("keeps unavailable and unstable evidence honest without repeating stable examples", () => {
   const state = chatReviewState();

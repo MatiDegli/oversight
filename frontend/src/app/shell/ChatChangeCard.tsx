@@ -1,4 +1,14 @@
-import { ArrowRight, Eye, GitFork, ListChecks, MessageSquare } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  CircleHelp,
+  Eye,
+  GitFork,
+  ListChecks,
+  MessageSquare,
+  Minus,
+  X,
+} from "lucide-react";
 import type { State } from "../../state";
 import { costText } from "../../state";
 import { agentSlotStyle } from "../../theme";
@@ -6,6 +16,25 @@ import { ChangeFactsRow } from "../../review";
 // eslint-disable-next-line no-restricted-imports -- Reuse the built timeline timestamp without another projection.
 import { EventTime } from "../../agents/conversation/rows";
 import { selectChatChange } from "../chatReviewSelectors";
+
+const ruleResults = {
+  pass: { word: "pass", Icon: Check },
+  fail: { word: "fail", Icon: X },
+  unknown: { word: "unknown", Icon: CircleHelp },
+  absent: { word: "not assessed", Icon: Minus },
+};
+
+function RuleIndicator({ result, label }: { result: keyof typeof ruleResults; label: string }) {
+  const { word, Icon } = ruleResults[result];
+  return (
+    <li data-result={result} title={`${label}: ${word}`}>
+      <Icon aria-hidden="true" size={7} strokeWidth={3} />
+      <span className="sr-only">
+        {label}: {word}
+      </span>
+    </li>
+  );
+}
 
 export function GraphLink({ onClick }: { onClick?: () => void }) {
   return onClick ? (
@@ -135,15 +164,7 @@ export function ChatChangeCard({
               </span>
               <ul aria-label="Six recorded rule results">
                 {card.rules.map((rule) => (
-                  <li
-                    key={rule.rule}
-                    data-result={rule.result}
-                    title={`${rule.label}: ${rule.result}`}
-                  >
-                    <span className="sr-only">
-                      {rule.label}: {rule.result}
-                    </span>
-                  </li>
+                  <RuleIndicator key={rule.rule} result={rule.result} label={rule.label} />
                 ))}
               </ul>
             </div>

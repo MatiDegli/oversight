@@ -183,6 +183,9 @@
   margin-left: auto;
 }
 .chat-change-evidence li {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
   width: 9px;
   height: 9px;
   border: 1px solid var(--control-edge);
@@ -190,12 +193,19 @@
 }
 .chat-change-evidence li[data-result="pass"] {
   background: var(--text);
+  color: var(--page);
 }
 .chat-change-evidence li[data-result="fail"] {
   background: var(--failed);
+  color: var(--page);
 }
 .chat-change-evidence li[data-result="unknown"] {
   background: var(--inset);
+  color: var(--text);
+}
+.chat-change-evidence li[data-result="absent"] {
+  background: var(--raised);
+  color: var(--muted);
 }
 .chat-change-card footer {
   display: flex;

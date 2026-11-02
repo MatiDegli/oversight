@@ -139,7 +139,11 @@ async function waitForColdGraph(page: Page) {
   await page.evaluate(
     () =>
       new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            resolve();
+          });
+        }),
       ),
   );
 }
@@ -509,6 +513,54 @@ it("keeps answers, loading/dirty guards, selected diff and conflict in the share
     await page.close();
   }
 });
+it.each(["dark", "day"])("distinguishes every evidence result in %s mode", async (theme) => {
+  const { page } = await open({ theme });
+  try {
+    await page.evaluate(() => {
+      const assessment = window.chatReviewTest
+        .state()
+        .decisionEvents.findLast((event) => event.type === "change.assessed");
+      if (assessment?.type !== "change.assessed") throw new Error("Missing assessment");
+      const [first, , ...rest] = assessment.payload.rules;
+      if (!first) throw new Error("Missing rule");
+      window.chatReviewTest.emit({
+        ...assessment,
+        payload: { ...assessment.payload, rules: [{ ...first, result: "fail" }, ...rest] },
+      });
+    });
+    const results = card(page).getByRole("list", { name: "Six recorded rule results" });
+    await check(results.getByRole("listitem")).toHaveCount(6);
+    await check(results.locator('[data-result="absent"]')).toHaveText(
+      "Second-model review: not assessed",
+    );
+    await check(results.locator('[data-result="unknown"]')).toHaveText("Known spend: unknown");
+    await check(card(page)).toContainText("Evidence 3 of 6");
+    const indicators = await results.locator("li").evaluateAll((items) =>
+      items.map((item) => {
+        const icon = item.querySelector("svg");
+        const style = getComputedStyle(item);
+        return {
+          result: item.dataset.result,
+          glyph: icon?.innerHTML,
+          hidden: icon ? getComputedStyle(icon).display === "none" : true,
+          fill: style.backgroundColor,
+          title: item.getAttribute("title"),
+          width: item.getBoundingClientRect().width,
+          height: item.getBoundingClientRect().height,
+        };
+      }),
+    );
+    expect(new Set(indicators.map((item) => item.glyph)).size).toBe(4);
+    expect(indicators.every((item) => item.glyph && !item.hidden)).toBe(true);
+    expect(indicators.every((item) => item.width === 9 && item.height === 9)).toBe(true);
+    expect(indicators.find((item) => item.result === "absent")?.fill).not.toBe(
+      indicators.find((item) => item.result === "unknown")?.fill,
+    );
+    expect(indicators.find((item) => item.result === "absent")?.title).toContain("not assessed");
+  } finally {
+    await page.close();
+  }
+});
 it("C5's resolved tab opens beside its owner without a proposed-only navigation or graph request", async () => {
   const { page, requested } = await open();
   try {
@@ -537,7 +589,7 @@ it.each([1920, 1600, 1280])("preserves the Oversight review width at %ipx", asyn
     await check(panel(page).locator(".review-body")).toBeVisible();
     await layout(page, "Oversight").click();
     expect(
-      Math.abs((await panel(page).boundingBox())!.width - Math.min(880, width * 0.46)),
+      Math.abs(required(await panel(page).boundingBox()).width - Math.min(880, width * 0.46)),
     ).toBeLessThan(0.02);
   } finally {
     await page.close();
