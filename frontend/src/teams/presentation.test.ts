@@ -1,4 +1,4 @@
-import type { AgentStatus, Plan, ServerEvent } from "@contracts";
+import type { AgentStatus, LeadStatus, Plan, ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import { applyEvent, createInitialState } from "../state";
@@ -31,6 +31,20 @@ function agent(id: string, extra: Partial<AgentStatus> = {}) {
     base_commit: null,
     examples: null,
     answering: null,
+    ...extra,
+  });
+}
+function lead(id: string, extra: Partial<LeadStatus> = {}) {
+  return event("lead.status", {
+    agent_id: id,
+    revision: 1,
+    task: "Coordinate",
+    model: "fake",
+    state: "working",
+    step: 0,
+    detail: null,
+    limits: null,
+    requested_plan_id: null,
     ...extra,
   });
 }
@@ -205,4 +219,40 @@ it("does not mutate deeply frozen inputs or expose mutable cached identities", (
   expect(JSON.stringify(state)).toBe(before);
   expect(Reflect.set(result.byAgent.one ?? {}, "label", "X")).toBe(false);
   expect(Reflect.set(result.byAgent, "other", {})).toBe(false);
+});
+
+it.each(["starting", "working", "idle"] as const)(
+  "keeps an open lead hue occupied while %s (migrated from Chat)",
+  (state) => {
+    const rows = identities(
+      lead("lead", { state }),
+      ...Array.from({ length: 5 }, (_, i) => agent(`a${String(i)}`)),
+      resolve("a0"),
+      agent("new"),
+    );
+    expect(rows.lead).toMatchObject({ label: "A", hue: "A", kind: "lead" });
+    expect(rows.new?.hue).toBe("B");
+  },
+);
+it("introduces a lead before its children and breaks equal idle times by first observation", () => {
+  const prefix = [
+    lead("first"),
+    lead("second"),
+    plan("p", "first", ["one", "two"]),
+    agent("two", { plan_id: "p", slot: "F" }),
+    agent("one", { plan_id: "p", slot: "B" }),
+    ...Array.from({ length: 4 }, (_, i) => agent(`a${String(i)}`)),
+    lead("second", { revision: 2, state: "stopped" }),
+    lead("first", { revision: 2, state: "stopped" }),
+    resolve("one"),
+    resolve("two"),
+  ];
+  const rows = identities(...prefix, agent("new"));
+  expect(rows.first).toMatchObject({ label: "A", hue: "A", kind: "lead" });
+  expect(rows.second).toMatchObject({ label: "B", hue: "B", kind: "lead" });
+  expect(rows.one).toMatchObject({ label: "A·1", hue: "A" });
+  expect(rows.two).toMatchObject({ label: "A·2", hue: "A" });
+  expect(rows.new).toMatchObject({ label: "G", hue: "A" });
+  // A stale idle revision cannot reserve the terminal lead's hue again.
+  expect(identities(...prefix, lead("first", { state: "idle" }), agent("new")).new?.hue).toBe("A");
 });

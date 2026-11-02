@@ -76,7 +76,7 @@ it("keeps direct work first and focuses only after New task or New lead", async 
       "Lead B",
       "Agent C",
     ]);
-    await check(page.locator(".chat-agents > header")).toContainText("2 of 2 running");
+    await check(page.locator(".chat-agents > header")).toContainText("2 running");
     await check(leadRow(page, "A")).toContainText("2 agents · 1 working, 1 needs you");
     await leadRow(page, "A").click();
     await leadRow(page, "B").focus();
@@ -384,7 +384,7 @@ it.each([1920, 1280])(
         "Lead B",
         "Agent C",
       ]);
-      await check(page.locator(".chat-agents > header")).toContainText("3 of 4 running");
+      await check(page.locator(".chat-agents > header")).toContainText("3 running");
       await check(leadRow(page, "A")).toContainText("3 agents · 1 working, 1 needs you");
       await check(leadRow(page, "B")).toContainText("1 plan needs you");
       const sizes = await page.evaluate(() =>

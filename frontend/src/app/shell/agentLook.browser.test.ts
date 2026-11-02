@@ -85,7 +85,7 @@ it.each(["dark", "day"] as const)(
       );
       await check(page.getByRole("article", { name: "Agent C", exact: true })).toBeVisible();
       await page.getByRole("button", { name: "Chat", exact: true }).click();
-      await check(page.locator(".chat-agent-row")).toHaveCount(6);
+      await check(page.locator(".chat-agent-row:not(.chat-lead-row)")).toHaveCount(6);
       await check(page.locator(".chat-agent-badge").filter({ hasText: "A·2" })).toHaveCSS(
         "color",
         rgb(themes[theme]["agent-a-text"]),

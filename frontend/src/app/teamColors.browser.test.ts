@@ -114,7 +114,7 @@ for (const width of [1920, 1280])
             if (scene === "inbox" || scene === "seventh-team")
               await check(page.getByRole("region", { name: "Decisions inbox" })).toBeVisible();
             if (scene === "chat-flat") {
-              await check(page.locator(".chat-agent-row")).toHaveCount(6);
+              await check(page.locator(".chat-agent-row:not(.chat-lead-row)")).toHaveCount(6);
               await check(page.locator(".chat-agent-row").filter({ hasText: "A·2" })).toBeVisible();
             }
             if (scene === "seventh-team")
