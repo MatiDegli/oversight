@@ -54,8 +54,9 @@ DESIGN.md (every visual rule), DECISIONS.md (each decision with its reason; it w
 ## UI invariants
 - One graph, always visible in the Oversight view; Chat loads it on the first switch. The panels change with what the person does. Never steal focus.
 - Approve has no keyboard shortcut, not even Ctrl+Enter.
-- A dashed node border means only a pending change, in its agent's color.
-- Color is an agent or a state, never alone and never amber; every color comes from a theme token.
+- A dashed node border means only a pending change, in its team's color.
+- Color is a team or a state, never alone and never amber; every color comes from a theme token. A team is the
+  plan's lead, else the plan, else the agent; a lead's agents carry the lead's color and a label such as A·1.
 - Design work follows DESIGN.md with Impeccable 4.5.2 (allowed: shape, harden, onboard, audit, critique, polish,
   clarify, typeset, layout). Where Impeccable clashes with DESIGN.md or this file, ours wins and DECISIONS.md records it.
 

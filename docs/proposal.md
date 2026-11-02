@@ -339,9 +339,9 @@ class SlotInfo:
     default_model: str         # a ModelProfile id
 
 class Limits:
-    max_steps: int             # tool calls per task
+    max_steps: int             # tool calls per round; renewed on Request changes
     max_output_tokens: int     # per model call
-    max_wall_clock_s: int      # per task
+    max_wall_clock_s: int      # per round; own-repository runs derive it from the test limit
     test_timeout_s: int
     cone_max_depth: int
     cone_max_nodes: int
