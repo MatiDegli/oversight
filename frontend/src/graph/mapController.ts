@@ -274,7 +274,7 @@ function createMapController(
     ...commands,
     getFrame: () => runtime.frame,
     moduleOwners: () => runtime.owners,
-    level: () => runtime.frame.level,
+    level: () => (latest.current.map ? runtime.frame.level : "cards"),
     subscribe: (listener: () => void) => {
       runtime.listeners.add(listener);
       return () => {
