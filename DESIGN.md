@@ -1355,6 +1355,8 @@ leaves plain ground behind the graph: no lamps, no contour lines.
   halo thins over several rings.
   On the map, light follows the rendered module cell, including its agent lines, with fixed
   screen spreads `map-light-near` (30px), `map-light-far` (84px) and gain `map-light-gain` (0.85).
+  Map counts and resting agent labels use opaque text plates matching the group panel resolved
+  over ground (or ground without a panel), preserving 4.5:1 over lit lamps with no box on unlit cells.
   A light always falls off softly on every side, however faint it has become.
 - **Sources:** only each agent's current node at full strength and its last read node at about
   0.4 emit light, in that agent's token, and only while that agent is acting (see Agent light).

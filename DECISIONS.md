@@ -4148,3 +4148,6 @@ module cell and fixed screen spreads. The existing transition interpolates effec
 screen profiles when the published map level changes, including interrupted moves.
 Card geometry, zoom scaling, mode gains and all existing source strengths remain
 unchanged, including full working strength and the current 0.5 waiting weight.
+Map counts and resting agent labels use opaque plates matching the group panel resolved over
+ground (or ground without a panel) to keep text above 4.5:1 over stronger pools without adding
+a visible box to unlit cells; expanded agent labels retain their existing hover backing.
