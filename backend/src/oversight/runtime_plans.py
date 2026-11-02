@@ -51,10 +51,15 @@ class PlanService:
         if plan.started_by is None and count != 1:
             raise ApiError("invalid_request", "person-created plans require exactly one subtask")
 
-    @staticmethod
-    def check_limits(subtasks: Sequence[SubtaskDraft]) -> None:
+    def check_limits(self, subtasks: Sequence[SubtaskDraft]) -> None:
         try:
-            plan_core.check_limits(subtasks)
+            plan_core.check_limits(subtasks, self.live._lead_limits.subtasks)
+        except ValueError as error:
+            raise ApiError("invalid_request", str(error)) from None
+
+    def check_first_wave(self, subtasks: Sequence[SubtaskDraft]) -> None:
+        try:
+            plan_core.check_first_wave(subtasks, len(self.live._slots))
         except ValueError as error:
             raise ApiError("invalid_request", str(error)) from None
 
@@ -120,7 +125,9 @@ class PlanService:
         if self.live._closing:
             return PlanCreated(plan_id=plan.plan_id)
         draft = SubtaskDraft(task=outcome.task, zone=plan_core.whole_graph(snapshot))
-        proposed = plan_core.propose(plan, [draft]).model_copy(update={"detail": outcome.detail})
+        proposed = plan_core.propose(plan, [draft], self.live._lead_limits.subtasks).model_copy(
+            update={"detail": outcome.detail}
+        )
         await self.live._finish(self.save(proposed))
         return PlanCreated(plan_id=plan.plan_id)
 
@@ -137,7 +144,7 @@ class PlanService:
             plan = plan_core.planning(task, snapshot, self._count).model_copy(
                 update={"started_by": started_by}
             )
-            proposed = plan_core.propose(plan, drafts)
+            proposed = plan_core.propose(plan, drafts, self.live._lead_limits.subtasks)
             return await self.live._finish(self._save_drafts(plan, proposed))
 
     async def _save_drafts(self, plan: Plan, proposed: Plan) -> PlanCreated:
@@ -162,7 +169,8 @@ class PlanService:
             try:
                 plan_core.editable(plan, request.revision)
                 self.check_count(plan, len(request.subtasks))
-                updated = plan_core.update(plan, request)
+                updated = plan_core.update(plan, request, self.live._lead_limits.subtasks)
+                self.check_first_wave(request.subtasks)
                 if plan.started_by is None:
                     assert plan.subtasks is not None
                     if any(draft.zone != plan.subtasks[0].zone for draft in request.subtasks):
@@ -184,6 +192,7 @@ class PlanService:
         assert plan.subtasks is not None
         self.check_limits(plan.subtasks)
         self.check_count(plan, len(plan.subtasks))
+        self.check_first_wave(plan.subtasks)
         return plan
 
     def dispatch_plan(self, item: QueuedTask) -> Plan:
@@ -199,6 +208,7 @@ class PlanService:
             or not plan_core.content_matches(plan, original)
         ):
             raise ApiError("invalid_request", "plan content differs from the queued revision")
+        self.check_first_wave(plan.subtasks)
         return plan
 
     async def reject(self, plan_id: str, request: RejectPlan) -> None:

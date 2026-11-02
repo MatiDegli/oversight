@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import type { FileAccess } from "../editor";
 import { Frame } from "./Frame";
-import { useEscapeCloses } from "./escape";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import type { ServerEvent } from "@contracts";
 import { applyEvent, createInitialState, stateStore } from "../state";
@@ -19,7 +18,6 @@ import {
   navigateView,
   openChange,
   openReview,
-  panelOpen,
   tabbedView,
   viewReducer,
 } from "./view";
@@ -46,7 +44,6 @@ function Harness() {
   const close = () => {
     setView(closePanel);
   };
-  useEscapeCloses(panelOpen(view), close);
   const open = (kind: "file" | "diff" | "review") => {
     setView((current) =>
       navigateView(

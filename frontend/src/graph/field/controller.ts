@@ -10,7 +10,7 @@ import { MilestoneLife, MergeLife, type Milestone } from "./milestones";
 import { afterlightOf } from "./afterlight";
 import type { Afterlight } from "./afterlight";
 import type { BoxSource } from "./boxSource";
-import { createLampField, fieldConfig, parseHex, placeLights, signalConfig } from "./model";
+import { createLampField, fieldConfig, parseHex, placeLights } from "./model";
 import { overlayBoxes, contains } from "./mask";
 import { MarkerMotion } from "./marker";
 import { MarkerLayer } from "./markerLayer";
@@ -143,6 +143,8 @@ class FieldRuntime implements FieldController {
   private draws = 0;
   private fresh = false;
   private paintedAt = 0;
+  private level: "map" | "cards" = "cards";
+  private zoom = 1;
   private theme = getActiveTheme();
   private look = lampLook(this.theme);
   private afterlight: Afterlight = afterlightOf(this.theme);
@@ -260,7 +262,8 @@ class FieldRuntime implements FieldController {
       return;
     }
     try {
-      const sampled = this.transition.sample(now);
+      this.zoom = this.source.zoom?.() ?? 1;
+      const sampled = this.transition.sample(now, this.zoom);
       const { config } = sampled;
       const burning = this.life.lights(now);
       const lights = burning.length > 0 ? [...sampled.lights, ...burning] : sampled.lights;
@@ -292,15 +295,7 @@ class FieldRuntime implements FieldController {
       this.drawnMasks = masks;
       const time = this.reducedMotion ? null : (this.frozen ?? now / 1000);
       const points = this.drawPulses(now, width, height);
-      this.grid = this.lamps(
-        this.source.zoom ? signalConfig(config, this.source.zoom()) : config,
-        width,
-        height,
-        placed,
-        time,
-        points,
-        rings,
-      );
+      this.grid = this.lamps(config, width, height, placed, time, points, rings);
       const contours = this.contours(this.grid, width, height, time);
       this.renderer.draw(this.grid, this.look, masks, contours);
       // A marker is a letter above the graph, as the sketch's DOM marker is: only the overlays clip it,
@@ -475,6 +470,11 @@ class FieldRuntime implements FieldController {
     this.schedule();
   };
   private onGraph = () => {
+    const level = this.source.level?.() ?? "cards";
+    if (level !== this.level) {
+      this.level = level;
+      this.setTarget();
+    }
     this.redraw();
     this.fresh = true;
   };
@@ -515,6 +515,7 @@ class FieldRuntime implements FieldController {
   };
 
   private setTarget() {
+    this.level = this.source.level?.() ?? "cards";
     this.markers.set(
       this.input.lights,
       this.source,
@@ -525,11 +526,12 @@ class FieldRuntime implements FieldController {
     );
     this.transition.set(
       this.input,
-      fieldConfig(this.theme, this.input.mode),
+      fieldConfig(this.theme, this.input.mode, this.level),
       performance.now(),
       this.theme["transition-duration"],
       this.theme["transition-easing"],
       this.reducedMotion,
+      this.zoom,
     );
   }
 

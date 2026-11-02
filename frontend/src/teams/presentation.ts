@@ -41,14 +41,15 @@ function teamLetter(index: number): string {
 /**
  * Q4 uses the accepted event prefix. An idle interval starts when the last acting member
  * stops (including a merge/rejection); pending changes are tracked separately and survive
- * pauses, stops, requests for changes and conflicts. A never-acting lead is idle from its
- * first observation. Event timestamps determine elapsed idle time; equal times, invalid
+ * pauses, stops, requests for changes and conflicts. An open lead reserves its hue even
+ * while awaiting a message in idle; terminal lead statuses release it. Event timestamps determine elapsed idle time; equal times, invalid
  * legacy timestamps and teams still acting tie in selectTeams' first-observed order.
  * Reusing paint never removes or recolors the donor. No clock read or global allocator.
  */
 function allocate(state: State, identities: ReturnType<typeof selectTeams>) {
   const teams = new Map<string, TeamActivity>();
   const changes = new Map<string, string>();
+  const leadRevisions = new Map<string, number>();
   let eventTime = Date.parse(state.runStartedAt ?? "") || 0;
   function introduce(teamId: string) {
     if (teams.has(teamId)) return;
@@ -66,6 +67,11 @@ function allocate(state: State, identities: ReturnType<typeof selectTeams>) {
     teams.set(teamId, { hue, order, active: new Set(), pending: new Set(), idleSince: eventTime });
   }
   for (const event of state.decisionEvents) {
+    if (event.type === "lead.status") {
+      const lead = event.payload;
+      if (lead.revision <= (leadRevisions.get(lead.agent_id) ?? 0)) continue;
+      leadRevisions.set(lead.agent_id, lead.revision);
+    }
     const parsed = Date.parse(event.ts);
     if (Number.isFinite(parsed)) eventTime = Math.max(eventTime, parsed);
     const id =
@@ -89,7 +95,7 @@ function allocate(state: State, identities: ReturnType<typeof selectTeams>) {
       if (["starting", "working", "revising"].includes(agent.state)) team.active.add(id);
       else team.active.delete(id);
     } else if (event.type === "lead.status") {
-      if (["starting", "working"].includes(event.payload.state)) team.active.add(id);
+      if (["starting", "working", "idle"].includes(event.payload.state)) team.active.add(id);
       else team.active.delete(id);
     } else if (event.type === "change.proposed") {
       changes.set(event.payload.change_id, identity.team);

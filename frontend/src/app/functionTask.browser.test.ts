@@ -62,7 +62,7 @@ it(
       expect(await editor.evaluate((element) => element.isConnected)).toBe(true);
       expect(await graphSelection(page)).toEqual(graphBefore);
       await browserExpect(
-        page.getByRole("button", { name: "B Muse Spark Open", exact: true }),
+        page.getByRole("button", { name: "Muse Spark Open", exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
       expect(starts).toEqual([]);
       await page.keyboard.insertText("Validate the quantity.");

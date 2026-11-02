@@ -52,7 +52,7 @@ describe("the new-agent box", () => {
   });
 
   it.each(["A", "B", null] as const)(
-    "keeps slot names stable and marks only selected slot %s with a visible, decorative check and aria-pressed",
+    "shows model names only and marks only selected slot %s with a visible, decorative check and aria-pressed",
     (selected) => {
       const markup = view({
         slots: [
@@ -68,7 +68,7 @@ describe("the new-agent box", () => {
         expect(button).toContain(`aria-pressed="${String(selected === slot)}"`);
         expect(button).not.toMatch(/aria-label=|aria-labelledby=|<title/);
         expect(button.replace(/<[^>]*>/g, "").trim()).toBe(
-          slot === "A" ? "A Muse Spark" : "B Muse Spark Open",
+          slot === "A" ? "Muse Spark" : "Muse Spark Open",
         );
         if (selected === slot) {
           expect(button).toContain("aria-pressed:border-text");
@@ -87,7 +87,7 @@ describe("the new-agent box", () => {
     },
   );
 
-  it("shows the two offered letters and model labels, with B's token, and disables a named holder", () => {
+  it("shows only the two offered model labels and disables a named holder", () => {
     const state = through(14);
     const run = state.run;
     if (!run) throw new Error("Missing run fixture");
@@ -101,10 +101,10 @@ describe("the new-agent box", () => {
     expect(slots).toHaveLength(2);
     expect(slots[0]).toContain('aria-disabled="true"');
     expect(slots[0]).toContain("Agent A is working.");
-    expect(slots[0]).toContain("text-agent-a-text");
+    expect(slots[0]).not.toContain("--slot-");
     expect(slots[1]).toContain('aria-disabled="false"');
     expect(slots[1]).toContain('aria-pressed="true"');
-    expect(slots[1]).toContain("text-agent-b-text");
+    expect(slots[1]).not.toContain("text-agent-b-text");
     for (const info of run.slots) {
       expect(markup).toContain(run.models.find((model) => model.id === info.default_model)?.label);
     }
@@ -113,6 +113,20 @@ describe("the new-agent box", () => {
       'aria-label="Agent slot"',
     );
   });
+  it("shows one chip when both slots offer the same profile", () => {
+    const state = twoSlotState();
+    if (!state.run) throw new Error("Missing run");
+    state.run = {
+      ...state.run,
+      slots: state.run.slots.map((slot) => ({ ...slot, default_model: "muse-spark" })),
+    };
+    const markup = renderToStaticMarkup(
+      <TaskBox state={state} onStart={vi.fn()} store={createTaskBoxStore()} />,
+    );
+    expect(markup).toContain('aria-label="Model: Muse Spark"');
+    expect(markup).not.toContain('aria-label="Agent slot"');
+  });
+
   it("draws the field once, around the text and its chips, and names the box for screen readers", () => {
     const markup = view({ draft: "x" });
     const box = /<div class="[^"]*bg-field[^"]*">/.exec(markup)?.[0] ?? "";

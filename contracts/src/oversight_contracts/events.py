@@ -558,13 +558,26 @@ class LeadReply(ContractModel):
     agent_id: AgentId
     """The lead replying."""
     answers_seq: PositiveInt | None
-    """An earlier agent.message to this lead; null answers the opening task."""
+    """An earlier agent.message to this lead; null answers the opening task or a wake."""
+    woken_by: list[PositiveInt] | None = None
+    """Committed plan events that woke this lead, in seq order; null when a person's message or
+    the opening task started the turn.
+    """
     text: Annotated[str, Field(min_length=1, max_length=4096, pattern=r"\S")] | None
     """Nonblank text, masked before storage like messages; null with a cut or withheld export."""
     through_seq: NonNegativeInt | None
     """The observed horizon, strictly lower than this reply's envelope seq, or null."""
     cut: Literal["tool_calls", "model_calls", "time", "spend_brake"] | None
     """The turn limit that cut the reply short, or null."""
+
+    @model_validator(mode="after")
+    def _wake_references(self) -> Self:
+        if self.woken_by is not None:
+            if not self.woken_by or self.woken_by != sorted(set(self.woken_by)):
+                raise ValueError("woken_by must be nonempty, unique and in seq order")
+            if self.answers_seq is not None:
+                raise ValueError("woken_by and answers_seq are mutually exclusive")
+        return self
 
     @model_validator(mode="after")
     def _reply_text(self, info: ValidationInfo) -> Self:

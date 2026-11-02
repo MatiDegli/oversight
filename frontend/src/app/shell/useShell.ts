@@ -21,8 +21,10 @@ export function isEditableMonaco(target: EventTarget | null): boolean {
   return !editor.querySelector('[role="textbox"][aria-autocomplete="none"]');
 }
 
-export function useShell(open: boolean, onClose: () => void) {
+export function useShell(hasPanel: boolean, onClose: () => void, hiddenChatPanel = false) {
   const [layout, setLayout] = useState(useContext(InitialShellLayout));
+  // Hidden Chat tabs remain available, but only a visible panel can be closed by a shortcut.
+  const open = hasPanel && (layout !== "Chat" || !hiddenChatPanel);
   const [oversightVisited, setOversightVisited] = useState(layout === "Oversight");
   useEffect(() => {
     if (layout === "Chat" && !oversightVisited) allowEditorWithoutGraph();
@@ -107,6 +109,7 @@ export function useShell(open: boolean, onClose: () => void) {
     };
   }, [open, onClose, shortcuts, palette]);
   return {
+    panelOpen: open,
     layout,
     setLayout: (choice: ShellLayout) => {
       setLayout(choice);

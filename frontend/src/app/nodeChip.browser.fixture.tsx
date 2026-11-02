@@ -8,8 +8,7 @@ import behavior from "../../../fixtures/events/handwritten-behavior-review.jsonl
 import measured from "../../../fixtures/events/handwritten-measured-cone.jsonl?raw";
 import { applyEvent, createInitialState, stateStore } from "../state";
 import { Frame } from "./Frame";
-import { useEscapeCloses } from "./escape";
-import { closePanel, initialView, openReview, panelOpen } from "./view";
+import { closePanel, initialView, openReview } from "./view";
 
 const logs = [behavior, measured].map((log) =>
   log
@@ -27,7 +26,6 @@ function Harness() {
   const close = useCallback(() => {
     setView(closePanel);
   }, []);
-  useEscapeCloses(panelOpen(view), close);
   return (
     <Frame
       state={state}

@@ -152,9 +152,63 @@ it("discloses structured test results and opens the change diff", async () => {
     await page.getByRole("button", { name: /^Round 1 ·/ }).click();
     const summary = page.getByText("Test output", { exact: true });
     const output = page.getByText("28 passed in 0.40s", { exact: true });
+    const diff = page.getByRole("button", { name: "View in diff" }).first();
+    expect(
+      await diff.evaluate(
+        (node) => node.closest('[title="edit_file"]')?.getAttribute("title") ?? null,
+      ),
+    ).toBeNull();
+    await check(page.getByText("Edited pricing.py", { exact: true }).first()).toHaveAttribute(
+      "title",
+      "edit_file",
+    );
+    await check(page.getByText("28 tests passed", { exact: true })).toHaveAttribute(
+      "title",
+      "run_tests",
+    );
+    for (const surface of [summary, output, summary.locator("..")]) {
+      expect(
+        await surface.evaluate(
+          (node) => node.closest('[title="run_tests"]')?.getAttribute("title") ?? null,
+        ),
+      ).toBeNull();
+    }
+    const calls = page
+      .getByRole("button", { name: /^Round 1 ·/ })
+      .locator("..")
+      .locator("..");
+    expect(
+      await calls.evaluate((node) => [...node.children].every((child) => child.tagName === "DIV")),
+    ).toBe(true);
+    const dividers = calls.locator(":scope > div + div");
+    expect(await dividers.count()).toBeGreaterThan(0);
+    const dividerColor = await calls.evaluate((node) => {
+      const probe = document.createElement("span");
+      probe.style.borderTopColor = "var(--divider)";
+      node.append(probe);
+      const color = getComputedStyle(probe).borderTopColor;
+      probe.remove();
+      return color;
+    });
+    for (const divider of await dividers.all()) {
+      await check(divider).toHaveCSS("border-top-width", "1px");
+      await check(divider).toHaveCSS("border-top-style", "solid");
+      await check(divider).toHaveCSS("border-top-color", dividerColor);
+    }
     await check(output).not.toBeVisible();
     await summary.click();
     await check(output).toBeVisible();
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await check(output).not.toBeVisible();
+    await check(summary).toBeFocused();
+    await check(summary).toHaveCSS("outline-style", "solid");
+    await page.keyboard.press("Enter");
+    await check(output).toBeVisible();
+    await check(summary).toBeFocused();
+    await diff.focus();
+    await check(diff).toBeFocused();
+    await check(diff).toHaveCSS("outline-style", "solid");
     await check(page.getByText("tests/test_pricing.py · 12 passed", { exact: true })).toHaveCount(
       0,
     );

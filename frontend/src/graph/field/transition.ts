@@ -1,6 +1,6 @@
 import type { FieldInput } from "./controller";
 import type { FieldLight } from "./lights";
-import type { FieldConfig } from "./model";
+import { signalConfig, type FieldConfig } from "./model";
 
 export interface FieldScene {
   lights: readonly FieldLight[];
@@ -59,6 +59,7 @@ export class FieldTransition {
   private duration = 0;
   private easing = "";
   private pulses = true;
+  private screenTransition = false;
 
   constructor(initial: FieldScene) {
     this.from = initial;
@@ -76,8 +77,23 @@ export class FieldTransition {
     duration: string,
     easing: string,
     jump: boolean,
+    zoom = 1,
   ) {
-    this.from = this.sample(now);
+    const crossing = Boolean(config.screenSpace) !== Boolean(this.to.config.screenSpace);
+    const interrupted = this.screenTransition && this.active(now);
+    this.from = this.sample(now, zoom);
+    this.screenTransition = crossing || interrupted;
+    // Card-only mode transitions keep following camera zoom throughout their easing.
+    if (!this.screenTransition && !config.screenSpace)
+      this.from.config = {
+        ...this.from.config,
+        screenSpace: false,
+        profile: {
+          near: this.from.config.profile.near / zoom,
+          far: this.from.config.profile.far / zoom,
+          gain: this.from.config.profile.gain,
+        },
+      };
     this.pulses = input.mode === "watch" || input.mode === "live-diff";
     const lights = this.pulses
       ? input.lights
@@ -94,16 +110,17 @@ export class FieldTransition {
     this.duration = 0;
   }
 
-  sample(now: number): FieldScene {
-    if (!this.active(now)) return this.to;
+  sample(now: number, zoom = 1): FieldScene {
+    if (!this.active(now)) return { ...this.to, config: signalConfig(this.to.config, zoom) };
     const fraction = Math.max(0, (now - this.started) / this.duration);
     const t = fraction === 0 ? 0 : ease(fraction, this.easing);
-    const a = this.from.config.profile;
-    const b = this.to.config.profile;
+    const a = signalConfig(this.from.config, zoom).profile;
+    const b = signalConfig(this.to.config, zoom).profile;
     return {
       lights: blendLights(this.from.lights, this.to.lights, t, this.pulses),
       config: {
         ...this.to.config,
+        screenSpace: true,
         profile: {
           near: mix(a.near, b.near, t),
           far: mix(a.far, b.far, t),

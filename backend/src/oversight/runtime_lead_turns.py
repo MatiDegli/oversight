@@ -16,6 +16,7 @@ from oversight.agents import (
     LeadRun,
     LedgerError,
     ModelClient,
+    ServerNotice,
     close_model,
 )
 from oversight.runtime_accounting import PlanAccounting
@@ -42,10 +43,13 @@ class LeadTurn:
             on_working=self.working,
             on_step=self.step,
             mask=self.live._redactor,
+            limits=lead.limits,
+            history_chars=service.policy.history_chars,
         )
         lead.run = self.run
         self.run.make_client, self.run.record = self.make_client, self.accounting.record
         self.run.on_working, self.run.on_step = self.working, self.step
+        self.run.admit = self.admit
 
     def check(self) -> None:
         if self.service._closing or self.live._closing or self.lead.stopping:
@@ -81,7 +85,13 @@ class LeadTurn:
             )
         )
 
-    async def drive(self, human: str | None, answers_seq: int | None) -> None:
+    async def drive(
+        self,
+        human: str | None,
+        answers_seq: int | None,
+        notice: ServerNotice | None = None,
+        woken_by: list[int] | None = None,
+    ) -> None:
         lead, service, live = self.lead, self.service, self.live
         lead.entered = True
         lead.turns += 1
@@ -89,7 +99,7 @@ class LeadTurn:
         try:
             try:
                 self.check()
-                end = await self.run.run(human, answers_seq)
+                end = await self.run.run(human, answers_seq, notice=notice, woken_by=woken_by)
                 state, detail = end.state, end.detail
             except asyncio.CancelledError:
                 state, detail = service._ending(lead)
@@ -104,6 +114,8 @@ class LeadTurn:
             if self.client is not None:
                 with contextlib.suppress(Exception):
                     await live._finish(close_model(self.client))
+            if lead.phase not in {"starting", "working", "idle"} and lead.watching is not None:
+                await asyncio.gather(lead.watching, return_exceptions=True)
 
     async def finalize(self, end: LeadEnd | None, state: str, detail: str) -> None:
         lead, service, live = self.lead, self.service, self.live
@@ -112,6 +124,8 @@ class LeadTurn:
                 state, detail = service._ending(lead)
             elif end is not None and end.reply is not None:
                 await live._finish(live.store.publish(end.reply))
+                if end.reply.through_seq is not None:
+                    lead.through_seq = end.reply.through_seq
                 if lead.stopping or service._closing or live._closing:
                     state, detail = service._ending(lead)
                 elif lead.turns >= self.run.limits.turns:

@@ -45,6 +45,9 @@ export interface FieldTheme extends MotionTheme, ProfileTheme, Record<LightSourc
   "lamp-off": string;
   "signal-light-near": string;
   "signal-light-far": string;
+  "map-light-near": string;
+  "map-light-far": string;
+  "map-light-gain": number;
   "dot-cell-size": string;
   "lamp-cut-low": number;
   "lamp-cut-high": number;
@@ -77,6 +80,8 @@ export interface FieldConfig {
   lampOff: Rgb;
   colors: Record<LightSource, string>;
   profile: LightProfile;
+  /** Map tokens and sampled transition profiles are already in screen pixels. */
+  screenSpace?: boolean;
   motion: Motion;
 }
 
@@ -107,7 +112,11 @@ export function parseHex(hex: string): Rgb {
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }
 
-export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
+export function fieldConfig(
+  theme: FieldTheme,
+  mode: FieldMode,
+  level: "map" | "cards" = "cards",
+): FieldConfig {
   const key = profileKey[mode];
   return {
     cell: px(theme["dot-cell-size"]),
@@ -125,11 +134,19 @@ export function fieldConfig(theme: FieldTheme, mode: FieldMode): FieldConfig {
     limit: theme["light-source-limit"],
     lampOff: parseHex(theme["lamp-off"]),
     colors: theme,
-    profile: {
-      near: px(theme["signal-light-near"]),
-      far: px(theme["signal-light-far"]),
-      gain: theme[`${key}-light-gain`],
-    },
+    ...(level === "map" ? { screenSpace: true } : {}),
+    profile:
+      level === "map"
+        ? {
+            near: px(theme["map-light-near"]),
+            far: px(theme["map-light-far"]),
+            gain: theme["map-light-gain"],
+          }
+        : {
+            near: px(theme["signal-light-near"]),
+            far: px(theme["signal-light-far"]),
+            gain: theme[`${key}-light-gain`],
+          },
     motion: motionOf(theme),
   };
 }
@@ -583,10 +600,12 @@ export function shadeLamps(
   }
 }
 
-/** R4 uses the same physical spread in every view; only the graph camera scales it. */
+/** Resolve card spreads into screen pixels once; map and sampled profiles already use them. */
 export function signalConfig(config: FieldConfig, zoom: number): FieldConfig {
+  if (config.screenSpace) return config;
   return {
     ...config,
+    screenSpace: true,
     profile: {
       near: config.profile.near * zoom,
       far: config.profile.far * zoom,

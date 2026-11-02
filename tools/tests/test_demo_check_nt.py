@@ -718,3 +718,224 @@ def test_cli_retains_outer_before_either_mode(monkeypatch, tmp_path, mode):
     monkeypatch.setattr(nt, "probe_lock", probe)
     monkeypatch.setattr(nt, "run_checks", checks)
     assert nt.main() == 0 and len(calls) == 2
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("layout", ["packages/foo/src", "backend/src"])
+async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeypatch, layout):
+    original = nt.run_process
+    setup_calls = []
+
+    async def setup(argv, **kwargs):
+        if argv[0] != "uv":
+            return await original(argv, **kwargs)
+        setup_calls.append(argv)
+        (tmp_path / "source/.venv/Lib/site-packages").mkdir(parents=True, exist_ok=True)
+        from oversight.workspace import ProcessResult
+
+        return ProcessResult(0, "", "", False, False, 0)
+
+    monkeypatch.setattr(nt, "run_process", setup)
+    monkeypatch.setenv("OVERSIGHT_DISCARD_OWN_RUNTIME", "inherited-authority")
+    fixture = await nt.prepare_own_fixture(tmp_path, layout=layout)
+    assert setup_calls == [
+        ["uv", "--no-config", "venv", "--python", "3.12", str(fixture.source / ".venv")],
+        [
+            "uv",
+            "--no-config",
+            "pip",
+            "install",
+            "--python",
+            str(fixture.source / ".venv/Scripts/python.exe"),
+            "pytest==9.1.1",
+            "pytest-asyncio==1.3.0",
+        ],
+    ]
+    asynchronous = (fixture.source / "test_async.py").read_text()
+    assert "@pytest_asyncio.fixture\nasync def copied_module" in asynchronous
+    assert "@pytest.mark.asyncio\nasync def test_async_copy" in asynchronous
+    assert "await asyncio.sleep(0)" in asynchronous
+    assert "copied_module.is_relative_to(Path.cwd())" in asynchronous
+    env = nt.own_fixture_env(8000, fixture)
+    assert env["OVERSIGHT_WORKSPACE_SOURCE"] == str(fixture.source)
+    assert env["OVERSIGHT_TEST_TIMEOUT_S"] == "75"
+    assert env["OVERSIGHT_DISCARD_OWN_RUNTIME"] == ""
+    assert env["META_API_KEY"] == env["BASETEN_API_KEY"] == ""
+    assert env["OVERSIGHT_AGENT_MODEL"] == env["OVERSIGHT_AGENT_MODEL_B"] == "fake"
+    assert "PYTEST_DISABLE_PLUGIN_AUTOLOAD" not in env
+    script = json.loads(fixture.script.read_text())
+    tools = [turn["tool_calls"][0] for turn in script["turns"]]
+    assert [t["name"] for t in tools] == [
+        "read_file",
+        "edit_file",
+        "run_tests",
+        "read_file",
+        "edit_file",
+        "run_tests",
+        "finish",
+    ]
+    assert all(t["arguments"]["path"] == fixture.module for t in tools if "path" in t["arguments"])
+    old = tools[1]["arguments"]["old_text"]
+    assert (fixture.source / fixture.module).read_text().count(old) == 1
+    assert not list((fixture.source / ".venv").rglob("top_level.txt"))
+    assert (fixture.source / "crlf.py").read_bytes() == b"line = 1\r\n"
+    config = (fixture.source / ".git/config").read_text()
+    assert '[filter "sentinel"]' in config and "FILTER_SENTINEL" in config
+    assert "worktree = " in config and "misleading-worktree" in config
+    selected = fixture.source / fixture.module
+    baseline = await nt.fixture_git(
+        fixture.source, "--work-tree=" + str(fixture.source), "show", "HEAD:" + fixture.module
+    )
+    assert selected.read_bytes() == baseline.encode() + b"\n"
+    assert not (fixture.source / "FILTER_SENTINEL").exists()
+
+
+@pytest.mark.anyio
+async def test_stat_dirty_sentinel_preserves_export_apply_bytes(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    module = "sample.py"
+    selected = source / module
+    original = b"def value():\n    return 41\n"
+    selected.write_bytes(original)
+    await nt.fixture_git(source, "init", "-q", "--template=", "-b", "main")
+    await nt.fixture_git(source, "add", module)
+    await nt.fixture_git(source, "commit", "-qm", "Fixture base")
+    indexed_stat = selected.stat()
+    nt.prepare_fixture_git_sentinel(source, module)
+
+    # Match the driver's raw-byte staging, then export a change against that base.
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    (runtime / module).write_bytes(selected.read_bytes())
+    await nt.fixture_git(runtime, "init", "-q", "--template=", "-b", "main")
+    await nt.fixture_git(runtime, "add", module)
+    await nt.fixture_git(runtime, "commit", "-qm", "Runtime base")
+    (runtime / module).write_bytes(selected.read_bytes().replace(b"return 41", b"return 42"))
+    patch = tmp_path / "own.patch"
+    await nt.fixture_git(runtime, "diff", "--binary", "--full-index", f"--output={patch}", "HEAD")
+    target = tmp_path / "apply-target"
+    await nt.fixture_git(source, "clone", "--no-hardlinks", str(source), str(target))
+    await nt.fixture_git(target, "apply", "--check", str(patch))
+    await nt.fixture_git(target, "apply", str(patch))
+    assert (target / module).read_bytes() == (runtime / module).read_bytes()
+    assert selected.read_bytes() == original
+    assert selected.stat().st_mtime_ns >= indexed_stat.st_mtime_ns + 5_000_000_000
+    nt.check_fixture_filters(tmp_path)
+
+
+@pytest.mark.anyio
+async def test_own_recovery_never_accepts_an_arbitrary_repository(tmp_path, monkeypatch):
+    fixture = nt.OwnFixture(
+        tmp_path / "person", tmp_path / "runtime", "code.py", tmp_path / "script"
+    )
+    monkeypatch.setattr(nt, "start_server", lambda *args: pytest.fail("started arbitrary recovery"))
+    with pytest.raises(smoke.SmokeError, match="restricted to disposable"):
+        await nt.fixture_recovery(fixture, {}, tmp_path)
+
+
+@pytest.mark.parametrize("relative", ["source", "runtime/workspace", "runtime/tmp/combined"])
+def test_fixture_filter_evidence_is_never_accepted(tmp_path, relative):
+    nt.check_fixture_filters(tmp_path)
+    sentinel = tmp_path / relative / "FILTER_SENTINEL"
+    sentinel.parent.mkdir(parents=True)
+    sentinel.write_text("executed")
+    with pytest.raises(smoke.SmokeError, match="source clean filter executed"):
+        nt.check_fixture_filters(tmp_path)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("fail", [False, True])
+async def test_six_run_driver_orders_demo_then_own_and_propagates_failure(
+    tmp_path, monkeypatch, fail
+):
+    phases = []
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    monkeypatch.setattr(nt, "retain_outer", lambda: 99)
+    monkeypatch.setattr(nt, "evidence_dir", lambda: logs)
+    monkeypatch.setattr(Path, "is_file", lambda _: True)
+
+    async def demo(number, *args, **kwargs):
+        phases.append(f"demo {number}")
+
+    async def own(*args):
+        phases.append("three own fixtures")
+        if fail:
+            raise smoke.SmokeError("own phase failed")
+
+    async def members(*args):
+        phases.append("empty job")
+
+    cleaned = []
+    monkeypatch.setattr(nt, "run_once", demo)
+    monkeypatch.setattr(nt, "run_own_checks", own)
+    monkeypatch.setattr(nt, "wait_members", members)
+    monkeypatch.setattr(nt, "cleanup", cleaned.append)
+    if fail:
+        with pytest.raises(smoke.SmokeError, match="own phase failed"):
+            await nt.run_checks(own_fixtures=True)
+        assert not cleaned
+    else:
+        await nt.run_checks(own_fixtures=True)
+        assert phases[-1] == "empty job" and len(cleaned) == 1
+        nt.shutil.rmtree(cleaned[0])
+    assert phases[:4] == ["demo 1", "demo 2", "demo 3", "three own fixtures"]
+
+
+@pytest.mark.anyio
+async def test_fixture_recovery_orders_refusal_export_apply_then_exact_hash(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    fixture = nt.OwnFixture(
+        tmp_path / "source", tmp_path / "runtime", "code.py", tmp_path / "script"
+    )
+    nt._disposable_sources.add(fixture.source)
+    tree = fixture.runtime / "workspace"
+    tree.mkdir(parents=True)
+    (tree / "code.py").write_bytes(b"repaired\r\n")
+    (tree / "marker.py").write_bytes(b"advanced\n")
+    calls = []
+
+    async def git(root, *args):
+        calls.append(args[0])
+        if args[0] == "rev-list":
+            return "a" * 40
+        if args[0] == "rev-parse":
+            return "b" * 40
+        if args[0] == "diff":
+            assert {"--binary", "--full-index", "--no-ext-diff", "--no-textconv"} <= set(args)
+        if args[0] == "apply" and "--check" not in args:
+            root.mkdir()
+            for name in ("code.py", "marker.py", "data.bin"):
+                (root / name).write_bytes((tree / name).read_bytes())
+        return ""
+
+    async def start(argv, env, log):
+        calls.append("discard" if "OVERSIGHT_DISCARD_OWN_RUNTIME" in env else "refuse")
+        if "OVERSIGHT_DISCARD_OWN_RUNTIME" in env:
+            assert env["OVERSIGHT_DISCARD_OWN_RUNTIME"] == "b" * 40
+            assert calls[-3:] == ["apply", "apply", "discard"]
+        log.write_text("Windows source refused: export first")
+        return nt.Server(77, log, FakeJobs().api, cast(Any, Child()))
+
+    monkeypatch.setattr(nt, "fixture_git", git)
+    monkeypatch.setattr(nt, "start_server", start)
+    monkeypatch.setattr(nt.Server, "dispose", AsyncMock())
+    monkeypatch.setattr(nt.Server, "stop", AsyncMock())
+    monkeypatch.setattr(nt, "probe_lock", AsyncMock())
+    monkeypatch.setattr(Child, "wait", lambda *args, **kwargs: 1)
+    monkeypatch.setattr(smoke, "wait_for_health", lambda *args: None)
+    await nt.fixture_recovery(fixture, {"OVERSIGHT_PORT": "8000"}, tmp_path)
+    assert calls == [
+        "refuse",
+        "rev-list",
+        "add",
+        "commit",
+        "rev-parse",
+        "diff",
+        "clone",
+        "apply",
+        "apply",
+        "discard",
+    ]

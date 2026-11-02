@@ -125,7 +125,8 @@ static build requires the recording and its receipt; UI tests select their own f
   in its own directory that touches no product code: a Windows window showing the current UI,
   starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
   translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
-- Native Windows demo backend: W1/W2b/W3 implemented; W2a and native acceptance pending (see below).
+- Native Windows demo backend and private own-copy composition are implemented; native
+  qualification and public own-source enablement remain pending (see below).
   Broader Windows and macOS backend ports remain after the Tauri shell.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
@@ -152,9 +153,9 @@ MIT. See [LICENSE](LICENSE).
 
 ## Native Windows advisory checks
 
-W1 startup/lifetime, W2b metadata/tree I/O and W3 tools are implemented; native acceptance is
-pending. W2a must also land before file/agent/merge acceptance or the full demo driver is enabled
-in CI. The separate `windows advisory` workflow is unrequired; failures still fail its job.
+Startup/lifetime, native metadata/tree I/O, demo tools, private own-copy composition and guarded
+results are implemented. Public own-source paths still refuse; the final enabling change precedes
+own-source qualification. The separate `windows advisory` workflow is unrequired; failures still fail its job.
 Its logs distinguish injected tests, native tests and skipped proofs. Linux/WSL remains the
 verified development path. Windows runs open mode with OPEN_NOTICE: no network isolation,
 rules, Revert, behavior or measured evidence, and no memory cap (`memwatch` needs `/proc`).
@@ -204,8 +205,26 @@ tree/graph omit it, restart unlink it and outside hashes remain unchanged. Check
 separately with `uv run --frozen python -m oversight replay fixtures/events/handwritten-level1.jsonl
 --allow-fake-provider`; UI proof uses live serve. No model credits are used.
 
-No Windows make/bash/reload or native browser suite is supplied. Arbitrary own-repository paths,
-native own-source COPY/qualification and the complete two-machine six-run release proof await W4.
+No Windows make/bash/reload or native browser suite is supplied. Public own-repository paths
+still refuse. After public enablement, run the same driver on
+the maintainer's Windows machine and windows-latest:
+
+```powershell
+uv run --frozen python tools/demo_check_nt.py --own-fixtures
+uv run --frozen pytest -o timeout_method=thread backend/tests/workspace/test_source_nt_windows.py -rs -s
+```
+
+This adds three disposable own-source runs to the three demo runs. It retains source hashes,
+copy-specific failed/repaired and combined-suite evidence, pytest-asyncio autoload, restart refusal, binary full-index
+export, explicit apply/check to a separate disposable target, byte parity and exact-hash discard.
+Neither Windows machine has qualified this path yet; Linux injections/skips are not acceptance.
+Use [the chosen-repository fake template](docs/workspace-source.md#chosen-repository-template)
+for a trusted repository. That workflow never automatically applies or discards its changes.
+Set `OVERSIGHT_TEST_TIMEOUT_S` before startup (default 60, no policy maximum). The console says
+`Test limit: {T} s. Agent time limit: {W} s per round. These settings stay fixed for this run.`
+Demo/Boltons retain 60 seconds and log
+`OVERSIGHT_TEST_TIMEOUT_S applies only to your own repositories; this run keeps 60 s.`
+when a different value was configured.
 Before making Windows required, measure complete installs/build/tests/six runs, use
 `ceil(1.5 × slowest green duration)` for the timeout and remove PR path filters so even a
 documentation-only PR produces a successful check. The initial advisory bound is 30 minutes.

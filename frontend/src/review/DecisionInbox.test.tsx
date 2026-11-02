@@ -81,6 +81,23 @@ it("uses singular labels for 1 agent and 1 step", () => {
   expect(html).not.toContain("1 steps");
 });
 
+it("keeps the exact inbox header after a highest-revision lead resend", () => {
+  const current = leadEvents.findLast((event) => event.type === "lead.status");
+  if (current?.type !== "lead.status") throw new Error("Missing current lead");
+  const before = leadEvents.reduce(applyEvent, createInitialState());
+  const after = applyEvent(before, {
+    ...current,
+    seq: before.lastSeq + 1,
+    payload: { ...current.payload, step: 99 },
+  });
+  const sentence = "1 agent took 4 steps in 0 min. These 1 need a person.";
+  for (const value of [before, after]) {
+    const html = renderToStaticMarkup(<DecisionInbox state={value} />);
+    const header = html.match(/<header class="inbox-heading">.*?<\/header>/s)?.[0];
+    expect(header?.match(/<p class="decision-muted">(.*?)<\/p>/s)?.[1]).toBe(sentence);
+  }
+});
+
 function rowContaining(html: string, text: string): string {
   const row = html
     .match(/<article class="inbox-row">.*?<\/article>/gs)
@@ -156,16 +173,84 @@ it("lists a second distinct reason once, excluding the heading and paragraph", (
   if (!entry || !decision) throw new Error("Missing non-change entry");
   const reason = "Check the new main commit before trying again.";
   const additional = { ...decision, id: "second-reason", reason };
-  const projection = vi
-    .spyOn(selectors, "selectDecisionInbox")
-    .mockReturnValue([
-      { ...entry, decisions: [decision, additional, { ...additional, id: "repeated-reason" }] },
-    ]);
+  const projection = vi.spyOn(selectors, "selectDecisionInbox").mockReturnValue([
+    {
+      ...entry,
+      changeId: null,
+      decisions: [decision, additional, { ...additional, id: "repeated-reason" }],
+    },
+  ]);
   try {
     const row = rowContaining(renderToStaticMarkup(<DecisionInbox state={kindsState} />), reason);
     expect(row).toContain(`<ul class="decision-reasons"><li>${reason}</li></ul>`);
     expect(row.split(decision.reason)).toHaveLength(2);
     expect(row.split(reason)).toHaveLength(2);
+  } finally {
+    projection.mockRestore();
+  }
+});
+
+it("keeps question reasons inside the answer card without an additional list", () => {
+  const entry = selectors.selectDecisionInbox(state).find((entry) => entry.changeId === "change-3");
+  const question = entry?.decisions.find((decision) => decision.kind === "review_card");
+  if (!entry || !question) throw new Error("Missing question entry");
+  const reason = "Inspect this independent question evidence.";
+  const projection = vi
+    .spyOn(selectors, "selectDecisionInbox")
+    .mockReturnValue([
+      { ...entry, decisions: [...entry.decisions, { ...question, id: "extra-question", reason }] },
+    ]);
+  try {
+    const row = rowContaining(
+      renderToStaticMarkup(<DecisionInbox state={state} />),
+      "Choices need you",
+    );
+    expect(row).not.toContain('class="decision-reasons"');
+    expect(row).not.toContain(reason);
+    expect(row).toContain('<details class="inbox-answer"><summary>Answer this change</summary>');
+    const card = row.match(/<aside aria-label="Change card".*?<\/aside>/s)?.[0];
+    expect(card).toBeDefined();
+    expect(card?.replace(/<[^>]*>/g, "").split(question.reason)).toHaveLength(2);
+    expect(card).toContain("Yes, keep it");
+    projection.mockReturnValue([
+      {
+        ...entry,
+        changeId: null,
+        decisions: [question, { ...question, id: "question-only-extra", reason }],
+      },
+    ]);
+    const questionOnly = rowContaining(
+      renderToStaticMarkup(<DecisionInbox state={state} />),
+      "Choices need you",
+    );
+    expect(questionOnly).not.toContain('class="decision-reasons"');
+  } finally {
+    projection.mockRestore();
+  }
+});
+
+it("omits additional reasons for a change without questions and retains its answer disclosure", () => {
+  const entry = selectors.selectDecisionInbox(state).find((entry) => entry.changeId === "change-4");
+  const decision = entry?.decisions.find((decision) => decision.kind !== "change");
+  if (!entry || !decision) throw new Error("Missing change entry");
+  expect(entry.decisions.some((decision) => decision.kind === "review_card")).toBe(false);
+  const reason = "Inspect this independent unavailable-check evidence.";
+  const projection = vi
+    .spyOn(selectors, "selectDecisionInbox")
+    .mockReturnValue([
+      { ...entry, decisions: [...entry.decisions, { ...decision, id: "extra-check", reason }] },
+    ]);
+  try {
+    const row = rowContaining(
+      renderToStaticMarkup(<DecisionInbox state={state} />),
+      "The reserve error now names quantity.",
+    );
+    expect(row).not.toContain('class="decision-reasons"');
+    expect(row).not.toContain(reason);
+    expect(row).toContain('<details class="inbox-answer"><summary>Answer this change</summary>');
+    expect(row).toContain('aria-label="Change card"');
+    expect(row).toContain("Needs you because a check was unavailable");
+    expect(row).toContain("Reject");
   } finally {
     projection.mockRestore();
   }

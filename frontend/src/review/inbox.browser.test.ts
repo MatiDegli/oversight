@@ -42,6 +42,9 @@ it.each(["dark", "day"])(
     const shots = fileURLToPath(new URL("../../../.shots/inbox-answers/", import.meta.url));
     await mkdir(shots, { recursive: true });
     const capture = async (name: string) => {
+      if (name === "01-inbox") {
+        await expect(page.locator(".inbox-answer > summary:focus-visible")).toHaveCount(0);
+      }
       if (process.env.INBOX_SHOTS === "1") {
         await page.evaluate(() => document.fonts.ready);
         await page.waitForFunction(() => {
@@ -71,11 +74,28 @@ it.each(["dark", "day"])(
       await expect(page.getByRole("region", { name: "Decisions inbox" })).toBeVisible();
       await expect(page.locator(".graph-stage")).toBeVisible();
       await expect(page.locator(".inbox-row")).toHaveCount(3);
+      await expect(page.locator(".inbox-row .decision-reasons")).toHaveCount(0);
+      const answers = page.locator(".inbox-row .inbox-answer");
+      await expect(answers).toHaveCount(2);
       await expect(page.getByRole("button", { name: "Open Settings" })).toHaveCount(0);
       await expect(
         page.getByRole("button", { name: "Standing grants 1", exact: true }),
       ).toBeVisible();
       await capture("01-inbox");
+      for (const answer of await answers.all()) {
+        await expect(answer).not.toHaveAttribute("open");
+        const disclosure = answer.locator(":scope > summary");
+        await expect(disclosure).toHaveText("Answer this change");
+        await disclosure.focus();
+        await page.keyboard.press("Enter");
+        await expect(answer).toHaveAttribute("open", "");
+        await expect(disclosure).toBeFocused();
+        await expect(answer.getByRole("complementary", { name: "Change card" })).toBeVisible();
+        await expect(answer.getByRole("button", { name: "Reject", exact: true })).toBeDisabled();
+        await page.keyboard.press("Enter");
+        await expect(answer).not.toHaveAttribute("open");
+        await expect(disclosure).toBeFocused();
+      }
       await page.getByText("Don't ask again", { exact: false }).first().click();
       await expect(page.getByRole("radio")).toHaveCount(2);
       await expect(page.getByRole("radio", { name: /This module shop.pricing/ })).toBeDisabled();
@@ -117,6 +137,16 @@ it.each(["dark", "day"])(
       await expect(
         card.getByRole("region", { name: "Compared functions and callers" }),
       ).toBeVisible();
+      for (const question of [
+        "Was this behavior change asked for?",
+        "Oversight could not tell whether this was asked for",
+      ]) {
+        const answer = card.getByRole("region", { name: question, exact: true });
+        await expect(answer).toHaveCount(1);
+        await expect(answer.getByRole("heading")).toHaveCount(1);
+        await expect(answer.getByRole("heading")).toContainText(question);
+        await expect(answer.getByRole("button", { name: "Yes, keep it" })).toBeVisible();
+      }
       const comparison = card.getByRole("region", { name: "Compared functions and callers" });
       await expect(
         comparison.getByRole("heading", {

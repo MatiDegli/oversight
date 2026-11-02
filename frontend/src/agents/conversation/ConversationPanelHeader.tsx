@@ -1,3 +1,4 @@
+import { agentSlotStyle } from "../../theme";
 import { presentationLook } from "../../teams/badge";
 import { costText } from "../../state";
 import { labels } from "../AgentCard";
@@ -11,7 +12,16 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
     return (
       <header className="conversation-header shrink-0 border-b border-divider bg-panel px-[18px] py-4">
         <div className="flex items-center gap-[10px]">
-          <h2 className="text-[16px]! leading-[1.3]! font-semibold text-text">Lead</h2>
+          <span
+            aria-hidden="true"
+            style={agentSlotStyle(header.hue)}
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-(--slot-graphic) font-bold text-(--slot-text)"
+          >
+            {header.letter}
+          </span>
+          <h2 className="text-[16px]! leading-[1.3]! font-semibold text-text">
+            Lead {header.letter}
+          </h2>
           <span className={chip}>
             {header.state === "done" ? "Done (historical)" : header.state}
           </span>

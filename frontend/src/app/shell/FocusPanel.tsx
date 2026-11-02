@@ -2,27 +2,25 @@ import { presentationFor, presentationStyle } from "../../teams/presentation";
 import { Maximize2, Minimize2, Settings, Timer, X } from "lucide-react";
 import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
+// eslint-disable-next-line no-restricted-imports -- K2a shares the Chat team identity without extending the agents barrel.
+import { selectChatLeads } from "../../agents/chatLeadSelectors";
 import { selectConversation, loadConversationPanel } from "../../agents";
-import {
-  ReviewFrame,
-  InboxFrame,
-  ConversationFrame,
-  FileFrame,
-  SettingsFrame,
-} from "./PanelFallbacks";
+import { InboxFrame, ConversationFrame, FileFrame, SettingsFrame } from "./PanelFallbacks";
 import { LazyPanel } from "./LazyPanel";
 
-import { loadReviewPanel, loadDecisionInbox } from "../../review";
+import { loadDecisionInbox } from "../../review";
 import type { FrameProps } from "../Frame";
 import { UsageMount } from "../usage/UsageMount";
 import { LivePanel } from "./LivePanel";
 import { ChatMergeChip, ChatMergeReceipt, isRulesMerge, resolvedReviewAction } from "./ChatMerge";
 import { focusRing } from "./shared";
+import { ChatReview } from "./ChatReview";
+import { ChatChangeCard } from "./ChatChangeCard";
+import { selectChatChange } from "../chatReviewSelectors";
 
 const SettingsPanel = lazy(() =>
   import("./SettingsPanel").then((m) => ({ default: m.SettingsPanel })),
 );
-const ReviewPanel = lazy(() => loadReviewPanel().then((m) => ({ default: m.ReviewPanel })));
 const DecisionInbox = lazy(() => loadDecisionInbox().then((m) => ({ default: m.DecisionInbox })));
 const ConversationPanel = lazy(() =>
   loadConversationPanel().then((m) => ({
@@ -30,10 +28,38 @@ const ConversationPanel = lazy(() =>
   })),
 );
 
+const LeadConversationFocus = lazy(() =>
+  loadConversationPanel().then((module) => ({
+    default: ({
+      state,
+      agentId,
+      onMessageLead,
+      chat,
+      onOpenSettings,
+    }: Pick<FrameProps, "state" | "onMessageLead" | "onOpenSettings"> & {
+      agentId: string;
+      chat?: boolean;
+    }) => {
+      const conversation = module.selectLeadConversation(state, agentId);
+      if (!conversation) return null;
+      return (
+        <module.ConversationPanel
+          conversation={conversation}
+          actionAccessory={
+            chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
+          }
+          onSend={onMessageLead ? (text) => onMessageLead(agentId, text) : undefined}
+        />
+      );
+    },
+  })),
+);
+
 export function FocusPanel(
   props: FrameProps & {
     startAgentAction: ReactNode;
     chat?: boolean;
+    onGraph?: (changeId: string) => void;
     practiceOnly?: boolean;
     maximized: boolean;
     onMaximize: () => void;
@@ -42,6 +68,7 @@ export function FocusPanel(
   const { view, state, onClosePanel, onTabAction } = props;
   const tabs = view.tabs ?? [];
   const agentId = tabs.find((tab) => tab.id === view.activeTab)?.conversation;
+  const owner = view.review ? state.changes[view.review]?.proposal?.agent_id : agentId;
   const tablist = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     tablist.current
@@ -57,7 +84,14 @@ export function FocusPanel(
   const Icon = props.maximized ? Minimize2 : Maximize2;
   return (
     <section className="focus-panel" aria-label="Focus panel">
-      <div className="focus-tabs" hidden={props.chat && Boolean(agentId)}>
+      <div
+        className="focus-tabs"
+        hidden={
+          props.chat &&
+          Boolean(owner) &&
+          (!view.review || state.changes[view.review]?.resolution?.merge !== "merged")
+        }
+      >
         <div
           ref={tablist}
           role="tablist"
@@ -79,7 +113,7 @@ export function FocusPanel(
                       ? "Two-change practice"
                       : tab.conversation
                         ? identity
-                          ? `Agent ${identity.label} · conversation`
+                          ? `${identity.kind === "lead" && !state.agents[identity.agentId] ? "Lead" : "Agent"} ${identity.label} · conversation`
                           : "Conversation"
                         : tab.review
                           ? `Review · ${tab.review}`
@@ -158,26 +192,12 @@ export function FocusPanel(
           </LazyPanel>
         ) : view.activeTab === "practice" && props.practice?.active ? (
           props.practice.content
-        ) : agentId ? (
-          <ConversationFocus {...props} agentId={agentId} />
-        ) : view.review !== null ? (
-          <LazyPanel
-            key={`review:${view.review}`}
-            frame={<ReviewFrame state={state} changeId={view.review} onClose={onClosePanel} />}
-          >
-            <ReviewPanel
-              key={view.review}
-              state={state}
-              changeId={view.review}
-              attempt={props.attempts?.[view.review]}
-              revertAttempt={props.revertAttempts?.[view.review]}
-              onRevert={props.onRevert}
-              files={props.files?.readOnly ? undefined : props.files}
-              onDecide={props.onDecide}
-              replayOf={props.replayOf}
-              onClose={onClosePanel}
-            />
-          </LazyPanel>
+        ) : owner || view.review !== null ? (
+          <ChatReview
+            {...props}
+            agentId={owner}
+            conversation={owner ? <ConversationFocus {...props} agentId={owner} /> : null}
+          />
         ) : view.diff ? (
           <LivePanel state={state} view={view} onClose={onClosePanel} />
         ) : view.file && props.files ? (
@@ -210,6 +230,7 @@ function ConversationFocus({
   state,
   agentId,
   onMessageAgent,
+  onMessageLead,
   onPauseAgent,
   onResumeAgent,
   onStopAgent,
@@ -219,14 +240,77 @@ function ConversationFocus({
   onOpenSettings,
   onTabAction,
   view,
-}: FrameProps & { agentId: string; chat?: boolean }) {
+  canReview,
+  onReview,
+  onGraph,
+}: FrameProps & { agentId: string; chat?: boolean; onGraph?: (id: string) => void }) {
   const conversation = selectConversation(state, agentId, state.messages[agentId] ?? []);
-  if (!conversation)
+  if (!conversation) {
+    const lead = selectChatLeads(state).find((row) => row.id === agentId);
+    if (lead)
+      return (
+        <LazyPanel
+          key={agentId}
+          frame={
+            <ConversationFrame
+              header={{
+                ...lead.status,
+                kind: "lead",
+                agentId,
+                hue: lead.hue,
+                letter: lead.letter,
+                modelLabel:
+                  state.run?.models.find((model) => model.id === lead.status.model)?.label ??
+                  lead.status.model,
+              }}
+            />
+          }
+        >
+          <LeadConversationFocus
+            state={state}
+            agentId={agentId}
+            onMessageLead={onMessageLead}
+            chat={chat}
+            onOpenSettings={onOpenSettings}
+          />
+        </LazyPanel>
+      );
     return <p className="px-3 py-2 text-muted">This agent is not in the current run.</p>;
+  }
   return (
     <LazyPanel key={agentId} frame={<ConversationFrame header={conversation.header} />}>
       <ConversationPanel
         conversation={conversation}
+        renderProposed={
+          chat
+            ? (entry) => {
+                const changeId = conversation.header.changeId;
+                if (!selectChatChange(state, changeId, entry.seq)) return null;
+                return (
+                  <ChatChangeCard
+                    state={state}
+                    changeId={changeId}
+                    seq={entry.seq}
+                    reviewing={view.review === changeId}
+                    onReview={
+                      canReview?.(changeId) && onReview
+                        ? () => {
+                            onReview(changeId);
+                          }
+                        : undefined
+                    }
+                    onGraph={
+                      onGraph
+                        ? () => {
+                            onGraph(changeId);
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              }
+            : undefined
+        }
         renderResolution={
           chat
             ? (entry) => {

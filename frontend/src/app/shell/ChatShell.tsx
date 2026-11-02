@@ -1,3 +1,4 @@
+import { Plus, GitFork } from "lucide-react";
 import { TaskBox, slotUsage, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
 import { ChatAgents } from "./ChatAgents";
@@ -8,12 +9,24 @@ export interface ChatAgentSelection {
   selectedAgentId?: string;
   onOpenConversation?: (agentId: string) => void;
 }
-export interface ChatAgentsFrameProps extends ChatAgentSelection {
+export interface ChatStartActions {
+  leadDraft?: boolean;
+  onNewTask?: () => void;
+  onNewLead?: () => void;
+}
+export interface ChatAgentsFrameProps extends ChatAgentSelection, ChatStartActions {
   state: State;
   children?: ReactNode | ((selection: ChatAgentSelection) => ReactNode);
 }
 /** C2 owns the body, selection and lead position; C1 supplies only its frame. */
-export function ChatAgentsFrame({ state, children, ...selection }: ChatAgentsFrameProps) {
+export function ChatAgentsFrame({
+  state,
+  children,
+  onNewTask,
+  onNewLead,
+  leadDraft,
+  ...selection
+}: ChatAgentsFrameProps) {
   const count = slotUsage(state);
   return (
     <aside
@@ -24,11 +37,20 @@ export function ChatAgentsFrame({ state, children, ...selection }: ChatAgentsFra
       <header>
         <h2>Agents</h2>
         {count && <span>{count.held} running</span>}
+        <div className="chat-start-actions">
+          <button type="button" className="chat-new-task" onClick={onNewTask}>
+            <Plus size={15} aria-hidden="true" />
+            New task
+          </button>
+          <button type="button" onClick={onNewLead}>
+            <GitFork size={15} aria-hidden="true" />
+            New lead
+          </button>
+        </div>
       </header>
       <div className="chat-side-body">
-        {/* Reserved first structural position for L3’s lead; empty in C2. */}
         {typeof children === "function" ? children(selection) : children}
-        <ChatAgents state={state} {...selection} />
+        <ChatAgents state={state} leadDraft={leadDraft} {...selection} />
       </div>
     </aside>
   );
@@ -52,20 +74,32 @@ export function ChatShell({
   sidebar,
   agents,
   children,
+  onNewTask,
+  onNewLead,
+  leadDraft,
   ...selection
-}: ChatAgentSelection & {
-  children: ReactNode;
-  state: State;
-  active: boolean;
-  rail: ReactNode;
-  sidebar: ReactNode;
-  agents: ReactNode;
-}) {
+}: ChatAgentSelection &
+  ChatStartActions & {
+    children: ReactNode;
+    state: State;
+    active: boolean;
+    rail: ReactNode;
+    sidebar: ReactNode;
+    agents: ReactNode;
+  }) {
   return (
     <div className={`shell-workspace ${active ? "chat-shell" : ""}`}>
       {rail}
       {sidebar}
-      {active && <ChatAgentsFrame state={state} {...selection} />}
+      {active && (
+        <ChatAgentsFrame
+          state={state}
+          onNewTask={onNewTask}
+          onNewLead={onNewLead}
+          leadDraft={leadDraft}
+          {...selection}
+        />
+      )}
       {children}
       {!active && agents}
       {active && (
@@ -77,12 +111,24 @@ export function ChatShell({
   );
 }
 
-export function ChatEmpty(props: TaskBoxProps) {
+export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActions) {
   return (
     <div className="chat-empty">
       <div>
         <h1>What should change{props.state.run ? ` in ${props.state.run.workspace}` : ""}?</h1>
+        <p className="chat-start-explanation">
+          One agent does the task itself; you approve its change.
+        </p>
         <TaskBox {...props} />
+        <div className="chat-lead-option">
+          <p>
+            When work is worth splitting across several agents, a lead proposes plans you queue.
+          </p>
+          <button type="button" onClick={onNewLead}>
+            <GitFork size={15} aria-hidden="true" />
+            New lead
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ the store, the lock.
 import asyncio
 import contextlib
 import logging
+import os
 import sys
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, replace
@@ -83,16 +84,19 @@ from oversight.runtime_plans import PlanService
 from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
-from oversight.settings import REPO_ROOT, Settings, run_time_limits
-from oversight.setup import missing_settings, offered_profiles
+from oversight.settings import REPO_ROOT, Settings, build_lead_limits, run_time_limits
+from oversight.setup import missing_settings, offered_profiles, resolve_profile
 from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
 from oversight.workspace import (
     OPEN_NOTICE,
+    TRUST_NOTICE,
+    OwnSource,
     Workspace,
     WorkspaceError,
     configure_suite,
     list_tree,
+    outside_profile,
     preflight_placement,
     select_source,
     valid_agent_id,
@@ -235,6 +239,15 @@ class LiveRun:
         reviewer: ReviewerCall | None = None,
     ) -> None:
         self._settings = settings
+        self._lead_limits = build_lead_limits(settings)
+        self._max_leads = settings.max_leads
+        self._lead_history_chars = settings.lead_history_chars
+        self._source = select_source(settings.workspace_source)
+        own = (
+            self._source.prepare(settings.runtime_dir, REPO_ROOT)
+            if isinstance(self._source, OwnSource)
+            else None
+        )
         self._redactor = Redactor(settings.meta_api_key, settings.baseten_api_key)
         self._closing = False
         self._reviewer = reviewer
@@ -265,7 +278,6 @@ class LiveRun:
                 settings.baseten_input_usd_per_m,
             )
         self.layout = read_layout(settings.layout)
-        self._source = select_source(settings.workspace_source)
         own_source = self._own_source()
         timeout, wall_clock = run_time_limits(own_source, settings.test_timeout_s)
         self._limits = LIMITS.model_copy(
@@ -274,12 +286,20 @@ class LiveRun:
         self._test_timeout_ignored = not own_source and settings.test_timeout_s != 60
         self.workspace = Workspace(
             settings.runtime_dir,
-            self._source.checkout(settings.runtime_dir) if self._source else TEMPLATE,
+            own.root
+            if own
+            else self._source.checkout(settings.runtime_dir)
+            if self._source is not None and not isinstance(self._source, OwnSource)
+            else TEMPLATE,
             pytest_pin=pytest_pin(),
             demo_python=settings.demo_python,
             pytest_targets=self._source.pytest_targets if self._source else (),
             pytest_options=self._source.pytest_options if self._source else (),
+            own_source=own,
+            _nt_source_bytes=own is not None,
         )
+        self._own_selection = own
+        self._environment_unavailable: str | None = None
         configure_suite(self.workspace, harness_pack=settings.harness_pack)
         self.run_id = new_run_id(settings.runtime_dir, datetime.now(UTC))
         self.store = EventStore(
@@ -331,11 +351,81 @@ class LiveRun:
     # --- Startup and shutdown -----------------------------------------------------------------
 
     def _own_source(self) -> bool:
-        """W4c2 flips this predicate when own repositories become selectable."""
-        return False
+        """Private injected own selection; public repository paths still refuse."""
+        return isinstance(self._source, OwnSource)
+
+    def _source_providers(self) -> tuple[str, ...]:
+        """Conservative callable union, from configuration only, even without credentials."""
+        profiles = offered_profiles(self._settings)
+        providers = {profile.provider for profile in profiles.values()}
+        if self._settings.cross_review:
+            with contextlib.suppress(ValueError):
+                providers.add(resolve_profile(self._settings.review_model).provider)
+        if self._settings.decision_model == "muse-spark-open":
+            providers.add("baseten")
+        if profiles["A"].provider != "fake":
+            providers.add("meta")  # Planner chooses Spark for any non-fake A.
+        # LeadService accepts explicit Spark and Spark Open independently of author slots.
+        providers.update(("meta", "baseten"))
+        return tuple(sorted(providers))
+
+    async def _disclose_source(self) -> None:
+        own = self._own_selection
+        assert own is not None
+        providers = self._source_providers()
+        destinations = ", ".join(PROVIDER_URLS.get(p, p) for p in providers)
+        _log.warning(
+            "Own-source provider destinations: %s. Credentials are checked on calls.", destinations
+        )
+        outside = outside_profile(own, os.environ.get("USERPROFILE"))
+        if not await self.workspace.remember_source_trust(providers, outside):
+            _log.warning("%s", TRUST_NOTICE)
+        if outside:
+            _log.warning("Own source is outside USERPROFILE; verify this is a private folder.")
+
+    async def _reset_workspace(self) -> str:
+        await self.workspace.acquire_runtime()
+        try:
+            await self.workspace.guard_previous_runtime()
+            await self.workspace.check_isolation()
+            if self._own_selection is not None:
+                await self._disclose_source()
+                stage = await self.workspace.stage_own_source()
+                _log.warning(
+                    "Own-source copy: %s skipped roots; writable raw bytes. "
+                    "Secret-name filtering is not a complete secret detector. "
+                    "Export changes before restart; "
+                    "discard requires the exact current runtime hash.",
+                    stage.selection.inventory.skipped_roots,
+                )
+                return await self.workspace.reset(_nt_stage=stage)
+            if self._source is not None:
+                assert not isinstance(self._source, OwnSource)
+                async with self.workspace.guard_nt_cleanup():
+                    await validate_source(self._source, self._settings.runtime_dir)
+            return await self.workspace.reset()
+        except BaseException:
+            self.workspace.release_runtime()
+            raise
 
     async def startup(self) -> None:
         settings = self._settings
+        lead = self._lead_limits
+        _log.warning(
+            "Lead capacity: %s active leads. These settings stay fixed for this run.",
+            self._max_leads,
+        )
+        _log.warning(
+            "Lead limits: %s turns per thread; %s tool calls, %s model calls and %s s per turn; "
+            "%s plans per thread; %s subtasks per plan; %s characters per task.",
+            lead.turns,
+            lead.tool_calls,
+            lead.model_calls,
+            str(lead.wall_clock_s).removesuffix(".0"),
+            lead.plans,
+            lead.subtasks,
+            lead.task_chars,
+        )
         _log.warning(
             "Test limit: %s s. Agent time limit: %s s per round. "
             "These settings stay fixed for this run.",
@@ -347,13 +437,10 @@ class LiveRun:
                 "OVERSIGHT_TEST_TIMEOUT_S applies only to your own repositories; "
                 "this run keeps 60 s."
             )
-        if self._source is not None:
-            await validate_source(self._source, settings.runtime_dir)
-        await self.workspace.acquire_runtime()  # a second server fails here with WorkspaceBusy
-        capability = await self.workspace.check_isolation()
+        base = await self._reset_workspace()
+        capability = self.workspace.isolation
         if not capability.available:
             _log.warning("%s Reason: %s", OPEN_NOTICE, capability.reason)
-        base = await self.workspace.reset()
         ledger_error: str | None = None
         try:
             await self.ledger.load()
@@ -375,7 +462,12 @@ class LiveRun:
                 merge_mode=MergeModeState(),
                 run_id=self.run_id,
                 contract_version=CONTRACT_VERSION,
-                prompt_version=prompt_version(settings.harness_pack, settings.history_prune_tokens),
+                prompt_version=prompt_version(
+                    settings.harness_pack,
+                    settings.history_prune_tokens,
+                    lead_limits=self._lead_limits,
+                ),
+                max_leads=self._max_leads,
                 workspace=self._source.provenance if self._source else TEMPLATE.name,
                 base_commit=base,
                 models=list({profile.id: profile for profile in profiles}.values()),
@@ -423,7 +515,13 @@ class LiveRun:
             spend_lost=lambda: self._ledger_lost,
             spend_receipt=started,
         )
-        self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
+        if self._own_selection is None:
+            self._venv = asyncio.create_task(self._build_venv(), name="demo-venv")
+        else:
+            self._environment_unavailable = await self.workspace.own_environment_readiness()
+            _log.warning("Own-source environment: %s", self._environment_unavailable or "ready")
+            if self._environment_unavailable:
+                await self._report("tests", self._environment_unavailable)
         self.dispatcher.start()
 
     def _rules_evidence(self, inputs: PolicyInputs) -> RulesEvidence:
@@ -1146,7 +1244,8 @@ def create_app(
     and the fake model its slot's script. `reviewer` supplies the separate review call transport;
     PR3a does not install a production transport before PR3b accounting is available."""
     settings = settings or Settings.load()
-    if sys.platform == "win32":
+    selection = select_source(settings.workspace_source) if replay is None else None
+    if not isinstance(selection, OwnSource) and sys.platform == "win32":
         preflight_placement(REPO_ROOT)
         preflight_placement(settings.runtime_dir)
     app = (

@@ -2238,9 +2238,14 @@ export interface LeadReplyEvent {
 export interface LeadReply {
   agent_id: AgentId;
   /**
-   * An earlier agent.message to this lead; null answers the opening task.
+   * An earlier agent.message to this lead; null answers the opening task or a wake.
    */
   answers_seq: number | null;
+  /**
+   * Committed plan events that woke this lead, in seq order; null when a person's message or
+   * the opening task started the turn.
+   */
+  woken_by: number[] | null;
   /**
    * Nonblank text, masked before storage like messages; null with a cut or withheld export.
    */
@@ -2662,4 +2667,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.16.0";
+export const CONTRACT_VERSION = "1.17.0";

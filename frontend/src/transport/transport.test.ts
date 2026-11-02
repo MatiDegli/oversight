@@ -22,6 +22,7 @@ describe("live transport", () => {
         payload: {
           agent_id: "agent-1",
           answers_seq: null,
+          woken_by: null,
           text: "Reply",
           through_seq: 1,
           cut: null,

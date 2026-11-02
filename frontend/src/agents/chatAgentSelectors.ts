@@ -15,6 +15,16 @@ const labels: Record<AgentStatus["state"], string> = {
   stopped: "Stopped",
   done: "Done",
 };
+/** Compatibility projection for K2a consumers; the shared presentation owns all allocation. */
+export function teamIdentities(state: State) {
+  return new Map(
+    Object.entries(selectPresentation(state).byAgent).map(([id, identity]) => [
+      id,
+      { ...identity, letter: identity.label },
+    ]),
+  );
+}
+
 /** Row facts reuse the card's tool, model-wait, step-limit and cumulative cost projections. */
 export function selectChatAgents(state: State) {
   return Object.entries(selectPresentation(state).byAgent)

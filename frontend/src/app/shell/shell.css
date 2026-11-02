@@ -235,8 +235,7 @@
   position: relative;
   overflow: hidden;
 }
-.agent-card::before,
-[data-slot-card]::before {
+.agent-card::before {
   content: "";
   position: absolute;
   inset: 0 0 auto;

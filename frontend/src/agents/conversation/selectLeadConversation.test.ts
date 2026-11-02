@@ -95,6 +95,7 @@ function thread(turns = 3, withPlans = false) {
       payload: {
         agent_id: base.agent_id,
         answers_seq: answer,
+        woken_by: null,
         text: `Lead turn ${String(turn + 1)}`,
         through_seq: turn ? events.length : 0,
         cut: null,
@@ -225,7 +226,7 @@ it.each(["starting", "working", "idle", "halted", "stopped", "done"] as const)(
     const html = renderToStaticMarkup(
       createElement(Composer, { header: conversation.header, onSend: () => Promise.resolve() }),
     );
-    expect(html).toContain('aria-label="Message the lead"');
+    expect(html).toContain('aria-label="Message Lead A"');
     expect(html.includes('readOnly=""')).toBe(state !== "idle");
     expect(html).not.toContain("Pause");
     expect(html).not.toContain("Stop and discard");

@@ -1,6 +1,8 @@
 """One suite boundary for agents, proposals, combinations and selected-case probes."""
 
-from collections.abc import Mapping
+import asyncio
+import sys
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from functools import partial
 from pathlib import Path
@@ -10,8 +12,9 @@ from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.isolation import IsolatedRunner
 from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallTarget
-from oversight.workspace.runner import Spawn
+from oversight.workspace.runner import NtCleanupRunner, Spawn, nt_cleanup_failed
 from oversight.workspace.snapshot import finish_snapshot, take_snapshot
+from oversight.workspace.source_nt import OwnEnvironment
 from oversight.workspace.suite import SuiteInterrupted, SuiteRun, SuiteUnavailable, run_suite
 from oversight.workspace.suite_files import file_problems, file_stamp
 from oversight.workspace.test_tree import capture_test_tree
@@ -23,6 +26,10 @@ if TYPE_CHECKING:
 def configure_suite(workspace: "Workspace", *, harness_pack: bool) -> None:
     """Select this workspace's output arm at composition time; never inspect process settings."""
     workspace.harness_pack = harness_pack
+
+
+def _nt_cleanup_unverified(runner: Spawn) -> bool:
+    return isinstance(runner, NtCleanupRunner) and not runner.cleanup_complete
 
 
 async def guarded_suite(
@@ -39,11 +46,12 @@ async def guarded_suite(
     pytest_targets: tuple[str, ...] = (),
     pytest_options: tuple[str, ...] = (),
     measured_targets: tuple[CallTarget, ...] | None = None,
+    _own_prepare: Callable[[Path, float], OwnEnvironment] | None = None,
 ) -> SuiteRun:
     """Caller retains main/worktree/lease through capture, namespace death and restoration."""
     state = workspace.integrity
     snapshot = await offload(partial(take_snapshot, tree.git_identity, state, timeout_s))
-    runner = spawn
+    runner: Spawn = NtCleanupRunner(spawn) if sys.platform == "win32" else spawn
     try:
         before = await offload(partial(file_stamp, tree.root))
         tested_tree, tested_commit = await capture_test_tree(
@@ -68,6 +76,7 @@ async def guarded_suite(
                 pytest_options=pytest_options,
                 harness_pack=workspace.harness_pack,
                 measured_targets=measured_targets,
+                _own_prepare=_own_prepare,
             )
         except (SuiteInterrupted, SuiteUnavailable) as error:
             problems = await offload(partial(file_problems, tree.root, before))
@@ -86,6 +95,28 @@ async def guarded_suite(
             problems=(*run.problems, *problems),
         )
     finally:
+        pending = sys.exception()
+        if _nt_cleanup_unverified(runner) or nt_cleanup_failed(pending):
+            error = workspace.refuse_unverified_cleanup()
+            if isinstance(pending, SuiteInterrupted):
+                pending.run = replace(
+                    pending.run,
+                    result=pending.run.result.model_copy(
+                        update={
+                            "outcome": "error",
+                            "passed": 0,
+                            "failed": 0,
+                            "skipped": 0,
+                            "failed_tests": [],
+                        }
+                    ),
+                    cases=(),
+                    measured=None,
+                    problems=(str(error),),
+                )
+            if isinstance(pending, asyncio.CancelledError):
+                raise pending from error
+            raise error
         if isinstance(runner, IsolatedRunner) and not runner.cleanup_complete:
             error = IntegrityError(
                 "suite namespace cleanup is unverified", ".git", code="main_suspect"

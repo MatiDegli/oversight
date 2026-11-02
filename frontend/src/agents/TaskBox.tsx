@@ -1,5 +1,3 @@
-import { agentSlotStyle } from "../theme";
-import { agentLook } from "../theme";
 import type { Slot, StartAgent } from "@contracts";
 import { Check, Cpu, X } from "lucide-react";
 import { useId } from "react";
@@ -71,12 +69,12 @@ export function TaskBoxView({
   const canStart = !pending && draft.trim() !== "" && block === null;
   const line = pending ? "Starting the agent." : block;
   return (
-    <section aria-labelledby={`${id}-heading`} className="flex flex-col gap-2.5">
+    <section aria-labelledby={`${id}-heading`} className="task-box flex flex-col gap-2.5">
       {/* The sketch names the box by its placeholder alone; the heading stays for screen readers. */}
       <h3 id={`${id}-heading`} className={`${heading} sr-only`}>
         New agent
       </h3>
-      <div className="flex flex-col gap-3 rounded-card border border-control-edge bg-field p-3 has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-text">
+      <div className="task-box-field flex flex-col gap-3 rounded-card border border-control-edge bg-field p-3 has-[textarea:focus-visible]:outline-2 has-[textarea:focus-visible]:outline-offset-2 has-[textarea:focus-visible]:outline-text">
         <textarea
           ref={inputRef}
           aria-label="Task for the new agent"
@@ -98,12 +96,15 @@ export function TaskBoxView({
           className="resize-none bg-transparent p-1 text-(length:--body-size) text-text placeholder:text-faint read-only:text-muted focus:outline-none"
         />
         {slots.length === 2 && (
-          <div role="group" aria-label="Agent slot" className="flex flex-wrap gap-2">
+          <div
+            role="group"
+            aria-label="Agent slot"
+            className="task-box-models flex flex-wrap gap-2"
+          >
             {slots.map(({ slot, label, holder }) => (
               <button
                 key={slot}
                 data-slot-card={slot}
-                style={agentSlotStyle(slot)}
                 type="button"
                 aria-pressed={selected === slot}
                 aria-disabled={pending || holder !== null}
@@ -112,7 +113,7 @@ export function TaskBoxView({
                 }}
                 className={`min-w-0 flex-1 rounded-control border border-control-edge p-2 text-left text-(length:--caption-size) aria-pressed:bg-raised aria-disabled:cursor-not-allowed ${selected === slot ? "aria-pressed:border-text" : ""} ${focusRing}`}
               >
-                <span className={agentLook[slot].textClass}>{slot}</span> {label}
+                {label}
                 {selected === slot && (
                   <Check aria-hidden="true" className="ml-1 inline-block size-4 text-text" />
                 )}
@@ -121,7 +122,7 @@ export function TaskBoxView({
             ))}
           </div>
         )}
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="task-box-actions flex flex-wrap items-center gap-1.5">
           {model !== undefined && (
             <span aria-label={`Model: ${model}`} className={chip}>
               <Cpu aria-hidden="true" className="size-4 shrink-0 text-muted" />
@@ -147,7 +148,7 @@ export function TaskBoxView({
           </button>
         </div>
       </div>
-      <p className="text-(length:--caption-size) text-muted">
+      <p className="task-box-hint text-(length:--caption-size) text-muted">
         <kbd className="rounded-keyboard-hint border border-control-edge px-1.5 font-mono">
           {modifier}
         </kbd>
@@ -204,9 +205,11 @@ export function TaskBox({
       label:
         state.run?.models.find((model) => model.id === info.default_model)?.label ??
         info.default_model,
-      holder: holder ? holderReason(holder) : null,
+      holder: holder ? holderReason(state, holder) : null,
     };
   });
+  const modelChoice = new Set(state.run?.slots.map((info) => info.default_model)).size > 1;
+  const showSlotCards = modelChoice && slots.length === 2;
   if (!onStart) {
     return (
       <section aria-label="New agent" className="flex flex-col gap-2.5">
@@ -227,16 +230,16 @@ export function TaskBox({
       pending={pending}
       failure={failure}
       block={startBlock(state, selected)}
-      model={slots.length === 1 ? slots[0]?.label : undefined}
+      model={!modelChoice ? slots[0]?.label : undefined}
       maxSteps={state.run?.limits.max_steps}
-      slots={slots}
+      slots={showSlotCards ? slots : []}
       selected={selected}
       onSlot={(slot) => {
         store.getState().choose(slotChoice(state, slot));
       }}
       onDraft={store.getState().setDraft}
       onStart={() => {
-        void store.getState().start(onStart, slots.length === 2 ? selected : undefined);
+        void store.getState().start(onStart, showSlotCards ? selected : undefined);
       }}
     />
   );

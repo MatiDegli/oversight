@@ -13,21 +13,24 @@ from typing import TYPE_CHECKING
 from oversight.agents import (
     MUSE_SPARK,
     MUSE_SPARK_OPEN,
-    STARTING_DETAIL,
     UNVERIFIED_PROFILES,
+    LeadPolicy,
     LeadProposalError,
     LeadRun,
     LeadTools,
+    ServerNotice,
+    build_starting_detail,
 )
 from oversight.api import ApiError
 from oversight.changes import plan_core, read_queue
 from oversight.runtime_lead_admission import message
 from oversight.runtime_lead_turns import LeadTurn
+from oversight.runtime_lead_wakes import LeadWatcher, WakeClock
 from oversight.setup import missing_settings
 from oversight_contracts.commands import LeadCreated as LeadCreated
 from oversight_contracts.commands import StartLead as StartLead
 from oversight_contracts.commands import StopLead as StopLead
-from oversight_contracts.events import LeadStatus, ModelProfile
+from oversight_contracts.events import LeadLimits, LeadStatus, ModelProfile
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import SubtaskDraft
 
@@ -43,9 +46,16 @@ UNEXPECTED_DETAIL = "The lead failed unexpectedly."
 class _Lead:
     status: LeadStatus
     profile: ModelProfile
+    limits: LeadLimits
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     phase: str = "starting"
     turns: int = 0
+    wakes: int = 0
+    humans_waiting: int = 0
+    through_seq: int | None = None
+    refusals: set[str] = field(default_factory=set[str])
+    watcher: LeadWatcher | None = None
+    watching: asyncio.Task[None] | None = None
     run: LeadRun | None = None
     revision: int = 0
     stopping: bool = False
@@ -61,6 +71,10 @@ class LeadService:
         self.live = live
         self._closing = False
         self.leads: dict[str, _Lead] = {}
+        self.policy = LeadPolicy(
+            live._lead_limits, live._lead_history_chars, live._settings.lead_wakes
+        )
+        self.wake_clock = WakeClock()
 
     async def start(self, request: StartLead) -> LeadCreated:
         live = self.live
@@ -73,8 +87,13 @@ class LeadService:
             raise ApiError("not_configured", "Server setup is incomplete.", missing=missing)
         if profile.provider == "meta" and (reason := live.brake_reason()) is not None:
             raise ApiError("spend_brake", reason)
-        if any(lead.phase in {"starting", "working", "idle"} for lead in self.leads.values()):
-            raise ApiError("wrong_state", "a lead is already active")
+        active = sum(lead.phase in {"starting", "working", "idle"} for lead in self.leads.values())
+        if active >= live._max_leads:
+            raise ApiError(
+                "wrong_state",
+                f"OVERSIGHT_MAX_LEADS is {live._max_leads} for this run. "
+                "Stop a lead to free capacity, or change the setting for the next run.",
+            )
         live._count += 1
         agent_id = f"agent-{live._count}"
         lead = _Lead(
@@ -85,9 +104,11 @@ class LeadService:
                 model=profile.id,
                 state="starting",
                 step=0,
-                detail=STARTING_DETAIL,
+                detail=build_starting_detail(live._lead_limits),
+                limits=live._lead_limits,
             ),
             profile,
+            live._lead_limits,
         )
         self.leads[agent_id] = lead
         # Registration is synchronous. Retain initialization so shutdown cannot miss a start
@@ -111,13 +132,17 @@ class LeadService:
         return profiles[model] if model is not None else default
 
     async def _begin(self, lead: _Lead, profile: ModelProfile) -> None:
-        if lead.stopping:
+        if lead.stopping or self._closing or self.live._closing:
             return
         try:
-            await self._status(lead, "starting", STARTING_DETAIL)
+            await self._status(lead, "starting", build_starting_detail(lead.limits))
         except Exception as error:
             await self._halt_unexpected(lead, error)
             return
+        if lead.stopping or self._closing or self.live._closing:
+            return
+        lead.watcher = LeadWatcher(self, lead)
+        lead.watching = asyncio.create_task(lead.watcher.run())
         self._launch(lead)
 
     def _launch(
@@ -125,9 +150,15 @@ class LeadService:
         lead: _Lead,
         human: str | None = None,
         answers_seq: int | None = None,
+        *,
+        notice: ServerNotice | None = None,
+        woken_by: list[int] | None = None,
     ) -> None:
         lead.entered = False
-        lead.task = asyncio.create_task(self._drive(lead, lead.profile, human, answers_seq))
+        lead.refusals.clear()
+        lead.task = asyncio.create_task(
+            self._drive(lead, lead.profile, human, answers_seq, notice, woken_by)
+        )
         lead.tasks.append(lead.task)
 
     async def _status(
@@ -147,12 +178,18 @@ class LeadService:
                 "step": lead.status.step if step is None else step,
                 "detail": detail,
                 "requested_plan_id": plan_id,
+                "limits": lead.limits,
             }
         )
         await self.live.store.publish(status)
         lead.status = status
         lead.revision = status.revision
         lead.phase = state
+        if state not in {"starting", "working", "idle"}:
+            if lead.watching is not None:
+                lead.watching.cancel()
+        elif state == "idle" and lead.watcher is not None:
+            lead.watcher.changed.set()
 
     def _graph(self) -> GraphSnapshot:
         snapshot = self.live.store.graph()[1]
@@ -182,6 +219,7 @@ class LeadService:
             slots=len(self.live._slots),
             mask=self.live._redactor,
             status=self.live.store.lead_status,
+            limits=lead.limits,
         )
 
     async def _drive(
@@ -190,8 +228,10 @@ class LeadService:
         profile: ModelProfile,
         human: str | None = None,
         answers_seq: int | None = None,
+        notice: ServerNotice | None = None,
+        woken_by: list[int] | None = None,
     ) -> None:
-        await LeadTurn(self, lead).drive(human, answers_seq)
+        await LeadTurn(self, lead).drive(human, answers_seq, notice, woken_by)
 
     async def _halt_unexpected(
         self,
@@ -230,6 +270,8 @@ class LeadService:
                 f"stale lead revision {request.revision}; the latest is {lead.revision}",
             )
         lead.stopping = True
+        if lead.watching is not None:
+            lead.watching.cancel()
         previous = lead.task
         admitting = lead.admitting
         if (
@@ -250,7 +292,10 @@ class LeadService:
         admitting: asyncio.Task[None] | None,
         previous: asyncio.Task[None] | None,
     ) -> None:
-        await asyncio.gather(*(t for t in (admitting, previous) if t), return_exceptions=True)
+        await asyncio.gather(
+            *(t for t in (lead.initializing, admitting, previous, lead.watching) if t),
+            return_exceptions=True,
+        )
         await self._finish_open(lead)
 
     def _ending(self, lead: _Lead) -> tuple[str, str]:
@@ -268,6 +313,10 @@ class LeadService:
 
     async def close(self) -> None:
         self._closing = True
+        watchers = [lead.watching for lead in self.leads.values() if lead.watching is not None]
+        for watcher in watchers:
+            watcher.cancel()
+        await asyncio.gather(*watchers, return_exceptions=True)
         initial = [
             lead.initializing for lead in self.leads.values() if lead.initializing is not None
         ]
@@ -275,6 +324,7 @@ class LeadService:
         admissions = [lead.admitting for lead in self.leads.values() if lead.admitting is not None]
         await asyncio.gather(*admissions, return_exceptions=True)
         tasks = {task for lead in self.leads.values() for task in lead.tasks}
+        tasks |= set(watchers)
         tasks |= {lead.task for lead in self.leads.values() if lead.task is not None}
         for lead in self.leads.values():
             if lead.task is not None and lead.entered and not lead.task.done():

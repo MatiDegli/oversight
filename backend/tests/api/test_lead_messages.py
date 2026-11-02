@@ -4,6 +4,7 @@
 # pyright: reportPrivateUsage=false
 
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -152,8 +153,10 @@ async def test_idle_stop_shutdown_and_terminal_preservation(tmp_path: Path) -> N
         assert len(replies(s)) == 2
 
 
+@pytest.mark.parametrize("old_log", [False, True])
 async def test_thread_replay_rejects_message_before_parsing_and_rebuilds_events(
     tmp_path: Path,
+    old_log: bool,
 ) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
         await start_idle(s)
@@ -172,15 +175,20 @@ async def test_thread_replay_rejects_message_before_parsing_and_rebuilds_events(
                 detail=None,
             )
         )
-        log.write_text("\n".join(e.model_dump_json() for e in s.events()) + "\n")
+        rows = [e.model_dump(mode="json") for e in s.events()]
+        if old_log:
+            for row in rows:
+                if row["type"] == "lead.status":
+                    row["payload"].pop("limits", None)
+                elif row["type"] == "run.started":
+                    row["payload"].pop("max_leads", None)
+        log.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
     app = create_app(
         live_settings(tmp_path / "replay"), ReplayConfig(log=log, speed=0, allow_fake_provider=True)
     )
     with TestClient(app, base_url="http://127.0.0.1:8710") as client:
-        assert error_code(client.post("/leads/agent-1/message", content=b"invalid")) == (
-            501,
-            "not_implemented",
-        )
+        for path in ("/leads", "/leads/agent-1/message", "/leads/agent-1/stop"):
+            assert error_code(client.post(path, content=b"invalid")) == (501, "not_implemented")
 
         async def completed():
             async for row in app.state.store.subscribe(0):
@@ -194,16 +202,21 @@ async def test_thread_replay_rejects_message_before_parsing_and_rebuilds_events(
             e.model_dump() for e in events if e.type in {"agent.message", "lead.reply"}
         ] == expected
         assert client.get("/leads/agent-2").json()["state"] == "done"
+        if old_log:
+            assert client.get("/leads/agent-1").json()["limits"] is None
+            assert next(e.payload for e in events if e.type == "run.started").max_leads is None
 
 
 async def test_thread_halt_reads_the_contract_limits(tmp_path: Path) -> None:
     factory = ThreadModels()
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), factory) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, lead_max_turns=2), factory) as s,
+    ):
         await start_idle(s)
         lead = s.live.leads.leads["agent-1"]
         assert lead.run is not None
         assert type(lead.run.limits) is type(LEAD_LIMITS)
-        lead.run.limits = LEAD_LIMITS.model_copy(update={"turns": 2})
         after = s.store.last_seq
         assert (
             await s.client.post("/leads/agent-1/message", json={"text": "Final turn"})
@@ -211,5 +224,5 @@ async def test_thread_halt_reads_the_contract_limits(tmp_path: Path) -> None:
         await s.until(is_type("lead.status", state="halted"), after)
         assert s.events()[-1].payload.detail == "Reached the limit of 2 turns."
         assert len(replies(s)) == 2
-        assert all(e.payload.limits is None for e in s.events() if e.type == "lead.status")
-        assert next(e.payload for e in s.events() if e.type == "run.started").max_leads is None
+        assert all(e.payload.limits == lead.limits for e in s.events() if e.type == "lead.status")
+        assert next(e.payload for e in s.events() if e.type == "run.started").max_leads == 6

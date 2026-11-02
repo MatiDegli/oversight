@@ -673,7 +673,23 @@ A partition heuristic does not prove independence; speed claims wait for the spl
 
 L2 adds the run-local lead thread: idle between turns, masked replies, per-turn cuts and
 bounded exchange history, committed-prefix status, and live message admission with serialized
-Stop/shutdown ownership. Three plans remain the thread-wide limit; turn 50 replies then halts.
+Stop/shutdown ownership. Several leads now run concurrently up to `OVERSIGHT_MAX_LEADS` (default 6),
+independently of coding seats; idle and stopping leads retain capacity until terminal. Each owns
+its thread, counters, plan budget, revisions, callbacks and Stop. Process-fixed snapshots feed the
+live tools, prompts, schemas, `lead.status.limits` and `run.started.max_leads`; old logs keep null.
+`OVERSIGHT_LEAD_MAX_` defaults are TURNS=50 per thread, TOOL_CALLS=12, MODEL_CALLS=18 and
+WALL_CLOCK_S=300 per turn, PLANS=3 per thread, SUBTASKS=6 per plan and TASK_CHARS=2000 per task.
+`OVERSIGHT_LEAD_HISTORY_CHARS` defaults to 24000. These positive integer settings have no maximum.
+The final allowed turn replies then halts. The person alone queues proposals and merge authority
+is unchanged; the shared Meta spending brake still refuses calls rather than queueing them.
+The backend also watches each lead's own committed catalog triggers, coalesces for five seconds,
+and admits bounded server-digest turns with human priority. Wakes default to three per thread;
+the person's setting has no configured maximum and zero disables execution. Refusals are
+existing lead-status revisions. The shared hand-written fixture is
+`fixtures/events/handwritten-lead-wakes.jsonl`
+with `fixtures/events/handwritten-lead-wakes.expected.json`; its companion Markdown file documents
+the fake-only generator and synthetic transitions. Frontend attribution and notice rendering remain
+separate work, with no TypeScript parity claim here.
 L3 remains the Chat composer/navigation, freshness and withheld/cut UI, plan links, graph/focus,
 fixture exclusion, approval keyboard protection, decision-count cost fixture and Playwright work.
 

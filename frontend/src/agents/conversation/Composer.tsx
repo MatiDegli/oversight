@@ -75,7 +75,7 @@ export function Composer({
       if (!lead || stateStore.getState().state.run?.run_id === runId) clearSentDraft(key, text);
     } catch (error) {
       clearControlFailure();
-      setDraftFailure(key, commandFailure(lead ? "Message the lead" : "Send", error));
+      setDraftFailure(key, commandFailure(lead ? `Message Lead ${header.letter}` : "Send", error));
     } finally {
       finishSend(key);
     }
@@ -109,12 +109,14 @@ export function Composer({
       {(onSend || lead) && (
         <textarea
           aria-label={
-            lead ? "Message the lead" : `Message Agent ${header.presentation?.label ?? "unknown"}`
+            lead
+              ? `Message Lead ${header.letter}`
+              : `Message Agent ${header.presentation?.label ?? "unknown"}`
           }
           aria-describedby={!active || replay || tooLong ? captionId : undefined}
           placeholder={
             lead
-              ? "Message the lead"
+              ? `Message Lead ${header.letter}`
               : `Message Agent ${header.presentation?.label ?? "unknown"}. It reads it at its next step.`
           }
           aria-disabled={!active || replay}

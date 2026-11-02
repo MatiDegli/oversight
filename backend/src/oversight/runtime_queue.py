@@ -91,9 +91,12 @@ class Dispatcher:
             ]
         plan = self.live.plans.dispatch_plan(item)
         assert plan.subtasks is not None
+        ready = plan_core.ready(plan)
+        # The whole first wave was checked against capacity. Later waves may be wider;
+        # reserve each stable-index batch atomically and leave the rest waiting.
         return [
             (index, StartAgent(task=plan.subtasks[index].task, zone=plan.subtasks[index].zone))
-            for index in plan_core.ready(plan)
+            for index in ready[: len(self.live._slots)]
         ]
 
     async def enqueue(self, request: EnqueueTask) -> QueuedTask:
@@ -181,10 +184,8 @@ class Dispatcher:
             await self._save(queue_transition(item, "completed", detail=outcome))
 
     def _reserve(self, item: QueuedTask) -> list[tuple[int | None, Admission]]:
-        """Check and reserve all k ready slots without yielding; roll back all on refusal."""
+        """Reserve one selected batch without yielding; roll back all on refusal."""
         requests = self._requests(item)
-        if len(requests) > len(self.live._slots):
-            raise ApiError("invalid_request", "the ready subtasks exceed the offered slot count")
         admissions: list[tuple[int | None, Admission]] = []
         try:
             for index, request in requests:

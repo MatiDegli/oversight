@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -140,13 +141,115 @@ async def test_default_18_model_and_12_tool_limits_are_exact(budget: str) -> Non
         assert len(model.requests) == 18 and run.steps == 6 and end.reply.cut == "model_calls"
 
 
-async def test_lead_tool_keeps_its_dependency_index_limit() -> None:
+async def test_lead_tool_enforces_default_dependency_index_server_side() -> None:
     tools, propose = setup_tools()
     outcome = await tools.call(
         "request_plan", json.dumps(plan(subtasks=[dict(task="Work", depends_on=[6])]))
     )
     assert not outcome.ok
     assert outcome.content == (
-        "Invalid arguments for request_plan: Input should be less than or equal to 5"
+        "A subtask dependency index must be at most 5 (OVERSIGHT_LEAD_MAX_SUBTASKS)."
     )
     propose.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    "budget,value", [("tool_calls", 2), ("tool_calls", 14), ("model_calls", 2), ("model_calls", 21)]
+)
+async def test_injected_cuts_are_exact_and_reset_each_turn(budget: str, value: int) -> None:
+    limits = LEAD_LIMITS.model_copy(
+        update={budget: value, "tool_calls" if budget == "model_calls" else "model_calls": 100}
+    )
+    tools, _ = setup_tools(limits=limits)
+    run, _, _ = lead(scripted([]), tools, limits=limits)
+    for index in range(2):
+        model = scripted(
+            [
+                turn(call("read_file", path="shop/pricing.py", start_line=i, end_line=i))
+                for i in range(1, value + 2)
+            ]
+        )
+        run.make_client = lambda model=model: model
+        end = await run.run(None if index == 0 else "Again", None if index == 0 else 2)
+        assert end.reply and end.reply.cut == budget
+        assert run.turn_steps == run.turns == len(model.requests) == value
+        assert run.steps == value * (index + 1)
+
+
+@pytest.mark.parametrize("seconds", [1, 600])
+async def test_injected_time_budget_cuts_and_restarts(seconds, monkeypatch) -> None:
+    timeout = asyncio.timeout
+    deadlines = []
+
+    def accelerated(value):
+        deadlines.append(value)
+        return timeout(0.001)
+
+    monkeypatch.setattr(asyncio, "timeout", accelerated)
+    limits = LEAD_LIMITS.model_copy(update={"wall_clock_s": seconds})
+    tools, _ = setup_tools(limits=limits)
+    model = scripted([])
+    model.complete = AsyncMock(side_effect=lambda *args: None)
+
+    async def wait(*args):
+        await asyncio.Event().wait()
+
+    model.complete.side_effect = wait
+    run, _, _ = lead(model, tools, limits=limits)
+    for index in range(2):
+        end = await run.run(None if index == 0 else "Again")
+        assert end.reply and end.reply.cut == "time"
+        assert run.turns == 1
+    assert deadlines == [seconds, seconds]
+
+
+async def test_thread_builds_derived_policy_once_and_passes_its_snapshot(monkeypatch) -> None:
+    from unittest.mock import Mock
+
+    from oversight.agents import _lead, build_lead_prompt, build_lead_tool_schemas
+
+    limits = LEAD_LIMITS.model_copy(update={"tool_calls": 2, "subtasks": 8})
+    tools, _ = setup_tools(limits=limits)
+    prompt = Mock(wraps=build_lead_prompt)
+    schemas = Mock(wraps=build_lead_tool_schemas)
+    monkeypatch.setattr(_lead, "build_lead_prompt", prompt)
+    monkeypatch.setattr(_lead, "build_lead_tool_schemas", schemas)
+    model = scripted([dict(text="Answer", usage={})] * 2)
+    model.complete = AsyncMock(wraps=model.complete)
+    run, _, _ = lead(model, tools, limits=limits, history_chars=48000)
+    for _ in range(2):
+        assert (await run.run()).state == "idle"
+    prompt.assert_called_once_with(limits)
+    schemas.assert_called_once_with(limits)
+    assert run.limits is tools.limits is limits
+    assert run.history.history_chars == 48000
+    from oversight.agents._prompts import SERVER_NOTICE_PROMPT
+
+    assert (
+        model.requests[0][0]["content"] == build_lead_prompt(limits) + "\n\n" + SERVER_NOTICE_PROMPT
+    )
+    assert all(c.args[1] is run.schemas for c in model.complete.await_args_list)
+    other = build_lead_tool_schemas(LEAD_LIMITS)
+    instance_schemas: Any = run.schemas
+    instance_schemas[5]["function"]["parameters"]["properties"]["subtasks"]["maxItems"] = 99
+    assert other == build_lead_tool_schemas(LEAD_LIMITS)
+    assert other != run.schemas
+
+
+def test_mismatched_loop_and_tool_snapshots_are_rejected() -> None:
+    from oversight.agents import LeadRun
+
+    tools, _ = setup_tools()
+    with pytest.raises(ValueError, match="same lead limits"):
+        LeadRun(
+            agent_id="agent-1",
+            task="Task",
+            make_client=lambda: scripted([]),
+            tools=tools,
+            record=AsyncMock(),
+            publish=AsyncMock(),
+            admit=lambda: None,
+            on_working=AsyncMock(),
+            on_step=AsyncMock(),
+            limits=LEAD_LIMITS.model_copy(update={"subtasks": 8}),
+        )

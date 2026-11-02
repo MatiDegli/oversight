@@ -1,22 +1,27 @@
-import type { MergeMode, StartAgent } from "@contracts";
-import { lazy, Suspense, type ReactNode } from "react";
+import type { MergeMode, StartAgent, StartLead } from "@contracts";
+import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
 import type { State } from "../state";
 import type { View, ViewAction, FocusTab } from "./view";
 import { panelOpen } from "./view";
+import { useEscapeCloses } from "./escape";
 import { useFunctionTask } from "./useFunctionTask";
 import { TopBar } from "./TopBar";
 import { AgentsPanel, AgentsRail } from "./shell/Agents";
 import type { MergeModeAttempt } from "./shell/mergeModeAttempt";
 import { ChatMergeChip } from "./shell/ChatMerge";
+import { NewLead } from "./shell/NewLead";
+// eslint-disable-next-line no-restricted-imports -- K2a owns the New lead form and its draft transfer.
+import { leadDraftStore } from "../agents/leadDraftModel";
 import { ChatEmpty, ChatShell } from "./shell/ChatShell";
 import { FocusPanel } from "./shell/FocusPanel";
 import { LazyPanel } from "./shell/LazyPanel";
 import { LeftRail, Sidebar, ShortcutsSheet } from "./shell/Navigation";
 import { BottomDock, StatusLine } from "./shell/Status";
 import { useShell } from "./shell/useShell";
+import { useChatReviewNavigation } from "./chatReviewNavigation";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 import "./shell/chatShell.css";
@@ -45,9 +50,11 @@ export interface FrameProps {
   onOpenChange: (changeId: string) => void;
   onClosePanel: () => void;
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
+  onStartLead?: (body: StartLead) => Promise<unknown>;
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
   onStopAgent?: (agentId: string) => Promise<unknown>;
   onOpenConversation?: (agentId: string) => void;
+  onMessageLead?: (agentId: string, text: string) => Promise<unknown>;
   onMessageAgent?: (agentId: string, text: string) => Promise<unknown>;
   onPauseAgent?: (agentId: string) => Promise<unknown>;
   onResumeAgent?: (agentId: string) => Promise<unknown>;
@@ -92,13 +99,36 @@ export function Frame(props: FrameProps) {
           activeTab: "practice",
         }
       : props.view;
-  const open = panelOpen(view);
-  const shell = useShell(open, onClosePanel);
+  const [newLead, setNewLead] = useState(false);
+  const [hiddenChatView, setHiddenChatView] = useState<View | null>(null);
+  const leadInput = useRef<HTMLTextAreaElement>(null);
+  // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
+  const shell = useShell(panelOpen(view), onClosePanel, hiddenChatView === view);
+  const open = shell.panelOpen;
+  useEscapeCloses(open, onClosePanel);
+  const showNewLead = newLead && !open && shell.layout === "Chat";
+  const chatReview = useChatReviewNavigation(state, view, shell, props.onTabAction);
   const task = useFunctionTask(
     state,
     view,
     props.onStartAgent !== undefined && shell.layout === "Oversight",
   );
+  const newTask = () => {
+    setNewLead(false);
+    setHiddenChatView(view);
+    requestAnimationFrame(() => task.inputRef.current?.focus());
+  };
+  const openNewLead = () => {
+    setHiddenChatView(view);
+    setNewLead(true);
+    requestAnimationFrame(() => {
+      leadInput.current?.focus();
+      const list = leadInput.current
+        ?.closest(".shell-frame")
+        ?.querySelector<HTMLElement>(".chat-agents .chat-side-body");
+      if (list) list.scrollTop = list.scrollHeight;
+    });
+  };
   const layoutKey =
     shell.sidebar === null &&
     !shell.dock &&
@@ -124,8 +154,22 @@ export function Frame(props: FrameProps) {
       <ChatShell
         state={state}
         active={shell.layout === "Chat"}
-        selectedAgentId={view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation}
-        onOpenConversation={props.onOpenConversation}
+        selectedAgentId={
+          !open || showNewLead
+            ? undefined
+            : view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation
+        }
+        onNewTask={newTask}
+        onNewLead={openNewLead}
+        leadDraft={showNewLead}
+        onOpenConversation={
+          props.onOpenConversation
+            ? (id) => {
+                setNewLead(false);
+                props.onOpenConversation?.(id);
+              }
+            : undefined
+        }
         rail={
           <LeftRail
             watching={!open}
@@ -162,14 +206,31 @@ export function Frame(props: FrameProps) {
                 {...props}
                 view={view}
                 chat={shell.layout === "Chat"}
+                onGraph={chatReview.onGraph}
                 practiceOnly={phone}
                 startAgentAction={task.action}
                 maximized={shell.maximized}
                 onMaximize={shell.toggleMaximize}
               />
             )}
-            {shell.layout === "Chat" && !open && (
+            {showNewLead && (
+              <NewLead
+                state={state}
+                onStart={props.onStartLead}
+                inputRef={leadInput}
+                onOpenSettings={props.onOpenSettings}
+                onClose={() => {
+                  setNewLead(false);
+                }}
+                onTaskInstead={() => {
+                  leadDraftStore.getState().moveToTask();
+                  newTask();
+                }}
+              />
+            )}
+            {shell.layout === "Chat" && !open && !newLead && (
               <ChatEmpty
+                onNewLead={openNewLead}
                 actionAccessory={
                   <ChatMergeChip state={state} onOpenSettings={props.onOpenSettings} />
                 }
@@ -191,7 +252,7 @@ export function Frame(props: FrameProps) {
                     stacked={phone}
                     arrival={arrival}
                     state={state}
-                    view={view}
+                    view={chatReview.graphView}
                     onNodeTap={phone ? () => undefined : props.onNodeTap}
                     layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
                   />
