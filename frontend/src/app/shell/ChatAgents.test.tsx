@@ -13,7 +13,9 @@ it.each([
   ["merged", 1],
 ] as const)("renders the running header for %s without capture flags", (name, count) => {
   const html = renderToStaticMarkup(<ChatAgentsFrame state={fold(scenario(name))} />);
-  expect(html).toContain(`<header><h2>Agents</h2><span>${count} of 2 running</span></header>`);
+  expect(html).toContain(
+    `<header><h2>Agents</h2><span>${String(count)} of 2 running</span></header>`,
+  );
 });
 it("omits the numeric header before metadata and derives the denominator from the run", () => {
   const initial = renderToStaticMarkup(<ChatAgentsFrame state={createInitialState()} />);

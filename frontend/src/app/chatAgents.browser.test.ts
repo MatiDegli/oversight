@@ -58,14 +58,18 @@ it("updates the running header as work, review, conflict and merge events arrive
   try {
     await check(count).toHaveText("0 of 2 running");
     await page.evaluate(
-      (events) => window.chatAgentsTest.deliver(events),
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
       [status(), status("agent-b", { slot: "B" })],
     );
     await check(count).toHaveText("2 of 2 running");
     await row(page, "A").click();
     await row(page, "B").focus();
     await page.evaluate(
-      (events) => window.chatAgentsTest.deliver(events),
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
       [
         status("agent-a", { state: "ready_for_review" }),
         proposal("agent-a"),
@@ -74,7 +78,9 @@ it("updates the running header as work, review, conflict and merge events arrive
     );
     await check(count).toHaveText("2 of 2 running");
     await page.evaluate(
-      (events) => window.chatAgentsTest.deliver(events),
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
       [
         status("agent-b", { slot: "B", state: "halted" }),
         proposal("agent-b"),
@@ -82,7 +88,12 @@ it("updates the running header as work, review, conflict and merge events arrive
       ],
     );
     await check(count).toHaveText("2 of 2 running");
-    await page.evaluate((events) => window.chatAgentsTest.deliver(events), [resolved("agent-b")]);
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      [resolved("agent-b")],
+    );
     await check(count).toHaveText("1 of 2 running");
     await check(row(page, "A")).toHaveAttribute("aria-pressed", "true");
     await check(row(page, "B")).toBeFocused();
@@ -94,12 +105,16 @@ it("preserves team members on slot reuse and resets rows and letters for a new r
   const page = await open("empty");
   try {
     await page.evaluate(
-      (events) => window.chatAgentsTest.deliver(events),
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
       [plan("p", "lead"), status("first", { plan_id: "p", slot: "B" })],
     );
     await row(page, "A·1").click();
     await page.evaluate(
-      (events) => window.chatAgentsTest.deliver(events),
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
       [resolved("first"), plan("q", "lead"), status("second", { plan_id: "q", slot: "B" })],
     );
     await check(page.locator(".chat-agent-name")).toHaveText(["Agent A·1", "Agent A·2"]);
@@ -109,12 +124,19 @@ it("preserves team members on slot reuse and resets rows and letters for a new r
     const start = seed.find((e) => e.type === "run.started");
     if (!start) throw new Error("Missing fixture run");
     await page.evaluate(
-      (events) => window.chatAgentsTest.deliver(events),
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
       [{ ...start, payload: { ...start.payload, run_id: "c2-new-run" } }],
     );
     await check(page.locator(".chat-agent-row")).toHaveCount(0);
     await check(page.locator(".chat-agents > header > span")).toHaveText("0 of 2 running");
-    await page.evaluate((events) => window.chatAgentsTest.deliver(events), [status("fresh")]);
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      [status("fresh")],
+    );
     await check(page.locator(".chat-agent-name")).toHaveText(["Agent A"]);
     await check(row(page, "A")).toHaveAttribute("aria-pressed", "false");
     await check(page.locator(".chat-agents > header > span")).toHaveText("1 of 2 running");
