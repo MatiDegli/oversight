@@ -6,6 +6,8 @@ import { BudgetNotice, Notices } from "./Notices";
 import { TimelineEntry } from "./rows";
 import type { Conversation, ConversationEntry, LeadConversation } from "./selectConversation";
 
+export { selectLeadConversation } from "./selectLeadConversation";
+
 const LeadThreadRows = lazy(() => import("./LeadThreadRows"));
 
 export interface ConversationPanelProps extends ConversationControls {

@@ -110,6 +110,29 @@ const project = (events: ServerEvent[]) => {
   return conversation;
 };
 
+it("loads the lead selector only through the lazy conversation boundary", async () => {
+  vi.resetModules();
+  const loaded = vi.fn();
+  vi.doMock("./selectLeadConversation", async (original) => {
+    loaded();
+    return original<typeof import("./selectLeadConversation")>();
+  });
+  try {
+    const { loadConversationPanel } = await import("../index");
+    expect(loaded).not.toHaveBeenCalled();
+    const panel = await loadConversationPanel();
+    expect(loaded).toHaveBeenCalledOnce();
+    expect(panel.selectLeadConversation(fold(thread(1)), base.agent_id)?.header).toMatchObject({
+      kind: "lead",
+      state: "idle",
+      step: 2,
+    });
+  } finally {
+    vi.doUnmock("./selectLeadConversation");
+    vi.resetModules();
+  }
+});
+
 it("retains opening and two person turns in envelope order with exact answer association", () => {
   const events = thread();
   const conversation = project(events);

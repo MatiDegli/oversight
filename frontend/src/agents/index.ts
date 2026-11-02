@@ -10,7 +10,6 @@ export { StartAgentHere } from "./StartAgentHere";
 export { selectAgentCard } from "./selectors";
 export type { ConversationPanelProps } from "./conversation/ConversationPanel";
 export { selectConversation } from "./conversation/selectConversation";
-export { selectLeadConversation } from "./conversation/selectLeadConversation";
 export type {
   Conversation,
   ConversationHeader,
