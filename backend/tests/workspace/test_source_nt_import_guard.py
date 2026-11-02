@@ -119,12 +119,10 @@ async def test_probe_and_conftest_path_insertion_are_refused(tmp_path, conftest)
     (tree / "test_x.py").write_text("def test_x(): pass\n")
     (source.runtime / "tmp").mkdir(exist_ok=True)
 
-    if conftest:
-        result = await copied_suite(source, tree, io, missing=not conftest)
-        assert result.result.outcome == "error" and result.result.passed == 0
-    else:
-        with pytest.raises(SuiteUnavailable):
-            await copied_suite(source, tree, io, missing=not conftest)
+    with pytest.raises(SuiteUnavailable) as error:
+        await copied_suite(source, tree, io, missing=not conftest)
+    assert error.value.own_source_reason is not None
+    assert error.value.run.result.outcome == "error" and error.value.run.result.passed == 0
 
 
 @pytest.mark.anyio
@@ -240,10 +238,13 @@ async def copied_suite(source, tree, io, *, missing=False):
 
 
 def test_own_finder_removed_and_deleted_submodule_cannot_fall_back(tmp_path, monkeypatch):
-    source, _tree, plugin, report = guarded(tmp_path, monkeypatch)
+    source, tree, plugin, report = guarded(tmp_path, monkeypatch)
     module = ModuleType("__editable__own")
     original = source.root / "backend/src/sample/deleted.py"
     original.write_text("value = 'original'")
+    copied = tree / "backend/src/sample/deleted.py"
+    copied.write_text("value = 'copy'")
+    copied.unlink()
     exec(
         "class _EditableFinder:\n"
         "    @classmethod\n"
@@ -256,6 +257,7 @@ def test_own_finder_removed_and_deleted_submodule_cannot_fall_back(tmp_path, mon
     module.__dict__.update(MAPPING={"sample": str(original.parent)}, NAMESPACES={})
     monkeypatch.setitem(sys.modules, module.__name__, module)
     own = module.__dict__["_EditableFinder"]
+    assert own.find_spec("sample.deleted").origin == str(original)
     dependency = type(
         "_EditableFinder",
         (),
@@ -295,3 +297,13 @@ def test_malformed_policy_emits_refusal(tmp_path, monkeypatch, raw):
         "ok": False,
         "reason": "invalid import guard policy",
     }
+
+
+def test_relative_policy_location_emits_refusal(tmp_path, monkeypatch):
+    _, _, plugin, report = guarded(tmp_path, monkeypatch)
+    policy = json.loads(os.environ["OVERSIGHT_IMPORT_GUARD"])
+    policy["source"] = "relative"
+    monkeypatch.setenv("OVERSIGHT_IMPORT_GUARD", json.dumps(policy))
+    with pytest.raises(pytest.exit.Exception):
+        plugin.prepare_imports()
+    assert json.loads(report.read_text())["ok"] is False

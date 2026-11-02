@@ -64,6 +64,10 @@ class _ImportPolicy:
             )
         ):
             raise ValueError("invalid import policy")
+        for path in (policy["tree"], policy["source"], *policy["libraries"]):
+            drive, tail = ntpath.splitdrive(path)
+            if not os.path.isabs(path) and not (drive and tail.startswith(("/", "\\"))):
+                raise ValueError("relative import policy location")
         self.tree = _normalized(policy["tree"])
         self.source = _normalized(policy["source"])
         self.libraries = tuple(_normalized(lib) for lib in policy["libraries"])

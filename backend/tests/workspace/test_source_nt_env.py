@@ -170,7 +170,9 @@ async def test_own_environment_and_one_deadline(tmp_path, monkeypatch, budget, e
             now[0] += elapsed
             return ProcessResult(0, '{"ok":true}', "", False, False, 1)
         assert timeout_s == budget - 0.5 - elapsed
-        await asyncio.to_thread(Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"start"}\n')
+        await asyncio.to_thread(
+            Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"guard","ok":true}\n'
+        )
         return ProcessResult(0, "", "", False, False, 1)
 
     async def suite():
@@ -206,7 +208,9 @@ async def test_probe_failure_is_bounded_and_cleanup_runs(tmp_path, fault):
 
     async def spawn(argv, *, env=None, **kwargs):
         assert env is not None
-        await asyncio.to_thread(Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"start"}\n')
+        await asyncio.to_thread(
+            Path(env["OVERSIGHT_REPORT"]).write_text, '{"kind":"guard","ok":true}\n'
+        )
         if fault == "launch":
             raise OSError("secret C:/private")
         if fault == "cancel":
@@ -242,7 +246,11 @@ async def test_probe_failure_is_bounded_and_cleanup_runs(tmp_path, fault):
             ),
         )
     if isinstance(error.value, SuiteUnavailable):
-        assert "private" not in str(error.value.cause) and len(str(error.value.cause)) < 200
+        if fault == "launch":
+            assert error.value.own_source_reason is None
+            assert str(error.value.cause) == "secret C:/private"
+        else:
+            assert "private" not in str(error.value.cause) and len(str(error.value.cause)) < 200
         if fault not in {"garbage", "launch"}:
             assert "python=3.9.9, pytest=7.0, pluggy=missing" in str(error.value.cause)
     assert not list((tmp_path / "tmp").iterdir())
@@ -350,3 +358,29 @@ async def test_probe_refuses_shadow_before_import(tmp_path, name):
             run_process,
         )
     assert not marker.exists()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("field", ["source", "tree", "libraries", "wrong-tree"])
+async def test_guard_locations_refuse_before_probe(tmp_path, field):
+    policy = json.loads(guard_policy(tmp_path))
+    if field == "wrong-tree":
+        policy["tree"] = str(tmp_path / "another-tree")
+    else:
+        policy[field] = ["relative"] if field == "libraries" else "relative"
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("invalid policy location launched a process")
+
+    with pytest.raises(SuiteUnavailable) as error:
+        await run_suite(
+            python=Path("unused"),
+            plugin_dir=tmp_path,
+            runtime_root=tmp_path,
+            tree_root=tmp_path,
+            timeout_s=7,
+            redact=lambda s: s,
+            spawn=forbidden,
+            _own_prepare=lambda *_: nt.OwnEnvironment(Path("original"), guard=json.dumps(policy)),
+        )
+    assert error.value.own_source_reason == "invalid import guard policy"
