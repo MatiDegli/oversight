@@ -42,6 +42,9 @@ it.each(["dark", "day"])(
     const shots = fileURLToPath(new URL("../../../.shots/inbox-answers/", import.meta.url));
     await mkdir(shots, { recursive: true });
     const capture = async (name: string) => {
+      if (name === "01-inbox") {
+        await expect(page.locator(".inbox-answer > summary:focus-visible")).toHaveCount(0);
+      }
       if (process.env.INBOX_SHOTS === "1") {
         await page.evaluate(() => document.fonts.ready);
         await page.waitForFunction(() => {
@@ -74,6 +77,11 @@ it.each(["dark", "day"])(
       await expect(page.locator(".inbox-row .decision-reasons")).toHaveCount(0);
       const answers = page.locator(".inbox-row .inbox-answer");
       await expect(answers).toHaveCount(2);
+      await expect(page.getByRole("button", { name: "Open Settings" })).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Standing grants 1", exact: true }),
+      ).toBeVisible();
+      await capture("01-inbox");
       for (const answer of await answers.all()) {
         await expect(answer).not.toHaveAttribute("open");
         const disclosure = answer.locator(":scope > summary");
@@ -88,11 +96,6 @@ it.each(["dark", "day"])(
         await expect(answer).not.toHaveAttribute("open");
         await expect(disclosure).toBeFocused();
       }
-      await expect(page.getByRole("button", { name: "Open Settings" })).toHaveCount(0);
-      await expect(
-        page.getByRole("button", { name: "Standing grants 1", exact: true }),
-      ).toBeVisible();
-      await capture("01-inbox");
       await page.getByText("Don't ask again", { exact: false }).first().click();
       await expect(page.getByRole("radio")).toHaveCount(2);
       await expect(page.getByRole("radio", { name: /This module shop.pricing/ })).toBeDisabled();
