@@ -4155,3 +4155,13 @@ comments and copy:
 6. Use exactly "These calls use the new parameter, so What was compared does not count them."
    as the muted sentence. It explains count separation without suggesting additional measurement
    or an unsupported binding interpretation.
+
+## 2026-11-02 — Team hue and agent label, packet b-1102f
+
+The maintainer approved packet b-1102f at 2026-11-02T14:34:16Z: “Sí, aprobalo”. Color means a team; the label means the agent. Team identity comes only from the shared frontend selectTeams selector, matching lead, else plan, else agent. Plan labels use letter·n with the plan subtask index plus one. A person-started lone agent is C, becoming C·1 once its plan gives it a sibling.
+
+The approved sketch is a reference outside the repository; the design is built in code against DESIGN.md (the maintainer, 2026-11-02T18:19:25Z). Six existing palette families supply team hues. A seventh team skips teams with pending changes and reuses the hue of the longest-idle remaining team; when every team has a pending change, it uses the longest-idle team. Letters distinguish shared hues. This answer overrides the seventh-team image.
+
+K3 delivers colors and labels, including the flat Chat rail. K3r follows with collapsible groups, the leadless heading “Plan B · 2 agents · 2 working”, stacked groups above the thread at 390, ungrouped lone agents and work chips. Lead headings are plain group headings; lead picking, lead threads and Stop per lead belong to K2.
+
+The approved departures retain the map-r1 base, hidden tests, “ready” on pending node chips, neutral card actions, the approved legend, pending agents in the running count and dock clipping at the 20% zoom floor. The product pluralizes decision counts and retains “Click a group to frame it”. Existing later Conversation title decisions remain in force. No contract or capacity change.
