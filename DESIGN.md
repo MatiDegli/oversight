@@ -1113,8 +1113,23 @@ The graph stays visible and keeps positions.
    row, 8px below, for further samples, method details and test runs. When current-revision
    parameter extensions exist, insert a sibling **New-parameter calls** section before Details,
    with its own divider and 14/600 title on 20px lines. Keep comparison and diff ordering.
-   Without a comparison, show the extension section alone, with no invented summary or Details.
+   Without a comparison, show the extension section with no invented summary. Mount closed
+   Details after it when test sequence findings or structural analysis/completeness were recorded.
    Null or empty extensions retain the original comparison and Details structure.
+   Inside Details, after source/added-test evidence and before behavior/caller methods, show
+   **Test sequence findings** and **Structural observations**. Use 14/600 headings, 15/22 prose
+   and 13/18 supporting references; Mono only for test/code identities, paths and hashes. Keep
+   every published identifier and escaped observation with lossless wraps, without badges or
+   another scroll region. Label failure, edit and later execution sequences individually;
+   unavailable execution or source support stays explicit. Historical executions may precede
+   the candidate. Removed, skipped and deleted cases establish later absence of failure, not
+   execution or passing. Structural duplication establishes no same-behavior claim.
+   Structural analysis null means not recorded; an empty list means no observations retained.
+   Completeness qualifies the whole analysis: false means checks incomplete, true means only
+   bounded checks completed, null means unavailable. Retain the qualification with populated
+   results. Null analysis/completeness and no sequence findings alone add no disclosure.
+   Findings never change decisions, questions, comparisons or caller totals. Arrival/replacement
+   opens nothing and preserves the person's focused control, disclosure and scroll state.
    Extension prose is 15/22; parameter names and sample values are Mono 15. Show the function,
    published calls run and positive aggregate base rejections, never discovered totals or per-row
    rejection flags. No positional-binding explanation is supported by events. Omit zero counters
@@ -1216,7 +1231,8 @@ with a down arrow and Mono 15 soft-wrapped values. "What was compared" and "Show
 44px rows with one-line muted previews and chevrons. Dock buttons read "Approve" and "Reject"
 in equal 48px containers.
 New-parameter calls stays outside the phone comparison disclosure, followed by closed Details
-only when a comparison exists. It uses the same scrolling evidence body and 16px gutters.
+when a comparison or recorded findings exist. Findings use the same scrolling evidence body
+and 16px gutters; long identities and references wrap fully. Details remains a 44px row.
 The existing graph chip retains its drawn 22px size and anchor; invisible vertical padding
 provides a minimum 44px touch area without overlapping neighboring chip targets.
 

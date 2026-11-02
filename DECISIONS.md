@@ -4228,6 +4228,13 @@ The approved sketch is a reference outside the repository; the design is built i
 K3 delivers colors and labels, including the flat Chat rail. K3r follows with collapsible groups, the leadless heading “Plan B · 2 agents · 2 working”, stacked groups above the thread at 390, ungrouped lone agents and work chips. Lead headings are plain group headings; lead picking, lead threads and Stop per lead belong to K2.
 
 The approved departures retain the map-r1 base, hidden tests, “ready” on pending node chips, neutral card actions, the approved legend, pending agents in the running count and dock clipping at the 20% zoom floor. The product pluralizes decision counts and retains “Click a group to frame it”. Existing later Conversation title decisions remain in force. No contract or capacity change.
+
+## 2026-11-02 — Findings designed in the built review
+
+The maintainer requested design directly in code without a sketch round. This overrides
+Impeccable shape's brief-confirmation stop for this work. Findings follow the built Details
+and New-parameter calls typography and disclosure anatomy; DESIGN.md governs their layout,
+neutral evidence language and phone behavior.
 ## 2026-11-02 — Chat starts with a direct task; leads join the Agents list
 
 The maintainer approved packet a-1102c on Nov 2 at 13:42 ART. Chat opens on the direct task: the built task box and Start agent come first; a lead is the quieter second option, as New lead in the Agents header and as a link under the box. Leads and direct tasks are peers in one Agents list, in start order; a lead's row carries its team's hue and letter and its agents follow it. The header count stays the slots held; leads hold no slot. Slot cards show the model only; the letter comes from the team rule once the agent starts. Before any lead has started, the New lead form says its limits are set before Oversight starts, with no numbers. No contract, endpoint or event change.
@@ -4262,8 +4269,8 @@ neither model nor lead can extend the catalog or acquire approval authority.
 The watcher coalesces for five seconds from the first trigger, accumulates during work, and
 admits only an idle open lead under its lock. Only a committed reply's observation horizon
 prunes seen triggers. A person's Send wins until a wake claims working and takes pending
-triggers only after message commitment and the final open checks. The maintainer's resolved
-mixed-turn interpretation is explicit: that reply has the accepted message's `answers_seq`
+triggers only after message commitment and the final open checks. The coordinator's ruling of
+2026-11-02 fixes the mixed-turn interpretation: that reply has the accepted message's `answers_seq`
 only, with `woken_by=None`. Its digest triggers count as seen through the committed
 `through_seq`; they do not get another wake merely to obtain wake correlation. A wake sends
 no human-message event and names all consumed seqs, including omitted digest lines, in sorted
@@ -4272,7 +4279,7 @@ Every runtime reply after the opening one has exactly one of `answers_seq` and `
 Historical null/null replies keep validating; the runtime invariant does not change log validation.
 
 The person-owned run snapshot adds `OVERSIGHT_LEAD_WAKES`: default 3, no configured maximum,
-0 disables wake execution, and invalid or negative values stop configuration. Admission checks
+0 disables wake execution, and invalid or negative values fail startup. Admission checks
 the existing provider-applicable spending brake and wake cap and preserves the last thread
 turn for the person. An admitted wake spends one wake and one turn. A refusal spends neither;
 while idle and holding the lock through publication, it records an existing lead-status
@@ -4292,6 +4299,7 @@ The service owns and retains watchers, cancels them at terminalization, and canc
 shutdown gathers while the store remains open. Closing is set before initialization can spawn
 another watcher. Restart is still a fresh run, without restored leads, pending triggers, wakes
 or model calls; the run-local lifetime and per-turn budget decisions above remain in force.
+
 ## 2026-11-02 — Several leads with person-set limits
 
 K1 was approved by the maintainer on 2026-11-02. This explicitly supersedes the singleton

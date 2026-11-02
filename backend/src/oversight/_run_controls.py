@@ -34,6 +34,7 @@ def prepare(
         pricing=live._price_for(profile),
         harness_pack=live._settings.harness_pack,
         history_prune_tokens=live._settings.history_prune_tokens,
+        lead_limits=live._lead_limits,
     )
     live._kept[task.agent_id] = run
     live._controls[task.agent_id] = run

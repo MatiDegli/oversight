@@ -9,6 +9,7 @@ import { candidateKey, useAnswers } from "./answers";
 import { CardEvidence, eventTime } from "./ChangeCard";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { mergedRuleWords } from "./evidenceWords";
+import { hasReviewFindings } from "./reviewFindings";
 import { ReviewFacts } from "./ReviewFacts";
 import { NewParameterCalls } from "./NewParameterCalls";
 import { parameterExtensions } from "./parameterExtensions";
@@ -201,9 +202,16 @@ export function ReviewBody({
               <>
                 {comparison}
                 <NewParameterCalls entries={extensions} identity={identity} />
-                {extensions.length > 0 && comparison && change?.proposal && (
-                  <ReviewFacts state={state} proposal={change.proposal} scrollable={false} panel />
-                )}
+                {((extensions.length > 0 && comparison) ||
+                  (!comparison && hasReviewFindings(facts))) &&
+                  change?.proposal && (
+                    <ReviewFacts
+                      state={state}
+                      proposal={change.proposal}
+                      scrollable={false}
+                      panel
+                    />
+                  )}
               </>
             )}
           </Fragment>

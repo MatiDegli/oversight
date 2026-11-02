@@ -13,13 +13,12 @@ from oversight.agents._attempts import attempt_observer
 from oversight.agents._lead_history import LeadHistory, ServerNotice
 from oversight.agents._lead_policy import (
     LEAD_LIMITS,
-    build_lead_prompt,
     build_starting_detail,
     wall_clock_text,
 )
 from oversight.agents._lead_replies import reply_text
 from oversight.agents._lead_tools import LeadTools, build_lead_tool_schemas
-from oversight.agents._prompts import SERVER_NOTICE_PROMPT
+from oversight.agents._prompts import lead_system_prompt
 from oversight.agents._replies import ReplyError, ReplyRecovery
 from oversight.agents.client import (
     CALL_SCOPE,
@@ -78,7 +77,7 @@ class LeadRun:
         if limits != tools.limits:
             raise ValueError("LeadRun and LeadTools require the same lead limits")
         self.on_working, self.on_step, self.limits = on_working, on_step, limits
-        self.prompt = build_lead_prompt(limits) + "\n\n" + SERVER_NOTICE_PROMPT
+        self.prompt = lead_system_prompt(limits)
         self.schemas = build_lead_tool_schemas(limits)
         self.mask = mask
         self.history = LeadHistory(task, history_chars=history_chars)

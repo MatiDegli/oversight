@@ -351,8 +351,8 @@ def resolve_lead_setting(values: Mapping[str, str], field: str) -> int:
 
 
 def resolve_lead_wakes(values: Mapping[str, str]) -> int:
-    """Zero disables execution; no configured or decimal-conversion maximum."""
-    raw = values.get("OVERSIGHT_LEAD_WAKES", "3")
+    """Absent or empty means 3; zero disables; no configured or decimal-conversion maximum."""
+    raw = values.get("OVERSIGHT_LEAD_WAKES") or "3"
     if not raw.isascii() or not raw.isdecimal():
         raise ValueError("OVERSIGHT_LEAD_WAKES must be a nonnegative whole number")
     result = 0
