@@ -140,6 +140,21 @@ function coneFor(graph: GraphSnapshot, seed: string): ImpactCone {
 }
 export function evidenceGraph() {
   const graph = syntheticMapGraph(24);
+  // Keep the two agent modules inside the group camera at 1280, as on the real snapshot.
+  // Swap complete cells so the synthetic grid retains its size, spacing and function positions.
+  for (const [agent, middle] of [
+    ["00", "04"],
+    ["01", "05"],
+  ] as const)
+    for (const suffix of ["", ":run"]) {
+      const a = `library.module_${agent}${suffix}`;
+      const b = `library.module_${middle}${suffix}`;
+      const first = graph.positions[a],
+        second = graph.positions[b];
+      if (!first || !second) throw new Error("Missing synthetic cell position");
+      graph.positions[a] = second;
+      graph.positions[b] = first;
+    }
   graph.edges.push(
     ...[0, 1, 2].map((i) => ({
       id: `evidence-${String(i)}`,

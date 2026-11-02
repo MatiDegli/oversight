@@ -4259,3 +4259,21 @@ and consecutive-failure brake (6 failures) remain fixed. The global spending bra
 refusal, neither a person setting nor a queue: every selected Meta lead checks at start, message
 admission and each model-call boundary, with durable ledger accounting before usage publication.
 Baseten keeps its existing accounting and Meta-brake exemption; in-flight call semantics remain.
+## 2026-11-02 — Map light follows module cells at a fixed screen spread
+
+The map uses the approved October 31 sketch values: `map-light-near` at 30px,
+`map-light-far` at 84px and `map-light-gain` at 0.85, inherited by day mode.
+Each existing emitter projects to its node's containing module cell, including the
+circle, name, function count and agent lines. The original parent chain resolves
+folded functions and nested methods; a working focus can belong to a different
+module from its pending change, while waiting light stays on the changed module.
+
+Reason: at map zoom, scaling the card spreads by zoom collapses the light to a few
+lamps around a tiny rendered card box. The approved broad LED pool needs the drawn
+module cell and fixed screen spreads. The existing transition interpolates effective
+screen profiles when the published map level changes, including interrupted moves.
+Card geometry, zoom scaling, mode gains and all existing source strengths remain
+unchanged, including full working strength and the current 0.5 waiting weight.
+Map counts and resting agent labels use opaque plates matching the group panel resolved over
+ground (or ground without a panel) to keep text above 4.5:1 over stronger pools without adding
+a visible box to unlit cells; expanded agent labels retain their existing hover backing.

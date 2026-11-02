@@ -1347,12 +1347,16 @@ leaves plain ground behind the graph: no lamps, no contour lines.
   told no modules, so with no contours, still draws its off lamps in `lamp-off`. The contour lines
   fade out under a light by its smooth glow, not by its lamps, so no edge of the light's pool cuts
   them in blocks. The canvas reads rendered boxes; it does not draw graph nodes or edges.
-- **Shape and spread:** light follows the outline of each row an agent touches (its current row
+- **Shape and spread:** on cards, light follows the outline of each row an agent touches (its current row
   and its last read), or of the folded card that holds it, never the whole module frame: the shape
   follows the work, row by row, and lamps under cards stay hidden. The near and far spreads are about 26px and 72px at 100% zoom, measured
   outward from that box, and scale with graph zoom; the near term decays as an exponential and the
   far one has the long tail 1 over one plus the square of its distance (the sketch's), so the
   halo thins over several rings.
+  On the map, light follows the rendered module cell, including its agent lines, with fixed
+  screen spreads `map-light-near` (30px), `map-light-far` (84px) and gain `map-light-gain` (0.85).
+  Map counts and resting agent labels use opaque text plates matching the group panel resolved
+  over ground (or ground without a panel), preserving 4.5:1 over lit lamps with no box on unlit cells.
   A light always falls off softly on every side, however faint it has become.
 - **Sources:** only each agent's current node at full strength and its last read node at about
   0.4 emit light, in that agent's token, and only while that agent is acting (see Agent light).

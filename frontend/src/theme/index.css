@@ -329,6 +329,9 @@
   --light-source-limit: 8;
   --signal-light-near: 26px;
   --signal-light-far: 72px;
+  --map-light-near: 30px;
+  --map-light-far: 84px;
+  --map-light-gain: 0.85;
   --watch-light-gain: 0.92;
   --live-diff-light-gain: 0.92;
   --file-view-light-gain: 0.8;
