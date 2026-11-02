@@ -34,6 +34,10 @@ afterAll(async () => {
 });
 
 async function outside(page: Page) {
+  // The lazy loading frame also matches .graph-stage; its detached box reads as zero.
+  // Wait for the mounted graph and font layout before either geometry snapshot.
+  await check(page.locator("main.graph-stage")).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
   return page
     .locator(
       '.shell-frame > header, .graph-stage, .left-rail, [aria-label="Status line"], [aria-label="Agent B"], [aria-label="Task for the new agent"]',
