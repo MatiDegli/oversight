@@ -20,7 +20,13 @@ from oversight.agents._lead import (
     LeadEnd,
     LeadRun,
 )
-from oversight.agents._lead_policy import LEAD_LIMITS, build_lead_prompt, build_starting_detail
+from oversight.agents._lead_history import ServerNotice
+from oversight.agents._lead_policy import (
+    LEAD_LIMITS,
+    LeadPolicy,
+    build_lead_prompt,
+    build_starting_detail,
+)
 from oversight.agents._lead_tools import (
     LEAD_TOOL_SCHEMAS,
     LeadProposalError,
@@ -149,6 +155,7 @@ __all__ = [
     "ExamplesOutcome",
     "LeadEnd",
     "LeadLimits",
+    "LeadPolicy",
     "LeadProposalError",
     "LeadRun",
     "LeadTools",
@@ -170,6 +177,7 @@ __all__ = [
     "RunEnd",
     "Script",
     "ScriptedModel",
+    "ServerNotice",
     "TaskClients",
     "ToolCall",
     "ToolSchema",

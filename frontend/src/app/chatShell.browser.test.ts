@@ -336,13 +336,18 @@ it.each(
     });
     expect(measured.columns).toEqual(width === 1920 ? [56, 280, 1284, 300] : [56, 260, 704, 260]);
     expect(measured.switch).toBe(34);
-    expect(measured.sideHeaders).toEqual([56, 56]);
+    expect(measured.sideHeaders).toEqual([width === 1920 ? 98 : 94, 56]);
     expect(measured.status).toBe(24);
     await check(page.locator(".chat-work .chat-side-body > *")).toHaveCount(0);
     await check(page.locator(".chat-shell article, .chat-shell .file-agent-mark")).toHaveCount(0);
-    await check(
-      page.getByText(/^(Proposed change|Merged by rules|See on graph|New task)$/),
-    ).toHaveCount(0);
+    await check(page.getByText(/^(Proposed change|Merged by rules|See on graph)$/)).toHaveCount(0);
+    const startActions = page.locator(".chat-start-actions").getByRole("button");
+    await check(startActions).toHaveText(["New task", "New lead"]);
+    for (const button of await startActions.all()) {
+      const bounds = await button.boundingBox();
+      expect(bounds?.width).toBe(width === 1920 ? 123.5 : 115.5);
+      expect(bounds?.height).toBe(34);
+    }
     if (state === "working") {
       expect(measured.cap).toBe(width === 1920 ? 880 : 704);
       expect(measured.gutter).toBe(width === 1920 ? 24 : 20);

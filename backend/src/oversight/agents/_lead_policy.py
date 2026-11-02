@@ -1,5 +1,7 @@
 """Pure defaults and derived instructions for a person's explicit lead snapshot."""
 
+from dataclasses import dataclass
+
 from oversight_contracts.events import LeadLimits
 
 LEAD_LIMITS = LeadLimits(
@@ -11,6 +13,15 @@ LEAD_LIMITS = LeadLimits(
     subtasks=6,
     task_chars=2_000,
 )
+
+
+@dataclass(frozen=True)
+class LeadPolicy:
+    """Run-local extension of the captured public limits; never model-controlled."""
+
+    limits: LeadLimits
+    history_chars: int
+    wakes: int = 3
 
 
 def wall_clock_text(seconds: float) -> str:

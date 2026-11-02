@@ -14,12 +14,17 @@ it.each([
 ] as const)("renders the running header for %s without capture flags", (name, count) => {
   const html = renderToStaticMarkup(<ChatAgentsFrame state={fold(scenario(name))} />);
   expect(html).toContain(
-    `<header><h2>Agents</h2><span>${String(count)} of 2 running</span></header>`,
+    `<header><h2>Agents</h2><span>${String(count)} of 2 running</span><div class="chat-start-actions">`,
   );
+  const header = html.split("</header>")[0] ?? "";
+  expect(header.match(/<button/g)).toHaveLength(2);
+  expect(header).toContain("New task</button>");
+  expect(header).toContain("New lead</button></div>");
 });
 it("omits the numeric header before metadata and derives the denominator from the run", () => {
   const initial = renderToStaticMarkup(<ChatAgentsFrame state={createInitialState()} />);
-  expect(initial).toContain("<header><h2>Agents</h2></header>");
+  expect(initial).toContain('<header><h2>Agents</h2><div class="chat-start-actions">');
+  expect(initial).not.toMatch(/of \d+ running/);
   const state = fold(scenario("working"));
   if (!state.run) throw new Error("Missing fixture run");
   const html = renderToStaticMarkup(
@@ -39,7 +44,7 @@ it("exposes full identities, selected state and facts in a native button list", 
       onOpenConversation={onOpenConversation}
     />,
   );
-  expect(html).toContain('<ul class="chat-agent-list" aria-label="Coding agents">');
+  expect(html).toContain('<ul class="chat-agent-list" aria-label="Agents">');
   expect(html.match(/<button/g)).toHaveLength(2);
   expect(html).toContain('aria-pressed="true"');
   expect(html).toContain('aria-pressed="false"');

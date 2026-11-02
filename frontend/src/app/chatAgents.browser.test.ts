@@ -122,7 +122,7 @@ it("preserves team members on slot reuse and resets rows and letters for a new r
     await check(page.locator(".chat-agent-name")).toHaveText(["Agent A·1", "Agent A·2"]);
     await check(row(page, "A·1")).toHaveAttribute("aria-pressed", "true");
     await row(page, "A·2").click();
-    await check(page.getByLabel("Agent B conversation", { exact: true })).toBeVisible();
+    await check(page.getByLabel("Agent A·2 conversation", { exact: true })).toBeVisible();
     const start = seed.find((e) => e.type === "run.started");
     if (!start) throw new Error("Missing fixture run");
     await page.evaluate(

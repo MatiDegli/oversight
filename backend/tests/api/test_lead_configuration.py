@@ -14,6 +14,7 @@ from live_helpers import DEADLINE_S, error_code, is_type, live_server, two_fakes
 
 from oversight.agents import build_lead_prompt, build_lead_tool_schemas, build_starting_detail
 from oversight.agents import prompt_version as version
+from oversight.agents._prompts import SERVER_NOTICE_PROMPT
 
 pytestmark = pytest.mark.anyio
 
@@ -59,7 +60,7 @@ async def test_snapshot_survives_environment_and_settings_replacement(
             assert lead.limits is snapshot and lead.run is not None
             assert lead.status.limits is snapshot
             assert lead.run.limits is snapshot and lead.run.tools.limits is snapshot
-            assert lead.run.prompt == build_lead_prompt(snapshot)
+            assert lead.run.prompt == build_lead_prompt(snapshot) + "\n\n" + SERVER_NOTICE_PROMPT
             assert lead.run.schemas == build_lead_tool_schemas(snapshot)
             assert lead.run.history.history_chars == 48000
             statuses = [

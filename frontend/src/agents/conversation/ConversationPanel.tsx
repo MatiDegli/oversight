@@ -49,7 +49,9 @@ export function ConversationPanel({
   return (
     <section
       aria-label={
-        header.kind === "lead" ? "Lead conversation" : `Agent ${header.slot} conversation`
+        header.kind === "lead"
+          ? "Lead conversation"
+          : `Agent ${header.letter ?? header.slot} conversation`
       }
       className="conversation-panel flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >

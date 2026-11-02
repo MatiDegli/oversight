@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from oversight.agents._attempts import attempt_observer
-from oversight.agents._lead_history import LeadHistory
+from oversight.agents._lead_history import LeadHistory, ServerNotice
 from oversight.agents._lead_policy import (
     LEAD_LIMITS,
     build_lead_prompt,
@@ -19,6 +19,7 @@ from oversight.agents._lead_policy import (
 )
 from oversight.agents._lead_replies import reply_text
 from oversight.agents._lead_tools import LeadTools, build_lead_tool_schemas
+from oversight.agents._prompts import SERVER_NOTICE_PROMPT
 from oversight.agents._replies import ReplyError, ReplyRecovery
 from oversight.agents.client import (
     CALL_SCOPE,
@@ -77,7 +78,7 @@ class LeadRun:
         if limits != tools.limits:
             raise ValueError("LeadRun and LeadTools require the same lead limits")
         self.on_working, self.on_step, self.limits = on_working, on_step, limits
-        self.prompt = build_lead_prompt(limits)
+        self.prompt = build_lead_prompt(limits) + "\n\n" + SERVER_NOTICE_PROMPT
         self.schemas = build_lead_tool_schemas(limits)
         self.mask = mask
         self.history = LeadHistory(task, history_chars=history_chars)
@@ -85,6 +86,8 @@ class LeadRun:
         self.turn_steps = 0
         self.human: str | None = None
         self.answers_seq: int | None = None
+        self.notice: ServerNotice | None = None
+        self.woken_by: list[int] | None = None
         self.text: str | None = None
         self.seen: Counter[tuple[str, str, str]] = Counter()
 
@@ -93,10 +96,18 @@ class LeadRun:
             text += " Requested " + ", ".join(self.tools.plan_ids) + "."
         return text
 
-    async def run(self, human: str | None = None, answers_seq: int | None = None) -> LeadEnd:
+    async def run(
+        self,
+        human: str | None = None,
+        answers_seq: int | None = None,
+        *,
+        notice: ServerNotice | None = None,
+        woken_by: list[int] | None = None,
+    ) -> LeadEnd:
         self.turns = self.failures = self.turn_steps = 0
         self.seen.clear()
-        self.tools.through_seq = None
+        self.tools.through_seq = notice.through_seq if notice is not None else None
+        self.notice, self.woken_by = notice, woken_by
         self.human, self.answers_seq, self.text = human, answers_seq, None
         deadline = asyncio.timeout(self.limits.wall_clock_s)
         try:
@@ -134,7 +145,7 @@ class LeadRun:
     async def _loop(self, client: ModelClient) -> LeadEnd:
         messages: list[Message] = [
             {"role": "system", "content": self.prompt},
-            *self.history.messages(self.human, reserved=len(self.prompt)),
+            *self.history.messages(self.human, reserved=len(self.prompt), notice=self.notice),
         ]
         recovery = ReplyRecovery()
         while True:
@@ -187,11 +198,12 @@ class LeadRun:
         reply = LeadReply(
             agent_id=self.agent_id,
             answers_seq=self.answers_seq,
+            woken_by=self.woken_by,
             text=text,
             through_seq=self.tools.through_seq,
             cut=cut,
         )
-        self.history.append(self.human, text)
+        self.history.append(self.human, text, self.notice)
         detail = (
             "Requested " + ", ".join(self.tools.plan_ids) + "."
             if self.tools.plan_ids

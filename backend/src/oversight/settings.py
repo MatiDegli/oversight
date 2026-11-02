@@ -55,7 +55,8 @@ class Settings:
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
     workspace_source: str = ""
-    """OVERSIGHT_WORKSPACE_SOURCE: empty for demo-repo, or a server-owned pinned profile."""
+    """OVERSIGHT_WORKSPACE_SOURCE: raw selection; empty demo or pinned profile.
+    Own-copy composition is private; public repository paths still refuse."""
     layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
     """The preset layout, `{node_id: {x, y}}`; a missing or unusable file means the graph has no
     positions. OVERSIGHT_LAYOUT may be relative, and then starts at the repository root, not at the
@@ -74,6 +75,7 @@ class Settings:
     lead_max_subtasks: int = 6
     lead_max_task_chars: int = 2000
     lead_history_chars: int = 24000
+    lead_wakes: int = 3
     memory_hold_percent: int = 90
     """OVERSIGHT_MEMORY_HOLD_PERCENT: hold new starts at this host-memory percentage."""
     test_timeout_s: int = 60
@@ -156,6 +158,8 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if type(self.lead_wakes) is not int or self.lead_wakes < 0:
+            raise ValueError("OVERSIGHT_LEAD_WAKES must be a nonnegative whole number")
         for name in LEAD_SETTING_DEFAULTS:
             value = getattr(self, name)
             if type(value) is not int or value < 1:
@@ -205,6 +209,7 @@ class Settings:
             lead_max_subtasks=resolve_lead_setting(merged, "lead_max_subtasks"),
             lead_max_task_chars=resolve_lead_setting(merged, "lead_max_task_chars"),
             lead_history_chars=resolve_lead_setting(merged, "lead_history_chars"),
+            lead_wakes=resolve_lead_wakes(merged),
             memory_hold_percent=resolve_memory_hold_percent(merged),
             test_timeout_s=resolve_test_timeout(merged),
             agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
@@ -338,6 +343,18 @@ def resolve_lead_setting(values: Mapping[str, str], field: str) -> int:
     if not raw.isascii() or not raw.isdecimal():
         raise ValueError(f"{name} must be a positive whole number")
     # Convert bounded chunks so Python's decimal-string safety limit adds no setting cap.
+    result = 0
+    for offset in range(0, len(raw), 9):
+        chunk = raw[offset : offset + 9]
+        result = result * 10 ** len(chunk) + int(chunk)
+    return result
+
+
+def resolve_lead_wakes(values: Mapping[str, str]) -> int:
+    """Zero disables execution; no configured or decimal-conversion maximum."""
+    raw = values.get("OVERSIGHT_LEAD_WAKES", "3")
+    if not raw.isascii() or not raw.isdecimal():
+        raise ValueError("OVERSIGHT_LEAD_WAKES must be a nonnegative whole number")
     result = 0
     for offset in range(0, len(raw), 9):
         chunk = raw[offset : offset + 9]

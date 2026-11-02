@@ -1,7 +1,9 @@
+import { Plus } from "lucide-react";
 import type { KeyboardEvent } from "react";
 import type { State } from "../../state";
 // eslint-disable-next-line no-restricted-imports -- C2 owns this Chat-only leaf; the shared agents barrel is outside this slice.
-import { selectChatAgents } from "../../agents/chatAgentSelectors";
+import { selectChatRows } from "../../agents/chatLeadSelectors";
+import { ChatLeadRow } from "./ChatLeadRow";
 import { agentLook, agentSlotStyle } from "../../theme";
 import type { ChatAgentSelection } from "./ChatShell";
 import "./chatAgents.css";
@@ -25,17 +27,30 @@ export function ChatAgents({
   state,
   selectedAgentId,
   onOpenConversation,
-}: ChatAgentSelection & { state: State }) {
-  const rows = selectChatAgents(state);
-  if (!rows.length)
+  leadDraft,
+}: ChatAgentSelection & { state: State; leadDraft?: boolean }) {
+  const rows = selectChatRows(state);
+  const leadTeams = new Set(rows.filter((row) => row.kind === "lead").map((row) => row.team));
+  if (!rows.length && !leadDraft)
     return (
       <p className="chat-agents-empty">
         No agents yet. Each task you start gets its own letter and color.
       </p>
     );
   return (
-    <ul className="chat-agent-list" aria-label="Coding agents" onKeyDown={navigate}>
+    <ul className="chat-agent-list" aria-label="Agents" onKeyDown={navigate}>
       {rows.map((row) => {
+        if (row.kind === "lead")
+          return (
+            <li key={row.id}>
+              <ChatLeadRow
+                row={row}
+                selectedAgentId={selectedAgentId}
+                onOpenConversation={onOpenConversation}
+              />
+            </li>
+          );
+        const member = leadTeams.has(row.team);
         const Row = onOpenConversation ? "button" : "div";
         return (
           <li key={row.id}>
@@ -46,6 +61,7 @@ export function ChatAgents({
               data-selected={selectedAgentId === row.id}
               data-ended={row.done}
               data-review={row.ready}
+              data-member={member}
               {...(onOpenConversation
                 ? {
                     type: "button" as const,
@@ -66,12 +82,14 @@ export function ChatAgents({
                 .join("; ")}
             >
               <span className={`chat-agent-badge ${agentLook[row.hue].tint}`} aria-hidden="true">
-                {row.letter}
+                {member ? row.hue : row.letter}
                 <span className="chat-agent-lamp" />
               </span>
               <span className="chat-agent-content">
                 <span className="chat-agent-heading">
-                  <span className="chat-agent-name">Agent {row.letter}</span>
+                  <span className="chat-agent-name">
+                    {member ? row.letter : `Agent ${row.letter}`}
+                  </span>
                   <span className="chat-agent-pill">{row.label}</span>
                 </span>
                 <span className="chat-agent-model">{row.model}</span>
@@ -95,6 +113,27 @@ export function ChatAgents({
           </li>
         );
       })}
+      {leadDraft && (
+        <li>
+          <div
+            className="chat-agent-row chat-lead-draft"
+            data-selected="true"
+            role="group"
+            aria-label="New lead draft"
+          >
+            <span className="chat-lead-draft-icon">
+              <Plus size={18} aria-hidden="true" />
+            </span>
+            <span className="chat-agent-content">
+              <span className="chat-agent-heading">
+                <span className="chat-agent-name">New lead</span>
+                <span className="chat-agent-pill">Not started</span>
+              </span>
+              <span className="chat-lead-team">Writing its first task</span>
+            </span>
+          </div>
+        </li>
+      )}
     </ul>
   );
 }

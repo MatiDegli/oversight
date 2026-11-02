@@ -276,7 +276,7 @@ def test_prompt_version_hashes_the_revision_prompt() -> None:
             ).encode()
         ).hexdigest()[:12]
     )
-    assert expected == PROMPT_VERSION == "agent-v1-aaef5d57bb58"
+    assert expected == PROMPT_VERSION == "agent-v1-4a2fa60c5ec6"
 
 
 async def test_revise_before_a_run_raises(small_tree: Opened) -> None:

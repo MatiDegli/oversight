@@ -75,7 +75,7 @@ export function Composer({
       if (!lead || stateStore.getState().state.run?.run_id === runId) clearSentDraft(key, text);
     } catch (error) {
       clearControlFailure();
-      setDraftFailure(key, commandFailure(lead ? "Message the lead" : "Send", error));
+      setDraftFailure(key, commandFailure(lead ? `Message Lead ${header.letter}` : "Send", error));
     } finally {
       finishSend(key);
     }
@@ -108,12 +108,14 @@ export function Composer({
     <div className="conversation-composer shrink-0 border-t border-divider p-[14px]">
       {(onSend || lead) && (
         <textarea
-          aria-label={lead ? "Message the lead" : `Message Agent ${header.slot}`}
+          aria-label={
+            lead ? `Message Lead ${header.letter}` : `Message Agent ${header.letter ?? header.slot}`
+          }
           aria-describedby={!active || replay || tooLong ? captionId : undefined}
           placeholder={
             lead
-              ? "Message the lead"
-              : `Message Agent ${header.slot}. It reads it at its next step.`
+              ? `Message Lead ${header.letter}`
+              : `Message Agent ${header.letter ?? header.slot}. It reads it at its next step.`
           }
           aria-disabled={!active || replay}
           readOnly={pending || !active || replay}
@@ -132,7 +134,7 @@ export function Composer({
               : tooLong
                 ? "Use at most 4,096 characters."
                 : `The lead is ${header.state}. Messages are available only while idle.`
-            : `Agent ${header.slot} is not running.`}
+            : `Agent ${header.letter ?? header.slot} is not running.`}
         </p>
       )}
       <div className="composer-actions mt-[10px] flex flex-wrap items-start gap-2">
