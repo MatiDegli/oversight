@@ -5,7 +5,9 @@ guard the previous runtime and disclose trust before calling source Git. Staging
 validate this inventory again before reset. See DECISIONS.md and docs/workspace-source.md.
 """
 
+import ast
 import hashlib
+import json
 import ntpath
 import os
 import re
@@ -16,6 +18,8 @@ from collections.abc import Callable, Generator
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any, cast
+from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 from oversight.workspace._platform import (
@@ -1025,6 +1029,7 @@ def finish_reset(runtime: Path, commit: str, stage: StagedSource | None) -> None
 class OwnEnvironment:
     python: Path
     roots: tuple[Path, ...] = ()
+    guard: str | None = None
 
 
 @dataclass
@@ -1067,6 +1072,8 @@ def prepare_environment(
 ) -> OwnEnvironment:
     """Read only the original venv. No builder, copy, installation or fallback is allowed."""
     io = io or EnvironmentIO(deadline)
+    io.deadline = min(io.deadline, deadline)
+    mapping = False
     try:
         venv = source.root / ".venv"
         for path in (venv, venv / "Scripts", venv / "Lib", venv / "Lib/site-packages", tree):
@@ -1092,8 +1099,182 @@ def prepare_environment(
             if executable_path != home / "python.exe":
                 raise ValueError("inconsistent base executable")
             io.check(executable_path, directory=False)
-        return OwnEnvironment(python)
-    except (OSError, ValueError, KeyError, IntegrityError, InvalidPath):
-        raise OSError(
-            "Own-source environment unavailable: missing or unsafe original venv"
-        ) from None
+        mapping = True
+        roots, packages = editable_imports(source, tree, io)
+        guard = json.dumps(
+            dict(
+                source=str(source.root),
+                tree=str(tree),
+                libraries=[str(venv / "Lib")],
+                packages=packages,
+            )
+        )
+        return OwnEnvironment(python, roots, guard)
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        IndexError,
+        RecursionError,
+        IntegrityError,
+        InvalidPath,
+    ):
+        reason = (
+            "unsupported or unsafe editable metadata"
+            if mapping
+            else "missing or unsafe original venv"
+        )
+        raise OSError("Own-source environment unavailable: " + reason) from None
+
+
+def _inside(root: Path, path: Path) -> bool:
+    try:
+        return ntpath.commonpath(
+            [ntpath.normcase(str(root)), ntpath.normcase(str(path))]
+        ) == ntpath.normcase(str(root))
+    except ValueError:
+        return False
+
+
+def _mapped_target(
+    raw: str, source: NtSource, tree: Path, site: Path, io: EnvironmentIO
+) -> Path | None:
+    if ntpath.splitdrive(raw)[0]:
+        raw = absolute_drive(raw)
+        if not _inside(Path(source.source_path), Path(raw)):
+            return None
+        path = io.bind(raw)
+    else:
+        path = Path(os.path.abspath(site / raw))
+    if not _inside(source.root, path) or _inside(source.root / ".venv", path):
+        return None
+    relative = ntpath.relpath(str(path), str(source.root)).replace("\\", "/")
+    mapped = tree if relative == "." else resolve_in(tree, relative, nt=True)
+    for target in (path, mapped):
+        io.check(target, directory=stat.S_ISDIR(target.lstat().st_mode))
+    return mapped
+
+
+def _package_name(name: str) -> str:
+    if not name or any(not part.isidentifier() for part in name.split(".")):
+        raise ValueError("invalid editable package name")
+    return name
+
+
+def editable_imports(
+    source: NtSource, tree: Path, io: EnvironmentIO
+) -> tuple[tuple[Path, ...], tuple[str, ...]]:
+    """Static bounded metadata only. Recompute for this tree, never import a finder here."""
+    site = source.root / ".venv/Lib/site-packages"
+    budget = Budget(io.deadline)
+    children: list[Path] = []
+    for child in site.iterdir():
+        budget.charge(0)
+        children.append(child)
+    roots: set[Path] = set()
+    packages: set[str] = set()
+    expected: set[str] = set()
+    referenced: set[str] = set()
+    own_editable = False
+    for child in children:
+        if not child.name.endswith(".dist-info"):
+            continue
+        io.check(child, directory=True)
+        url = child / "direct_url.json"
+        if not url.exists():
+            continue
+        data: Any = json.loads(io.read(url, budget))
+        if data.get("dir_info", {}).get("editable") is not True:
+            continue
+        parsed = urlsplit(str(data["url"]))
+        if (
+            parsed.scheme != "file"
+            or parsed.netloc.lower() not in ("", "localhost")
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("unsupported editable URL")
+        raw = unquote(parsed.path)
+        raw = raw[1:] if re.match(r"^/[A-Za-z]:/", raw) else raw
+        if _mapped_target(raw, source, tree, site, io) is None:
+            continue
+        own_editable = True
+        names = child / "top_level.txt"
+        if names.exists():
+            expected.update(
+                _package_name(n) for n in io.read(names, budget).decode("utf-8").splitlines() if n
+            )
+    for child in children:
+        if not child.name.endswith(".pth"):
+            continue
+        for line in io.read(child, budget).decode("utf-8-sig").splitlines():
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith(("import ", "import\t")):
+                if "__editable__" in line:
+                    match = re.fullmatch(r"import (__editable__\w+);\s*\1\.install\(\)", line)
+                    if match is None:
+                        raise ValueError("unsupported editable hook")
+                    referenced.add(match[1] + ".py")
+                continue
+            mapped = _mapped_target(line, source, tree, site, io)
+            if mapped is not None:
+                io.check(mapped, directory=True)
+                roots.add(mapped)
+    for child in children:
+        if not (child.name.startswith("__editable__") and child.suffix == ".py"):
+            continue
+        try:
+            literals = _finder_literals(io.read(child, budget))
+        except (ValueError, SyntaxError):
+            if child.name in referenced:
+                raise ValueError("unsupported editable finder") from None
+            continue  # An unrelated finder's presence is not a refusal.
+        referenced.discard(child.name)
+        for kind, mapping in literals.items():
+            for name, values in mapping.items():
+                for raw in [values] if kind == "MAPPING" else values:
+                    if not isinstance(raw, str):
+                        raise ValueError("invalid finder target")
+                    mapped = _mapped_target(raw, source, tree, site, io)
+                    if mapped is not None:
+                        packages.add(_package_name(name))
+                        root = mapped.parents[len(name.split(".")) - 1]
+                        if not _inside(tree, root):
+                            raise ValueError("unmapped package parent")
+                        io.check(root, directory=True)
+                        roots.add(root)
+    if referenced:
+        raise ValueError("missing editable finder")
+    for name in expected:
+        targets = [root / name.replace(".", "/") for root in roots]
+        candidates = [
+            p for target in targets for p in (target, target.with_suffix(".py")) if p.exists()
+        ]
+        if not candidates:
+            raise ValueError("unmapped editable package")
+        for target in candidates:
+            io.check(target, directory=stat.S_ISDIR(target.lstat().st_mode))
+        packages.add(name)
+    if (own_editable or roots) and not packages:
+        raise ValueError("editable metadata alone cannot establish import roots")
+    return tuple(sorted(roots)), tuple(sorted(packages))
+
+
+def _finder_literals(data: bytes) -> dict[str, dict[str, Any]]:
+    literals: dict[str, dict[str, Any]] = {}
+    for statement in ast.parse(data).body:
+        if not isinstance(statement, ast.Assign | ast.AnnAssign) or statement.value is None:
+            continue
+        targets = statement.targets if isinstance(statement, ast.Assign) else [statement.target]
+        for target in targets:
+            if isinstance(target, ast.Name) and target.id in {"MAPPING", "NAMESPACES"}:
+                value = ast.literal_eval(statement.value)
+                if target.id in literals or not isinstance(value, dict):
+                    raise ValueError("invalid finder mapping")
+                literals[target.id] = cast(dict[str, Any], value)
+    if not literals:
+        raise ValueError("missing finder literals")
+    return literals

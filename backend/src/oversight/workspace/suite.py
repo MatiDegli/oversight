@@ -54,7 +54,9 @@ try:
         import pytest, oversight_report
         origin = os.path.normcase(os.path.realpath(oversight_report.__file__))
         ok = origin == os.path.normcase(expected)
-except Exception:
+        if ok:
+            oversight_report.guard_imports()
+except BaseException:
     ok = False
 print(json.dumps(dict(versions, ok=ok)))
 """
@@ -304,6 +306,8 @@ async def run_suite(
                 TMP=env["HOME"],
                 OVERSIGHT_TRUSTED_PLUGIN=str(plugin_dir / "oversight_report.py"),
             )
+            if own.guard is not None:
+                env["OVERSIGHT_IMPORT_GUARD"] = own.guard
             await _probe_environment(python, tree_root, env, deadline, _clock, spawn)
             argv = _pytest_argv(python, junit, case_ids, pytest_targets, pytest_options)
         if measured_targets is not None:
