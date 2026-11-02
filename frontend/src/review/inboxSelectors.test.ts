@@ -45,6 +45,36 @@ it("counts a lead once using its latest revision's step, including null plan req
   ).toEqual({ agents: 1, steps: 4, minutes: 0 });
 });
 
+it("retains the first highest-revision lead step through resends and older revisions", () => {
+  const current = leadEvents.findLast((event) => event.type === "lead.status");
+  if (current?.type !== "lead.status") throw new Error("Missing current lead");
+  expect(current.payload.revision).toBe(
+    Math.max(
+      ...leadEvents.flatMap((event) =>
+        event.type === "lead.status" ? [event.payload.revision] : [],
+      ),
+    ),
+  );
+  const resent = applyEvent(leadState, {
+    ...current,
+    seq: leadState.lastSeq + 1,
+    payload: { ...current.payload, step: 99 },
+  });
+  expect(selectInboxSummary(resent)).toEqual({ agents: 1, steps: 4, minutes: 0 });
+  const newer = applyEvent(resent, {
+    ...current,
+    seq: resent.lastSeq + 1,
+    payload: { ...current.payload, revision: current.payload.revision + 1, step: 5 },
+  });
+  expect(selectInboxSummary(newer)).toEqual({ agents: 1, steps: 5, minutes: 0 });
+  const older = applyEvent(newer, {
+    ...current,
+    seq: newer.lastSeq + 1,
+    payload: { ...current.payload, step: 100 },
+  });
+  expect(selectInboxSummary(older)).toEqual({ agents: 1, steps: 5, minutes: 0 });
+});
+
 it("counts a coding agent plus a lead and sums their steps", () => {
   const agent = state.agents["agent-2"],
     steps = state.steps["agent-2"];

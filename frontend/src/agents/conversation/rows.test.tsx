@@ -83,6 +83,42 @@ it.each([false, true])("shows a sentence and keeps the tool on hover (compact=%s
   expect(html).not.toContain("<code");
 });
 
+it.each([false, true])("confines tool titles to summary text (compact=%s)", (compact) => {
+  const edit = sketchState.steps["agent-1"]?.find((step) => step.tool === "edit_file");
+  const tests = sketchState.steps["agent-1"]?.find((step) => step.tests);
+  if (!edit || !tests) throw new Error("Missing tool steps");
+  const steps = [
+    { ...edit, summary: "Edited pricing.py" },
+    {
+      ...edit,
+      summary: "Could not edit pricing.py",
+      result: "error" as const,
+      error: "File changed during the edit.",
+    },
+    { ...tests, summary: "Tested pricing.py" },
+  ];
+  const html = steps
+    .map((step, index) =>
+      renderToStaticMarkup(
+        <TimelineEntry
+          compact={compact}
+          changeId="change-1"
+          onOpenDiff={() => undefined}
+          entry={{ kind: "step", seq: index + 1, ts: undefined, step }}
+        />,
+      ),
+    )
+    .join("");
+  expect(html.match(/>View in diff<\/button>/g)).toHaveLength(1);
+  expect(html).toContain("File changed during the edit.");
+  expect(html).toContain("Test output");
+  expect(html).toContain("28 passed in 0.40s");
+  const titled = [...html.matchAll(/<(\w+)[^>]*\btitle="([^"]*)"[^>]*>(.*?)<\/\1>/gs)];
+  expect(titled.map((match) => match.slice(1))).toEqual(
+    steps.map((step) => ["span", step.tool, step.summary]),
+  );
+});
+
 it.each(
   [false, true].flatMap((compact) =>
     (["list_files", "read_file", "edit_file", "run_tests", "finish"] as const).map((tool) => ({
@@ -104,7 +140,9 @@ it.each(
   expect(html.replace(/<[^>]*>/g, "")).toContain(step.tool);
   expect(html).toContain(`title="${step.tool}"`);
   expect(html).not.toContain("<code");
-  const title = html.match(new RegExp(`<div class="([^"]*)">${step.tool}<`));
+  const title = html.match(
+    new RegExp(`<div class="([^"]*)"><span title="${step.tool}">${step.tool}</span>`),
+  );
   expect(title).not.toBeNull();
   expect(title?.[1]?.split(/\s+/)).not.toContain("font-mono");
 });
