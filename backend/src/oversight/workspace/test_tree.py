@@ -13,6 +13,8 @@ from oversight.workspace.integrity import (
     GitIdentity,
     remaining,
     scan_nested_git,
+    verify_byte_override,
+    verify_tree_byte_policy,
     veto_gitmodules,
     veto_index,
 )
@@ -27,11 +29,15 @@ async def capture_test_tree(
     env: Mapping[str, str],
     flags: Sequence[str],
     timeout_s: float,
+    nt_source_bytes: bool = False,
 ) -> tuple[str, str | None]:
     index = tmp / f"suite-index-{uuid4().hex}"
     deadline = time.monotonic() + timeout_s
 
     async def git(*args: str) -> str:
+        if nt_source_bytes:
+            await offload(partial(verify_byte_override, identity, deadline))
+            await offload(partial(verify_tree_byte_policy, identity, deadline))
         binary = "git"
         if sys.platform == "win32":
             binary = await offload(lambda: executable("git"))

@@ -46,6 +46,7 @@ from oversight.workspace.integrity import (
     IntegrityError,
     MergeGuard,
     prepare_merge_guard,
+    validate_source_byte_policy,
     verify_merge_abort,
     verify_merge_guard,
 )
@@ -162,6 +163,7 @@ __all__ = [
     "unlink_retry",
     "valid_agent_id",
     "validate_source",
+    "validate_source_byte_policy",
     "validate_suite_execution",
     "verify_merge_abort",
     "verify_merge_guard",

@@ -270,3 +270,18 @@ def test_a_replay_answers_501_to_the_file_routes_without_reading_the_body(tmp_pa
     assert error_code(client.get("/files")) == (501, "not_implemented")  # no path asked
     assert error_code(client.put("/files", content=b"not json")) == (501, "not_implemented")
     assert error_code(client.post("/graph/rescan", content=b"not json")) == (501, "not_implemented")
+
+
+@pytest.mark.parametrize("content", ["# crlf\r\nVALUE = 1\r\n", "# mixed\r\nVALUE = 1\n"])
+async def test_raw_eol_round_trip_and_submitted_lf(tmp_path: Path, content: str) -> None:
+    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path)) as s:
+        before = await read(s, PATH)
+        assert (await put(s, PATH, content, before.hash)).status_code == 200
+        after = await read(s, PATH)
+        assert after.content.encode() == content.encode()
+        assert after.hash == content_hash(content.encode())
+        stale = await put(s, PATH, "VALUE = 0\n", before.hash)
+        assert error_code(stale) == (409, "stale_file")
+        lf = "VALUE = 2\n"
+        assert (await put(s, PATH, lf, after.hash)).status_code == 200
+        assert (await read(s, PATH)).content.encode() == lf.encode()

@@ -229,7 +229,7 @@ WINDOWS_BACKEND = (
     "workspace/_platform.py workspace/capability.py workspace/core.py workspace/files.py "
     "workspace/integrity.py workspace/isolation.py workspace/metadata_io.py workspace/runner.py "
     "workspace/source.py workspace/test_tree.py workspace/tree.py workspace/snapshot.py "
-    "workspace/suite_files.py"
+    "workspace/suite_files.py workspace/suite_guard.py agents/tools.py"
 )
 UPLOAD = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2"
 
@@ -271,7 +271,9 @@ def assert_windows_policy(text: str) -> None:
         "OVERSIGHT_NT_EVIDENCE_DIR": "${{ github.workspace }}/nt-evidence",
     }
     assert_windows_steps(steps(job["steps"]))
-    assert "tools/demo_check_nt.py --hard-kill-check" not in text  # W2a is absent
+    assert (
+        "tools/demo_check_nt.py --hard-kill-check" not in text
+    )  # driver qualification remains staged
     assert "OVERSIGHT_NT_FULL_DEMO" not in text
     assert_ci_triggers((WORKFLOWS / "ci.yml").read_text())
 
@@ -287,13 +289,13 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         "if-no-files-found: error\nretention-days: 7",
     }
     assert UPLOAD in (WORKFLOWS / "ci.yml").read_text()
-    assert len(items) == 15
+    assert len(items) == 16
     for index, step in enumerate(items[4:-1], 4):
         permitted = {"name", "run"}
-        if index == 11:
+        if index == 12:
             permitted.add("timeout-minutes")
             assert step["timeout-minutes"] == "3"
-        if index == 13:
+        if index == 14:
             permitted.add("if")
             assert step["if"] == "always()"
         assert set(step) <= permitted
@@ -306,6 +308,12 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         )
     ]
     files = WINDOWS_TOOLS.split() + ["backend/src/oversight/" + f for f in WINDOWS_BACKEND.split()]
+    files += [
+        "backend/tests/workspace/test_source_bytes.py",
+        "backend/tests/workspace/test_source_bytes_windows.py",
+        "backend/tests/agents/test_tools_nt_bytes.py",
+        "backend/tests/api/test_files.py",
+    ]
     assert items[8] == {
         "name": "Windows target typing for landed sites",
         "run": "uv run --frozen pyright --pythonplatform Windows " + " ".join(files),
@@ -326,11 +334,20 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
             + f" -rs -s 2>&1 | Tee-Object nt-evidence/{log}.log\n"
             + "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
         }
-    assert items[11]["run"] == (
+    assert items[11] == {
+        "name": "W4b injected and native byte cases",
+        "run": "|\nuv run --frozen pytest -o timeout_method=thread "
+        "backend/tests/workspace/test_source_bytes.py "
+        "backend/tests/workspace/test_source_bytes_windows.py "
+        "backend/tests/agents/test_tools_nt_bytes.py -n 2 -rs -s 2>&1 | "
+        "Tee-Object nt-evidence/w4b-tests.log\n"
+        "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+    }
+    assert items[12]["run"] == (
         "|\nuv run --frozen python tools/smoke.py 2>&1 | Tee-Object nt-evidence/smoke.log\n"
         "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }"
     )
-    assert items[12] == {
+    assert items[13] == {
         "name": "Report unavailable Linux isolation",
         "run": "|\nuv run --frozen python -m oversight isolation-probe "
         "> nt-evidence/isolation-probe.json\n"
@@ -342,11 +359,11 @@ def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
     versions = items[4]["run"]
     assert "[System.Environment]::OSVersion.VersionString" in versions
     assert all(f"{tool} --version" in versions for tool in ("uv", "git", "node", "pnpm"))
-    assert "W1 + W2b + W3 only" in versions and "await W2a + W2b" in versions
-    assert "await W4" in versions and "not acceptance" in versions
+    assert "W1 + W2 + W3 + W4b byte policy only" in versions
+    assert "awaits W4a2 + W4c1 + W4c2" in versions and "not acceptance" in versions
     assert "Set-Content nt-evidence/staging.txt" in versions
-    assert "platform.python_version(), type(loop).__name__" in items[13]["run"]
-    assert "Tee-Object nt-evidence/python-loop.log" in items[13]["run"]
+    assert "platform.python_version(), type(loop).__name__" in items[14]["run"]
+    assert "Tee-Object nt-evidence/python-loop.log" in items[14]["run"]
 
 
 def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> None:
@@ -371,8 +388,8 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
         ("exit $LASTEXITCODE", "Write-Output ignored"),
         ("$probe.status -ne 'unavailable'", "$probe.status -eq 'failed'"),
         ("if: always()", "if: failure()"),
-        ("await W2a + W2b", "ready"),
-        ("await W4", "ready"),
+        ("W4b byte policy only", "ready"),
+        ("awaits W4a2 + W4c1 + W4c2", "ready"),
         ("tools/tests/test_smoke.py", "tools/tests"),
         ("uses: actions/checkout@", "uses: untrusted/checkout@"),
     ],
