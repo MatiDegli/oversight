@@ -7,9 +7,10 @@ import "./chatLeads.css";
 
 export function ChatLeadRow({
   row,
+  showTeamLine = true,
   selectedAgentId,
   onOpenConversation,
-}: ChatAgentSelection & { row: ChatLead }) {
+}: ChatAgentSelection & { row: ChatLead; showTeamLine?: boolean }) {
   const Row = onOpenConversation ? "button" : "div";
   const Icon =
     row.status.state === "done" ? Check : row.status.state === "halted" ? OctagonX : CircleStop;
@@ -49,7 +50,7 @@ export function ChatLeadRow({
           </span>
         </span>
         <span className="chat-agent-task">{row.status.task}</span>
-        {row.teamLine && (
+        {showTeamLine && row.teamLine && (
           <span className="chat-lead-team">
             {attention ? (
               <>
