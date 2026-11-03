@@ -20,7 +20,8 @@ type References[T] = Annotated[list[T], Field(min_length=1, max_length=8)]
 class _Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    kind: Literal["highlight", "files", "behavior", "moment"]
+    kind: Literal["highlight", "files", "behavior", "moment", "preview"]
+    agent_id: AgentId | None = None
     agent_ids: References[AgentId] | None = None
     paths: References[ViewPath] | None = None
     files: References[ChangeFileRef] | None = None
@@ -34,7 +35,12 @@ def parse_view(arguments: str, agent_id: str, seq: int, mask: Callable[[str], st
     try:
         args = _Arguments.model_validate_json(arguments)
         fields = args.model_fields_set - {"kind", "caption"}
-        expected = {"files": {"files"}, "behavior": {"change_id"}, "moment": {"event_seq"}}
+        expected = {
+            "files": {"files"},
+            "behavior": {"change_id"},
+            "moment": {"event_seq"},
+            "preview": {"agent_id"},
+        }
         if args.kind == "highlight":
             if not fields or fields - {"agent_ids", "paths"}:
                 raise ViewRefusal("Highlight requires only agent_ids and/or paths.")

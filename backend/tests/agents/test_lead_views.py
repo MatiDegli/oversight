@@ -18,8 +18,38 @@ VALID = [
     {"kind": "files", "files": [{"change_id": "change-1", "path": "a.py"}]},
     {"kind": "behavior", "change_id": "change-1"},
     {"kind": "moment", "event_seq": 1},
+    {"kind": "preview", "agent_id": "agent-1"},
 ]
 INVALID = [
+    *[
+        {"kind": "preview", **fields}
+        for fields in [
+            {},
+            {"agent_id": None},
+            {"agent_id": "agent-0"},
+            {"agent_id": "agent-01"},
+            {"agent_id": 1},
+            {"agent_ids": ["agent-1"]},
+            *[
+                {"agent_id": "agent-1", key: value}
+                for key, value in {
+                    "agent_ids": ["agent-1"],
+                    "change_id": "change-1",
+                    "revision": 1,
+                    "head_commit": "a" * 40,
+                    "url": "http://secret.invalid/token",
+                    "command": "secret-command",
+                    "profile": "secret-profile",
+                    "token": "secret-token",
+                    "facts": "invented",
+                    "paths": None,
+                    "files": None,
+                    "event_seq": None,
+                    "caption": None,
+                }.items()
+            ],
+        ]
+    ],
     {},
     {"kind": "unknown"},
     {"kind": "highlight"},
@@ -235,6 +265,7 @@ def test_advertised_view_is_one_closed_reference_object() -> None:
     assert params["required"] == ["kind"] and "oneOf" not in json.dumps(schema)
     assert set(params["properties"]) == {
         "kind",
+        "agent_id",
         "agent_ids",
         "paths",
         "files",
@@ -242,7 +273,13 @@ def test_advertised_view_is_one_closed_reference_object() -> None:
         "event_seq",
         "caption",
     }
-    assert params["properties"]["kind"]["enum"] == ["highlight", "files", "behavior", "moment"]
+    assert params["properties"]["kind"]["enum"] == [
+        "highlight",
+        "files",
+        "behavior",
+        "moment",
+        "preview",
+    ]
     assert LEAD_PROMPT.endswith(
         "Summarize completed plans for the person. "
         "Approval waiting is a notice, never permission to act."
@@ -312,3 +349,26 @@ async def test_view_dispatch_preserves_consecutive_failure_brake() -> None:
     assert run.steps == 7 and run.failures == 6
     publish.assert_not_awaited()
     step.assert_awaited_once_with(None)
+
+
+def test_preview_identity_constraints_and_person_authority() -> None:
+    schema = next(
+        item["function"] for item in LEAD_TOOL_SCHEMAS if item["function"]["name"] == "show_view"
+    )
+    props = schema["parameters"]["properties"]
+    assert props["agent_id"] == props["agent_ids"]["items"]
+    parsed = parse_view(json.dumps(VALID[-1] | {"caption": "c" * 160}), "agent-9", 12, str)
+    assert parsed.agent_id == "agent-9" and parsed.view.kind == "preview"
+    assert parsed.view.agent_id == "agent-1" and len(parsed.caption or "") == 160
+    for caption in ("", " ", "c" * 161):
+        with pytest.raises(ViewRefusal):
+            parse_view(json.dumps(VALID[-1] | {"caption": caption}), "agent-9", 12, str)
+    for wording in (
+        "eligible preview inventory",
+        "asks to see or try the app",
+        "never replaces review or Approve",
+        "Only the person opens it",
+        "cannot start, stop or open previews",
+        "160-character limit",
+    ):
+        assert wording in LEAD_PROMPT

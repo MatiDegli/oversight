@@ -153,15 +153,15 @@ async def test_pack_prompt_has_one_evidence_path_and_stop(small_tree: Opened) ->
     prompt = str(model.requests[0][0]["content"])
     assert "one hypothesis" in prompt and "evidence" in prompt
     assert "Stop" in prompt and "several approaches" not in prompt
-    assert _prompts.prompt_version(True) != "agent-v1-9b54c5a17a31"
+    assert _prompts.prompt_version(True) != "agent-v1-9d084b21af2c"
 
 
 @pytest.mark.parametrize(
     "history_prune_tokens,versions",
     [
-        (None, ("agent-v1-9b54c5a17a31", "agent-v1-084c4f11b6b2")),
-        (8000, ("agent-v1-864e956e87de", "agent-v1-333bb2aead66")),
-        (9000, ("agent-v1-c6ac07a82cd1", "agent-v1-1327f8a45d00")),
+        (None, ("agent-v1-9d084b21af2c", "agent-v1-3dc7d749888a")),
+        (8000, ("agent-v1-4a5b9923f98b", "agent-v1-f378a76b516f")),
+        (9000, ("agent-v1-97a2eb45e9bf", "agent-v1-672909eebe92")),
     ],
 )
 async def test_startup_exports_the_selected_prompt_version(
@@ -187,7 +187,7 @@ async def test_startup_exports_the_selected_prompt_version(
             version = json.loads(started.envelope)["payload"]["prompt_version"]
             assert version == _prompts.prompt_version(enabled, history_prune_tokens)
             assert version == versions[int(enabled)]
-            assert (version == "agent-v1-9b54c5a17a31") is (
+            assert (version == "agent-v1-9d084b21af2c") is (
                 not enabled and history_prune_tokens is None
             )
             agent = await live.start(StartAgent(task="Do the task."))
@@ -242,7 +242,7 @@ async def test_off_preserves_prompt_and_tool_results(
         + ["[1 more matches; narrow the search]"]
     )
     assert content[-1] == "Edited shop/mod.py."
-    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-9b54c5a17a31"
+    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-9d084b21af2c"
     assert (
         hashlib.sha256(_prompts.SYSTEM_PROMPT.encode()).hexdigest()
         == "8b02c2c5d9e6ea51b5be9c201cc0de04ebc56b51e49f87ea8d83e79cfd98c454"

@@ -108,7 +108,11 @@ def build_lead_tool_schemas(limits: LeadLimits) -> list[ToolSchema]:
             "show_view",
             "Show current state from committed references; never supply facts.",
             {
-                "kind": {"type": "string", "enum": ["highlight", "files", "behavior", "moment"]},
+                "kind": {
+                    "type": "string",
+                    "enum": ["highlight", "files", "behavior", "moment", "preview"],
+                },
+                "agent_id": {"type": "string", "pattern": r"^agent-[1-9]\d*$"},
                 "agent_ids": {
                     "type": "array",
                     "minItems": 1,

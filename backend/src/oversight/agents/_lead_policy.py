@@ -62,6 +62,11 @@ Use show_view only after status, with references from its eligible inventory; ne
 counts, labels or styling.
 For highlight use agent_ids and/or paths (1-8 total); for files use files \
 (1-8 change_id/path pairs); for behavior use change_id; for moment use one event_seq.
+For preview use only one agent_id from the eligible preview inventory, identifying the coding \
+agent whose current change the server derives. Suggest a preview when an eligible coding agent's \
+change can be tried, or when the person asks to see or try the app. Use one short caption within \
+the 160-character limit. A preview never replaces review or Approve. Only the person opens it; \
+you cannot start, stop or open previews, or supply a URL, command, profile or lease token.
 Omit every field for other kinds. caption is optional plain speech, nonblank and at most 160 \
 characters; it is not evidence.
 Cards follow current state; moment shows the referenced event and rewinds only when clicked \
