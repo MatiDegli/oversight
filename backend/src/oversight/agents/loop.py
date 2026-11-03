@@ -405,10 +405,10 @@ class AgentRun:
 
                 duration_ms = self._since(started)
                 self._step += 1
+                outcome = await self._report(call.name, outcome, duration_ms)
                 messages.append(
                     {"role": "tool", "tool_call_id": call.id, "content": outcome.content}
                 )
-                await self._report(call.name, outcome, duration_ms)
                 if outcome.finish_summary is not None:
                     await self.control.wait_for_admission()
                     if not self.control.pending_messages:
@@ -464,12 +464,18 @@ class AgentRun:
             return False
 
     @timed("tool_publication")
-    async def _report(self, tool: str, outcome: ToolOutcome, duration_ms: int) -> None:
+    async def _report(self, tool: str, outcome: ToolOutcome, duration_ms: int) -> ToolOutcome:
         agent_id = self._task.agent_id
         # The edit is on disk either way. A lost record only changes what the UI is told: the
         # model's result, the failure count and the stop rules still follow `outcome`.
         if outcome.suite_run is not None:
-            await self._sink.tests_executed(self._task.agent_id, outcome.suite_run)
+            suite_note = await self._sink.tests_executed(agent_id, outcome.suite_run)
+            if suite_note is not None:
+                outcome = replace(
+                    outcome,
+                    content=outcome.content + "\n" + suite_note,
+                    summary=outcome.summary + "\n" + suite_note,
+                )
         recorded = outcome.edited_path is None
         cut_short: asyncio.CancelledError | None = None
         if outcome.edited_path is not None:
@@ -509,6 +515,7 @@ class AgentRun:
         )
         if cut_short is not None:
             raise cut_short
+        return outcome
 
     async def _usage(self, reply: ModelReply) -> None:
         await publish_usage(self, reply)

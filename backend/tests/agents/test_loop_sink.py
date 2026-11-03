@@ -266,3 +266,32 @@ async def test_stop_during_file_edited_still_reports_the_edit(small_tree: Opened
     assert recorder.kinds()[-2:] == ["AgentFocus", "AgentStep"]
     assert errors(recorder) == [] and "halted" not in [s.state for s in statuses(recorder)]
     assert "return 2" in (small_tree[1].root / "shop" / "mod.py").read_text()
+
+
+@pytest.mark.parametrize("note", [None, "configuration attribution: server-written test note"])
+async def test_suite_note_precedes_step_and_next_model_history(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch, note: str | None
+) -> None:
+    recorder = Recorder()
+    recorder.suite_note = note
+    model = script([READ], [("run_tests", {})], FINISH)
+    original = Toolbox.call
+    outcomes: list[ToolOutcome] = []
+
+    async def observe(self: Toolbox, name: str, raw_arguments: str) -> ToolOutcome:
+        outcome = await original(self, name, raw_arguments)
+        outcomes.append(outcome)
+        return outcome
+
+    monkeypatch.setattr(Toolbox, "call", observe)
+    end = await make_run(small_tree, model, recorder).run()
+    assert end.state == "ready_for_review" and len(recorder.suites) == 1
+    published = steps(recorder)
+    results = [m["content"] for m in model.requests[-1] if m["role"] == "tool"]
+    suffix = "\n" + note if note is not None else ""
+    assert published[1].summary == outcomes[1].summary + suffix
+    assert results[1] == outcomes[1].content + suffix
+    assert results[0] == outcomes[0].content
+    assert published[0].summary == outcomes[0].summary
+    assert published[2].summary == outcomes[2].summary
+    assert published[1].tests == outcomes[1].tests

@@ -443,3 +443,37 @@ def test_empty_integrity_requires_capture_witness(ready: PolicyInputs) -> None:
     assert not status.complete
     assert result(replace(ready, integrity_status=status), "test_integrity").result == "unknown"
     assert integrity_status({}, {}, captured=True).complete
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "pytest.ini",
+        "nested/conftest.py",
+        "pyproject.toml",
+        "Pytest.ini",
+        "tests/Conftest.py",
+        "Conftest.py",
+        "sitecustomize.py",
+        "pkg/usercustomize.py",
+    ],
+)
+@pytest.mark.parametrize("enabled", [False, True])
+def test_configuration_diagnostic_has_no_integrity_authority(
+    ready: PolicyInputs, path: str, enabled: bool
+) -> None:
+    from oversight.changes._configuration import PREFIX, _note, is_configuration
+
+    before, after = {path: "# old\n"}, {path: "# new\n"}
+    status = integrity_status(before, after)
+    expected = result(replace(ready, integrity_status=status), "test_integrity")
+    if enabled:
+        note = _note("f" * 40, (path,) if is_configuration(path) else (), 5)
+        assert note.startswith(PREFIX)
+    assert integrity_status(before, after) == status
+    assert result(replace(ready, integrity_status=status), "test_integrity") == expected
+    assert expected.result == (
+        "fail"
+        if path in {"pytest.ini", "nested/conftest.py", "pyproject.toml", "tests/Conftest.py"}
+        else "pass"
+    )

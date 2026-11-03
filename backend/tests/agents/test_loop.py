@@ -396,3 +396,29 @@ async def test_a_cancelled_suite_reaches_the_sink_with_partial_evidence(
     assert recorder.suites[0].result.outcome == "timeout"
     assert recorder.suites[0].tested_tree is not None and recorder.suites[0].problems
     assert steps(recorder)[0].error == "interrupted before it finished"
+
+
+async def test_identical_suites_with_varying_elapsed_times_still_repeat_stop(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    workspace, tree = small_tree
+    captured = await workspace.run_tests(tree, timeout_s=60)
+    elapsed: list[int] = []
+
+    async def run_tests(tree: Tree, *, timeout_s: float):
+        elapsed.append(len(elapsed) * 123 + 1)
+        return replace(
+            captured,
+            result=captured.result.model_copy(update={"duration_ms": elapsed[-1]}),
+        )
+
+    monkeypatch.setattr(workspace, "run_tests", run_tests)
+    recorder = Recorder()
+    recorder.suite_note = "configuration attribution: identical bounded note"
+    model = script(*([("run_tests", {})] for _ in range(5)))
+    end = await make_run(small_tree, model, recorder).run()
+    assert end.state == "halted" and end.steps == 4
+    assert "same result 4 times" in (end.detail or "")
+    assert len(set(elapsed)) == 4 and len(recorder.suites) == 4
