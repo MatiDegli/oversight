@@ -1,5 +1,5 @@
-import { Plus } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import { ChevronDown, Plus } from "lucide-react";
+import { useId, useState, type KeyboardEvent } from "react";
 import type { State } from "../../state";
 import { ChatLeadRow } from "./ChatLeadRow";
 import { presentationFor, presentationStyle } from "../../teams/presentation";
@@ -10,8 +10,10 @@ import "./chatAgents.css";
 
 function navigate(event: KeyboardEvent<HTMLUListElement>) {
   if (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) return;
-  const rows = Array.from(event.currentTarget.querySelectorAll("button"));
-  const index = rows.indexOf(event.target as HTMLButtonElement);
+  const rows = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>("button.chat-agent-row"),
+  ).filter((row) => !row.closest("[hidden]"));
+  const index = rows.indexOf((event.target as HTMLElement).closest("button") as HTMLButtonElement);
   if (index < 0) return;
   const next = {
     ArrowUp: Math.max(0, index - 1),
@@ -104,6 +106,19 @@ export function ChatAgents({
   onOpenConversation,
   leadDraft,
 }: ChatAgentSelection & { state: State; leadDraft?: boolean }) {
+  const prefix = useId();
+  const runId = state.run?.run_id;
+  const [disclosure, setDisclosure] = useState({ runId, closed: new Set<string>() });
+  if (disclosure.runId !== runId) setDisclosure({ runId, closed: new Set() });
+  const closed = disclosure.runId === runId ? disclosure.closed : new Set<string>();
+  const toggle = (id: string) => {
+    setDisclosure((current) => {
+      const next = new Set(current.closed);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return { runId, closed: next };
+    });
+  };
   const groups = chatTeamGroups(state);
   const selection = { selectedAgentId, onOpenConversation };
   if (!groups.length && !leadDraft)
@@ -121,7 +136,24 @@ export function ChatAgents({
           style={presentationStyle(group.identity)}
         >
           {group.grouped && (
-            <div className="chat-team-summary">
+            <div
+              className="chat-team-summary"
+              data-selected={
+                closed.has(group.id) && group.members.some((row) => row.id === selectedAgentId)
+              }
+            >
+              <button
+                type="button"
+                className="chat-team-disclosure"
+                aria-label={`Members of ${group.title}`}
+                aria-expanded={!closed.has(group.id)}
+                aria-controls={`${prefix}-${encodeURIComponent(group.id)}`}
+                onClick={() => {
+                  toggle(group.id);
+                }}
+              >
+                <ChevronDown size={16} aria-hidden="true" />
+              </button>
               <span className="chat-team-ring" aria-hidden="true">
                 {group.identity.letter}
               </span>
@@ -129,7 +161,11 @@ export function ChatAgents({
             </div>
           )}
           {group.lead && <ChatLeadRow row={group.lead} {...selection} />}
-          <ul className={group.grouped ? "chat-team-members" : "chat-lone-agent"}>
+          <ul
+            className={group.grouped ? "chat-team-members" : "chat-lone-agent"}
+            id={`${prefix}-${encodeURIComponent(group.id)}`}
+            hidden={group.grouped && closed.has(group.id)}
+          >
             {group.members.map((row) => (
               <li key={row.id}>
                 <MemberRow row={row} member={group.grouped} state={state} {...selection} />

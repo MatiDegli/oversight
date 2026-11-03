@@ -211,3 +211,31 @@ button.chat-agent-row:hover {
   white-space: normal;
   overflow-wrap: anywhere;
 }
+.chat-team-summary[data-selected="true"] {
+  background: var(--raised);
+  border-color: var(--border);
+  box-shadow: var(--top-highlight);
+}
+.chat-team-disclosure {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+}
+.chat-team-disclosure:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.chat-team-disclosure:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.chat-team-disclosure[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
+.chat-team-members[hidden] {
+  display: none;
+}
