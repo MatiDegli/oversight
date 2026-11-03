@@ -72,6 +72,29 @@ def test_environment_check_accepts_name_derived_execute_bits(tmp_path, monkeypat
     io.check(path, directory=False)
 
 
+@pytest.mark.parametrize(
+    "changes,reason",
+    [
+        ({"st_nlink": 2}, "environment file is hard-linked"),
+        ({"st_nlink": 1, "st_size": -1}, "unsafe environment file$"),
+    ],
+    ids=["hardlink", "token-mismatch"],
+)
+def test_environment_check_refuses_unsafe_handle(tmp_path, monkeypatch, changes, reason):
+    from .test_source_nt_env import environment
+
+    source, _, io = environment(tmp_path)
+    path = source.root / ".venv/Scripts/python.exe"
+    fstat = os.fstat
+    monkeypatch.setattr(os, "fstat", lambda fd: stat_fields(fstat(fd), **changes))
+    with pytest.raises(OSError, match="^Windows source refused: " + reason) as refused:
+        io.check(path, directory=False)
+    if changes["st_nlink"] == 2:
+        assert "--link-mode copy" in str(refused.value)
+        assert "UV_LINK_MODE=copy" in str(refused.value)
+        assert str(path) not in str(refused.value)
+
+
 @pytest.mark.parametrize("kind", ["Git metadata", "working file"])
 def test_native_read_accepts_name_derived_execute_bits(tmp_path, monkeypatch, kind):
     path = tmp_path / "make.bat"

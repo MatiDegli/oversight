@@ -236,6 +236,7 @@ A match suppresses only this detail; it grants no permission or discard authorit
 ## Chosen-repository template
 
 Use a trusted short private local NTFS repository with its validated original venv on native Windows.
+Hard-linked environments are refused; recreate the environment with `uv sync --reinstall --link-mode copy` or `UV_LINK_MODE=copy`.
 Copy `fixtures/fake-model/own-source-edit.json` privately; replace every path and exact unique
 old/new text, preserving read before edit, failing then repairing tests and separate personal Approve.
 

@@ -45,6 +45,21 @@ def test_native_named_file_token_matches_handle(name):
         driver.cleanup(root)
 
 
+def test_native_environment_check_refuses_hardlink():
+    from .test_source_nt_env import environment
+
+    root = long_temp_dir()
+    try:
+        source, _, io = environment(root)
+        path = source.root / ".venv/Scripts/python.exe"
+        os.link(path, path.with_name("linked-python.exe"))
+        with pytest.raises(OSError, match="environment file is hard-linked") as refused:
+            io.check(path, directory=False)
+        assert "--link-mode copy" in str(refused.value)
+    finally:
+        driver.cleanup(root)
+
+
 def venv_link_diagnostics(venv: Path) -> list[str]:
     """Bound readiness diagnostics to ten venv-relative non-directory paths."""
     return list(

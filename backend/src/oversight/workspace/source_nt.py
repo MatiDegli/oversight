@@ -1077,7 +1077,13 @@ class EnvironmentIO:
             check_streams(path, self.deadline, time.monotonic, self.streams)
             with open_nt(path) as handle:
                 opened = os.fstat(handle.fileno())
-                if opened.st_nlink != 1 or nt_token(opened) != nt_token(path.lstat()):
+                if opened.st_nlink != 1:
+                    raise refuse(
+                        "environment file is hard-linked (uv's default on Windows); "
+                        "recreate the environment with uv sync --reinstall --link-mode copy "
+                        "(or UV_LINK_MODE=copy)"
+                    )
+                if nt_token(opened) != nt_token(path.lstat()):
                     raise refuse("unsafe environment file")
 
     def read(self, path: Path, budget: Budget) -> bytes:
