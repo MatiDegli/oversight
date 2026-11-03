@@ -14,6 +14,7 @@ from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
 from oversight.workspace.metadata_io import Budget, Entry, read_entry, replace_file
 from oversight.workspace.runner import Spawn, run_process
+from oversight.workspace.source_config import check_source_config
 
 if TYPE_CHECKING:
     from oversight.workspace.source_nt import NtSource
@@ -160,8 +161,17 @@ async def validate_source(
     if sys.platform == "win32":
         binary = await offload(lambda: executable("git"))
     try:
+        await check_source_config(
+            root / ".git",
+            git=binary,
+            spawn=spawn,
+            env=SOURCE_GIT_ENV,
+            time_left=lambda: 30,
+            refuse=ValueError,
+        )
+        flags = ["-c", "core.fsmonitor=false", "-c", f"core.hooksPath={os.devnull}"]
         head = await spawn(
-            [binary, "rev-parse", "HEAD"],
+            [binary, *flags, "rev-parse", "HEAD"],
             cwd=root,
             timeout_s=30,
             env=SOURCE_GIT_ENV,
@@ -169,7 +179,7 @@ async def validate_source(
         if head.returncode != 0 or head.timed_out or head.stdout.strip() != profile.commit:
             raise ValueError(f"{profile.name}: checkout must be at {profile.commit}. {FETCH_HINT}")
         status = await spawn(
-            [binary, "status", "--porcelain", "--untracked-files=all"],
+            [binary, *flags, "status", "--porcelain", "--untracked-files=all"],
             cwd=root,
             timeout_s=30,
             env=SOURCE_GIT_ENV,
