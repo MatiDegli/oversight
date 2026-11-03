@@ -280,7 +280,11 @@ def entry(root: Path, name: str, deadline: float, *, missing: bool = False) -> F
 
 
 def metadata(root: Path, deadline: float) -> tuple[FileEntry, ...]:
-    """Bound and witness Git metadata, refusing links, external storage and active writes."""
+    """Witness Git identities; hash only HEAD/index, without reading object storage.
+
+    Entry counts and deadlines bound the walk. Working-file byte budgets do not apply to
+    Git storage. Tokens retain inode, mode, owner, link count, size, mtime and ctime checks.
+    """
     forbidden = {
         "commondir",
         "gitdir",
@@ -293,7 +297,6 @@ def metadata(root: Path, deadline: float) -> tuple[FileEntry, ...]:
         "refs/replace",
     }
     found: list[FileEntry] = []
-    total = 0
     pending = [root / ".git"]
     count = 0
     while pending:
@@ -320,10 +323,16 @@ def metadata(root: Path, deadline: float) -> tuple[FileEntry, ...]:
                 if stat.S_ISDIR(info.st_mode):
                     pending.append(path / name)
                 else:
-                    record = entry(root / ".git", rel, deadline)
-                    total += record.size
-                    if total > MAX_TOTAL:
-                        raise refuse("Git metadata byte budget exceeded")
+                    secure(info)
+                    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                        raise refuse("nonregular or multiple-link Git metadata")
+                    record = (
+                        entry(root / ".git", rel, deadline)
+                        if rel in {"HEAD", "index"}
+                        else FileEntry(rel, token(info), None, info.st_size, info.st_mode & 0o777)
+                    )
+                    if record.identity != token(info):
+                        raise refuse("Git metadata changed during read")
                     found.append(record)
     if not {"HEAD", "index", "config"}.issubset({e.path for e in found}):
         raise refuse("incomplete Git metadata")

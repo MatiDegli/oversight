@@ -135,6 +135,132 @@ def test_posix_inventory_safety(tmp_path):
     asyncio.run(scenario())
 
 
+def test_packed_clone_inventory_and_copy(tmp_path):
+    async def scenario():
+        original = await repository(tmp_path)
+        historical = original.root / "historical.bin"
+        historical.write_bytes(os.urandom(posix.MAX_FILE + 65536))
+        await git(original.root, "add", "historical.bin")
+        await git(original.root, "commit", "-qm", "Historical blob")
+        historical.unlink()
+        await git(original.root, "add", "-u")
+        await git(original.root, "commit", "-qm", "Remove historical blob")
+        clone = tmp_path / "clone"
+        await git(tmp_path, "clone", "--no-local", "--quiet", str(original.root), str(clone))
+        assert any(p.stat().st_size > posix.MAX_FILE for p in (clone / ".git").rglob("*.pack"))
+        # Reflogs and object storage are witnesses, outside the working-file byte budget.
+        with (clone / ".git/logs/large").open("wb") as log:
+            log.truncate(posix.MAX_TOTAL + 1)
+        source = await posix.prepare_source(clone, original.runtime, original.ide)
+        before = {p: posix.token(p.lstat()) for p in clone.rglob("*")}
+        selection = await posix.validate_selection(await posix.inventory(source, git=GIT))
+        assert selection.total_bytes == len(b"value = 1\ngone\n")
+        stage = await posix.stage_source(selection, git=GIT)
+        await posix.verify_stage(stage)
+        assert (stage.tree / "a.py").read_bytes() == b"value = 1\n"
+        assert not (stage.tree / ".git").exists()
+        assert {p: posix.token(p.lstat()) for p in clone.rglob("*")} == before
+        await posix.cleanup_stage(stage)
+        assert not tuple(source.runtime.iterdir())
+
+    asyncio.run(scenario())
+
+
+def test_git_metadata_hashes_only_head_and_index(tmp_path, monkeypatch):
+    async def scenario():
+        source = await repository(tmp_path)
+        read = posix.read_file
+        reads = set()
+
+        def record_read(path, *args, **kwargs):
+            reads.add(path.relative_to(source.root / ".git").as_posix())
+            return read(path, *args, **kwargs)
+
+        monkeypatch.setattr(posix, "read_file", record_read)
+        listing = await posix.inventory(source, git=GIT)
+        assert reads == {"HEAD", "index"}
+        for item in listing.metadata:
+            if item.path in {"HEAD", "index"}:
+                assert (
+                    item.sha256
+                    == hashlib.sha256((source.root / ".git" / item.path).read_bytes()).hexdigest()
+                )
+            else:
+                assert item.sha256 is None
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("phase", ["selection", "copy"])
+@pytest.mark.parametrize("attack", ["bytes", "swap", "missing", "extra", "mode"])
+@pytest.mark.parametrize("storage", ["loose", "packed"])
+def test_git_object_changes_refuse(tmp_path, monkeypatch, phase, attack, storage):
+    async def scenario():
+        source = await repository(tmp_path)
+        blob = await git(source.root, "rev-parse", "HEAD:a.py")
+        target = source.root / ".git/objects" / blob[:2] / blob[2:]
+        if storage == "packed":
+            await git(source.root, "repack", "-adq")
+            target = next((source.root / ".git/objects/pack").glob("*.pack"))
+        selection = await posix.validate_selection(await posix.inventory(source, git=GIT))
+
+        def mutate():
+            if attack == "bytes":
+                target.chmod(0o600)
+                data = target.read_bytes()
+                target.write_bytes(bytes([data[0] ^ 1]) + data[1:])
+            elif attack == "swap":
+                target.rename(tmp_path / "held-object")
+                shutil.copyfile(tmp_path / "held-object", target)
+            elif attack == "missing":
+                target.unlink()
+            elif attack == "extra":
+                (target.parent / "extra").write_bytes(b"extra")
+            else:
+                target.chmod(0o600)
+
+        if phase == "selection":
+            mutate()
+        else:
+            copy = posix._copy
+
+            def changed_copy(*args):
+                stage = copy(*args)
+                mutate()
+                return stage
+
+            monkeypatch.setattr(posix, "_copy", changed_copy)
+        with pytest.raises(OSError, match="Git metadata changed"):
+            await posix.stage_source(selection, git=GIT)
+        assert not tuple(source.runtime.iterdir())
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("attack", ["link", "fifo", "hardlink", "writable"])
+def test_git_object_storage_safety(tmp_path, attack):
+    async def scenario():
+        source = await repository(tmp_path)
+        target = source.root / ".git/objects/pack/unsafe"
+        if attack == "link":
+            target.symlink_to(source.root / "a.py")
+        elif attack == "fifo":
+            os.mkfifo(target)
+        elif attack == "hardlink":
+            os.link(source.root / "a.py", target)
+        else:
+            target.write_bytes(b"unsafe")
+            target.chmod(0o666)
+
+        async def spawn(*args, **kwargs):
+            raise AssertionError("unsafe object storage reached Git")
+
+        with pytest.raises(OSError):
+            await posix.inventory(source, git=GIT, spawn=spawn)
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize(
     "attack",
     [
