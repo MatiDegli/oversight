@@ -19,7 +19,7 @@ from backend.tests.events.test_preview_resolution import EVENTS
 from live_helpers import DEADLINE_S, live_server, two_fakes
 
 from oversight.events import EventRejected, EventStore
-from oversight.settings import REPO_ROOT
+from oversight.settings import REPO_ROOT, resolve_preview_profile
 from oversight.workspace import PreviewProfile
 from oversight_contracts.views import LeadView, PreviewView
 
@@ -31,6 +31,7 @@ SECRET = "http://private.invalid/app?token=planted-sensitive-output"
 
 def profile() -> PreviewProfile:
     return PreviewProfile(
+        enabled=True,
         adapter=REPO_ROOT / "backend/src/oversight/preview_adapter.py",
         interpreter=Path(sys.executable),
         ports=(19681,),
@@ -46,7 +47,11 @@ async def prepared(s, monkeypatch, state="ready_for_review"):
     )
     await s.store.publish(EVENTS[5].payload.model_copy(update={"agent_id": "agent-2"}))
     manager = s.live.previews
-    manager.profile = profile()
+    # live_server chooses its backend port after Settings construction. Preserve the
+    # composed opt-in/trust/port constraints and use that explicit test-server origin.
+    manager.profile = replace(
+        manager.profile, origins=(f"http://127.0.0.1:{manager.profile.backend_port}",)
+    )
     # Namespaces are unavailable on some CI hosts; keep real profile and integrity admission.
     monkeypatch.setattr(
         type(manager.workspace), "isolation", property(lambda _: SimpleNamespace(available=True))
@@ -81,10 +86,14 @@ async def suggest(tools, arguments=None):
 async def test_admitted_reference_only_event_with_distinct_lead_and_coding_agent(
     tmp_path, monkeypatch, state
 ):
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), ThreadModels()) as s,
+    ):
         _, tools, spies = await prepared(s, monkeypatch, state)
         assert s.live.previews.profile.configured
-        assert not s.live.previews.profile.production_open
+        assert s.live.previews.profile.enabled is s.live._settings.preview_profile.enabled is True
+        assert s.live.previews.profile.production_open
         status = await tools.call("status", "{}")
         assert (
             status.ok
@@ -106,7 +115,8 @@ async def test_admitted_reference_only_event_with_distinct_lead_and_coding_agent
 
 def refuse(manager, fault, monkeypatch) -> None:
     profiles = {
-        "missing": PreviewProfile(),
+        "missing": PreviewProfile(enabled=True),
+        "switch_disabled": replace(profile(), enabled=False),
         "partial": replace(profile(), interpreter=None),
         "invalid": replace(profile(), ports=(8710,)),
         "own_source": replace(profile(), trusted_demo=False),
@@ -139,6 +149,7 @@ def refuse(manager, fault, monkeypatch) -> None:
     "fault",
     [
         "missing",
+        "switch_disabled",
         "partial",
         "invalid",
         "own_source",
@@ -153,7 +164,10 @@ def refuse(manager, fault, monkeypatch) -> None:
     ],
 )
 async def test_real_admission_refusal_omits_inventory_and_sanitizes(tmp_path, monkeypatch, fault):
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), ThreadModels()) as s,
+    ):
         _, tools, spies = await prepared(s, monkeypatch)
         with monkeypatch.context() as patch:
             refuse(s.live.previews, fault, patch)
@@ -172,11 +186,16 @@ async def test_real_admission_refusal_omits_inventory_and_sanitizes(tmp_path, mo
 
 
 @pytest.mark.parametrize("at_lock", [False, True])
-@pytest.mark.parametrize("fault", ["disabled", "closed", "memory", "partial", "exception"])
+@pytest.mark.parametrize(
+    "fault", ["disabled", "switch_disabled", "closed", "memory", "partial", "exception"]
+)
 async def test_lost_admission_after_status_or_while_waiting_for_lock(
     tmp_path, monkeypatch, at_lock, fault
 ):
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), ThreadModels()) as s,
+    ):
         lead, tools, spies = await prepared(s, monkeypatch)
         assert (await tools.call("status", "{}")).ok
         before = s.store.committed_events()
@@ -202,14 +221,22 @@ async def test_lost_admission_after_status_or_while_waiting_for_lock(
         s.live.previews.memory_hold = lambda: None
 
 
-async def test_gained_admission_requires_new_status_even_at_same_horizon(tmp_path, monkeypatch):
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+@pytest.mark.parametrize("fault", ["disabled", "switch_disabled"])
+async def test_gained_admission_requires_new_status_even_at_same_horizon(
+    tmp_path, monkeypatch, fault
+):
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), ThreadModels()) as s,
+    ):
         _, tools, spies = await prepared(s, monkeypatch)
-        s.live.previews._disabled = True
+        admitted_profile = s.live.previews.profile
+        refuse(s.live.previews, fault, monkeypatch)
         status = await tools.call("status", "{}")
         assert status.ok and "eligible preview data:" not in status.content
         before = s.store.committed_events()
         s.live.previews._disabled = False
+        s.live.previews.profile = admitted_profile
         outcome = await suggest(tools)
         assert not outcome.ok and outcome.content == UNAVAILABLE
         assert s.store.committed_events() == before
@@ -223,7 +250,10 @@ async def test_gained_admission_requires_new_status_even_at_same_horizon(tmp_pat
     "fault", ["revision", "resolved", "revised", "noncoding", "wrong_run", "run_restart"]
 )
 async def test_stale_or_ineligible_target_never_publishes(tmp_path, monkeypatch, fault):
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), ThreadModels()) as s,
+    ):
         _, tools, spies = await prepared(s, monkeypatch)
         await tools.call("status", "{}")
         arguments = ARGUMENTS
@@ -272,7 +302,10 @@ async def test_stale_or_ineligible_target_never_publishes(tmp_path, monkeypatch,
 
 @pytest.mark.parametrize("closing", ["lead", "service", "live"])
 async def test_shutdown_while_waiting_for_lock_is_fixed_refusal(tmp_path, monkeypatch, closing):
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), ThreadModels()) as s,
+    ):
         lead, tools, spies = await prepared(s, monkeypatch)
         await tools.call("status", "{}")
         await lead.lock.acquire()
@@ -296,7 +329,10 @@ async def test_shutdown_while_waiting_for_lock_is_fixed_refusal(tmp_path, monkey
 
 @pytest.mark.parametrize("arguments", [a for a in INVALID if a.get("kind") == "preview"])
 async def test_sensitive_and_invalid_arguments_never_publish(tmp_path, monkeypatch, arguments):
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), ThreadModels()) as s,
+    ):
         _, tools, spies = await prepared(s, monkeypatch)
         await tools.call("status", "{}")
         before = s.store.committed_events()
@@ -310,7 +346,10 @@ async def test_sensitive_and_invalid_arguments_never_publish(tmp_path, monkeypat
 
 async def test_scripted_status_preview_finish_and_fresh_next_turn(tmp_path, monkeypatch):
     models = ThreadModels()
-    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), models) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(two_fakes(tmp_path, preview_profile=profile()), models) as s,
+    ):
         _, _, spies = await prepared(s, monkeypatch)
         models.scripts.append(
             [
@@ -336,4 +375,29 @@ async def test_scripted_status_preview_finish_and_fresh_next_turn(tmp_path, monk
         )
         after = await send(s, "Show it again")
         assert not any(e.type == "lead.view" for e in s.events() if e.seq > after)
+        untouched(s, spies)
+
+
+@pytest.mark.parametrize("switch", [None, "false"])
+async def test_default_or_false_switch_refuses_configured_candidate(tmp_path, monkeypatch, switch):
+    values = {
+        "OVERSIGHT_PREVIEW_ADAPTER": str(profile().adapter),
+        "OVERSIGHT_PREVIEW_PYTHON": str(profile().interpreter),
+        "OVERSIGHT_PREVIEW_PORTS": "19681",
+        "OVERSIGHT_PREVIEW_ORIGINS": "http://127.0.0.1:8710",
+    }
+    if switch is not None:
+        values["OVERSIGHT_PREVIEW_ENABLED"] = switch
+    settings = two_fakes(tmp_path, preview_profile=resolve_preview_profile(values, 8710, None))
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, ThreadModels()) as s:
+        _, tools, spies = await prepared(s, monkeypatch)
+        assert s.live.previews.profile.configured and s.live.previews.profile.trusted_demo
+        assert s.live.previews.profile.enabled is s.live._settings.preview_profile.enabled is False
+        assert not s.live.previews.profile.production_open
+        status = await tools.call("status", "{}")
+        assert status.ok and "eligible preview data:" not in status.content
+        before = s.store.committed_events()
+        outcome = await suggest(tools)
+        assert not outcome.ok and outcome.content == UNAVAILABLE
+        assert s.store.committed_events() == before
         untouched(s, spies)
