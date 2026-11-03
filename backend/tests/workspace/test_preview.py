@@ -194,7 +194,7 @@ async def test_capacity_is_reserved_before_any_preflight_git(workspace, monkeypa
     await h.close()
 
 
-@pytest.mark.parametrize("expiry,reason", [(31, "lease_expired"), (901, "lifetime_expired")])
+@pytest.mark.parametrize("expiry,reason", [(601, "lease_expired"), (901, "lifetime_expired")])
 async def test_no_renewal_revives_expiry(workspace, expiry, reason):
     h = await harness(workspace)
     created = await h.start()

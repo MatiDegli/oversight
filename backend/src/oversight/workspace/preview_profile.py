@@ -66,10 +66,21 @@ class PreviewProfile:
     vite_port: int | None = None
     trusted_demo: bool = False
     heartbeat_s: float = 10
-    lease_s: float = 30
+    lease_s: float = 600
     lifetime_s: float = 900
-    readiness_s: float = 10
+    readiness_s: float = 30
     memory_limit_bytes: int = 536870912
+    build_memory_bytes: int = 2 * 1024**3
+    build_cores: int = 2
+    nested_memory_bytes: int = 1024**3
+    nested_cores: int = 1
+    node_heap_mib: int = 1536
+    output_file_bytes: int = 16 * 1024**2
+    output_total_bytes: int = 256 * 1024**2
+    output_files: int = 10_000
+    cache_bytes: int = 2 * 1024**3
+    diagnostics_bytes: int = 1024**2
+    queue_cap: int = 8
     enabled: bool = False
     reviewed_app: ReviewedAppAuthorization | None = None
 
@@ -141,7 +152,21 @@ class PreviewProfile:
             raise ValueError("invalid preview deadline")
         if self.heartbeat_s >= self.lease_s or type(self.memory_limit_bytes) is not int:
             raise ValueError("invalid preview limits")
-        if self.memory_limit_bytes <= 0:
+        resources = (
+            self.memory_limit_bytes,
+            self.build_memory_bytes,
+            self.build_cores,
+            self.nested_memory_bytes,
+            self.nested_cores,
+            self.node_heap_mib,
+            self.output_file_bytes,
+            self.output_total_bytes,
+            self.output_files,
+            self.cache_bytes,
+            self.diagnostics_bytes,
+            self.queue_cap,
+        )
+        if any(type(value) is not int or value <= 0 for value in resources):
             raise ValueError("invalid preview limits")
         if self.reviewed_app is None:
             self.validate_files()
