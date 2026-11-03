@@ -96,6 +96,17 @@
   background: var(--page);
   border-right: 1px solid var(--divider);
 }
+.shell-stage.has-workflow {
+  position: relative;
+}
+/* Keep the covered origin's geometry and scroll range while the workflow owns this area. */
+.shell-stage.has-workflow > .focus-panel[hidden] {
+  display: flex;
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  visibility: hidden;
+}
 .focus-tabs {
   display: flex;
   height: 40px;

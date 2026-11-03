@@ -196,11 +196,13 @@ export function PlanFlow({
   plan,
   dispatched,
   onReview,
+  onOpenWorkflow,
 }: {
   state: State;
   plan: Plan;
   dispatched: boolean;
   onReview?: (id: string) => void;
+  onOpenWorkflow?: (id: string, launcher: HTMLButtonElement) => void;
 }) {
   const rows = projectPlanFlow(state, plan);
   return (
@@ -213,6 +215,17 @@ export function PlanFlow({
           {dispatched && ` · ${String(rows.filter((row) => row.merged).length)} merged`}
         </span>
       </header>
+      {onOpenWorkflow && (
+        <button
+          type="button"
+          className="workflow-launch"
+          onClick={(event) => {
+            onOpenWorkflow(plan.plan_id, event.currentTarget);
+          }}
+        >
+          Open workflow
+        </button>
+      )}
       <FlowKey rows={rows} />
       <FlowRows rows={rows} state={state} onReview={onReview} />
     </div>

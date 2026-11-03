@@ -17,7 +17,13 @@ import { selectPlanEvidence, selectRetainedPlans } from "./planSelectors";
 import "./inbox.css";
 
 const PlanActions = lazy(() => import("./PlanActions"));
-const planPiece = (state: State, plan: Plan, onReview?: (id: string) => void) => (
+type OpenWorkflow = (id: string, launcher: HTMLButtonElement) => void;
+const planPiece = (
+  state: State,
+  plan: Plan,
+  onReview?: (id: string) => void,
+  onOpenWorkflow?: OpenWorkflow,
+) => (
   <Suspense
     fallback={
       <div className="plan-content">
@@ -31,6 +37,7 @@ const planPiece = (state: State, plan: Plan, onReview?: (id: string) => void) =>
       plan={plan}
       slots={slotUsage(state)}
       onReview={onReview}
+      onOpenWorkflow={onOpenWorkflow}
     />
   </Suspense>
 );
@@ -40,11 +47,13 @@ function InboxRow({
   entry,
   plan,
   onReview,
+  onOpenWorkflow,
 }: {
   state: State;
   entry: DecisionInboxEntry;
   plan: Plan | undefined;
   onReview?: (id: string) => void;
+  onOpenWorkflow?: OpenWorkflow;
 }) {
   const change = entry.changeId ? state.changes[entry.changeId] : undefined;
   const wait = entry.changeId ? selectPossibleCallersWait(state, entry.changeId) : null;
@@ -96,7 +105,7 @@ function InboxRow({
           ))}
         </ul>
       )}
-      {plan?.subtasks && planPiece(state, plan, onReview)}
+      {plan?.subtasks && planPiece(state, plan, onReview, onOpenWorkflow)}
       {example && <Example row={example} identity={identity} />}
       <InboxAnswer state={state} entry={entry} />
       {change && onReview && (
@@ -172,9 +181,11 @@ function InboxAnswer({ state, entry }: { state: State; entry: DecisionInboxEntry
 export function DecisionInbox({
   state,
   onReview,
+  onOpenWorkflow,
 }: {
   state: State;
   onReview?: (id: string) => void;
+  onOpenWorkflow?: OpenWorkflow;
 }) {
   const [view, setView] = useState<"decisions" | "grants">("decisions");
   const entries = selectDecisionInbox(state);
@@ -201,6 +212,7 @@ export function DecisionInbox({
                     entry={entry}
                     plan={lead?.planId ? plans.get(lead.planId)?.payload : undefined}
                     onReview={onReview}
+                    onOpenWorkflow={onOpenWorkflow}
                   />
                 );
               })
@@ -248,7 +260,7 @@ export function DecisionInbox({
                         {group === "queued" && plan.detail && plan.detail !== plan.task && (
                           <p>{plan.detail}</p>
                         )}
-                        {planPiece(state, plan, onReview)}
+                        {planPiece(state, plan, onReview, onOpenWorkflow)}
                       </article>
                     ))}
                   </section>
