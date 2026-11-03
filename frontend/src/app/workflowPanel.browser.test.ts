@@ -34,7 +34,10 @@ afterAll(async () => {
 });
 
 async function open(options: WorkflowOptions = {}, width = 1280, theme = "dark") {
-  const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: "reduce" });
+  const page = await browser.newPage({
+    viewport: { width, height: width === 390 ? 844 : 900 },
+    reducedMotion: "reduce",
+  });
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   await page.goto(url);
   await page.waitForFunction(() => Boolean(window.workflowTest));
@@ -45,12 +48,15 @@ async function open(options: WorkflowOptions = {}, width = 1280, theme = "dark")
     },
     { options, theme },
   );
-  await check(
-    page.getByRole("button", { name: "Open workflow", exact: true }).first(),
-  ).toBeVisible();
+  if (width === 390 && options.layout === "Oversight")
+    await check(page.locator(".narrow-notice")).toBeVisible();
+  else
+    await check(
+      page.getByRole("button", { name: "Open workflow", exact: true }).first(),
+    ).toBeVisible();
   return page;
 }
-const panel = (page: Page) => page.getByRole("region", { name: "Workflow", exact: true });
+const panel = (page: Page) => page.getByLabel("Workflow", { exact: true });
 const steps = (page: Page) =>
   panel(page).getByRole("list", { name: "Workflow steps" }).getByRole("button");
 
@@ -61,6 +67,11 @@ it.each([
 ] as const)("opens explicitly from %j and restores the originating launcher", async (options) => {
   const page = await open(options);
   try {
+    const graphRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/\/src\/(graph\/|app\/shell\/OversightStage)/u.test(request.url()))
+        graphRequests.push(request.url());
+    });
     await check(panel(page)).toHaveCount(0);
     const launcher = page.getByRole("button", { name: "Open workflow", exact: true }).first();
     await launcher.scrollIntoViewIfNeeded();
@@ -77,6 +88,7 @@ it.each([
       "1 Reject negative prices in Item Merged",
     );
     if (options.layout === "Chat") {
+      expect(graphRequests).toEqual([]);
       await check(page.getByLabel("Repository graph", { exact: true })).toHaveCount(0);
       await check(page.locator(".conversation-panel")).toBeVisible();
     } else {
@@ -210,6 +222,120 @@ it("keeps the graph instance, camera and docks while workflow evidence refreshes
       ),
     ).toBe(true);
     await check(page.getByLabel("Bottom dock", { exact: true })).toBeVisible();
+  } finally {
+    await page.close();
+  }
+});
+
+it.each(["dark", "day"])(
+  "maximizes phone Chat explicitly and restores reading and focus in %s",
+  async (theme) => {
+    const page = await open({}, 390, theme);
+    try {
+      const launcher = page.getByRole("button", { name: "Open workflow", exact: true });
+      await launcher.scrollIntoViewIfNeeded();
+      const chat = page.locator(".chat-shell");
+      const before = await chat.evaluate((node) => node.scrollTop);
+      await launcher.click();
+      await check(page.getByRole("dialog", { name: "Workflow", exact: true })).toBeVisible();
+      await check(panel(page)).toHaveAttribute("aria-modal", "true");
+      const back = panel(page).getByRole("button", { name: "Back", exact: true });
+      await check(back).toBeFocused();
+      const bounds = await panel(page).boundingBox();
+      expect(bounds).toEqual({ x: 0, y: 0, width: 390, height: 844 });
+      expect(await page.locator(".chat-agents").evaluate((node: HTMLElement) => node.inert)).toBe(
+        true,
+      );
+      expect(await chat.evaluate((node) => node.scrollTop)).toBe(before);
+      await back.press("Tab");
+      await check(steps(page).first()).toBeFocused();
+      await page.keyboard.press("Enter");
+      await page.keyboard.press("Tab");
+      await page.keyboard.press("Space");
+      await check(steps(page).nth(1)).toHaveAttribute("aria-pressed", "true");
+      await back.focus();
+      await back.press("Shift+Tab");
+      await check(panel(page).getByRole("button", { name: "Review change" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await check(back).toBeFocused();
+      await back.click();
+      await check(panel(page)).toHaveCount(0);
+      await check(launcher).toBeFocused();
+      expect(await chat.evaluate((node) => node.scrollTop)).toBe(before);
+      expect(await page.locator(".chat-agents").evaluate((node: HTMLElement) => node.inert)).toBe(
+        false,
+      );
+      await check(page.getByLabel("Repository graph", { exact: true })).toHaveCount(0);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it("phone updates keep selection and focus, and a removed step returns focus to Back", async () => {
+  const page = await open({ scene: "large" }, 390);
+  try {
+    const launcher = page.getByRole("button", { name: "Open workflow", exact: true });
+    await launcher.focus();
+    await page.evaluate(() => {
+      window.workflowTest.arrive();
+    });
+    await check(panel(page)).toHaveCount(0);
+    await check(launcher).toBeFocused();
+    await launcher.click();
+    await steps(page).nth(3).click();
+    const scroll = await panel(page)
+      .locator(".workflow-body")
+      .evaluate((node) => node.scrollTop);
+    await page.evaluate(() => {
+      window.workflowTest.arrive();
+    });
+    await check(steps(page).nth(3)).toBeFocused();
+    await check(steps(page).nth(3)).toHaveAttribute("aria-pressed", "true");
+    expect(
+      await panel(page)
+        .locator(".workflow-body")
+        .evaluate((node) => node.scrollTop),
+    ).toBe(scroll);
+    await page.evaluate(() => {
+      window.workflowTest.removeSelected();
+    });
+    await check(panel(page).getByRole("button", { name: "Back", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await check(panel(page)).toHaveCount(0);
+    await check(launcher).toBeFocused();
+  } finally {
+    await page.close();
+  }
+});
+
+it("keeps Oversight's widen-window notice at 390", async () => {
+  const page = await open({ layout: "Oversight" }, 390);
+  try {
+    await check(page.locator(".narrow-notice")).toContainText("Widen it to at least 1280 px");
+    await check(page.locator(".workflow-launch")).toBeHidden();
+    await check(panel(page)).toHaveCount(0);
+  } finally {
+    await page.close();
+  }
+});
+
+it("wraps full long-task evidence on the phone while keeping the node face compact", async () => {
+  const page = await open({ scene: "long" }, 390);
+  try {
+    await page.getByRole("button", { name: "Open workflow", exact: true }).click();
+    const label = await steps(page).first().locator("span").nth(1).innerText();
+    expect(Array.from(label).length).toBeLessThanOrEqual(48);
+    expect(label.endsWith("…")).toBe(true);
+    await steps(page).first().click();
+    await check(
+      panel(page).getByRole("heading", { name: /Validate the extraordinarily long/ }),
+    ).toContainText("acción, 数量, 🛒");
+    await check(panel(page).getByRole("button", { name: "Review change" })).toHaveCount(0);
+    expect(await panel(page).evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
   } finally {
     await page.close();
   }

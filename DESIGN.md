@@ -979,6 +979,12 @@ numbered steps, then detail actions. Enter/Space select; Escape or Close restore
 Updates preserve focus; a disappearing selected step clears selection and focuses Close.
 A focused Review change that loses eligibility stays inert until focus leaves, then disappears.
 
+At phone width, Chat's Open workflow explicitly maximizes the same one-column list. Back
+replaces Close and returns to the retained Chat view, its reading position and launcher focus;
+Escape does the same. The full-screen panel keeps background controls inert and keyboard
+traversal inside it. The fixed header and 44px controls remain available above scrolling evidence,
+with 16px side gutters and no sideways scroll. Oversight retains its widen-window notice.
+
 ### Settings tab
 
 Settings opens in the focus panel. The tab names it once: there is no second Settings title in

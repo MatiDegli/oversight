@@ -1,11 +1,21 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import {
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import { ArrowLeft, X } from "lucide-react";
 import { selectPlanEvidence } from "../../review";
 import { projectPlanFlow, type PlanFlowRow, type State } from "../../state";
 import { presentationFor, presentationStyle } from "../../teams/presentation";
 import { truncateTask } from "./truncateTask";
 import { workflowDetail } from "./workflowDetail";
 import "./workflowPanel.css";
+import "./workflowPhone.css";
 
 export function workflowOrigin(launcher: HTMLButtonElement) {
   const scroll: { element: HTMLElement; top: number; left: number }[] = [];
@@ -31,41 +41,39 @@ export function WorkflowPanel({
   planId,
   onClose,
   onReview,
+  chat = false,
 }: {
   state: State;
   planId: string;
   onClose: () => void;
   onReview?: (id: string) => void;
+  chat?: boolean;
 }) {
   const plan = selectPlanEvidence(state).plans.get(planId)?.payload;
   const rows = useMemo(() => (plan ? projectPlanFlow(state, plan) : []), [state, plan]);
-  const [selection, setSelection] = useState<number | null>(null);
-  const selected = rows.find((row) => row.index === selection);
-  const close = useRef<HTMLButtonElement>(null);
-  const previousSelection = useRef<number | null>(null);
+  const { selection, selected, setSelection, close } = useStepSelection(rows);
+  const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false) && chat;
+  const host = useRef<HTMLElement>(null);
   const detailId = useId();
-  // Clear removed local indices before committing the new evidence. The layout effect
-  // still observes the removal and returns keyboard focus after that commit.
-  if (selection !== null && !selected) setSelection(null);
-  useLayoutEffect(() => {
-    close.current?.focus({ preventScroll: true });
-  }, []);
-  useLayoutEffect(() => {
-    if (
-      previousSelection.current !== null &&
-      !rows.some((row) => row.index === previousSelection.current)
-    ) {
-      close.current?.focus({ preventScroll: true });
-    }
-    previousSelection.current = selection;
-  }, [selection, rows]);
+  usePhoneBoundary(phone, host, close);
+  const Icon = phone ? ArrowLeft : X;
   return (
-    <section className="workflow-panel" aria-label="Workflow">
+    <section
+      ref={host}
+      className="workflow-panel"
+      aria-label="Workflow"
+      role={phone ? "dialog" : "region"}
+      aria-modal={phone || undefined}
+      data-phone={phone}
+      onKeyDown={(event) => {
+        workflowKeys(event, phone, onClose);
+      }}
+    >
       <header className="workflow-header">
         <h2>Workflow</h2>
         <button ref={close} type="button" onClick={onClose}>
-          <X size={16} aria-hidden="true" />
-          Close
+          <Icon size={16} aria-hidden="true" />
+          {phone ? "Back" : "Close"}
         </button>
       </header>
       <div className="workflow-body">
@@ -91,6 +99,84 @@ export function WorkflowPanel({
       </div>
     </section>
   );
+}
+
+function useStepSelection(rows: PlanFlowRow[]) {
+  const [selection, setSelection] = useState<number | null>(null);
+  const selected = rows.find((row) => row.index === selection);
+  const close = useRef<HTMLButtonElement>(null);
+  const previousSelection = useRef<number | null>(null);
+  // Clear removed local indices before committing the new evidence. The layout effect
+  // still observes the removal and returns keyboard focus after that commit.
+  if (selection !== null && !selected) setSelection(null);
+  useLayoutEffect(() => {
+    close.current?.focus({ preventScroll: true });
+  }, []);
+  useLayoutEffect(() => {
+    if (
+      previousSelection.current !== null &&
+      !rows.some((row) => row.index === previousSelection.current)
+    ) {
+      close.current?.focus({ preventScroll: true });
+    }
+    previousSelection.current = selection;
+  }, [selection, rows]);
+  return { selection, selected, setSelection, close };
+}
+
+function subscribePhone(listener: () => void) {
+  const query = window.matchMedia("(max-width: 767px)");
+  query.addEventListener("change", listener);
+  return () => {
+    query.removeEventListener("change", listener);
+  };
+}
+const phoneSnapshot = () => window.matchMedia("(max-width: 767px)").matches;
+
+/** The phone's explicit maximize keeps the originating Chat mounted at its original size. */
+function usePhoneBoundary(
+  phone: boolean,
+  host: RefObject<HTMLElement | null>,
+  close: RefObject<HTMLButtonElement | null>,
+) {
+  useLayoutEffect(() => {
+    const panel = host.current;
+    if (!phone || !panel) return;
+    const saved: { node: HTMLElement; inert: boolean }[] = [];
+    for (let node = panel; node.parentElement; node = node.parentElement) {
+      for (const sibling of node.parentElement.children) {
+        if (sibling === node || !(sibling instanceof HTMLElement)) continue;
+        saved.push({ node: sibling, inert: sibling.inert });
+        sibling.setAttribute("inert", "");
+      }
+    }
+    if (!panel.contains(document.activeElement)) close.current?.focus({ preventScroll: true });
+    return () => {
+      for (const entry of saved) entry.node.toggleAttribute("inert", entry.inert);
+    };
+  }, [phone, host, close]);
+}
+
+function workflowKeys(event: KeyboardEvent<HTMLElement>, phone: boolean, onClose: () => void) {
+  if (event.defaultPrevented) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    onClose();
+  } else if (phone && event.key === "Tab") {
+    const controls = [
+      ...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+    ];
+    const first = controls[0],
+      last = controls.at(-1);
+    if (event.shiftKey && event.target === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && event.target === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
 }
 
 function WorkflowSteps({

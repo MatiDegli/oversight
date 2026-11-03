@@ -359,6 +359,7 @@ export function Frame(input: FrameProps) {
                   key={`${workflow.runId ?? ""}:${workflow.planId}`}
                   state={state}
                   planId={workflow.planId}
+                  chat={shell.layout === "Chat"}
                   onClose={closeWorkflow}
                   onReview={
                     props.onReview
