@@ -1,5 +1,9 @@
 """`ChangeSink`: how the agent runtime reports edits and the end of a run, without importing
-`changes` (docs/proposal.md, section 3). The change manager implements it and `app` wires it."""
+`changes` (docs/proposal.md, section 3). The change manager implements it and `app` wires it.
+
+Configuration diagnostics use one cross-module exception: this Protocol, its implementation
+in changes and its caller in the loop change atomically to agree on return type and sequencing.
+"""
 
 from typing import Protocol
 
@@ -18,8 +22,12 @@ class ChangeSink(Protocol):
         with no nodes."""
         ...
 
-    async def tests_executed(self, agent_id: AgentId, run: SuiteRun) -> None:
-        """Publish the captured agent suite without adding metadata to its tool result."""
+    async def tests_executed(self, agent_id: AgentId, run: SuiteRun) -> str | None:
+        """Publish the captured suite and return an optional server-written advisory note.
+
+        The caller adds the same note to the step summary and model history before either
+        observes the result. Classification and comparison belong to the implementation.
+        """
         ...
 
     async def proposed(

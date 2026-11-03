@@ -118,15 +118,40 @@ it("keeps eleven folded origins and lamps inside nonshrinking tiles", () => {
   expect(html).not.toContain("-top-1");
 });
 
-it("keeps grouped counts in the heading while the standalone lead retains its team line", () => {
+it.each([0, 1, 2])("retains grouped counts accessibly with %i needs-you facts", (needsYou) => {
   const state = railState("chat-busy");
+  const standaloneLead = required(required(chatTeamGroups(state)[0]).lead);
+  if (needsYou) {
+    state.agents.a1 = { ...required(state.agents.a1), state: "ready_for_review" };
+  }
+  if (needsYou === 2) {
+    const proposedPlan = event("plan.updated", {
+      plan_id: "proposed-plan",
+      started_by: "lead-a",
+      revision: 1,
+      task: "Proposed follow-up",
+      graph_version: "fixture",
+      state: "proposed",
+      subtasks: null,
+      detail: null,
+      queued_task_id: null,
+    });
+    if (proposedPlan.type !== "plan.updated") throw new Error("Missing proposed plan fixture");
+    state.decisionEvents.push(proposedPlan);
+  }
   const group = required(chatTeamGroups(state)[0]);
-  const lead = required(group.lead);
+  expect(group.summary).toContain(needsYou ? "1 working" : "2 working");
+  if (needsYou) expect(group.summary).toContain(needsYou === 1 ? "1 needs you" : "2 need you");
   const grouped = renderToStaticMarkup(<ChatAgents state={state} />);
   expect(grouped).toContain(`<h3>${group.summary}</h3>`);
+  const row = required(grouped.match(/<div class="chat-agent-row chat-lead-row"[^>]*>/)?.[0]);
+  expect(required(row.match(/title="([^"]*)"/)?.[1])).toContain(group.summary);
+  expect(required(row.match(/aria-description="([^"]*)"/)?.[1])).toContain(group.summary);
   expect(grouped).not.toContain('class="chat-lead-team"');
-  const standalone = renderToStaticMarkup(<ChatLeadRow row={lead} />);
-  expect(standalone).toContain(`<span class="chat-lead-team">${lead.teamLine ?? ""}</span>`);
+  const standalone = renderToStaticMarkup(<ChatLeadRow row={standaloneLead} />);
+  expect(standalone).toContain(
+    `<span class="chat-lead-team">${standaloneLead.teamLine ?? ""}</span>`,
+  );
   expect(renderToStaticMarkup(<ChatAgents state={railState("chat-leadless")} />)).toContain(
     "Plan B · 2 agents · 2 working",
   );

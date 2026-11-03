@@ -163,7 +163,8 @@ export function ChatAgents({
           )}
           {group.lead && (
             <ChatLeadRow
-              row={group.grouped ? { ...group.lead, teamLine: null } : group.lead}
+              row={group.grouped ? { ...group.lead, teamLine: group.summary } : group.lead}
+              showTeamLine={!group.grouped}
               {...selection}
             />
           )}

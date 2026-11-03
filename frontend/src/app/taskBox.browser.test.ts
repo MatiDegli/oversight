@@ -35,7 +35,10 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await launchBrowser({ args: ["--disable-features=LocalNetworkAccessChecks"] });
+  browser = await launchBrowser({
+    // Routed fixture HTML needs Vite's loopback HMR WebSocket for replay's console-error gate.
+    args: ["--disable-features=LocalNetworkAccessChecks"],
+  });
 }, 60_000);
 afterAll(async () => {
   await browser?.close();
@@ -44,13 +47,18 @@ afterAll(async () => {
 
 async function withPage(
   test: (page: Page) => Promise<void>,
-  options: { width?: number; theme?: string; chat?: boolean } = {},
+  options: {
+    width?: number;
+    theme?: string;
+    chat?: boolean;
+    reducedMotion?: "reduce" | "no-preference";
+  } = {},
 ) {
   if (!browser) throw new Error("Browser was not started");
   const width = options.width ?? 1600;
   const page = await browser.newPage({
     viewport: { width, height: width === 1920 ? 1080 : width === 1280 ? 800 : 900 },
-    reducedMotion: "reduce",
+    reducedMotion: options.reducedMotion,
   });
   page.setDefaultTimeout(15_000);
   const errors: string[] = [];
@@ -470,6 +478,6 @@ for (const width of [1920, 1280])
           await browserExpect(box(page)).toHaveCount(0);
           expect(await calls(page)).toEqual([]);
         },
-        { width, theme, chat: true },
+        { width, theme, chat: true, reducedMotion: "reduce" },
       );
     });

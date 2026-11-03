@@ -88,6 +88,9 @@ One line per day, in Argentina time (ART).
   Added demo/Boltons run_tests queue diagnostics: call-scoped lock contention, throttled path-free
   backend logs, cancellation-safe elapsed callbacks and server-only completed/interrupted step
   summaries, with deterministic queue clocks and fake-model HTTP Stop/deadline/no-progress proofs.
+  Added backend configuration attribution from captured Git objects and the current
+  locked record base, with bounded advisory notes in agent history/steps and frozen proposal facts;
+  kept the integrity veto unchanged and added fake-only moving-base, failure and sequencing proofs.
   Reviewed self-profile front (2026-11-03): added filtered pinned input and frozen launch authority,
   nonexecuting admission scaffold and bounded console/live-index startup carrier; consumer rendering,
   builds, boundary/gateway/nesting and native launch remain unavailable. No model API calls.

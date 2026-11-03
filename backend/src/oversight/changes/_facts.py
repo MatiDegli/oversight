@@ -12,6 +12,7 @@ from oversight.changes._behavior_publish import (
     project_behavior,
     project_extensions,
 )
+from oversight.changes._configuration import proposal_attribution
 from oversight.changes._measured import MeasuredEvidence, project_measured, validate_measured
 from oversight.changes._probes import added_cases, comparison
 from oversight.changes._run_findings import RunEvidence, project_run_findings
@@ -382,6 +383,8 @@ async def capture_facts(
         )
     )
     problems = list(MISSING_PRODUCERS) + list(diagnostics) + list(run_problems)
+    if not ctx.workspace.nt_source_bytes:
+        problems.append(await proposal_attribution(ctx, rec, target))
     for seq, execution in sorted(rec.executions.items()):
         run = rec.suite_runs[seq]
         problems.extend(f"suite {seq}: {problem}" for problem in run.problems)

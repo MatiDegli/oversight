@@ -1,6 +1,7 @@
 """The tool loop through the scripted fake model: a whole task, the limits and the stops."""
 
 import asyncio
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal, cast
 
@@ -398,6 +399,33 @@ async def test_a_cancelled_suite_reaches_the_sink_with_partial_evidence(
     assert steps(recorder)[0].error == "interrupted before it finished"
 
 
+async def test_identical_suites_with_varying_elapsed_times_still_repeat_stop(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from dataclasses import replace
+
+    workspace, tree = small_tree
+    captured = await workspace.run_tests(tree, timeout_s=60)
+    elapsed: list[int] = []
+
+    async def run_tests(tree: Tree, *, timeout_s: float, on_queue_wait: Callable[[float], None]):
+        elapsed.append(len(elapsed) * 123 + 1)
+        on_queue_wait(float(len(elapsed)))
+        return replace(
+            captured,
+            result=captured.result.model_copy(update={"duration_ms": elapsed[-1]}),
+        )
+
+    monkeypatch.setattr(workspace, "run_tests", run_tests)
+    recorder = Recorder()
+    recorder.suite_note = "configuration attribution: identical bounded note"
+    model = script(*([("run_tests", {})] for _ in range(5)))
+    end = await make_run(small_tree, model, recorder).run()
+    assert end.state == "halted" and end.steps == 4
+    assert "same result 4 times" in (end.detail or "")
+    assert len(set(elapsed)) == 4 and len(recorder.suites) == 4
+
+
 def queue_suite(outcome: Literal["passed", "failed", "error", "timeout"] = "passed"):
     from oversight.workspace import SuiteRun
     from oversight_contracts.events import CaseResult, SuiteResult
@@ -415,6 +443,42 @@ def queue_suite(outcome: Literal["passed", "failed", "error", "timeout"] = "pass
         cases=(CaseResult(test_id="tests/test_x.py::test_ok", outcome="passed"),),
         problems=(),
     )
+
+
+async def test_queue_wait_and_suite_note_have_separate_history_and_summary(
+    small_tree: Opened, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    suite = queue_suite()
+
+    async def run_tests(self, tree, *, timeout_s, on_queue_wait):
+        on_queue_wait(2.5)
+        return suite
+
+    outcomes: list[ToolOutcome] = []
+    original = Toolbox.call
+
+    async def observe(self: Toolbox, name: str, raw_arguments: str) -> ToolOutcome:
+        outcome = await original(self, name, raw_arguments)
+        outcomes.append(outcome)
+        return outcome
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    monkeypatch.setattr(Toolbox, "call", observe)
+    recorder = Recorder()
+    note = "configuration attribution: server-written comparison note"
+    recorder.suite_note = note
+    model = script([("run_tests", {})], [("finish", {"summary": "Done."})])
+    end = await make_run(small_tree, model, recorder).run()
+
+    assert end.state == "ready_for_review" and recorder.suites == [suite]
+    [message] = [m for m in model.requests[-1] if m["role"] == "tool"]
+    assert message["content"] == outcomes[0].content + "\n" + note
+    assert "Queued" not in str(message["content"])
+    assert "round budget remaining" not in str(message["content"])
+    step = steps(recorder)[0]
+    assert step.summary.startswith(outcomes[0].summary + ". Queued 2.5 s;")
+    assert "round budget remaining " in step.summary
+    assert step.summary.endswith("\n" + note)
 
 
 @pytest.mark.parametrize(
