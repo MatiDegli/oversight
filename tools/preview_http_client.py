@@ -29,6 +29,7 @@ class PreviewHttpClient:
         self._receipt: PreviewCreated | None = None
         self._candidate: Candidate | None = None
         self._uncertain = False
+        self._operation = asyncio.Lock()
 
     async def _request(
         self, method: str, path: str, model: type[T], body: BaseModel | None = None
@@ -94,6 +95,12 @@ class PreviewHttpClient:
                 await asyncio.sleep(0.05)
 
     async def open(self, candidate: Candidate) -> None:
+        # Admission and the receipt form one operation, including the first awaited readiness
+        # lookup. Concurrent callers must never overwrite the lease needed for cleanup.
+        async with self._operation:
+            await self._open(candidate)
+
+    async def _open(self, candidate: Candidate) -> None:
         require(
             self._receipt is None and not self._uncertain, "Preview closure must be verified first"
         )
@@ -110,6 +117,10 @@ class PreviewHttpClient:
         self._uncertain = False
 
     async def ready(self, candidate: Candidate) -> str:
+        async with self._operation:
+            return await self._ready(candidate)
+
+    async def _ready(self, candidate: Candidate) -> str:
         require(
             self._receipt is not None and self._candidate == candidate,
             "Preview ownership is absent",
@@ -150,10 +161,15 @@ class PreviewHttpClient:
         return result
 
     async def renew(self) -> None:
-        result = await self._token("lease")
-        require(result.state in {"starting", "ready"}, "Preview renewal was not confirmed")
+        async with self._operation:
+            result = await self._token("lease")
+            require(result.state in {"starting", "ready"}, "Preview renewal was not confirmed")
 
     async def stop(self) -> None:
+        async with self._operation:
+            await self._stop()
+
+    async def _stop(self) -> None:
         if self._receipt is None:
             require(not self._uncertain, "Preview closure is unverified; wait for server expiry")
             return

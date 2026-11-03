@@ -206,3 +206,87 @@ it("loses the lease on reload and waits for expiry when pagehide Stop delivery i
     await session.close();
   }
 }, 55_000);
+
+it("keeps failed network admission private and suppresses rapid duplicate starts", async () => {
+  const session = await support.session();
+  try {
+    const page = await session.open();
+    const starts: string[] = [];
+    await session.context.route("**/previews", async (route) => {
+      starts.push(route.request().method());
+      await route.fulfill({
+        status: 503,
+        headers: { "Cache-Control": "no-store" },
+        contentType: "application/json",
+        body: JSON.stringify({ error: { message: "PRIVATE_BODY_NEVER_DISPLAY" } }),
+      });
+    });
+    await page.evaluate(async () => {
+      await Promise.all(Array.from({ length: 10 }, () => window.previewAcceptance.see()));
+    });
+    expect(starts).toEqual(["POST"]);
+    await check(page.getByRole("alert")).toContainText("The preview could not be confirmed.");
+    await check(page.locator("iframe")).toHaveCount(0);
+    expect(await page.locator("body").innerText()).not.toContain("PRIVATE_BODY_NEVER_DISPLAY");
+    await page.getByRole("button", { name: "Close", exact: true }).press("Enter");
+    await session.context.setOffline(true);
+    await page.getByRole("button", { name: "See preview", exact: true }).press("Enter");
+    await check(page.getByRole("alert")).toContainText("Replacement is unavailable");
+    expect(starts).toEqual(["POST"]);
+    await session.context.setOffline(false);
+    expect(session.errors).toEqual([
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+    ]);
+  } finally {
+    await session.close();
+  }
+});
+
+it.each(["dark", "day"])(
+  "wraps mixed-script observer metadata and retains keyboard focus in %s",
+  async (theme) => {
+    const session = await support.session(sizes[2], theme);
+    try {
+      const page = await session.open();
+      await page.evaluate((candidate) => {
+        if (!candidate) throw new Error("Missing candidate");
+        const text = "العربية 漢字 😀 ".repeat(12);
+        window.previewAcceptance.observe({
+          ...candidate,
+          preview_id: `preview-${"a".repeat(32)}`,
+          change_id: text,
+          agent_id: text,
+          head_commit: "a".repeat(200),
+          state: "ready",
+          reason: null,
+        });
+      }, support.candidate);
+      await check(page.getByRole("status")).toContainText("Preview in use in another tab");
+      await page.keyboard.press("Tab");
+      await check(page.getByRole("button", { name: "See preview", exact: true })).toBeFocused();
+      await page.keyboard.press("Tab");
+      const close = page.getByRole("button", { name: "Close", exact: true });
+      await check(close).toBeFocused();
+      await page.emulateMedia({ forcedColors: "active" });
+      expect(await close.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe(
+        "solid",
+      );
+      await page.evaluate(() => {
+        const elements = [...document.querySelectorAll<HTMLElement>(".preview-panel *")];
+        const sizes = elements.map((element) => parseFloat(getComputedStyle(element).fontSize));
+        elements.forEach((element, index) => {
+          element.style.fontSize = `${String((sizes[index] ?? 16) * 2)}px`;
+        });
+      });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+        false,
+      );
+      await check(page.locator("iframe")).toHaveCount(0);
+      await close.press("Enter");
+      await check(page.getByRole("complementary")).toHaveCount(0);
+      expect(session.errors).toEqual([]);
+    } finally {
+      await session.close();
+    }
+  },
+);

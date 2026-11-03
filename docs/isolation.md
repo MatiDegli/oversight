@@ -459,3 +459,38 @@ endpoint. The earlier C matrix of 132 state frames and 18 references was absent 
 and was not recaptured. Those gaps do not authorize a trust append or production opening;
 the conditional trust and deferred adapter-provenance decisions remain unappended. Full gates
 and independent review remain the coordinator's responsibility.
+
+### Hardening and technical audit recheck
+
+Impeccable 4.5.2's `harden.md` and `audit.md` were read in full for this recheck;
+DESIGN.md retains precedence. The isolated fixture reuses C's panel and controller.
+The scoped implementation-integrity verdict is pass: generated contracts, existing validators,
+explicit fake provenance and no production mount. The scoped source detector returned no findings.
+
+| Audit dimension | Score / 4 | Evidence / limit |
+| --- | --- | --- |
+| Accessibility | 3 | Keyboard focus, live status/alerts, forced colors and doubled text; no screen reader certification |
+| Performance | 3 | Bounded calls, one frame, disposed timers; no runtime performance benchmark |
+| Theming | 4 | Existing token-based panel, both themes inspected; candidate retains D's browser defaults |
+| Responsive design | 3 | Three viewport sizes, long RTL/CJK/emoji metadata; no physical device qualification |
+| Implementation integrity | 4 | Dormant transport/fixture, exact policies, integer form totals and explicit provenance |
+
+Total: **17/20 (Good)** for this bounded surface audit, not a WCAG certification.
+One P1 concurrency finding was fixed: the Python HTTP consumer now serializes admission,
+readiness, renewal and Stop, preserving the cleanup receipt during competing operations.
+[Regressions](../tools/tests/test_preview_http_client.py) gate simultaneous Start and early Stop.
+Acceptance witnesses also pin the authenticated PID namespace inode until the unchanged death
+assertions finish; inode reuse must not confuse another namespace with the dead preview.
+[Kernel regression](../backend/tests/workspace/test_preview_acceptance.py) verifies identity through
+death and descriptor release. No process-death, listener, registry or lock assertion was removed.
+Router construction installs the sink only for the run-owned `PreviewManager`; unrelated command
+facades retain their no-effect behavior, covered by the existing history/reserved/mode route tests.
+
+Positive findings include bounded private failures, preserved ownership, a status-only observer,
+no focus stealing and no preview dependency in production. D's native form controls remain small
+touch targets (P2), preserved by the brief rather than restyled. The broader `make shots` detector
+also reports a pre-existing skipped heading in `agents/TaskBox.tsx`, outside this front's Touches;
+it is not a preview finding. Windows browser proof and C's earlier capture matrix remain missing.
+The new browser cases cover rapid admission, a refused request, offline quarantine and mixed-script
+observer text at 200% size. Viewports and forced colors are Chromium emulation, not a physical
+touch/Windows test. There is no custom drag gesture on this surface. Trust remains withheld.

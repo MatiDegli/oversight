@@ -11,7 +11,8 @@ from oversight.api.commands import Commands
 from oversight.api.preview_publication import install_preview_publication
 from oversight.api.routes import create_router
 from oversight.events import EventRejected, EventStore
-from oversight.workspace import PreviewManager, PreviewStatusRecord
+from oversight.settings import REPO_ROOT
+from oversight.workspace import PreviewManager, PreviewStatusRecord, Workspace
 from oversight_contracts.previews import PreviewStatus
 
 from .test_preview_resolution import EVENTS, RUN, seed
@@ -25,11 +26,13 @@ RECORD = PreviewStatusRecord(
 async def test_sink_installed_during_router_construction_before_startup_and_awaits_sql(
     tmp_path, monkeypatch
 ):
-    installed = []
-    manager = SimpleNamespace(set_status_sink=installed.append)
+    manager = PreviewManager(
+        Workspace(tmp_path / ".runtime", REPO_ROOT / "demo-repo", pytest_pin="9.1.1")
+    )
     store = EventStore(tmp_path / "run.sqlite", RUN)
     create_router(store, "live", cast(Commands, SimpleNamespace(previews=manager)))
-    assert len(installed) == 1 and store.last_seq == 0
+    sink = manager._sink
+    assert sink is not None and store.last_seq == 0
     await store.start()
     try:
         await seed(store)
@@ -43,7 +46,7 @@ async def test_sink_installed_during_router_construction_before_startup_and_awai
 
         monkeypatch.setattr(store, "_commit", gated)
         before = store.last_seq
-        pending = asyncio.create_task(installed[0](RECORD))
+        pending = asyncio.ensure_future(sink(RECORD))
         await asyncio.wait_for(entered.wait(), 5)
         assert not pending.done() and store.last_seq == before
         release.set()

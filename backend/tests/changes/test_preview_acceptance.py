@@ -3,6 +3,7 @@
 import asyncio
 import os
 import sys
+from contextlib import ExitStack
 from pathlib import Path
 
 import changes_helpers
@@ -28,7 +29,7 @@ from oversight.workspace.snapshot import finish_snapshot
 
 # isort: split
 sys.path.insert(0, str(REPO_ROOT))
-from tools.preview_acceptance_checks import free_port, namespace_members
+from tools.preview_acceptance_checks import free_port, namespace_members, pin_namespace
 
 pytestmark = [
     pytest.mark.anyio,
@@ -53,23 +54,27 @@ async def h(tmp_path, monkeypatch):
     harness = await changes_helpers.start_harness(tmp_path)
     await harness.workspace.check_isolation()
     assert harness.workspace.isolation.available
-    processes = wire_real_preview(harness, monkeypatch)
+    pins = ExitStack()
+    processes = wire_real_preview(harness, monkeypatch, pins)
     try:
         yield harness
     finally:
-        for process, data in processes:
-            # Testing an uncertain proof must not leave a live test application. This direct
-            # cleanup verifies only exact registered ownership; quarantine/locks remain latched.
-            await PreviewProcess.stop(process)
-            await dead(data)
-        manager = harness.workspace.previews
-        if manager and manager._watcher:
-            manager._watcher.cancel()
-            await asyncio.gather(manager._watcher, return_exceptions=True)
-        await harness.close()
+        try:
+            for process, data in processes:
+                # Testing an uncertain proof must not leave a live test application. This direct
+                # cleanup verifies only exact registered ownership; quarantine/locks remain latched.
+                await PreviewProcess.stop(process)
+                await dead(data)
+            manager = harness.workspace.previews
+            if manager and manager._watcher:
+                manager._watcher.cancel()
+                await asyncio.gather(manager._watcher, return_exceptions=True)
+            await harness.close()
+        finally:
+            pins.close()
 
 
-def wire_real_preview(harness, monkeypatch):
+def wire_real_preview(harness, monkeypatch, pins):
     processes = []
 
     class RealFaultProcess(PreviewProcess):
@@ -79,6 +84,7 @@ def wire_real_preview(harness, monkeypatch):
             await super().launch(listener, profile)
             data = self.registry.read()
             assert data is not None and data["phase"] == "executing"
+            pins.enter_context(pin_namespace(data))
             processes.append((self, data))
 
         async def stop(self):

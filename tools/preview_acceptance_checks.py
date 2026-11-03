@@ -68,12 +68,15 @@ class ProcessWitness(PreviewProcess):
     """Observe the real supervisor; never substitute its launch, namespace or cleanup."""
 
     evidence: dict[str, Any] | None = None
+    death_evidence: dict[str, Any] | None = None
+    pins: contextlib.ExitStack
 
     async def ready(self, within_s: float) -> bool:
         result = await super().ready(within_s)
         if result:
             data = self.registry.read()
             assert data is not None
+            self.pins.enter_context(pin_namespace(data))
             self.evidence = {
                 "port": self.port,
                 "namespaces": data["namespaces"],
@@ -85,10 +88,27 @@ class ProcessWitness(PreviewProcess):
         return result
 
     def verified(self) -> dict[str, Any]:
+        if self.death_evidence is not None:
+            return self.death_evidence
         assert self.dead and self.evidence is not None
         assert all(not registered_identity(raw).alive() for raw in self.evidence["births"].values())
         assert namespace_members(self.evidence["namespaces"]["pid"]) == []
-        return {**self.evidence, "namespace_dead": True}
+        self.death_evidence = {**self.evidence, "namespace_dead": True}
+        return self.death_evidence
+
+
+@contextlib.contextmanager
+def pin_namespace(data: dict[str, Any]):
+    """Keep the authenticated namespace inode from being reused during a death assertion."""
+    identity = registered_identity(data["namespace"])
+    assert identity.alive()
+    descriptor = os.open(f"/proc/{identity.pid}/ns/pid", os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        assert os.readlink(f"/proc/self/fd/{descriptor}") == data["namespaces"]["pid"]
+        assert identity.alive()
+        yield descriptor
+    finally:
+        os.close(descriptor)
 
 
 @asynccontextmanager
@@ -98,9 +118,11 @@ async def server(config: Settings) -> AsyncGenerator[AcceptanceServer]:
         await IsolatedRunner(config.runtime_dir).preflight()
     app = create_app(config)
     witnesses: list[ProcessWitness] = []
+    pins = contextlib.ExitStack()
 
     def witness(registry: Any, port: int) -> ProcessWitness:
         process = ProcessWitness(registry, port)
+        process.pins = pins
         witnesses.append(process)
         return process
 
@@ -137,10 +159,16 @@ async def server(config: Settings) -> AsyncGenerator[AcceptanceServer]:
             async with asyncio.timeout(30):
                 await asyncio.shield(task)
         finally:
-            listener.close()
-            if not task.done():
-                task.cancel()
-                await asyncio.gather(task, return_exceptions=True)
+            try:
+                listener.close()
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+                for process in witnesses:
+                    if process.evidence is not None:
+                        process.verified()
+            finally:
+                pins.close()
 
 
 async def released(workspace: Workspace, ports: tuple[int, ...]) -> None:

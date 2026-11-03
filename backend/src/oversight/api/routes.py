@@ -21,6 +21,7 @@ from oversight.events import (
     read_history,
 )
 from oversight.graph import NodeNotFoundError, node_cone
+from oversight.workspace import PreviewManager
 from oversight_contracts import CONTRACT_VERSION
 from oversight_contracts.commands import GraphResponse, Health, MissingSetting
 from oversight_contracts.events import Limits
@@ -64,6 +65,10 @@ def create_router(
     router = APIRouter()
     add_command_routes(router, commands, run_id=store.run_id)
     previews = getattr(commands, "previews", None) if mode == "live" else None
+    # Composition accepts only the run-owned service, not a synthesized capability on a
+    # partial Commands facade. Construction must not invoke unrelated command handlers.
+    if not isinstance(previews, PreviewManager):
+        previews = None
     if previews is not None:
         install_preview_publication(store, previews)
     add_preview_routes(router, previews)

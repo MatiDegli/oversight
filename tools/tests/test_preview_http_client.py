@@ -1,5 +1,6 @@
 """Mock HTTP proves the consumer's identity fencing and retained cleanup ownership."""
 
+import asyncio
 import json
 import sys
 from dataclasses import replace
@@ -101,6 +102,47 @@ async def test_stale_details_still_retain_receipt_for_authenticated_cleanup():
             await previews.open(replace(CANDIDATE, revision=2))
         wire.wrong_details = False
         await previews.stop()
+    assert wire.calls[-1] == ("POST", f"/previews/{ID}/stop", {"lease_token": TOKEN})
+
+
+@pytest.mark.parametrize("action", ["open", "stop"])
+async def test_concurrent_operations_wait_for_admission_and_preserve_cleanup(action):
+    wire = Wire()
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def delayed(request):
+        if request.url.path == "/agents/agent-1":
+            entered.set()
+            await asyncio.wait_for(release.wait(), 5)
+        return wire(request)
+
+    async with httpx.AsyncClient(
+        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(delayed), trust_env=False
+    ) as client:
+        previews = factory(client)
+        first = asyncio.create_task(previews.open(CANDIDATE))
+        await asyncio.wait_for(entered.wait(), 5)
+        second = asyncio.create_task(
+            previews.open(CANDIDATE) if action == "open" else previews.stop()
+        )
+        try:
+            await asyncio.sleep(0)
+            assert not second.done()
+            release.set()
+            await asyncio.wait_for(first, 5)
+            if action == "open":
+                with pytest.raises(ScenarioError, match="closure must be verified"):
+                    await asyncio.wait_for(second, 5)
+            else:
+                await asyncio.wait_for(second, 5)
+            await previews.stop()
+        finally:
+            release.set()
+            for task in (first, second):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(first, second, return_exceptions=True)
+    assert sum(method == "POST" and path == "/previews" for method, path, _ in wire.calls) == 1
     assert wire.calls[-1] == ("POST", f"/previews/{ID}/stop", {"lease_token": TOKEN})
 
 

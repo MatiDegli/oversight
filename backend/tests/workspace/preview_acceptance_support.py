@@ -5,7 +5,7 @@ import json
 import os
 import sys
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,7 +25,7 @@ from oversight.workspace.preview_types import FakeStatusSink
 
 # isort: split
 sys.path.insert(0, str(REPO_ROOT))
-from tools.preview_acceptance_checks import free_port, namespace_members
+from tools.preview_acceptance_checks import free_port, namespace_members, pin_namespace
 
 
 async def preflight(root: Path) -> None:
@@ -48,6 +48,7 @@ class RealPreview:
     head: str
     sink: FakeStatusSink
     report: Path
+    pins: ExitStack
 
     async def start(self):
         receipt = await self.manager.start(
@@ -56,6 +57,7 @@ class RealPreview:
         await self.sink.wait("ready", receipt.preview_id)
         data = self.manager.registry.read()
         assert data is not None
+        self.pins.enter_context(pin_namespace(data))
         for name in ("supervisor", "unshare", "namespace"):
             assert registered_identity(data[name]).alive()
         for name, identity in data["namespaces"].items():
@@ -131,7 +133,8 @@ async def real_preview(
         manager = PreviewManager(workspace, profile, resolve_candidate=resolve)
         sink = FakeStatusSink()
         manager.set_status_sink(sink)
-        yield RealPreview(workspace, manager, head, sink, root / "report.json")
+        with ExitStack() as pins:
+            yield RealPreview(workspace, manager, head, sink, root / "report.json", pins)
     finally:
         if workspace.previews and not workspace.integrity.main_suspect:
             await workspace.previews.drain("shutdown")

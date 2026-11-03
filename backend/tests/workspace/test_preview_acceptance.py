@@ -23,7 +23,7 @@ from .preview_acceptance_support import (
 )
 
 # isort: split
-from tools.preview_acceptance_checks import free_port, released, server, settings
+from tools.preview_acceptance_checks import free_port, pin_namespace, released, server, settings
 from tools.preview_scenario import document
 
 pytestmark = [
@@ -40,6 +40,20 @@ def external_address():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as connection:
         connection.connect(("192.0.2.1", 9))
         return connection.getsockname()[0]
+
+
+async def test_namespace_pin_retains_identity_through_death_and_closes_descriptor(tmp_path):
+    async with real_preview(tmp_path) as h:
+        receipt, data = await h.start()
+        with pin_namespace(data) as descriptor:
+            inode = os.fstat(descriptor).st_ino
+            assert data["namespaces"]["pid"] == f"pid:[{inode}]"
+            await h.manager.stop(receipt.preview_id, receipt.lease_token)
+            await dead(data)
+            assert os.fstat(descriptor).st_ino == inode
+            assert os.readlink(f"/proc/self/fd/{descriptor}") == data["namespaces"]["pid"]
+        with pytest.raises(OSError):
+            os.fstat(descriptor)
 
 
 async def test_inherited_http_forms_network_refusal_and_setsid_death(tmp_path, capsys):
