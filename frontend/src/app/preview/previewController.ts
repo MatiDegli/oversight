@@ -346,6 +346,7 @@ class Controller implements PreviewController {
     this.#publish({
       pending: true,
       notice: "closure_unconfirmed",
+      frameUrl: null,
       uncertain: true,
     });
     try {
@@ -369,6 +370,7 @@ class Controller implements PreviewController {
   }
   close = async () => {
     this.#cancelStart = true;
+    this.#publish({ frameUrl: null });
     await this.#flight;
     if (this.#disposed) return;
     if (!this.#token) {

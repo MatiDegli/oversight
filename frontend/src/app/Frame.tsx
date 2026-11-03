@@ -1,3 +1,5 @@
+import { presentationFor } from "../teams/presentation";
+import { stateStore } from "../state";
 import { PreviewPanel } from "./preview/PreviewPanel";
 import "./preview/previewChatLayout.css";
 import { PreviewActionsContext, type PreviewActions } from "../agents";
@@ -142,7 +144,14 @@ export function Frame(input: FrameProps) {
             subscribe: (listener: () => void) =>
               props.previewHost?.subscribe(listener) ?? (() => {}),
             snapshot: props.previewHost.snapshot,
-            content: <PreviewPanel controller={props.previewHost.controller} />,
+            content: (
+              <PreviewPanel
+                controller={props.previewHost.controller}
+                clock={props.previewHost.clock}
+                elapsed={props.previewHost.elapsed}
+                identity={(id) => presentationFor(stateStore.getState().state, id)}
+              />
+            ),
           }
         : undefined,
     [props.previewHost],

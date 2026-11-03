@@ -101,8 +101,10 @@ it.each(previewStates)("renders %s with persistent accessible Close", (state) =>
     status: fakeStatus(state, state === "starting" || state === "ready" ? null : "closed"),
   });
   expect(html).toContain('aria-label="Live preview panel"');
-  expect(html).toContain(`>${state.charAt(0).toUpperCase()}${state.slice(1)}<`);
-  expect(html).toContain("</svg>Close</button>");
+  expect(html).toContain(
+    `>${state === "failed" ? "Refused" : state.charAt(0).toUpperCase() + state.slice(1)}<`,
+  );
+  expect(html).toContain("Close</span>");
   expect(html).not.toContain("iframe");
 });
 it.each(previewReasons)("maps %s exhaustively to fixed useful copy", (reason) => {
@@ -133,7 +135,7 @@ it("keeps blocked start feedback visible alongside another preview's public stat
   expect(html).toContain("The preview could not be confirmed.");
   expect(html).not.toContain("iframe");
 });
-it("only mounts owned ready details and retains an existing frame during uncertain closure", () => {
+it("only mounts owned ready details and unmounts a stopping or failed app", () => {
   const url = "https://frame.invalid/app";
   for (const state of ["ready", "stopping", "failed"] as const) {
     const html = render({
@@ -141,11 +143,12 @@ it("only mounts owned ready details and retains an existing frame during uncerta
       frameUrl: url,
       uncertain: state !== "ready",
     });
-    expect(html).toContain('sandbox="allow-forms"');
-    expect(html).toContain('referrerPolicy="no-referrer"');
-    expect(html).toContain('title="Live preview for agent-a"');
+    if (state === "ready") {
+      expect(html).toContain('sandbox="allow-forms"');
+      expect(html).toContain('referrerPolicy="no-referrer"');
+      expect(html).toContain('title="Live preview for the selected app"');
+    } else expect(html).not.toContain("iframe");
     expect(html).not.toMatch(/allow-scripts|allow-same-origin|lease_token/);
-    if (state !== "ready") expect(html).toContain("current frame stays visible");
   }
 });
 it("renders no ordinary-failure frame and hides only after dismissal", () => {
@@ -171,4 +174,24 @@ it("keeps pending closure polite and announces failed commands assertively", () 
   );
   for (const notice of ["renewal_failed", "start_failed"] as const)
     expect(render({ uncertain: true, notice })).toContain('role="alert"');
+});
+
+it("replay panel fixtures never mount a live frame even with owned ready details", () => {
+  const view = {
+    visible: true,
+    status: fakeStatus("ready"),
+    owned: true,
+    pending: false,
+    uncertain: false,
+    frameUrl: "https://frame.invalid",
+    notice: null,
+  };
+  const controller = {
+    snapshot: () => view,
+    subscribe: () => () => {},
+  } as unknown as PreviewController;
+  const html = renderToStaticMarkup(<PreviewPanel controller={controller} replay />);
+  expect(html).toContain("Replay panel fixture");
+  expect(html).toContain("inert");
+  expect(html).not.toContain("iframe");
 });

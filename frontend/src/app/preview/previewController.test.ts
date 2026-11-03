@@ -118,7 +118,7 @@ it("awaits matching verified stop, then reads the fresh candidate once; repeated
   await controller.see(read);
   expect(read).not.toHaveBeenCalled();
   expect(port.calls.map((call) => call.kind)).toEqual(["start", "details", "stop"]);
-  expect(controller.snapshot().frameUrl).toBe(port.frameUrl);
+  expect(controller.snapshot().frameUrl).toBeNull();
   port.gate.resolve(undefined);
   await replacement;
   expect(read).toHaveBeenCalledTimes(1);
@@ -132,7 +132,7 @@ it("awaits matching verified stop, then reads the fresh candidate once; repeated
   expect(port.calls[3]?.candidate).toEqual(next);
 });
 it.each(["reject", "unverified"] as const)(
-  "quarantines %s stop and retains the same frame",
+  "quarantines %s stop and unmounts the frame",
   async (mode) => {
     const { port, controller } = setup();
     await controller.see(() => fakeCandidate);
@@ -143,7 +143,7 @@ it.each(["reject", "unverified"] as const)(
     expect(controller.snapshot()).toMatchObject({
       visible: true,
       uncertain: true,
-      frameUrl: port.frameUrl,
+      frameUrl: null,
     });
     expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(1);
     expect(JSON.stringify(controller.snapshot())).not.toContain("Private child output");
@@ -168,7 +168,7 @@ it("does not accept a terminal enum, wrong target or cleanup_unverified as drain
     const controller = createPreviewController(port, clock, identity);
     await controller.see(() => fakeCandidate);
     await controller.see(() => next);
-    expect(controller.snapshot()).toMatchObject({ uncertain: true, frameUrl: fake.frameUrl });
+    expect(controller.snapshot()).toMatchObject({ uncertain: true, frameUrl: null });
     expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
   }
 });
@@ -231,7 +231,7 @@ it("bounds lost stop delivery and relies on fake authority lease expiry", async 
   expect(controller.snapshot()).toMatchObject({
     visible: true,
     uncertain: true,
-    frameUrl: port.frameUrl,
+    frameUrl: null,
   });
   await vi.advanceTimersByTimeAsync(30_000);
   expect(port.publicStatus()?.reason).toBe("lease_expired");
@@ -333,7 +333,7 @@ it.each(["reject", "unverified", "lost"] as const)(
       controller.observe(port.publicStatus() as PreviewStatus);
       expect(controller.snapshot()).toMatchObject({
         owned: true,
-        frameUrl: port.frameUrl,
+        frameUrl: null,
         status: { state: "failed", reason: "cleanup_unverified" },
       });
     }

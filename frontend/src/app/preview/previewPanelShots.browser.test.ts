@@ -34,14 +34,15 @@ it.each(cases)(
       try {
         const page = await session.open();
         await check(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
-        if (scenario === "ready" || scenario === "failed-stop" || scenario === "stopping-closed")
-          await check(page.locator("iframe")).toBeVisible();
+        if (scenario === "ready") await check(page.locator("iframe")).toBeVisible();
+        if (scenario === "failed-stop" || scenario === "stopping-closed")
+          await check(page.locator("iframe")).toHaveCount(0);
         if (scenario === "stopping-closed") {
           await check(page.locator(".preview-panel-state")).toHaveText("Stopping");
           await check(page.getByRole("status")).toContainText("Waiting for verified closure.");
         }
         if (scenario === "failed-stop") {
-          await check(page.locator(".preview-panel-state")).toHaveText("Ready");
+          await check(page.locator(".preview-panel-state")).toHaveText("Unconfirmed");
           await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
           await check(page.getByText("Waiting for verified closure.")).toHaveCount(0);
         }

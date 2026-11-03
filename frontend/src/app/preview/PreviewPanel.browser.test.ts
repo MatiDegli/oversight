@@ -45,10 +45,10 @@ it("isolates two tabs: observer receives public status only and Close is local",
     const observer = await session.open("panel", "", "observer");
     await check(owner.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
     await check(owner.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
-    await check(owner.locator("iframe")).toHaveAttribute("title", "Live preview for agent-a");
+    await check(owner.locator("iframe")).toHaveAttribute("title", "Live preview for Agent A");
     await check(observer.getByText("Preview in use in another tab", { exact: true })).toBeVisible();
     await check(observer.locator("iframe")).toHaveCount(0);
-    await check(observer.getByRole("button")).toHaveCount(1);
+    await check(observer.getByRole("button")).toHaveCount(2);
     await observer.evaluate(() => {
       window.previewFixture.advance(20_000);
     });
@@ -109,7 +109,7 @@ it("replacement waits for verified drainage, reads fresh head and prevents repea
       revision: 3,
       head_commit: "fresh-head",
     });
-    await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for agent-b");
+    await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for Agent B");
     await noErrors(page);
   } finally {
     await session.close();
@@ -145,12 +145,12 @@ it("recovers a rejected agent-b start while agent-a owns the slot", async () => 
     expect(await page.evaluate(() => window.previewFixture.snapshot().notice)).toBe("start_failed");
     const before = session.authority.calls.length;
     await page.getByRole("button", { name: "Close", exact: true }).press("Enter");
-    await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
     await page.getByRole("button", { name: "See preview", exact: true }).click();
     await check(page.getByRole("alert")).toContainText("The preview could not be confirmed.");
     await page.getByRole("button", { name: "Close", exact: true }).click();
     await page.evaluate(() => window.previewFixture.observePublic());
-    await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(1);
     expect(session.authority.calls).toHaveLength(before);
     await page.getByRole("button", { name: "See preview", exact: true }).click();
     await check(page.getByRole("alert")).toContainText("The preview could not be confirmed.");
@@ -163,9 +163,9 @@ it("recovers a rejected agent-b start while agent-a owns the slot", async () => 
     expect(await page.evaluate(() => window.previewFixture.snapshot().uncertain)).toBe(false);
     session.clock.advance(30_001);
     await page.evaluate(() => window.previewFixture.observePublic());
-    await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    await check(page.locator(".preview-panel-state")).toHaveText("Stopped");
     await page.getByRole("button", { name: "See preview", exact: true }).click();
-    await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for agent-b");
+    await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for Agent B");
     expect(session.authority.calls.filter((call) => call.kind === "start")).toHaveLength(2);
     await noErrors(owner);
     await noErrors(page);
@@ -185,7 +185,7 @@ it.each(["reject", "unverified"] as const)(
       expect(await page.evaluate(() => window.previewFixture.snapshot().status?.state)).toBe(
         "ready",
       );
-      await check(page.locator("iframe")).toBeVisible();
+      await check(page.locator("iframe")).toHaveCount(0);
       await page.evaluate(() => window.previewFixture.observePublic());
       session.clock.advance(30_001);
       await page.evaluate(() => window.previewFixture.observePublic());
@@ -197,7 +197,7 @@ it.each(["reject", "unverified"] as const)(
       expect(session.authority.calls).toHaveLength(before);
       session.authority.stopMode = "verified";
       await page.getByRole("button", { name: "See preview", exact: true }).click();
-      await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for agent-b");
+      await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for Agent B");
       await noErrors(page);
     } finally {
       await session.close();
@@ -205,7 +205,7 @@ it.each(["reject", "unverified"] as const)(
   },
 );
 it.each(["reject", "unverified"] as const)(
-  "%s stop retains the same frame and blocks replacement",
+  "%s stop unmounts the frame and blocks replacement",
   async (mode) => {
     const session = await support.session();
     try {
@@ -216,7 +216,7 @@ it.each(["reject", "unverified"] as const)(
       });
       await page.evaluate(() => window.previewFixture.see({ agent_id: "agent-b" }));
       await page.evaluate(() => window.previewFixture.see());
-      await check(page.locator("iframe")).toHaveAttribute("data-original", "true");
+      await check(page.locator("iframe")).toHaveCount(0);
       await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
       await check(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
       expect(session.authority.calls.filter((call) => call.kind === "start")).toHaveLength(1);
@@ -227,7 +227,7 @@ it.each(["reject", "unverified"] as const)(
   },
 );
 it.each(["Close", "Leave preview"])(
-  "%s sends stop and keeps the pending panel until verified termination",
+  "%s sends stop and keeps closure feedback until verified termination",
   async (label) => {
     const session = await support.session();
     try {
@@ -239,7 +239,8 @@ it.each(["Close", "Leave preview"])(
         .poll(() => session.authority.calls.filter((call) => call.kind === "stop").length)
         .toBe(1);
       await check(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
-      await check(page.locator("iframe")).toBeVisible();
+      if (label === "Close") await check(page.locator("iframe")).toHaveCount(0);
+      else await check(page.locator("iframe")).toHaveCount(0);
       session.authority.gate.resolve(undefined);
       await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
       await noErrors(page);
@@ -275,7 +276,7 @@ it("reload loses ownership; lost page-disappearance delivery relies on server ex
     await session.close();
   }
 });
-it("bounds an in-session lost Close while the frame stays visible", async () => {
+it("bounds an in-session lost Close with no hidden live iframe", async () => {
   const session = await support.session();
   try {
     const page = await session.open();
@@ -285,7 +286,7 @@ it("bounds an in-session lost Close while the frame stays visible", async () => 
       window.previewFixture.advance(5_001);
     });
     await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
-    await check(page.locator("iframe")).toBeVisible();
+    await check(page.locator("iframe")).toHaveCount(0);
     await noErrors(page);
   } finally {
     await session.close();
@@ -310,6 +311,8 @@ it.each([1920, 390])(
         slot.style.minHeight = "350px";
         control.focus({ preventScroll: true });
         window.scrollTo(0, 60);
+        const app = document.querySelector("iframe");
+        if (app) app.style.minHeight = "600px";
         panel.scrollTop = 80;
         return { page: scrollY, panel: panel.scrollTop };
       });
@@ -325,7 +328,8 @@ it.each([1920, 390])(
             page: scrollY,
             panel: document.querySelector(".preview-panel-body")?.scrollTop,
           })),
-        ).toEqual(before);
+        ).toEqual(operation === "status" ? before : { ...before, panel: 0 });
+        if (operation === "replacement") await check(page.locator("iframe")).toHaveCount(0);
         expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("IFRAME");
       }
       await noErrors(page);
@@ -401,7 +405,9 @@ it("wraps long multilingual candidate identities, preserves Close in forced colo
         window.previewFixture.see({ agent_id, head_commit: "0123456789abcdef".repeat(8) }),
       identity,
     );
-    await check(page.getByText(identity, { exact: true })).toBeVisible();
+    await check(
+      page.getByText(`Agent ${identity.replace(/^agent-/, "")}`, { exact: true }),
+    ).toBeVisible();
     await check(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
     await noErrors(page);
     await page.emulateMedia({ forcedColors: "active" });
@@ -456,7 +462,9 @@ it.each([1920, 1280, 390])(
       expect(panel?.width).toBeGreaterThan(width === 390 ? 380 : (conversation?.width ?? 0));
       expect(await page.locator(".chat-agents").boundingBox()).toEqual(rail);
       await check(page.getByRole("img", { name: "Repository graph" })).toHaveCount(0);
-      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await page
+        .getByRole("button", { name: width === 390 ? "Back" : "Close", exact: true })
+        .click();
       await check(page.locator(".chat-preview-slot")).toHaveCount(0);
       expect(await page.locator(".shell-center").boundingBox()).toEqual(before);
       await check(page.locator(".chat-work")).toHaveCount(1);
@@ -468,14 +476,3 @@ it.each([1920, 1280, 390])(
     }
   },
 );
-it.each([1920, 1280, 390])("captures the available pre-redesign panel at %i", async (width) => {
-  for (const theme of ["dark", "day"]) {
-    const viewport = { width, height: width === 1920 ? 1080 : width === 1280 ? 800 : 844 };
-    const session = await support.session({ ...viewport, theme });
-    try {
-      await support.capture(await session.open(), "before-ready", viewport, theme);
-    } finally {
-      await session.close();
-    }
-  }
-});

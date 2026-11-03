@@ -128,7 +128,7 @@ function PreviewFixture() {
     <main className="preview-fixture">
       <div className="preview-fixture-caption">Isolated fixture · handwritten fake authority</div>
       <div className="preview-fixture-controls">
-        {(!view.visible || view.owned) && (
+        {
           <button
             type="button"
             onClick={() => {
@@ -137,7 +137,7 @@ function PreviewFixture() {
           >
             See preview
           </button>
-        )}
+        }
         {view.owned && (
           <button
             type="button"
@@ -161,7 +161,19 @@ function PreviewFixture() {
         </label>
       </div>
       <div className="preview-fixture-slot">
-        <PreviewPanel controller={controller} />
+        <PreviewPanel
+          controller={controller}
+          clock={localClock}
+          identity={() => ({
+            label:
+              candidate.agent_id === "agent-a"
+                ? "A"
+                : candidate.agent_id === "agent-b"
+                  ? "B"
+                  : candidate.agent_id.replace(/^agent-/, ""),
+            hue: "A",
+          })}
+        />
       </div>
     </main>
   );
