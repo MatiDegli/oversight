@@ -605,6 +605,47 @@ def test_descriptor_closure(tmp_path):
     asyncio.run(scenario())
 
 
+def runner_child_code(marker: Path) -> str:
+    return (
+        "import os,time; from pathlib import Path; marker = Path("
+        + repr(str(marker))
+        + "); pending = marker.with_name(marker.name + '.tmp'); "
+        + "pending.write_text(str(os.getpid())); pending.replace(marker); time.sleep(30)"
+    )
+
+
+def test_runner_pid_publication_is_atomic(tmp_path):
+    async def scenario():
+        marker = tmp_path / "child-pid"
+        # Inspect the create-before-write window deterministically inside the child.
+        probe = (
+            "import os,time\nfrom pathlib import Path\n"
+            + f"marker = Path({str(marker)!r})\n"
+            + "def interrupted_write(path, data):\n"
+            + " with path.open('w') as stream:\n"
+            + "  assert not marker.exists(), 'partial PID published'\n"
+            + "  return stream.write(data)\n"
+            + "Path.write_text = interrupted_write\ntime.sleep = lambda _: None\n"
+        )
+        result = await run_process(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                "-c",
+                probe + runner_child_code(marker) + "; print(os.getpid())",
+            ],
+            cwd=tmp_path,
+            timeout_s=10,
+        )
+        assert result.returncode == 0, result.stderr
+        assert marker.read_text() == result.stdout.strip()
+        assert int(marker.read_text()) > 0
+
+    asyncio.run(scenario())
+
+
 async def runner_cleanup_witness(tmp_path, operation, mode):
     marker = tmp_path / "child-pid"
     descriptors = await offload(lambda: len(tuple(Path("/proc/self/fd").iterdir())))
@@ -612,13 +653,8 @@ async def runner_cleanup_witness(tmp_path, operation, mode):
 
     async def spawn(argv, **kwargs):
         entered.set()
-        code = (
-            "import os,time; from pathlib import Path; Path("
-            + repr(str(marker))
-            + (").write_text(str(os.getpid())); time.sleep(30)")
-        )
         return await run_process(
-            [sys.executable, "-I", "-S", "-B", "-c", code],
+            [sys.executable, "-I", "-S", "-B", "-c", runner_child_code(marker)],
             cwd=kwargs["cwd"],
             timeout_s=0.3 if mode == "timeout" else 10,
             output_cap=kwargs["output_cap"],
