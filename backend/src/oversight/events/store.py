@@ -1,6 +1,9 @@
-"""Append-only SQLite log: one writer assigns gapless seqs and batches concurrent publications.
+"""The append-only event store of one run: a SQLite file, one writer task, and live subscribers.
 
-Subscribers observe events only after their transaction commits.
+Producers call `publish` from any task. Only the writer task assigns `seq` and `ts`, so `seq` goes
+1, 2, 3 with no gaps even when two agents publish at once. It drains whatever is queued into one
+transaction, so a burst of events costs one commit. An event reaches subscribers only after its
+transaction commits, so what a client sees is always in the file.
 """
 
 import asyncio
@@ -187,7 +190,10 @@ def read_store(path: Path) -> list[StoredEvent]:
 
 
 class EventStore:
-    """One run's durable log and in-memory committed subscriber index."""
+    """The log of one run, kept in `path` (`.runtime/runs/{run_id}.sqlite`) and in memory.
+
+    A run's log is small, so subscribers read from the in-memory copy of what was committed.
+    """
 
     def __init__(
         self,
@@ -272,7 +278,10 @@ class EventStore:
         await self.close()
 
     async def publish(self, payload: EventPayload, *, ts: str | None = None) -> StoredEvent:
-        """Return the committed receipt; replay may supply its recorded timestamp."""
+        """Append one event and return it once committed, with its `seq` and `ts`.
+
+        `ts` defaults to the clock at commit time; the replay player passes the recorded one.
+        """
         if self._closing or self._writer is None:
             raise StoreClosedError("the event store is not accepting events")
         try:

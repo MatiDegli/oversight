@@ -1,17 +1,4 @@
-"""Pure accounting over a complete committed event prefix, with no decision authority.
-
-Fold a complete, ordered, committed prefix starting at seq 1 (or an empty prefix).
-
-    Reject missing/duplicate/out-of-order seqs and invalid costs with ValueError. A suffix cannot
-    establish rounds or complete accounting. Completeness refers to the committed inventory;
-    absent receipts or calls never recorded by a producer cannot be reconstructed here.
-
-    Round zero precedes confirmed changes_requested resolutions; each such resolution increments
-    that change's round for subsequent ticks. This is receipt order, not proof of the originating
-    call's revision. Proposal revisions, agent ids, model names and timing imply no attribution.
-    In particular, reviewer and decision calls remain combined under the existing review role.
-
-"""
+"""Pure accounting over a complete committed event prefix, with no decision authority."""
 
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
@@ -118,7 +105,17 @@ def _run_usage(costs: list[float], unknown: int, calls: int, accepted: int) -> R
 
 
 def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
-    """Fold complete committed accounting; see the module accounting rules."""
+    """Fold a complete, ordered, committed prefix starting at seq 1 (or an empty prefix).
+
+    Reject missing/duplicate/out-of-order seqs and invalid costs with ValueError. A suffix cannot
+    establish rounds or complete accounting. Completeness refers to the committed inventory;
+    absent receipts or calls never recorded by a producer cannot be reconstructed here.
+
+    Round zero precedes confirmed changes_requested resolutions; each such resolution increments
+    that change's round for subsequent ticks. This is receipt order, not proof of the originating
+    call's revision. Proposal revisions, agent ids, model names and timing imply no attribution.
+    In particular, reviewer and decision calls remain combined under the existing review role.
+    """
     rounds: dict[str, int] = {}
     groups: dict[str, dict[_Bucket, list[float | None]]] = {}
     accepted: set[str] = set()
