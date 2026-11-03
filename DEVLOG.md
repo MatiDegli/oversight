@@ -94,3 +94,14 @@ One line per day, in Argentina time (ART).
   Reviewed self-profile front (2026-11-03): added filtered pinned input and frozen launch authority,
   nonexecuting admission scaffold and bounded console/live-index startup carrier; consumer rendering,
   builds, boundary/gateway/nesting and native launch remain unavailable. No model API calls.
+
+  Added reviewed preview translation, effective-manifest/root adaptation, persistence before execution,
+  fresh-root build/start orchestration and supervisor-owned connector/publication/gateway lifecycle.
+  Retained quarantine, the self-application refusal and separate tests/shop filesystem residual.
+  Folded authenticated namespace/filter/teardown, static preparation/import/log, HTTP/readiness,
+  connector and explicit no-key nested configuration rationales into the preview documentation.
+  Readiness/lease defaults are 30/600 seconds; controlled wiring does not certify final self-app,
+  scripted-story or Windows-browser acceptance. No provider calls or contract changes.
+  Qualified the actual prepared offline production build and imports in the Linux root, and the
+  real supervisor/guardian death ordering; retained the explicit development-header and shop-host
+  integration prerequisites and the absence of final self-app/story/Windows-browser acceptance.
