@@ -11,6 +11,8 @@ import pytest
 from oversight.workspace.isolation import open_pidfd
 from oversight.workspace.preview_connector import ConnectorTarget, connect_api
 
+from .preview_connector_support import helper_launch
+
 pytestmark = pytest.mark.anyio
 
 
@@ -192,46 +194,6 @@ async def fake_target(monkeypatch):
         os.close(fd)
 
 
-def helper_launch(
-    monkeypatch, mode: str, *, delay_spawn=False, hold_spawn=False, connect_port=None
-):
-    from .preview_connector_support import SUPPORT
-
-    loop = asyncio.get_running_loop()
-    original = loop.subprocess_exec
-    transports = []
-    spawning = asyncio.Event()
-    release = asyncio.Event()
-    started = asyncio.Event()
-
-    async def spawn(factory, *argv, **kwargs):
-        spawning.set()
-        if delay_spawn:
-            await release.wait()
-        arguments = list(argv[-4:])
-        if connect_port is not None:
-            arguments[2] = str(connect_port)
-        transport, protocol = await original(
-            factory,
-            argv[0],
-            "-I",
-            "-B",
-            str(SUPPORT),
-            "failure-helper",
-            mode,
-            *arguments,
-            **kwargs,
-        )
-        transports.append(transport)
-        started.set()
-        if hold_spawn:
-            await release.wait()
-        return transport, protocol
-
-    monkeypatch.setattr(loop, "subprocess_exec", spawn)
-    return transports, spawning, release, started
-
-
 def fd_count() -> int:
     return len(os.listdir("/proc/self/fd"))
 
@@ -283,14 +245,46 @@ async def test_connector_cleanup_on_every_exit(monkeypatch, fake_target, mode: s
     else:
         if mode in ("timeout-spawn", "timeout-spawn-after"):
             await (started.wait() if hold else spawning.wait())
-            await asyncio.sleep(0.2)
-            assert not task.done()
+            done, _ = await asyncio.wait({task}, timeout=2)
+            assert task in done, "timeout must interrupt spawn without releasing it"
             release.set()
         with pytest.raises((OSError, ValueError, TimeoutError)):
             await task
     assert all(transport.get_returncode() is not None for transport in transports)
     assert fd_count() == before
     os.fstat(fake_target.u0_pidfd)
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+@pytest.mark.parametrize("after_spawn", [False, True])
+async def test_stalled_spawn_observes_abort(monkeypatch, fake_target, cancel, after_spawn) -> None:
+    before = fd_count()
+    transports, spawning, release, started = helper_launch(
+        monkeypatch, "hang", delay_spawn=not after_spawn, hold_spawn=after_spawn
+    )
+    task = asyncio.create_task(connect_api(fake_target, timeout_s=5 if cancel else 0.15))
+    try:
+        await asyncio.wait_for((started if after_spawn else spawning).wait(), 2)
+        if cancel:
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+        done, _ = await asyncio.wait({task}, timeout=2)
+        assert task in done, "aborted connector still waits for the stalled spawn"
+        with pytest.raises(asyncio.CancelledError if cancel else TimeoutError):
+            await task
+        assert bool(transports) == after_spawn
+        for transport in transports:
+            assert transport.get_returncode() is not None
+            with pytest.raises(ChildProcessError):
+                await asyncio.to_thread(os.waitpid, transport.get_pid(), os.WNOHANG)
+        assert fd_count() == before
+        os.fstat(fake_target.u0_pidfd)
+        os.fstat(fake_target.n0_pidfd)
+    finally:
+        release.set()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.mark.parametrize(

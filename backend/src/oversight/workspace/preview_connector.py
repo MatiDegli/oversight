@@ -28,6 +28,17 @@ class _CleanupError(OSError):
     """A helper could not be proved dead; connection evidence must stay unavailable."""
 
 
+class _ConnectorCollector(ProcessCollector):
+    """Retain ownership even if spawn is interrupted after the helper is born."""
+
+    def __init__(self) -> None:
+        super().__init__(4096)
+        self.transport: asyncio.SubprocessTransport | None = None
+
+    def connection_made(self, transport: asyncio.BaseTransport) -> None:
+        self.transport = cast(asyncio.SubprocessTransport, transport)
+
+
 @dataclass(frozen=True, slots=True)
 class ConnectorTarget:
     u0_pidfd: int
@@ -217,33 +228,53 @@ async def _reap(transport: asyncio.SubprocessTransport, collector: ProcessCollec
         transport.close()
 
 
+async def _spawn(
+    target: ConnectorTarget,
+    descriptors: tuple[int, int, int],
+    collector: _ConnectorCollector,
+    abort: asyncio.Event,
+) -> asyncio.SubprocessTransport:
+    spawn = asyncio.create_task(
+        asyncio.get_running_loop().subprocess_exec(
+            lambda: collector,
+            sys.executable,
+            "-I",
+            "-B",
+            str(ENTRY),
+            str(descriptors[0]),
+            str(descriptors[1]),
+            str(target.api_port),
+            str(descriptors[2]),
+            cwd=ENTRY.parent,
+            env=child_env(None),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+            pass_fds=descriptors,
+        )
+    )
+    cancelled = asyncio.create_task(abort.wait())
+    try:
+        await asyncio.wait({spawn, cancelled}, return_when=asyncio.FIRST_COMPLETED)
+        if abort.is_set():
+            raise TimeoutError("connector aborted during spawn")
+        return (await spawn)[0]
+    finally:
+        cancelled.cancel()
+        spawn.cancel()
+        await asyncio.gather(spawn, cancelled, return_exceptions=True)
+
+
 async def _attempt(target: ConnectorTarget, abort: asyncio.Event) -> socket.socket:
-    collector = ProcessCollector(4096)
+    collector = _ConnectorCollector()
     u0, n0 = _duplicates(target)
-    transport: asyncio.SubprocessTransport | None = None
     channel: socket.socket | None = None
     peer: socket.socket | None = None
     result: socket.socket | None = None
     try:
         channel, peer = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         channel.setblocking(False)
-        transport, _ = await asyncio.get_running_loop().subprocess_exec(
-            lambda: collector,
-            sys.executable,
-            "-I",
-            "-B",
-            str(ENTRY),
-            str(u0),
-            str(n0),
-            str(target.api_port),
-            str(peer.fileno()),
-            cwd=ENTRY.parent,
-            env=child_env(None),
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.PIPE,
-            pass_fds=(u0, n0, peer.fileno()),
-        )
+        transport = await _spawn(target, (u0, n0, peer.fileno()), collector, abort)
         peer.close()
         result = await _exchange(channel, target, abort, transport, collector)
         return result
@@ -254,9 +285,9 @@ async def _attempt(target: ConnectorTarget, abort: asyncio.Event) -> socket.sock
             peer.close()
         os.close(u0)
         os.close(n0)
-        if transport is not None:
+        if collector.transport is not None:
             try:
-                await _reap(transport, collector)
+                await _reap(collector.transport, collector)
             except BaseException:
                 if result is not None:
                     result.close()

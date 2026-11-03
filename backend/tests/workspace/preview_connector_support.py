@@ -176,6 +176,44 @@ class Harness:
             self.transport.close()
 
 
+def helper_launch(
+    monkeypatch, mode: str, *, delay_spawn=False, hold_spawn=False, connect_port=None
+):
+    loop = asyncio.get_running_loop()
+    original = loop.subprocess_exec
+    transports = []
+    spawning = asyncio.Event()
+    release = asyncio.Event()
+    started = asyncio.Event()
+
+    async def spawn(factory, *argv, **kwargs):
+        spawning.set()
+        if delay_spawn:
+            await release.wait()
+        arguments = list(argv[-4:])
+        if connect_port is not None:
+            arguments[2] = str(connect_port)
+        transport, protocol = await original(
+            factory,
+            argv[0],
+            "-I",
+            "-B",
+            str(SUPPORT),
+            "failure-helper",
+            mode,
+            *arguments,
+            **kwargs,
+        )
+        transports.append(transport)
+        started.set()
+        if hold_spawn:
+            await release.wait()
+        return transport, protocol
+
+    monkeypatch.setattr(loop, "subprocess_exec", spawn)
+    return transports, spawning, release, started
+
+
 def inherited_descriptors() -> dict[str, str]:
     # Inspect before asyncio creates its own wakeup socketpair.
     descriptors: dict[str, str] = {}
