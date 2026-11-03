@@ -180,7 +180,8 @@ may import OpenAI; only app and API may import FastAPI or Starlette.
   Git lease. Root verification and suite execution are excluded from this queue measurement;
   immediate and task-reentrant acquisitions contribute zero. One call identifier and a lock
   category (no paths) appear in backend waiting logs, limited to one line per 30 seconds across
-  lock transitions. The observer never acquires a lock and is cancelled and drained on exit.
+  lock transitions. The observer is a timer handle that never acquires a lock; it is cancelled
+  synchronously when each wait ends and on exit, with no cleanup await after the suite.
   The optional synchronous `Workspace.run_tests(on_queue_wait=...)` callback reports cumulative
   queue seconds, including zero, independently of suite results and before propagating interrupted
   waits. Agents append queue time and the active deadline's remaining round budget only to the

@@ -8,7 +8,7 @@ risking a deadlock. Two agents share only main, which they always take first.
 import asyncio
 import contextlib
 import logging
-from asyncio import sleep
+from asyncio import get_running_loop
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
 from time import monotonic
@@ -29,7 +29,7 @@ class QueueWait:
         self._started: float | None = None
         self._category: str | None = None
         self._last_log: float | None = None
-        self._timer: asyncio.Task[None] | None = None
+        self._timer: asyncio.TimerHandle | None = None
 
     async def __aenter__(self) -> "QueueWait":
         if self._report is not None:
@@ -37,19 +37,13 @@ class QueueWait:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
-        if self._timer is None:
-            return
-        self._timer.cancel()
-        cancelled = False
-        while not self._timer.done():
-            try:
-                await asyncio.shield(self._timer)
-            except asyncio.CancelledError:
-                # Drain even when Stop is repeated. Never abandon the logging observer.
-                cancelled = True
-        task = asyncio.current_task()
-        if cancelled and exc[0] is None and task is not None and task.cancelling():
-            raise asyncio.CancelledError
+        # No await after the suite: preserve its result/error and cancellation ownership.
+        self._cancel_timer()
+
+    def _cancel_timer(self) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
 
     def begin(self, category: str) -> None:
         if not self._enabled:
@@ -57,10 +51,10 @@ class QueueWait:
         self._started = monotonic()
         self._category = category
         self._log_if_due()
-        if self._timer is None:
-            self._timer = asyncio.create_task(self._observe(), name="run_tests queue observer")
+        self._schedule()
 
     def end(self) -> None:
+        self._cancel_timer()
         if self._started is None:
             return
         self._elapsed += monotonic() - self._started
@@ -77,14 +71,17 @@ class QueueWait:
             )
             self._last_log = now
 
-    async def _observe(self) -> None:
-        while True:
-            assert self._last_log is not None
-            await sleep(max(0.001, self._last_log + 30 - monotonic()))
-            self._log_if_due()
-            if self._category is None:
-                self._timer = None
-                return
+    def _schedule(self) -> None:
+        assert self._last_log is not None
+        self._timer = get_running_loop().call_later(
+            max(0.001, self._last_log + 30 - monotonic()), self._observe
+        )
+
+    def _observe(self) -> None:
+        self._timer = None
+        self._log_if_due()
+        if self._category is not None:
+            self._schedule()
 
 
 class _TaskLock:

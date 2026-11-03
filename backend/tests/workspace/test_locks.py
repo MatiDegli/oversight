@@ -270,3 +270,38 @@ async def test_cancelled_handoff_does_not_count_as_contention(monkeypatch, caplo
         await waiter
     assert locks.idle
     assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]
+
+
+@pytest.mark.parametrize("failure", [None, OSError("suite failed"), LockOrderError("invalid")])
+async def test_queue_exit_does_not_yield_to_late_cancellation(failure):
+    """A completed suite/error must escape before a late Stop can enter observer cleanup."""
+    from oversight.workspace.locks import QueueWait
+
+    cancellation_accepted = []
+    delivered = []
+    result = object()
+
+    async def run():
+        async with QueueWait(delivered.append) as queue:
+            queue.begin("main")
+            await asyncio.sleep(0)  # let the old observer start before the wait ends
+            queue.end()
+            task = asyncio.current_task()
+            assert task is not None
+            asyncio.get_running_loop().call_soon(
+                lambda: cancellation_accepted.append(task.cancel())
+            )
+            if failure is not None:
+                raise failure
+            return result
+
+    task = asyncio.create_task(run())
+    if failure is None:
+        assert await task is result
+    else:
+        with pytest.raises(type(failure)) as caught:
+            await task
+        assert caught.value is failure
+    assert cancellation_accepted == [False], "observer cleanup yielded after the suite ended"
+    assert len(delivered) == 2
+    assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]

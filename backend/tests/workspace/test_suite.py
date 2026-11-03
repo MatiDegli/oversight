@@ -384,22 +384,21 @@ class QueueClock:
 
     def __init__(self):
         self.now = 0.0
-        self.sleepers = []
+        self.timers = []
 
-    async def sleep(self, delay):
-        future = asyncio.get_running_loop().create_future()
-        entry = (self.now + delay, future)
-        self.sleepers.append(entry)
-        try:
-            await future
-        finally:
-            self.sleepers.remove(entry)
+    def call_later(self, delay, callback):
+        timer = asyncio.TimerHandle(self.now + delay, callback, (), asyncio.get_running_loop())
+        self.timers.append((timer, callback))
+        return timer
 
     async def advance(self, seconds):
         self.now += seconds
-        for due, future in self.sleepers:
-            if due <= self.now and not future.done():
-                future.set_result(None)
+        for timer, callback in self.timers.copy():
+            if timer.cancelled():
+                self.timers.remove((timer, callback))
+            elif timer.when() <= self.now:
+                self.timers.remove((timer, callback))
+                callback()
         await settle_queue()
 
 
@@ -458,7 +457,7 @@ async def test_run_tests_queue_logs_throttled(
     workspace, tree = queue_workspace
     clock = QueueClock()
     monkeypatch.setattr("oversight.workspace.locks.monotonic", lambda: clock.now)
-    monkeypatch.setattr("oversight.workspace.locks.sleep", clock.sleep)
+    monkeypatch.setattr("oversight.workspace.locks.get_running_loop", lambda: clock)
     caplog.set_level("WARNING", logger="oversight.workspace.locks")
     delivered, observed, stamps, starts = [], [], [], []
     waiting = asyncio.Queue()
@@ -539,7 +538,7 @@ async def test_run_tests_queue_logs_throttled(
     messages = [r.getMessage() for r in caplog.records]
     assert len({m.split()[1] for m in messages}) == (1 if boundaries else 0)
     assert all(str(workspace.runtime_root) not in m and "agent-1" not in m for m in messages)
-    assert not clock.sleepers
+    assert all(timer.cancelled() for timer, _ in clock.timers)
     assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]
 
 
