@@ -295,10 +295,17 @@
   flex-shrink: 0;
   width: 100%;
   min-width: 0;
-  padding-inline: 2px;
   text-align: center;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 .agents-rail-tile > span:not([data-agent-origin]) {
   max-width: 100%;
+}
+
+.agents-rail-tile > span[aria-hidden="true"] {
+  font-size: var(--group-label-size);
+  letter-spacing: calc(var(--group-label-tracking) / -2);
+  white-space: nowrap;
 }

@@ -5,6 +5,9 @@ import { WhereTheyWork } from "./WhereTheyWork";
 import { event } from "../chatAgents.fixture";
 import { AgentsRail } from "./Agents";
 import { ChatAgents } from "./ChatAgents";
+import { ChatLeadRow } from "./ChatLeadRow";
+import { railState } from "../teamRail.fixture";
+import { chatTeamGroups } from "./chatTeamGroups";
 import { ChatAgentsFrame } from "./ChatShell";
 import { required, fold, scenario } from "../chatAgents.fixture";
 import { createInitialState } from "../../state";
@@ -113,4 +116,18 @@ it("keeps eleven folded origins and lamps inside nonshrinking tiles", () => {
   expect(html.match(/agents-rail-tile/g)).toHaveLength(11);
   expect(html.match(/agents-rail-lamp absolute top-0 right-0/g)).toHaveLength(11);
   expect(html).not.toContain("-top-1");
+});
+
+it("keeps grouped counts in the heading while the standalone lead retains its team line", () => {
+  const state = railState("chat-busy");
+  const group = required(chatTeamGroups(state)[0]);
+  const lead = required(group.lead);
+  const grouped = renderToStaticMarkup(<ChatAgents state={state} />);
+  expect(grouped).toContain(`<h3>${group.summary}</h3>`);
+  expect(grouped).not.toContain('class="chat-lead-team"');
+  const standalone = renderToStaticMarkup(<ChatLeadRow row={lead} />);
+  expect(standalone).toContain(`<span class="chat-lead-team">${lead.teamLine ?? ""}</span>`);
+  expect(renderToStaticMarkup(<ChatAgents state={railState("chat-leadless")} />)).toContain(
+    "Plan B · 2 agents · 2 working",
+  );
 });

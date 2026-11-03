@@ -42,7 +42,14 @@ export interface RailManifest {
   pageErrors: string[];
   measurements: Record<string, Measure[]>;
   lamps: unknown;
-  comparison?: { reference: string; referenceHash: string; pngHash: string };
+  captions?: Awaited<ReturnType<typeof measureFoldedCaptions>>;
+  comparison?: {
+    reference: string;
+    referenceHash: string;
+    pngHash: string;
+    order?: string;
+    beforeSourceSha?: string;
+  };
 }
 export function validateManifest(manifest: RailManifest) {
   if (!expectedFrames.includes(manifest.name) || manifest.provenance !== "handwritten")
@@ -157,8 +164,56 @@ export async function measureFrame(page: Page, folded = false) {
     { folded },
   );
 }
+/** Actual text fragments, including offscreen tiles, with no DOM or style mutation. */
+export async function measureFoldedCaptions(page: Page) {
+  return page.locator(".agents-rail-tile").evaluateAll((tiles) =>
+    tiles.flatMap((tile) =>
+      Array.from(
+        tile.querySelectorAll<HTMLSpanElement>(":scope > span:not([data-agent-origin])"),
+      ).map((caption) => {
+        const text = caption.firstChild;
+        if (!(text instanceof Text)) throw new Error("Missing folded caption text");
+        const fragments = (start: number, end: number) => {
+          const range = document.createRange();
+          range.setStart(text, start);
+          range.setEnd(text, end);
+          return Array.from(range.getClientRects()).map((rect) => ({
+            x: rect.x,
+            right: rect.right,
+            y: rect.y,
+            height: rect.height,
+          }));
+        };
+        const value = text.data;
+        const words = Array.from(value.matchAll(/\S+/g)).map((match) => ({
+          text: match[0],
+          fragments: fragments(match.index, match.index + match[0].length),
+        }));
+        const box = tile.getBoundingClientRect();
+        return {
+          text: value,
+          state: caption.getAttribute("aria-hidden") === "true",
+          fragments: fragments(0, value.length),
+          words,
+          tile: { x: box.x, right: box.right },
+          fontSize: getComputedStyle(caption).fontSize,
+          tracking: getComputedStyle(caption).letterSpacing,
+        };
+      }),
+    ),
+  );
+}
 async function comparison(page: Page, png: Buffer, name: string) {
-  const reference = "docs/sketches/v4/conversation.png";
+  const fixRound = process.env.TEAM_RAIL_FIX_ROUND === "1";
+  const reference = fixRound
+    ? `.shots/team-rail/before-fix-round/${name}.png`
+    : "docs/sketches/v4/conversation.png";
+  const before = fixRound
+    ? (JSON.parse(
+        await readFile(new URL(`.shots/team-rail/before-fix-round/${name}.json`, repo), "utf8"),
+      ) as RailManifest)
+    : undefined;
+  const beforeSourceSha = before?.sourceSha;
   const referencePng = await readFile(new URL(reference, repo));
   const data = await page.evaluate(
     async (sources) => {
@@ -170,25 +225,35 @@ async function comparison(page: Page, png: Buffer, name: string) {
           return image;
         }),
       );
-      const [product, reference] = images;
-      if (!product || !reference) throw new Error("Missing comparison source");
+      const [left, right] = images;
+      if (!left || !right) throw new Error("Missing comparison source");
       const canvas = document.createElement("canvas");
-      const height = Math.max(product.height, reference.height);
-      canvas.width = product.width + reference.width;
+      const height = Math.max(left.height, right.height);
+      canvas.width = left.width + right.width;
       canvas.height = height;
       const context = canvas.getContext("2d");
       if (!context) throw new Error("Missing canvas context");
-      context.drawImage(product, 0, 0);
-      context.drawImage(reference, product.width, 0);
+      context.drawImage(left, 0, 0);
+      context.drawImage(right, left.width, 0);
       return canvas.toDataURL("image/png").split(",")[1];
     },
-    [png, referencePng].map((buffer) => `data:image/png;base64,${buffer.toString("base64")}`),
+    (fixRound ? [referencePng, png] : [png, referencePng]).map(
+      (buffer) => `data:image/png;base64,${buffer.toString("base64")}`,
+    ),
   );
   if (!data) throw new Error("Missing comparison PNG");
   const combined = Buffer.from(data, "base64");
   await mkdir(new URL("comparisons/", evidenceRoot), { recursive: true });
   await writeFile(new URL(`comparisons/${name}.png`, evidenceRoot), combined);
-  return { reference, referenceHash: sha256(referencePng), pngHash: sha256(combined) };
+  if (before && before.pngHash !== sha256(referencePng))
+    throw new Error("Before capture hash mismatch");
+  return {
+    reference,
+    referenceHash: sha256(referencePng),
+    pngHash: sha256(combined),
+    order: fixRound ? "before-after" : "product-reference",
+    ...(beforeSourceSha ? { beforeSourceSha } : {}),
+  };
 }
 export async function writeFrame(
   page: Page,
@@ -220,6 +285,7 @@ export async function writeFrame(
     pageErrors: errors,
     measurements: await measureFrame(page, scene === "agents-folded-overflow"),
     lamps,
+    ...(scene === "agents-folded-overflow" ? { captions: await measureFoldedCaptions(page) } : {}),
   };
   manifest.comparison = await comparison(page, png, name);
   validateManifest(manifest);

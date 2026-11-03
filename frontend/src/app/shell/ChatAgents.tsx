@@ -161,7 +161,12 @@ export function ChatAgents({
               <h3>{group.summary}</h3>
             </div>
           )}
-          {group.lead && <ChatLeadRow row={group.lead} {...selection} />}
+          {group.lead && (
+            <ChatLeadRow
+              row={group.grouped ? { ...group.lead, teamLine: null } : group.lead}
+              {...selection}
+            />
+          )}
           <ul
             className={group.grouped ? "chat-team-members" : "chat-lone-agent"}
             id={`${prefix}-${encodeURIComponent(group.id)}`}

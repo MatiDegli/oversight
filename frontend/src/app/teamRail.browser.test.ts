@@ -11,6 +11,7 @@ import {
   captureContext,
   evidenceRoot,
   measureFrame,
+  measureFoldedCaptions,
   validateCoverage,
   writeFrame,
 } from "./teamRailEvidence.testSupport";
@@ -131,7 +132,13 @@ it("retains selected actor, thread element, scroll, draft, focus and pending com
       [status("a2", { plan_id: "plan-a1", state: "ready_for_review" })],
     );
     await check(disclosure(page)).toBeFocused();
-    await check(page.locator(".chat-team-summary h3").first()).toContainText("1 needs you");
+    await check(
+      page.getByRole("heading", {
+        name: "Lead A · 3 agents · 2 working, 1 needs you",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await check(page.locator(".chat-lead-row .chat-lead-team")).toHaveCount(0);
     await page.locator(".chat-team-summary h3").first().click();
     expect(await page.evaluate(() => window.teamRailTest.calls())).toEqual([]);
     for (const width of [390, 1280]) {
@@ -234,6 +241,20 @@ async function lampAt(page: Page, edge: "first" | "last") {
   }
   return metric;
 }
+async function expectWholeCaptions(page: Page) {
+  const captions = await measureFoldedCaptions(page);
+  expect(captions.filter((caption) => caption.state)).toHaveLength(11);
+  for (const caption of captions) {
+    if (caption.state) expect(caption.fragments, caption.text).toHaveLength(1);
+    for (const word of caption.words) {
+      expect(word.fragments, word.text).toHaveLength(1);
+      const fragment = word.fragments[0];
+      if (!fragment) throw new Error("Missing caption fragment");
+      expect(fragment.x, word.text).toBeGreaterThanOrEqual(caption.tile.x);
+      expect(fragment.right, word.text).toBeLessThanOrEqual(caption.tile.right);
+    }
+  }
+}
 it.each(["dark", "day"])(
   "scrolls eleven folded agents with stable gutter and full lamps in %s",
   async (theme) => {
@@ -254,13 +275,14 @@ it.each(["dark", "day"])(
         (events) => {
           window.teamRailTest.deliver(events);
         },
-        Array.from({ length: 6 }, (_, i) =>
-          status(`extra-${String(i)}`, { state: "ready_for_review" }),
+        (["starting", "paused", "halted", "stopped", "done", "ready_for_review"] as const).map(
+          (state, i) => status(`extra-${String(i)}`, { state }),
         ),
       );
       await check(page.locator(".agents-rail-tile")).toHaveCount(11);
       expect(await size()).toEqual(before);
       expect(before.gutter).toBe("stable");
+      await expectWholeCaptions(page);
       expect(await rail.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
       expect((await lampAt(page, "first")).origin).toBe("a1");
       expect((await lampAt(page, "last")).origin).toBe("extra-5");
@@ -297,6 +319,7 @@ it.skipIf(!shots)(
             let lamps: unknown = null;
             if (scene === "agents-folded-overflow") {
               await graphReady(page);
+              await expectWholeCaptions(page);
               lamps = { first: await lampAt(page, "first"), last: await lampAt(page, "last") };
               actions.push("Measure first tile; scroll to and measure last tile");
             }
