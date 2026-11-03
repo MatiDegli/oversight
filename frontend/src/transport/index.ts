@@ -1,3 +1,4 @@
+import type { PreviewStatusEvent } from "@contracts";
 import fixture from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import recorded from "../../../fixtures/events/recorded-demo.jsonl?recorded-replay";
 
@@ -7,6 +8,7 @@ import type { ReplayPlayer } from "./replayPlayer";
 import { chooseReplaySource } from "./replay-source";
 
 export { CommandError, createCommandClient } from "./commands";
+export { createLivePreviewPort } from "./preview";
 export { createPreviewAcceptancePort } from "./previewAcceptance";
 export { commandFailure } from "./failure";
 export type { ReplayPlayer, ReplaySnapshot, ReplayRate } from "./replayPlayer";
@@ -39,8 +41,9 @@ export function startAppTransport(
   onError?: (error: unknown) => void,
   onOpen?: () => void,
   onReplay?: (player: ReplayPlayer) => void,
+  onPreviewStatus?: (event: PreviewStatusEvent) => void,
 ) {
-  if (!replayBuild) return startLive({ store, onError, onOpen });
+  if (!replayBuild) return startLive({ store, onError, onOpen, onPreviewStatus });
   let stopped = false;
   const isStopped = () => stopped;
   let player: ReplayPlayer | undefined;

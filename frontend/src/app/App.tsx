@@ -1,3 +1,6 @@
+import { createPreviewHost, previewClock } from "./preview/previewHost";
+import { parsePreviewDetails, parsePreviewStatus } from "./preview/previewTypes";
+import { createLivePreviewPort } from "../transport";
 import { type ContextType, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useStore } from "zustand";
@@ -80,6 +83,39 @@ export function App() {
   useEffect(() => {
     setView((current) => reconcileReferenceHighlight(state, current));
   }, [state]);
+  const previewPermission = useRef(false);
+  useEffect(() => {
+    previewPermission.current = commands !== null && historical === null;
+  }, [commands, historical]);
+  const [previewHost] = useState(() =>
+    createPreviewHost(
+      createLivePreviewPort(window.location.origin, {
+        details: parsePreviewDetails,
+        status: parsePreviewStatus,
+      }),
+      previewClock,
+      { run: stateStore.getState().state.run?.run_id ?? "", source: "live" },
+      () => stateStore.getState().state,
+      () => previewPermission.current,
+    ),
+  );
+  useEffect(() => {
+    void previewHost.setIdentity({
+      run: state.run?.run_id ?? "",
+      source: replay ? `replay:${String(replay.id)}` : "live",
+    });
+    if (historical) void previewHost.navigate();
+  }, [previewHost, state.run?.run_id, replay, historical]);
+  useEffect(() => {
+    const hide = () => {
+      previewHost.dispose();
+    };
+    window.addEventListener("pagehide", hide);
+    return () => {
+      window.removeEventListener("pagehide", hide);
+      previewHost.dispose();
+    };
+  }, [previewHost]);
   const stopSession = useRef(() => {});
   const practice = usePractice(
     setView,
@@ -105,6 +141,9 @@ export function App() {
         setConnection("connected");
       },
       setReplay,
+      (event) => {
+        previewHost.accept(event);
+      },
     );
     const stop = () => {
       stopTransport();
@@ -112,7 +151,7 @@ export function App() {
     };
     stopSession.current = stop;
     return stop;
-  }, [retry]);
+  }, [retry, previewHost]);
   // The graph keeps one tap handler; it reads the store when the tap happens.
   const onNodeTap = useCallback(
     (nodeId: string) => {
@@ -342,13 +381,24 @@ export function App() {
         openFile={onOpenFile}
       >
         <Frame
+          previewHost={previewHost}
           previewActions={{
             state: historical?.chat ?? state,
             readState: () => stateStore.getState().state,
             readOnlyReason: !canCommand
               ? "Preview and review are unavailable in replay."
               : undefined,
-            onReview: canCommand ? (candidate) => onReview(candidate.change_id) : undefined,
+            onPreview: canCommand
+              ? (request) => {
+                  void previewHost.activate(request);
+                }
+              : undefined,
+            onReview: canCommand
+              ? (candidate) => {
+                  void previewHost.navigate();
+                  onReview(candidate.change_id);
+                }
+              : undefined,
           }}
           state={state}
           chatState={historical?.chat}

@@ -1,3 +1,4 @@
+import type { PreviewStatusEvent } from "@contracts";
 import type { ReplayPlayer } from "../transport";
 import { stateStore } from "../state";
 import { startAppTransport } from "../transport";
@@ -11,6 +12,7 @@ export function startAppSession(
   onError: (error: unknown) => void,
   onOpen?: () => void,
   onReplay?: (player: ReplayPlayer) => void,
+  onPreviewStatus?: (event: PreviewStatusEvent) => void,
 ) {
   let active = true;
   let cancelPrefetch: () => void = () => undefined;
@@ -53,6 +55,9 @@ export function startAppSession(
     },
     (player) => {
       if (active) onReplay?.(player);
+    },
+    (event) => {
+      if (active) onPreviewStatus?.(event);
     },
   );
   void transport.ready.catch(report);

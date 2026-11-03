@@ -238,7 +238,7 @@ it("bounds lost stop delivery and relies on fake authority lease expiry", async 
   expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
 });
 it.each(["reject", "deadline"])(
-  "locally dismisses a %s start and reopens blocked retry with failure feedback",
+  "keeps a %s start visible until verified closure and blocks retry",
   async (mode) => {
     const { port, controller } = setup();
     await port.start(fakeCandidate, new AbortController().signal);
@@ -251,7 +251,7 @@ it.each(["reject", "deadline"])(
     expect(controller.snapshot()).toMatchObject({ notice: "start_failed", owned: false });
     const calls = port.calls.length;
     await controller.close();
-    expect(controller.snapshot().visible).toBe(false);
+    expect(controller.snapshot().visible).toBe(true);
     const candidate = vi.fn(() => next);
     await controller.see(candidate);
     controller.observe({ ...fakeStatus("stopped", "lease_expired"), run_id: "other" });
@@ -268,7 +268,7 @@ it.each(["reject", "deadline"])(
     await controller.close();
     port.expire();
     controller.observe(port.publicStatus() as PreviewStatus);
-    expect(controller.snapshot()).toMatchObject({ visible: false, uncertain: false });
+    expect(controller.snapshot()).toMatchObject({ visible: true, uncertain: false });
     await controller.see(candidate);
     expect(controller.snapshot()).toMatchObject({ owned: true, status: { agent_id: "agent-b" } });
     controller.dispose();

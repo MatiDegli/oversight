@@ -1,37 +1,5 @@
-import type { AgentId, ChangeId, RunId, NonEmptyText } from "@contracts";
-
-// Temporary Appendix A preview input types; Front A replaces these with the generated contract types.
-export type PreviewState = "starting" | "ready" | "stopping" | "stopped" | "failed";
-export type PreviewReason =
-  | "closed"
-  | "lease_expired"
-  | "lifetime_expired"
-  | "mutation"
-  | "shutdown"
-  | "app_exited"
-  | "readiness_timeout"
-  | "launch_failed"
-  | "isolation_unavailable"
-  | "memory_limit"
-  | "cleanup_unverified"
-  | "worktree_changed"
-  | "profile_disabled";
-export interface PreviewStatus {
-  /** Matches ^preview-[0-9a-f]{32}$. */
-  preview_id: string;
-  run_id: RunId;
-  agent_id: AgentId;
-  change_id: ChangeId;
-  /** Positive integer candidate revision. */
-  revision: number;
-  head_commit: NonEmptyText;
-  state: PreviewState;
-  reason: PreviewReason | null;
-}
-export interface PreviewDetails {
-  status: PreviewStatus;
-  url: NonEmptyText | null;
-}
+import type { PreviewState, PreviewReason, PreviewStatus, PreviewDetails } from "@contracts";
+export type { PreviewState, PreviewReason, PreviewStatus, PreviewDetails } from "@contracts";
 
 export const previewStates = [
   "starting",

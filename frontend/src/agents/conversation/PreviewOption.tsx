@@ -59,7 +59,7 @@ export function PreviewOption({
             type="button"
             className="lead-preview-primary"
             disabled={Boolean(reason)}
-            onClick={() => activate("preview")}
+            onClick={() => { activate("preview"); }}
           >
             Preview app
           </button>
@@ -67,7 +67,7 @@ export function PreviewOption({
             type="button"
             className="lead-preview-secondary"
             disabled={Boolean(reason)}
-            onClick={() => activate("review")}
+            onClick={() => { activate("review"); }}
           >
             Review change
           </button>

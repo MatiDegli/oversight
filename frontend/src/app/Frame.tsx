@@ -42,6 +42,7 @@ const ReplayBar = lazy(() => import("./replay/ReplayBar"));
 
 export interface FrameProps {
   previewActions?: PreviewActions;
+  previewHost?: import("./preview/previewHost").PreviewHost;
   chatState?: State;
   readChatState?: () => State | undefined;
   historySession?: { eventSeq: number; back: () => HTMLElement | null };

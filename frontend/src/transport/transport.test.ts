@@ -448,3 +448,41 @@ describe("live transport", () => {
     expect(request).not.toHaveBeenCalled();
   });
 });
+
+it("delivers preview lifecycle only after a newly accepted application, never gaps or obsolete callbacks", () => {
+  const store = createStateStore();
+  const source = new FakeSource("/events");
+  const received: number[] = [];
+  const transport = startLive({
+    store,
+    openStream: () => source,
+    onPreviewStatus: (event) => {
+      expect(store.getState().state.lastSeq).toBe(event.seq);
+      received.push(event.seq);
+    },
+  });
+  for (const event of log) source.emit(event);
+  const status: ServerEvent = {
+    seq: store.getState().state.lastSeq + 1,
+    ts: "2026-11-03T00:00:00Z",
+    type: "preview.status",
+    payload: {
+      preview_id: `preview-${"a".repeat(32)}`,
+      run_id: "run",
+      agent_id: "agent",
+      change_id: "change",
+      revision: 1,
+      head_commit: "head",
+      state: "starting",
+      reason: null,
+    },
+  };
+  source.emit(status);
+  source.emit(status);
+  expect(received).toEqual([status.seq]);
+  source.emit({ ...status, seq: status.seq + 2 });
+  expect(received).toEqual([status.seq]);
+  transport.stop();
+  source.emit({ ...status, seq: status.seq + 1 });
+  expect(received).toEqual([status.seq]);
+});
