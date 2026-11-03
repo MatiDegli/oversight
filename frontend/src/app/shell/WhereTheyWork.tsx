@@ -33,7 +33,9 @@ function WorkFiles({ group, openFile }: { group: WorkGroup; openFile: (path: str
       <button
         className="work-chip"
         type="button"
-        onClick={() => { openFile(file.path); }}
+        onClick={() => {
+          openFile(file.path);
+        }}
         aria-label={`Open ${file.path} · Agent ${group.presentation?.label ?? "unknown"} · ${workDescription(group)}`}
         aria-description={[
           ...file.functions,

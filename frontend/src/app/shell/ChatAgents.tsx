@@ -48,6 +48,7 @@ function MemberRow({
       data-ended={row.done}
       data-review={row.ready}
       data-member={member}
+      data-collision={Boolean(row.planContext)}
       {...(onOpenConversation
         ? {
             type: "button" as const,
@@ -168,7 +169,7 @@ export function ChatAgents({
           >
             {group.members.map((row) => (
               <li key={row.id}>
-                <MemberRow row={row} member={group.grouped} state={state} {...selection} />
+                <MemberRow row={row} member={Boolean(group.lead)} state={state} {...selection} />
               </li>
             ))}
           </ul>

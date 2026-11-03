@@ -6,7 +6,7 @@ import { event } from "../chatAgents.fixture";
 import { AgentsRail } from "./Agents";
 import { ChatAgents } from "./ChatAgents";
 import { ChatAgentsFrame } from "./ChatShell";
-import { fold, scenario } from "../chatAgents.fixture";
+import { required, fold, scenario } from "../chatAgents.fixture";
 import { createInitialState } from "../../state";
 
 it.each([
@@ -102,7 +102,7 @@ it("keeps eleven folded origins and lamps inside nonshrinking tiles", () => {
     ...scenario("working"),
     ...Array.from({ length: 9 }, (_, i) =>
       event("agent.status", {
-        ...Object.values(fold(scenario("working")).agents)[0]!,
+        ...required(Object.values(fold(scenario("working")).agents)[0]),
         agent_id: `extra-${String(i)}`,
         change_id: `extra-${String(i)}`,
       }),

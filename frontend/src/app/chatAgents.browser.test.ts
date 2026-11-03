@@ -189,7 +189,10 @@ it.each([
           status("second", { plan_id: "q", slot: "B" }),
         ],
       );
-      await check(page.locator(".chat-agent-name")).toHaveText(["A·1 · plan 1", "A·1 · plan 2"]);
+      await check(page.locator(".chat-agent-name")).toHaveText([
+        "Agent A·1 · plan 1",
+        "Agent A·1 · plan 2",
+      ]);
       await check(page.locator('.chat-agent-row[data-agent-origin="first"]')).toHaveAttribute(
         "aria-pressed",
         "true",

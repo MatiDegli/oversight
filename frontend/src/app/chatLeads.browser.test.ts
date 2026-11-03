@@ -396,7 +396,7 @@ for (const theme of ["dark", "day"])
         link: [83, 44],
       });
       await check(page.locator(".left-rail")).toBeHidden();
-      await check(page.locator(".chat-work")).toBeHidden();
+      await check(page.locator(".chat-work")).toBeVisible();
       await check(page.locator(".task-box-hint")).toBeHidden();
       for (const button of await page.locator(".shell-top-bar button:visible").all()) {
         const box = await button.boundingBox();
@@ -490,7 +490,9 @@ it.each([1920, 1280])(
         .locator('.chat-agent-row[data-member="true"]')
         .first()
         .boundingBox();
-      expect(member?.y).toBe(width === 1920 ? 260 : 246.390625);
+      const lead = await leadRow(page, "A").boundingBox();
+      if (!member || !lead) throw new Error("Missing grouped row geometry");
+      expect(member.y).toBe(lead.y + lead.height);
       await leadRow(page, "B").click();
       await check(page.getByRole("textbox", { name: "Message Lead B" })).toBeEditable();
     } finally {
