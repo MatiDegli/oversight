@@ -8,11 +8,13 @@ from typing import TYPE_CHECKING
 
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
+from oversight.workspace.preview_lifecycle import quiesce
 from oversight.workspace.preview_process import PreviewProcess
 from oversight.workspace.preview_types import (
     PreviewCandidate,
     PreviewError,
     PreviewReason,
+    PreviewRestoredError,
     PreviewState,
 )
 from oversight.workspace.snapshot import MetadataSnapshot, finish_snapshot, take_snapshot
@@ -21,7 +23,7 @@ if TYPE_CHECKING:
     from oversight.workspace.core import Tree, Workspace
 
 
-async def settle(task: asyncio.Task[None]) -> None:
+async def settle(task: asyncio.Future[None]) -> None:
     """Keep the exclusive caller's lease through repeated cancellation of async cleanup."""
     while not task.done():
         try:
@@ -40,6 +42,10 @@ class PreviewOwnership:
     comparison_finished: bool = False
     reason: PreviewReason | None = None
     cleanup: asyncio.Task[None] | None = None
+    launch_task: asyncio.Task[None] | None = None
+    launched: bool = False
+    draining: bool = False
+    restoration_refusal: bool = False
 
 
 class PreviewBarrier:
@@ -55,6 +61,7 @@ class PreviewBarrier:
         self.owner: PreviewOwnership | None = None
         self.contaminated: dict[str, tuple[int, str]] = {}
         self.finalizer: asyncio.Task[None] | None = None
+        self.finalizer_owner: PreviewOwnership | None = None
         workspace.operations.set_git_hook(self.before_git)
 
     async def capture(self, candidate: PreviewCandidate) -> PreviewOwnership:
@@ -75,11 +82,20 @@ class PreviewBarrier:
         self.workspace.integrity.before_git()
         owner = self.owner
         if owner is not None and not owner.snapshot_finished:
-            await self.drain_namespace(owner.reason or "mutation")
-            # Comparison needs this preview's tree lock, possibly held by a queued caller.
-            # Mark it pending before yielding; candidate/merge ports refuse pending evidence.
-            if self.finalizer is None or self.finalizer.done():
-                self.finalizer = asyncio.create_task(self.finish_pending())
+            try:
+                await self.drain_namespace(owner.reason or "mutation")
+            finally:
+                # Schedule even when verified restoration refuses the waiting operation.
+                if owner.snapshot_finished and (
+                    self.finalizer is None
+                    or self.finalizer.done()
+                    or self.finalizer is asyncio.current_task()
+                    or self.finalizer_owner is not owner
+                ):
+                    self.finalizer_owner = owner
+                    self.finalizer = asyncio.create_task(self.finish_pending(owner))
+            if owner.restoration_refusal:
+                raise PreviewRestoredError()
         self.workspace.integrity.before_git()
 
     async def drain_namespace(self, reason: PreviewReason) -> None:
@@ -87,6 +103,7 @@ class PreviewBarrier:
         if owner is None or owner.snapshot_finished:
             return
         if owner.cleanup is None:
+            owner.draining = True
             owner.reason = reason
             owner.cleanup = asyncio.create_task(self._cleanup(owner, reason))
         try:
@@ -98,6 +115,7 @@ class PreviewBarrier:
 
     async def _cleanup(self, owner: PreviewOwnership, reason: PreviewReason) -> None:
         try:
+            await quiesce(owner)
             # A sink failure must not leave execution running. Retain it until death/restoration.
             failure: BaseException | None = None
             try:
@@ -113,6 +131,7 @@ class PreviewBarrier:
                     raise
                 # Verified restoration still suspends rules, just as the suite boundary does.
                 owner.reason = "worktree_changed"
+                owner.restoration_refusal = True
                 self.contaminated[owner.candidate.agent_id] = (
                     owner.candidate.revision,
                     owner.candidate.head_commit,
@@ -144,16 +163,20 @@ class PreviewBarrier:
         owner.comparison_finished = True
         self.owner = None
 
-    async def finish_pending(self) -> None:
-        owner = self.owner
-        if owner is None:
+    async def finish_pending(self, expected: PreviewOwnership | None = None) -> None:
+        owner = expected or self.owner
+        if owner is None or self.owner is not owner:
             return
         try:
-            async with (
-                self.workspace.locks(main=True, agent_id=owner.candidate.agent_id),
-                self.workspace.git_lease(),
-            ):
-                await self.compare(owner.candidate.tree)
+            async with self.workspace.locks(main=True, agent_id=owner.candidate.agent_id):
+                if self.owner is not owner:
+                    return
+                async with self.workspace.git_lease():
+                    await self.compare(owner.candidate.tree)
+        except PreviewRestoredError:
+            # The hook already arranged finalization after verified restitution. Persistent
+            # uncertainty is latched at its source, never inferred from an operation refusal.
+            return
         except BaseException:
             # The original waiter sees failures at the choke point; background comparison
             # failures latch as well, rather than leaking an unobserved task exception.

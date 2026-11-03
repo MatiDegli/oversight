@@ -45,7 +45,7 @@ async def test_authenticated_stop_retries_return_final_record_without_drain(
         assert await h.manager.stop(created.preview_id, created.lease_token) is final
         with pytest.raises(PreviewError, match="expired"):
             await h.manager.renew(created.preview_id, created.lease_token)
-        for token in ("wrong", replacement.lease_token):
+        for token in ("A" * 43, replacement.lease_token):
             with pytest.raises(PreviewError) as caught:
                 await h.manager.stop(created.preview_id, token)
             assert caught.value.code == "forbidden"
@@ -68,7 +68,7 @@ async def test_public_interface_and_sink_excludes_output_url_and_token(workspace
         assert name in facade.__all__ and getattr(facade, name)
     h = await harness(workspace)
     created = await h.start()
-    assert len(created.lease_token) == 64 and created.state == "ready"
+    assert len(created.lease_token) == 43 and created.state == "starting"
     assert created.lease_token not in repr(created)
     url = (await h.manager.get(created.preview_id)).url
     assert url and url.startswith("http://127.0.0.1:")
@@ -134,19 +134,29 @@ async def test_invalid_admission_never_launches(workspace, fault):
         await h.start()
     if fault == "C":
         assert str(caught.value) == ISOLATION_MESSAGE
+    if fault in profiles:
+        assert_wire_error(caught.value, "not_configured")
     assert h.processes == [] and not h.manager.has_owner and h.sink.records == []
 
 
 @pytest.mark.parametrize(
     "field,value",
-    [("run_id", "other"), ("agent_id", "lead-1"), ("revision", 2), ("head_commit", "f" * 40)],
+    [
+        ("run_id", "run-20261103-000001"),
+        ("agent_id", "agent-2"),
+        ("revision", 2),
+        ("head_commit", "f" * 40),
+    ],
 )
 async def test_stale_or_wrong_identity_never_launches(workspace, field, value):
     h = await harness(workspace)
-    request: dict[str, Any] = dict(run_id="run", agent_id="agent-1", revision=1, head_commit=h.head)
+    request: dict[str, Any] = dict(
+        run_id="run-20261103-000000", agent_id="agent-1", revision=1, head_commit=h.head
+    )
     request[field] = value
-    with pytest.raises(PreviewError):
+    with pytest.raises(PreviewError) as caught:
         await h.manager.start(**request)
+    assert_wire_error(caught.value, "wrong_state")
     assert h.processes == []
 
 
@@ -254,8 +264,10 @@ async def test_readiness_failure_requires_verified_cleanup_before_reuse(workspac
         return process
 
     h.manager.process_factory = failing
-    with pytest.raises(PreviewError, match="did not become ready"):
-        await h.start()
+    created = await h.start(wait_ready=False)
+    await h.sink.wait("failed", created.preview_id)
+    assert h.manager._watcher is not None
+    await h.manager._watcher
     assert h.processes[0].dead and not h.manager.has_owner
     assert h.sink.records[-1].state == "failed"
     assert h.sink.records[-1].reason == "readiness_timeout"
@@ -274,13 +286,15 @@ async def test_awaited_starting_sink_and_memory_recheck_precede_execution(worksp
             await release.wait()
 
     h.manager.set_status_sink(sink)
-    task = asyncio.create_task(h.start())
+    task = asyncio.create_task(h.start(wait_ready=False))
     await committed.wait()
     assert h.processes == []
     h.manager.memory_hold = lambda: "host memory hold"
     release.set()
-    with pytest.raises(PreviewError, match="memory"):
-        await task
+    created = await task
+    await h.sink.wait("failed", created.preview_id)
+    assert h.manager._watcher is not None
+    await h.manager._watcher
     assert h.processes == [] and not h.manager.has_owner
     await h.close()
 
@@ -363,11 +377,117 @@ async def test_exit_before_readiness_preserves_confirmed_supervisor_reason(
         return process
 
     h.manager.process_factory = exited
-    with pytest.raises(PreviewError, match="did not become ready"):
-        await h.start()
+    created = await h.start(wait_ready=False)
+    await h.sink.wait("stopped" if code is None else "failed", created.preview_id)
+    assert h.manager._watcher is not None
+    await h.manager._watcher
     assert h.sink.records[-1].reason == expected
     assert h.processes[0].dead and not h.manager.has_owner
     if code == 73:
         with pytest.raises(PreviewError, match="disabled"):
             await h.start()
+    await h.close()
+
+
+def assert_wire_error(error, code):
+    import json
+
+    from oversight.api.errors import error_response
+    from oversight_contracts.commands import ERROR_STATUS, ErrorResponse
+
+    assert error.code == code
+    assert error.missing == ([] if code == "not_configured" else None)
+    response = error_response(
+        error.code, str(error), missing=[] if code == "not_configured" else None
+    )
+    wire = json.loads(bytes(response.body))
+    assert response.status_code == ERROR_STATUS[code]
+    ErrorResponse.model_validate(wire)
+    assert ("missing" in wire["error"]) == (code == "not_configured")
+    return str(wire)
+
+
+@pytest.mark.parametrize("operation", ["get", "renew", "stop"])
+async def test_unknown_and_malformed_ids_have_distinct_safe_errors(workspace, operation):
+    h = await harness(workspace)
+    method = getattr(h.manager, operation)
+    for preview_id, code in [
+        ("preview-" + "0" * 32, "not_found"),
+        *[
+            (value, "invalid_request")
+            for value in (
+                "0" * 32,
+                "preview-" + "0" * 33,
+                "preview-" + "0" * 32 + "\n",
+                "preview-" + "0" * 10000,
+                7,
+                None,
+            )
+        ],
+    ]:
+        args = (preview_id,) if operation == "get" else (preview_id, "A" * 43)
+        with pytest.raises(PreviewError) as caught:
+            await method(*args)
+        assert_wire_error(caught.value, code)
+    assert h.processes == [] and h.sink.records == []
+
+
+@pytest.mark.parametrize("operation", ["renew", "stop"])
+async def test_tokens_match_literal_regex_and_invalid_inputs_have_no_effect(workspace, operation):
+    h = await harness(workspace)
+    created = await h.start()
+    before = list(h.sink.records)
+    deadline = h.manager._deadline
+    for token, code in [
+        ("A" * 43, "forbidden"),
+        *[(value, "invalid_request") for value in ("bad", "a" * 64, "A" * 43 + "\n", None, 7)],
+    ]:
+        with pytest.raises(PreviewError) as caught:
+            await getattr(h.manager, operation)(created.preview_id, token)
+        assert created.lease_token not in assert_wire_error(caught.value, code)
+    assert h.sink.records == before and h.manager._deadline == deadline
+    assert h.processes[0].live and h.processes[0].sent == []
+    await h.close()
+
+
+async def test_generation_requests_32_bytes_and_accepts_noncanonical_regex_token(
+    workspace, monkeypatch
+):
+    import secrets
+
+    h = await harness(workspace)
+    requested = []
+
+    def token_urlsafe(size):
+        requested.append(size)
+        return "_" * 43  # Contract-valid even though not a canonical encoding of 32 bytes.
+
+    monkeypatch.setattr(secrets, "token_urlsafe", token_urlsafe)
+    created = await h.start()
+    assert requested == [32]
+    await h.manager.renew(created.preview_id, "_" * 43)
+    assert (await h.manager.stop(created.preview_id, "_" * 43)).state == "stopped"
+    await h.close()
+
+
+async def test_stop_retry_queued_before_termination_cannot_drain_replacement(workspace):
+    h = await harness(workspace)
+    created = await h.start()
+    entered = asyncio.Event()
+
+    async def retry():
+        entered.set()
+        return await h.manager.stop(created.preview_id, created.lease_token)
+
+    async with workspace.locks(main=True):
+        queued = asyncio.create_task(retry())
+        async with asyncio.timeout(5):
+            await entered.wait()
+        await h.manager.stop(created.preview_id, created.lease_token)
+        replacement = await h.start(wait_ready=False)
+    async with asyncio.timeout(5):
+        assert (await queued).state == "stopped"
+    assert (await h.manager.get(replacement.preview_id)).state in {"starting", "ready"}
+    await h.sink.wait("ready", replacement.preview_id)
+    assert h.processes[-1].live
     await h.close()

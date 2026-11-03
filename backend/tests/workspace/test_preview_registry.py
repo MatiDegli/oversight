@@ -274,3 +274,68 @@ async def test_manual_release_after_recovery_refusal_allows_fresh_startup(
     await fresh.acquire_runtime()
     assert fresh.runtime_owned and not fresh.integrity.main_suspect
     assert await fresh.reset()
+
+
+@pytest.mark.parametrize(
+    "raw_id",
+    [
+        "a" * 32,
+        "preview-" + "A" * 32,
+        "preview-" + "a" * 33,
+        "preview-" + "a" * 32 + "\n",
+        "preview-" + "a" * 10000,
+        None,
+        123,
+        ["preview"],
+    ],
+    ids=["bare-hex", "uppercase", "overlong", "newline", "huge", "null", "integer", "list"],
+)
+async def test_raw_invalid_owner_id_refuses_before_recovery_authority(
+    workspace, monkeypatch, raw_id
+):
+    from oversight.workspace import preview
+
+    h = await harness(workspace)
+    await h.start()
+    data = h.manager.registry.read()
+    assert data is not None
+    data["preview_id"] = raw_id
+    h.manager.registry.write(data)
+    before = h.manager.registry.path.read_bytes()
+    effects = []
+
+    async def forbidden(*args, **kwargs):
+        effects.append("signal or Git")
+        pytest.fail("invalid ID exercised recovery authority")
+
+    def restore(*args):
+        effects.append("restore")
+        pytest.fail("invalid ID restored metadata")
+
+    monkeypatch.setattr(preview, "reclaim_registered", forbidden)
+    monkeypatch.setattr(preview, "finish_snapshot", restore)
+    monkeypatch.setattr(core, "run_process", forbidden)
+    with pytest.raises(PreviewError, match="recovery is unverified"):
+        await h.manager.recover()
+    assert effects == [] and h.manager.registry.path.read_bytes() == before
+    assert workspace.runtime_owned and workspace._cleanup_unverified
+    assert h.manager.has_owner and h.manager.barrier.owner is not None
+    workspace.release_runtime()
+    assert workspace.runtime_owned
+    await h.close()
+
+
+async def test_valid_wire_owner_recovers_without_any_durable_token(workspace):
+    h = await harness(workspace)
+    created = await h.start()
+    data = h.manager.registry.read()
+    assert data is not None
+    assert data["preview_id"] == created.preview_id
+    assert "lease_token" not in str(data) and created.lease_token not in str(data)
+    await h.processes[0].stop()
+    h.manager.barrier.owner = None
+    h.manager._reserved = False
+    workspace._reset_done = False
+    await h.manager.recover()
+    assert h.manager.registry.read() is None and not workspace.integrity.main_suspect
+    await h.close()

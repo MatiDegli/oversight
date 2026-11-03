@@ -282,7 +282,12 @@ class PreviewProcess:
         try:
             async with asyncio.timeout(15):
                 if self.reader is not None and not self.reported_dead:
-                    self.accept_death(await self.message())
+                    # Cancellation can interrupt either handoff acknowledgement. The
+                    # launch reader has settled before stop takes sole channel ownership.
+                    while not self.reported_dead:
+                        message = await self.message()
+                        if message.get("kind") not in {"confirmed", "executing"}:
+                            self.accept_death(message)
                 if self.transport is not None and not await wait_done(self.collector.exited, 8):
                     raise PreviewError()
                 if self.pidfd is not None:

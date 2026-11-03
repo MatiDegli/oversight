@@ -6,6 +6,7 @@ import secrets
 import socket
 import sys
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import asdict, replace
 from pathlib import Path
@@ -13,7 +14,8 @@ from typing import TYPE_CHECKING
 
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
-from oversight.workspace.preview_barrier import PreviewBarrier, settle
+from oversight.workspace.preview_barrier import PreviewBarrier, PreviewOwnership, settle
+from oversight.workspace.preview_lifecycle import PreviewLifecycle, finish_supervision
 from oversight.workspace.preview_process import PreviewProcess, bind_listener, launch_configuration
 from oversight.workspace.preview_profile import PreviewProfile
 from oversight.workspace.preview_registry import (
@@ -29,14 +31,18 @@ from oversight.workspace.preview_types import (
     PreviewDetailsResult,
     PreviewError,
     PreviewReason,
+    PreviewRestoredError,
     PreviewState,
     PreviewStatusRecord,
     PreviewStatusSink,
+    valid_lease_token,
+    validate_preview_id,
+    validate_start,
 )
 from oversight.workspace.snapshot import finish_snapshot
 
 if TYPE_CHECKING:
-    from oversight.workspace.core import Tree, Workspace
+    from oversight.workspace.core import Workspace
 
 
 class PreviewManager:
@@ -70,6 +76,18 @@ class PreviewManager:
         self._deadline = 0.0
         self._absolute = 0.0
         self._watcher: asyncio.Task[None] | None = None
+        self.lifecycle = PreviewLifecycle(
+            workspace,
+            self.barrier,
+            self.profile,
+            clock,
+            lambda: (self._deadline, self._absolute),
+            self._authorize_execution,
+            self._launch,
+            self._transition,
+            self.drain,
+            self._watch,
+        )
 
     def set_status_sink(self, sink: PreviewStatusSink) -> None:
         if self._reserved:
@@ -84,12 +102,14 @@ class PreviewManager:
         return self._reserved
 
     def _admit(self) -> None:
-        if self._closed or self._disabled:
-            raise PreviewError("Live preview profile is disabled.")
+        if self._closed:
+            raise PreviewError("Live preview admission is closed.")
+        if self._disabled:
+            raise PreviewError("Live preview profile is disabled.", code="not_configured")
         try:
             self.profile.validate()
         except ValueError:
-            raise PreviewError("Live preview profile is disabled.") from None
+            raise PreviewError("Live preview profile is disabled.", code="not_configured") from None
         if sys.platform == "win32" or not self.workspace.isolation.available:
             raise PreviewError(ISOLATION_MESSAGE)
         self.workspace.integrity.before_git()
@@ -108,6 +128,7 @@ class PreviewManager:
         revision: int,
         head_commit: str,
     ) -> PreviewCreatedResult:
+        validate_start(run_id, agent_id, revision, head_commit)
         self._admit()
         # Synchronous reservation BEFORE waiting for locks/preflight Git: never evict an owner.
         if self._reserved:
@@ -147,7 +168,7 @@ class PreviewManager:
                     raise PreviewError("Live preview candidate changed.")
                 owner = await self.barrier.capture(candidate)
                 self._record = PreviewStatusRecord(
-                    secrets.token_hex(16),
+                    "preview-" + uuid.uuid4().hex,
                     candidate.run_id,
                     candidate.agent_id,
                     candidate.change_id,
@@ -155,29 +176,28 @@ class PreviewManager:
                     candidate.head_commit,
                     "starting",
                 )
-                self._token = secrets.token_hex(32)
+                self._token = secrets.token_urlsafe(32)
                 self._deadline = self.clock() + self.profile.lease_s
                 self._absolute = self.clock() + self.profile.lifetime_s
                 await self._emit(self._record)
-                ready_deadline = time.monotonic() + self.profile.readiness_s
-                await self._launch(candidate.tree)
-                assert owner.process is not None
-                if not await owner.process.ready(max(0, ready_deadline - time.monotonic())):
-                    owner.reason = "readiness_timeout"
-                    raise PreviewError("Live preview did not become ready.")
-                await self._transition("ready", None)
-                self._watcher = asyncio.create_task(self._watch())
-                assert self._token is not None
-                return PreviewCreatedResult(**asdict(self._record), lease_token=self._token)
+                # Admission owns metadata/evidence only. Supervision acquires its own locks.
+                result = PreviewCreatedResult(**asdict(self._record), lease_token=self._token)
+                self.lifecycle.profile = self.profile
+                owner.launch_task = asyncio.create_task(self.lifecycle.start(owner))
+                self._watcher = asyncio.create_task(self.lifecycle.supervise(owner))
+                return result
         except BaseException as cause:
-            await self._failed_start()
+            if self.barrier.owner is None:
+                self._reserved = False
+                self._token = None
+            await self.lifecycle.failed_admission()
             if isinstance(cause, (PreviewError, asyncio.CancelledError)):
                 raise
             raise PreviewError("Live preview launch failed.") from None
 
-    async def _launch(self, tree: "Tree") -> None:
-        self._admit()
-        owner, record = self.barrier.owner, self._record
+    async def _launch(self, owner: PreviewOwnership) -> None:
+        self._authorize_execution(owner)
+        tree, record = owner.candidate.tree, self._record
         assert owner is not None and record is not None
         listener = bind_listener(self.profile.ports)
         refusal: socket.socket | None = None
@@ -216,29 +236,23 @@ class PreviewManager:
             }
             await offload(lambda: self.registry.write(data))
             owner.process = self.process_factory(self.registry, int(listener.getsockname()[1]))
-            owner.process.authorize_execution = self._authorize_execution
+            owner.process.authorize_execution = lambda: self._authorize_execution(owner)
             await owner.process.launch(listener, self.profile)
         finally:
             listener.close()
             if refusal is not None:
                 refusal.close()
 
-    def _authorize_execution(self) -> None:
+    def _authorize_execution(self, owner: PreviewOwnership) -> None:
         self._admit()
-        owner = self.barrier.owner
-        if owner is None or not owner.candidate.eligible():
+        if (
+            self.barrier.owner is not owner
+            or owner.draining
+            or self.clock() >= min(self._deadline, self._absolute)
+            or not owner.candidate.current()
+            or not owner.candidate.eligible()
+        ):
             raise PreviewError("Live preview candidate changed.")
-
-    async def _failed_start(self) -> None:
-        owner = self.barrier.owner
-        if owner is None:
-            self._reserved = False
-            self._token = None
-            return
-        owner.reason = owner.reason or "launch_failed"
-        task = asyncio.create_task(self.drain(owner.reason))
-        await settle(task)
-        task.result()
 
     async def _emit(self, record: PreviewStatusRecord) -> None:
         if self._sink is None:
@@ -306,6 +320,9 @@ class PreviewManager:
             self._watcher.cancel()
 
     def _authenticate(self, preview_id: str, token: str) -> PreviewStatusRecord:
+        validate_preview_id(preview_id)
+        if not valid_lease_token(token):
+            raise PreviewError("Live preview request is invalid.", code="invalid_request")
         record = self._records.get(preview_id)
         # Compare even unknown IDs; no token value enters exception text.
         matched = secrets.compare_digest(
@@ -313,19 +330,18 @@ class PreviewManager:
             self._terminal_tokens.get(preview_id)
             or hashlib.sha256((self._token or secrets.token_hex(32)).encode()).digest(),
         )
-        if (
-            record is None
-            or (self._record is not record and preview_id not in self._terminal_tokens)
-            or not matched
-        ):
+        if record is None:
+            raise PreviewError("Live preview was not found.", code="not_found")
+        if (self._record is not record and preview_id not in self._terminal_tokens) or not matched:
             raise PreviewError("Live preview lease is invalid.", code="forbidden")
         return record
 
     async def get(self, preview_id: str) -> PreviewDetailsResult:
+        validate_preview_id(preview_id)
         record = self._records.get(preview_id)
         if record is None:
             raise PreviewError("Live preview was not found.", code="not_found")
-        if record.state == "ready":
+        if record.state in {"starting", "ready"}:
             await self._check_owner()
             record = self._records[preview_id]
         owner = self.barrier.owner
@@ -337,16 +353,19 @@ class PreviewManager:
         return PreviewDetailsResult(**asdict(record), url=url)
 
     async def renew(self, preview_id: str, lease_token: str) -> PreviewStatusRecord:
-        if self._authenticate(preview_id, lease_token).state != "ready":
+        if self._authenticate(preview_id, lease_token).state not in {"starting", "ready"}:
             raise PreviewError("Live preview lease has expired.")
         await self._check_owner()
         record = self._records[preview_id]
-        if record.state != "ready":
+        if record.state not in {"starting", "ready"}:
+            raise PreviewError("Live preview lease has expired.")
+        owner = self.barrier.owner
+        assert owner is not None
+        if owner.draining:
             raise PreviewError("Live preview lease has expired.")
         self._deadline = min(self.clock() + self.profile.lease_s, self._absolute)
-        owner = self.barrier.owner
-        assert owner is not None and owner.process is not None
-        owner.process.send((f'{{"renew":{self._deadline}}}\n').encode())
+        if owner.launched and owner.process is not None:
+            owner.process.send((f'{{"renew":{self._deadline}}}\n').encode())
         return record  # No transition, no heartbeat event.
 
     async def stop(self, preview_id: str, lease_token: str) -> PreviewStatusRecord:
@@ -360,18 +379,24 @@ class PreviewManager:
         owner = self.barrier.owner
         if owner is None:
             return
+        watcher = self._watcher
         owner.reason = owner.reason or reason
+        owner.draining = True
         try:
-            async with (
-                self.workspace.locks(main=True, agent_id=owner.candidate.agent_id),
-                self.workspace.git_lease(),
-            ):
-                await self.barrier.compare(owner.candidate.tree)
-        except asyncio.CancelledError:
+            async with self.workspace.locks(main=True, agent_id=owner.candidate.agent_id):
+                if self.barrier.owner is not owner:
+                    return
+                async with self.workspace.git_lease():
+                    await self.barrier.compare(owner.candidate.tree)
+        except (asyncio.CancelledError, PreviewRestoredError):
             raise
         except BaseException:
             self.workspace.refuse_unverified_cleanup(preview=True)
             raise PreviewError("Live preview cleanup is unverified; restart is required.") from None
+        finally:
+            if self._closed and self.barrier.finalizer is not None:
+                await settle(self.barrier.finalizer)
+            await finish_supervision(owner, watcher)
 
     async def disable_profile(self) -> None:
         self._disabled = True
@@ -389,20 +414,25 @@ class PreviewManager:
             reason = "lease_expired"
         elif not self.workspace.isolation.available:
             reason = "isolation_unavailable"
-        elif owner.process is not None:
+        elif owner.launched and owner.process is not None:
             try:
                 if not await owner.process.confirmed_live():
                     reason = "app_exited"
             except Exception:
                 reason = "app_exited"
+        if self.barrier.owner is not owner:
+            return
         if reason is None and self.clock() >= min(self._deadline, self._absolute):
             reason = "lifetime_expired" if self.clock() >= self._absolute else "lease_expired"
         if reason is not None:
             await self.drain(reason)
 
     async def _watch(self) -> None:
+        owner = self.barrier.owner
         try:
-            while self._reserved and not self.workspace.integrity.main_suspect:
+            while self.barrier.owner is owner and self._reserved:
+                if self.workspace.integrity.main_suspect:
+                    return
                 await asyncio.sleep(
                     min(
                         self.profile.heartbeat_s,
@@ -410,7 +440,7 @@ class PreviewManager:
                     )
                 )
                 await self._check_owner()
-        except asyncio.CancelledError:
+        except (asyncio.CancelledError, PreviewRestoredError):
             return
         except BaseException:
             self.workspace.refuse_unverified_cleanup(preview=True)
