@@ -276,7 +276,7 @@ class LiveRun:
         for slot, default in resolve_slots(settings).items():
             self._offer(slot, default)
         self._client_factory = TaskClients(client_factory or self._default_client)
-        self._lead_factory = TaskClients(lead_factory) if lead_factory else self._client_factory
+        self._lead_factory = TaskClients(lead_factory) if lead_factory is not None else None
         self._pricing: Pricing | None = None
         if settings.input_usd_per_m is not None and settings.output_usd_per_m is not None:
             # Cached input is priced as fresh input: an upper bound, never an undercount.
@@ -662,11 +662,7 @@ class LiveRun:
             self._drain_previews,
             self._close_manager,
             self._client_factory.aclose,
-            *(
-                [self._lead_factory.aclose]
-                if self._lead_factory is not self._client_factory
-                else []
-            ),
+            *([self._lead_factory.aclose] if self._lead_factory is not None else []),
             self._check_main,
             self.store.close,
         )

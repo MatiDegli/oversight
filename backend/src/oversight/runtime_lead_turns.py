@@ -58,7 +58,10 @@ class LeadTurn:
     def make_client(self) -> ModelClient:
         self.check()
         self.live.require_role("lead", self.lead.profile)
-        self.client = self.live._lead_factory(self.lead.profile, "A")
+        factory = self.live._lead_factory
+        if factory is None:
+            factory = self.live._client_factory
+        self.client = factory(self.lead.profile, "A")
         return self.client
 
     def admit(self) -> str | None:
