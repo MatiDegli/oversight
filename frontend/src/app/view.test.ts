@@ -322,3 +322,55 @@ describe("file targets when file commands are available", () => {
     expect(clickNode(through(20), initialView, untouched, false).file).toBeNull();
   });
 });
+
+it("opens only an exact recorded change/file pair after merge or rejection", async () => {
+  const { openChangeFile } = await import("./view");
+  const { default: fixture } = await import("../../../fixtures/views/reference-cases.json");
+  const { applyEvent, createInitialState } = await import("../state");
+  const state = (fixture.events as unknown as import("@contracts").ServerEvent[]).reduce(
+    applyEvent,
+    createInitialState(),
+  );
+  expect(openChangeFile(state, "change-1", "a.py")?.diff).toEqual({
+    changeId: "change-1",
+    path: "a.py",
+  });
+  expect(openChangeFile(state, "change-2", "a.py")).toBeNull();
+  expect(openChangeFile(state, "change-1", "extra.py")).toBeNull();
+  const change = required(state.changes["change-1"]);
+  const rejected = {
+    ...state,
+    changes: { ...state.changes, "change-1": { ...change, status: "rejected" as const } },
+  };
+  expect(openChangeFile(rejected, "change-1", "a.py")?.diff?.path).toBe("a.py");
+});
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Missing synthetic fixture value");
+  return value;
+}
+
+it("prunes a reference target without changing its frame key and clears it on navigation or a new run", async () => {
+  const { reconcileReferenceHighlight, viewReducer, tabbedView } = await import("./view");
+  const { default: fixture } = await import("../../../fixtures/views/reference-cases.json");
+  const { applyEvent, createInitialState } = await import("../state");
+  const state = (fixture.events as unknown as import("@contracts").ServerEvent[]).reduce(
+    applyEvent,
+    createInitialState(),
+  );
+  const target = {
+    ...tabbedView,
+    referenceHighlight: {
+      nodeIds: ["n1", "missing"],
+      frameKey: "clicked",
+      runId: state.run?.run_id ?? "",
+    },
+  };
+  const pruned = reconcileReferenceHighlight(state, target);
+  expect(pruned.referenceHighlight).toEqual({ ...target.referenceHighlight, nodeIds: ["n1"] });
+  expect(reconcileReferenceHighlight(state, pruned)).toBe(pruned);
+  expect(viewReducer(pruned, { type: "watch" }).referenceHighlight).toBeUndefined();
+  expect(
+    reconcileReferenceHighlight(createInitialState(), pruned).referenceHighlight,
+  ).toBeUndefined();
+});

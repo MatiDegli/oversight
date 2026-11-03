@@ -32,6 +32,10 @@ describe("live transport", () => {
     source().emit(reply);
     expect(store.getState().state).toEqual({
       ...before,
+      eventFacts: {
+        ...before.eventFacts,
+        [reply.seq]: { type: reply.type, ts: reply.ts, agentId: "agent-1" },
+      },
       lastSeq: reply.seq,
       clock: reply.ts,
       leadReplies: { ...before.leadReplies, "agent-1": [reply] },
@@ -56,6 +60,11 @@ describe("live transport", () => {
     source().emit(idle);
     expect(store.getState().state).toEqual({
       ...before,
+      eventFacts: {
+        ...before.eventFacts,
+        [reply.seq]: { type: reply.type, ts: reply.ts, agentId: "agent-1" },
+        [idle.seq]: { type: idle.type, ts: idle.ts, agentId: "agent-1" },
+      },
       lastSeq: idle.seq,
       clock: idle.ts,
       decisionEvents: [...before.decisionEvents, idle],
@@ -108,6 +117,19 @@ describe("live transport", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
+      eventFacts: {
+        ...before.eventFacts,
+        ...Object.fromEntries(
+          unwired.map((event, index) => [
+            before.lastSeq + index + 1,
+            {
+              type: event.type,
+              ts: event.ts,
+              agentId: "agent_id" in event.payload ? event.payload.agent_id : null,
+            },
+          ]),
+        ),
+      },
       mergeMode: { mode: "merge_when_safe", revision: 1 },
       lastSeq: before.lastSeq + unwired.length,
       clock: reservedA.at(-1)?.ts,
@@ -147,6 +169,19 @@ describe("live transport", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
+      eventFacts: {
+        ...before.eventFacts,
+        ...Object.fromEntries(
+          delivered.map((event) => [
+            event.seq,
+            {
+              type: event.type,
+              ts: event.ts,
+              agentId: "agent_id" in event.payload ? event.payload.agent_id : null,
+            },
+          ]),
+        ),
+      },
       mergeMode: { mode: "merge_when_safe", revision: 1 },
       lastSeq: before.lastSeq + reserved.length + reservedA.length - 1,
       clock: reservedA.at(-1)?.ts,
@@ -402,6 +437,7 @@ describe("live transport", () => {
       ...createInitialState(),
       run: newRun.payload,
       runStartedAt: newRun.ts,
+      eventFacts: { 1: { type: "run.started", ts: newRun.ts, agentId: null } },
       lastSeq: 1,
       // The new run's first event is its "now"; nothing of the old run's times survives.
       clock: newRun.ts,

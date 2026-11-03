@@ -1,7 +1,7 @@
 import type { ImpactCone } from "@contracts";
 import { liveImpact } from "../graph";
 import type { State } from "../state";
-import { changeNodeIds } from "./view";
+import { changeNodeIds, referenceHighlightIds } from "./view";
 import type { View } from "./view";
 
 /** Keep review's card/camera scope separate from the live cone's dimming and work-light. */
@@ -9,6 +9,8 @@ export function graphScope(
   state: State,
   view: View,
 ): { cone: ImpactCone | null; liveCone: ImpactCone | null; litIds: string[] | null } {
+  const highlight = referenceHighlightIds(state, view);
+  if (highlight) return { cone: null, liveCone: null, litIds: highlight };
   const id = view.review ?? view.diff?.changeId;
   const change = id === undefined ? undefined : state.changes[id];
   if (!change || change.status === "approved" || change.status === "rejected")

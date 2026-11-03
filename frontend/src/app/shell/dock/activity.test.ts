@@ -65,6 +65,7 @@ it("retains envelopes and globally orders all kinds identically in live batches 
   expect(applyEvent(state, { ...start, payload: { ...start.payload, run_id: "another" } })).toEqual(
     {
       ...createInitialState(),
+      eventFacts: { 1: { type: "run.started", ts: start.ts, agentId: null } },
       run: { ...start.payload, run_id: "another" },
       runStartedAt: start.ts,
       lastSeq: 1,

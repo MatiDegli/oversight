@@ -21,6 +21,7 @@ export interface FileTarget {
  */
 export interface View {
   selected: string | null;
+  referenceHighlight?: { nodeIds: readonly string[]; frameKey: string; runId: string };
   diff: DiffTarget | null;
   review: string | null;
   file: FileTarget | null;
@@ -195,7 +196,8 @@ export type ViewAction =
   | { type: "open"; tab: FocusTab }
   | { type: "activate"; id: string }
   | { type: "close"; id: string }
-  | { type: "watch" };
+  | { type: "watch" }
+  | { type: "clear-reference" };
 
 export const tabbedView: View = { ...initialView, tabs: [], activeTab: null, history: [] };
 
@@ -218,8 +220,11 @@ function activate(view: View, tabs: readonly FocusTab[], id: string | null): Vie
 
 /** Six tabs, oldest inactive eviction, and last-used activation on close. */
 export function viewReducer(view: View, action: ViewAction): View {
+  if (view.referenceHighlight) view = { ...view, referenceHighlight: undefined };
   const tabs = view.tabs ?? [];
   switch (action.type) {
+    case "clear-reference":
+      return view;
     case "watch":
       return { ...tabbedView, selected: view.selected };
     case "activate":
@@ -250,6 +255,7 @@ export function viewReducer(view: View, action: ViewAction): View {
 
 /** Capture camera scope at the person's navigation, not on later agent events. */
 export function navigateView(view: View, next: View, state: State): View {
+  if (view.referenceHighlight) view = { ...view, referenceHighlight: undefined };
   if (
     JSON.stringify([view.diff, view.review, view.file]) ===
     JSON.stringify([next.diff, next.review, next.file])
@@ -312,4 +318,33 @@ export function conversationTab(view: View, state: State, agentId: string): Focu
     frameIds: change ? changeNodeIds(change) : [],
     frameKey: id,
   };
+}
+
+/** Exact recorded pair, including resolved changes; LiveDiff is always read-only. */
+export function openChangeFile(state: State, changeId: string, path: string): View | null {
+  const file = state.changes[changeId]?.files[path];
+  if (!file) return null;
+  return { selected: file.node_ids[0] ?? null, diff: { changeId, path }, review: null, file: null };
+}
+
+/** Pruning never changes the click's frame key, so arriving events do not move the camera. */
+export function referenceHighlightIds(state: State, view: View): string[] | null {
+  const target = view.referenceHighlight;
+  if (!target || target.runId !== state.run?.run_id) return null;
+  const ids = new Set(state.graph?.nodes.map((node) => node.id));
+  for (const change of Object.values(state.changes))
+    if (change.status !== "approved" && change.status !== "rejected")
+      change.graph.nodes_added.forEach((node) => ids.add(node.id));
+  return target.nodeIds.filter((id) => ids.has(id));
+}
+
+/** Discard a stale run target and permanently prune removed IDs without a new frame key. */
+export function reconcileReferenceHighlight(state: State, view: View): View {
+  const target = view.referenceHighlight;
+  if (!target) return view;
+  const nodeIds = referenceHighlightIds(state, view);
+  if (nodeIds === null) return { ...view, referenceHighlight: undefined };
+  return nodeIds.length === target.nodeIds.length
+    ? view
+    : { ...view, referenceHighlight: { ...target, nodeIds } };
 }

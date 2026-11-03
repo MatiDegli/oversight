@@ -17,9 +17,7 @@ describe("shared reference resolution", () => {
       const prefix = events.slice(0, sample.prefix);
       const state = prefix.reduce(applyEvent, createInitialState());
       expect(state.gap).toBe(false);
-      expect(resolveViewReferences(state, sample.request as LeadView, prefix)).toEqual(
-        sample.expected,
-      );
+      expect(resolveViewReferences(state, sample.request as LeadView)).toEqual(sample.expected);
     });
 
   it("parses and stores ordered views per lead, then resets on run.started", () => {
