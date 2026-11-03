@@ -273,3 +273,88 @@ async def test_shutdown_restored_metadata_finalizes_before_store_close(tmp_path,
         if finalizer is not None:
             async with asyncio.timeout(5):
                 await finalizer
+
+
+async def test_reviewed_self_authorization_is_separate_and_nonexecuting(tmp_path, monkeypatch):
+    import sys
+    from dataclasses import replace
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    from workspace.test_self_profile import self_checkout
+
+    from oversight.preview_runtime import compose
+    from oversight.preview_startup import reviewed_startup_report
+    from oversight.workspace import (
+        ReviewedAppAuthorization,
+        Workspace,
+        authorize_reviewed_app,
+        load_preview_app,
+    )
+    from oversight.workspace.source import self_inventory
+
+    # Keep this valid-disclosure case independent of the runner's potentially long TMPDIR.
+    short = TemporaryDirectory(prefix="op-", dir="/tmp" if sys.platform == "linux" else None)
+    tmp_path = Path(short.name)
+    runtime, original, source, resources = await self_checkout(tmp_path, monkeypatch)
+    inventory = await self_inventory(source, runtime)
+    launch = load_preview_app(original, {}, **resources)
+    assert launch is not None
+    authority = authorize_reviewed_app(inventory, launch)
+    frozen = replace(
+        profile(), trusted_demo=False, reviewed_app=authority, interpreter=resources["python"]
+    )
+    frozen.validate()
+    assert not frozen.trusted_demo
+    with pytest.raises(ValueError, match="preview app is not authorized"):
+        ReviewedAppAuthorization(inventory, launch).validate()
+    with pytest.raises(ValueError, match="preview app is not authorized"):
+        replace(authority, launch=replace(launch, mode="forged")).validate()
+    for selected in ("", "boltons-d31d821", "C:/own"):
+        with pytest.raises(ValueError, match="preview app is not authorized"):
+            Settings(workspace_source=selected, preview_app="explicit override")
+        with pytest.raises(ValueError, match="preview app is not authorized"):
+            Settings(workspace_source=selected, preview_profile=frozen)
+    workspace = Workspace(
+        runtime,
+        original,
+        pytest_pin="9.1.1",
+        source_inventory=inventory,
+        demo_python=resources["python"],
+    )
+
+    async def candidate(*args):
+        raise AssertionError("candidate resolution must not run")
+
+    manager = compose(
+        workspace,
+        frozen,
+        trusted_demo=False,
+        resolve_candidate=candidate,
+        memory_hold=lambda: None,
+    )
+    calls = []
+
+    def forbidden_process(*args):
+        calls.append(args)
+        raise AssertionError("reviewed scaffold must not spawn")
+
+    manager.process_factory = forbidden_process
+
+    async def refused(message):
+        with pytest.raises(PreviewError, match=message) as caught:
+            manager._admit()
+        assert caught.value.code == "not_configured"
+
+    await refused("Reviewed-app startup disclosure is unavailable")
+    manager.startup_report = "invalid"
+    await refused("Reviewed-app startup disclosure is unavailable")
+    manager.startup_report = reviewed_startup_report(frozen, "/r/previews/id/logs/build.log")
+    await refused("Reviewed-app preview execution is not available")
+    with pytest.raises(PreviewError, match="Reviewed-app preview execution is not available"):
+        await manager._launch(None)  # pyright: ignore[reportArgumentType]
+    assert calls == [] and not manager.has_owner
+    resources["node"].write_text("stale executable")
+    with pytest.raises(ValueError, match="preview app is not authorized"):
+        authority.validate()
+    await refused("Live preview profile is disabled")

@@ -75,6 +75,8 @@ from oversight.events import (
 )
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
+from oversight.nested_clients import NestedPolicy
+from oversight.preview_startup import ENABLE_HINT, reviewed_startup_report
 from oversight.redaction import Redactor
 from oversight.resources import hold_reason, memory_used
 from oversight.runtime_accounting import write_tick
@@ -90,17 +92,23 @@ from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
 from oversight.workspace import (
     OPEN_NOTICE,
+    OVERSIGHT_SELF,
     TRUST_NOTICE,
     OwnSource,
     PreviewCandidate,
     PreviewError,
+    PreviewManager,
+    PreviewProfile,
     Workspace,
     WorkspaceError,
+    authorize_reviewed_app,
     configure_suite,
     list_tree,
+    load_preview_app,
     outside_profile,
     preflight_placement,
     select_source,
+    self_inventory,
     valid_agent_id,
     validate_source,
 )
@@ -239,7 +247,12 @@ class LiveRun:
         client_factory: ClientFactory | None = None,
         *,
         reviewer: ReviewerCall | None = None,
+        tree: Path | None = None,
+        policy: NestedPolicy | None = None,
+        lead_factory: ClientFactory | None = None,
+        preview_factory: Callable[[Workspace], PreviewManager] | None = None,
     ) -> None:
+        self.nested_policy = policy
         self._settings = settings
         self._lead_limits = build_lead_limits(settings)
         self._max_leads = settings.max_leads
@@ -263,6 +276,7 @@ class LiveRun:
         for slot, default in resolve_slots(settings).items():
             self._offer(slot, default)
         self._client_factory = TaskClients(client_factory or self._default_client)
+        self._lead_factory = TaskClients(lead_factory) if lead_factory is not None else None
         self._pricing: Pricing | None = None
         if settings.input_usd_per_m is not None and settings.output_usd_per_m is not None:
             # Cached input is priced as fresh input: an upper bound, never an undercount.
@@ -292,6 +306,8 @@ class LiveRun:
             if own
             else self._source.checkout(settings.runtime_dir)
             if self._source is not None and not isinstance(self._source, OwnSource)
+            else tree / "demo-repo"
+            if tree is not None
             else TEMPLATE,
             pytest_pin=pytest_pin(),
             demo_python=settings.demo_python,
@@ -299,6 +315,12 @@ class LiveRun:
             pytest_options=self._source.pytest_options if self._source else (),
             own_source=own,
             _nt_source_bytes=own is not None,
+            require_demo_python=self._source == OVERSIGHT_SELF,
+            source_inventory=(
+                settings.preview_profile.reviewed_app.inventory
+                if settings.preview_profile.reviewed_app
+                else None
+            ),
         )
         self._own_selection = own
         self._environment_unavailable: str | None = None
@@ -341,12 +363,17 @@ class LiveRun:
         self.dispatcher = Dispatcher(self)
         self.plans = PlanService(self)
         self.leads = LeadService(self)
-        self.previews = preview_runtime.compose(
-            self.workspace,
-            settings.preview_profile,
-            trusted_demo=self._source is None,
-            resolve_candidate=self.preview_candidate,
-            memory_hold=self._memory_hold,
+        self.preview_startup_serialized: str | None = None
+        self.previews = (
+            preview_factory(self.workspace)
+            if preview_factory
+            else preview_runtime.compose(
+                self.workspace,
+                settings.preview_profile,
+                trusted_demo=self._source is None,
+                resolve_candidate=self.preview_candidate,
+                memory_hold=self._memory_hold,
+            )
         )
 
     async def preview_candidate(
@@ -416,13 +443,75 @@ class LiveRun:
             if self._source is not None:
                 assert not isinstance(self._source, OwnSource)
                 async with self.workspace.guard_nt_cleanup():
-                    await validate_source(
-                        self._source, self._settings.runtime_dir, spawn=self.workspace.startup_git
-                    )
+                    if self._source == OVERSIGHT_SELF:
+                        self.workspace.source_inventory = await self_inventory(
+                            self._source,
+                            self._settings.runtime_dir,
+                            spawn=self.workspace.startup_git,
+                        )
+                    else:
+                        await validate_source(
+                            self._source,
+                            self._settings.runtime_dir,
+                            spawn=self.workspace.startup_git,
+                        )
             return await self.workspace.reset()
         except BaseException:
             self.workspace.release_runtime()
             raise
+
+    async def _prepare_reviewed_preview(self) -> None:
+        if self.preview_startup_serialized is not None:
+            return
+        if self._source != OVERSIGHT_SELF:
+            return
+        settings, profile = self._settings, self.previews.profile
+        if not profile.enabled:
+            _log.warning(ENABLE_HINT)
+            return
+        inventory = self.workspace.source_inventory
+        assert inventory is not None
+        port = profile.ports[0] if profile.ports else 0
+        if port in (settings.port, settings.vite_port):
+            raise ValueError("preview app is not authorized")
+        directory = settings.runtime_dir / "previews" / self.run_id
+
+        def prepare() -> tuple[PreviewProfile, str | None]:
+            launch = load_preview_app(
+                inventory.root,
+                {"OVERSIGHT_PREVIEW_APP": settings.preview_app}
+                if settings.preview_app is not None
+                else {},
+                tree=directory / "tree",
+                state=directory / "state",
+                python=profile.interpreter,
+                node=settings.preview_node,
+                tsc=settings.preview_tsc,
+                vite=settings.preview_vite,
+                api_port=port,
+                public_port=port,
+            )
+            if launch is None:
+                return profile, None
+            frozen = replace(
+                profile, trusted_demo=False, reviewed_app=authorize_reviewed_app(inventory, launch)
+            )
+            frozen.validate()
+            try:
+                serialized = reviewed_startup_report(frozen, str(directory / "logs/build.log"))
+            except ValueError:
+                _log.warning("Reviewed-app startup disclosure is unavailable; preview refused.")
+                serialized = None
+            return frozen, serialized
+
+        frozen, serialized = await asyncio.to_thread(prepare)
+        assert isinstance(frozen, type(profile))
+        self.previews.profile = frozen
+        self.previews.lifecycle.profile = frozen
+        if serialized is not None:
+            _log.warning("%s", serialized)
+            self.preview_startup_serialized = serialized
+            self.previews.startup_report = serialized
 
     async def startup(self) -> None:
         settings = self._settings
@@ -454,6 +543,7 @@ class LiveRun:
                 "this run keeps 60 s."
             )
         base = await self._reset_workspace()
+        await self._prepare_reviewed_preview()
         capability = self.workspace.isolation
         if not capability.available:
             _log.warning("%s Reason: %s", OPEN_NOTICE, capability.reason)
@@ -572,6 +662,7 @@ class LiveRun:
             self._drain_previews,
             self._close_manager,
             self._client_factory.aclose,
+            *([self._lead_factory.aclose] if self._lead_factory is not None else []),
             self._check_main,
             self.store.close,
         )
@@ -800,6 +891,26 @@ class LiveRun:
 
     # --- Commands -----------------------------------------------------------------------------
 
+    def require_role(self, role: str, profile: ModelProfile | None = None) -> None:
+        """Nested admission precedes effects and is repeated at client construction."""
+        if self.nested_policy is not None:
+            try:
+                self.nested_policy.admit(role, profile)
+            except ValueError as error:
+                raise ApiError("wrong_state", str(error)) from None
+
+    def nested_profile(self, role: str, model: str | None) -> ModelProfile:
+        assert self.nested_policy is not None
+        profile = PROFILES.get(model or self.nested_policy.default_profile)
+        if profile is None:
+            raise ApiError(
+                "invalid_request", "Nested roles require an implemented scripted profile"
+            )
+        try:
+            return self.nested_policy.admit(role, profile)
+        except ValueError as error:
+            raise ApiError("invalid_request", str(error)) from None
+
     def _api_key(self, provider: str) -> str | None:
         settings = self._settings
         return {"meta": settings.meta_api_key, "baseten": settings.baseten_api_key}.get(provider)
@@ -807,6 +918,7 @@ class LiveRun:
     def _default_client(self, profile: ModelProfile, slot: Slot) -> ModelClient:
         """One client per start: the fake model plays its slot's own script, the others call their
         provider's endpoint with their provider's key."""
+        self.require_role("coder", profile)
         if profile.provider == "fake":
             script = self._scripts.get(slot)
             if script is None:
@@ -852,6 +964,8 @@ class LiveRun:
     def _profile_for(self, slot: Slot, model: str | None) -> ModelProfile:
         """The profile a start on `slot` runs: the slot's default, or another offered profile. The
         fake model belongs to the slot that owns its script, so it is no other slot's."""
+        if self.nested_policy is not None:
+            return self.nested_profile("coder", model)
         default = self._slot_profiles[slot]
         name = model or default.id
         if name in UNVERIFIED_PROFILES:
@@ -961,7 +1075,7 @@ class LiveRun:
         if manager is None or self._closing:
             raise ApiError("wrong_state", "the run is not accepting starts")
         request = request.model_copy(deep=True)
-        runtime_answering.admit(request.answering, self.store)
+        runtime_answering.admit(request.answering, self.store, policy=self.nested_policy)
         slot, profile = self._check(request, manager)
         self._slots[slot] = "starting"  # check, reservation and allocation never yield
         self._count += 1
@@ -989,7 +1103,8 @@ class LiveRun:
 
             def before_create() -> None:
                 nonlocal client
-                runtime_answering.admit(task.answering, self.store)
+                runtime_answering.admit(task.answering, self.store, policy=self.nested_policy)
+                self.require_role("coder", profile)
                 client = self._client_factory(profile, slot)
 
             tree = await manager.open(task, profile.id, before_create=before_create)
@@ -1259,6 +1374,10 @@ def create_app(
     *,
     client_factory: ClientFactory | None = None,
     reviewer: ReviewerCall | None = None,
+    tree: Path | None = None,
+    policy: NestedPolicy | None = None,
+    lead_factory: ClientFactory | None = None,
+    preview_factory: Callable[[Workspace], PreviewManager] | None = None,
 ) -> FastAPI:
     """Without `replay`, the live app. `client_factory` builds each agent's model client from its
     profile and slot; tests pass one, and without it each provider gets its own endpoint and key
@@ -1270,7 +1389,15 @@ def create_app(
         preflight_placement(REPO_ROOT)
         preflight_placement(settings.runtime_dir)
     app = (
-        _live_app(settings, client_factory, reviewer)
+        _live_app(
+            settings,
+            client_factory,
+            reviewer,
+            tree=tree,
+            policy=policy,
+            lead_factory=lead_factory,
+            preview_factory=preview_factory,
+        )
         if replay is None
         else _replay_app(settings, replay)
     )
@@ -1286,8 +1413,21 @@ def _live_app(
     settings: Settings,
     client_factory: ClientFactory | None,
     reviewer: ReviewerCall | None = None,
+    *,
+    tree: Path | None = None,
+    policy: NestedPolicy | None = None,
+    lead_factory: ClientFactory | None = None,
+    preview_factory: Callable[[Workspace], PreviewManager] | None = None,
 ) -> FastAPI:
-    live = LiveRun(settings, client_factory, reviewer=reviewer)
+    live = LiveRun(
+        settings,
+        client_factory,
+        reviewer=reviewer,
+        tree=tree,
+        policy=policy,
+        lead_factory=lead_factory,
+        preview_factory=preview_factory,
+    )
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
@@ -1308,7 +1448,9 @@ def _live_app(
         )
     )
     if settings.frontend_dist is not None:
-        add_static(app, settings.frontend_dist)  # after the API routes, so they always win
+        add_static(
+            app, settings.frontend_dist, startup_report=lambda: live.preview_startup_serialized
+        )
     app.state.live = live
     app.state.store = live.store
     app.state.layout = live.layout

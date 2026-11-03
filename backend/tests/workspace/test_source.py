@@ -13,7 +13,13 @@ from oversight.settings import Settings
 from oversight.workspace import Workspace, run_process
 from oversight.workspace.core import INITIAL_DATE, PLUGIN_DIR
 from oversight.workspace.runner import ProcessResult
-from oversight.workspace.source import BOLTONS, OwnSource, select_source, validate_source
+from oversight.workspace.source import (
+    BOLTONS,
+    OVERSIGHT_SELF,
+    OwnSource,
+    select_source,
+    validate_source,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -80,10 +86,12 @@ async def test_outside_reset_preserves_source_and_fixed_initial_commit(tmp_path:
         workspace.release_runtime()
 
 
-@pytest.mark.parametrize("value", ["", "boltons-d31d821", "../source", "boltons"])
+@pytest.mark.parametrize("value", ["", "boltons-d31d821", "oversight-self", "../source", "boltons"])
 async def test_profile_selection(value: str) -> None:
     if value == "":
         assert select_source(value) is None
+    elif value == OVERSIGHT_SELF.name:
+        assert select_source(value) == OVERSIGHT_SELF
     elif value == BOLTONS.name:
         assert select_source(value) == BOLTONS
         assert BOLTONS.extra_requirements == ()

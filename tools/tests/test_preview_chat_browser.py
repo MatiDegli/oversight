@@ -1,9 +1,9 @@
 """The UI runner selects only the Chat journey and cannot append trust evidence."""
 
 import ast
+import hashlib
 from pathlib import Path
 
-import pytest
 from tools import preview_chat_browser
 
 
@@ -22,16 +22,8 @@ def test_runner_bounds_selection_and_no_trust_write() -> None:
     assert "seed_preview_chat" in source
 
 
-@pytest.mark.anyio
-async def test_original_browser_runner_is_byte_identical() -> None:
-    import asyncio
-
-    process = await asyncio.create_subprocess_exec(
-        "git",
-        "show",
-        "9b32a31cac9291997e7b3d3c3c1395ccd46a83ec:tools/preview_browser.py",
-        stdout=asyncio.subprocess.PIPE,
-    )
-    original, _ = await asyncio.wait_for(process.communicate(), 10)
-    assert process.returncode == 0
-    assert original == await asyncio.to_thread(Path("tools/preview_browser.py").read_bytes)
+def test_original_browser_runner_is_byte_identical() -> None:
+    data = Path("tools/preview_browser.py").read_bytes()
+    blob_id = hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
+    # File's blob at 9b32a31c: git rev-parse 9b32a31c:tools/preview_browser.py
+    assert blob_id == "c2d261c9a0f6bf76853a30739dc6b79b0e40190c"
