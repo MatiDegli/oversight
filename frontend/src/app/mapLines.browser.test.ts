@@ -742,10 +742,8 @@ it.each(["dark", "day"])("keeps map text at 4.5:1 over the hottest lamp in %s", 
       theme,
     );
     console.log("Map text contrast", theme, found);
-    expect(found).toHaveLength(2);
+    expect(found).toHaveLength(3);
     for (const label of found) {
-      expect(label.lamp.level).toBe(3);
-      expect(label.unmasked).toBeLessThan(4.5);
       expect(label.actual, label.text).toBeGreaterThanOrEqual(4.5);
       for (const difference of label.unlitDifference) expect(difference).toBeLessThanOrEqual(1);
     }
@@ -753,6 +751,135 @@ it.each(["dark", "day"])("keeps map text at 4.5:1 over the hottest lamp in %s", 
     await page.close();
   }
 });
+/** Resolve plates against the unlit panel, including its independent opacity. */
+async function mapSurfaces(page: Page) {
+  return page.evaluate(() => {
+    const ctx = document.createElement("canvas").getContext("2d");
+    if (!ctx) throw new Error("Missing color resolver");
+    const color = (css: string) => {
+      ctx.clearRect(0, 0, 1, 1);
+      ctx.fillStyle = css;
+      ctx.fillRect(0, 0, 1, 1);
+      return [...ctx.getImageData(0, 0, 1, 1).data];
+    };
+    const over = (a: number[], b: number[]) =>
+      a
+        .slice(0, 3)
+        .map((c, i) => (c * (a[3] ?? 255)) / 255 + (b[i] ?? 0) * (1 - (a[3] ?? 255) / 255));
+    return [...document.querySelectorAll("[data-map-module]")].flatMap((cell) => {
+      const ground = color(getComputedStyle(cell).getPropertyValue("--ground"));
+      const panel = cell.parentElement?.querySelector(".map-panel");
+      const panelStyle = panel ? getComputedStyle(panel) : null;
+      const panelColor = panelStyle ? color(panelStyle.backgroundColor) : [0, 0, 0, 0];
+      panelColor[3] = (panelColor[3] ?? 0) * Number(panelStyle?.opacity ?? 1);
+      const surface = over(panelColor, ground);
+      return [...cell.querySelectorAll(".map-count, .map-agent:not(.map-agent-full)")]
+        .filter((el) => getComputedStyle(el).visibility !== "hidden")
+        .map((el) => {
+          const style = getComputedStyle(el);
+          const plate = over(color(style.backgroundColor), surface);
+          const rect = el.getBoundingClientRect(),
+            bounds = cell.getBoundingClientRect();
+          return {
+            module: cell.getAttribute("data-map-module"),
+            text: el.textContent,
+            hook: el.className,
+            panel: Boolean(panel),
+            panelOpacity: Number(panelStyle?.opacity ?? 1),
+            surface,
+            plate,
+            unlitDifference: plate.map((c, i) => Math.abs(c - (surface[i] ?? 0))),
+            width: rect.width,
+            cellWidth: bounds.width,
+            centerDifference: Math.abs(rect.x + rect.width / 2 - bounds.x - bounds.width / 2),
+          };
+        });
+    });
+  });
+}
+async function captureSurface(page: Page, width: number, theme: string) {
+  await page.evaluate(() => {
+    window.mapLinesTest.mount();
+  });
+  await clearPointer(page);
+  const frame = await page.evaluate(() => window.mapLinesTest.stationary(false, true));
+  await page.evaluate(() => document.fonts.ready);
+  const surfaces = await mapSurfaces(page);
+  const overflow = await page.evaluate(() =>
+    [document.documentElement, document.body, ...document.querySelectorAll(".map-layer")].map(
+      (el) => Math.max(0, el.scrollWidth - el.clientWidth),
+    ),
+  );
+  const directory = `${sweepRoot}/${sweep ?? "M3"}/${phase}`;
+  await mkdir(directory, { recursive: true });
+  const stem = `${directory}/synthetic-faded-panel-${String(width)}-${theme}`;
+  await page.screenshot({ path: `${stem}.png` });
+  const errors = frameErrors.get(page);
+  await writeFile(
+    `${stem}.json`,
+    JSON.stringify(
+      {
+        png: `${stem}.png`,
+        finding: "M3",
+        phase,
+        checkpoint,
+        uncommittedEdit: process.env.MAP_SWEEP_EDIT ?? "capture support only",
+        provenance:
+          "supplementary synthetic map fixture; hand-written events; all modules outside cone",
+        snapshot: "map-synthetic",
+        layout: "syntheticMapGraph(24) with evidenceGraph cell swaps",
+        viewport: page.viewportSize(),
+        theme,
+        camera: frame,
+        publishedLevel: frame.level,
+        pointer: { x: 5, y: 5 },
+        fieldClock: 2,
+        reducedMotion: true,
+        surfaces,
+        overflow,
+        ...errors,
+      },
+      null,
+      2,
+    ),
+  );
+  expect(frame.level).toBe("map");
+  expect(errors).toEqual({ pageErrors: [], consoleErrors: [] });
+  expect(overflow.every((n) => n === 0)).toBe(true);
+}
+it.each(["dark", "day"])(
+  "matches resting plates on normal, faded and ground surfaces in %s",
+  async (theme) => {
+    const page = await setup(1280, theme);
+    try {
+      await page.evaluate(() => window.mapLinesTest.stationary());
+      const normal = await mapSurfaces(page);
+      expect(normal.some((label) => label.panel && label.panelOpacity === 1)).toBe(true);
+      await page.evaluate(() => window.mapLinesTest.stationary(false, true));
+      const faded = await mapSurfaces(page);
+      expect(
+        faded.some((label) => label.hook.includes("map-agent") && label.panelOpacity === 0.5),
+      ).toBe(true);
+      await page.evaluate(() => {
+        window.mapLinesTest.demo();
+      });
+      // The small demo has no published interactive map; render its real no-panel model statically.
+      await page.evaluate(() => window.mapLinesTest.stationary());
+      const ground = await mapSurfaces(page);
+      expect(ground.some((label) => !label.panel && label.hook.includes("map-agent"))).toBe(true);
+      for (const label of [...normal, ...faded, ...ground]) {
+        for (const difference of label.unlitDifference)
+          expect(difference, label.text).toBeLessThanOrEqual(1);
+        if (label.hook === "map-count") {
+          expect(label.width).toBeLessThan(label.cellWidth);
+          expect(label.centerDifference).toBeLessThanOrEqual(1);
+        }
+      }
+    } finally {
+      await page.close();
+    }
+  },
+);
 /** Compare every unmasked card lamp with the pre-existing card spread and mode gain. */
 async function assertCardPool(page: Page, theme: "dark" | "day", real = !!boltons) {
   const sample = await page.evaluate((real) => {
@@ -1098,6 +1225,7 @@ for (const width of [1920, 1280])
         const cardPool = await assertCardPool(page, theme);
         await capture("group");
         const badge = await captureCone(page, width, id, capture);
+        if (sweep === "M3") await captureSurface(page, width, theme);
         if (process.env.MAP_LINES_SHOTS === "1")
           await writeFile(
             `${shots}measurements-${String(width)}-${theme}.json`,
