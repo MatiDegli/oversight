@@ -4414,12 +4414,13 @@ source checkout, with the caller's runner, environment and timeout. Missing conf
 failed, timed-out, truncated or malformed listings refuse inspection. Refusals name only the
 config file and key, never its value.
 
-Refuse `include.path`, `includeIf.*.path` and absolute, UNC or drive-prefixed
-`core.excludesFile` values: source inspection must not follow repository-configured arbitrary
-files, especially UNC paths that can initiate Windows SMB authentication. Ordinary core, remote
-and branch settings and relative excludes files remain accepted. Pinned `rev-parse` and `status`
-also disable fsmonitor and hooks without overriding checkout line-ending or symlink settings.
-Fresh runtime repositories still use `git init` and never inherit the original config or hooks.
+Refuse `include.path`, `includeIf.*.path` and `core.excludesFile` values that are absolute, UNC,
+drive-prefixed or start with `~` or `%(prefix)`: source inspection must not follow
+repository-configured arbitrary files, especially UNC paths that can initiate Windows SMB
+authentication. Ordinary core, remote and branch settings and relative excludes files remain
+accepted. Pinned `rev-parse` and `status` also disable fsmonitor and hooks without overriding
+checkout line-ending or symlink settings. Fresh runtime repositories still use `git init` and never
+inherit the original config or hooks.
 
 Residual risk: a filter driver planted in the pinned checkout's config needs local write access
 and stays out of scope. The existing concurrent source-replacement races remain accepted.

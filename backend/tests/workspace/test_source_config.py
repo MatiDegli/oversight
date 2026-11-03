@@ -1,15 +1,19 @@
 """Source config is listed in isolation before any query can act on its settings."""
 
+import asyncio
 import os
 import sys
+import tempfile
+import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from oversight.workspace.runner import ProcessResult, run_process
-from oversight.workspace.source import BOLTONS, SOURCE_GIT_ENV, validate_source
+from oversight.workspace.locks import offload
+from oversight.workspace.runner import NtCleanupError, ProcessResult, run_process
+from oversight.workspace.source import BOLTONS, FETCH_HINT, SOURCE_GIT_ENV, validate_source
 from oversight.workspace.source_config import MAX_CONFIG_OUTPUT, check_source_config
 from oversight.workspace.source_nt import inventory
 
@@ -92,6 +96,196 @@ async def test_missing_configs_need_no_git(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("kind", ["file", "directory", "dangling-symlink"])
+@pytest.mark.parametrize("config_present", [False, True])
+async def test_pinned_commondir_refuses_before_any_spawn(
+    tmp_path: Path, kind: str, config_present: bool
+) -> None:
+    git_dir = BOLTONS.checkout(tmp_path) / ".git"
+    git_dir.mkdir(parents=True)
+    if config_present:
+        (git_dir / "config").touch()
+    commondir = git_dir / "commondir"
+    if kind == "file":
+        commondir.write_text("private-common-directory\n")
+    elif kind == "directory":
+        commondir.mkdir()
+    else:
+        try:
+            commondir.symlink_to(tmp_path / "private-missing-common-directory")
+        except OSError:
+            pytest.skip("symlinks unavailable")
+
+    async def forbidden(*args: object, **kwargs: object) -> ProcessResult:
+        pytest.fail("Git spawned before refusing commondir")
+
+    with pytest.raises(ValueError, match="unsafe checkout") as error:
+        await validate_source(BOLTONS, tmp_path, spawn=forbidden)
+    assert FETCH_HINT in str(error.value)
+    assert BOLTONS.name in str(error.value)
+    assert "private-" not in str(error.value)
+
+
+@pytest.mark.parametrize("relative", [False, True])
+async def test_both_listings_use_empty_cwd_and_parent_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative: bool
+) -> None:
+    git_dir = tmp_path / "source/.git"
+    git_dir.mkdir(parents=True)
+    for filename in ("config", "config.worktree"):
+        (git_dir / filename).touch()
+    supplied_env = {
+        **SOURCE_GIT_ENV,
+        "GIT_DIR": str(git_dir),
+        "GIT_WORK_TREE": str(git_dir.parent),
+        "GIT_CEILING_DIRECTORIES": str(tmp_path.parent),
+        "CALLER_SETTING": "retained",
+    }
+    before = supplied_env.copy()
+    calls: list[str] = []
+    directories: list[Path] = []
+    event_loop_thread = threading.get_ident()
+    original_temporary_directory = tempfile.TemporaryDirectory
+
+    def temporary_directory(*args, **kwargs):
+        assert threading.get_ident() != event_loop_thread
+        return original_temporary_directory(*args, **kwargs)
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", temporary_directory)
+
+    async def recording(
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: Mapping[str, str] | None = None,
+        output_cap: int = 262144,
+    ) -> ProcessResult:
+        assert argv[0] == "caller-git"
+        path = Path(argv[argv.index("--file") + 1])
+        assert path.is_absolute() and path.parent == git_dir
+        calls.append(path.name)
+        assert not any(arg.startswith("--git-dir") for arg in argv)
+        assert cwd == await offload(cwd.resolve)
+        assert await offload(lambda: list(cwd.iterdir())) == []
+        assert not cwd.is_relative_to(git_dir.parent)
+        assert cwd not in directories and all(not previous.exists() for previous in directories)
+        directories.append(cwd)
+        assert env == {
+            **SOURCE_GIT_ENV,
+            "GIT_CEILING_DIRECTORIES": str(cwd.parent),
+            "CALLER_SETTING": "retained",
+        }
+        assert timeout_s == 7.5
+        assert output_cap == MAX_CONFIG_OUTPUT
+        return ProcessResult(0, "", "", False, False, 0)
+
+    monkeypatch.chdir(tmp_path)
+    await check_source_config(
+        Path("source/.git") if relative else git_dir,
+        git="caller-git",
+        spawn=recording,
+        env=supplied_env,
+        time_left=lambda: 7.5,
+        refuse=ValueError,
+    )
+    assert calls == ["config", "config.worktree"]
+    assert supplied_env == before
+    assert all(not directory.exists() for directory in directories)
+
+
+@pytest.mark.parametrize("failure", [asyncio.CancelledError, NtCleanupError])
+async def test_listing_directory_removed_when_spawn_raises(tmp_path: Path, failure) -> None:
+    git_dir = tmp_path / "source/.git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "config").touch()
+    directories: list[Path] = []
+
+    async def interrupted(argv, *, cwd, **kwargs) -> ProcessResult:
+        directories.append(cwd)
+        raise failure("interrupted")
+
+    with pytest.raises(failure):
+        await check_source_config(
+            git_dir,
+            git="git",
+            spawn=interrupted,
+            env=SOURCE_GIT_ENV,
+            time_left=lambda: 10,
+            refuse=ValueError,
+        )
+    assert len(directories) == 1
+    assert all(not directory.exists() for directory in directories)
+
+
+async def test_temporary_root_inside_source_is_refused_before_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git_dir = tmp_path / "source/.git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "config").touch()
+    monkeypatch.setattr(tempfile, "tempdir", str(git_dir.parent))
+
+    async def forbidden(*args, **kwargs) -> ProcessResult:
+        pytest.fail("Git spawned with a temporary directory inside the source")
+
+    with pytest.raises(ValueError, match="cannot list Git config"):
+        await check_source_config(
+            git_dir,
+            git="git",
+            spawn=forbidden,
+            env=SOURCE_GIT_ENV,
+            time_left=lambda: 10,
+            refuse=ValueError,
+        )
+    assert list(git_dir.parent.iterdir()) == [git_dir]
+
+
+async def test_real_git_enclosing_repository_cannot_inject_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    enclosing = tmp_path / "enclosing"
+    enclosing.mkdir()
+    result = await run_process(
+        ["git", "init", "-q"], cwd=enclosing, timeout_s=10, env=SOURCE_GIT_ENV
+    )
+    assert result.returncode == 0, result.stderr
+    (enclosing / ".git/config").write_text("[private-invalid-section\n")
+    temporary_root = enclosing / "listing"
+    temporary_root.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(temporary_root))
+    git_dir = tmp_path / "source/.git"
+    git_dir.mkdir(parents=True)
+    for filename in ("config", "config.worktree"):
+        (git_dir / filename).write_text("[core]\nexcludesFile = local-ignore\n")
+    directories: list[Path] = []
+
+    async def guarded(argv, *, cwd, env=None, **kwargs) -> ProcessResult:
+        assert env is not None
+        assert cwd.parent == temporary_root.resolve()
+        directories.append(cwd)
+        # With no ceiling, discovery reaches the enclosing repository's invalid config.
+        control = await run_process(
+            argv,
+            cwd=cwd,
+            env={k: v for k, v in env.items() if k != "GIT_CEILING_DIRECTORIES"},
+            **kwargs,
+        )
+        assert control.returncode != 0
+        assert "bad config" in control.stderr and ".git/config" in control.stderr
+        return await run_process(argv, cwd=cwd, env=env, **kwargs)
+
+    await check_source_config(
+        git_dir,
+        git="git",
+        spawn=guarded,
+        env={**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(tmp_path)},
+        time_left=lambda: 10,
+        refuse=ValueError,
+    )
+    assert len(directories) == 2 and all(not directory.exists() for directory in directories)
+
+
 @pytest.mark.parametrize("caller", ["inventory", "validation"])
 @pytest.mark.parametrize("filename", ["config", "config.worktree"])
 @pytest.mark.parametrize(
@@ -101,6 +295,7 @@ async def test_refusal_precedes_all_source_queries(
     tmp_path: Path, caller: str, filename: str, fault: str
 ) -> None:
     calls: list[tuple[str, ...]] = []
+    directories: list[Path] = []
     private = "private-value-must-not-appear"
     result = ProcessResult(0, f"include.path\n{private}\0", "", False, False, 0)
     if fault != "include":
@@ -131,17 +326,20 @@ async def test_refusal_precedes_all_source_queries(
             "--null",
             "--list",
         )
-        assert cwd == config.parent.parent.parent
+        assert await offload(lambda: list(cwd.iterdir())) == []
+        assert not cwd.is_relative_to(config.parent.parent)
+        directories.append(cwd)
         assert 0 < timeout_s <= (10 if caller == "inventory" else 30)
         assert output_cap == MAX_CONFIG_OUTPUT
         assert env is not None
+        assert env["GIT_CEILING_DIRECTORIES"] == str(cwd.parent)
         assert env["GIT_CONFIG_NOSYSTEM"] == "1" and env["GIT_OPTIONAL_LOCKS"] == "0"
         # Git must not be pointed at the original while it lists the original's config.
         assert "GIT_DIR" not in env and "GIT_WORK_TREE" not in env
         if caller == "inventory":
             assert env["GIT_CONFIG_GLOBAL"] == "nul"
         else:
-            assert env == SOURCE_GIT_ENV
+            assert env == {**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(cwd.parent)}
         if fault in {"oserror", "raised-timeout"}:
             raise (OSError if fault == "oserror" else TimeoutError)(private)
         return result
@@ -161,6 +359,7 @@ async def test_refusal_precedes_all_source_queries(
         with pytest.raises(ValueError) as error:
             await validate_source(BOLTONS, tmp_path, spawn=recording)
     assert len(calls) == 1
+    assert all(not directory.exists() for directory in directories)
     assert private not in str(error.value)
     assert f".git/{filename}" in str(error.value)
 

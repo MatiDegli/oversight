@@ -3,7 +3,9 @@
 import ntpath
 import os
 import stat
-from collections.abc import Callable, Mapping
+import tempfile
+from collections.abc import AsyncGenerator, Callable, Mapping
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from oversight.workspace.locks import offload
@@ -32,6 +34,26 @@ def refused_key(key: str, value: str) -> str | None:
     return None
 
 
+@asynccontextmanager
+async def _listing_directory(source_root: Path) -> AsyncGenerator[Path]:
+    directory: tempfile.TemporaryDirectory[str] | None = None
+
+    def create() -> Path:
+        nonlocal directory
+        temporary_root = Path(tempfile.gettempdir()).resolve()
+        if temporary_root.is_relative_to(source_root.resolve()):
+            raise OSError("temporary directory is inside the source checkout")
+        directory = tempfile.TemporaryDirectory(prefix="oversight-config-", dir=temporary_root)
+        return Path(directory.name).resolve()
+
+    try:
+        yield await offload(create)
+    finally:
+        # Retain ownership even when cancellation arrives during creation or resolution.
+        if directory is not None:
+            await offload(directory.cleanup)
+
+
 async def check_source_config(
     git_dir: Path,
     *,
@@ -55,22 +77,26 @@ async def check_source_config(
         if not stat.S_ISREG(mode):
             raise refuse(f"{label}: unsafe Git config file")
         try:
-            result = await spawn(
-                [
-                    git,
-                    "--no-pager",
-                    "config",
-                    "--file",
-                    str(path),
-                    "--no-includes",
-                    "--null",
-                    "--list",
-                ],
-                cwd=git_dir.parent.parent,
-                env=listing_env,
-                timeout_s=time_left(),
-                output_cap=MAX_CONFIG_OUTPUT,
-            )
+            async with _listing_directory(git_dir.parent) as listing_cwd:
+                # The ceiling is the empty cwd's parent, so discovery checks only the empty cwd.
+                listing_env["GIT_CEILING_DIRECTORIES"] = str(listing_cwd.parent)
+                config_path = await offload(path.absolute)
+                result = await spawn(
+                    [
+                        git,
+                        "--no-pager",
+                        "config",
+                        "--file",
+                        str(config_path),
+                        "--no-includes",
+                        "--null",
+                        "--list",
+                    ],
+                    cwd=listing_cwd,
+                    env=listing_env,
+                    timeout_s=time_left(),
+                    output_cap=MAX_CONFIG_OUTPUT,
+                )
         except NtCleanupError:
             raise  # Keep the runner's cleanup signal intact across the COPY refusal boundary.
         except OSError:
