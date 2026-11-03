@@ -1,6 +1,7 @@
 """Public native composition fixtures; skipped Linux cases are never NT acceptance."""
 
 import importlib
+import os
 import sys
 import tempfile
 from functools import wraps
@@ -12,6 +13,8 @@ from live_helpers import live_settings
 
 from oversight import app
 from oversight.workspace import SuiteUnavailable, base_probe_checkout, core
+from oversight.workspace.files import open_nt
+from oversight.workspace.metadata_io import nt_token
 
 from . import test_platform_windows as process
 
@@ -28,6 +31,18 @@ pytestmark = [
 def long_temp_dir() -> Path:
     """Keep paths short while expanding Windows 8.3 aliases before native validation."""
     return Path(tempfile.mkdtemp(prefix="ov-")).resolve()
+
+
+@pytest.mark.parametrize("name", ["tool.exe", "make.bat", "run.cmd", "plain.txt"])
+def test_native_named_file_token_matches_handle(name):
+    root = long_temp_dir()
+    try:
+        path = root / name
+        path.write_bytes(b"fixture\r\n")
+        with open_nt(path) as handle:
+            assert nt_token(os.lstat(path)) == nt_token(os.fstat(handle.fileno()))
+    finally:
+        driver.cleanup(root)
 
 
 def venv_link_diagnostics(venv: Path) -> list[str]:

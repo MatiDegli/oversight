@@ -59,10 +59,11 @@ def nt_guard(path: Path, deadline: float, *, working: bool = False) -> os.stat_r
 def nt_token(info: os.stat_result) -> tuple[int, ...]:
     # CPython 3.12 NT lstat uses creation time for ctime, while fstat uses ChangeTime.
     # Birth time is comparable across both. Readers check handle ChangeTime separately.
+    # CPython's update_st_mode_from_path adds execute bits by name; path checks pin the name.
     return (
         info.st_dev,
         info.st_ino,
-        info.st_mode,
+        info.st_mode & ~0o111,
         info.st_nlink,
         info.st_size,
         info.st_mtime_ns,
@@ -141,10 +142,11 @@ def read_at(
     )
     with os.fdopen(opened_fd, "rb") as handle:
         opened = os.fstat(handle.fileno())
-        if (opened.st_dev, opened.st_ino, opened.st_mode, opened.st_nlink) != (
+        mode_mask = ~0o111 if isinstance(fd, Path) else -1
+        if (opened.st_dev, opened.st_ino, opened.st_mode & mode_mask, opened.st_nlink) != (
             info.st_dev,
             info.st_ino,
-            info.st_mode,
+            info.st_mode & mode_mask,
             1,
         ):
             raise IntegrityError(f"{kind} changed during open", str(path))
