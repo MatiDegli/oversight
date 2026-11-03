@@ -68,11 +68,23 @@ export function createPreviewHost(
   // The panel proxy masks the frame during navigation/Stop without changing controller evidence.
   let frameHidden = false;
   let cached = controller.snapshot();
+  let observed = cached;
+  let masked: typeof cached | undefined;
   const panelListeners = new Set<() => void>();
   const notifyPanel = () => {
     const view = controller.snapshot();
-    cached = frameHidden ? Object.freeze({ ...view, frameUrl: null }) : view;
-    for (const listener of panelListeners) listener();
+    if (view !== observed) {
+      observed = view;
+      masked = undefined;
+    }
+    const next =
+      frameHidden && view.frameUrl !== null
+        ? (masked ??= Object.freeze({ ...view, frameUrl: null }))
+        : view;
+    if (next !== cached) {
+      cached = next;
+      for (const listener of panelListeners) listener();
+    }
     if (
       closeRequested &&
       !view.owned &&

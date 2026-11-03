@@ -3,6 +3,7 @@ import type { LeadView, ServerEvent } from "@contracts";
 import fixture from "../../../fixtures/views/reference-cases.json";
 import { applyEvent, createInitialState } from "./index";
 import { resolvePreviewReference } from "./previewReferences";
+import { resolveViewReferences } from "./viewReferences";
 
 const events = fixture.events as ServerEvent[];
 function setup() {
@@ -80,4 +81,24 @@ it("refuses a suggestion before readiness, and a head changed without matching p
   const change = required(state.changes["change-1"]);
   change.proposal = { ...required(change.proposal), head_commit: "different-head" };
   expect(resolvePreviewReference(state, request).candidate).toBeNull();
+});
+
+it("retains result identities for unchanged evidence and revalidates after invalidation", () => {
+  const { state, request } = setup();
+  const eligible = resolvePreviewReference(state, request);
+  const targets = resolveViewReferences(state, request);
+  expect(resolvePreviewReference(state, request)).toBe(eligible);
+  expect(resolvePreviewReference(state, request).candidate).toBe(eligible.candidate);
+  expect(resolveViewReferences(state, request)).toBe(targets);
+
+  // Even an in-place fixture update must invalidate a previously eligible result.
+  required(state.changes["change-1"]).fileUpdateSeq = { "a.py": state.lastSeq };
+  const unavailable = resolvePreviewReference(state, request);
+  expect(unavailable).not.toBe(eligible);
+  expect(unavailable.candidate).toBeNull();
+  expect(resolvePreviewReference(state, request)).toBe(unavailable);
+  const empty = resolveViewReferences(state, request);
+  expect(empty).toEqual([]);
+  expect(empty).not.toBe(targets);
+  expect(resolveViewReferences(state, request)).toBe(empty);
 });

@@ -92,3 +92,18 @@ it("does not infer an opening turn from an incomplete status prefix", () => {
   current.status.revision = 4;
   expect(groupLeadPreviews([current, view(2), reply(3)])[1]?.fallback).toBe(true);
 });
+
+it("retains projection identity for an unchanged timeline and regroups a new reply prefix", () => {
+  const prefix = [status(1), view(2)];
+  const fallback = groupLeadPreviews(prefix);
+  expect(groupLeadPreviews(prefix)).toBe(fallback);
+  expect(groupLeadPreviews(prefix)[1]).toBe(fallback[1]);
+
+  const extended = [...prefix, reply(3)];
+  const grouped = groupLeadPreviews(extended);
+  expect(grouped).not.toBe(fallback);
+  expect(grouped[1]?.previews).toEqual([prefix[1]]);
+  expect(groupLeadPreviews(extended)).toBe(grouped);
+  expect(groupLeadPreviews(prefix)).toBe(fallback);
+  expect(fallback[1]?.fallback).toBe(true);
+});

@@ -4,9 +4,33 @@ import type { State } from "./types";
 export type ResolvedPreview = StartPreview & { change_id: string };
 export type PreviewResolution =
   { candidate: ResolvedPreview; reason: null } | { candidate: null; reason: string };
+const resolutions = new WeakMap<State, WeakMap<LeadView, PreviewResolution>>();
 
 /** Resolve the observed proposal, never a newer candidate carrying the same agent id. */
 export function resolvePreviewReference(state: State, request: LeadView): PreviewResolution {
+  // Revalidate every read, including activation after drainage. Only the returned identity is cached.
+  const next = resolveCurrentPreview(state, request);
+  let requests = resolutions.get(state);
+  if (!requests) {
+    requests = new WeakMap();
+    resolutions.set(state, requests);
+  }
+  const previous = requests.get(request);
+  if (
+    previous &&
+    previous.reason === next.reason &&
+    previous.candidate?.run_id === next.candidate?.run_id &&
+    previous.candidate?.agent_id === next.candidate?.agent_id &&
+    previous.candidate?.change_id === next.candidate?.change_id &&
+    previous.candidate?.revision === next.candidate?.revision &&
+    previous.candidate?.head_commit === next.candidate?.head_commit
+  )
+    return previous;
+  requests.set(request, next);
+  return next;
+}
+
+function resolveCurrentPreview(state: State, request: LeadView): PreviewResolution {
   const unavailable = (reason: string): PreviewResolution => ({ candidate: null, reason });
   if (request.view.kind !== "preview") return unavailable("This is not a preview reference.");
   if (!state.run || state.gap || request.through_seq > state.lastSeq)

@@ -145,3 +145,32 @@ it("duplicate activation and navigation during start drain the late receipt with
   expect(host.controller.snapshot().frameUrl).toBeNull();
   host.dispose();
 });
+
+it("returns cached slot and panel snapshots between changes, including a masked frame", async () => {
+  const { host, request, state } = setup();
+  const listener = vi.fn();
+  const unsubscribe = host.controller.subscribe(listener);
+  const initial = host.controller.snapshot();
+  expect(host.controller.snapshot()).toBe(initial);
+  expect(host.snapshot()).toBe(false);
+  await host.setIdentity({ run: state.run?.run_id ?? "", source: "live" });
+  expect(host.controller.snapshot()).toBe(initial);
+  expect(listener).not.toHaveBeenCalled();
+
+  await host.activate(request);
+  const ready = host.controller.snapshot();
+  expect(ready.frameUrl).not.toBeNull();
+  expect(host.controller.snapshot()).toBe(ready);
+  expect(host.snapshot()).toBe(true);
+
+  const closing = host.navigate();
+  const masked = host.controller.snapshot();
+  expect(masked.frameUrl).toBeNull();
+  expect(host.controller.snapshot()).toBe(masked);
+  await closing;
+  const closed = host.controller.snapshot();
+  expect(host.controller.snapshot()).toBe(closed);
+  expect(host.snapshot()).toBe(false);
+  unsubscribe();
+  host.dispose();
+});

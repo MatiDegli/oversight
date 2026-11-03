@@ -2,9 +2,12 @@ import type { LeadEntry } from "./selectConversation";
 
 export const unmatchedPreview = "Preview suggested; no matching lead reply is available.";
 export type PreviewGroup = { entry: LeadEntry; previews: LeadEntry[]; fallback: boolean };
+const projections = new WeakMap<readonly LeadEntry[], PreviewGroup[]>();
 
 /** Presentation only. The retained timeline and every non-preview row keep their order. */
 export function groupLeadPreviews(entries: readonly LeadEntry[]): PreviewGroup[] {
+  const previous = projections.get(entries);
+  if (previous) return previous;
   const attached = new Map<number, LeadEntry[]>();
   const grouped = new Set<number>();
   for (const entry of entries) {
@@ -65,11 +68,13 @@ export function groupLeadPreviews(entries: readonly LeadEntry[]): PreviewGroup[]
     attached.set(reply.seq, [...(attached.get(reply.seq) ?? []), entry]);
     grouped.add(entry.seq);
   }
-  return entries
+  const result = entries
     .filter((entry) => !grouped.has(entry.seq))
     .map((entry) => ({
       entry,
       previews: attached.get(entry.seq) ?? [],
       fallback: entry.kind === "lead-view" && entry.event.payload.view.kind === "preview",
     }));
+  projections.set(entries, result);
+  return result;
 }

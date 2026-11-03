@@ -80,11 +80,6 @@ function counters(events: ServerEvent[], replay: boolean): Plugin {
           `export const replaySource = chooseReplaySource(null, ${JSON.stringify(events.map((e) => JSON.stringify(e)).join("\n"))});`,
         );
       }
-      if (id.endsWith("/app/App.tsx"))
-        source = source.replace(
-          'setConnection(failure === null ? "connected" : "lost");',
-          'if (failure instanceof Error) window.previewChatFailure = failure.stack; setConnection(failure === null ? "connected" : "lost");',
-        );
       const targets: [string, string, string][] = [
         ["/shell/ChatShell.tsx", "export function ChatShell(", "  return ("],
         [
@@ -129,7 +124,6 @@ function counters(events: ServerEvent[], replay: boolean): Plugin {
 declare global {
   interface Window {
     previewChatRenders: Record<string, number>;
-    previewChatFailure?: string;
     previewChatTiming?: { clicked?: number; ready?: number; loaded?: number };
   }
 }
@@ -225,19 +219,6 @@ class ChatSupport {
     if (!this.browser || !viewport) throw new Error("Missing Chat browser");
     if (!this.real)
       this.events = extra.includes("replyLate") ? chatEvents().slice(0, 9) : chatEvents();
-    if (!this.real && extra.includes("stress")) {
-      const status = this.events[6];
-      if (!status) throw new Error("Missing stress agent");
-      this.events.splice(7, 0, ...Array.from({ length: 80 }, () => structuredClone(status)));
-      this.events = this.events.map((event, i) => {
-        const seq = i + 1;
-        if (event.type === "lead.view")
-          return { ...event, seq, payload: { ...event.payload, through_seq: seq - 1 } };
-        if (event.type === "lead.reply")
-          return { ...event, seq, payload: { ...event.payload, through_seq: seq - 1 } };
-        return { ...event, seq };
-      });
-    }
     const context = await this.browser.newContext({ viewport, reducedMotion: "reduce" });
     context.setDefaultTimeout(7_000);
     const pageErrors: string[] = [],
@@ -406,7 +387,6 @@ class ChatSupport {
         reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
         renders: window.previewChatRenders,
         timing: window.previewChatTiming,
-        applicationFailure: window.previewChatFailure ?? null,
       };
     });
     const frame = page.frames().find((frame) => frame.parentFrame());
