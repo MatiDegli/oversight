@@ -4419,7 +4419,10 @@ Native compilation, nested Jobs, console delivery, rendering and acceptance cann
 in this Linux session. See [desktop status](desktop/README.md) and the
 [prospective runbook](README.md#future-tauri-shell-runbook).
 
-Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed in license-report.md, used unmodified.
+Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed below, used unmodified.
+MPL-2.0: none.
+Unicode-3.0: unicode-ident
+Zlib: none.
 
 The granted crates present in `desktop/Cargo.lock`, grouped by license, are:
 
