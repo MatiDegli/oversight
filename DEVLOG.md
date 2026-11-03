@@ -82,3 +82,6 @@ One line per day, in Argentina time (ART).
   Composer also exceeds 80 lines:
   its shared draft hooks and active/ended command surfaces stay together to preserve hook order
   and make the terminal early return auditable. These size exceptions remain for reviewer judgment.
+  Added demo/Boltons run_tests queue diagnostics: call-scoped lock contention, throttled path-free
+  backend logs, cancellation-safe elapsed callbacks and server-only completed/interrupted step
+  summaries, with deterministic queue clocks and fake-model HTTP Stop/deadline/no-progress proofs.

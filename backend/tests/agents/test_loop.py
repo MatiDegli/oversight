@@ -2,7 +2,7 @@
 
 import asyncio
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 import httpx2 as httpx
 import openai
@@ -396,3 +396,218 @@ async def test_a_cancelled_suite_reaches_the_sink_with_partial_evidence(
     assert recorder.suites[0].result.outcome == "timeout"
     assert recorder.suites[0].tested_tree is not None and recorder.suites[0].problems
     assert steps(recorder)[0].error == "interrupted before it finished"
+
+
+def queue_suite(outcome: Literal["passed", "failed", "error", "timeout"] = "passed"):
+    from oversight.workspace import SuiteRun
+    from oversight_contracts.events import CaseResult, SuiteResult
+
+    return SuiteRun(
+        SuiteResult(
+            outcome=outcome,
+            passed=1,
+            failed=int(outcome == "failed"),
+            skipped=0,
+            duration_ms=10,
+            failed_tests=["tests/test_x.py::test_bad"] if outcome == "failed" else [],
+        ),
+        "same suite output",
+        cases=(CaseResult(test_id="tests/test_x.py::test_ok", outcome="passed"),),
+        problems=(),
+    )
+
+
+@pytest.mark.parametrize(
+    "mode", ["passed", "failed", "timeout", "unavailable", "cancelled", "partial"]
+)
+async def test_run_tests_summary_queue_and_budget(small_tree, monkeypatch, mode):
+    import re
+
+    from oversight.agents.client import CALL_SCOPE
+    from oversight.workspace import SuiteInterrupted, SuiteUnavailable
+
+    expected_budget = []
+    suite = queue_suite(mode if mode in {"passed", "failed", "timeout"} else "passed")
+    calls = 0
+
+    async def run_tests(self, tree, *, timeout_s, on_queue_wait):
+        nonlocal calls
+        calls += 1
+        on_queue_wait(0.0)
+        on_queue_wait(2.5 if calls == 1 else 0.0)
+        if calls == 1:
+            await asyncio.sleep(0.12)  # the remaining budget must use the active clock
+        scope = CALL_SCOPE.get()
+        assert scope is not None and scope.deadline is not None
+        expected_budget.append(scope.deadline - asyncio.get_running_loop().time())
+        if calls == 1:
+            if mode == "unavailable":
+                raise SuiteUnavailable(suite, OSError("suite unavailable"))
+            if mode == "cancelled":
+                task = asyncio.current_task()
+                assert task is not None
+                task.cancel()
+                await asyncio.sleep(0)
+            if mode == "partial":
+                raise SuiteInterrupted(suite)
+        return suite
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    model = script(
+        [("run_tests", {})],
+        [("run_tests", {})],
+        [("list_files", {})],
+        [("finish", {"summary": "ok"})],
+    )
+    recorder = Recorder()
+    run = make_run(small_tree, model, recorder)
+    if mode in {"cancelled", "partial"}:
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.create_task(run.run())
+    else:
+        assert (await run.run()).state == "ready_for_review"
+    first = steps(recorder)[0]
+    match = re.search(r"Queued 2.5 s; round budget remaining ([\d.]+) s\.$", first.summary)
+    assert match and float(match[1]) == pytest.approx(expected_budget[0], abs=0.051)
+    assert "Queued" not in (first.error or "")
+    assert recorder.suites == (
+        [] if mode == "cancelled" else [suite] if mode == "partial" else [suite, suite]
+    )
+    if mode in {"cancelled", "partial"}:
+        assert first.result == "error" and first.error == "interrupted before it finished"
+        assert "sink.proposed" not in recorder.kinds()
+    else:
+        assert "Queued 0.0 s;" in steps(recorder)[1].summary
+        assert all("Queued" not in step.summary for step in steps(recorder)[2:])
+        assert all(
+            "Queued" not in str(message.get("content", ""))
+            for request in model.requests
+            for message in request
+        )
+
+
+async def test_queue_timing_does_not_reset_no_progress(small_tree, monkeypatch):
+    suite = queue_suite()
+    calls = 0
+
+    async def run_tests(self, tree, *, timeout_s, on_queue_wait):
+        nonlocal calls
+        calls += 1
+        on_queue_wait(float(calls))
+        return suite
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    recorder = Recorder()
+    model = script(*([("run_tests", {})] for _ in range(5)))
+    end = await make_run(small_tree, model, recorder).run()
+    assert end.state == "halted" and "same result 4 times" in (end.detail or "")
+    assert calls == 4
+    assert [f"Queued {n}.0 s;" in step.summary for n, step in enumerate(steps(recorder), 1)] == [
+        True
+    ] * 4
+    observations = [
+        message["content"]
+        for request in model.requests
+        for message in request
+        if message["role"] == "tool"
+    ]
+    assert len(set(observations)) == 1 and "Queued" not in str(observations[0])
+
+
+@pytest.mark.parametrize("boundary", ["main", "worktree", "Git lease"])
+@pytest.mark.parametrize("mode", ["deadline", "cancel"])
+async def test_round_deadline_while_waiting_reports_queue_time(
+    small_tree, monkeypatch, boundary, mode
+):
+    from oversight.workspace.locks import QueueWait
+
+    workspace, tree = small_tree
+    scanned, admit, held, release, waiting = [asyncio.Event() for _ in range(5)]
+    scan = Toolbox.refresh_graph
+    begin = QueueWait.begin
+    now = 10.0
+    monkeypatch.setattr("oversight.workspace.locks.monotonic", lambda: now)
+
+    async def scan_then_gate(self):
+        await scan(self)
+        scanned.set()
+        await admit.wait()
+
+    def observe(self, category):
+        begin(self, category)
+        waiting.set()
+
+    monkeypatch.setattr(Toolbox, "refresh_graph", scan_then_gate)
+    monkeypatch.setattr(QueueWait, "begin", observe)
+
+    async def holder():
+        async with workspace.locks(
+            main=boundary == "main",
+            agent_id="agent-1"
+            if boundary == "worktree"
+            else "holder"
+            if boundary == "Git lease"
+            else None,
+        ):
+            if boundary == "Git lease":
+                async with workspace.git_lease():
+                    held.set()
+                    await release.wait()
+            else:
+                held.set()
+                await release.wait()
+
+    recorder = Recorder()
+    run = asyncio.create_task(
+        make_run(
+            small_tree,
+            script([("run_tests", {})]),
+            recorder,
+            max_wall_clock_s=1 if mode == "deadline" else 120,
+        ).run()
+    )
+    await scanned.wait()
+    holder_task = asyncio.create_task(holder())
+    await held.wait()
+    admit.set()
+    await waiting.wait()
+    now = 18.0
+    if mode == "cancel":
+        run.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await run
+        assert "sink.proposed" not in recorder.kinds()
+    else:
+        end = await run
+        assert end.state == "halted" and end.detail == "Ran past the time limit of 1 s."
+    (step,) = steps(recorder)
+    assert "Queued 8.0 s; round budget remaining " in step.summary
+    if mode == "deadline":
+        assert step.summary.endswith("round budget remaining 0.0 s.")
+    assert step.error == "interrupted before it finished" and step.tests is None
+    assert not recorder.suites and not holder_task.done()
+    release.set()
+    await holder_task
+    async with workspace.locks(main=True, agent_id=tree.agent_id), workspace.git_lease():
+        pass
+    assert workspace.operations.idle
+    assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]
+
+
+async def test_queue_timing_is_cleared_before_a_call_that_cannot_report(small_tree, monkeypatch):
+    calls = 0
+
+    async def run_tests(self, tree, *, timeout_s, on_queue_wait):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            on_queue_wait(4.0)
+            return queue_suite()
+        raise OSError("failed before observation")
+
+    monkeypatch.setattr(Workspace, "run_tests", run_tests)
+    recorder = Recorder()
+    model = script([("run_tests", {})], [("run_tests", {})], [("finish", {"summary": "ok"})])
+    await make_run(small_tree, model, recorder).run()
+    assert "Queued 4.0 s;" in steps(recorder)[0].summary
+    assert "Queued" not in steps(recorder)[1].summary
