@@ -125,19 +125,19 @@ it.each([0, 1, 2])("retains grouped counts accessibly with %i needs-you facts", 
     state.agents.a1 = { ...required(state.agents.a1), state: "ready_for_review" };
   }
   if (needsYou === 2) {
-    state.decisionEvents.push(
-      event("plan.updated", {
-        plan_id: "proposed-plan",
-        started_by: "lead-a",
-        revision: 1,
-        task: "Proposed follow-up",
-        graph_version: "fixture",
-        state: "proposed",
-        subtasks: null,
-        detail: null,
-        queued_task_id: null,
-      }),
-    );
+    const proposedPlan = event("plan.updated", {
+      plan_id: "proposed-plan",
+      started_by: "lead-a",
+      revision: 1,
+      task: "Proposed follow-up",
+      graph_version: "fixture",
+      state: "proposed",
+      subtasks: null,
+      detail: null,
+      queued_task_id: null,
+    });
+    if (proposedPlan.type !== "plan.updated") throw new Error("Missing proposed plan fixture");
+    state.decisionEvents.push(proposedPlan);
   }
   const group = required(chatTeamGroups(state)[0]);
   expect(group.summary).toContain(needsYou ? "1 working" : "2 working");
