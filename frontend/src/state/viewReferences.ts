@@ -30,6 +30,8 @@ export function resolveViewReferences(
         .map((ref): [string, string] => [ref.change_id, ref.path]);
     case "behavior":
       return hasMeasuredBehavior(state, view.change_id) ? [view.change_id] : [];
+    case "preview":
+      return [];
     case "moment":
       return view.event_seq <= request.through_seq &&
         events.some(

@@ -41,6 +41,7 @@ API_PATHS = frozenset(
         "leads",
         "dictation",
         "usage",
+        "previews",
     }
 )
 """The first path segment of every API route: what the UI never answers."""

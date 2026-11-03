@@ -36,6 +36,7 @@ const apiPaths = [
   "/leads",
   "/dictation",
   "/usage",
+  "/previews",
 ];
 
 export default defineConfig(({ command }) => {

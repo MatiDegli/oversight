@@ -349,11 +349,14 @@ source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScrip
 TypeScript and json-schema-to-typescript. `make check-contracts` compares both generated
 outputs byte for byte, including in CI.
 
-The 26 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
+The 27 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
 `agent.status`, `agent.step`, `agent.message`, `agent.focus`, `change.updated`, `change.proposed`,
 `change.resolved`, `lead.reply`, `usage.tick` and `error`.
 The complete `ServerEvent` union is in `contracts/src/oversight_contracts/events.py`.
 Every envelope has `seq`, `ts`, `type` and `payload`.
+
+Contracts 1.19.0 adds preview.status for person-owned live-preview lifecycle transitions. Its payload contains candidate identity, state and a nullable closed reason code; it contains no URL, lease token or application output. PreviewView is a dormant fifth lead-view reader. Preview is absent from the advertised show_view kinds, lead prompt and preview-specific status inventory. Live GET supplies the current frame URL; replay never launches or connects to an app.
+
 `run.started` includes the run id, exact model, prompt version and limits.
 `agent.status` includes `revising` after Request changes and `paused` in level 3.
 `agent.step` is emitted once per tool call when it ends, carrying the step number, tool,
@@ -558,7 +561,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.18.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.19.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

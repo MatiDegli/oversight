@@ -4377,3 +4377,23 @@ ACL hardening or preparation-budget change is granted. Native qualification on t
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
 
 2026-11-03 — Dormant views with references. Following maintainer OK of the exact diff, contracts 1.18.0 adds lead.view with highlight, files, behavior and moment. PR1 ships validated reference infrastructure, eligible status inventory and event readers; show_view remains absent from the advertised tool table and dispatch. Prompt bytes and prompt_version remain unchanged. This supersedes the no-new-events/contracts restriction for this feature only. No visible cards or paid calls are released by PR1.
+
+## 2026-11-03 — Dormant preview references and person-owned preview lifecycle
+
+Following maintainer approval of this exact diff, contracts 1.19.0 extends LeadViewKind
+with PreviewView, whose only reference is the target agent. The server derives the
+agent's current change. Preview ships as a reader plus strict server validation;
+preview remains absent from the advertised show_view enum, lead prompt and
+preview-specific status inventory. This does not amend gen-ui's approved tool table,
+prompt_version or probe scope. Model preview suggestions require a later separately
+authorized amendment and matching probe.
+
+The person-driven API creates a preview and returns an unguessable lease token.
+Renewal and stop require that token. preview.status records lifecycle transitions
+without a token, URL or application output; live GET supplies the current frame URL.
+Replay never starts an app or connects to historical localhost. This supersedes the
+no-new-events/contracts restriction for this feature only. Contract order remains
+1.18.0, 1.19.0, then 1.20.0 for merge rehearsal.
+
+Reason: person-driven preview infrastructure can ship without disturbing gen-ui's
+locked model-facing scope, prompt pins, probe or recording.
