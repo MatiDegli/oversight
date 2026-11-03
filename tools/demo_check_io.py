@@ -222,14 +222,32 @@ class EventStream:
 
     def _pump(self) -> None:
         data: list[str] = []
+        event_id: str | None = None
+        event_name = ""
         try:
             for raw in self._response:
                 line = raw.decode("utf-8").rstrip("\r\n")
-                if line.startswith("data:"):
-                    data.append(line.removeprefix("data:").removeprefix(" "))
-                elif not line and data:
-                    self._queue.put(json.loads("\n".join(data)))
+                if not line:
+                    if data:
+                        if event_name not in ("", "message"):
+                            raise smoke.SmokeError(
+                                f"/events SSE event {event_name!r} is not a default message"
+                            )
+                        if event_id is None:
+                            raise smoke.SmokeError("/events message has missing SSE id")
+                        self._queue.put((event_id, json.loads("\n".join(data))))
                     data = []
+                    event_id = None
+                    event_name = ""
+                elif not line.startswith(":"):
+                    name, _, value = line.partition(":")
+                    value = value.removeprefix(" ")
+                    if name == "data":
+                        data.append(value)
+                    elif name == "id":
+                        event_id = value
+                    elif name == "event":
+                        event_name = value
         except Exception as error:  # a thread's end: whatever broke the stream goes to the waiter
             self._queue.put(error)
         self._queue.put(None)  # the stream ended
@@ -277,8 +295,9 @@ class EventStream:
                 clock.check()  # the reader's timeout or EOF can beat the queue's own timeout
             if item is None or isinstance(item, Exception):
                 raise smoke.SmokeError(f"/events ended before {what}: {item or 'closed'}")
+            event_id, envelope = item
             try:
-                event = EVENTS.validate_python(item)
+                event = EVENTS.validate_python(envelope)
             except ValidationError as error:
                 raise smoke.SmokeError(
                     f"an event does not validate: {error.errors()[0]}"
@@ -286,6 +305,10 @@ class EventStream:
             expected_seq = self.seen[-1].seq + 1 if self.seen else 1
             if event.seq != expected_seq:
                 raise smoke.SmokeError(f"/events seq {event.seq}, expected {expected_seq}")
+            if event_id != str(event.seq):
+                raise smoke.SmokeError(
+                    f"/events SSE id {event_id!r} differs from JSON seq {event.seq}"
+                )
             self.seen.append(event)
             if event.type == "error":
                 raise smoke.SmokeError(
