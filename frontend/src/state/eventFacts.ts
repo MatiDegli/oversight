@@ -6,7 +6,12 @@ export function recordEventFact(state: State, event: ServerEvent): State {
   // Dormant 1.19 event: the contract keeps it inert; it is not a moment type.
   if (event.type === "preview.status") return state;
   const payload = event.payload;
-  const agentId = "agent_id" in payload ? payload.agent_id : null;
+  const agentId =
+    event.type === "plan.updated"
+      ? (event.payload.started_by ?? null)
+      : "agent_id" in payload
+        ? payload.agent_id
+        : null;
   const fact: EventFact = { type: event.type, ts: event.ts, agentId };
   return { ...state, eventFacts: { ...state.eventFacts, [event.seq]: fact } };
 }

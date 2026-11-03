@@ -252,6 +252,65 @@ it("shows No agent for an accepted agentless milestone", () => {
   ).toContain("No agent");
 });
 
+it.each(["agent-9", null])("attributes a plan moment started by %s from metadata", (startedBy) => {
+  let state = events.slice(0, 3).reduce(applyEvent, createInitialState());
+  state = applyEvent(state, {
+    seq: 4,
+    ts: required(events[0]).ts,
+    type: "lead.status",
+    payload: {
+      agent_id: "agent-9",
+      revision: 1,
+      task: "Inspect references",
+      model: "fake",
+      state: "idle",
+      step: 0,
+      detail: null,
+      limits: null,
+      requested_plan_id: null,
+    },
+  });
+  state = applyEvent(state, {
+    seq: 5,
+    ts: required(events[0]).ts,
+    type: "plan.updated",
+    payload: {
+      plan_id: "plan-moment",
+      revision: 1,
+      task: "Synthetic plan",
+      graph_version: "g1",
+      state: "planning",
+      subtasks: null,
+      detail: null,
+      started_by: startedBy,
+      queued_task_id: null,
+    },
+  });
+  const event: LeadViewEvent = {
+    seq: 6,
+    ts: required(events[0]).ts,
+    type: "lead.view",
+    payload: {
+      agent_id: "agent-9",
+      through_seq: 5,
+      caption: null,
+      view: { kind: "moment", event_seq: 5 },
+    },
+  };
+  const html = renderToStaticMarkup(<LeadViewCard state={state} event={event} header={header} />);
+  expect(html).toContain("plan.updated");
+  if (startedBy === null) expect(html).toContain("<dd>No agent</dd>");
+  else {
+    expect(html).toContain("Lead B</span></dd>");
+    expect(html).toContain("--slot-text:var(--agent-b-text)");
+  }
+  expect(state.eventFacts[5]).toEqual({
+    type: "plan.updated",
+    ts: event.ts,
+    agentId: startedBy,
+  });
+});
+
 it("shows measured Input/Before/After samples through the shared evidence component", () => {
   let state = events.slice(0, 7).reduce(applyEvent, createInitialState());
   const facts = required(events[6]);

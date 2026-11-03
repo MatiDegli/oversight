@@ -390,9 +390,11 @@ caption remain. Files require exact recorded change/path pairs, including resolv
 Behavior uses the shared current-revision/head evidence selector and measured Input/Before/After;
 no caption substitutes for evidence. Unknown future kinds render nothing.
 
-Accepted envelopes add metadata-only `eventFacts[seq] = {type, ts, agentId}` after successful
-application; rejected applications and gaps add nothing. A start resets the per-run facts and
-records itself. Metadata has no payload, caption or full envelope, and is not capped at the
+Accepted envelopes except dormant `preview.status` add metadata-only
+`eventFacts[seq] = {type, ts, agentId}` after successful application; rejected applications and
+gaps add nothing. Plan moments attribute the requesting lead through `started_by`, or null for
+a person's plan. A start resets the per-run facts and records itself. Metadata has no payload,
+caption or full envelope, and is not capped at the
 32-milestone admission window. Moment rendering checks both the request's through_seq and the
 displayed lastSeq against the shared milestone catalog. Live moments show facts without rewind.
 
@@ -404,10 +406,11 @@ the offset and sequence, paused. Ordinary seek/play/restart and source replaceme
 session. Historical command capabilities are withheld. Highlights frame on click, even on the
 first graph mount without a panel, and prune missing IDs without changing the frame key.
 
-Producer advertisement, dispatch and final prompt/version verification are separately gated;
-these readers do not activate tools or make model calls. Visible release requires the matching
-authorization, prompt validation and real recording; otherwise readers remain available and the
-verified existing public recording remains bundled.
+`show_view` is advertised and dispatched with the moved prompt version: baseline
+`agent-v1-9b54c5a17a31` and pack `agent-v1-084c4f11b6b2` (DECISIONS, November 3).
+Remaining release gates are the separately authorized paid probe and prompt validation,
+a real recording and bundle replacement. Until those pass, the verified Oct 27 public
+recording remains bundled.
 
 `LeadStatus.state` gains `idle` between turns; `done` remains accepted for historical logs.
 L1 accepts replies as no-ops: only envelope sequence/clock bookkeeping advances, with no messages,

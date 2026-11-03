@@ -714,9 +714,10 @@ metadata supports live moment facts; replay navigation keeps Chat outside the so
 Back restores the saved offset and sequence, paused. Synthetic browser evidence covers all four
 kinds, withheld captions, eight long-path references, cold graph framing, exact merged-file diff
 and history in dark/day at 1280/390. Exports retain the existing caption withholding and inclusion
-receipt behavior. Producer activation and final prompt/version verification remain separately
-gated, as do matching paid authorization, validation and a real recording. The verified Oct 27
-public bundle stays in place. Merge rehearsal has its own one-page plan outside this slice.
+receipt behavior. `show_view` is advertised and dispatched with the moved prompt version
+(DECISIONS, November 3). Remaining release gates are the separately authorized paid probe and
+prompt validation, a real recording and bundle replacement. The verified Oct 27 public bundle
+stays in place. Merge rehearsal has its own one-page plan outside this slice.
 
 ### Saved agent flows
 

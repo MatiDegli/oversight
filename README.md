@@ -51,8 +51,9 @@ below are labeled separately.
   and moment references from committed events. A click opens the graph or read-only diff;
   moments show live event facts and rewind only in replay, retaining Chat with an explicit Back.
   Synthetic browser fixtures cover these interactions; the public replay still uses the real
-  Oct 27 recording. Producer activation, matching prompt validation and any new recording
-  remain separate release gates.
+  Oct 27 recording. `show_view` is advertised and dispatched with the moved prompt version
+  (DECISIONS, November 3). The separately authorized paid probe and prompt validation,
+  a real recording and bundle replacement remain release gates.
 
 Muse Spark through the Meta Model API writes the changes. In the bundled recorded run, agent B
 wrote with Muse Spark Open through Baseten. Cross-review with Muse Spark Open is optional and off

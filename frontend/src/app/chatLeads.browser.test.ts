@@ -1164,8 +1164,19 @@ for (const theme of ["dark", "day"])
           expect(
             await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           ).toBe(true);
-          if (name === "files-eight-long-paths")
+          if (name === "files-eight-long-paths") {
             await check(card.getByRole("button")).toHaveCount(8);
+            await check(
+              card.getByRole("button").filter({ hasText: "· Agent A · approved" }),
+            ).toHaveCount(8);
+          }
+          if (name === "files-eight-long-paths" || name === "live-moment") {
+            const agent = card.locator(".lead-view-agent").first();
+            await check(agent).toHaveText("Agent A");
+            await check(agent).toHaveCSS("color", await themeColor(page, "agent-a-text"));
+            await check(card.getByText("Agent agent-1", { exact: true })).toHaveCount(0);
+            await check(card.getByText("change-1 · approved", { exact: true })).toHaveCount(0);
+          }
           await captureView(page, name, width, theme);
         }
         await page.evaluate(() => window.chatLeadsTest.mountViews(true, true));

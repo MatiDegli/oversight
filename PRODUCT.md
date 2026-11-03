@@ -92,8 +92,9 @@ the agents' lights, the diff) is where this happens, not the pitch.
   fixtures for all four kinds, live facts, exact-sequence replay/Back, long paths and eight
   references in dark/day at 1280/390. This does not demonstrate a real model choosing a view.
   The existing Oct 27 public recording proves `change.*`; scripted-rules supplies
-  `tests.executed` evidence. Producer activation, matching authorization and prompt validation,
-  and a separately authorized real recording gate any visible release or bundle replacement.
+  `tests.executed` evidence. `show_view` is advertised and dispatched with the moved prompt version
+  (DECISIONS, November 3). Remaining release gates are the separately authorized paid probe and
+  prompt validation, a real recording and bundle replacement.
 - No users, testimonials, benchmarks or metrics exist yet; none may be invented.
 
 ## Product Principles
