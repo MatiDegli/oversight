@@ -345,3 +345,34 @@ describe("review evidence", () => {
     ).toContain("Said tests were not run; agent run_tests calls recorded");
   });
 });
+
+it("mounts cone membership once with missing facts or comparison and retains Details", async () => {
+  const { coneState } = await import("./ConeOverlap.fixture");
+  for (const missing of ["facts", "comparison", "neither"]) {
+    const view = coneState("intersection");
+    if (missing === "facts") view.changeFacts = {};
+    const current = view.changeFacts["change-1"]?.at(-1);
+    if (current && missing === "comparison") {
+      current.behavior_diff = null;
+      current.measured_cone = null;
+      current.review_cards = null;
+    }
+    const html = renderToStaticMarkup(
+      <ReviewBody
+        state={view}
+        changeId="change-1"
+        diff={<div>Diff</div>}
+        showCrossReview={false}
+        phone
+      />,
+    );
+    expect(html.match(/aria-label="Other pending changes"/g)).toHaveLength(1);
+    expect(html).toContain("compute_price</code> is in Agent B");
+    if (missing === "neither") expect(html).toContain('aria-label="Details"');
+    const proposal = view.changes["change-1"]?.proposal;
+    if (!proposal) throw new Error("Missing proposal");
+    expect(renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />)).toContain(
+      "Other pending changes",
+    );
+  }
+});

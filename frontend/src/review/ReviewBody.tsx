@@ -10,6 +10,7 @@ import { CardEvidence, eventTime } from "./ChangeCard";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { mergedRuleWords } from "./evidenceWords";
 import { hasReviewFindings } from "./reviewFindings";
+import { ConeOverlap } from "./ConeOverlapSection";
 import { ReviewFacts } from "./ReviewFacts";
 import { NewParameterCalls } from "./NewParameterCalls";
 import { parameterExtensions } from "./parameterExtensions";
@@ -202,6 +203,7 @@ export function ReviewBody({
               <>
                 {comparison}
                 <NewParameterCalls entries={extensions} identity={identity} />
+                <ConeOverlap state={state} changeId={changeId} />
                 {((extensions.length > 0 && comparison) ||
                   (!comparison && hasReviewFindings(facts))) &&
                   change?.proposal && (

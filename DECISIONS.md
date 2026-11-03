@@ -4565,3 +4565,15 @@ loads on the first switch. Both views retain the same session and shared state.
 
 Rollback: change the single `InitialShellLayout` default in
 `frontend/src/app/shell/useShell.ts` from `"Chat"` to `"Oversight"`.
+
+## 2026-11-03 — Pending cone membership is informational review evidence
+
+Design directly in the built panel, as requested by the maintainer on November 2; this
+supersedes Impeccable shape's confirmation stop. Preserve the review's existing order and
+question authority. The bounded current graph supplies peer cone membership, with explicit
+limits, rather than another traversal or retained proposal cone.
+
+The maintainer explicitly requires the pending-change evidence review without delegation.
+This supersedes Impeccable critique's independent-subagent requirement: assess the rendered
+design first, then the detector evidence in this session, and disclose the reduced independence.
+No additional design approval is implied.

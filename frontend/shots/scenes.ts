@@ -9,6 +9,7 @@ import type { ServerEvent } from "@contracts";
 import type { Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
 
+import { coneScenes } from "./coneOverlap.ts";
 import { findingScenes } from "./reviewFindings.ts";
 import { assertPanelFrame } from "./framing.ts";
 
@@ -207,6 +208,7 @@ async function openFileView(page: Page): Promise<void> {
 }
 
 export const scenes: readonly Scene[] = [
+  ...(process.env.OVERSIGHT_SHOTS_CONE ? coneScenes : []),
   ...[1280, 390].map((width): Scene => ({
     name: `first-${String(width)}`,
     enabled: true,

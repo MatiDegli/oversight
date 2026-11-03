@@ -561,3 +561,32 @@
   outline: 2px solid var(--text);
   outline-offset: 2px;
 }
+
+/* Informational graph membership shares the evidence body's scroll and sibling rhythm. */
+.cone-overlap {
+  border-top: 1px solid var(--divider);
+  padding-top: 16px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.cone-overlap h3 {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.cone-overlap > div {
+  margin-top: 16px;
+}
+.cone-overlap .cone-peer {
+  margin-bottom: 4px;
+}
+.cone-overlap code {
+  font-family: var(--code-font);
+  font-size: 15px;
+  white-space: pre-wrap;
+  color: var(--text);
+}

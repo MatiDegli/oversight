@@ -379,10 +379,19 @@ it.each(cases)(
           .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")));
         expect(order).toEqual(
           name === "a" || name === "merged"
-            ? ["Review lead", "Agent note", "What was compared", "Change files"]
+            ? [
+                "Review lead",
+                "Agent note",
+                "What was compared",
+                "Other pending changes",
+                "Change files",
+              ]
             : name === "b" || name === "c"
               ? ["Review lead", "Agent note", "Change files", "What was compared"]
               : ["Review lead", "Agent note", "Change files"],
+        );
+        expect(await page.getByRole("region", { name: "Other pending changes" }).count()).toBe(
+          name === "a" || name === "merged" ? 1 : 0,
         );
         expect(await page.locator(".review-file-row").first().getAttribute("aria-expanded")).toBe(
           String(!closed),
