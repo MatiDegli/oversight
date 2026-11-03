@@ -16,6 +16,14 @@ RUN = "fresh-run"
 PARENT = "http://localhost:8710"
 
 
+def envelope(kind: str, payload: object, *, seq: int = 1) -> dict[str, object]:
+    return {"seq": seq, "ts": "2026-11-03T12:00:00Z", "type": kind, "payload": payload}
+
+
+def sse_frame(event: dict[str, object]) -> bytes:
+    return f"id: {event.get('seq', 1)}\ndata: ".encode() + json.dumps(event).encode() + b"\n\n"
+
+
 class Backend:
     def __init__(self):
         self.alive = True
@@ -26,6 +34,8 @@ class Backend:
         self.tasks = set()
         self.sse_open = False
         self.sse_closed = asyncio.Event()
+        self.sse_events: list[dict[str, object]] | None = None
+        self.sse_complete = False
         self.fail_path = ""
 
     def accept(self, reader, writer):
@@ -52,14 +62,22 @@ class Backend:
                 writer.write(self.raw_response)
             elif path == "/events":
                 self.sse_open = True
-                frame = b"data: " + json.dumps({"run_id": self.sse_run}).encode() + b"\n\n"
                 writer.write(
                     b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\n"
                     b"Transfer-Encoding: chunked\r\n" + self.extra + b"\r\n"
                 )
-                writer.write(f"{len(frame):x}\r\n".encode() + frame + b"\r\n")
-                await writer.drain()
-                await reader.read()
+                events = self.sse_events
+                if events is None:
+                    events = [envelope("run.started", {"run_id": self.sse_run})]
+                for event in events:
+                    frame = sse_frame(event)
+                    writer.write(f"{len(frame):x}\r\n".encode() + frame + b"\r\n")
+                    await writer.drain()
+                    await asyncio.sleep(0.01)
+                if self.sse_complete:
+                    writer.write(b"0\r\n\r\n")
+                else:
+                    await reader.read()
             else:
                 run = self.health_run if path == "/health" else self.api_run
                 body = json.dumps({"ok": True, "run_id": run}).encode()
@@ -321,6 +339,37 @@ async def test_gateway_fresh_readiness_and_nonce_authorization(tmp_path):
         assert gateway.listener.fileno() == -1
 
 
+async def test_gateway_readiness_ignores_events_without_run_identity(tmp_path):
+    async with running(tmp_path) as (gateway, backend, _, _, _):
+        backend.sse_events = [
+            envelope("graph.snapshot", {"nodes": [], "edges": []}),
+            envelope("run.started", {"run_id": RUN}, seq=2),
+        ]
+        evidence = await probe(gateway)
+        assert evidence.sse_run_id == RUN
+        assert gateway.authorize_ready(evidence, expected_run=RUN)
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        envelope("graph.snapshot", {"run_id": RUN}),
+        {"run_id": RUN},
+        envelope("run.started", {"run_id": "old"}),
+        envelope("run.started", {}),
+        envelope("run.started", None),
+    ],
+)
+async def test_gateway_readiness_requires_run_started_identity(tmp_path, event):
+    async with running(tmp_path) as (gateway, backend, _, port, authority):
+        backend.sse_events = [event]
+        backend.sse_complete = True
+        with pytest.raises(ValueError, match="SSE"):
+            await probe(gateway)
+        assert gateway._evidence is None
+        assert (await request(port, authority, "/_oversight_ready"))[0] == 403
+
+
 @pytest.mark.parametrize(
     "failure",
     [
@@ -397,6 +446,36 @@ async def test_gateway_cancellation_peer_death_and_partial_setup(tmp_path):
         assert not gateway.alive() and not gateway._tasks
 
 
+async def test_gateway_close_drains_active_sse(tmp_path):
+    limits = GatewayLimits(io_s=5, sse_s=5)
+    async with running(tmp_path, limits=limits) as (gateway, backend, connector, port, authority):
+        reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        closing = None
+        try:
+            writer.write(f"GET /events HTTP/1.1\r\nHost: {authority}\r\n\r\n".encode())
+            await writer.drain()
+            async with asyncio.timeout(1):
+                assert b"200" in await reader.readuntil(b"\r\n\r\n")
+                assert await reader.readuntil(b"\n\n")
+            assert gateway._tasks and not backend.sse_closed.is_set()
+            closing = asyncio.create_task(gateway.close())
+            done, _ = await asyncio.wait({closing}, timeout=0.5)
+            assert closing in done, "close waited for the live SSE handler's deadline"
+            await closing
+            async with asyncio.timeout(1):
+                await backend.sse_closed.wait()
+                assert await reader.read() == b""
+            assert not gateway._tasks
+            assert gateway.listener.fileno() == -1
+            assert all(sock.fileno() == -1 for sock in connector.sockets)
+            assert not (tmp_path / "published").exists()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            if closing is not None:
+                await closing
+
+
 @pytest.mark.parametrize(
     "framing", ["length", "chunked", "truncated", "slow", "bad_chunk", "upgrade"]
 )
@@ -444,7 +523,9 @@ async def test_gateway_request_body_boundary_and_service_death_during_probe(tmp_
 
 
 async def test_gateway_sse_streaming_and_limits(tmp_path):
-    limits = GatewayLimits(sse_bytes=80, io_s=0.3, sse_s=0.4)
+    event = envelope("run.started", {"run_id": RUN})
+    frame_bytes = len(sse_frame(event))
+    limits = GatewayLimits(sse_bytes=frame_bytes, io_s=0.3, sse_s=0.4)
     async with running(tmp_path, limits=limits) as (_, backend, _, port, authority):
         reader, writer = await asyncio.open_connection("127.0.0.1", port)
         try:
@@ -452,7 +533,7 @@ async def test_gateway_sse_streaming_and_limits(tmp_path):
             await writer.drain()
             async with asyncio.timeout(0.3):
                 assert b"200" in await reader.readuntil(b"\r\n\r\n")
-                assert json.loads((await reader.readuntil(b"\n\n"))[6:]) == {"run_id": RUN}
+                assert await reader.readuntil(b"\n\n") == sse_frame(event)
             # An open backend stream is terminated within the configured deadline.
             async with asyncio.timeout(1):
                 assert await reader.read() == b""
@@ -460,7 +541,9 @@ async def test_gateway_sse_streaming_and_limits(tmp_path):
             writer.close()
             await writer.wait_closed()
         backend.raw_response = (
-            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: 81\r\n\r\n"
+            b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: "
+            + str(frame_bytes + 1).encode()
+            + b"\r\n\r\n"
         )
         assert (await request(port, authority, "/events"))[0] == 413
 

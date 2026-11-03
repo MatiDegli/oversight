@@ -15,7 +15,7 @@ import socket
 import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, cast
 from urllib.parse import unquote_to_bytes, urlsplit
 
 
@@ -67,6 +67,29 @@ class GatewayLimits:
 
 
 DEFAULT_GATEWAY_LIMITS = GatewayLimits()
+
+
+def _sse_run_ids(data: bytes) -> tuple[str, ...]:
+    """Only run.started identifies a run; ignore other complete SSE events."""
+    runs: list[str] = []
+    for frame in data.replace(b"\r\n", b"\n").split(b"\n\n")[:-1]:
+        fields = [line[5:].lstrip(b" ") for line in frame.split(b"\n") if line.startswith(b"data:")]
+        if not fields:
+            continue
+        event = json.loads(b"\n".join(fields))
+        if not isinstance(event, dict):
+            raise ValueError("invalid nested SSE envelope")
+        envelope = cast(dict[str, object], event)
+        if envelope.get("type") != "run.started":
+            continue
+        payload = envelope.get("payload")
+        run_id = (
+            cast(dict[str, object], payload).get("run_id") if isinstance(payload, dict) else None
+        )
+        if not isinstance(run_id, str) or not run_id:
+            raise ValueError("missing nested SSE run identity")
+        runs.append(run_id)
+    return tuple(runs)
 
 
 @dataclass(frozen=True)
@@ -590,10 +613,7 @@ class PreviewGateway:
                 reader, response, self.limits.response_bytes, self.limits.io_s
             ):
                 data.extend(chunk)
-                frames = data.replace(b"\r\n", b"\n").split(b"\n\n")
-                if sse and any(
-                    frame.startswith(b"data:") or b"\ndata:" in frame for frame in frames[:-1]
-                ):
+                if sse and _sse_run_ids(bytes(data)):
                     return bytes(data)
             return bytes(data)
         finally:
@@ -633,14 +653,8 @@ class PreviewGateway:
                 if api.get("run_id") != self.expected_run:
                     raise ValueError("stale nested API")
                 raw = await self._probe_get("/events", sse=True)
-                frames = raw.replace(b"\r\n", b"\n").split(b"\n\n")
-                events = [
-                    json.loads(line[5:].strip())
-                    for frame in frames[:-1]
-                    for line in frame.split(b"\n")
-                    if line.startswith(b"data:")
-                ]
-                if not events or any(event.get("run_id") != self.expected_run for event in events):
+                runs = _sse_run_ids(raw)
+                if not runs or any(run_id != self.expected_run for run_id in runs):
                     raise ValueError("stale nested SSE")
                 if not self.alive():
                     raise ValueError("service died during readiness")
@@ -699,11 +713,12 @@ class PreviewGateway:
         self._evidence, self._nonce = None, None
         if self._server is not None:
             self._server.close()
-            await self._server.wait_closed()
         self.listener.close()
         current = asyncio.current_task()
         tasks = [task for task in self._tasks if task is not current]
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if self._server is not None:
+            await self._server.wait_closed()
         await asyncio.to_thread(self.build.close)
