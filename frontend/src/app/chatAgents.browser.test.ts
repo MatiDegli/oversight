@@ -68,7 +68,7 @@ function assignedPlan(id: string, lead: string, agents: string[]) {
 }
 const row = (page: Page, letter: string) =>
   page.locator(".chat-agent-row").filter({
-    has: page.locator(".chat-agent-name", { hasText: new RegExp(`^Agent ${letter}$`) }),
+    has: page.locator(".chat-agent-name", { hasText: new RegExp(`^(?:Agent )?${letter}$`) }),
   });
 const view = (page: Page, name: string) =>
   page.getByRole("group", { name: "Workspace view" }).getByRole("button", { name, exact: true });
@@ -751,4 +751,111 @@ asyncio.run(main())
   const decisions = await readFile(decisionsUrl, "utf8");
   const totals = `${String(added)} additions, ${String(deleted)} deletions, ${String(added + deleted)} changed lines`;
   expect(decisions.includes(totals), `Missing current slice: ${totals}`).toBe(true);
+});
+
+it("folds teams independently without changing the selected thread, draft or command actor", async () => {
+  const page = await open();
+  try {
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      [
+        assignedPlan("p1", "lead-a", ["agent-a", "a2"]),
+        status("agent-a", { plan_id: "p1" }),
+        status("a2", { plan_id: "p1" }),
+        assignedPlan("p2", "lead-b", ["agent-b"]),
+        status("agent-b", { plan_id: "p2" }),
+      ],
+    );
+    const timeline = await page
+      .getByRole("list", { name: "Conversation timeline" })
+      .elementHandle();
+    const draft = page.getByRole("textbox", { name: "Message Agent A·1" });
+    await draft.fill("Keep this draft");
+    const first = page.getByRole("button", { name: "Members of Lead A", exact: true });
+    const second = page.getByRole("button", { name: "Members of Lead B", exact: true });
+    const region = await first.getAttribute("aria-controls");
+    await first.focus();
+    await page.keyboard.press("Space");
+    await check(first).toHaveAttribute("aria-expanded", "false");
+    await check(first).toBeFocused();
+    await check(second).toHaveAttribute("aria-expanded", "true");
+    await check(page.locator(".chat-team-summary[data-selected=true]")).toHaveCount(1);
+    await check(page.locator(`[id="${region ?? ""}"]`)).toBeHidden();
+    await check(draft).toHaveValue("Keep this draft");
+    expect(
+      await timeline.evaluate(
+        (el) => el === document.querySelector('[aria-label="Conversation timeline"]'),
+      ),
+    ).toBe(true);
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      [status("a2", { plan_id: "p1", state: "revising" })],
+    );
+    await check(first).toHaveAttribute("aria-expanded", "false");
+    await check(first).toBeFocused();
+    for (const width of [390, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await check(first).toHaveAttribute("aria-expanded", "false");
+      await check(draft).toHaveValue("Keep this draft");
+    }
+    await page.locator(".chat-team-summary h3").first().click();
+    expect(await page.evaluate(() => window.chatAgentsTest.calls())).toEqual([]);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    expect(await page.evaluate(() => window.chatAgentsTest.calls())).toEqual([
+      { id: "agent-a", text: "Keep this draft" },
+    ]);
+    await first.focus();
+    await page.keyboard.press("Enter");
+    await check(first).toHaveAttribute("aria-expanded", "true");
+    await check(page.locator('.chat-agent-row[data-agent-origin="agent-a"]')).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  } finally {
+    await page.close();
+  }
+});
+it("skips hidden members in arrow/Home/End traversal and resets disclosure on a new run", async () => {
+  const page = await open();
+  try {
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      [
+        assignedPlan("p1", "lead", ["agent-a", "a2"]),
+        status("agent-a", { plan_id: "p1" }),
+        status("a2", { plan_id: "p1" }),
+      ],
+    );
+    const disclosure = page.getByRole("button", { name: "Members of Lead A", exact: true });
+    await disclosure.click();
+    const lone = page.locator('.chat-agent-row[data-agent-origin="agent-b"]');
+    await lone.focus();
+    for (const key of ["Home", "End", "ArrowUp", "ArrowDown"]) {
+      await page.keyboard.press(key);
+      await check(lone).toBeFocused();
+    }
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      seed.map((e) =>
+        e.type === "run.started" ? { ...e, payload: { ...e.payload, run_id: "new-team-run" } } : e,
+      ),
+    );
+    await page.evaluate(
+      (events) => {
+        window.chatAgentsTest.deliver(events);
+      },
+      [assignedPlan("p1", "lead", ["agent-a"]), status("agent-a", { plan_id: "p1" })],
+    );
+    await check(disclosure).toHaveAttribute("aria-expanded", "true");
+  } finally {
+    await page.close();
+  }
 });

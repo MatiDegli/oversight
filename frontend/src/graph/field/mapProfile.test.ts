@@ -10,6 +10,7 @@ import {
   media,
   setupControllerClock,
   source,
+  renderer,
 } from "./controller.support";
 import { createFieldController } from "./controller";
 
@@ -178,7 +179,9 @@ it("jumps on reduced motion in both directions and when enabled during a crossin
   expect(canvas.oversightField?.animating()).toBe(false);
   level = "cards";
   notify();
-  expect(last()[0].profile).toEqual({ near: 7.8, far: 21.599999999999998, gain: 0.92 });
+  expect(last()[0].profile.near).toBeCloseTo(26 * 0.3, 10);
+  expect(last()[0].profile.far).toBeCloseTo(72 * 0.3, 10);
+  expect(last()[0].profile.gain).toBeCloseTo(0.92, 10);
   level = "map";
   notify();
   expect(last()[0].profile).toEqual({ near: 30, far: 84, gain: 0.85 });
@@ -190,5 +193,52 @@ it("keeps card spreads on a small zoom without a published map level", () => {
   const controller = createFieldController(canvas, { ...source, zoom: () => 0.21 });
   controller.update(light);
   expect(last()[0].profile).toEqual({ near: 26 * 0.21, far: 72 * 0.21, gain: 0.92 });
+  controller.dispose();
+});
+
+it("omits only card header masks at map level and restores them on returning to cards", () => {
+  media.matches = true;
+  let level: "map" | "cards" = "cards";
+  let notify: () => void = () => undefined;
+  const header = { x1: 10, y1: 20, x2: 30, y2: 40 };
+  const overlay = { x1: 0, y1: 0, x2: 8, y2: 8 };
+  const element = {
+    parentElement: null,
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 8, bottom: 8, width: 8, height: 8 }),
+  };
+  Object.assign(canvas, {
+    closest: () => ({
+      querySelectorAll: () => [element],
+      closest: () => null,
+      addEventListener() {},
+      removeEventListener() {},
+    }),
+    getBoundingClientRect: () => ({ left: 0, top: 0 }),
+    ownerDocument: { querySelectorAll: () => [] },
+  });
+  const controller = createFieldController(canvas, {
+    ...source,
+    zoom: () => 0.3,
+    level: () => level,
+    headers: () => [header],
+    subscribe(listener) {
+      notify = listener;
+      return () => undefined;
+    },
+  });
+  controller.update(light);
+  const masks = (): unknown => renderer.draw.mock.calls.at(-1)?.[2];
+  expect(masks()).toEqual([overlay, header]);
+  expect(last()[0].profile.near).toBeCloseTo(26 * 0.3, 10);
+  level = "map";
+  notify();
+  expect(masks()).toEqual([overlay]);
+  expect(last()[0].profile).toEqual({ near: 30, far: 84, gain: 0.85 });
+  level = "cards";
+  notify();
+  expect(masks()).toEqual([overlay, header]);
+  expect(last()[0].profile.near).toBeCloseTo(26 * 0.3, 10);
+  expect(last()[0].profile.far).toBeCloseTo(72 * 0.3, 10);
+  expect(last()[0].profile.gain).toBeCloseTo(0.92, 10);
   controller.dispose();
 });

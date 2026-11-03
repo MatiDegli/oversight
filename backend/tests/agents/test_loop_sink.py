@@ -2,6 +2,7 @@
 failure nobody planned for."""
 
 import asyncio
+import re
 from typing import Literal, cast
 
 import pytest
@@ -289,7 +290,12 @@ async def test_suite_note_precedes_step_and_next_model_history(
     published = steps(recorder)
     results = [m["content"] for m in model.requests[-1] if m["role"] == "tool"]
     suffix = "\n" + note if note is not None else ""
-    assert published[1].summary == outcomes[1].summary + suffix
+    assert re.fullmatch(
+        re.escape(outcomes[1].summary)
+        + r"\. Queued [\d.]+ s; round budget remaining [\d.]+ s\."
+        + re.escape(suffix),
+        published[1].summary,
+    )
     assert results[1] == outcomes[1].content + suffix
     assert results[0] == outcomes[0].content
     assert published[0].summary == outcomes[0].summary

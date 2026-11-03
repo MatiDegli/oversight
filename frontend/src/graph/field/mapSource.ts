@@ -3,7 +3,10 @@ import { moduleLayout } from "../mapModel";
 import type { BoxSource } from "./boxSource";
 import type { Box } from "./model";
 
-type MapSourceControl = Pick<MapController, "getFrame" | "moduleOwners" | "subscribe" | "level">;
+type MapSourceControl = Pick<
+  MapController,
+  "getFrame" | "moduleOwners" | "subscribe" | "level" | "enabled"
+>;
 
 /** Only emitters use map cells; contour frames, routes and masks retain their card sources. */
 export function createMapSource(cards: BoxSource, control: MapSourceControl): BoxSource {
@@ -16,7 +19,7 @@ export function createMapSource(cards: BoxSource, control: MapSourceControl): Bo
   let attached = false;
   return {
     ...cards,
-    level: () => (attached ? control.level() : "cards"),
+    level: () => (attached && control.enabled() ? control.level() : "cards"),
     attach(cy) {
       stopCards?.();
       stopMap?.();
@@ -35,7 +38,7 @@ export function createMapSource(cards: BoxSource, control: MapSourceControl): Bo
     },
     boxes(ids) {
       const { model, zoom, pan } = control.getFrame();
-      if (control.level() !== "map") return cards.boxes(ids);
+      if (!control.enabled() || control.level() !== "map") return cards.boxes(ids);
       const found = new Map<string, Box>();
       if (!attached) return found;
       const modules = new Map(model.groups.flatMap((g) => g.modules.map((m) => [m.id, m])));

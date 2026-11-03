@@ -247,7 +247,7 @@ export function mountEvidence(graph = evidenceGraph(), name = "map fixture") {
   flushSync(() => root?.render(<Harness />));
 }
 let stableModel: ReturnType<typeof mapModel>;
-export function stationaryEvidence(cone = false) {
+export function stationaryEvidence(cone = false, fadedPanel = false) {
   const state = stateStore.getState().state;
   const elements = graphElements(state, false);
   if (!cone) {
@@ -263,11 +263,13 @@ export function stationaryEvidence(cone = false) {
     state,
     cone ? state.changes["change-A"]?.proposal?.impact : null,
   );
-  flushSync(() =>
-    root?.render(
-      <MapLayer frame={{ model: stableModel, level: "map", zoom: 0.3, pan: { x: 40, y: 40 } }} />,
-    ),
-  );
+  // Supplementary synthetic coverage: a wholly out-of-cone panel still has a visible agent.
+  if (fadedPanel)
+    for (const group of stableModel.groups)
+      for (const module of group.modules) module.inCone = false;
+  const frame = { model: stableModel, level: "map" as const, zoom: 0.3, pan: { x: 40, y: 40 } };
+  flushSync(() => root?.render(<MapLayer frame={frame} />));
+  return { level: frame.level, zoom: frame.zoom, pan: frame.pan };
 }
 export function reviewEvidence() {
   flushSync(() => {
