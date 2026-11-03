@@ -23,6 +23,11 @@ pytestmark = [
 ]
 
 
+def long_temp_dir() -> Path:
+    """Keep paths short while expanding Windows 8.3 aliases before native validation."""
+    return Path(tempfile.mkdtemp(prefix="ov-")).resolve()
+
+
 async def assert_combined_failure_then_repair(workspace, fixture, agent):
     module = agent.root / fixture.module
     module.write_bytes(b"def value():\n    return 42\n")
@@ -59,7 +64,7 @@ async def assert_combined_failure_then_repair(workspace, fixture, agent):
 
 @pytest.mark.parametrize("layout", ["packages/foo/src", "backend/src"])
 async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout):
-    tmp_path = Path(tempfile.mkdtemp(prefix="ov-"))
+    tmp_path = long_temp_dir()
     fixture = await driver.prepare_own_fixture(tmp_path, layout=layout)
     before = {
         p: (fixture.source / p).read_bytes()
@@ -109,7 +114,7 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout):
 
 
 async def test_missing_original_venv_still_serves_graph(tmp_path):
-    tmp_path = Path(tempfile.mkdtemp(prefix="ov-"))
+    tmp_path = long_temp_dir()
     source = tmp_path / "source"
     source.mkdir()
     (source / "code.py").write_text("value = 1\n", encoding="utf-8")
