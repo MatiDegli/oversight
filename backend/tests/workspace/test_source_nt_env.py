@@ -34,7 +34,7 @@ async def test_readiness_suite_environment_agreement(tmp_path, monkeypatch, plat
         monkeypatch.setattr(suite, "sys", SimpleNamespace(platform=platform))
         monkeypatch.setattr(runner, "sys", SimpleNamespace(platform=platform))
         # Separate readiness/suite deadlines; retain a real epoch for Git integrity leases.
-        now = time.monotonic()
+        now = float(int(time.monotonic()))
         monkeypatch.setattr(core, "time", SimpleNamespace(monotonic=lambda: now))
         workspace._own_source = source
         tree = workspace.main.root
