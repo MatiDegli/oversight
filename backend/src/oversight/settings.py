@@ -152,7 +152,7 @@ class Settings:
     """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
     demo_python: Path | None = None
     preview_profile: PreviewProfile = field(default_factory=PreviewProfile)
-    """Explicit trusted preview startup configuration; production opening remains disabled."""
+    """Frozen preview startup configuration; opening is opt-in and requires trusted demo paths."""
     """Tests only, no variable: an interpreter with pytest, used instead of building the demo
     venv."""
     frontend_dist: Path | None = None
@@ -290,9 +290,13 @@ def resolve_preview_profile(
     def duration(name: str, default: float) -> float:
         return float(values.get("OVERSIGHT_PREVIEW_" + name, str(default)))
 
+    enabled = values.get("OVERSIGHT_PREVIEW_ENABLED", "false")
+    if enabled not in {"true", "false"}:
+        raise ValueError("OVERSIGHT_PREVIEW_ENABLED must be true or false")
     raw_ports = values.get("OVERSIGHT_PREVIEW_PORTS", "")
     ports = tuple(int(item) for item in raw_ports.split(",")) if raw_ports else ()
     return PreviewProfile(
+        enabled=enabled == "true",
         adapter=Path(values["OVERSIGHT_PREVIEW_ADAPTER"])
         if values.get("OVERSIGHT_PREVIEW_ADAPTER")
         else None,
