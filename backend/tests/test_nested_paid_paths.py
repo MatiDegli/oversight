@@ -15,6 +15,7 @@ from test_nested_composition import event, inputs, session
 from oversight import runtime_answering, runtime_review
 from oversight.agents import RunEnd, validate_answering
 from oversight.api import ApiError
+from oversight.events import parse_needs_you
 from oversight.nested_entry import parse_config
 from oversight.settings import Settings
 
@@ -69,6 +70,8 @@ async def test_all_role_seams_have_no_paid_fallback(
         # Scheduling still refuses if an independent reviewer configuration is enabled.
         monkeypatch.setattr(live, "_settings", replace(live._settings, cross_review=True))
         runtime_review.facts_ready(live, capture, proposal, author="agent")
+        assert not live._review_pending
+        await asyncio.gather(*list(live._reviews.values()))
         assert not live._review_pending and not live._reviews
         live._review_pending[proposal.agent_id] = capture, proposal
         runtime_review.run_ended(
@@ -96,6 +99,36 @@ async def test_all_role_seams_have_no_paid_fallback(
     configurations.assert_not_called()
     constructors.assert_not_called()
     transport.assert_not_called()
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_nested_review_scheduling_publishes_refusal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, enabled: bool
+) -> None:
+    configured = Mock(side_effect=AssertionError("unsupported review configured"))
+    monkeypatch.setattr("oversight.runtime_review.configured_reviewer", configured)
+    async with session(parse_config(inputs(tmp_path))) as (_, live, client):
+        monkeypatch.setattr(live, "_settings", replace(live._settings, cross_review=enabled))
+        assert (await client.post("/agents", json={"task": "implement coupon"})).status_code == 201
+        status = await event(live, "agent.status", state="ready_for_review")
+        await asyncio.gather(*list(live._runs.values()), *list(live._reviews.values()))
+        assert not live._review_pending and not live._reviews
+        proposal = next(
+            p for p in live.store.committed_events() if p.type == "change.proposed"
+        ).payload
+        reports = [
+            e.payload
+            for e in live.store.committed_events()
+            if e.type == "error" and e.payload.change_id == status["change_id"]
+        ]
+        assert len(reports) == 1
+        refusal = parse_needs_you(reports[0].message)
+        assert reports[0].source == "server" and reports[0].agent_id == proposal.agent_id
+        assert not reports[0].fatal
+        assert refusal is not None and refusal.code == "reviewer_missing"
+        assert refusal.revision == proposal.revision and refusal.head == proposal.head_commit
+        assert "Nested role is not supported: review" in refusal.reason
+        configured.assert_not_called()
 
 
 @pytest.mark.parametrize("role", ["coder", "lead"])
