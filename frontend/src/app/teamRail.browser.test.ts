@@ -66,7 +66,7 @@ const disclosure = (page: Page, title = "Lead A") =>
   page.getByRole("button", { name: `Members of ${title}`, exact: true });
 const timeline = (page: Page) => page.getByRole("list", { name: "Conversation timeline" });
 const draft = (page: Page) =>
-  page.getByRole("textbox", { name: "Message Agent A·1 · plan 1", exact: true });
+  page.getByRole("textbox", { name: "Message Agent A·1", exact: true });
 async function inspect(page: Page, name: string) {
   await mkdir(evidenceRoot, { recursive: true });
   await page.screenshot({
@@ -83,11 +83,9 @@ it.each(["dark", "day"])(
       await check(page.locator('.chat-lone-agent [data-agent-origin="lone-c"]')).toContainText(
         "Agent C",
       );
-      await check(page.locator(".chat-agent-name").filter({ hasText: "A·1 · plan 1" })).toHaveText(
-        "A·1 · plan 1",
-      );
+      await check(page.locator(".chat-agent-name").filter({ hasText: /^A·1$/ })).toHaveText("A·1");
       const chip = page.getByRole("button", {
-        name: `Open ${observedPath} · Agent A·1 · plan 1 · Editing`,
+        name: `Open ${observedPath} · Agent A·1 · Editing`,
         exact: true,
       });
       await check(chip).toHaveAttribute("aria-description", "lines 12 to 28");
