@@ -3,8 +3,9 @@
 The UI answers every GET that no API route took. `/` and any other path that is not an API path
 and does not name a file get `index.html`, so a client-side route survives a reload. A file of
 the build is served as it is: hashed assets under `/assets/` with a year's cache, everything else,
-`index.html` included, with `no-cache`. A path that names a file the build lacks, `/assets/x.js`
-or `/favicon.ico`, is the API's `not_found`: a script request must never be answered with HTML.
+with `no-cache`; the live index uses `no-store`. A path that names a file the build lacks,
+`/assets/x.js` or `/favicon.ico`, is the API's `not_found`: a script request must never be
+answered with HTML.
 
 The UI route steps aside for the API's own paths (`API_PATHS`, the list in the frontend's
 vite.config.ts, which a test keeps equal): an unknown API path is the API's 404, and a wrong
@@ -13,16 +14,19 @@ reaches the browser as it is written.
 """
 
 import ntpath
+import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from starlette.routing import Match, Route
 from starlette.types import Scope
 
 from oversight.api.errors import error_response
 from oversight.api.preview_policy import frame_policy
+from oversight.preview_startup import validate_preview_startup
 
 API_PATHS = frozenset(
     {
@@ -125,12 +129,36 @@ def _frames(request: Request) -> str:
         return frame_policy()
 
 
-def add_static(app: FastAPI, dist: Path) -> bool:
+def add_static(
+    app: FastAPI,
+    dist: Path,
+    *,
+    startup_report: Callable[[], str | None] | None = None,
+) -> bool:
     """Serve the build in `dist` after the app's own routes. False, and nothing added, without
-    `dist/index.html`: a source checkout that was never built has no UI to serve."""
+    `dist/index.html`: a source checkout that was never built has no UI to serve.
+    The parent live app supplies the report callback, including when no report is enabled;
+    other static callers retain their file responses and cache policy."""
     root = dist.resolve()
     if not (root / INDEX).is_file():
         return False
+
+    def respond(target: Path) -> Response:
+        if startup_report is None or target != root / INDEX:
+            return _respond(target, root)
+        html = target.read_text(encoding="utf-8", errors="strict")
+        serialized = startup_report()
+        if serialized is not None and validate_preview_startup(serialized):
+            element = (
+                '<script type="application/json" id="oversight-preview-startup">'
+                + serialized
+                + "</script>"
+            )
+            # Before the first script, including module scripts in Vite's head.
+            match = re.search(r"<script\b", html, flags=re.IGNORECASE)
+            position = match.start() if match else len(html)
+            html = html[:position] + element + html[position:]
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     def serve(request: Request) -> Response:
         relative = request.path_params["path"]
@@ -138,7 +166,7 @@ def add_static(app: FastAPI, dist: Path) -> bool:
             return error_response("not_found", "no such resource")
         target = _file_under(root, relative or INDEX)
         if target is not None:
-            response = _respond(target, root)
+            response = respond(target)
             if target.suffix == ".html":
                 response.headers["Content-Security-Policy"] = _frames(request)
             return response
@@ -148,7 +176,7 @@ def add_static(app: FastAPI, dist: Path) -> bool:
         index = _file_under(root, INDEX)
         if looks_like_file or index is None:
             return error_response("not_found", "no such resource")
-        response = _respond(index, root)
+        response = respond(index)
         response.headers["Content-Security-Policy"] = _frames(request)
         return response
 
