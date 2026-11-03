@@ -438,10 +438,12 @@ class AgentRun:
         until = deadline.when()
         assert until is not None
         remaining = max(0.0, until - asyncio.get_running_loop().time())
+        summary = outcome.summary
+        if not summary.endswith((".", "!", "?")):
+            summary += "."
         return replace(
             outcome,
-            summary=outcome.summary
-            + f" Queued {queued:.1f} s; round budget remaining {remaining:.1f} s.",
+            summary=summary + f" Queued {queued:.1f} s; round budget remaining {remaining:.1f} s.",
         )
 
     def _since(self, started: float) -> int:

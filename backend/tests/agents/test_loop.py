@@ -467,7 +467,7 @@ async def test_run_tests_summary_queue_and_budget(small_tree, monkeypatch, mode)
     else:
         assert (await run.run()).state == "ready_for_review"
     first = steps(recorder)[0]
-    match = re.search(r"Queued 2.5 s; round budget remaining ([\d.]+) s\.$", first.summary)
+    match = re.search(r"\. Queued 2.5 s; round budget remaining ([\d.]+) s\.$", first.summary)
     assert match and float(match[1]) == pytest.approx(expected_budget[0], abs=0.051)
     assert "Queued" not in (first.error or "")
     assert recorder.suites == (
@@ -484,6 +484,28 @@ async def test_run_tests_summary_queue_and_budget(small_tree, monkeypatch, mode)
             for request in model.requests
             for message in request
         )
+
+
+@pytest.mark.parametrize(
+    "summary, expected",
+    [
+        ("Ran tests: 3 of 4 pass", "Ran tests: 3 of 4 pass."),
+        ("Tests reached the limit.", "Tests reached the limit."),
+        ("Tests passed!", "Tests passed!"),
+        ("Tests available?", "Tests available?"),
+    ],
+)
+async def test_queue_summary_joins_sentences(small_tree, monkeypatch, summary, expected):
+    run = make_run(small_tree, script(), Recorder())
+    run._tools._queue_wait(2.5)
+    outcome = ToolOutcome(ok=True, summary=summary, content="Unchanged model observation")
+    # Freeze only this synchronous helper call; no event-loop callbacks use the fake clock.
+    with monkeypatch.context() as clock:
+        clock.setattr(asyncio.get_running_loop(), "time", lambda: 0.0)
+        updated = run._queue_summary(outcome, asyncio.Timeout(41.0))
+    assert updated.summary == expected + " Queued 2.5 s; round budget remaining 41.0 s."
+    assert updated.content == outcome.content
+    assert outcome.summary == summary
 
 
 async def test_queue_timing_does_not_reset_no_progress(small_tree, monkeypatch):
@@ -521,6 +543,7 @@ async def test_round_deadline_while_waiting_reports_queue_time(
 ):
     from oversight.workspace.locks import QueueWait
 
+    tasks_before = asyncio.all_tasks()
     workspace, tree = small_tree
     scanned, admit, held, release, waiting = [asyncio.Event() for _ in range(5)]
     scan = Toolbox.refresh_graph
@@ -591,7 +614,7 @@ async def test_round_deadline_while_waiting_reports_queue_time(
     async with workspace.locks(main=True, agent_id=tree.agent_id), workspace.git_lease():
         pass
     assert workspace.operations.idle
-    assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]
+    assert asyncio.all_tasks() <= tasks_before
 
 
 async def test_queue_timing_is_cleared_before_a_call_that_cannot_report(small_tree, monkeypatch):
