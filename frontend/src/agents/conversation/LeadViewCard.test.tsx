@@ -97,8 +97,10 @@ it("uses only the current candidate's latest measured behavior and shared limita
   const html = render(view, 7);
   for (const label of ["Inputs compared", "These bounded inputs do not establish equivalence."])
     expect(html).toContain(label);
-  for (const prefix of [8, 9, 11])
+  for (const prefix of [8, 9, 11]) {
     expect(render(view, prefix)).toContain("No referenced items are available");
+    expect(render(view, prefix)).toContain("<h3>Measured behavior</h3>");
+  }
   expect(render(view, 10)).toContain("Behavior diff");
   expect(render(view, 12)).toContain("Behavior diff");
 });

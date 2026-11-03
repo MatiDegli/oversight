@@ -1041,6 +1041,72 @@ it("shows live moment facts without rewind and never moves focus on arriving vie
   await check(page.getByRole("article")).toHaveCount(5);
   await page.close();
 });
+it.each([390, 1280])(
+  "keeps mixed-script cards readable at %i and in a 200 percent zoom-equivalent viewport",
+  async (width) => {
+    const page = await openViews(width);
+    const caption = `مراجعة 漢字 👩🏽‍💻 ${"LongReference".repeat(9)} <b>speech</b>`;
+    try {
+      await page.evaluate((caption) => {
+        window.chatLeadsTest.deliver([
+          {
+            type: "lead.view",
+            seq: 0,
+            ts: "2026-11-03T00:01:00Z",
+            payload: {
+              agent_id: "agent-9",
+              through_seq: 6,
+              caption,
+              view: { kind: "moment", event_seq: 6 },
+            },
+          },
+        ]);
+      }, caption);
+      const speech = page.getByText(caption, { exact: true });
+      await speech.scrollIntoViewIfNeeded();
+      await check(speech).toBeVisible();
+      await check(speech).toHaveCSS("direction", "rtl");
+      await check(speech.locator("b")).toHaveCount(0);
+      // Half the CSS viewport models browser zoom reflow, including media queries.
+      // CSS zoom alone leaves desktop breakpoints active. Physical devices remain untested.
+      if (width === 1280) await page.setViewportSize({ width: 640, height: 400 });
+      expect(
+        await page.locator(".lead-view-card").evaluateAll((cards) =>
+          cards
+            .filter((card) => card.scrollWidth > card.clientWidth)
+            .map((card) => ({
+              title: card.getAttribute("aria-label"),
+              width: card.clientWidth,
+              scrollWidth: card.scrollWidth,
+            })),
+        ),
+      ).toEqual([]);
+      await page.evaluate(() => window.chatLeadsTest.mountViews(true, true));
+      const behavior = page.getByRole("article", { name: "Measured behavior" });
+      const samples = behavior.getByText("Samples (1)", { exact: true });
+      await samples.click();
+      await check(behavior.getByText("ValueError", { exact: true })).toBeVisible();
+      if (width === 390) {
+        expect((await samples.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+        await check(behavior.locator("h3")).toHaveCSS("font-weight", "700");
+      }
+      await page.getByRole("button", { name: "View event 6", exact: true }).click();
+      const back = page.getByRole("button", { name: "Back", exact: true });
+      await check(back).toBeVisible();
+      expect((await back.boundingBox())?.width).toBeGreaterThanOrEqual(44);
+      expect((await back.boundingBox())?.height).toBeGreaterThanOrEqual(width === 390 ? 44 : 34);
+      await page.emulateMedia({ forcedColors: "active" });
+      await page.keyboard.press("Tab");
+      await back.focus();
+      await check(back).toHaveCSS("outline-style", "solid");
+      await back.press("Enter");
+      await check(back).toHaveCount(0);
+      await check(page.getByRole("article", { name: "Run moment" })).toBeVisible();
+    } finally {
+      await page.close();
+    }
+  },
+);
 it("opens the merged exact recorded file and keeps its diff read-only", async () => {
   const page = await openViews();
   const file = page.getByRole("article", { name: "Changed files" }).getByRole("button").last();

@@ -81,10 +81,10 @@ export function LeadViewCard({
         <strong>Lead {header.letter}</strong>
         <EventTime ts={event.ts} />
       </header>
-      <p className={caption === null ? "lead-view-note" : "lead-view-caption"}>
+      <p dir="auto" className={caption === null ? "lead-view-note" : "lead-view-caption"}>
         {caption ?? "Caption omitted or withheld in this source."}
       </p>
-      {view.kind !== "behavior" && <h3>{title}</h3>}
+      {(view.kind !== "behavior" || references.length === 0) && <h3>{title}</h3>}
       {references.length === 0 ? (
         <p className="lead-view-note">
           No referenced items are available at this point in the run.

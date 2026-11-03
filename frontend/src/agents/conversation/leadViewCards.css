@@ -25,9 +25,10 @@
 .lead-view-card h3 {
   margin: 16px 0 8px;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
 .lead-view-caption {
+  max-inline-size: 75ch;
   margin-top: 6px;
   white-space: pre-wrap;
   font-size: 15px;
@@ -70,6 +71,10 @@
   cursor: default;
   color: var(--muted);
 }
+.lead-view-card summary {
+  min-height: 36px;
+  align-content: center;
+}
 .lead-view-card code {
   font-family: var(--font-mono);
 }
@@ -94,6 +99,8 @@
   font-size: 14px;
 }
 .view-history-banner button {
+  min-width: 44px;
+  min-height: 34px;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -106,7 +113,9 @@
     margin: 10px 12px;
     padding: 12px;
   }
-  .lead-view-card button {
+  .lead-view-card button,
+  .lead-view-card summary,
+  .view-history-banner button {
     min-height: 44px;
   }
 }
