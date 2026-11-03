@@ -89,6 +89,7 @@ const mapStyles = `
   text-overflow: clip;
   background: color-mix(in srgb, var(--card) 85%, transparent);
 }
+.map-agent-caption { display: block; font-weight: 400; }
 [aria-label="Repository graph"][data-map-level="map"] {
   opacity: 0;
 }
@@ -161,12 +162,15 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                     ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
                     : "empty"}
                 </div>
-                {module.agents.map(({ agentId, hue, text }) => (
+                {module.agents.map(({ agentId, hue, text, planContext }) => (
                   <div
                     key={agentId}
                     className={`map-agent ${full ? "map-agent-full " : ""}${agentLook[hue].textClass}`}
                   >
                     {text}
+                    {planContext && (
+                      <span className="map-agent-caption">{planContext.caption}</span>
+                    )}
                   </div>
                 ))}
               </div>

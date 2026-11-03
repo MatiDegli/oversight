@@ -8,6 +8,23 @@ import { graphElements } from "../graph/elements";
 import { mapModel } from "../graph/mapModel";
 import { MapLayer } from "../graph/MapLayer";
 import { themes } from "../theme";
+import design from "../../../DESIGN.md?raw";
+import decisions from "../../../DECISIONS.md?raw";
+
+it("documents the collision qualifier in both label rules and this front's decision", () => {
+  const rules = [
+    design.split("**The Never Alone Rule.**")[1]?.split("\n\n")[0],
+    design.split("**Agent labels.**")[1]?.split("\n\n")[0],
+    decisions
+      .split("## 2026-11-02 — Team hue and agent label, packet b-1102f")[1]
+      ?.split("\n## ")[0],
+  ];
+  for (const rule of rules) {
+    expect(rule).toContain(" · plan k");
+    expect(rule).toContain("first-observed order within its lead");
+    expect(rule).toContain("only when labels collide");
+  }
+});
 
 function assignedPlan(id: string, agentId: string) {
   const source = plan(id, "lead");
@@ -65,7 +82,9 @@ it.each(["dark", "day"] as const)(
       expect(chat).toContain(`aria-label="Agent ${label}: Same subtask.`);
       const header = renderToStaticMarkup(<ConversationPanelHeader header={conversation.header} />);
       expect(header).toMatch(new RegExp(`<h2[^>]*>Agent ${label}</h2>`));
-      expect(map).toContain(`${label} editing</div>`);
+      expect(map).toContain(
+        `A·1 editing<span class="map-agent-caption">plan ${String(ordinal)}</span></div>`,
+      );
     }
   },
 );

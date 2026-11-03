@@ -110,7 +110,7 @@ export function mapModel(elements: readonly GraphElement[], theme: GeometryToken
       combineMarks(nodes.flatMap((node) => node.data.marks?.badges ?? []))?.badges ?? []
     ).map((mark) => ({
       ...mark,
-      text: `${mark.label} ${mark.work === "edit" ? "editing" : mark.ready ? "ready" : mark.work === "read" ? "reading" : mark.word}`,
+      text: `${mark.planContext?.shortLabel ?? mark.label} ${mark.work === "edit" ? "editing" : mark.ready ? "ready" : mark.work === "read" ? "reading" : mark.word}`,
     }));
     group.modules.push({
       id: root.data.id,
@@ -196,7 +196,8 @@ export function moduleLayout(
   pan: { x: number; y: number },
 ) {
   const radius = Math.max(5, Math.min(9, Math.round(model.cellHeight * zoom * 0.1)));
-  const height = 2 * radius + 3 + 15.6 + 14.4 * (1 + module.agents.length) + ringClearance(module);
+  const agentLines = module.agents.reduce((count, agent) => count + (agent.planContext ? 2 : 1), 0);
+  const height = 2 * radius + 3 + 15.6 + 14.4 * (1 + agentLines) + ringClearance(module);
   const x = module.x * zoom + pan.x,
     top = module.y * zoom + pan.y - height / 2;
   const width = model.cellWidth * zoom - 10;

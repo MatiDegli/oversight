@@ -563,7 +563,7 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 
 **The Team or State Rule.** A hue identifies a team or a state (green passed or added, red failed, removed or destructive). Team = lead, else plan, else agent, through the shared team selector. Nothing else gets a hue: no brand color, accent or decorative gradient. Counters across teams are neutral.
 
-**The Never Alone Rule.** Every team hue comes with a team letter or agent label. An agent label is letter·n, where n is its plan subtask index plus one; a person-started lone agent uses its letter alone. Every state color comes with a word, sign (`+`, `-`) or icon.
+**The Never Alone Rule.** Every team hue comes with a team letter or agent label. An agent label is letter·n, where n is its plan subtask index plus one; a person-started lone agent uses its letter alone. Append " · plan k" only when labels collide across plans of one lead, where k is the plan's first-observed order within its lead. Every state color comes with a word, sign (`+`, `-`) or icon.
 
 **The No Amber Rule.** There are no yellow or amber warnings. A warning is said in words with an
 icon, in neutral colors.
@@ -1027,7 +1027,7 @@ introduces no animation. Folded cards and opaque graph text plates mask straight
 Open frames retain their translucent body fill and stay below their rows during edge hover;
 straight lines can show through that fill.
 
-**Agent labels.** Hue means team; label means agent. Use the same label on graph work chips and markers, cards, Conversation, inbox, file presence and rails. Use letter·n for plan subtasks and the letter alone for a person-started lone agent. Labels are never inferred from runtime seats or palette families. For example, a plan’s second subtask is "Agent A·2"; a person-started lone agent is "Agent A". No avatars, beads or mascots.
+**Agent labels.** Hue means team; label means agent. Use the same label on graph work chips and markers, cards, Conversation, inbox, file presence and rails. Use letter·n for plan subtasks and the letter alone for a person-started lone agent. Append " · plan k" only when labels collide across plans of one lead, where k is the plan's first-observed order within its lead. Compact tiles and map chips show the short label with a separate "plan k" caption; the map's first line retains the state word. Labels are never inferred from runtime seats or palette families. For example, a plan’s second subtask is "Agent A·2"; colliding first subtasks are "Agent A·1 · plan 1" and "Agent A·1 · plan 2"; a person-started lone agent is "Agent A". No avatars, beads or mascots.
 
 **Distance badges.** A 20px circle filled with text, the distance as a page-colored number, 12px,
 weight 700. Neutral: the cone is about the code, not an agent.

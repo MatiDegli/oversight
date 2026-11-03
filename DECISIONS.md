@@ -4221,7 +4221,7 @@ comments and copy:
 
 ## 2026-11-02 — Team hue and agent label, packet b-1102f
 
-The maintainer approved packet b-1102f at 2026-11-02T14:34:16Z: “Sí, aprobalo”. Color means a team; the label means the agent. Team identity comes only from the shared frontend selectTeams selector, matching lead, else plan, else agent. Plan labels use letter·n with the plan subtask index plus one. A person-started lone agent is C, becoming C·1 once its plan gives it a sibling.
+The maintainer approved packet b-1102f at 2026-11-02T14:34:16Z: “Sí, aprobalo”. Color means a team; the label means the agent. Team identity comes only from the shared frontend selectTeams selector, matching lead, else plan, else agent. Plan labels use letter·n with the plan subtask index plus one. A person-started lone agent is C, becoming C·1 once its plan gives it a sibling. Collision clarification (2026-11-03): append " · plan k" only when labels collide across plans of one lead, where k is the plan's first-observed order within its lead. Each plan keeps its own subtask indices and shared team hue. Compact tiles and map chips show the short label with a separate "plan k" caption, retaining the state word on the map's first line.
 
 The approved sketch is a reference outside the repository; the design is built in code against DESIGN.md (the maintainer, 2026-11-02T18:19:25Z). Six existing palette families supply team hues. A seventh team skips teams with pending changes and reuses the hue of the longest-idle remaining team; when every team has a pending change, it uses the longest-idle team. Letters distinguish shared hues. This answer overrides the seventh-team image.
 
