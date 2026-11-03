@@ -376,3 +376,153 @@ it("mounts cone membership once with missing facts or comparison and retains Det
     );
   }
 });
+
+const attributedView = (problems: string[], complete = false): State => ({
+  ...state,
+  changeFacts: { [facts.change_id]: [{ ...facts, complete, problems }] },
+});
+const hash = (html: string) => createHash("sha256").update(html).digest("hex");
+
+it("pins pre-attribution HTML for ordinary and empty problems in both modes", () => {
+  const pins = [false, true].flatMap((panel) =>
+    [false, true].flatMap((complete) =>
+      [
+        [],
+        facts.problems,
+        [
+          " configuration attribution: one",
+          "Configuration attribution: two",
+          "configuration attribution:",
+        ],
+      ].map((problems) =>
+        hash(
+          renderToStaticMarkup(
+            <ReviewFacts
+              state={attributedView(problems, complete)}
+              proposal={proposal}
+              panel={panel}
+            />,
+          ),
+        ),
+      ),
+    ),
+  );
+  expect(pins).toMatchInlineSnapshot(`
+    [
+      "ec42f5319d6d217226d18c09c4eb8dedbba99b207a8d98f55173bbced013db0f",
+      "2fc8db237bd78d7748b89c9ca85bcef75db7c17eebc2fe27d4d74c9e9e198285",
+      "37b4a6301e2e1a63f6a4ce6fac33cfdc2008022fa7937a9ed80cd29ccbaedeb2",
+      "11617a2409c2e4e1b50a8c7d6013f2a24f5fef9349cdd656eae1cc54aef7946f",
+      "260fd8b408c863fa8d79e058decaa91bd6a4fd0e817d57658f73b23931e1c7d6",
+      "11617a2409c2e4e1b50a8c7d6013f2a24f5fef9349cdd656eae1cc54aef7946f",
+      "58ce42a58beef833d870e68995c75bb76ec38f89db6fcff0d31f0e8b45d40db4",
+      "99b35f65581bb729b1f0bcaf6b9695c6c52bcc1cfe12c81d8c313658ac53a1aa",
+      "db62974691eb5d9ae7106723e11ecae911a9ca33bd3f9d6db04b73d4558ddcd0",
+      "6c8db2d1e662c3ad0512104bfc63e9cd24f7b1aa8a9da3a86a18f0af9305581e",
+      "297312fea69ab9e4b2931be4cfe86432c3b5fa2db89522c2428e1b907f1f43cf",
+      "6c8db2d1e662c3ad0512104bfc63e9cd24f7b1aa8a9da3a86a18f0af9305581e",
+    ]
+  `);
+});
+it("pins the untouched real recording and the no-comparison body without attribution", () => {
+  const recorded: ServerEvent[] = readFileSync(
+    new URL("../../../fixtures/events/recorded-demo.jsonl", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as ServerEvent);
+  const first = recorded.find((event) => event.type === "change.proposed");
+  if (first?.type !== "change.proposed") throw new Error("Missing recorded proposal");
+  const original = recorded
+    .filter((event) => event.seq <= first.seq)
+    .reduce(applyEvent, createInitialState());
+  expect([
+    hash(renderToStaticMarkup(<ReviewFacts state={original} proposal={first.payload} />)),
+    ...[false, true].map((phone) =>
+      hash(
+        renderToStaticMarkup(
+          <ReviewBody
+            state={attributedView([])}
+            changeId={proposal.change_id}
+            diff={null}
+            showCrossReview={false}
+            phone={phone}
+          />,
+        ),
+      ),
+    ),
+  ]).toMatchInlineSnapshot(`
+    [
+      "d90283ecf74510c19a8600caeccefb8cfa7a52e9e3ef576996ec3487ca951f2f",
+      "efa85e5370363344cff12e5451f1a1b60601fa56efdb92c5a3b97f3019ab3c3f",
+      "efa85e5370363344cff12e5451f1a1b60601fa56efdb92c5a3b97f3019ab3c3f",
+    ]
+  `);
+});
+
+it.each([false, true])(
+  "renders separate attribution text with panel=%s for both completeness values",
+  (panel) => {
+    for (const complete of [false, true]) {
+      for (const mixed of [false, true]) {
+        const notes = [
+          "configuration attribution:  unchanged <script>x</script> & path\nnext  ",
+          "configuration attribution: second",
+          "configuration attribution: second",
+        ] as const;
+        const problems = mixed
+          ? ["first ordinary", notes[0], "last ordinary", ...notes.slice(1)]
+          : [...notes];
+        const view = attributedView(problems, complete);
+        const before = structuredClone(view);
+        const html = renderToStaticMarkup(
+          <ReviewFacts state={view} proposal={proposal} panel={panel} />,
+        );
+        expect(html.match(/<p[^>]*>Configuration attribution: /g)).toHaveLength(3);
+        expect(html).toContain(
+          "Configuration attribution:  unchanged &lt;script&gt;x&lt;/script&gt; &amp; path\nnext  </p>",
+        );
+        expect(html.indexOf("unchanged")).toBeLessThan(
+          html.indexOf("Configuration attribution: second"),
+        );
+        expect(html).not.toContain("<script>");
+        expect(html).not.toContain('role="alert"');
+        expect(html.includes("<p>Incomplete: first ordinary; last ordinary</p>")).toBe(
+          mixed && !complete,
+        );
+        expect(html).not.toContain("Incomplete: configuration attribution:");
+        if (!mixed) {
+          expect(html).not.toContain("Incomplete:");
+          if (!panel) expect(html).toContain(">Review signals</summary>");
+        }
+        expect(view).toEqual(before);
+      }
+    }
+  },
+);
+it.each([false, true])(
+  "exposes closed Details for current attribution alone with phone=%s",
+  (phone) => {
+    const view = attributedView(["configuration attribution: unchanged"]);
+    const render = () =>
+      renderToStaticMarkup(
+        <ReviewBody
+          state={view}
+          changeId={proposal.change_id}
+          diff={null}
+          showCrossReview={false}
+          phone={phone}
+        />,
+      );
+    const html = render();
+    expect(html).toContain('aria-label="Details"');
+    expect(html).toContain("<details>");
+    expect(html).not.toContain("<details open");
+    expect(html).not.toMatch(/What was compared|Test sequence findings/);
+    const current = view.changeFacts[facts.change_id]?.[0];
+    if (!current) throw new Error("Missing current facts");
+    current.revision++;
+    expect(render()).not.toContain('aria-label="Details"');
+  },
+);

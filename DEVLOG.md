@@ -78,10 +78,13 @@ One line per day, in Argentina time (ART).
   event sequences beside their scene definitions; the browser suite keeps Stop, cap, density and capture assertions together
   so their shared lifecycle evidence can be reviewed in context. Added reference-card proofs stay
   beside the shared lifecycle and capture harness, while viewScenario (93 lines) keeps the graph,
-  measured behavior, long files and ordered Chat events in one auditable production-fold sequence; GraphView.tsx (526 lines) keeps the framing props added for reference highlights beside its camera lifecycle, and chatLeads.browser.test.ts (1294 lines) extends its 1285-line baseline with keyboard-return and framing assertions.
+  measured behavior, long files and ordered Chat events in one auditable production-fold sequence; GraphView.tsx (526 lines) keeps the framing props added for reference highlights beside its camera lifecycle, and chatLeads.browser.test.ts (1310 lines) extends its 1285-line baseline with keyboard-return, framing and grouped-row geometry assertions.
   Composer also exceeds 80 lines:
   its shared draft hooks and active/ended command surfaces stay together to preserve hook order
   and make the terminal early return auditable. These size exceptions remain for reviewer judgment.
+  Added configuration attribution as separate informational review paragraphs with exact-prefix
+  partitioning, attribution-only Details, unchanged HTML pins and synthetic replay captures at
+  1440/390 in dark/day; preserved contracts, recordings and integrity policy, with no paid calls.
   Added demo/Boltons run_tests queue diagnostics: call-scoped lock contention, throttled path-free
   backend logs, cancellation-safe elapsed callbacks and server-only completed/interrupted step
   summaries, with deterministic queue clocks and fake-model HTTP Stop/deadline/no-progress proofs.

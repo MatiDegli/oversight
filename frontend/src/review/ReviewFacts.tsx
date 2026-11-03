@@ -11,6 +11,10 @@ import { behaviorNotRecorded } from "./behaviorEvidence";
 import { MeasuredCallers } from "./MeasuredCallers";
 import { factsForRevision } from "./factsForRevision";
 import { mergedRuleWords } from "./evidenceWords";
+import {
+  CONFIGURATION_ATTRIBUTION_PREFIX,
+  partitionConfigurationAttribution,
+} from "./configurationAttribution";
 
 /** The same neutral vocabulary as changes/_reviewfacts.py; no policy assessment. */
 export function detectorLine(facts: ChangeFacts): string {
@@ -160,6 +164,8 @@ export function ReviewFacts({
         <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
       </section>,
     );
+  const { attributions, problems } = partitionConfigurationAttribution(facts.problems);
+  const attributionOnly = attributions.length > 0 && problems.length === 0;
   const executions = facts.test_runs
     .map((seq) => state.testExecutions[seq])
     .filter(
@@ -179,7 +185,9 @@ export function ReviewFacts({
         <summary className="cursor-pointer rounded-label font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text">
           {panel
             ? "Details"
-            : `Review signals · ${facts.complete ? "Recorded facts" : "Incomplete"}`}
+            : attributionOnly
+              ? "Review signals"
+              : `Review signals · ${facts.complete ? "Recorded facts" : "Incomplete"}`}
           {panel && <ChevronRight aria-hidden="true" size={16} />}
         </summary>
         <div
@@ -218,6 +226,15 @@ export function ReviewFacts({
               detectorLine(facts) !== "Tests in this change: 0 recorded test changes") && (
               <p>{detectorLine(facts)}</p>
             )}
+            {attributions.map((diagnostic, index) => (
+              <p
+                key={index}
+                className="font-sans text-[15px]/[22px] font-normal whitespace-pre-wrap text-muted wrap-anywhere"
+              >
+                Configuration attribution:{" "}
+                {diagnostic.slice(CONFIGURATION_ATTRIBUTION_PREFIX.length)}
+              </p>
+            ))}
             {facts.added_tests.length > 0 && (
               <ul aria-label={panel ? "Added tests" : "Added test signals"}>
                 {facts.added_tests.map((probe) => (
@@ -234,7 +251,7 @@ export function ReviewFacts({
               <BehaviorDiff state={state} changeId={proposal.change_id} detailsOnly={panel} />
               {facts.behavior_diff == null && <p>{behaviorNotRecorded}</p>}
             </div>
-            {!facts.complete && <p>Incomplete: {facts.problems.join("; ")}</p>}
+            {!facts.complete && !attributionOnly && <p>Incomplete: {problems.join("; ")}</p>}
             <div className={`pt-(--spacing-lg)${panel ? " empty:hidden" : ""}`}>
               <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
             </div>
