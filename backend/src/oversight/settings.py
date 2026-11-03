@@ -34,7 +34,7 @@ type ParsedSettingName = (
 
 
 def read_env_file(path: Path) -> dict[str, str]:
-    """Parse KEY=VALUE lines; blank lines and comments are skipped, quotes around values removed."""
+    """Parse KEY=VALUE lines, preserving the literal preview opt-in for startup validation."""
     values: dict[str, str] = {}
     if not path.is_file():
         return values
@@ -42,8 +42,10 @@ def read_env_file(path: Path) -> dict[str, str]:
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
-        key, _, value = line.partition("=")
-        values[key.strip()] = value.strip().strip("\"'")
+        key, _, value = raw.partition("=")
+        key = key.strip()
+        # Validate after environment precedence, without normalizing this literal-only flag.
+        values[key] = value if key == "OVERSIGHT_PREVIEW_ENABLED" else value.strip().strip("\"'")
     return values
 
 

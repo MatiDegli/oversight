@@ -39,7 +39,32 @@ def test_preview_enabled_strict_and_frozen(tmp_path, monkeypatch, raw, expected)
 
 @pytest.mark.parametrize(
     "raw",
-    ["", " ", "\t", "\n", " true", "true ", "True", "TRUE", "False", "fAlSe", "1", "0", "yes"],
+    [
+        "",
+        " ",
+        "\t",
+        "\n",
+        " true",
+        "true ",
+        " true ",
+        "\ttrue\t",
+        " false",
+        "false ",
+        " false ",
+        '"true"',
+        "'true'",
+        '"false"',
+        "'false'",
+        '"true',
+        "true'",
+        "True",
+        "TRUE",
+        "False",
+        "fAlSe",
+        "1",
+        "0",
+        "yes",
+    ],
 )
 def test_preview_enabled_rejects_malformed_values(tmp_path, monkeypatch, raw):
     message = "^OVERSIGHT_PREVIEW_ENABLED must be true or false$"
@@ -48,6 +73,14 @@ def test_preview_enabled_rejects_malformed_values(tmp_path, monkeypatch, raw):
     monkeypatch.setenv("OVERSIGHT_PREVIEW_ENABLED", raw)
     with pytest.raises(ValueError, match=message):
         Settings.load(tmp_path / "absent.env")
+    monkeypatch.delenv("OVERSIGHT_PREVIEW_ENABLED")
+    env_file = tmp_path / ".env"
+    env_file.write_text(f"OVERSIGHT_PREVIEW_ENABLED={raw}\n")
+    with pytest.raises(ValueError, match=message):
+        Settings.load(env_file)
+    for override in ("true", "false"):
+        monkeypatch.setenv("OVERSIGHT_PREVIEW_ENABLED", override)
+        assert Settings.load(env_file).preview_profile.enabled is (override == "true")
 
 
 @pytest.mark.parametrize("enabled", [None, 0, 1, "true", "false", [], {}])
