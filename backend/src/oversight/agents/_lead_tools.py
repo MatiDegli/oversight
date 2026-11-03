@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from oversight.agents._lead_policy import LEAD_LIMITS
 from oversight.agents._lead_replies import reply_text
-from oversight.agents._lead_views import ViewRefusal, show_view
+from oversight.agents._lead_views import PreviewUnavailable, ViewRefusal, show_view
 from oversight.agents.client import ToolSchema
 from oversight.agents.tools import MAX_READ_CHARS, MAX_READ_LINES, _function
 from oversight.events import StatusInventoryTooLarge
@@ -28,6 +28,10 @@ from oversight_contracts.views import LeadView
 
 class LeadProposalError(Exception):
     """A server-owned proposal refusal, adapted at the runtime boundary."""
+
+    def __init__(self, message: str, *, preview_unavailable: bool = False) -> None:
+        super().__init__(message)
+        self.preview_unavailable = preview_unavailable
 
 
 class _Empty(BaseModel):
@@ -108,7 +112,11 @@ def build_lead_tool_schemas(limits: LeadLimits) -> list[ToolSchema]:
             "show_view",
             "Show current state from committed references; never supply facts.",
             {
-                "kind": {"type": "string", "enum": ["highlight", "files", "behavior", "moment"]},
+                "kind": {
+                    "type": "string",
+                    "enum": ["highlight", "files", "behavior", "moment", "preview"],
+                },
+                "agent_id": {"type": "string", "pattern": r"^agent-[1-9]\d*$"},
                 "agent_ids": {
                     "type": "array",
                     "minItems": 1,
@@ -219,6 +227,7 @@ class LeadTools:
         agent_id: str = "agent-1",
         resolve_views: Callable[[int], Callable[[LeadView], bool]] | None = None,
         publish_view: Callable[[LeadView], Awaitable[None]] | None = None,
+        preview_available: Callable[[], bool] = lambda: False,
     ) -> None:
         self.graph, self.tree, self.read, self.queue = graph, tree, read, queue
         self.zone, self.propose, self.slots = zone, propose, slots
@@ -229,6 +238,7 @@ class LeadTools:
         self.status_without_views = status_without_views
         self.through_seq: int | None = None
         self.agent_id, self.resolve_views, self.publish_view = agent_id, resolve_views, publish_view
+        self.preview_available = preview_available
         self.status_seen = False
         self.view_S: int | None = None
         self._view_resolver: Callable[[LeadView], bool] | None = None
@@ -330,8 +340,17 @@ class LeadTools:
                 mask=self.mask,
                 resolve=self._view_resolver,
                 publish=self.publish_view,
+                preview_available=self.preview_available,
             )
-        except (ViewRefusal, LeadProposalError):
+        except (ViewRefusal, LeadProposalError) as error:
+            if isinstance(error, PreviewUnavailable) or (
+                isinstance(error, LeadProposalError) and error.preview_unavailable
+            ):
+                return LeadOutcome(
+                    "Preview unavailable on this server. "
+                    "Call status again after availability changes.",
+                    False,
+                )
             return LeadOutcome(
                 "View refused. Call status successfully, then use distinct, available references "
                 "with the exact fields and bounds for that kind; "

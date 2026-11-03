@@ -251,3 +251,53 @@ def test_recorded_moment_window_preserves_available_milestones(name: str) -> Non
         assert "tests.executed" not in kinds
     else:
         assert "tests.executed" in kinds
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("state", ["ready_for_review", "halted"])
+async def test_preview_inventory_explicit_current_candidates_sorted(tmp_path, state) -> None:
+    from backend.tests.events.test_preview_resolution import EVENTS, RUN, seed
+
+    async with EventStore(tmp_path / "preview.sqlite", RUN) as store:
+        await seed(store)
+        for number in (3, 2):
+            await store.publish(
+                EVENTS[2].payload.model_copy(
+                    update={
+                        "agent_id": f"agent-{number}",
+                        "change_id": f"change-{number}",
+                        "state": state,
+                    }
+                )
+            )
+            await store.publish(
+                EVENTS[5].payload.model_copy(
+                    update={
+                        "agent_id": f"agent-{number}",
+                        "change_id": f"change-{number}",
+                    }
+                )
+            )
+        assert "eligible preview data:" not in store.lead_status(include_views=True)[1]
+        assert store.lead_status(include_previews=True) == store.lead_status()
+        seq, text = store.lead_status(include_views=True, include_previews=True)
+        assert (seq, text) == fold_lead_status(
+            store.committed_events(), seq, include_views=True, include_previews=True
+        )
+        rows = [
+            json.loads(c.split("\n```", 1)[0])
+            for c in text.split("eligible preview data:\n```json\n")[1:]
+        ]
+        assert rows == [{"agent_id": f"agent-{n}"} for n in (1, 2, 3)]
+
+
+def test_preview_inventory_overflow_is_complete_or_refused() -> None:
+    from oversight.events import ViewProjection
+
+    projection = ViewProjection(previews={f"agent-{n}" for n in range(1, 1001)})
+    assert projection.inventory() == []
+    rows = projection.inventory(include_previews=True)
+    assert len(rows) == 1000 and all(set(row) == {"agent_id"} for _, row in rows)
+    assert [row["agent_id"] for _, row in rows] == sorted(projection.previews)
+    with pytest.raises(StatusInventoryTooLarge):
+        serialize_status(1, [], required=rows)

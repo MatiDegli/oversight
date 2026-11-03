@@ -18,8 +18,38 @@ VALID = [
     {"kind": "files", "files": [{"change_id": "change-1", "path": "a.py"}]},
     {"kind": "behavior", "change_id": "change-1"},
     {"kind": "moment", "event_seq": 1},
+    {"kind": "preview", "agent_id": "agent-1"},
 ]
 INVALID = [
+    *[
+        {"kind": "preview", **fields}
+        for fields in [
+            {},
+            {"agent_id": None},
+            {"agent_id": "agent-0"},
+            {"agent_id": "agent-01"},
+            {"agent_id": 1},
+            {"agent_ids": ["agent-1"]},
+            *[
+                {"agent_id": "agent-1", key: value}
+                for key, value in {
+                    "agent_ids": ["agent-1"],
+                    "change_id": "change-1",
+                    "revision": 1,
+                    "head_commit": "a" * 40,
+                    "url": "http://secret.invalid/token",
+                    "command": "secret-command",
+                    "profile": "secret-profile",
+                    "token": "secret-token",
+                    "facts": "invented",
+                    "paths": None,
+                    "files": None,
+                    "event_seq": None,
+                    "caption": None,
+                }.items()
+            ],
+        ]
+    ],
     {},
     {"kind": "unknown"},
     {"kind": "highlight"},
@@ -87,6 +117,7 @@ async def test_status_before_view_despite_wake_and_correct_after_refusal() -> No
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda v: v.view.kind == "moment",
+        preview_available=lambda: True,
         publish_view=publish,
     )
     tools.through_seq = 5
@@ -113,7 +144,10 @@ async def test_failed_status_invalidates_previous_eligibility() -> None:
 
     publish = AsyncMock()
     tools, _ = setup_tools(
-        status=lambda: (1, "status"), resolve_views=lambda _: lambda _: True, publish_view=publish
+        status=lambda: (1, "status"),
+        resolve_views=lambda _: lambda _: True,
+        preview_available=lambda: True,
+        publish_view=publish,
     )
     await tools.call("status", "{}")
     tools.status = overflow
@@ -134,7 +168,12 @@ async def test_status_inventory_overflow_fallback(fallback_fails: bool) -> None:
     if fallback_fails:
         fallback.side_effect = ValueError("private diagnostic")
     publish = AsyncMock()
-    tools, _ = setup_tools(status=overflow, status_without_views=fallback, publish_view=publish)
+    tools, _ = setup_tools(
+        status=overflow,
+        status_without_views=fallback,
+        preview_available=lambda: True,
+        publish_view=publish,
+    )
     tools.through_seq = 3
     outcome = await tools.call("status", "{}")
     fallback.assert_called_once_with()
@@ -196,7 +235,10 @@ async def test_status_view_finish_keeps_budgets_without_view_step(
 ) -> None:
     publish = AsyncMock()
     tools, _ = setup_tools(
-        status=lambda: (5, "status"), resolve_views=lambda _: lambda _: True, publish_view=publish
+        status=lambda: (5, "status"),
+        resolve_views=lambda _: lambda _: True,
+        preview_available=lambda: True,
+        publish_view=publish,
     )
     turns = [turn(call("status"))]
     if correct:
@@ -235,6 +277,7 @@ def test_advertised_view_is_one_closed_reference_object() -> None:
     assert params["required"] == ["kind"] and "oneOf" not in json.dumps(schema)
     assert set(params["properties"]) == {
         "kind",
+        "agent_id",
         "agent_ids",
         "paths",
         "files",
@@ -242,7 +285,13 @@ def test_advertised_view_is_one_closed_reference_object() -> None:
         "event_seq",
         "caption",
     }
-    assert params["properties"]["kind"]["enum"] == ["highlight", "files", "behavior", "moment"]
+    assert params["properties"]["kind"]["enum"] == [
+        "highlight",
+        "files",
+        "behavior",
+        "moment",
+        "preview",
+    ]
     assert LEAD_PROMPT.endswith(
         "Summarize completed plans for the person. "
         "Approval waiting is a notice, never permission to act."
@@ -263,6 +312,7 @@ async def test_view_dispatch_preserves_per_turn_cut(accepted: bool, budget: str)
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda _: accepted,
+        preview_available=lambda: True,
         publish_view=publish,
     )
     model = scripted([turn(call("status")), turn(call("show_view", **VALID[3]))])
@@ -281,6 +331,7 @@ async def test_view_dispatch_preserves_repetition_brake(accepted: bool) -> None:
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda _: accepted,
+        preview_available=lambda: True,
         publish_view=publish,
     )
     model = scripted([turn(call("status")), turn(*[call("show_view", **VALID[3])] * 4)])
@@ -298,6 +349,7 @@ async def test_view_dispatch_preserves_consecutive_failure_brake() -> None:
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda _: False,
+        preview_available=lambda: True,
         publish_view=publish,
     )
     model = scripted(
@@ -312,3 +364,42 @@ async def test_view_dispatch_preserves_consecutive_failure_brake() -> None:
     assert run.steps == 7 and run.failures == 6
     publish.assert_not_awaited()
     step.assert_awaited_once_with(None)
+
+
+def test_preview_identity_constraints_and_person_authority() -> None:
+    schema = next(
+        cast(dict[str, Any], item["function"])
+        for item in LEAD_TOOL_SCHEMAS
+        if cast(dict[str, Any], item["function"])["name"] == "show_view"
+    )
+    props = schema["parameters"]["properties"]
+    assert props["agent_id"] == props["agent_ids"]["items"]
+    parsed = parse_view(json.dumps(VALID[-1] | {"caption": "c" * 160}), "agent-9", 12, str)
+    assert parsed.agent_id == "agent-9" and parsed.view.kind == "preview"
+    assert parsed.view.agent_id == "agent-1" and len(parsed.caption or "") == 160
+    for caption in ("", " ", "c" * 161):
+        with pytest.raises(ViewRefusal):
+            parse_view(json.dumps(VALID[-1] | {"caption": caption}), "agent-9", 12, str)
+    for wording in (
+        "eligible preview inventory",
+        "asks to see or try the app",
+        "never replaces review or Approve",
+        "Only the person opens it",
+        "cannot start, stop or open previews",
+        "160-character limit",
+    ):
+        assert wording in LEAD_PROMPT
+
+
+@pytest.mark.anyio
+async def test_preview_availability_defaults_off_even_with_resolvable_reference() -> None:
+    publish = AsyncMock()
+    tools, _ = setup_tools(
+        status=lambda: (5, "status"), resolve_views=lambda _: lambda _: True, publish_view=publish
+    )
+    await tools.call("status", "{}")
+    result = await tools.call("show_view", json.dumps(VALID[-1]))
+    assert not result.ok and result.content == (
+        "Preview unavailable on this server. Call status again after availability changes."
+    )
+    publish.assert_not_awaited()
