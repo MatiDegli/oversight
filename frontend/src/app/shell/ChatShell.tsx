@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-restricted-imports -- Event-backed lead capacity is shared by both entry points.
+import { leadCapacity, newLeadLabel } from "../../agents/chatLeadSelectors";
 import { Plus, GitFork } from "lucide-react";
 import { TaskBox, slotUsage, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
@@ -46,9 +48,15 @@ export function ChatAgentsFrame({
             <Plus size={15} aria-hidden="true" />
             New task
           </button>
-          <button type="button" onClick={onNewLead}>
+          <button
+            type="button"
+            aria-disabled={leadCapacity(state).atCap}
+            onClick={() => {
+              if (!leadCapacity(state).atCap) onNewLead?.();
+            }}
+          >
             <GitFork size={15} aria-hidden="true" />
-            New lead
+            {newLeadLabel(state)}
           </button>
         </div>
       </header>
@@ -116,6 +124,7 @@ export function ChatShell({
 }
 
 export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActions) {
+  const { state } = props;
   return (
     <div className="chat-empty">
       <div>
@@ -128,9 +137,15 @@ export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActio
           <p>
             When work is worth splitting across several agents, a lead proposes plans you queue.
           </p>
-          <button type="button" onClick={onNewLead}>
+          <button
+            type="button"
+            aria-disabled={leadCapacity(state).atCap}
+            onClick={() => {
+              if (!leadCapacity(state).atCap) onNewLead?.();
+            }}
+          >
             <GitFork size={15} aria-hidden="true" />
-            New lead
+            {newLeadLabel(state)}
           </button>
         </div>
       </div>

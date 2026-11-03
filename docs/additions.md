@@ -708,6 +708,12 @@ resolution fixtures. Status inventory is opt-in and off in production. Tool adve
 dispatch, prompt changes and visible cards remain absent. Exports withhold captions under the
 existing message-text receipt; inclusion requires the existing explicit authorization.
 
+K2b adds the event-derived operational header, per-lead observed-revision Stop pending through
+terminal publication, noninteractive ended composer, observed cut captions, published-cap guards
+and backend-default-only New lead. Its fake-only browser fixtures include stopped and six-lead
+scenes; lifecycle/freshness notices and timeline treatment remain K2c, grouping/hues remain K3,
+and plan tracking is still pending. No backend, contract or generated schema changes.
+
 ### Saved agent flows
 
 After the lead, extend package 12's shipped Start an agent here with a short list of repository
