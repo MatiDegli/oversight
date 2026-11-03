@@ -276,3 +276,11 @@ button.chat-agent-row:hover {
     -webkit-line-clamp: 1;
   }
 }
+
+.chat-agent-model-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+}

@@ -1,3 +1,4 @@
+import { ScriptedAgentLabel } from "../../teams/ScriptedAgentLabel";
 import { Check, CircleStop, OctagonX } from "lucide-react";
 import { agentSlotStyle } from "../../theme";
 import { costText } from "../../state";
@@ -32,6 +33,7 @@ export function LeadHeaderView({ header }: { header: LeadHeader }) {
           {leadLabels[header.state]}
         </span>
       </div>
+      {header.scripted && <ScriptedAgentLabel explain />}
       <p className="mt-2 text-[14px] text-muted wrap-anywhere">
         Lead {header.letter} · {header.modelLabel}
         {header.reasoning !== null ? ` · reasoning ${header.reasoning}` : ""}

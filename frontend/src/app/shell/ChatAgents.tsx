@@ -1,3 +1,6 @@
+// eslint-disable-next-line no-restricted-imports -- This scoped selector supplies event provenance to the Chat rail.
+import { isScriptedAgent } from "../../state/scriptedAgents";
+import { ScriptedAgentLabel } from "../../teams/ScriptedAgentLabel";
 import { ChevronDown, Plus } from "lucide-react";
 import { useId, useState, type KeyboardEvent } from "react";
 import type { State } from "../../state";
@@ -37,6 +40,7 @@ function MemberRow({
   state: State;
 }) {
   const identity = presentationFor(state, row.id);
+  const scripted = isScriptedAgent(state, row.id);
   const Row = onOpenConversation ? "button" : "div";
   return (
     <Row
@@ -62,6 +66,7 @@ function MemberRow({
       aria-description={[
         row.planId ? `Plan ${row.planId}` : undefined,
         row.model,
+        scripted ? "Scripted demo agents" : undefined,
         row.activity,
         `Step ${String(row.step)} of ${String(row.maxSteps)}`,
         row.cost,
@@ -80,7 +85,10 @@ function MemberRow({
           </span>
           <span className="chat-agent-pill">{row.label}</span>
         </span>
-        <span className="chat-agent-model">{row.model}</span>
+        <span className="chat-agent-model-line">
+          <span className="chat-agent-model">{row.model}</span>
+          {scripted && <ScriptedAgentLabel />}
+        </span>
         <span className="chat-agent-task">{row.task}</span>
         <span className="chat-agent-activity" title={row.activity}>
           {row.activity}
@@ -164,6 +172,7 @@ export function ChatAgents({
           {group.lead && (
             <ChatLeadRow
               row={group.grouped ? { ...group.lead, teamLine: group.summary } : group.lead}
+              scripted={isScriptedAgent(state, group.lead.id)}
               showTeamLine={!group.grouped}
               {...selection}
             />
