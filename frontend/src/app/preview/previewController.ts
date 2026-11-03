@@ -12,6 +12,8 @@ import type { PreviewStatus } from "./previewTypes";
 const active = (status: PreviewStatus | null) =>
   status?.state === "starting" || status?.state === "ready";
 const terminal = (status: PreviewStatus) => status.state === "stopped" || status.state === "failed";
+const confirmed = (status: PreviewStatus) =>
+  terminal(status) && status.reason !== "cleanup_unverified";
 const sameCandidate = (status: PreviewStatus, candidate: PreviewCandidate) =>
   status.run_id === candidate.run_id &&
   status.agent_id === candidate.agent_id &&
@@ -108,9 +110,12 @@ class Controller implements PreviewController {
   }
   #accept(status: PreviewStatus) {
     const old = this.#view.status;
-    if (old && (rank[status.state] < rank[old.state] || (terminal(old) && this.#token !== null)))
-      return false;
+    if (old && rank[status.state] < rank[old.state]) return false;
     if (old && JSON.stringify(old) === JSON.stringify(status)) return false;
+    if (this.#token && confirmed(status)) {
+      this.#release(status);
+      return true;
+    }
     this.#publish({ status, visible: !this.#dismissed });
     if (!active(status)) {
       this.#cancelRenewal();
@@ -118,12 +123,42 @@ class Controller implements PreviewController {
     }
     return true;
   }
+  #release(status: PreviewStatus) {
+    this.#cancelRenewal();
+    ++this.#epoch;
+    this.#token = null;
+    this.#id = null;
+    this.#candidate = null;
+    this.#quarantined = false;
+    this.#publish({
+      status,
+      visible: !this.#dismissed,
+      frameUrl: null,
+      uncertain: false,
+      pending: false,
+      notice: null,
+    });
+  }
   observe = (input: PreviewStatus) => {
     if (this.#disposed) return;
     const status = parsePreviewStatus(input);
     if (this.#token) {
       if (this.#matches(status)) this.#accept(status);
     } else if (!this.#flight && status.run_id === this.#identity.run) {
+      // A failed start may still have reached the server. Only its matching
+      // public termination can release quarantine; Close merely hides the panel.
+      if (
+        this.#quarantined &&
+        this.#candidate &&
+        sameCandidate(status, this.#candidate) &&
+        (!this.#id || status.preview_id === this.#id)
+      ) {
+        this.#id = status.preview_id;
+        if (confirmed(status)) {
+          this.#release(status);
+          return;
+        }
+      }
       if (this.#view.status?.preview_id === status.preview_id) this.#accept(status);
       else this.#publish({ status, visible: !this.#dismissed, frameUrl: null, notice: null });
     }
@@ -229,6 +264,7 @@ class Controller implements PreviewController {
       head_commit: candidate.head_commit,
     };
     const epoch = ++this.#epoch;
+    this.#candidate = observed;
     this.#publish({
       visible: true,
       pending: true,
@@ -279,36 +315,30 @@ class Controller implements PreviewController {
   }
   async #drain() {
     this.#cancelRenewal();
-    ++this.#epoch;
+    const epoch = ++this.#epoch;
     const id = this.#id,
       token = this.#token;
     if (!id || !token) return !this.#quarantined;
-    const old = this.#view.status;
     this.#publish({
       pending: true,
       notice: "closure_unconfirmed",
       uncertain: true,
-      status: old ? { ...old, state: "stopping", reason: "closed" } : null,
     });
     try {
       const status = parsePreviewStatus(
         await this.#bounded((signal) => this.#port.stop(id, { lease_token: token }, signal)),
       );
-      if (!this.#matches(status) || !terminal(status) || status.reason === "cleanup_unverified")
-        throw new Error("Unverified drainage");
-      this.#token = null;
-      this.#id = null;
-      this.#candidate = null;
-      this.#quarantined = false;
-      this.#publish({ status, frameUrl: null, uncertain: false, pending: false, notice: null });
+      if (!this.#current(epoch)) return !this.#token && !this.#quarantined;
+      if (!this.#matches(status) || !confirmed(status)) throw new Error("Unverified drainage");
+      this.#release(status);
       return true;
     } catch {
+      if (!this.#current(epoch)) return !this.#token && !this.#quarantined;
       this.#quarantined = true;
       this.#publish({
         pending: false,
         uncertain: true,
         notice: "closure_unconfirmed",
-        status: old ? { ...old, state: "failed", reason: "cleanup_unverified" } : null,
       });
       return false;
     }
@@ -318,7 +348,7 @@ class Controller implements PreviewController {
     await this.#flight;
     if (this.#disposed) return;
     if (!this.#token) {
-      if (!this.#quarantined) this.#dismiss();
+      this.#dismiss();
       return;
     }
     if (await this.#stop()) this.#dismiss();

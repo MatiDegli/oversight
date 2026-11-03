@@ -133,6 +133,62 @@ it("keeps observer Close dismissed through background updates and a new owner's 
     await session.close();
   }
 });
+it("dismisses start_failed locally and permits See preview only after authoritative expiry", async () => {
+  const session = await support.session();
+  try {
+    const owner = await session.open();
+    const page = await session.open(); // Start races the public status and is rejected as in use.
+    expect(await page.evaluate(() => window.previewFixture.snapshot().notice)).toBe("start_failed");
+    const before = session.authority.calls.length;
+    await page.getByRole("button", { name: "Close", exact: true }).press("Enter");
+    await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    await page.getByRole("button", { name: "See preview", exact: true }).click();
+    await page.evaluate(() => window.previewFixture.observePublic());
+    await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    expect(session.authority.calls).toHaveLength(before);
+    session.clock.advance(30_001);
+    await page.evaluate(() => window.previewFixture.observePublic());
+    await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    await page.getByRole("button", { name: "See preview", exact: true }).click();
+    await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for agent-b");
+    expect(session.authority.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+    await noErrors(owner);
+    await noErrors(page);
+  } finally {
+    await session.close();
+  }
+});
+it.each(["reject", "unverified"] as const)(
+  "recovers from %s stop after server expiry and retries Close without an expired token",
+  async (mode) => {
+    const session = await support.session();
+    try {
+      const page = await session.open();
+      session.authority.stopMode = mode;
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
+      expect(await page.evaluate(() => window.previewFixture.snapshot().status?.state)).toBe(
+        "ready",
+      );
+      await check(page.locator("iframe")).toBeVisible();
+      await page.evaluate(() => window.previewFixture.observePublic());
+      session.clock.advance(30_001);
+      await page.evaluate(() => window.previewFixture.observePublic());
+      await check(page.getByRole("status")).toContainText(previewReasonCopy.lease_expired);
+      await check(page.locator("iframe")).toHaveCount(0);
+      const before = session.authority.calls.length;
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+      expect(session.authority.calls).toHaveLength(before);
+      session.authority.stopMode = "verified";
+      await page.getByRole("button", { name: "See preview", exact: true }).click();
+      await check(page.locator("iframe")).toHaveAttribute("title", "Live preview for agent-b");
+      await noErrors(page);
+    } finally {
+      await session.close();
+    }
+  },
+);
 it.each(["reject", "unverified"] as const)(
   "%s stop retains the same frame and blocks replacement",
   async (mode) => {

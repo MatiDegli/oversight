@@ -237,6 +237,101 @@ it("bounds lost stop delivery and relies on fake authority lease expiry", async 
   expect(port.publicStatus()?.reason).toBe("lease_expired");
   expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
 });
+it.each(["reject", "deadline"])(
+  "locally dismisses a %s start but blocks retry until matching verified termination",
+  async (mode) => {
+    const { port, controller } = setup();
+    await port.start(fakeCandidate, new AbortController().signal);
+    const start = vi.spyOn(port, "start");
+    if (mode === "reject") start.mockRejectedValueOnce(new Error("In use"));
+    else start.mockReturnValueOnce(deferred<Awaited<ReturnType<PreviewPort["start"]>>>().promise);
+    const opening = controller.see(() => fakeCandidate);
+    if (mode === "deadline") await vi.advanceTimersByTimeAsync(5_000);
+    await opening;
+    expect(controller.snapshot()).toMatchObject({ notice: "start_failed", owned: false });
+    const calls = port.calls.length;
+    await controller.close();
+    expect(controller.snapshot().visible).toBe(false);
+    const candidate = vi.fn(() => next);
+    await controller.see(candidate);
+    controller.observe({ ...fakeStatus("stopped", "lease_expired"), run_id: "other" });
+    controller.observe({ ...fakeStatus("stopped", "lease_expired"), agent_id: "other" });
+    controller.observe(fakeStatus("failed", "cleanup_unverified"));
+    controller.observe({
+      ...fakeStatus("stopped", "lease_expired"),
+      preview_id: `preview-${"f".repeat(32)}`,
+    });
+    await controller.see(candidate);
+    expect(candidate).not.toHaveBeenCalled();
+    expect(port.calls).toHaveLength(calls);
+    expect(controller.snapshot().visible).toBe(false);
+    port.expire();
+    controller.observe(port.publicStatus() as PreviewStatus);
+    expect(controller.snapshot()).toMatchObject({ visible: false, uncertain: false });
+    await controller.see(candidate);
+    expect(controller.snapshot()).toMatchObject({ owned: true, status: { agent_id: "agent-b" } });
+    controller.dispose();
+  },
+);
+it.each(["reject", "unverified", "lost"] as const)(
+  "keeps authoritative status after %s stop and permits local Close after expiry",
+  async (mode) => {
+    const { port, controller } = setup();
+    await controller.see(() => fakeCandidate);
+    const ready = port.publicStatus();
+    port.stopMode = mode;
+    const closing = controller.close();
+    await Promise.resolve();
+    expect(controller.snapshot()).toMatchObject({ pending: true, status: ready });
+    if (mode === "lost") await vi.advanceTimersByTimeAsync(5_000);
+    await closing;
+    expect(controller.snapshot()).toMatchObject({ status: ready, uncertain: true });
+    if (mode === "unverified") {
+      controller.observe(port.publicStatus() as PreviewStatus);
+      expect(controller.snapshot()).toMatchObject({
+        owned: true,
+        frameUrl: port.frameUrl,
+        status: { state: "failed", reason: "cleanup_unverified" },
+      });
+    }
+    await vi.advanceTimersByTimeAsync(30_000);
+    if (mode === "lost") await controller.refresh();
+    else controller.observe(port.publicStatus() as PreviewStatus);
+    expect(controller.snapshot()).toMatchObject({
+      visible: true,
+      owned: false,
+      uncertain: false,
+      frameUrl: null,
+      status: { state: "stopped", reason: "lease_expired" },
+    });
+    const calls = port.calls.length;
+    await controller.close();
+    expect(controller.snapshot().visible).toBe(false);
+    expect(port.calls).toHaveLength(calls);
+    port.stopMode = "verified";
+    await controller.see(() => next);
+    expect(controller.snapshot()).toMatchObject({ owned: true, status: { agent_id: "agent-b" } });
+    controller.dispose();
+  },
+);
+it("does not restore quarantine when a pending stop rejects after authoritative expiry", async () => {
+  const { port, controller } = setup();
+  await controller.see(() => fakeCandidate);
+  port.stopMode = "reject";
+  port.gate = deferred<undefined>();
+  const closing = controller.close();
+  await Promise.resolve();
+  port.expire();
+  controller.observe(port.publicStatus() as PreviewStatus);
+  expect(controller.snapshot()).toMatchObject({ owned: false, uncertain: false, frameUrl: null });
+  port.gate.resolve(undefined);
+  await closing;
+  expect(controller.snapshot()).toMatchObject({ visible: false, uncertain: false });
+  port.stopMode = "verified";
+  await controller.see(() => next);
+  expect(controller.snapshot()).toMatchObject({ owned: true, status: { agent_id: "agent-b" } });
+  controller.dispose();
+});
 it.each(["dispose", "identity", "deadline"])(
   "drains a late start after %s without mounting or renewing",
   async (action) => {
