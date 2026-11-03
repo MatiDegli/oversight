@@ -80,7 +80,7 @@ class ViewProjection:
             return view.event_seq in list(self.moments)[-32:]
         return bool(self.resolve(view))
 
-    def inventory(self) -> list[tuple[str, dict[str, Any]]]:
+    def inventory(self, *, include_previews: bool = False) -> list[tuple[str, dict[str, Any]]]:
         """Complete eligible rows, followed by the latest 32 committed milestones."""
         rows: list[tuple[str, dict[str, Any]]] = []
         rows.extend(
@@ -97,6 +97,8 @@ class ViewProjection:
             if _canonical(path)
         )
         rows.extend(("eligible behavior", {"change_id": key}) for key in sorted(self.behaviors))
+        if include_previews:
+            rows.extend(("eligible preview", {"agent_id": key}) for key in sorted(self.previews))
         moments = list(self.moments.items())
         rows.extend(
             ("eligible moment", {"event_seq": seq, "type": kind})

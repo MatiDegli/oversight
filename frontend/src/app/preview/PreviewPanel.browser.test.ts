@@ -483,8 +483,7 @@ it.each([1920, 1280, 390])(
       await check(page.locator(".chat-preview-slot")).toHaveCount(0);
       expect(await page.locator(".shell-center").boundingBox()).toEqual(before);
       await check(page.locator(".chat-work")).toHaveCount(1);
-      if (width === 390) await check(page.locator(".chat-work")).toBeHidden();
-      else await check(page.locator(".chat-work")).toBeVisible();
+      await check(page.locator(".chat-work")).toBeVisible();
       await noErrors(page);
     } finally {
       await session.close();

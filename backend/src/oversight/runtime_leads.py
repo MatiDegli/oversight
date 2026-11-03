@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,7 @@ from oversight.agents import (
 )
 from oversight.api import ApiError
 from oversight.changes import plan_core, read_queue
+from oversight.events import EventRejected
 from oversight.runtime_lead_admission import message
 from oversight.runtime_lead_turns import LeadTurn
 from oversight.runtime_lead_wakes import LeadWatcher, WakeClock
@@ -197,7 +199,37 @@ class LeadService:
         assert snapshot is not None
         return snapshot
 
+    def _preview_available(self) -> bool:
+        if self._closing or self.live._closing:
+            return False
+        try:
+            # Narrow composition seam: reuse the composed manager's existing admission,
+            # including trusted-demo policy, without reserving or starting a preview.
+            self.live.previews._admit()
+        except Exception:
+            # Admission diagnostics may contain infrastructure or secret data.
+            return False
+        return True
+
     def _tools(self, lead: _Lead) -> LeadTools:
+        admitted = False
+
+        def status() -> tuple[int, str]:
+            nonlocal admitted
+            admitted = self._preview_available()
+            return self.live.store.lead_status(include_views=True, include_previews=admitted)
+
+        def resolve_views(seq: int) -> Callable[[LeadView], bool]:
+            resolver = self.live.store.view_resolver(seq)
+            observed_admission = admitted
+
+            def resolve(view: LeadView) -> bool:
+                if view.view.kind == "preview" and not observed_admission:
+                    raise LeadProposalError("Preview unavailable.", preview_unavailable=True)
+                return resolver(view)
+
+            return resolve
+
         async def propose(task: str, drafts: list[SubtaskDraft]) -> str:
             try:
                 result = await self.live.plans.create_and_propose(
@@ -212,9 +244,14 @@ class LeadService:
 
         async def publish_view(view: LeadView) -> None:
             async with lead.lock:
+                if view.view.kind == "preview" and (lead.stopping or not self._preview_available()):
+                    raise LeadProposalError("Preview unavailable.", preview_unavailable=True)
                 if lead.stopping or self._closing or self.live._closing:
                     raise LeadProposalError("The lead is no longer accepting views.")
-                await self.live._finish(self.live.store.publish(view))
+                try:
+                    await self.live._finish(self.live.store.publish(view))
+                except EventRejected:
+                    raise LeadProposalError("View references are no longer current.") from None
 
         return LeadTools(
             graph=self._graph,
@@ -225,10 +262,11 @@ class LeadService:
             propose=propose,
             slots=len(self.live._slots),
             mask=self.live._redactor,
-            status=lambda: self.live.store.lead_status(include_views=True),
+            status=status,
             status_without_views=self.live.store.lead_status,
             agent_id=lead.status.agent_id,
-            resolve_views=self.live.store.view_resolver,
+            resolve_views=resolve_views,
+            preview_available=self._preview_available,
             publish_view=publish_view,
             limits=lead.limits,
         )
