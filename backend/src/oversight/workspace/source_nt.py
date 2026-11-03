@@ -298,6 +298,7 @@ async def inventory(
             raise refuse("Git output exceeds 8 MiB")
         return result.stdout
 
+    await offload(lambda: verify_sentinel(sentinel, lock_fd))
     await check_source_config(
         source.root / ".git",
         git=git,

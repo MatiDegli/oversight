@@ -167,7 +167,7 @@ async def validate_source(
             spawn=spawn,
             env=SOURCE_GIT_ENV,
             time_left=lambda: 30,
-            refuse=ValueError,
+            refuse=lambda reason: ValueError(f"{profile.name}: {reason}. {FETCH_HINT}"),
         )
         flags = ["-c", "core.fsmonitor=false", "-c", f"core.hooksPath={os.devnull}"]
         head = await spawn(

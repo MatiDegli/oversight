@@ -18,12 +18,12 @@ from .test_source_nt import source_case
 pytestmark = pytest.mark.anyio
 
 
-async def check(git_dir: Path) -> None:
+async def check(git_dir: Path, env: Mapping[str, str] = SOURCE_GIT_ENV) -> None:
     await check_source_config(
         git_dir,
         git="git",
         spawn=run_process,
-        env=SOURCE_GIT_ENV,
+        env=env,
         time_left=lambda: 10,
         refuse=ValueError,
     )
@@ -34,14 +34,17 @@ async def check(git_dir: Path) -> None:
     "section,key,value,listed_key",
     [
         ("include", "path", "private-include", "include.path"),
-        ('includeIf "gitdir:x"', "path", "private-include", "includeif.gitdir:x.path"),
+        ('includeIf "gitdir:private-section"', "path", "private-include", "includeIf.*.path"),
         ("InClUdE", "PaTh", "private-include", "include.path"),
-        ('InClUdEiF "gitdir:x"', "PaTh", "private-include", "includeif.gitdir:x.path"),
-        ("core", "excludesFile", r"\\private-server\share\ignore", "core.excludesfile"),
-        ("CoRe", "ExClUdEsFiLe", "//private-server/share/ignore", "core.excludesfile"),
-        ("core", "excludesFile", "/private/ignore", "core.excludesfile"),
-        ("core", "excludesFile", "C:/private/ignore", "core.excludesfile"),
-        ("core", "excludesFile", "C:private-ignore", "core.excludesfile"),
+        ('InClUdEiF "gitdir:private-section"', "PaTh", "private-include", "includeIf.*.path"),
+        ("core", "excludesFile", r"\\private-server\share\ignore", "core.excludesFile"),
+        ("CoRe", "ExClUdEsFiLe", "//private-server/share/ignore", "core.excludesFile"),
+        ("core", "excludesFile", "/private/ignore", "core.excludesFile"),
+        ("core", "excludesFile", "C:/private/ignore", "core.excludesFile"),
+        ("core", "excludesFile", "C:private-ignore", "core.excludesFile"),
+        ("core", "excludesFile", "~/private-ignore", "core.excludesFile"),
+        ("core", "excludesFile", "~private-user/ignore", "core.excludesFile"),
+        ("core", "excludesFile", "%(prefix)/private-ignore", "core.excludesFile"),
     ],
 )
 async def test_real_git_refuses_keys_without_disclosing_values(
@@ -57,6 +60,7 @@ async def test_real_git_refuses_keys_without_disclosing_values(
     assert f".git/{filename}" in str(error.value)
     assert listed_key in str(error.value)
     assert value not in str(error.value)
+    assert "private-section" not in str(error.value)
 
 
 @pytest.mark.parametrize("worktree", [False, True])
@@ -119,6 +123,7 @@ async def test_refusal_precedes_all_source_queries(
     ) -> ProcessResult:
         calls.append(tuple(argv))
         assert tuple(argv[1:]) == (
+            "--no-pager",
             "config",
             "--file",
             str(config),
@@ -131,9 +136,9 @@ async def test_refusal_precedes_all_source_queries(
         assert output_cap == MAX_CONFIG_OUTPUT
         assert env is not None
         assert env["GIT_CONFIG_NOSYSTEM"] == "1" and env["GIT_OPTIONAL_LOCKS"] == "0"
+        # Git must not be pointed at the original while it lists the original's config.
+        assert "GIT_DIR" not in env and "GIT_WORK_TREE" not in env
         if caller == "inventory":
-            assert env["GIT_DIR"] == str(config.parent)
-            assert env["GIT_WORK_TREE"] == str(config.parent.parent)
             assert env["GIT_CONFIG_GLOBAL"] == "nul"
         else:
             assert env == SOURCE_GIT_ENV
@@ -169,6 +174,33 @@ async def test_real_git_parse_failure_refuses_without_stderr(tmp_path: Path) -> 
     assert "private-invalid-section" not in str(error.value)
 
 
+@pytest.mark.parametrize(
+    "section",
+    ["include", 'includeIf "gitdir:**/source/.git"'],  # The condition matches the repo.
+)
+async def test_real_git_listing_never_reads_includes_of_the_original(
+    tmp_path: Path, section: str
+) -> None:
+    """Pointed at the original (as inventory is), Git's early read would follow includes."""
+    root = tmp_path / "source"
+    root.mkdir()
+    # Inventory's env, so only this check's own env handling can keep Git away from the include.
+    env = {**SOURCE_GIT_ENV, "GIT_DIR": str(root / ".git"), "GIT_WORK_TREE": str(root)}
+    init = await run_process(
+        ["git", "init", "-q", str(root)], cwd=tmp_path, timeout_s=10, env=SOURCE_GIT_ENV
+    )
+    assert init.returncode == 0, init.stderr
+    target = tmp_path / "private-invalid-include"
+    target.write_text("[private-invalid-section\n")  # Git dies if it ever reads this file.
+    escaped = str(target).replace("\\", "\\\\")
+    with (root / ".git/config").open("a") as config:
+        config.write(f'[{section}]\npath = "{escaped}"\n')
+    with pytest.raises(ValueError, match=r"refused Git config key include") as error:
+        await check(root / ".git", env)
+    assert "failed" not in str(error.value)
+    assert "private-" not in str(error.value) and "gitdir" not in str(error.value)
+
+
 async def test_inventory_config_listing_shares_selection_deadline(tmp_path: Path) -> None:
     with source_case(tmp_path) as (source, fd):
         (source.root / ".git/config").touch()
@@ -180,7 +212,7 @@ async def test_inventory_config_listing_shares_selection_deadline(tmp_path: Path
             argv: Sequence[str], *, timeout_s: float, **kwargs: object
         ) -> ProcessResult:
             nonlocal elapsed
-            assert argv[1] == "config"
+            assert argv[1:3] == ["--no-pager", "config"]
             timeouts.append(timeout_s)
             elapsed += 5
             return ProcessResult(0, "core.bare\nfalse\0", "", False, False, 0)

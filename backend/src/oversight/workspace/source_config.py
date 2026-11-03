@@ -10,6 +10,26 @@ from oversight.workspace.locks import offload
 from oversight.workspace.runner import NtCleanupError, Spawn
 
 MAX_CONFIG_OUTPUT = 262_144
+# Pointing Git at the original would make its early config read follow the original's includes.
+REPOSITORY_ENV = frozenset({"GIT_DIR", "GIT_WORK_TREE"})
+# Git expands these into absolute paths (a network home share on Windows).
+EXPANDED_PREFIXES = ("~", "%(prefix)")
+
+
+def refused_key(key: str, value: str) -> str | None:
+    """Name of the setting that makes Git read outside the repository, never its value."""
+    if key == "include.path":
+        return "include.path"
+    if key.startswith("includeif.") and key.endswith(".path"):
+        return "includeIf.*.path"  # The subsection is a repository-chosen path.
+    if key == "core.excludesfile" and (
+        os.path.isabs(value)
+        or ntpath.isabs(value)
+        or ntpath.splitdrive(value)[0]
+        or value.startswith(EXPANDED_PREFIXES)
+    ):
+        return "core.excludesFile"
+    return None
 
 
 async def check_source_config(
@@ -22,6 +42,7 @@ async def check_source_config(
     refuse: Callable[[str], Exception],
 ) -> None:
     """Fail closed before source queries; the caller owns the deadline and refusal type."""
+    listing_env = {name: value for name, value in env.items() if name.upper() not in REPOSITORY_ENV}
     for name in ("config", "config.worktree"):
         path = git_dir / name
         label = f".git/{name}"
@@ -35,9 +56,18 @@ async def check_source_config(
             raise refuse(f"{label}: unsafe Git config file")
         try:
             result = await spawn(
-                [git, "config", "--file", str(path), "--no-includes", "--null", "--list"],
+                [
+                    git,
+                    "--no-pager",
+                    "config",
+                    "--file",
+                    str(path),
+                    "--no-includes",
+                    "--null",
+                    "--list",
+                ],
                 cwd=git_dir.parent.parent,
-                env=env,
+                env=listing_env,
                 timeout_s=time_left(),
                 output_cap=MAX_CONFIG_OUTPUT,
             )
@@ -56,12 +86,5 @@ async def check_source_config(
             key = key.casefold()
             if not key or "." not in key:
                 raise refuse(f"{label}: malformed Git config key")
-            if (
-                key == "include.path"
-                or (key.startswith("includeif.") and key.endswith(".path"))
-                or (
-                    key == "core.excludesfile"
-                    and (os.path.isabs(value) or ntpath.isabs(value) or ntpath.splitdrive(value)[0])
-                )
-            ):
-                raise refuse(f"{label}: refused Git config key {key}")
+            if (refused := refused_key(key, value)) is not None:
+                raise refuse(f"{label}: refused Git config key {refused}")
