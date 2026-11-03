@@ -153,14 +153,31 @@ async def test_failed_drain_blocks_all_git_and_non_git_effects(workspace, operat
     await h.close()
 
 
-async def test_filter_metadata_is_restored_before_first_status(workspace, monkeypatch):
+@pytest.mark.parametrize("operation", ["stop", "status", "lease"])
+async def test_filter_metadata_is_restored_before_first_status(workspace, monkeypatch, operation):
     h = await harness(workspace)
-    created = await h.start()
+    other = await workspace.create_worktree("agent-2")
     config = workspace.main.git_identity.common / "config"
     original = config.read_bytes()
-    config.write_bytes(original + b'\n[filter "evil"]\n clean = echo should-never-run\n')
-    spawn = run_process
-    calls = []
+    sentinel = workspace.runtime_root / "filter-ran"
+    attributes = workspace.main.git_identity.common / "info/attributes"
+    attributes.write_text("shop/mod.py filter=evil\n")
+    evil = original + f'\n[filter "evil"]\n clean = "touch {sentinel}; cat"\n'.encode()
+    config.write_bytes(evil)
+    # Prove this filter/attribute combination is effective with real temporary Git.
+    path = other.root / "shop/mod.py"
+    content = path.read_text()
+    path.write_text(content.replace("return 1", "return 2"))
+    async with workspace.locks(agent_id="agent-2"):
+        await workspace.git_ok(other, "status", "--porcelain")
+    assert sentinel.exists()
+    sentinel.unlink()
+    config.write_bytes(original)
+    created = await h.start()
+    config.write_bytes(evil)
+    path.write_text(content.replace("return 1", "return 3"))
+    (h.tree.root / "shop/mod.py").write_text(content.replace("return 1", "return 4"))
+    spawn, calls = run_process, []
 
     async def guarded(argv, **kwargs):
         assert h.processes[0].dead and config.read_bytes() == original
@@ -168,9 +185,45 @@ async def test_filter_metadata_is_restored_before_first_status(workspace, monkey
         return await spawn(argv, **kwargs)
 
     monkeypatch.setattr(core, "run_process", guarded)
-    result = await h.manager.stop(created.preview_id, created.lease_token)
-    assert result.reason == "worktree_changed"
-    assert calls and workspace.integrity.rules_suspended and not workspace.integrity.main_suspect
+    process = h.processes[0]
+    process.stop_gate.clear()
+
+    async def release_cleanup():
+        async with asyncio.timeout(5):
+            await process.stop_started.wait()
+        assert calls == [] and not sentinel.exists()
+        process.stop_gate.set()
+
+    release = asyncio.create_task(release_cleanup())
+    # Hold main so finalization cannot mask whether the triggering operation spawned.
+    async with workspace.locks(main=True):
+        with pytest.raises(IntegrityError, match="restored Git metadata"):
+            if operation == "stop":
+                await h.manager.stop(created.preview_id, created.lease_token)
+            else:
+                async with workspace.locks(agent_id="agent-2"):
+                    if operation == "lease":
+                        async with workspace.operations.git_lease():
+                            pytest.fail("direct lease escaped restored-metadata refusal")
+                    else:
+                        await workspace.git_ok(other, "status", "--porcelain")
+        assert calls == [] and not sentinel.exists()
+        await release
+        assert config.read_bytes() == original and h.processes[0].dead
+        assert not workspace.integrity.main_suspect and not workspace._cleanup_unverified
+        owner = h.manager.barrier.owner
+        assert owner and owner.snapshot_finished and not owner.comparison_finished
+        assert h.manager.barrier.contaminated["agent-1"] == (1, h.head)
+        # A later explicit safe request can proceed even before evidence finalization.
+        assert await other.head()
+    assert h.manager.barrier.finalizer is not None
+    await h.manager.barrier.finalizer
+    assert h.sink.records[-1].reason == "worktree_changed"
+    assert workspace.integrity.rules_suspended and not workspace.integrity.main_suspect
+    assert not sentinel.exists()
+    async with workspace.locks(main=True, agent_id="agent-1"):
+        with pytest.raises(PreviewError, match="new revision"):
+            await workspace.preview_evidence(h.tree, 1, h.head)
     await h.close()
 
 
@@ -188,7 +241,14 @@ async def test_changed_evidence_never_stages_or_silently_merges(workspace, monke
         owner = h.manager.barrier.owner
         assert owner is not None
         object.__setattr__(owner.candidate, "current", lambda: False)
-    result = await h.manager.stop(created.preview_id, created.lease_token)
+    if tamper == "head":
+        with pytest.raises(IntegrityError, match="restored Git metadata"):
+            await h.manager.stop(created.preview_id, created.lease_token)
+        assert h.manager.barrier.finalizer is not None
+        await h.manager.barrier.finalizer
+        result = h.sink.records[-1]
+    else:
+        result = await h.manager.stop(created.preview_id, created.lease_token)
     assert result.reason == "worktree_changed"
     async with workspace.locks(main=True, agent_id="agent-1"):
         with pytest.raises(PreviewError, match="new revision"):
@@ -340,3 +400,58 @@ async def verify_combination(workspace, base, head):
     )
     await verify_merge_abort(workspace, workspace.main, pre=base, head=head, timeout_s=5)
     await workspace.git_ok(workspace.main, "merge", "--abort")
+
+
+@pytest.mark.parametrize("uncertainty", ["death", "restoration"])
+async def test_uncertainty_retains_owner_and_refuses_every_waiting_git(
+    workspace, monkeypatch, uncertainty
+):
+    from oversight.workspace.snapshot import MetadataSnapshot
+
+    h = await harness(workspace)
+    other = await workspace.create_worktree("agent-2")
+    created = await h.start()
+    owner = h.manager.barrier.owner
+    assert owner is not None
+    data = h.manager.registry.read()
+    assert data is not None
+    port = data["port"]
+    calls = []
+
+    async def spawn(*args, **kwargs):
+        calls.append(args)
+        pytest.fail("Git escaped unverified cleanup")
+
+    if uncertainty == "death":
+        h.processes[0].stop_failure = True
+    else:
+        config = workspace.main.git_identity.common / "config"
+        config.write_bytes(config.read_bytes() + b"\n# tampered\n")
+
+        def restore(*args, **kwargs):
+            raise OSError("private restoration diagnostics")
+
+        monkeypatch.setattr(MetadataSnapshot, "restore", restore)
+    monkeypatch.setattr(core, "run_process", spawn)
+    with pytest.raises(PreviewError, match="cleanup is unverified"):
+        await other.head()
+    assert calls == [] and h.manager.barrier.owner is owner
+    assert h.sink.records[-1].state == "failed"
+    assert h.sink.records[-1].reason == "cleanup_unverified"
+    data = h.manager.registry.read()
+    assert data is not None and data["port"] == port and h.manager.has_owner
+    assert workspace.runtime_owned and workspace._cleanup_unverified
+    assert workspace.integrity.main_suspect and not owner.snapshot_finished
+    for _ in range(2):
+        with pytest.raises(IntegrityError):
+            await other.head()
+        with pytest.raises(IntegrityError):
+            async with workspace.locks(agent_id="agent-2"), workspace.operations.git_lease():
+                pytest.fail("direct Git lease escaped quarantine")
+    with pytest.raises(PreviewError) as caught:
+        await h.manager.stop(created.preview_id, created.lease_token)
+    assert caught.value.code == "wrong_state" and calls == []
+    assert "private restoration diagnostics" not in str(caught.value)
+    workspace.release_runtime()
+    assert workspace.runtime_owned
+    await h.close()

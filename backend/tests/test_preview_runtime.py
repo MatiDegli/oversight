@@ -57,7 +57,7 @@ async def prepare_run(tmp_path):
     head = await tree.head()
 
     async def candidate(*args):
-        return PreviewCandidate("run", "agent-1", "change-1", 1, head, tree)
+        return PreviewCandidate("run-20261103-000000", "agent-1", "change-1", 1, head, tree)
 
     run.previews.resolve_candidate = candidate
     processes = []
@@ -76,11 +76,19 @@ async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, m
     run, head, processes = await prepare_run(tmp_path)
     order = []
 
+    ready = asyncio.Event()
+
     async def sink(record):
         order.append(record.state)
+        if record.state == "ready":
+            ready.set()
 
     run.previews.set_status_sink(sink)
-    await run.previews.start(run_id="run", agent_id="agent-1", revision=1, head_commit=head)
+    await run.previews.start(
+        run_id="run-20261103-000000", agent_id="agent-1", revision=1, head_commit=head
+    )
+    async with asyncio.timeout(5):
+        await ready.wait()
     process = processes[0]
     process.stop_failure = failed
     finish = finish_snapshot
@@ -94,6 +102,7 @@ async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, m
         order.append("manager_close")
 
     async def store_close():
+        assert run.previews._watcher is not None and run.previews._watcher.done()
         order.append("store_close")
 
     monkeypatch.setattr(barriers, "finish_snapshot", snapshot)
@@ -115,7 +124,9 @@ async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, m
         assert not run.workspace.runtime_owned
     assert order.index("manager_close") < order.index("store_close")
     with pytest.raises(PreviewError):
-        await run.previews.start(run_id="run", agent_id="agent-1", revision=1, head_commit=head)
+        await run.previews.start(
+            run_id="run-20261103-000000", agent_id="agent-1", revision=1, head_commit=head
+        )
 
 
 async def test_source_startup_lease_does_not_require_uncreated_main_byte_override(
@@ -150,3 +161,46 @@ def test_explicit_settings_always_exclude_actual_server_ports():
     assert settings.preview_profile.vite_port == 19682
     with pytest.raises(ValueError, match="port pool"):
         settings.preview_profile.validate()
+
+
+@pytest.mark.parametrize("phase", ["launch", "ready"])
+async def test_shutdown_starting_settles_tasks_before_store_close(tmp_path, monkeypatch, phase):
+    from oversight.workspace.preview_types import FakeStatusSink
+
+    run, head, processes = await prepare_run(tmp_path)
+    sink, available = FakeStatusSink(), asyncio.Event()
+    run.previews.set_status_sink(sink)
+    factory = run.previews.process_factory
+
+    def gated(registry, port):
+        process = factory(registry, port)
+        getattr(process, phase + "_gate").clear()
+        available.set()
+        return process
+
+    run.previews.process_factory = gated
+    created = await run.previews.start(
+        run_id="run-20261103-000000", agent_id="agent-1", revision=1, head_commit=head
+    )
+    assert created.state == "starting"
+    async with asyncio.timeout(5):
+        await available.wait()
+        process = processes[0]
+        await getattr(process, phase + "_started").wait()
+    owner, watcher = run.previews.barrier.owner, run.previews._watcher
+    closed = []
+
+    async def close_store():
+        assert owner is not None and owner.launch_task is not None and watcher is not None
+        assert owner.launch_task.done() and watcher.done()
+        assert process.dead and run.previews.registry.read() is None
+        assert sink.records[-1].state == "stopped"
+        closed.append(True)
+
+    monkeypatch.setattr(run.store, "close", close_store)
+    async with asyncio.timeout(5):
+        await run.shutdown()
+    getattr(process, phase + "_gate").set()
+    assert closed == [True] and not run.workspace.runtime_owned
+    assert [r.state for r in sink.records] == ["starting", "stopping", "stopped"]
+    assert not run.previews.has_owner

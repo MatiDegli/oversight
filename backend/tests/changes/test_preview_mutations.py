@@ -12,7 +12,7 @@ from test_rules_transaction import reserved as reserved
 from workspace.preview_fakes import FakeProcess, profile
 
 from oversight.changes import WrongState, _approval
-from oversight.workspace import PreviewError, PreviewManager
+from oversight.workspace import IntegrityError, PreviewError, PreviewManager
 from oversight.workspace.preview_types import FakeStatusSink
 from oversight_contracts.events import ChangeResolved
 
@@ -22,7 +22,7 @@ pytestmark = pytest.mark.anyio
 async def attach(h, record=None):
     record = record or h.manager._agents["agent-1"]
     await h.workspace.check_isolation()
-    h.manager._preview_run_id = "preview-run"
+    h.manager._preview_run_id = "run-20261103-000000"
     processes = []
 
     def factory(registry, port):
@@ -39,11 +39,12 @@ async def attach(h, record=None):
     sink = FakeStatusSink()
     previews.set_status_sink(sink)
     created = await previews.start(
-        run_id="preview-run",
+        run_id="run-20261103-000000",
         agent_id=record.agent_id,
         revision=record.revision,
         head_commit=record.head_commit,
     )
+    await sink.wait("ready", created.preview_id)
     return previews, processes[0], sink, created
 
 
@@ -106,13 +107,23 @@ async def test_stop_does_not_cancel_other_agent_before_verified_drain(h):
     await asyncio.gather(live, previews._watcher, return_exceptions=True)
 
 
-async def test_contamination_blocks_person_before_automatic_reproposal_or_stage(h):
+@pytest.mark.parametrize("tamper", ["files", "metadata"])
+async def test_contamination_blocks_person_before_automatic_reproposal_or_stage(h, tamper):
     await h.run_agent(1, EDIT)
     record = h.manager._agents["agent-1"]
     previews, _process, _sink, created = await attach(h)
     path = record.tree.root / "app-written.txt"
     path.write_text("preserve for review")
-    await previews.stop(created.preview_id, created.lease_token)
+    if tamper == "metadata":
+        config = h.workspace.main.git_identity.common / "config"
+        config.write_bytes(config.read_bytes() + b"\n# preview tamper\n")
+        with pytest.raises(IntegrityError):
+            await previews.stop(created.preview_id, created.lease_token)
+        assert previews.barrier.finalizer is not None
+        await previews.barrier.finalizer
+        assert h.workspace.integrity.rules_suspended and not h.workspace.integrity.main_suspect
+    else:
+        await previews.stop(created.preview_id, created.lease_token)
     calls = len(h.workspace.calls)
     with pytest.raises(PreviewError, match="new revision"):
         await h.manager.approve("change-1", None, **observed_target(h.manager, "change-1"))
@@ -131,11 +142,16 @@ def intercept_automatic(h, monkeypatch, *, contamination=False):
         previews, process, sink, _created = await attach(h, record)
         record.state = state
         started.append((previews, process, sink))
-        if contamination:
+        if contamination == "metadata":
+            config = h.workspace.main.git_identity.common / "config"
+            config.write_bytes(config.read_bytes() + b"\n# preview tamper\n")
+        elif contamination:
             (record.tree.root / "app-written.txt").write_text("preserve")
         else:
             process.stop_failure = True
         await original(ctx, reservation)
+        if previews.barrier.finalizer is not None:
+            await previews.barrier.finalizer
         if previews._watcher is not None:
             previews._watcher.cancel()
             await asyncio.gather(previews._watcher, return_exceptions=True)
@@ -144,7 +160,7 @@ def intercept_automatic(h, monkeypatch, *, contamination=False):
     return started
 
 
-@pytest.mark.parametrize("contamination", [False, True])
+@pytest.mark.parametrize("contamination", [False, True, "metadata"])
 async def test_rules_authority_refuses_cleanup_failure_or_contamination(
     h,
     reserved,
@@ -163,7 +179,7 @@ async def test_rules_authority_refuses_cleanup_failure_or_contamination(
         assert h.workspace.integrity.main_suspect
 
 
-@pytest.mark.parametrize("contamination", [False, True])
+@pytest.mark.parametrize("contamination", [False, True, "metadata"])
 async def test_standing_grant_authority_uses_same_barriers(h, granted, monkeypatch, contamination):
     started = intercept_automatic(h, monkeypatch, contamination=contamination)
     decisions = await later(h, monkeypatch)
