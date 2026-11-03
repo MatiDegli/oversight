@@ -8,9 +8,12 @@ import { launchBrowser } from "../browserLaunch.support";
 // eslint-disable-next-line no-restricted-imports -- Original optional offline snapshot, never a substitute graph.
 import { readBoltonsSnapshot } from "../graph/exactFixtures.testSupport";
 import type { GraphProbeHost } from "../graph";
-import type { TeamScene } from "./shell/agentLook.browser.fixture";
+import { teamCuts, type TeamScene } from "./shell/agentLook.browser.fixture";
+import { publishTeamColorsEvidence, type TeamCapture } from "./teamColorsEvidence.testSupport";
 
 const enabled = process.env.TEAM_COLORS_SHOTS === "1";
+const sourceSha = process.env.TEAM_COLORS_SOURCE_SHA ?? "";
+const captures: TeamCapture[] = [];
 const boltons = readBoltonsSnapshot();
 const shots = fileURLToPath(new URL("../../../.shots/team-colors/", import.meta.url));
 function requireGraph() {
@@ -21,6 +24,8 @@ let server: ViteDevServer, browser: Browser, html: string, url: string;
 beforeAll(async () => {
   if (!enabled) return;
   if (!boltons) throw new Error("Missing Boltons d31d821 snapshot; no substitute is permitted");
+  if (!/^[a-f0-9]{40}$/.test(sourceSha))
+    throw new Error("Set TEAM_COLORS_SOURCE_SHA to the clean checkout's source commit");
   server = await createServer({
     root: fileURLToPath(new URL("../../", import.meta.url)),
     cacheDir: `${shots}cache`,
@@ -39,10 +44,11 @@ afterAll(async () => {
   if (enabled) {
     await browser.close();
     await server.close();
+    await publishTeamColorsEvidence(shots, sourceSha, captures);
   }
 });
 for (const width of [1920, 1280])
-  for (const theme of ["dark", "day"])
+  for (const theme of ["dark", "day"] as const)
     for (const scene of [
       "graph-busy",
       "graph-rest",
@@ -119,10 +125,10 @@ for (const width of [1920, 1280])
             }
             if (scene === "seventh-team")
               await check(page.getByText("G·1", { exact: true }).first()).toBeVisible();
-            await page.screenshot({
-              path: `${shots}${scene}${width === 1280 ? "-1280" : ""}-${theme}.png`,
-            });
+            const filename = `${scene}${width === 1280 ? "-1280" : ""}-${theme}.png`;
+            await page.screenshot({ path: `${shots}${filename}` });
             expect(errors).toEqual([]);
+            captures.push({ filename, width, theme, fixtureCut: teamCuts[scene] });
           } finally {
             await page.close();
           }
