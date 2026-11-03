@@ -59,3 +59,13 @@ it("shows truthful noninteractive replay rows if navigation is absent", () => {
   expect(html).toContain("Merged by your rules");
   expect(html).not.toContain("Free");
 });
+
+it("retains full collision labels, lead targets and the New lead draft", () => {
+  const state = fold(scenario("working"));
+  const html = renderToStaticMarkup(
+    <ChatAgents state={state} leadDraft onOpenConversation={vi.fn()} />,
+  );
+  expect(html).toContain('data-agent-origin="agent-a"');
+  expect(html).toContain('data-agent-origin="agent-b"');
+  expect(html).toContain('aria-label="New lead draft"');
+});

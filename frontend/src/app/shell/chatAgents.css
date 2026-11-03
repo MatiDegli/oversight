@@ -148,3 +148,66 @@ button.chat-agent-row:hover {
     padding-block: 10px;
   }
 }
+
+.chat-team {
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.chat-team-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.chat-team-summary h3 {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.chat-team-ring {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 2px solid var(--slot-graphic);
+  border-radius: 50%;
+  color: var(--slot-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.chat-team-members {
+  margin-left: 12px;
+  border-left: 2px solid var(--slot-graphic);
+  padding-left: 4px;
+  list-style: none;
+}
+.chat-lone-agent {
+  list-style: none;
+}
+.chat-agent-list .chat-agent-badge {
+  width: max-content;
+  max-width: 100%;
+  min-width: 26px;
+  height: auto;
+  min-height: 26px;
+  border: 0;
+  background: none;
+}
+.chat-agent-badge > span:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.chat-agent-list .chat-agent-row {
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding-left: 8px;
+}
+.chat-agent-list .chat-agent-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
