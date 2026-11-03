@@ -6,7 +6,7 @@ export interface PreviewActions {
   state: State;
   readOnlyReason?: string;
   /** Preview-only refusal, described by the app-owned startup disclosure. */
-  previewRestriction?: { describedBy: string };
+  previewRestriction?: { describedBy?: string };
   readState: () => State;
   onPreview?: (request: LeadView) => void;
   onReview?: (candidate: ResolvedPreview) => void;

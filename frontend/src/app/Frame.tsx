@@ -1,5 +1,6 @@
 import { presentationFor } from "../teams/presentation";
 import { stateStore } from "../state";
+import { PreviewStartupPanel } from "./preview/PreviewStartupPanel";
 import { previewStartup } from "./preview/previewStartup";
 import { PreviewPanel } from "./preview/PreviewPanel";
 import "./preview/previewChatLayout.css";
@@ -120,14 +121,12 @@ export function Frame(input: FrameProps) {
     : input;
   const startup = previewStartup();
   const startupId = useId();
-  const previewActions = props.previewActions
-    ? {
-        ...props.previewActions,
-        ...(startup.kind === "invalid" && {
-          previewRestriction: { describedBy: `${startupId}-description` },
-        }),
-      }
-    : null;
+  const composerDisclosure =
+    startup.kind === "missing" ? undefined : (
+      <div id={`${startupId}-description`}>
+        <PreviewStartupPanel result={startup} headingId={`${startupId}-heading`} />
+      </div>
+    );
   const { state, onClosePanel } = props;
   const arrival = useMergeArrival(state);
   const phone = usePhonePractice(props.practice?.active ?? false);
@@ -148,6 +147,16 @@ export function Frame(input: FrameProps) {
   // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
   const shell = useShell(panelOpen(view), onClosePanel, hiddenChatView === view);
   const open = shell.panelOpen;
+  const previewActions = props.previewActions
+    ? {
+        ...props.previewActions,
+        ...(startup.kind === "invalid" && {
+          previewRestriction: {
+            describedBy: shell.layout === "Chat" ? `${startupId}-description` : undefined,
+          },
+        }),
+      }
+    : null;
   const previewSlot = useMemo(
     () =>
       props.previewHost
@@ -302,6 +311,7 @@ export function Frame(input: FrameProps) {
                   {...props}
                   view={view}
                   chat={shell.layout === "Chat"}
+                  composerDisclosure={composerDisclosure}
                   onGraph={chatReview.onGraph}
                   onViewHighlight={(ids, key) => {
                     props.onViewHighlight?.(ids, key);
