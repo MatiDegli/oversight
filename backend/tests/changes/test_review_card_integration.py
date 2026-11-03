@@ -19,10 +19,26 @@ from oversight_contracts.decisions import ReviewCardDecisionRef
 pytestmark = pytest.mark.anyio
 
 
+@pytest.fixture(autouse=True)
+def semantic_worker_budget(monkeypatch):
+    # These tests prove classification and publication, not worker speed. Match the live
+    # behavior tests' import/call allowance; retain real workers, repeats and outer deadlines.
+    monkeypatch.setattr("oversight.workspace.behavior_run.PER_CALL_TIMEOUT_S", 1.0)
+
+
 def final_cards(event):
     return event.type == "change.facts_recorded" and any(
         p.startswith("review cards: finished;") for p in event.payload.problems
     )
+
+
+def assert_review_samples(events, final):
+    first = next(event.payload for event in events if event.type == "change.facts_recorded")
+    assert first.behavior_diff, first.problems
+    finished = next(p for p in final.problems if p.startswith("review cards: finished;"))
+    counts = finished.removeprefix("review cards: finished; ").removesuffix(" classified")
+    _, selected = counts.split("/")
+    assert int(selected) >= 1, finished
 
 
 def classified_nodes(job, first, final, choice):
@@ -67,6 +83,7 @@ async def test_measured_callers_and_edited_nodes_replay_from_sqlite_without_work
         await s.until(final_cards)
         events = s.events()
         final = next(event for event in events if final_cards(event))
+        assert_review_samples(events, final.payload)
         first = next(event for event in events if event.type == "change.facts_recorded")
         assert first.payload.review_cards == []
         assert first.payload.behavior_diff == final.payload.behavior_diff
@@ -181,6 +198,7 @@ async def test_f1_invalid_json_is_unavailable_and_asked_for_never_approves(
         rec = await run(s)
         await s.until(final_cards)
         final = next(event.payload for event in s.events() if final_cards(event))
+        assert_review_samples(s.events(), final)
         assert final.review_cards == [] and any(expected in problem for problem in final.problems)
         assert rec.state == "ready" and not any(e.type == "change.resolved" for e in s.events())
         assert len(api.bodies) == 1
@@ -199,6 +217,7 @@ async def test_f2_reuses_f1_fail_closed_budget_admission(tmp_path, monkeypatch):
         await run(s)
         await s.until(final_cards)
         final = next(event.payload for event in s.events() if final_cards(event))
+        assert_review_samples(s.events(), final)
         assert final.review_cards == []
         assert any("budget_unconfigured" in problem for problem in final.problems)
         assert not forbidden.called
@@ -219,6 +238,7 @@ async def test_f1_queue_wait_uses_the_f2_call_deadline(tmp_path, monkeypatch):
             await run(s)
             await s.until(final_cards)
         final = next(event.payload for event in s.events() if final_cards(event))
+        assert_review_samples(s.events(), final)
         assert final.review_cards == [] and any("deadline" in p for p in final.problems)
         assert not forbidden.called
         assert not any(e.type == "usage.tick" and e.payload.role == "review" for e in s.events())
