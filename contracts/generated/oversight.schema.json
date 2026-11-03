@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.17.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.18.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -200,6 +200,26 @@
         "text"
       ],
       "title": "AgentMessageSent",
+      "type": "object"
+    },
+    "AgentRef": {
+      "additionalProperties": false,
+      "description": "One committed agent reference.",
+      "properties": {
+        "kind": {
+          "const": "agent",
+          "description": "Reference discriminator.",
+          "type": "string"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        }
+      },
+      "required": [
+        "kind",
+        "agent_id"
+      ],
+      "title": "AgentRef",
       "type": "object"
     },
     "AgentState": {
@@ -615,6 +635,26 @@
         "unstable"
       ],
       "title": "BehaviorDiffRow",
+      "type": "object"
+    },
+    "BehaviorView": {
+      "additionalProperties": false,
+      "description": "Measured behavior for the displayed candidate.",
+      "properties": {
+        "kind": {
+          "const": "behavior",
+          "description": "View discriminator.",
+          "type": "string"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        }
+      },
+      "required": [
+        "kind",
+        "change_id"
+      ],
+      "title": "BehaviorView",
       "type": "object"
     },
     "Budget": {
@@ -1089,6 +1129,24 @@
         "payload"
       ],
       "title": "ChangeFactsRecordedEvent",
+      "type": "object"
+    },
+    "ChangeFileRef": {
+      "additionalProperties": false,
+      "description": "One exact recorded change/file pair.",
+      "properties": {
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "path": {
+          "$ref": "#/$defs/ViewPath"
+        }
+      },
+      "required": [
+        "change_id",
+        "path"
+      ],
+      "title": "ChangeFileRef",
       "type": "object"
     },
     "ChangeGraph": {
@@ -2532,6 +2590,32 @@
       ],
       "type": "string"
     },
+    "FilesView": {
+      "additionalProperties": false,
+      "description": "Exact recorded files, including resolved changes.",
+      "properties": {
+        "kind": {
+          "const": "files",
+          "description": "View discriminator.",
+          "type": "string"
+        },
+        "references": {
+          "description": "One to eight distinct change/file pairs.",
+          "items": {
+            "$ref": "#/$defs/ChangeFileRef"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "references"
+      ],
+      "title": "FilesView",
+      "type": "object"
+    },
     "FinishDeclaration": {
       "additionalProperties": false,
       "description": "Claims made by the agent at finish, never server evidence.",
@@ -3268,6 +3352,49 @@
       "title": "Health",
       "type": "object"
     },
+    "HighlightRef": {
+      "discriminator": {
+        "mapping": {
+          "agent": "#/$defs/AgentRef",
+          "path": "#/$defs/PathRef"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AgentRef"
+        },
+        {
+          "$ref": "#/$defs/PathRef"
+        }
+      ]
+    },
+    "HighlightView": {
+      "additionalProperties": false,
+      "description": "References to highlight on a person's click.",
+      "properties": {
+        "kind": {
+          "const": "highlight",
+          "description": "View discriminator.",
+          "type": "string"
+        },
+        "references": {
+          "description": "One to eight distinct references.",
+          "items": {
+            "$ref": "#/$defs/HighlightRef"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "references"
+      ],
+      "title": "HighlightView",
+      "type": "object"
+    },
     "HistoryPage": {
       "additionalProperties": false,
       "description": "One bounded page of historical event envelopes.",
@@ -3788,6 +3915,98 @@
       "title": "LeadStatusEvent",
       "type": "object"
     },
+    "LeadView": {
+      "additionalProperties": false,
+      "description": "A lead's reference-only view request.",
+      "properties": {
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "through_seq": {
+          "description": "Successful status horizon, earlier than this event.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ViewCaption"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Masked optional speech; null when omitted or withheld."
+        },
+        "view": {
+          "$ref": "#/$defs/LeadViewKind"
+        }
+      },
+      "required": [
+        "agent_id",
+        "through_seq",
+        "caption",
+        "view"
+      ],
+      "title": "LeadView",
+      "type": "object"
+    },
+    "LeadViewEvent": {
+      "additionalProperties": false,
+      "description": "Envelope for one committed lead view.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "lead.view",
+          "description": "Event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/LeadView"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "LeadViewEvent",
+      "type": "object"
+    },
+    "LeadViewKind": {
+      "discriminator": {
+        "mapping": {
+          "behavior": "#/$defs/BehaviorView",
+          "files": "#/$defs/FilesView",
+          "highlight": "#/$defs/HighlightView",
+          "moment": "#/$defs/MomentView"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/HighlightView"
+        },
+        {
+          "$ref": "#/$defs/FilesView"
+        },
+        {
+          "$ref": "#/$defs/BehaviorView"
+        },
+        {
+          "$ref": "#/$defs/MomentView"
+        }
+      ]
+    },
     "Limits": {
       "additionalProperties": false,
       "description": "The person's values, fixed for the run.",
@@ -4229,6 +4448,28 @@
       "title": "ModelProfile",
       "type": "object"
     },
+    "MomentView": {
+      "additionalProperties": false,
+      "description": "One committed event; navigation is replay-only.",
+      "properties": {
+        "kind": {
+          "const": "moment",
+          "description": "View discriminator.",
+          "type": "string"
+        },
+        "event_seq": {
+          "description": "Referenced committed sequence, no later than through_seq.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "event_seq"
+      ],
+      "title": "MomentView",
+      "type": "object"
+    },
     "NodeBehaviorDiff": {
       "additionalProperties": false,
       "description": "Server-observed comparisons for one changed node.",
@@ -4469,6 +4710,26 @@
         "message"
       ],
       "title": "ParseError",
+      "type": "object"
+    },
+    "PathRef": {
+      "additionalProperties": false,
+      "description": "One repository path reference.",
+      "properties": {
+        "kind": {
+          "const": "path",
+          "description": "Reference discriminator.",
+          "type": "string"
+        },
+        "path": {
+          "$ref": "#/$defs/ViewPath"
+        }
+      },
+      "required": [
+        "kind",
+        "path"
+      ],
+      "title": "PathRef",
       "type": "object"
     },
     "Plan": {
@@ -5931,6 +6192,7 @@
           "graph.snapshot": "#/$defs/GraphSnapshotEvent",
           "lead.reply": "#/$defs/LeadReplyEvent",
           "lead.status": "#/$defs/LeadStatusEvent",
+          "lead.view": "#/$defs/LeadViewEvent",
           "merge_mode.changed": "#/$defs/MergeModeChangedEvent",
           "model.attempt_failed": "#/$defs/ModelAttemptFailedEvent",
           "plan.updated": "#/$defs/PlanUpdatedEvent",
@@ -6008,6 +6270,9 @@
         },
         {
           "$ref": "#/$defs/LeadStatusEvent"
+        },
+        {
+          "$ref": "#/$defs/LeadViewEvent"
         },
         {
           "$ref": "#/$defs/LeadReplyEvent"
@@ -7467,6 +7732,18 @@
       ],
       "title": "UsageView",
       "type": "object"
+    },
+    "ViewCaption": {
+      "maxLength": 160,
+      "minLength": 1,
+      "pattern": "\\S",
+      "type": "string"
+    },
+    "ViewPath": {
+      "maxLength": 512,
+      "minLength": 1,
+      "pattern": "^(?:\\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*\\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*$",
+      "type": "string"
     },
     "WorkspacePath": {
       "type": "string"

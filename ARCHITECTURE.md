@@ -349,7 +349,7 @@ source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScrip
 TypeScript and json-schema-to-typescript. `make check-contracts` compares both generated
 outputs byte for byte, including in CI.
 
-The 25 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
+The 26 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
 `agent.status`, `agent.step`, `agent.message`, `agent.focus`, `change.updated`, `change.proposed`,
 `change.resolved`, `lead.reply`, `usage.tick` and `error`.
 The complete `ServerEvent` union is in `contracts/src/oversight_contracts/events.py`.
@@ -367,15 +367,25 @@ every few hundred milliseconds and SQLite writes are batched.
 Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
 gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text to a coding agent or lead, masked before storage.
-Contracts 1.17.0 defines `lead.reply {agent_id, answers_seq, woken_by, text, through_seq, cut}`,
+Contracts 1.18.0 defines `lead.reply {agent_id, answers_seq, woken_by, text, through_seq, cut}`,
 produced by the lead runtime. `woken_by` names committed catalog triggers consumed by an autonomous wake.
 `answers_seq` is null for the opening task or a wake, or names an earlier `agent.message` to the same lead.
 `through_seq` is null or a nonnegative horizon strictly below the reply's seq, with no target-type
 requirement. Non-null reply text is nonblank and at most 4,096 characters, masked before storage
 like messages. `cut` is `tool_calls`, `model_calls`, `time`, `spend_brake` or null. Null text requires
 a cut in ordinary/live validation; publication validation also accepts withheld text with null
-cut under the existing message-text receipt. Both event types withhold text by default on export;
-explicit inclusion authorization includes the stored masked text. No new wire receipt fields exist.
+cut under the existing message-text receipt. Both message event types withhold text and `lead.view` withholds captions by default
+on export;
+explicit inclusion authorization includes the stored masked text and captions. No new wire receipt fields exist.
+`lead.view` is a dormant reference-only event with highlight, files, behavior and moment kinds.
+The strict adapter masks captions and resolves all references against the successful status
+prefix before publication under the lead lock; stopping or closing refuses without events.
+The sink checks horizons and committed moment membership in constant work, excluding batch-local
+targets. `show_view` is absent from advertised tools and dispatch; prompt bytes and version stay
+unchanged. Readers retain ordered requests per lead and resolve identities against displayed state.
+Behavior requires measured evidence for the current revision/head; files require exact recorded
+change/path pairs. No visible cards or model calls are added.
+
 `LeadStatus.state` gains `idle` between turns; `done` remains accepted for historical logs.
 L1 accepts replies as no-ops: only envelope sequence/clock bookkeeping advances, with no messages,
 decisions, activity or accounting observations and no thread UI. L2 gives idle leads message admission and Stop; L3 supplies the thread UI.
@@ -457,6 +467,17 @@ observed this turn, or null.
 L3 owns Chat/composer, freshness/cut/withheld UI, plan links, graph/focus, fixture exclusion,
 approval keyboard protection, the 50-turn cost fixture and separate Playwright coverage.
 
+A keyword-only `include_views` flag on status builders defaults to false; production leaves it
+off, preserving the previous status bytes. When enabled, status orders header, inventory/usage,
+complete eligible agent/path, change/path, measured-behavior and moment rows, then ordinary rows.
+Reference strings pass through the escaping serializer with a 512-character cap. Noncanonical
+paths never become eligible or count toward overflow. The latest 32 committed milestones are
+`change.proposed`, `change.resolved`, `change.reviewed`, `tests.executed`, `plan.updated`,
+`revert.resolved`, `lead.reply` and `error`, in descending seq order. Header, usage, eligibility
+and footer must fit within 20,000 characters or eligibility fails closed. Ordinary rows retain
+exact whole-entry omission counts. Status eligibility resets each turn separately from wake
+horizons. Resolution is available through the `oversight.events` facade and EventStore methods.
+
 The installed coding-agent Message, Pause and Resume routes accept only human HTTP commands
 and answer an empty 202.
 The manager's public eligibility check admits only working changes; the drive also refuses
@@ -537,7 +558,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.17.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.18.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

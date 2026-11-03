@@ -52,6 +52,7 @@ oversight/
 │   │   ├── common.py         # ids, paths, timestamps, shared literals
 │   │   ├── graph.py          # GraphNode, GraphEdge, GraphSnapshot, GraphDelta, ChangeGraph, ImpactCone
 │   │   ├── events.py         # the envelope, payloads and current ServerEvent union
+│   │   ├── views.py          # dormant grounded lead view requests
 │   │   ├── commands.py       # request and response bodies, ErrorResponse
 │   │   ├── policy.py  plans.py  queue.py
 │   │   └── review.py  decisions.py  examples.py  grants.py

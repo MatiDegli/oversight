@@ -59,6 +59,12 @@ def validate_text(
             and not include_message_text
         ):
             raise RecordError("message text requires an included exporter receipt")
+        if (
+            event.type == "lead.view"
+            and event.payload.caption is not None
+            and not include_message_text
+        ):
+            raise RecordError("caption requires an included exporter receipt")
         if event.seq != len(events) + 1:
             raise RecordError(f"event sequence gap at line {number}")
         if absolute_paths(json.loads(line)):

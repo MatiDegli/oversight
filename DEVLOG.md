@@ -70,3 +70,5 @@ One line per day, in Argentina time (ART).
   lead start, cap guards and compact lead rows with fake-only lifecycle and responsive capture proof.
   Rechecked the layout and clarify references in full, fixed the 390px capped-action overflow,
   and removed duplicate ended copy.
+
+- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls.

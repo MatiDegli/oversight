@@ -73,6 +73,12 @@ from oversight.events.usage_fold import (
     fold_usage,
 )
 from oversight.events.usage_view import build_usage_view
+from oversight.events.view_resolution import (
+    MOMENT_EVENT_TYPES,
+    ViewProjection,
+    project_views,
+    resolve_view_references,
+)
 
 
 def run_store_path(runtime_dir: Path, run_id: str) -> Path:
@@ -84,6 +90,7 @@ __all__ = [
     "EVENT_TYPES",
     "LIST_PRICES",
     "MAX_GAP_S",
+    "MOMENT_EVENT_TYPES",
     "NEEDS_YOU_CODES",
     "NEEDS_YOU_TEMPLATE",
     "ActivityFold",
@@ -120,6 +127,7 @@ __all__ = [
     "TerminalClaims",
     "UnassignedUsage",
     "UsageFold",
+    "ViewProjection",
     "absolute_paths",
     "build_usage_view",
     "export_run",
@@ -136,11 +144,13 @@ __all__ = [
     "parse_ts",
     "play",
     "price_usage",
+    "project_views",
     "read_history",
     "read_jsonl",
     "read_store",
     "replay_delays",
     "resolution_at",
+    "resolve_view_references",
     "run_store_path",
     "serialize_status",
     "system_clock",
