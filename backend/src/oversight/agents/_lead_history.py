@@ -41,6 +41,7 @@ class LeadHistory:
         self.history_chars = history_chars
         self.exchanges: list[tuple[str | None, str | None]] = []
         self.notices: list[ServerNotice | None] = []
+        self._dropped_exchanges = 0
 
     def append(
         self, human: str | None, reply: str | None, notice: ServerNotice | None = None
@@ -52,6 +53,7 @@ class LeadHistory:
     def _trim(self, reserved: int) -> None:
         while self.exchanges and (
             len(self.task)
+            + len(self._marker())
             + reserved
             + sum(len(h or "") + len(r or "") for h, r in self.exchanges)
             + sum(len(n.text) for n in self.notices if n is not None)
@@ -59,6 +61,14 @@ class LeadHistory:
         ):
             self.exchanges.pop(0)
             self.notices.pop(0)
+            self._dropped_exchanges += 1
+
+    def _marker(self) -> str:
+        return (
+            f"\n[Server dropped {self._dropped_exchanges} earlier exchanges.]"
+            if self._dropped_exchanges
+            else ""
+        )
 
     def messages(
         self, human: str | None = None, *, reserved: int = 0, notice: ServerNotice | None = None
@@ -67,11 +77,13 @@ class LeadHistory:
         self._trim(len(human or "") + reserved)
         # Keep the original task on the thread even if an unusually large opening task
         # alone exceeds the model history budget; label its bounded model representation.
-        available = max(0, self.history_chars - reserved - len(human or ""))
+        marker = self._marker()
+        # Send the marker whole even below marker + reservations; only the task clamps to zero.
+        available = max(0, self.history_chars - reserved - len(human or "") - len(marker))
         task = self.task
         if len(task) > available:
             task = task[: max(0, available - len(TASK_TRUNCATED))] + TASK_TRUNCATED[:available]
-        messages: list[Message] = [{"role": "user", "content": task}]
+        messages: list[Message] = [{"role": "user", "content": task + marker}]
         for (question, answer), retained in zip(self.exchanges, self.notices, strict=True):
             if retained is not None:
                 messages.extend(retained.messages())

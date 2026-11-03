@@ -181,6 +181,25 @@ class LeadOutcome:
     finish: bool = False
 
 
+def _queue_text(snapshot: QueueSnapshot) -> str:
+    """Keep the longest whole-entry prefix within the JSON character budget."""
+    first, last = 0, len(snapshot.tasks)
+    while first < last:
+        count = (first + last + 1) // 2
+        candidate = snapshot.model_copy(update={"tasks": snapshot.tasks[:count]})
+        if len(candidate.model_dump_json(exclude_none=True)) <= 20_000:
+            first = count
+        else:
+            last = count - 1
+    content = snapshot.model_copy(update={"tasks": snapshot.tasks[:first]}).model_dump_json(
+        exclude_none=True
+    )
+    omitted = len(snapshot.tasks) - first
+    if omitted:
+        content += f"\n(Queue truncated: {omitted} entries omitted.)"
+    return content
+
+
 class LeadTools:
     def __init__(
         self,
@@ -268,10 +287,7 @@ class LeadTools:
                 paths + ("\n(Listing truncated at 2,000 entries.)" if tree.truncated else "")
             )
         if name == "queue":
-            content = self.queue().model_dump_json(exclude_none=True)
-            if len(content) > 20_000:
-                content = content[:20_000] + "\n(Queue truncated at 20,000 characters.)"
-            return LeadOutcome(content)
+            return LeadOutcome(_queue_text(self.queue()))
         raise RuntimeError("Unknown lead tool outcome.")
 
     def reset_views(self) -> None:

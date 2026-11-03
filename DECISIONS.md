@@ -4445,3 +4445,12 @@ no-new-events/contracts restriction for this feature only. Contract order remain
 
 Reason: person-driven preview infrastructure can ship without disturbing gen-ui's
 locked model-facing scope, prompt pins, probe or recording.
+## 2026-11-03 — Make server cuts visible in the lead's view
+
+Each lead history appends its cumulative dropped-exchange count to the opening task and budgets
+the whole marker alongside reservations, current human text and the current notice. If their sum
+exceeds the history budget, only the opening task representation clamps to zero; the marker stays
+whole, so only its length may add an overrun. Queue reads keep the longest source-order prefix of
+whole entries whose JSON fits 20,000 characters, preserve run_id and seq, and state the exact count
+omitted outside the JSON. Prompts, contracts, authority and lifecycle stay unchanged.
+Reason: server cuts must be visible and must never hand the lead broken JSON.

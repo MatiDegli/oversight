@@ -344,6 +344,12 @@ async def test_scripted_thread_retains_exchanges_and_reads_fresh_status() -> Non
     assert following.reply.through_seq == 10
     assert "I can explain" in str(model.requests[1]) and "Check again" in str(model.requests[1])
     assert not tools.plan_ids
+    marker = "\n[Server dropped 2 earlier exchanges.]"
+    run.history.history_chars = len(run.prompt) + len(run.task) + len(marker) + len("Last check")
+    model = scripted([dict(text="Checked again.", usage={})])
+    run.make_client = lambda: model
+    assert (await run.run("Last check", 11)).state == "idle"
+    assert model.requests[0][1] == {"role": "user", "content": run.task + marker}
 
 
 @pytest.mark.parametrize("pack", [False, True])
