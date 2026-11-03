@@ -45,3 +45,6 @@ test-results/
 
 # Task bench results, raw events and durable spending ledger
 .eval-output/
+
+# Portable desktop checks and future native shell builds
+desktop/target/
