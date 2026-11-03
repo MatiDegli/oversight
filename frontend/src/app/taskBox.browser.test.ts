@@ -35,7 +35,10 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await launchBrowser({ args: ["--disable-features=LocalNetworkAccessChecks"] });
+  browser = await launchBrowser({
+    // Routed fixture HTML needs Vite's loopback HMR WebSocket for replay's console-error gate.
+    args: ["--disable-features=LocalNetworkAccessChecks"],
+  });
 }, 60_000);
 afterAll(async () => {
   await browser?.close();
