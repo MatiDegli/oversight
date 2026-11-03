@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from oversight.api.preview_policy import is_preview
 from oversight_contracts.commands import (
     ERROR_STATUS,
     ErrorCode,
@@ -37,12 +38,21 @@ def error_response(
 
 
 def install_error_handlers(app: FastAPI) -> None:
+    def private(request: Request, response: JSONResponse) -> JSONResponse:
+        if is_preview(request.scope):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.exception_handler(ApiError)
-    async def _api_error(_: Request, error: ApiError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
-        return error_response(error.code, error.message, missing=error.missing)
+    async def _api_error(request: Request, error: ApiError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        return private(request, error_response(error.code, error.message, missing=error.missing))
 
     @app.exception_handler(RequestValidationError)
-    async def _invalid_request(_: Request, error: RequestValidationError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+    async def _invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+        if is_preview(request.scope):
+            return private(
+                request, error_response("invalid_request", "Live preview request is invalid.")
+            )
         body: object = error.body
         problems: list[str] = []
         for problem in error.errors():
@@ -65,17 +75,25 @@ def install_error_handlers(app: FastAPI) -> None:
         return error_response("invalid_request", "; ".join(problems) or "invalid request")
 
     @app.exception_handler(StarletteHTTPException)
-    async def _http_error(_: Request, error: StarletteHTTPException) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+    async def _http_error(request: Request, error: StarletteHTTPException) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
         # An unknown path is not_found. The contract has no code for the rest, such as 405, so
         # they are invalid_request, with the status the contract gives it.
         if error.status_code == 404:
-            return error_response("not_found", "no such resource")
-        return error_response("invalid_request", str(error.detail))
+            return private(request, error_response("not_found", "no such resource"))
+        return private(request, error_response("invalid_request", str(error.detail)))
 
     @app.exception_handler(Exception)
-    async def _internal(_: Request, error: Exception) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
+    async def _internal(request: Request, error: Exception) -> JSONResponse:  # pyright: ignore[reportUnusedFunction]
         # Anything unexpected: the contract's internal (500), with no traceback in the body. The
         # module that failed has sent an error event with the details it may show.
+        if is_preview(request.scope):
+            return private(
+                request,
+                error_response(
+                    "internal",
+                    "Live preview request failed; closure must be verified before continuing.",
+                ),
+            )
         return error_response(
             "internal", f"the server failed ({type(error).__name__}); see the error events"
         )

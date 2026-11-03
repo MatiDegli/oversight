@@ -7,6 +7,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
 
 from oversight.api.errors import error_response
+from oversight.api.preview_policy import private_send
 
 _AUTHORITY = re.compile(rb"(localhost|127\.0\.0\.1|\[::1\])(?::([1-9][0-9]{0,4}))?")
 
@@ -56,6 +57,7 @@ class ApiGuard:
         self.policy = policy
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        send = private_send(scope, send)
         if scope["type"] not in ("http", "websocket"):
             await self.app(scope, receive, send)
             return

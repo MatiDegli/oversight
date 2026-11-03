@@ -27,7 +27,14 @@ from oversight.changes import (
 )
 from oversight.events import EventStore
 from oversight.telemetry import CURRENT, TRACE_HEADER, evaluation_trace, mark
-from oversight.workspace import TREE_TIMEOUT_S, FileTooLarge, InvalidPath, StaleFile, WorkspaceError
+from oversight.workspace import (
+    TREE_TIMEOUT_S,
+    FileTooLarge,
+    InvalidPath,
+    PreviewManager,
+    StaleFile,
+    WorkspaceError,
+)
 from oversight_contracts.commands import (
     AgentCreated,
     AgentMessage,
@@ -98,6 +105,9 @@ class Commands(Protocol):
     second one raises `WrongState` at once, and its result arrives as events. Those four, along
     with `message`, `pause` and `resume`, raise `ChangeNotFound` for an id they do not know,
     and the app's own refusals as `ApiError`."""
+
+    @property
+    def previews(self) -> PreviewManager: ...
 
     async def start_lead(self, request: StartLead) -> LeadCreated: ...
 

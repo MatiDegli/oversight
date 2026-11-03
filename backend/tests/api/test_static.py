@@ -145,8 +145,8 @@ async def test_api_routes_win_over_the_ui(tmp_path: Path, dist: Path) -> None:
     ("path", "status", "code"),
     [
         ("/graph/nope", 404, "not_found"),
-        ("/previews", 404, "not_found"),
-        ("/previews/preview-" + "a" * 32, 404, "not_found"),
+        ("/previews", 422, "invalid_request"),
+        ("/previews/preview-" + "a" * 32, 501, "not_implemented"),
         ("/previews/nope/deeper", 404, "not_found"),
         ("/events/nope", 404, "not_found"),
         ("/health/nope", 404, "not_found"),
@@ -212,9 +212,7 @@ def test_the_api_paths_are_the_frontend_proxys_and_the_routers() -> None:
     store = EventStore(Path("unused.sqlite"), "run-20261027-140312", mode="replay")
     paths = {route.path for route in create_router(store, "live").routes}  # pyright: ignore[reportAttributeAccessIssue,reportUnknownVariableType,reportUnknownMemberType]
     installed = {path.split("/")[1] for path in paths}
-    # Front A reserves previews; the later wiring front installs its routes.
-    assert API_PATHS - installed == {"previews"}
-    assert installed == API_PATHS - {"previews"}
+    assert installed == API_PATHS
 
 
 async def test_a_live_server_serves_the_build_and_never_compresses(

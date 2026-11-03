@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 from oversight.events.lead_wake import is_lead_wake_trigger
+from oversight.events.preview_resolution import validate_preview_status, validate_preview_view
 from oversight_contracts.events import ServerEvent
 
 
@@ -31,6 +32,10 @@ def validate_references(
 ) -> None:
     """References cannot see future or rejected candidates, including within one SQL batch."""
 
+    if event.type == "preview.status":
+        validate_preview_status(event.payload, prior)
+        return
+
     if event.type == "lead.view":
         # The store passes only the index committed before this SQL batch. No prior scan/fold.
         source = prior if committed is None else committed
@@ -41,6 +46,10 @@ def validate_references(
             view.view.event_seq > view.through_seq or source.get(view.view.event_seq) is None
         ):
             raise ValueError("view moment must belong to the observed committed prefix")
+        if view.view.kind == "preview":
+            validate_preview_view(
+                view.view.agent_id, source, view.through_seq, view.agent_id, prior
+            )
         return
 
     def referenced(seq: int, expected: str | None = None) -> ServerEvent:

@@ -236,25 +236,42 @@ Native Job/console/grandchild proof remains uncollected; accepted path/ACL resid
 
 ### Dormant person-owned preview supervision (2026-11-03)
 
-The backend infrastructure conforms to preview contracts 1.19.0; route wiring remains separate.
+The backend infrastructure conforms to preview contracts 1.19.0. Dormant route/publication wiring
+uses the run-owned manager and committed events.
 `LiveRun.previews` owns one `PreviewManager`. Its workspace facade exports `PreviewManager`,
 `PreviewProfile`, `PreviewCandidate`, `PreviewCreatedResult`, `PreviewStatusRecord`,
 `PreviewDetailsResult`, `PreviewStatusSink` and `PreviewError`. The awaited status sink is supplied
-by the composition owning the committed event writer; without it, execution is refused.
-There are no preview routes or production opening switch here. `PreviewProfile.production_open`
+during `create_router` construction, using that run's committed `EventStore`, before startup.
+Without it, execution is refused. There is no production opening switch. `PreviewProfile.production_open`
 is always false. Infrastructure configuration alone does not open the dormant feature.
 
 Execution is eligible only for the trusted demo, with session C available. Native Windows and
 generic/pinned/own repositories cannot use preview. The fixed C refusal is:
 “Live preview unavailable: isolation C is unavailable for this session.” Configuration is frozen
-at startup. `OVERSIGHT_PREVIEW_ADAPTER` must name the trusted absolute
-`backend/src/oversight/preview_adapter.py`; `OVERSIGHT_PREVIEW_PYTHON` is an explicit absolute
-prepared demo interpreter, preserving its venv path. `OVERSIGHT_PREVIEW_PORTS` is a comma-separated
-pool excluding backend/Vite ports, and `OVERSIGHT_PREVIEW_ORIGINS` contains exact configured HTTP
-origins, separated by commas. Missing or partial configuration disables execution without fallback.
-Person-owned startup limits are `OVERSIGHT_PREVIEW_HEARTBEAT_S` (10), `LEASE_S` (30), `LIFETIME_S`
-(900), `READINESS_S` (10), and `MEMORY_LIMIT_BYTES` (536870912), all with the same
-`OVERSIGHT_PREVIEW_` prefix. Host memory admission runs before every launch.
+at startup; `Settings(...)` acceptance fixtures never load `.env` or credentials. All four groups
+(adapter, interpreter, ports and origins) are required. Empty `OVERSIGHT_WORKSPACE_SOURCE` alone
+allows trusted-demo eligibility. No enable flag, inferred configuration or unisolated fallback exists.
+
+| Setting | Default | Parser / source |
+| --- | --- | --- |
+| `OVERSIGHT_PREVIEW_ADAPTER` | `None` | Nonempty `Path`, otherwise `None` |
+| `OVERSIGHT_PREVIEW_PYTHON` | `None` | Nonempty `Path`, otherwise `None` |
+| `OVERSIGHT_PREVIEW_PORTS` | `()` | Comma-separated integers; empty/unset gives `()` |
+| `OVERSIGHT_PREVIEW_ORIGINS` | `()` | Comma-separated strings without trimming; empty/unset gives `()` |
+| `OVERSIGHT_PREVIEW_HEARTBEAT_S` | `10` | Float seconds; watcher interval |
+| `OVERSIGHT_PREVIEW_LEASE_S` | `30` | Float seconds |
+| `OVERSIGHT_PREVIEW_LIFETIME_S` | `900` | Float seconds |
+| `OVERSIGHT_PREVIEW_READINESS_S` | `10` | Float seconds |
+| `OVERSIGHT_PREVIEW_MEMORY_LIMIT_BYTES` | `536870912` | Integer bytes; per-process `RLIMIT_AS` |
+
+Malformed numeric settings raise. The adapter must be the exact absolute
+`backend/src/oversight/preview_adapter.py`, without symlink substitution. The prepared interpreter
+must be absolute, present and executable; its virtual-environment path remains its identity. App
+ports must be unique and exclude backend/Vite ports. Origins are exact loopback HTTP **embedding
+backend/Vite origins**, never frame URLs. Deadlines must be finite and positive, heartbeat below
+lease, and memory a positive integer. Host memory admission runs before every launch. Partial or
+invalid profiles refuse rather than filling missing values. Generic, pinned and own repositories
+remain disabled. These checks do not make candidate code safe to run as another trust category.
 
 The trusted absolute supervisor never imports shop. It owns C's launcher, observes backend-only
 control EOF and monotonic lease/absolute deadlines, and verifies namespace-init death before
@@ -334,15 +351,15 @@ stopped or release the port. The generalized cleanup latch preserves the existin
 Shutdown closes preview admission at entry and drains immediately before manager close, retaining the
 store through awaited terminal publication; remaining shutdown steps still run after failure.
 
-A recovery refusal keeps its registry across restarts; restarting alone cannot release quarantine.
-Exit the server first. Inspect `worktrees/<agent>` and preserve any application-written changes.
-Using the registered identities, verify that the owned processes have ended and Git metadata has
-been restored before releasing ownership; ambiguous identities never authorize killing by PID or
-port. After this manual recovery, remove `preview-owner/owner.json` and any leftover
-`preview-owner/owner.pending`, then restart. This explicitly releases the preserved preview and
-allows normal startup/reset to proceed; copy out wanted files before that reset. The same release
-applies to incomplete owned/entering phases, partial writes, changed profiles or boot/process
-identities, and changed worktrees. Keep quarantine when death or restitution remains unverified.
+A recovery refusal keeps its registry and quarantine across restarts; restarting alone proves
+nothing and cannot release ownership. Exit the server first. Inspect `worktrees/<agent>` and
+preserve any application-written changes. Verify registered process births, namespace death and
+Git-metadata restitution before any recovery. Only authenticated recovery under the runtime lock
+may settle verified disposable ownership; unknown or ambiguous identities never authorize a kill.
+Do not kill by name or port, remove an unknown lock, or delete quarantine to force startup. Retain
+incomplete owned/entering phases, partial writes, changed profiles or boot/process identities and
+changed worktrees for inspection and verified recovery. Keep the registration whenever death or
+restitution remains uncertain; preserve wanted working files before any later reset.
 
 `runtime/preview-owner/owner.json` is private, atomic and fsynced, outside reset-deleted directories.
 It records profile/runtime fingerprint, preview/candidate identity, port, boot/process births,
@@ -357,8 +374,126 @@ restitution. Ordinary orphan detection remains unchanged. Names, ports and unkno
 authorize killing. Recovery compares the old candidate after restitution; changed working files retain
 quarantine and block reset, preserving them for review instead of deleting them at startup.
 
-These are fake-process/protocol ordering proofs, not host/browser reachability or kernel acceptance.
-Front F must still establish host/browser GET and form POST through the inherited socket, refused
-fresh backend/external connections, setsid teardown and crash recovery on the real host. C does not
-contain the filesystem, secrets accessible to the user, or application responses. RLIMIT_AS is per
-process, not an aggregate fork limit. Production opening remains disabled pending joint acceptance.
+C does not contain the filesystem, secrets accessible to the user, or application responses.
+`RLIMIT_AS` is per process, not an aggregate fork limit. Production opening remains disabled;
+recordings and their provenance are unchanged. The separate coupon story uses a scripted fake
+model and never becomes a historical recording or a paid probe.
+
+### Dormant HTTP, event and tab boundaries
+
+| Method / route | Request | Response |
+| --- | --- | --- |
+| `POST /previews` | `StartPreview`: run_id, coding agent_id, revision, head_commit | 202 `PreviewCreated`: preview_id, lease_token |
+| `GET /previews/{id}` | No body | 200 `PreviewDetails`: status, url |
+| `POST /previews/{id}/lease` | `PreviewTokenRequest`: lease_token | 200 `PreviewStatus` |
+| `POST /previews/{id}/stop` | `PreviewTokenRequest`: lease_token | 200 `PreviewStatus` |
+
+Records are explicitly projected to generated contracts. Required nulls remain present: reason is
+null while starting/ready; url is null except while ready. Private token, process, output and
+heartbeat facts never enter GET or events. All preview responses, including guard, validation,
+body-limit, replay and unexpected failures, use `Cache-Control: no-store`. Admission remains
+Host/Origin guard, bounded complete body, then route. Replay answers the existing 501 before
+parsing bodies or identifiers and before lookup or localhost access; guard/body-limit refusals
+still take precedence. There is no app proxy and no relaxed API guard.
+
+Codes retain `ERROR_STATUS`: `not_found` 404, `forbidden` 403, `invalid_request` 422,
+`wrong_state` 409, `not_configured` 503 with `missing=[]`, `not_implemented` 501,
+`too_large` 413 and `internal` 500. Other codes omit missing. Metadata refusal is a safe
+`wrong_state`; unexpected errors use fixed safe copy without exception names, output or bodies.
+
+| Lifecycle reason | Meaning |
+| --- | --- |
+| `closed` | Authenticated owner requested closure |
+| `lease_expired` | Initiating tab stopped renewing |
+| `lifetime_expired` | Absolute lifetime ended, regardless of renewals |
+| `mutation` | Any server Git/effect requires the candidate to close |
+| `shutdown` | Backend shuts down or control EOF reaches the supervisor |
+| `app_exited` | Application stopped outside an owner request |
+| `readiness_timeout` | Ready proof did not arrive within its deadline |
+| `launch_failed` | Trusted launch/handoff failed, including adapter exits 70–73 |
+| `isolation_unavailable` | Session isolation C is absent or invalidated |
+| `memory_limit` | Adapter's private memory-limit exit 74 |
+| `cleanup_unverified` | Namespace death/restoration cannot be verified; quarantine stays |
+| `worktree_changed` | Candidate files/head/revision or Git metadata changed |
+| `profile_disabled` | Person-owned profile is disabled after verified closure |
+
+The awaited sink publishes `PreviewStatus` through `EventStore.publish`; SQL commit precedes
+return and subscriber visibility. It validates the run, coding agent, change and exact pinned
+proposal. Terminal facts retain their pin after resolution. Unchanged GET and renew append
+nothing; expiry discovered by a read may publish transitions. Namespace death and listener
+release precede stopped; shutdown commits terminal facts before the event writer closes.
+
+A dormant `{kind:"preview", agent_id}` reference names the coding agent; outer `agent_id` is
+the lead. The committed prefix supplies its current unresolved proposal/revision/head. Absent,
+non-coding, resolved, stale, inconsistent or malformed targets append nothing. Existing horizon,
+caption masking and four view kinds retain their behavior. Launch independently revalidates
+membership and the current candidate under admission locks. The advertised enum, prompt/version
+and model-facing inventory stay unchanged; no model suggestions, cards or production mounting
+are released.
+
+Only the initiating tab keeps the token, in memory. An observer sees “Preview in use in another
+tab” with no frame, renewal or takeover. Close dismisses only that observer's panel. Reload loses
+ownership; absent successful owner cleanup, the server expires the lease. Replacement requires
+authenticated Stop and verified drain before reading the new candidate or requesting revision/Git.
+Uncertain stop retains cleanup ownership and blocks replacement. The sandbox is exactly
+`allow-forms`, referrer policy `no-referrer`. Static/Vite `frame-src` lists only exact
+`http://127.0.0.1:<app-port>` destinations from the pool; origins above are never substituted.
+Static replay inserts `frame-src 'none'` as the first child of head. The
+[policy checks](../backend/tests/api/test_preview_policy.py) inspect built replay with a configured
+pool and actual Vite HTML/SPA headers. These policies do not remove filesystem/secret/response
+residuals or grant arbitrary-code containment.
+
+Acceptance and missing-proof inventory follows in the hand-back. Claims are tied to
+[HTTP matrix](../backend/tests/api/test_previews.py),
+[reference membership](../backend/tests/events/test_preview_resolution.py),
+[committed publication](../backend/tests/events/test_preview_status.py),
+[real-C socket/death checks](../backend/tests/workspace/test_preview_acceptance.py),
+[mutation authorities](../backend/tests/changes/test_preview_acceptance.py),
+[three-start driver](../tools/preview_acceptance.py),
+[HTTP story client](../tools/preview_http_client.py) and
+[isolated browser proof](../frontend/src/app/preview/PreviewAcceptance.browser.test.ts).
+A skip, injected namespace or capture implementation is never collected trust evidence.
+
+The November 3 clone acceptance collected 12 Linux Chromium before/after frames and six
+comparisons under `.shots/preview-acceptance/`, with UTC/viewport/theme/error/overflow metadata.
+It did not collect WSL-to-Windows browser proof: the bounded Windows attempt exposed no CDP
+endpoint. C's 132 state frames and 18 references are available read-only at the coordinator's
+`preview-panel-loop/shots-approved/` path; the full matrix was not visually inspected in this round
+or recaptured. Missing Windows proof withholds trust and production opening; the conditional trust
+and deferred adapter-provenance decisions remain unappended. Full gates and independent review
+remain the coordinator's responsibility.
+
+### Hardening and technical audit recheck
+
+Impeccable 4.5.2's `harden.md` and `audit.md` were read in full for this recheck;
+DESIGN.md retains precedence. The isolated fixture reuses C's panel and controller.
+The scoped implementation-integrity verdict is pass: generated contracts, existing validators,
+explicit fake provenance and no production mount. The scoped source detector returned no findings.
+
+| Audit dimension | Score / 4 | Evidence / limit |
+| --- | --- | --- |
+| Accessibility | 3 | Keyboard focus, live status/alerts, forced colors and doubled text; no screen reader certification |
+| Performance | 3 | Bounded calls, one frame, disposed timers; no runtime performance benchmark |
+| Theming | 4 | Existing token-based panel, both themes inspected; candidate retains D's browser defaults |
+| Responsive design | 3 | Three viewport sizes, long RTL/CJK/emoji metadata; no physical device qualification |
+| Implementation integrity | 4 | Dormant transport/fixture, exact policies, integer form totals and explicit provenance |
+
+Total: **17/20 (Good)** for this bounded surface audit, not a WCAG certification.
+One P1 concurrency finding was fixed: the Python HTTP consumer now serializes admission,
+readiness, renewal and Stop, preserving the cleanup receipt during competing operations.
+[Regressions](../tools/tests/test_preview_http_client.py) gate simultaneous Start and early Stop.
+Acceptance witnesses also pin the authenticated PID namespace inode until the unchanged death
+assertions finish; inode reuse must not confuse another namespace with the dead preview.
+[Kernel regression](../backend/tests/workspace/test_preview_acceptance.py) verifies identity through
+death and descriptor release. No process-death, listener, registry or lock assertion was removed.
+Router construction installs the sink only for the run-owned `PreviewManager`; unrelated command
+facades retain their no-effect behavior, covered by the existing history/reserved/mode route tests.
+
+Positive findings include bounded private failures, preserved ownership, a status-only observer,
+no focus stealing and no preview dependency in production. D's native form controls remain small
+touch targets (P2), preserved by the brief rather than restyled. The broader `make shots` detector
+also reports a pre-existing skipped heading in `agents/TaskBox.tsx`, outside this front's Touches;
+it is not a preview finding. Windows browser proof remains missing; C's earlier capture matrix was not inspected in this round.
+The new browser cases cover rapid admission, a refused request, offline quarantine and mixed-script
+observer text at 200% size. Viewports and forced colors are Chromium emulation, not a physical
+touch/Windows test. There is no custom drag gesture on this surface. Trust remains withheld.

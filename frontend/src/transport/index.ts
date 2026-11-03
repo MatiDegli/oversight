@@ -7,6 +7,7 @@ import type { ReplayPlayer } from "./replayPlayer";
 import { chooseReplaySource } from "./replay-source";
 
 export { CommandError, createCommandClient } from "./commands";
+export { createPreviewAcceptancePort } from "./previewAcceptance";
 export { commandFailure } from "./failure";
 export type { ReplayPlayer, ReplaySnapshot, ReplayRate } from "./replayPlayer";
 export type { Transport, TransportStore } from "./events";

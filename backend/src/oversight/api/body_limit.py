@@ -3,6 +3,7 @@
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from oversight.api.errors import error_response
+from oversight.api.preview_policy import private_send
 from oversight.limits import MAX_BODY_BYTES
 
 
@@ -11,6 +12,7 @@ class BodyLimit:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        send = private_send(scope, send)
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
