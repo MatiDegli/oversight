@@ -4,6 +4,7 @@ import importlib
 import os
 import sys
 import tempfile
+import time
 from functools import wraps
 from itertools import islice
 from pathlib import Path
@@ -13,8 +14,9 @@ from live_helpers import live_settings
 
 from oversight import app
 from oversight.workspace import SuiteUnavailable, base_probe_checkout, core
+from oversight.workspace import source_nt as nt
 from oversight.workspace.files import open_nt
-from oversight.workspace.metadata_io import nt_token
+from oversight.workspace.metadata_io import Budget, nt_token
 
 from . import test_platform_windows as process
 
@@ -45,17 +47,26 @@ def test_native_named_file_token_matches_handle(name):
         driver.cleanup(root)
 
 
-def test_native_environment_check_refuses_hardlink():
-    from .test_source_nt_env import environment
-
+@pytest.mark.parametrize("metadata", [True, False], ids=["site-pth", "venv-config"])
+def test_native_environment_hardlink_scope(metadata):
     root = long_temp_dir()
     try:
-        source, _, io = environment(root)
-        path = source.root / ".venv/Scripts/python.exe"
-        os.link(path, path.with_name("linked-python.exe"))
-        with pytest.raises(OSError, match="environment file is hard-linked") as refused:
+        venv = root / "repo/.venv"
+        site = venv / "Lib/site-packages"
+        site.mkdir(parents=True)
+        path = site / "editable.pth" if metadata else venv / "pyvenv.cfg"
+        path.write_bytes(b"metadata\r\n")
+        os.link(path, root / "uv-cache-entry")
+        assert path.stat().st_nlink == 2
+        io = nt.EnvironmentIO(time.monotonic() + 20, site)
+        if metadata:
             io.check(path, directory=False)
-        assert "--link-mode copy" in str(refused.value)
+            assert io.read(path, Budget(io.deadline)) == b"metadata\r\n"
+        else:
+            with pytest.raises(nt.HardlinkedEnvironmentError) as refused:
+                io.check(path, directory=False)
+            assert "uv sync --reinstall --link-mode copy" in str(refused.value)
+            assert "UV_LINK_MODE=copy" in str(refused.value)
     finally:
         driver.cleanup(root)
 

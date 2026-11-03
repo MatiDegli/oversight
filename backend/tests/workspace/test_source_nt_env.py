@@ -123,6 +123,7 @@ def environment(tmp_path: Path):
     )
     io = nt.EnvironmentIO(
         time.monotonic() + 20,
+        source.root / ".venv/Lib/site-packages",
         preflight=lambda _: None,
         bind=lambda raw: base / ntpath.relpath(raw, "C:/base").replace("\\", "/"),
         sensitive=lambda _: False,
