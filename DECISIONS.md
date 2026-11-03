@@ -4611,47 +4611,6 @@ default single-link requirement.
 Residual risk: a linked file can also change through its uv cache name. The token recheck after
 each read refuses a change observed during that read; it cannot prevent later cache writes.
 
-## 2026-11-03 — Authorize gated lead preview suggestions
-
-The maintainer authorizes **packet b-preview, items 1–2**, expressly amending
-“Dormant preview references and person-owned preview lifecycle” above. The model may
-now suggest a preview through `show_view(kind="preview", agent_id=...)`, using only
-the single eligible coding-agent reference after fresh successful status and only
-while this server's composed profile is configured and admits. The outer agent
-identifies the requesting lead; the server derives the coding agent's current
-unresolved proposal. A short masked caption is speech, never evidence.
-
-Preview inventory is explicitly enabled by server admission, defaulting off for
-pure status readers. The status decision also controls reference eligibility;
-gaining availability requires fresh status. Admission is checked again before a
-request is accepted and under the lead lock at publication, using the composed
-manager's existing `_admit()` seam. Observed/current proposal, lead membership,
-run identity and same-batch invalidation remain event-store checks. A suggestion
-reserves nothing, starts no process and creates no lease.
-
-Only the person opens a preview. Review and Approve retain their roles. Auto-open
-remains dormant in this front, and previews of the person's own repositories remain
-dormant until the other line's plan lands. The model gains no start/stop/open, lease,
-URL, command or profile authority. This front changes no contracts or lifecycle.
-
-The resulting baseline/pack prompt versions are `agent-v1-9d084b21af2c` /
-`agent-v1-3dc7d749888a` without pruning; `agent-v1-4a5b9923f98b` /
-`agent-v1-f378a76b516f` at 8,000 tokens; and `agent-v1-97a2eb45e9bf` /
-`agent-v1-672909eebe92` at 9,000 tokens. Configured-limit pins are derived from
-the same production prompt and schemas. Hashing itself is unchanged.
-
-The matching opt-in API probe `preview_suggestion`, scenario
-`lead-preview-admitted-proposal-v1`, prepares a bounded synthetic current proposal
-and person asking to try the app. It uses the production lead loop, strict adapters
-and reference validators, expects status, one reference-only preview with a caption,
-and a final answer preserving person-owned opening, review and approval. It has only
-offline scripted-transport proof; the maintainer's separate paid run remains pending.
-The probe never starts an app or calls preview lifecycle endpoints. Historical
-provider results and recordings retain their original versions, including
-`agent-v1-3739943df858` in the bundled recording; no historical evidence is relabeled.
-
-Reason: the lead can ground a useful suggestion in this server's actual availability
-without acquiring execution authority or replacing the person's review decision.
 ## 2026-11-03 — Configuration attribution stays advisory and uses the current change base
 
 The maintainer authorized advisory configuration attribution for demo/Boltons agent suites and
@@ -4703,3 +4662,45 @@ constrains later work; that view itself is unchanged.
 This entry only removes the rule: building another graph view needs its own approved plan.
 
 Reason: a compact node view of a plan is easier to understand and to manipulate than a verbose card.
+
+## 2026-11-03 — Authorize gated lead preview suggestions
+
+The maintainer authorizes **packet b-preview, items 1–2**, expressly amending
+“Dormant preview references and person-owned preview lifecycle” above. The model may
+now suggest a preview through `show_view(kind="preview", agent_id=...)`, using only
+the single eligible coding-agent reference after fresh successful status and only
+while this server's composed profile is configured and admits. The outer agent
+identifies the requesting lead; the server derives the coding agent's current
+unresolved proposal. A short masked caption is speech, never evidence.
+
+Preview inventory is explicitly enabled by server admission, defaulting off for
+pure status readers. The status decision also controls reference eligibility;
+gaining availability requires fresh status. Admission is checked again before a
+request is accepted and under the lead lock at publication, using the composed
+manager's existing `_admit()` seam. Observed/current proposal, lead membership,
+run identity and same-batch invalidation remain event-store checks. A suggestion
+reserves nothing, starts no process and creates no lease.
+
+Only the person opens a preview. Review and Approve retain their roles. Auto-open
+remains dormant in this front, and previews of the person's own repositories remain
+dormant until the other line's plan lands. The model gains no start/stop/open, lease,
+URL, command or profile authority. This front changes no contracts or lifecycle.
+
+The resulting baseline/pack prompt versions are `agent-v1-9d084b21af2c` /
+`agent-v1-3dc7d749888a` without pruning; `agent-v1-4a5b9923f98b` /
+`agent-v1-f378a76b516f` at 8,000 tokens; and `agent-v1-97a2eb45e9bf` /
+`agent-v1-672909eebe92` at 9,000 tokens. Configured-limit pins are derived from
+the same production prompt and schemas. Hashing itself is unchanged.
+
+The matching opt-in API probe `preview_suggestion`, scenario
+`lead-preview-admitted-proposal-v1`, prepares a bounded synthetic current proposal
+and person asking to try the app. It uses the production lead loop, strict adapters
+and reference validators, expects status, one reference-only preview with a caption,
+and a final answer preserving person-owned opening, review and approval. It has only
+offline scripted-transport proof; the maintainer's separate paid run remains pending.
+The probe never starts an app or calls preview lifecycle endpoints. Historical
+provider results and recordings retain their original versions, including
+`agent-v1-3739943df858` in the bundled recording; no historical evidence is relabeled.
+
+Reason: the lead can ground a useful suggestion in this server's actual availability
+without acquiring execution authority or replacing the person's review decision.

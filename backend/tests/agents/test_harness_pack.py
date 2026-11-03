@@ -156,6 +156,34 @@ async def test_pack_prompt_has_one_evidence_path_and_stop(small_tree: Opened) ->
     assert _prompts.prompt_version(True) != "agent-v1-9d084b21af2c"
 
 
+def test_architecture_advertises_current_baseline_and_pack_versions() -> None:
+    architecture = (Path(__file__).resolve().parents[3] / "ARCHITECTURE.md").read_text()
+    marker = "`show_view` is advertised and dispatched with the moved prompt version: baseline\n"
+    assert architecture.count(marker) == 1
+    versions = architecture.partition(marker)[2].splitlines()[0]
+    assert versions == (
+        f"`{_prompts.prompt_version()}` and pack `{_prompts.prompt_version(True)}` "
+        "(DECISIONS, November 3)."
+    )
+
+
+def test_preview_decision_follows_existing_record_without_rewriting_entry() -> None:
+    decisions = (Path(__file__).resolve().parents[3] / "DECISIONS.md").read_text()
+    heading = "## 2026-11-03 — Authorize gated lead preview suggestions\n"
+    assert decisions.count(heading) == 1
+    position = decisions.index(heading)
+    for earlier in (
+        "## 2026-11-03 — Configuration attribution stays advisory and uses the current change base",
+        "## 2026-11-03 — Grouped Chat rail completes Q2/Q3 and folded scrolling",
+        "## 2026-11-03 — Remove the one-graph rule",
+    ):
+        assert decisions.index(earlier) < position
+    entry = decisions[position:].split("\n## ", 1)[0].rstrip() + "\n"
+    assert hashlib.sha256(entry.encode()).hexdigest() == (
+        "02cb66d67ae303e10ea60d829a26b2be2defb7cd75f2b9146c45e9e62ec3ba76"
+    )
+
+
 @pytest.mark.parametrize(
     "history_prune_tokens,versions",
     [
