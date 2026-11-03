@@ -257,16 +257,19 @@ class PreviewManager:
         process = owner.process if owner else None
         if (
             process
-            and reason == "app_exited"
+            and reason in {"app_exited", "readiness_timeout", "launch_failed"}
             and process.reason
             in {
+                "app_exited",
                 "lease_expired",
                 "lifetime_expired",
                 "shutdown",
             }
         ):
             reason = (
-                "lease_expired"
+                "app_exited"
+                if process.reason == "app_exited"
+                else "lease_expired"
                 if process.reason == "lease_expired"
                 else "lifetime_expired"
                 if process.reason == "lifetime_expired"

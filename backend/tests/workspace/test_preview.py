@@ -294,3 +294,41 @@ async def test_invalidated_c_drains_existing_owner_without_open_fallback(workspa
         await h.start()
     assert str(caught.value) == ISOLATION_MESSAGE and len(h.processes) == 1
     await h.close()
+
+
+@pytest.mark.parametrize(
+    "code,reported,expected",
+    [
+        (0, "app_exited", "app_exited"),
+        (-9, "app_exited", "app_exited"),
+        (74, "app_exited", "memory_limit"),
+        (73, "app_exited", "launch_failed"),
+        (None, "lease_expired", "lease_expired"),
+        (None, "lifetime_expired", "lifetime_expired"),
+        (None, "shutdown", "shutdown"),
+    ],
+)
+async def test_exit_before_readiness_preserves_confirmed_supervisor_reason(
+    workspace, code, reported, expected
+):
+    h = await harness(workspace)
+    factory = h.manager.process_factory
+
+    def exited(registry, port):
+        process = factory(registry, port)
+        assert isinstance(process, FakeProcess)
+        process.ready_result = False
+        process.live = False
+        process.exit_code = code
+        process.reason = reported
+        return process
+
+    h.manager.process_factory = exited
+    with pytest.raises(PreviewError, match="did not become ready"):
+        await h.start()
+    assert h.sink.records[-1].reason == expected
+    assert h.processes[0].dead and not h.manager.has_owner
+    if code == 73:
+        with pytest.raises(PreviewError, match="disabled"):
+            await h.start()
+    await h.close()
