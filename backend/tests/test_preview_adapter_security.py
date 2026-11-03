@@ -90,3 +90,18 @@ async def test_api_guard_refuses_preview_and_null_preserves_cli(path, origin):
         downstream.assert_not_called()
         assert sent[0]["status"] == 403
         assert not any(key.startswith(b"access-control") for key, _ in sent[0]["headers"])
+
+
+@pytest.mark.parametrize("path,status", [("/", 200), ("/_oversight_ready", 200), ("/missing", 404)])
+async def test_shop_csp_sandbox_on_all_responses(tmp_path, path, status):
+    async with launched(tmp_path) as child:
+        reply = await child.request(path=path)
+        assert reply.status == status
+        reply.policy()
+        assert reply.headers["content-security-policy"].endswith("; sandbox allow-forms")
+        refused = await child.request(path=path, headers=[("Host", "foreign.invalid")])
+        assert refused.status == 403
+        refused.policy()
+        assert (
+            refused.headers["content-security-policy"] == reply.headers["content-security-policy"]
+        )

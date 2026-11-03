@@ -3,6 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
 
+from oversight.preview_startup import validate_preview_startup
 from oversight.workspace import PreviewCandidate, PreviewManager, PreviewProfile, Workspace
 
 
@@ -16,9 +17,15 @@ def compose(
 ) -> PreviewManager:
     """Freeze the demo trust clamp without widening the startup opening flag."""
     frozen = replace(profile, trusted_demo=trusted_demo and profile.trusted_demo)
-    return PreviewManager(
+    if frozen.reviewed_app is not None:
+        if trusted_demo or workspace.source_inventory is None:
+            raise ValueError("preview app is not authorized")
+        frozen.reviewed_app.validate(workspace.source_inventory)
+    manager = PreviewManager(
         workspace, frozen, resolve_candidate=resolve_candidate, memory_hold=memory_hold
     )
+    manager.startup_report_valid = validate_preview_startup
+    return manager
 
 
 async def drain_shutdown(previews: PreviewManager) -> None:

@@ -153,16 +153,29 @@ class Settings:
     )
     """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
     demo_python: Path | None = None
+    """Explicit prepared interpreter with pytest; required for oversight-self, never built there.
+    No environment variable: supplied by the person-owned composition or a test fixture."""
     preview_profile: PreviewProfile = field(default_factory=PreviewProfile)
-    """Frozen preview startup configuration; opening is opt-in and requires trusted demo paths."""
-    """Tests only, no variable: an interpreter with pytest, used instead of building the demo
-    venv."""
+    """Frozen opt-in, demo trust clamp and separately verified reviewed-app authorization."""
+    preview_app: str | None = None
+    """Person override: absolute path to a UTF-8 JSON declaration, never command text."""
+    preview_node: Path | None = None
+    preview_tsc: Path | None = None
+    preview_vite: Path | None = None
+    """Person-owned absolute prepared resources; declarations cannot set them or install them."""
     frontend_dist: Path | None = None
     """The built frontend the live app serves, or `None` for none. No variable: `load` sets
     frontend/dist, and a test that builds `Settings` itself gets no UI unless it passes one."""
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if self.preview_app is not None and self.workspace_source != "oversight-self":
+            # An explicit reviewed-app selection must never fall through to the shop adapter.
+            raise ValueError("preview app is not authorized")
+        if self.preview_profile.reviewed_app is not None:
+            if self.workspace_source != "oversight-self":
+                raise ValueError("preview app is not authorized")
+            self.preview_profile.reviewed_app.validate()
         object.__setattr__(
             self,
             "preview_profile",
@@ -205,6 +218,16 @@ class Settings:
         port, vite_port = resolve_ports(merged)
         return cls(
             preview_profile=resolve_preview_profile(merged, port, vite_port),
+            preview_app=merged.get("OVERSIGHT_PREVIEW_APP"),
+            preview_node=Path(merged["OVERSIGHT_PREVIEW_NODE"])
+            if merged.get("OVERSIGHT_PREVIEW_NODE")
+            else None,
+            preview_tsc=Path(merged["OVERSIGHT_PREVIEW_TSC"])
+            if merged.get("OVERSIGHT_PREVIEW_TSC")
+            else None,
+            preview_vite=Path(merged["OVERSIGHT_PREVIEW_VITE"])
+            if merged.get("OVERSIGHT_PREVIEW_VITE")
+            else None,
             host=merged.get("OVERSIGHT_HOST", cls.host),
             port=port,
             vite_port=vite_port,

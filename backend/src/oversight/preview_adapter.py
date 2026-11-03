@@ -299,7 +299,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header(
             "Content-Security-Policy",
             "default-src 'none'; form-action 'self'; "
-            "base-uri 'none'; frame-ancestors " + " ".join(self.preview.config.origins),
+            "base-uri 'none'; frame-ancestors "
+            + " ".join(self.preview.config.origins)
+            + "; sandbox allow-forms",
         )
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cache-Control", "no-store")

@@ -18,7 +18,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path, PureWindowsPath
-from typing import BinaryIO
+from typing import TYPE_CHECKING, BinaryIO
+
+if TYPE_CHECKING:
+    from oversight.workspace.source import SourceInventory
 
 from oversight.limits import MAX_FILE_BYTES, SizeLimitError, bounded_read, bounded_text
 from oversight.workspace._platform import is_link_like, replace_retry, retry_nt, unlink_retry
@@ -432,8 +435,42 @@ def list_files(root: Path) -> list[str]:
     return sorted(found)
 
 
-def copy_template(template: Path, destination: Path) -> None:
+def copy_inventory(template: Path, destination: Path, inventory: "SourceInventory") -> None:
+    """Copy only frozen approved tracked bytes, refusing observed replacement or edits."""
+    from oversight.workspace.source import SELF_INVENTORY_REFUSAL, self_input_allowed
+
+    try:
+        if template != inventory.root:
+            raise ValueError(SELF_INVENTORY_REFUSAL)
+        inventory.verify()
+        destination.mkdir(mode=DIR_MODE, exist_ok=True)
+        for identity in inventory.entries:
+            name = identity.path.relative_to(template).as_posix()
+            if not self_input_allowed(name):
+                raise ValueError(SELF_INVENTORY_REFUSAL)
+            identity.verify()
+            with identity.path.open("rb") as source:
+                data = source.read(identity.token[2] + 1)
+            identity.verify()
+            if hashlib.sha256(data).hexdigest() != identity.sha256:
+                raise ValueError(SELF_INVENTORY_REFUSAL)
+            target = destination / name
+            target.parent.mkdir(mode=DIR_MODE, parents=True, exist_ok=True)
+            with target.open("xb") as output:
+                output.write(data)
+            target.chmod(FILE_MODE)
+        inventory.verify()
+    except (OSError, ValueError, RuntimeError):
+        raise ValueError(SELF_INVENTORY_REFUSAL) from None
+
+
+def copy_template(
+    template: Path, destination: Path, *, inventory: "SourceInventory | None" = None
+) -> None:
     """Copy file by file: refuse a symlink, skip git, caches and `*.pyc`, write files as 0644."""
+    if inventory is not None:
+        copy_inventory(template, destination, inventory)
+        return
     if sys.platform == "win32":
         nt_plain_parents(template)
         nt_plain_parents(destination.parent)

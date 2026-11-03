@@ -4674,3 +4674,91 @@ constrains later work; that view itself is unchanged.
 This entry only removes the rule: building another graph view needs its own approved plan.
 
 Reason: a compact node view of a plan is easier to understand and to manipulate than a verbose card.
+
+## 2026-11-03 — Authorize gated lead preview suggestions
+
+The maintainer authorizes **packet b-preview, items 1–2**, expressly amending
+“Dormant preview references and person-owned preview lifecycle” above. The model may
+now suggest a preview through `show_view(kind="preview", agent_id=...)`, using only
+the single eligible coding-agent reference after fresh successful status and only
+while this server's composed profile is configured and admits. The outer agent
+identifies the requesting lead; the server derives the coding agent's current
+unresolved proposal. A short masked caption is speech, never evidence.
+
+Preview inventory is explicitly enabled by server admission, defaulting off for
+pure status readers. The status decision also controls reference eligibility;
+gaining availability requires fresh status. Admission is checked again before a
+request is accepted and under the lead lock at publication, using the composed
+manager's existing `_admit()` seam. Observed/current proposal, lead membership,
+run identity and same-batch invalidation remain event-store checks. A suggestion
+reserves nothing, starts no process and creates no lease.
+
+Only the person opens a preview. Review and Approve retain their roles. Auto-open
+remains dormant in this front, and previews of the person's own repositories remain
+dormant until the other line's plan lands. The model gains no start/stop/open, lease,
+URL, command or profile authority. This front changes no contracts or lifecycle.
+
+The resulting baseline/pack prompt versions are `agent-v1-9d084b21af2c` /
+`agent-v1-3dc7d749888a` without pruning; `agent-v1-4a5b9923f98b` /
+`agent-v1-f378a76b516f` at 8,000 tokens; and `agent-v1-97a2eb45e9bf` /
+`agent-v1-672909eebe92` at 9,000 tokens. Configured-limit pins are derived from
+the same production prompt and schemas. Hashing itself is unchanged.
+
+The matching opt-in API probe `preview_suggestion`, scenario
+`lead-preview-admitted-proposal-v1`, prepares a bounded synthetic current proposal
+and person asking to try the app. It uses the production lead loop, strict adapters
+and reference validators, expects status, one reference-only preview with a caption,
+and a final answer preserving person-owned opening, review and approval. It has only
+offline scripted-transport proof; the maintainer's separate paid run remains pending.
+The probe never starts an app or calls preview lifecycle endpoints. Historical
+provider results and recordings retain their original versions, including
+`agent-v1-3739943df858` in the bundled recording; no historical evidence is relabeled.
+
+Reason: the lead can ground a useful suggestion in this server's actual availability
+without acquiring execution authority or replacing the person's review decision.
+## 2026-11-03 — Reviewed self-profile, launch declaration and startup disclosure
+
+The maintainer approved the source/worktree, fixed startup test specification and preview launch
+selection paragraphs now in AGENTS.md. This entry supersedes conflicting older selection and
+trust text. Selection is person override, then the original source's validated declaration, then
+supported startup detection. Invalid explicit inputs refuse without fallback. The shop retains its
+trusted adapter. This slice implements only a closed version-1 oversight-self/static-api declaration;
+startup detection and general declarations remain unavailable. A declaration freezes commands,
+not confinement: Vite configuration and backend startup execute edited repository code.
+
+The reviewed local source pin is c08eca088bfa790c8273fe6e41c4e0f2e5f94902. No startup fetch or
+moving-main selection is authorized. The filtered tracked-file inventory, declaration and prepared
+executable/dependency hashes mint separate reviewed-app authority; selected sources never gain
+demo trust. Self tests reuse an explicitly prepared demo Python, with demo-repo/tests scoped from
+T and demo-repo's config, with no pythonpath override. Own-source whole-repository discovery and
+the person's test timeout remain unchanged. No paid-run authorization is granted.
+
+Native Windows supports trusted repositories only. The exact warning is:
+“Native Windows: trusted repository code, same-user execution; original credentials and parent API remain accessible; no no-key/no-paid-call guarantee.”
+
+Health.preview_startup is approved for the next free minor assigned at landing; this change assigns
+no version and leaves Health/contracts untouched. Meanwhile the parent live index carries one inert
+oversight-preview-startup JSON script, identical to the bounded console serialization, before app
+scripts, with no-store. The consumer owner must use textContent, JSON.parse, strict validation and
+text nodes only; missing/invalid data disables reviewed-app actions. Nondismissible “Preview startup”
+disclosure is required in the selected-agent Chat composer and Settings before actions. Consumer
+rendering acceptance remains pending; this carrier does not implement or certify that rendering.
+
+Reviewed-app execution remains unavailable at admission and execution. Actual builds, nested
+execution, dependency installation, Linux filesystem boundary, gateway and nesting supervisor are
+not delivered. The Linux verified namespace/allowlisted-root boundary described in the approved
+policy is a required future capability, not an isolation claim for this scaffold. Current run_tests
+and shop launches retain namespace-only network/PID isolation without filesystem isolation;
+Origin-less HTTP writes remain allowed by current API policy. These residuals remain open.
+Linux own-source work starts after this change alongside boundary/gateway/nesting work. Native
+Windows preview launch and general declarations follow submission. No native-Windows isolation,
+no-key or no-paid-call guarantee is provided.
+
+The maintainer approved raising the startup disclosure cap to 4,096 escaped UTF-8 bytes on
+2026-11-03 ("Si, subilo a 4096"), superseding the prior 1,024-byte disclosure budget. Exact
+frozen commands and paths remain unchanged, without truncation or aliases. If the report
+cannot fit or is invalid, LiveRun continues with no index carrier and reviewed-app
+admission/execution refuses with `Reviewed-app startup disclosure is unavailable.` /
+`not_configured`. Source selection, declaration and authority validation errors still refuse
+startup. Real prepared resources at the default runtime can now pass disclosure admission;
+reviewed-app execution remains unavailable pending its separately required boundary and supervisor.

@@ -153,15 +153,43 @@ async def test_pack_prompt_has_one_evidence_path_and_stop(small_tree: Opened) ->
     prompt = str(model.requests[0][0]["content"])
     assert "one hypothesis" in prompt and "evidence" in prompt
     assert "Stop" in prompt and "several approaches" not in prompt
-    assert _prompts.prompt_version(True) != "agent-v1-9b54c5a17a31"
+    assert _prompts.prompt_version(True) != "agent-v1-9d084b21af2c"
+
+
+def test_architecture_advertises_current_baseline_and_pack_versions() -> None:
+    architecture = (Path(__file__).resolve().parents[3] / "ARCHITECTURE.md").read_text()
+    marker = "`show_view` is advertised and dispatched with the moved prompt version: baseline\n"
+    assert architecture.count(marker) == 1
+    versions = architecture.partition(marker)[2].splitlines()[0]
+    assert versions == (
+        f"`{_prompts.prompt_version()}` and pack `{_prompts.prompt_version(True)}` "
+        "(DECISIONS, November 3)."
+    )
+
+
+def test_preview_decision_follows_existing_record_without_rewriting_entry() -> None:
+    decisions = (Path(__file__).resolve().parents[3] / "DECISIONS.md").read_text()
+    heading = "## 2026-11-03 — Authorize gated lead preview suggestions\n"
+    assert decisions.count(heading) == 1
+    position = decisions.index(heading)
+    for earlier in (
+        "## 2026-11-03 — Configuration attribution stays advisory and uses the current change base",
+        "## 2026-11-03 — Grouped Chat rail completes Q2/Q3 and folded scrolling",
+        "## 2026-11-03 — Remove the one-graph rule",
+    ):
+        assert decisions.index(earlier) < position
+    entry = decisions[position:].split("\n## ", 1)[0].rstrip() + "\n"
+    assert hashlib.sha256(entry.encode()).hexdigest() == (
+        "02cb66d67ae303e10ea60d829a26b2be2defb7cd75f2b9146c45e9e62ec3ba76"
+    )
 
 
 @pytest.mark.parametrize(
     "history_prune_tokens,versions",
     [
-        (None, ("agent-v1-9b54c5a17a31", "agent-v1-084c4f11b6b2")),
-        (8000, ("agent-v1-864e956e87de", "agent-v1-333bb2aead66")),
-        (9000, ("agent-v1-c6ac07a82cd1", "agent-v1-1327f8a45d00")),
+        (None, ("agent-v1-9d084b21af2c", "agent-v1-3dc7d749888a")),
+        (8000, ("agent-v1-4a5b9923f98b", "agent-v1-f378a76b516f")),
+        (9000, ("agent-v1-97a2eb45e9bf", "agent-v1-672909eebe92")),
     ],
 )
 async def test_startup_exports_the_selected_prompt_version(
@@ -187,7 +215,7 @@ async def test_startup_exports_the_selected_prompt_version(
             version = json.loads(started.envelope)["payload"]["prompt_version"]
             assert version == _prompts.prompt_version(enabled, history_prune_tokens)
             assert version == versions[int(enabled)]
-            assert (version == "agent-v1-9b54c5a17a31") is (
+            assert (version == "agent-v1-9d084b21af2c") is (
                 not enabled and history_prune_tokens is None
             )
             agent = await live.start(StartAgent(task="Do the task."))
@@ -242,7 +270,7 @@ async def test_off_preserves_prompt_and_tool_results(
         + ["[1 more matches; narrow the search]"]
     )
     assert content[-1] == "Edited shop/mod.py."
-    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-9b54c5a17a31"
+    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-9d084b21af2c"
     assert (
         hashlib.sha256(_prompts.SYSTEM_PROMPT.encode()).hexdigest()
         == "8b02c2c5d9e6ea51b5be9c201cc0de04ebc56b51e49f87ea8d83e79cfd98c454"

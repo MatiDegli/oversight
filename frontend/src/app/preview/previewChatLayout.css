@@ -1,4 +1,7 @@
 /* The rail keeps its owned width. Only the conversation/app allocation changes. */
+.chat-shell:has(> .chat-preview-slot) > .chat-work {
+  display: none;
+}
 .chat-shell:has(> .chat-preview-slot) > .shell-center {
   flex: 0 0 clamp(340px, 18vw, 380px);
   min-width: 0;
@@ -15,6 +18,11 @@
   max-width: 100%;
 }
 @media (max-width: 767px) {
+  /* Retain the activity's height so the overlay never clamps the Chat scroll offset. */
+  .chat-shell:has(> .chat-preview-slot) > .chat-work {
+    display: flex;
+    visibility: hidden;
+  }
   .chat-preview-slot {
     position: fixed;
     inset: 0;

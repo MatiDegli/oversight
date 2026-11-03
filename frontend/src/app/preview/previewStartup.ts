@@ -86,7 +86,7 @@ export function readPreviewStartup(doc: Document): PreviewStartupResult {
     )
       return invalid;
     const text = element.textContent;
-    if (new TextEncoder().encode(text).byteLength > 1024) return invalid;
+    if (new TextEncoder().encode(text).byteLength > 4096) return invalid;
     const report: unknown = JSON.parse(text);
     if (!isReport(report)) return invalid;
     for (const command of report.argv) Object.freeze(command);
