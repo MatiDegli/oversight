@@ -724,12 +724,25 @@ def test_cli_retains_outer_before_either_mode(monkeypatch, tmp_path, mode):
 @pytest.mark.parametrize("layout", ["packages/foo/src", "backend/src"])
 async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeypatch, layout):
     original = nt.run_process
-    setup_calls = []
+    setup_calls, setup_envs = [], []
+    for name in (
+        "META_API_KEY",
+        "BASETEN_API_KEY",
+        "OTHER_API_KEY",
+        "UV_OVERRIDE",
+        "UV_EXCLUDE",
+        "UV_CONSTRAINT",
+        "UV_EXTRA_INDEX_URL",
+        "UV_NO_INDEX",
+        "UV_LINK_MODE",
+    ):
+        monkeypatch.setenv(name, "inherited-value-must-not-reach-uv")
 
     async def setup(argv, **kwargs):
         if argv[0] != "uv":
             return await original(argv, **kwargs)
         setup_calls.append(argv)
+        setup_envs.append(kwargs.get("env"))
         (tmp_path / "source/.venv/Lib/site-packages").mkdir(parents=True, exist_ok=True)
         from oversight.workspace import ProcessResult
 
@@ -738,6 +751,7 @@ async def test_own_fixture_setup_env_and_script_are_disposable(tmp_path, monkeyp
     monkeypatch.setattr(nt, "run_process", setup)
     monkeypatch.setenv("OVERSIGHT_DISCARD_OWN_RUNTIME", "inherited-authority")
     fixture = await nt.prepare_own_fixture(tmp_path, layout=layout)
+    assert all(env == {"UV_LINK_MODE": "copy"} for env in setup_envs)
     assert setup_calls == [
         ["uv", "--no-config", "venv", "--python", "3.12", str(fixture.source / ".venv")],
         [
