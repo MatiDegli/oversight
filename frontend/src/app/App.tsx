@@ -344,6 +344,7 @@ export function App() {
           }}
           onStartAgent={commands?.startAgent}
           onStartLead={commands?.startLead}
+          onStopLead={commands?.stopLead}
           onStopAgent={commands?.stopAgent}
           onOpenConversation={onOpenConversation}
           onMessageLead={commands ? (id, text) => commands.messageLead(id, { text }) : undefined}

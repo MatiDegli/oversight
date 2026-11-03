@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { Browser, Page } from "@playwright/test";
@@ -38,6 +39,7 @@ afterAll(async () => {
   await server.close();
 });
 async function ready(page: Page) {
+  await openOversight(page);
   await check
     .poll(
       () =>

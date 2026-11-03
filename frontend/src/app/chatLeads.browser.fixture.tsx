@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { useStore } from "zustand";
 import { stateStore } from "../state";
-import { createCommandClient } from "../transport";
+import { createCommandClient, parseEvent } from "../transport";
 // eslint-disable-next-line no-restricted-imports -- Fixture resets only the drafts owned by this front.
 import { leadDraftStore } from "../agents/leadDraftModel";
 // eslint-disable-next-line no-restricted-imports -- Same persistent TaskBox used by production.
@@ -105,6 +105,7 @@ export function leadScenario(name: string): ServerEvent[] {
   if (name === "chat-start" || name === "lead-new") return runSeed;
   if (name === "task-direct")
     return [...runSeed, status("agent-5", { task: "Reject negative prices and quantities." })];
+  if (!["leads-two", "lead-switch"].includes(name)) throw new Error(`Unknown lead scene: ${name}`);
   return [
     ...runSeed,
     lead(),
@@ -350,7 +351,14 @@ function approvedTeams(name: string) {
           tool("agent-6", 6, "Edited test_models.py"),
         ]),
     event("lead.reply", {
-      agent_id: name === "task-direct" ? "agent-3" : name === "lead-switch" ? "agent-2" : "agent-1",
+      agent_id:
+        name === "leads-six"
+          ? "lead-d"
+          : name === "task-direct"
+            ? "agent-3"
+            : name === "lead-switch"
+              ? "agent-2"
+              : "agent-1",
       answers_seq: null,
       woken_by: null,
       text:
@@ -371,7 +379,115 @@ function approvedTeams(name: string) {
   ];
   return prefix;
 }
+function lifecycleScene(name: string) {
+  const six = name === "leads-six";
+  const base = approvedTeams("lead-new");
+  const extra = six
+    ? [
+        lead("lead-c", {
+          task: "Give premium customers free shipping and cover the edge cases.",
+          state: "working",
+          limits,
+          step: 4,
+          detail: "Reading pricing.py",
+        }),
+        lead("lead-d", {
+          task: "Lowercase customer emails everywhere and reject bad addresses in every setter.",
+          state: "starting",
+          limits,
+          step: 0,
+          detail: null,
+        }),
+        lead("lead-e", {
+          task: "Speed up revenue by category for large order histories.",
+          state: "idle",
+          limits,
+          detail: null,
+        }),
+        lead("lead-f", {
+          task: "Make reorder_quote raise for an unknown product.",
+          state: "idle",
+          limits,
+          detail: null,
+        }),
+      ]
+    : [];
+  const events: ServerEvent[] = [];
+  for (const item of base) {
+    if (
+      six &&
+      (item.type === "agent.status" ||
+        item.type === "agent.step" ||
+        item.type === "change.resolved") &&
+      ["agent-3", "agent-5", "agent-7"].includes(item.payload.agent_id)
+    )
+      continue;
+
+    events.push(item);
+    if (item.type === "lead.status" && item.payload.agent_id === "agent-2") events.push(...extra);
+  }
+  if (six) {
+    events.push(
+      approvedPlan("plan-6", "lead-d", "Normalize and validate customer email setters.", false, [
+        "agent-9",
+      ]),
+      status("agent-9", {
+        plan_id: "plan-6",
+        task: "Reject an address without an at sign.",
+        state: "ready_for_review",
+        slot: "C",
+        step: 9,
+      }),
+      approvedPlan("plan-8", "lead-f", "Reject unknown products in reorder_quote.", true),
+    );
+    for (let turn = 1; turn <= limits.turns; turn++) {
+      events.push(
+        lead("lead-d", {
+          task: "Lowercase customer emails everywhere and reject bad addresses in every setter.",
+          revision: turn * 2,
+          state: "working",
+          limits,
+          step: Math.floor(((turn - 1) * 186) / limits.turns),
+          detail: null,
+        }),
+        event("lead.reply", {
+          agent_id: "lead-d",
+          answers_seq: null,
+          woken_by: null,
+          text:
+            turn === limits.turns
+              ? "No. Guest checkout builds a Customer through the same email setter, so the existing tests cover it."
+              : `Checked email validation, turn ${String(turn)}.`,
+          through_seq: null,
+          cut: null,
+        }),
+        lead("lead-d", {
+          task: "Lowercase customer emails everywhere and reject bad addresses in every setter.",
+          revision: turn * 2 + 1,
+          state: turn === limits.turns ? "halted" : "idle",
+          limits,
+          step: Math.floor((turn * 186) / limits.turns),
+          detail:
+            turn === limits.turns ? `Reached the limit of ${String(limits.turns)} turns.` : null,
+        }),
+      );
+    }
+    events.push(...costs([["lead-d", 0.21, "lead"]]));
+  }
+  return events;
+}
 export function approvedScenario(name: string) {
+  if (name === "lead-stopped" || name === "leads-six") return lifecycleScene(name);
+  if (name === "lead-cap")
+    return approvedTeams("leads-two").map((item) =>
+      item.type === "run.started" ? { ...item, payload: { ...item.payload, max_leads: 2 } } : item,
+    );
+  if (
+    !["chat-start", "start-phone", "task-direct", "leads-two", "lead-switch", "lead-new"].includes(
+      name,
+    )
+  )
+    throw new Error(`Unknown approved scene: ${name}`);
   return name === "chat-start" || name === "start-phone"
     ? approvedRun(false)
     : name === "task-direct"
@@ -383,13 +499,20 @@ const commands = createCommandClient();
 function Harness({ name, live, approved }: { name: string; live: boolean; approved: boolean }) {
   const state = useStore(stateStore, (store) => store.state);
   const [view, setView] = useState(() =>
-    name === "leads-two" || name === "lead-switch" || (approved && name === "task-direct")
+    ["leads-two", "lead-switch", "lead-stopped", "leads-six", "lead-cap"].includes(name) ||
+    (approved && name === "task-direct")
       ? viewReducer(tabbedView, {
           type: "open",
           tab: conversationTab(
             tabbedView,
             state,
-            name === "task-direct" ? "agent-3" : name === "lead-switch" ? "agent-2" : "agent-1",
+            name === "leads-six"
+              ? "lead-d"
+              : name === "task-direct"
+                ? "agent-3"
+                : name === "lead-switch"
+                  ? "agent-2"
+                  : "agent-1",
           ),
         })
       : tabbedView,
@@ -424,6 +547,7 @@ function Harness({ name, live, approved }: { name: string; live: boolean; approv
       }}
       onStartAgent={live ? commands.startAgent : undefined}
       onStartLead={live ? commands.startLead : undefined}
+      onStopLead={live ? commands.stopLead : undefined}
       onMessageAgent={live ? (id, text) => commands.messageAgent(id, { text }) : undefined}
       onPauseAgent={live ? commands.pauseAgent : undefined}
       onStopAgent={live ? commands.stopAgent : undefined}
@@ -436,8 +560,14 @@ export const chatLeadsTest = {
   mount(name = "chat-start", live = true, app = false, approved = false) {
     root?.unmount();
     taskBoxStore.setState({ draft: "", pending: false, failure: null, choice: null });
-    leadDraftStore.setState({ draft: "", pending: false, failure: null, choice: null });
-    stateStore.setState({ state: fold(approved ? approvedScenario(name) : leadScenario(name)) });
+    leadDraftStore.setState({ draft: "", pending: false, failure: null });
+    stateStore.setState({
+      state: fold(
+        (approved ? approvedScenario(name) : leadScenario(name)).map((item, i) =>
+          parseEvent(JSON.stringify({ ...item, seq: i + 1 })),
+        ),
+      ),
+    });
     root = createRoot(required(document.getElementById("root")));
     flushSync(() =>
       root?.render(
@@ -450,8 +580,14 @@ export const chatLeadsTest = {
   deliver(events: ServerEvent[]) {
     let seq = stateStore.getState().state.lastSeq;
     flushSync(() => {
-      stateStore.getState().applyEvents(events.map((item) => ({ ...item, seq: ++seq })));
+      stateStore
+        .getState()
+        .applyEvents(events.map((item) => parseEvent(JSON.stringify({ ...item, seq: ++seq }))));
     });
+  },
+  work: () => {
+    const { agents, changes } = stateStore.getState().state;
+    return { agents, changes };
   },
   events: () => stateStore.getState().state.decisionEvents,
   prefix: (name: string, approved = false) =>

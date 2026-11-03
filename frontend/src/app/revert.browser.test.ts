@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Page } from "@playwright/test";
@@ -94,6 +95,7 @@ async function open(replay = false, width = 1920, height = 1080, theme = "dark")
     });
   });
   await page.goto(entry.server.resolvedUrls?.local[0] ?? "");
+  await openOversight(page);
   await page.getByRole("button", { name: "Review change", exact: true }).first().click();
   return page;
 }

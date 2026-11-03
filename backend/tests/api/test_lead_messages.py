@@ -109,6 +109,10 @@ async def test_50_turns_and_large_history_no_lifetime_cap(tmp_path: Path) -> Non
     factory = ThreadModels()
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), factory) as s:
         await start_idle(s)
+        assert factory.built[0].requests[0][1] == {
+            "role": "user",
+            "content": "Retained opening task",
+        }
         for i in range(48):
             await send(s, f"human-{i}:" + "h" * 4000)
         after = s.store.last_seq
@@ -128,7 +132,10 @@ async def test_50_turns_and_large_history_no_lifetime_cap(tmp_path: Path) -> Non
         )
         messages = factory.built[-1].requests[0]
         assert sum(len(str(m.get("content") or "")) for m in messages) <= 24_000
-        assert messages[1]["content"] == "Retained opening task"
+        assert messages[1] == {
+            "role": "user",
+            "content": "Retained opening task\n[Server dropped 44 earlier exchanges.]",
+        }
         assert "human-0:" not in str(messages) and "human-47:" in str(messages)
         assert all(m["role"] != "tool" for m in messages)
         assert (await s.client.post("/leads", json={"task": "replacement"})).status_code == 201

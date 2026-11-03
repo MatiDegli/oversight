@@ -59,6 +59,8 @@ class ViewProjection:
                 ]
             case "behavior":
                 return [view.change_id] if view.change_id in self.behaviors else []
+            case "preview":
+                return []
             case "moment":
                 return [view.event_seq] if view.event_seq in self.moments else []
 

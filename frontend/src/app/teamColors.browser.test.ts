@@ -5,6 +5,7 @@ import { beforeAll, afterAll, expect, it } from "vitest";
 import { expect as check, type Browser } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { launchBrowser } from "../browserLaunch.support";
+import { openOversight } from "../workspaceView.browser.support";
 // eslint-disable-next-line no-restricted-imports -- Original optional offline snapshot, never a substitute graph.
 import { readBoltonsSnapshot } from "../graph/exactFixtures.testSupport";
 import type { GraphProbeHost } from "../graph";
@@ -82,6 +83,7 @@ for (const width of [1920, 1280])
               },
               { graph: requireGraph(), scene, theme },
             );
+            await openOversight(page);
             await check(
               page.getByText("Handwritten events over Boltons d31d821", { exact: true }),
             ).toBeVisible();

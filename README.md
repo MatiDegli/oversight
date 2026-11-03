@@ -26,7 +26,8 @@ below are labeled separately.
 
 ## What works today
 
-- On by default: a live graph of the repository and an impact cone of functions possibly affected.
+- Chat opens first; Oversight is one click away and loads the live repository graph and impact cone
+  of functions possibly affected on that first switch.
 - On by default: agents work in their own git worktrees, with reads and edits lit on the graph.
 - On by default: live diff and review with Approve, Reject and Request changes.
 - On by default: four agent slots, configurable up to six (A–F), working in parallel.
@@ -207,8 +208,9 @@ separately with `uv run --frozen python -m oversight replay fixtures/events/hand
 --allow-fake-provider`; UI proof uses live serve. No model credits are used.
 
 No Windows make/bash/reload or native browser suite is supplied. Validated native Windows
-own-repository paths are enabled; POSIX paths remain refused. Run the same driver on
-the maintainer's Windows machine and windows-latest:
+own-repository paths are enabled; POSIX paths and source Git configs with includes or
+`core.excludesFile` paths that are absolute, UNC, drive-prefixed or start with `~` or `%(prefix)`
+are refused. Run the same driver on the maintainer's Windows machine and windows-latest:
 
 ```powershell
 uv run --frozen python tools/demo_check_nt.py --own-fixtures

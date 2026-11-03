@@ -1,6 +1,7 @@
 """Fake application/transport boundaries; no unshare, worktree imports or provider calls."""
 
 import asyncio
+import json
 import socket
 import sys
 from dataclasses import dataclass
@@ -29,11 +30,19 @@ class FakeProcess(PreviewProcess):
         self.stop_gate.set()
         self.ready_gate = asyncio.Event()
         self.ready_gate.set()
+        self.launch_gate = asyncio.Event()
+        self.launch_gate.set()
+        self.launch_started = asyncio.Event()
+        self.ready_started = asyncio.Event()
+        self.launch_failure = False
         self.ready_result = True
         self.stop_failure = False
         self.sent: list[bytes] = []
         self.launches = 0
         self.order: list[str] = []
+        self.effective_deadline: float | None = None
+        self.absolute_deadline = 0.0
+        self.ready_budget = 0.0
 
     async def launch(self, listener: socket.socket, profile: PreviewProfile) -> None:
         self.launches += 1
@@ -43,16 +52,28 @@ class FakeProcess(PreviewProcess):
         data = self.registry.read()
         assert data and data["phase"] == "intent" and data["snapshot"]
         assert "lease_token" not in data and "nonce" not in data
+        self.effective_deadline = data["launch"]["lease_deadline"]
+        self.absolute_deadline = data["launch"]["absolute_deadline"]
+        self.launch_started.set()
+        await self.launch_gate.wait()
+        if self.launch_failure:
+            raise OSError("raw child diagnostic and secret must never escape")
+        self.authorize_execution()
+        self.order.append("execute")
         listener.close()
 
     async def ready(self, within_s: float) -> bool:
+        self.ready_budget = within_s
+        self.ready_started.set()
         await self.ready_gate.wait()
         return self.ready_result
 
     async def confirmed_live(self) -> bool:
-        return self.live
+        return self.live and "execute" in self.order
 
     def send(self, message: bytes) -> None:
+        assert "execute" in self.order, "renewal raced unfinished handoff"
+        self.effective_deadline = min(json.loads(message)["renew"], self.absolute_deadline)
         self.sent.append(message)
 
     async def stop(self) -> None:
@@ -91,10 +112,13 @@ class PreviewHarness:
     clock: Clock
     processes: list[FakeProcess]
 
-    async def start(self):
-        return await self.manager.start(
-            run_id="run", agent_id="agent-1", revision=1, head_commit=self.head
+    async def start(self, *, wait_ready=True):
+        created = await self.manager.start(
+            run_id="run-20261103-000000", agent_id="agent-1", revision=1, head_commit=self.head
         )
+        if wait_ready:
+            await self.sink.wait("ready", created.preview_id)
+        return created
 
     async def close(self) -> None:
         if not self.workspace.integrity.main_suspect:
@@ -117,7 +141,7 @@ async def harness(workspace: Workspace) -> PreviewHarness:
         return process
 
     async def resolve(run: str, agent: str, revision: int, commit: str) -> PreviewCandidate:
-        return PreviewCandidate("run", "agent-1", "change-1", 1, head, tree)
+        return PreviewCandidate("run-20261103-000000", "agent-1", "change-1", 1, head, tree)
 
     clock = Clock()
     manager = PreviewManager(

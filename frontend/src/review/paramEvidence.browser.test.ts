@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
@@ -60,6 +61,7 @@ async function mounted(
       { name, theme },
     );
     if (width >= 1280) {
+      await openOversight(page);
       await page.getByRole("button", { name: "Functions", exact: true }).click();
       await page.getByRole("button", { name: "Review change", exact: true }).click();
     }

@@ -188,6 +188,11 @@ def child_env(port: int, runtime_dir: Path) -> dict[str, str]:
         OVERSIGHT_FAKE_SCRIPT_B=FAKE_SCRIPT,
         OVERSIGHT_CROSS_REVIEW="false",
         OVERSIGHT_WORKSPACE_SOURCE="",
+        # Empty infrastructure pins keep personal settings from configuring a preview.
+        OVERSIGHT_PREVIEW_ADAPTER="",
+        OVERSIGHT_PREVIEW_PYTHON="",
+        OVERSIGHT_PREVIEW_PORTS="",
+        OVERSIGHT_PREVIEW_ORIGINS="",
     )
     # Empty keys override .env too; fake A/B and the demo source override personal settings.
     return env

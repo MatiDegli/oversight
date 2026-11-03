@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Page } from "@playwright/test";
@@ -39,6 +40,7 @@ async function open(commands = true, width = 1920, height = 1080, theme = "dark"
     },
     { commands, theme },
   );
+  await openOversight(page);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(
     () =>
@@ -268,6 +270,7 @@ it.each(["dark", "day"])("captures the conversation and card states in %s", asyn
         await page.evaluate(() => {
           window.conversationTabTest.mount();
         });
+        await openOversight(page);
       }
       await conversation(page);
       await page.screenshot({ path: `${shots}conversation-${String(width)}-${theme}.png` });
@@ -275,6 +278,7 @@ it.each(["dark", "day"])("captures the conversation and card states in %s", asyn
         await page.evaluate(() => {
           window.conversationTabTest.mount(false);
         });
+        await openOversight(page);
         await conversation(page);
         await page.screenshot({ path: `${shots}replay-${theme}.png` });
       }

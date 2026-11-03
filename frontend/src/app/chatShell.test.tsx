@@ -22,21 +22,20 @@ it("fills agents while retaining the empty work extension slot", () => {
   expect(html).toContain("New lead");
   expect(html).not.toMatch(/Nobody|article|avatar/);
 });
-it("initializes Chat only through the fixture context, with the real replay TaskBox", () => {
+it("opens in Chat by default with the real replay TaskBox and no graph", () => {
   const html = renderToStaticMarkup(
-    <InitialShellLayout value="Chat">
-      <Frame
-        state={through(2)}
-        view={initialView}
-        onNodeTap={vi.fn()}
-        canOpenChange={() => false}
-        onOpenChange={vi.fn()}
-        onClosePanel={vi.fn()}
-        replayOf="recorded run"
-      />
-    </InitialShellLayout>,
+    <Frame
+      state={through(2)}
+      view={initialView}
+      onNodeTap={vi.fn()}
+      canOpenChange={() => false}
+      onOpenChange={vi.fn()}
+      onClosePanel={vi.fn()}
+      replayOf="recorded run"
+    />,
   );
   expect(html).toContain("shell-workspace chat-shell");
+  expect(html).toMatch(/aria-pressed="true"[^>]*>.*Chat/);
   expect(html).toContain("Replay of a recorded run: agents cannot be started here.");
   expect(html).not.toContain("Loading repository graph");
   expect(html).not.toContain('aria-label="Repository graph"');

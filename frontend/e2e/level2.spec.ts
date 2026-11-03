@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 // One ordered scenario over the same static build as level 1. /level2 enables the real command
 // client only in this e2e build; page.route answers every command, while replay alone changes state.
 import { expect, test } from "@playwright/test";
@@ -80,6 +81,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
       ).toBe(true);
     }
     await page.goto("/level2");
+    await openOversight(page);
     await expect(cardA.getByRole("heading", { name: `Agent ${identityA.label}` })).toBeVisible();
     await expect(cardB.getByRole("heading", { name: `Agent ${identityB.label}` })).toBeVisible();
     for (const [who, identity, card] of [

@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { fileURLToPath } from "node:url";
 
 import { expect as browserExpect } from "@playwright/test";
@@ -112,6 +113,7 @@ async function withPage(options: Options, test: (page: Page) => Promise<void>) {
     await page.evaluate((name) => {
       window.fieldTest.mount(name);
     }, scene);
+    await openOversight(page);
     await page.waitForFunction(
       () =>
         (document

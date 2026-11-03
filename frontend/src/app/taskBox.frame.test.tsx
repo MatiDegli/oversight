@@ -1,3 +1,4 @@
+import "./oversightSelection.test-support";
 import type { Slot } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";

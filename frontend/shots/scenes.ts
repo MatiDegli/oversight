@@ -15,6 +15,10 @@ import { assertPanelFrame } from "./framing.ts";
 export interface Scene {
   name: string;
   enabled: boolean;
+  /** Capture production startup without selecting Oversight. */
+  firstView?: boolean;
+  viewport?: { width: number; height: number };
+  themes?: readonly Theme[];
   /** Use a derived cut or a hand-written fixture instead of the served proposal log. */
   log?: "editing" | "proposed" | "one-slot" | "handwritten-two-slots-braked.jsonl";
   edgeShapes?: readonly ("bezier" | "taxi")[];
@@ -203,6 +207,23 @@ async function openFileView(page: Page): Promise<void> {
 }
 
 export const scenes: readonly Scene[] = [
+  ...[1280, 390].map((width): Scene => ({
+    name: `first-${String(width)}`,
+    enabled: true,
+    firstView: true,
+    viewport: { width, height: width === 390 ? 844 : 800 },
+    themes: [
+      { name: "dark", enabled: true },
+      { name: "day", enabled: true },
+    ],
+    log: "one-slot",
+    prepare: async (page) => {
+      const chat = page.getByRole("button", { name: "Chat", exact: true, includeHidden: true });
+      assert.equal(await chat.getAttribute("aria-pressed"), "true");
+      assert.equal(await page.getByLabel("Repository graph", { exact: true }).count(), 0);
+      assert.ok(await page.locator(".chat-shell").isVisible());
+    },
+  })),
   // Opt in with OVERSIGHT_SHOTS_REVIEW_FINDINGS=1 make shots; keep default captures intact.
   ...(process.env.OVERSIGHT_SHOTS_REVIEW_FINDINGS === "1" ? findingScenes : []),
   // Watch mode: the graph and the agents panel, captured once the replay has put a card in it.

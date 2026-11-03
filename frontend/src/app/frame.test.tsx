@@ -1,3 +1,4 @@
+import "./oversightSelection.test-support";
 import { agentEvidence } from "../teams/evidence.testSupport";
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it, vi } from "vitest";

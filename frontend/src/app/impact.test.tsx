@@ -1,3 +1,4 @@
+import "./oversightSelection.test-support";
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 

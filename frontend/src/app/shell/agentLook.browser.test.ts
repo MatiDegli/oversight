@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Page, type Locator } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
@@ -61,6 +62,7 @@ it.each(["dark", "day"] as const)(
         },
         { graph, theme },
       );
+      await openOversight(page);
       await page.evaluate(() => document.fonts.ready);
       await check(
         page.getByText("Handwritten events over demo-repo", { exact: true }),

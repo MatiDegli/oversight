@@ -49,6 +49,7 @@ from oversight_contracts.grants import GrantCreated, GrantRevoked
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
 from oversight_contracts.plans import Plan
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
+from oversight_contracts.previews import PreviewStatus
 from oversight_contracts.queue import QueuedTask
 from oversight_contracts.review import ChangeFacts, CrossReview
 from oversight_contracts.views import LeadView
@@ -83,6 +84,7 @@ type EventPayload = (
     | LeadView
     | GrantCreated
     | GrantRevoked
+    | PreviewStatus
 )
 
 EVENT_TYPES: dict[type[EventPayload], str] = {
@@ -112,6 +114,7 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     LeadView: "lead.view",
     GrantCreated: "grant.created",
     GrantRevoked: "grant.revoked",
+    PreviewStatus: "preview.status",
 }
 """The event type each payload travels under; the store derives `type` from the payload."""
 

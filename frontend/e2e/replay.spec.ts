@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 // One test over the static replay site: level 1's definition of done, played from the hand-written
 // log (log.ts: its variant whose change adds a function), in the order a person sees it. The page is
 // the replay build as judges open it, served by `vite preview` with no backend. Every step waits on
@@ -202,6 +203,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
 
   await test.step("the graph renders the snapshot's nodes", async () => {
     await page.goto("/");
+    await openOversight(page);
     await page.waitForFunction(
       () =>
         (document

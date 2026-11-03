@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 
@@ -57,6 +58,7 @@ async function withPage(test: (page: Page) => Promise<void>) {
     await page.evaluate(() => {
       window.taskBoxTest.mount();
     });
+    await openOversight(page);
     await page.locator("textarea").waitFor();
     await test(page);
     expect(errors).toEqual([]);

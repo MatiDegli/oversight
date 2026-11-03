@@ -115,6 +115,8 @@ export interface State {
    * has no entry.
    */
   agentCosts: Record<string, number | null>;
+  /** Only role=lead ticks, isolated from agent and reviewer usage with the same id. */
+  leadCosts: Record<string, number | null>;
   errors: ErrorReport[];
   /** Envelopes parallel to errors, including its needs-you deduplication. */
   errorEvents: EventPosition[];
@@ -151,6 +153,7 @@ export function createInitialState(): State {
     budgetMarks: [],
     spendUnknown: false,
     agentCosts: {},
+    leadCosts: {},
     errors: [],
     errorEvents: [],
     testExecutions: {},

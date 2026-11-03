@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium, expect, type Browser, type Page } from "@playwright/test";
@@ -22,8 +23,8 @@ afterAll(async () => {
   await browser.close();
   await server.close();
 });
-const mount = (page: Page, recorded = false, two = false) =>
-  page.evaluate(
+const mount = async (page: Page, recorded = false, two = false) => {
+  await page.evaluate(
     ([recorded, two]) => {
       (
         window as unknown as {
@@ -33,6 +34,8 @@ const mount = (page: Page, recorded = false, two = false) =>
     },
     [recorded, two],
   );
+  await openOversight(page);
+};
 const inbox = (page: Page) => page.getByRole("button", { name: /^Decisions: 3/ }).click();
 it.each(["dark", "day"])(
   "sends decisions and revokes in %s, retaining event-owned rows",

@@ -21,7 +21,7 @@ from oversight.workspace.files import valid_agent_id
 from oversight.workspace.integrity import GitIdentity
 from oversight.workspace.isolation import open_pidfd, verify_preview_namespace_death
 from oversight.workspace.metadata_io import MAX_TOTAL, Entry
-from oversight.workspace.preview_types import PreviewError
+from oversight.workspace.preview_types import PreviewError, valid_preview_id
 from oversight.workspace.snapshot import MetadataSnapshot
 
 
@@ -233,7 +233,7 @@ def validate_ownership(
         data["version"] != 1
         or data["runtime"] != str(runtime)
         or not valid_agent_id(data["agent_id"])
-        or re.fullmatch(r"[0-9a-f]{32}", data["preview_id"]) is None
+        or not valid_preview_id(data["preview_id"])
         or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", data["head_commit"]) is None
         or type(data["revision"]) is not int
         or data["revision"] < 1

@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
@@ -44,6 +45,7 @@ async function open(width: number, theme: string, seq = 21, folded = false, devi
     document.documentElement.dataset.theme = theme;
     window.measuredConeTest.mount(6);
   }, theme);
+  await openOversight(page);
   await page.waitForFunction(
     () =>
       !!document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')?.oversightGraph,

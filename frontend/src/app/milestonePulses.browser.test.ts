@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 // Real Frame + WebGL field, with a held browser clock and event envelopes from the reducer.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -116,6 +117,7 @@ async function scene(
       document.documentElement.dataset.theme = name;
       window.milestones.mount();
     }, theme);
+    await openOversight(page);
     await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => {
       const { graph, field } = window.milestones.probes();

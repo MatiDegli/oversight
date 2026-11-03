@@ -3,8 +3,8 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { allowEditorWithoutGraph } from "../../editor/loader";
 
 export type ShellLayout = "Chat" | "Oversight";
-/** A fixture may initialize Chat without a URL flag or changing the production default. */
-export const InitialShellLayout = createContext<ShellLayout>("Oversight");
+/** Chat opens first in production; fixtures may explicitly choose either view. */
+export const InitialShellLayout = createContext<ShellLayout>("Chat");
 
 /** Includes Monaco's hidden input and native edit context, not just ordinary fields. */
 export function isTyping(target: EventTarget | null): boolean {

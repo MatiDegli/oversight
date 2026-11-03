@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -84,6 +85,7 @@ it.each(cases)(
         },
         { theme, facts },
       );
+      await openOversight(page);
       await page.getByRole("button", { name: /^Decisions:/ }).click();
       const panel = page.getByRole("complementary", { name: "Review panel" });
       await panel.locator(".line-insert").first().waitFor();

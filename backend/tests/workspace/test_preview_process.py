@@ -460,3 +460,19 @@ async def test_supervisor_reads_configuration_only_after_durable_handoff(monkeyp
     message = json.loads(os.read(report_read, 4096))
     assert message["kind"] == "dead" and message["reason"] == "shutdown"
     os.close(report_read)
+
+
+@pytest.mark.parametrize("acknowledgements", [[], ["confirmed"], ["confirmed", "executing"]])
+async def test_stop_owns_report_reader_after_incomplete_handoff(tmp_path, acknowledgements):
+    registry = PreviewRegistry(tmp_path)
+    registry.write({"version": 1, "runtime": str(tmp_path), "phase": "dead"})
+    process = PreviewProcess(registry, 19685)
+    reader = asyncio.StreamReader()
+    process.reader = reader
+    for kind in acknowledgements:
+        reader.feed_data(json.dumps({"kind": kind}).encode() + b"\n")
+    reader.feed_data(b'{"kind":"dead","reason":"closed","exit_code":null}\n')
+    reader.feed_eof()
+    async with asyncio.timeout(5):
+        await process.stop()
+    assert process.dead and process.reported_dead and process.reason == "closed"

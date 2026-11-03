@@ -1,4 +1,6 @@
-import { TriangleAlert } from "lucide-react";
+import type { StopLead } from "@contracts";
+import { leadEnded, leadStopStore, requestLeadStop } from "./leadStop";
+import { Square, TriangleAlert } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 import { stateStore } from "../../state";
@@ -19,6 +21,7 @@ import { focusRing } from "./rows";
 import { selectLeadConversation } from "./selectLeadConversation";
 
 export interface ConversationControls {
+  onStopLead?: (id: string, body: StopLead) => Promise<unknown>;
   actionAccessory?: ReactNode;
   onSend?: (text: string) => Promise<unknown>;
   onPause?: () => Promise<unknown>;
@@ -34,10 +37,12 @@ export function Composer({
   onPause,
   onResume,
   onStop,
+  onStopLead,
   actionAccessory,
 }: { header: ConversationHeader | LeadHeader } & ConversationControls) {
   const runId = useStore(stateStore, ({ state }) => state.run?.run_id ?? null);
   const key = draftKey(runId, header.agentId);
+  const stopping = useStore(leadStopStore, (stops) => stops[key] ?? false);
   const text = useStore(draftStore, (drafts) => drafts[key]?.text ?? "");
   const pending = useStore(draftStore, (drafts) => drafts[key]?.pending ?? false);
   const failure = useStore(draftStore, (drafts) => drafts[key]?.failure);
@@ -64,6 +69,7 @@ export function Composer({
       !onSend ||
       !active ||
       tooLong ||
+      (lead && leadStopStore.getState()[key]) ||
       !text.trim() ||
       (lead && (current.run?.run_id !== runId || currentLead?.state !== "idle")) ||
       !beginSend(key)
@@ -90,6 +96,20 @@ export function Composer({
     });
     return result;
   }
+  if (lead && leadEnded(header.state))
+    return (
+      <div className="conversation-composer shrink-0 border-t border-divider p-[14px] text-[14px] text-muted">
+        <p>
+          {header.detail ??
+            (header.state === "stopped"
+              ? "This lead has stopped."
+              : header.state === "halted"
+                ? "This lead has halted."
+                : "This lead has ended.")}
+        </p>
+        <p className="mt-[6px]">Start a new lead to continue.</p>
+      </div>
+    );
   if (replay && !lead) {
     const caption = "Recorded run: messages, pause and stop are off.";
     const replayClass =
@@ -119,8 +139,8 @@ export function Composer({
               ? `Message Lead ${header.letter}`
               : `Message Agent ${header.presentation?.label ?? "unknown"}. It reads it at its next step.`
           }
-          aria-disabled={!active || replay}
-          readOnly={pending || !active || replay}
+          aria-disabled={!active || replay || stopping}
+          readOnly={pending || stopping || !active || replay}
           value={text}
           onChange={(event) => {
             setDraft(key, event.target.value);
@@ -150,12 +170,25 @@ export function Composer({
           />
         )}
         {!lead && active && onStop && <StopControl agentId={header.agentId} onStop={onStop} />}
+        {lead && !replay && onStopLead && (
+          <button
+            type="button"
+            className={`${button} lead-stop text-failed-text`}
+            aria-disabled={stopping}
+            onClick={() => {
+              if (!stopping)
+                void requestLeadStop(runId, header.agentId, header.revision, onStopLead);
+            }}
+          >
+            <Square aria-hidden="true" className="size-4 shrink-0" /> Stop lead
+          </button>
+        )}
         {actionAccessory}
         {onSend && (
           <button
             type="button"
             className={`${button} ${actionAccessory ? "" : "ml-auto"} bg-raised`}
-            aria-disabled={!active || pending || !text.trim() || tooLong}
+            aria-disabled={!active || pending || stopping || !text.trim() || tooLong}
             aria-label={lead ? "Send message to lead" : undefined}
             onClick={() => {
               void send();
@@ -165,6 +198,11 @@ export function Composer({
           </button>
         )}
       </div>
+      {lead && stopping && (
+        <p role="status" className="mt-[6px] text-[14px] text-muted">
+          Stopping lead…
+        </p>
+      )}
       {failure && (
         <p
           role="alert"

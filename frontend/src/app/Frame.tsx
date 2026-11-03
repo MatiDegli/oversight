@@ -1,4 +1,6 @@
-import type { MergeMode, StartAgent, StartLead } from "@contracts";
+// eslint-disable-next-line no-restricted-imports -- Shared event-backed admission projection.
+import { leadCapacity } from "../agents/chatLeadSelectors";
+import type { MergeMode, StartAgent, StartLead, StopLead } from "@contracts";
 import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
@@ -50,6 +52,7 @@ export interface FrameProps {
   onOpenChange: (changeId: string) => void;
   onClosePanel: () => void;
   /** Absent in a recorded run, which has no backend: the agents panel then offers no new agent. */
+  onStopLead?: (id: string, body: StopLead) => Promise<unknown>;
   onStartLead?: (body: StartLead) => Promise<unknown>;
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
   onStopAgent?: (agentId: string) => Promise<unknown>;
@@ -119,6 +122,7 @@ export function Frame(props: FrameProps) {
     requestAnimationFrame(() => task.inputRef.current?.focus());
   };
   const openNewLead = () => {
+    if (leadCapacity(state).atCap) return;
     setHiddenChatView(view);
     setNewLead(true);
     requestAnimationFrame(() => {
