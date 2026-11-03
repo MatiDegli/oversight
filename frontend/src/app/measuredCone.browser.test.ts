@@ -31,10 +31,11 @@ afterAll(async () => {
   await server.close();
 });
 
-async function open(width: number, theme: string, seq = 21, folded = false) {
+async function open(width: number, theme: string, seq = 21, folded = false, deviceScaleFactor = 1) {
   const page = await browser.newPage({
     viewport: { width: 1920, height: 1080 },
     reducedMotion: "reduce",
+    deviceScaleFactor,
   });
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   await page.goto(url);
@@ -106,6 +107,25 @@ async function fieldLight(page: Page) {
   });
 }
 
+async function expectIsolatedRowTexture(page: Page, zoom: number | undefined) {
+  // Cytoscape 3.34.3 uses ceil(log2(zoom * DPR)); DPR 2 needs 0.5 < zoom <= 1 for level 1.
+  expect(zoom).toBeGreaterThan(0.5);
+  expect(zoom).toBeLessThanOrEqual(1);
+  const texture = await page.evaluate(() => {
+    const probe = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    // Excluding labels and overlays returns the body bounds used by the element texture cache.
+    const bounds = probe?.nodeBounds('node.measured-differs[label="quote_add"]', false)[0];
+    if (!bounds) throw new Error("Missing unchanged measured row");
+    return { dpr: window.devicePixelRatio, width: (bounds.x2 - bounds.x1) * 2 };
+  });
+  expect(texture.dpr).toBe(2);
+  // Two measured class rows must not fit; the row must still be cacheable.
+  expect(texture.width).toBeGreaterThan(1024 / 2);
+  expect(texture.width).toBeLessThanOrEqual(1024);
+}
+
 async function compare(sketch: string, capture: string) {
   const reference = fileURLToPath(
     new URL(`../../../docs/sketches/graph-evidence/${sketch}-dark.png`, import.meta.url),
@@ -154,7 +174,8 @@ it("observes all four measured words drawn to a canvas", async () => {
 });
 
 it("updates facts in place without camera, nodes, routes, borders or focus moving", async () => {
-  const page = await open(1920, "dark");
+  // DPR 2 isolates level 1 row textures; atlas eviction remains a flake hypothesis.
+  const page = await open(1920, "dark", 21, false, 2);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   try {
@@ -170,6 +191,7 @@ it("updates facts in place without camera, nodes, routes, borders or focus movin
       .poll(() => page.evaluate(() => window.measuredConeTest.drawnWords()))
       .toEqual(["differs"]);
     const before = await geometry(page);
+    await expectIsolatedRowTexture(page, before.zoom);
     const light = await fieldLight(page);
     for (const seq of [22, 23, 24]) {
       await page.evaluate((seq) => {
