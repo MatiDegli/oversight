@@ -16,6 +16,7 @@ export interface ConversationPanelProps extends ConversationControls {
   renderView?: (
     entry: Extract<LeadConversation["entries"][number], { kind: "lead-view" }>,
   ) => ReactNode;
+  renderPlan?: (planId: string) => ReactNode;
   renderResolution?: (entry: Extract<ConversationEntry, { kind: "resolution" }>) => ReactNode;
   renderProposed?: (entry: Extract<ConversationEntry, { kind: "proposed" }>) => ReactNode;
   onOpenDiff?: (changeId: string) => void;
@@ -26,6 +27,7 @@ export function ConversationPanel({
   onOpenDiff,
   renderResolution,
   renderView,
+  renderPlan,
   renderProposed,
   ...controls
 }: ConversationPanelProps) {
@@ -78,6 +80,7 @@ export function ConversationPanel({
               <LeadThreadRows
                 conversation={conversation}
                 renderView={renderView}
+                renderPlan={renderPlan}
                 onReady={() => {
                   if (atBottom.current && list.current)
                     list.current.scrollTop = list.current.scrollHeight;

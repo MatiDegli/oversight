@@ -25,40 +25,6 @@
   font-family: var(--code-font);
   font-size: 13.5px;
 }
-.plan-piece ol {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.plan-piece li {
-  display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
-  gap: 12px;
-  padding: 7px 16px;
-  border-top: 1px solid var(--divider);
-}
-.plan-circle {
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--faint);
-  border-radius: 50%;
-}
-.plan-piece li p {
-  font-size: 14px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-.plan-number {
-  font-family: var(--code-font);
-  color: var(--muted);
-  margin-right: 8px;
-  font-size: 13px;
-}
-.plan-piece li .plan-condition {
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--muted);
-}
 .plan-explanation,
 .plan-content blockquote {
   font-size: 13px;
@@ -144,4 +110,47 @@
 .plan-controls :is(input, button):focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 2px;
+}
+
+.thread-plan-card {
+  position: relative;
+  min-width: 0;
+  margin: 9px 22px 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--page);
+}
+.thread-plan-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  padding-inline-end: 110px;
+  font-size: 13px;
+}
+.thread-plan-heading strong {
+  font-size: 15px;
+}
+.thread-plan-heading code {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.thread-plan-card > h3 {
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.thread-plan-card .plan-content {
+  margin-top: 8px;
+}
+@media (max-width: 600px) {
+  .thread-plan-card {
+    margin-inline: 16px;
+    padding-inline: 10px;
+  }
+  .thread-plan-card .plan-status {
+    right: 10px;
+  }
 }

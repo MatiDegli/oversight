@@ -1,7 +1,7 @@
 import { presentationFor, presentationStyle } from "../../teams/presentation";
 import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, Settings, Timer, X } from "lucide-react";
-import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
+import { Suspense, lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
 // eslint-disable-next-line no-restricted-imports -- K2a shares the Chat team identity without extending the agents barrel.
 import { selectChatLeads } from "../../agents/chatLeadSelectors";
@@ -9,7 +9,8 @@ import { selectConversation, loadConversationPanel } from "../../agents";
 import { InboxFrame, ConversationFrame, FileFrame, SettingsFrame } from "./PanelFallbacks";
 import { LazyPanel } from "./LazyPanel";
 
-import { loadDecisionInbox } from "../../review";
+import { loadDecisionInbox, loadPlanActions, selectPlanEvidence } from "../../review";
+import { slotUsage } from "../../agents";
 import type { FrameProps } from "../Frame";
 import { UsageMount } from "../usage/UsageMount";
 import { LivePanel } from "./LivePanel";
@@ -29,6 +30,8 @@ const ConversationPanel = lazy(() =>
   })),
 );
 
+const PlanActions = lazy(loadPlanActions);
+
 const LeadConversationFocus = lazy(() =>
   loadConversationPanel().then((module) => ({
     default: ({
@@ -43,6 +46,7 @@ const LeadConversationFocus = lazy(() =>
       onViewHighlight,
       onViewFile,
       replay,
+      onReview,
     }: Pick<
       FrameProps,
       | "state"
@@ -54,15 +58,39 @@ const LeadConversationFocus = lazy(() =>
       | "onViewHighlight"
       | "onViewFile"
       | "replay"
+      | "onReview"
     > & {
       agentId: string;
       chat?: boolean;
     }) => {
-      const conversation = module.selectLeadConversation(chatState ?? state, agentId);
+      const threadState = chatState ?? state;
+      const conversation = module.selectLeadConversation(threadState, agentId);
+      const { plans } = selectPlanEvidence(threadState);
       if (!conversation) return null;
       return (
         <module.ConversationPanel
           conversation={conversation}
+          renderPlan={(planId) => {
+            const plan = plans.get(planId)?.payload;
+            if (!plan) return null;
+            return (
+              <Suspense fallback={<p role="status">Loading plan…</p>}>
+                <article className="thread-plan-card" aria-label={`Plan ${plan.plan_id}`}>
+                  <div className="thread-plan-heading">
+                    <strong>Plan</strong>
+                    <code>{plan.plan_id}</code>
+                  </div>
+                  <h3>{plan.task}</h3>
+                  <PlanActions
+                    state={threadState}
+                    plan={plan}
+                    slots={slotUsage(threadState)}
+                    onReview={onReview}
+                  />
+                </article>
+              </Suspense>
+            );
+          }}
           renderView={(entry) => (
             <module.LeadViewCard
               state={state}
@@ -324,6 +352,7 @@ function ConversationFocus({
             onViewHighlight={onViewHighlight}
             onViewFile={onViewFile}
             replay={replay}
+            onReview={onReview}
             agentId={agentId}
             onMessageLead={onMessageLead}
             onStopLead={onStopLead}
