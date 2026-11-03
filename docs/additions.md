@@ -254,7 +254,7 @@ new candidate work waits for the maintainer’s order.
   - **The graph optional by configuration.** After the hackathon, not queued. Keep it on by default;
     when off, Cytoscape, fcose and the WebGL field never load, and the [Files tree](../DESIGN.md#layout)
     and panels stand in for the graph.
-    Replacing AGENTS.md's “One graph, always visible” requires the maintainer's entry in DECISIONS.md first.
+    Making the repository graph optional requires the maintainer's entry in DECISIONS.md first (AGENTS.md: the repository graph stays visible in the Oversight view).
     Prerequisites: the editor loader currently waits for `whenFirstGraphDrawn()`; node selection, the impact
     cone, the palette's graph commands and both practice graphs need paths that work with the graph off.
   - **A fresh-context review of the plan.** After the hackathon, not queued. Before the person queues a lead's plan, a second Meta model

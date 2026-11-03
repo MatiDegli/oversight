@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from oversight.events import EventStore, fold_lead_status, serialize_status
+from oversight.events import EventStore, StatusInventoryTooLarge, fold_lead_status, serialize_status
 from oversight_contracts.events import LeadStatus
 
 
@@ -146,7 +146,7 @@ def test_eligibility_overflow_fails_closed_without_partial_status() -> None:
     )
     projection = project_views(events)
     projection.paths.update({f"path{i}/" + "a" * 490: ["node"] for i in range(100)})
-    with pytest.raises(ValueError, match="no views are eligible"):
+    with pytest.raises(StatusInventoryTooLarge, match="no views are eligible"):
         serialize_status(14, [], required=projection.inventory())
 
 

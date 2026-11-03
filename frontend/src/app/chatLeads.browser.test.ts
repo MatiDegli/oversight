@@ -158,7 +158,9 @@ it("keeps direct work first and focuses only after New task or New lead", async 
       "Agent C",
     ]);
     await check(page.locator(".chat-agents > header")).toContainText("2 running");
-    await check(leadRow(page, "A")).toContainText("2 agents · 1 working, 1 needs you");
+    await check(page.getByRole("heading", { name: /^Lead A ·/ })).toContainText(
+      "2 agents · 1 working, 1 needs you",
+    );
     await leadRow(page, "A").click();
     await leadRow(page, "B").focus();
     await page.evaluate(() => {
@@ -172,7 +174,9 @@ it("keeps direct work first and focuses only after New task or New lead", async 
     });
     await check(leadRow(page, "B")).toBeFocused();
     await check(leadRow(page, "A")).toHaveAttribute("aria-pressed", "true");
-    await check(leadRow(page, "A")).toContainText("2 agents · 2 need you");
+    await check(page.getByRole("heading", { name: /^Lead A ·/ })).toContainText(
+      "2 agents · 2 need you",
+    );
     await newTask(page).click();
     const task = page.getByRole("textbox", { name: "Task for the new agent" });
     await check(task).toBeFocused();
@@ -396,7 +400,7 @@ for (const theme of ["dark", "day"])
         link: [83, 44],
       });
       await check(page.locator(".left-rail")).toBeHidden();
-      await check(page.locator(".chat-work")).toBeHidden();
+      await check(page.locator(".chat-work")).toBeVisible();
       await check(page.locator(".task-box-hint")).toBeHidden();
       for (const button of await page.locator(".shell-top-bar button:visible").all()) {
         const box = await button.boundingBox();
@@ -474,8 +478,12 @@ it.each([1920, 1280])(
         "Agent C",
       ]);
       await check(page.locator(".chat-agents > header")).toContainText("3 running");
-      await check(leadRow(page, "A")).toContainText("3 agents · 1 working, 1 needs you");
-      await check(leadRow(page, "B")).toContainText("1 plan needs you");
+      await check(page.getByRole("heading", { name: /^Lead A ·/ })).toContainText(
+        "3 agents · 1 working, 1 needs you",
+      );
+      await check(page.getByRole("heading", { name: /^Lead B ·/ })).toContainText(
+        "1 plan needs you",
+      );
       const sizes = await page.evaluate(() =>
         [
           ".chat-lead-row",
@@ -490,7 +498,9 @@ it.each([1920, 1280])(
         .locator('.chat-agent-row[data-member="true"]')
         .first()
         .boundingBox();
-      expect(member?.y).toBe(width === 1920 ? 260 : 246.390625);
+      const lead = await leadRow(page, "A").boundingBox();
+      if (!member || !lead) throw new Error("Missing grouped row geometry");
+      expect(member.y).toBe(lead.y + lead.height);
       await leadRow(page, "B").click();
       await check(page.getByRole("textbox", { name: "Message Lead B" })).toBeEditable();
     } finally {
@@ -661,8 +671,10 @@ it.each([1280, 640, 390])("guards cap entry points and an open draft at %i", asy
       }),
     ).toBe(true);
     if (width === 390) {
-      await check(leadRow(page, "B").locator(".chat-lead-team")).toHaveText("1 plan needs you");
-      await check(leadRow(page, "B").locator(".chat-lead-team")).toBeVisible();
+      await check(page.getByRole("heading", { name: /^Lead B ·/ })).toHaveText(
+        "Lead B · 1 plan needs you",
+      );
+      await check(page.getByRole("heading", { name: /^Lead B ·/ })).toBeVisible();
     }
     if (process.env.CHAT_LEADS_SHOTS === "1" && width === 390) {
       await check(page.locator(".lead-header")).toBeVisible();
@@ -711,10 +723,12 @@ it.each(["dark", "day"])(
     const page = await open("leads-two", 390, theme, true, false, true);
     try {
       await check(page.getByRole("textbox", { name: "Message Lead A", exact: true })).toBeVisible();
-      await check(leadRow(page, "A").locator(".chat-lead-team")).toBeVisible();
-      await check(leadRow(page, "A").locator(".chat-lead-team")).toContainText("3 agents");
-      await check(leadRow(page, "B").locator(".chat-lead-team")).toHaveText("1 plan needs you");
-      await check(leadRow(page, "B").locator(".chat-lead-team")).toBeVisible();
+      await check(page.getByRole("heading", { name: /^Lead A ·/ })).toBeVisible();
+      await check(page.getByRole("heading", { name: /^Lead A ·/ })).toContainText("3 agents");
+      await check(page.getByRole("heading", { name: /^Lead B ·/ })).toHaveText(
+        "Lead B · 1 plan needs you",
+      );
+      await check(page.getByRole("heading", { name: /^Lead B ·/ })).toBeVisible();
       await page.locator(".conversation-composer").scrollIntoViewIfNeeded();
       const stopIcon = page.getByRole("button", { name: "Stop lead", exact: true }).locator("svg");
       await check(stopIcon).toHaveClass(/lucide-square/);
@@ -780,8 +794,10 @@ async function assertLifecycleScene(page: Page, name: string) {
   for (const [letter, state] of Object.entries(states))
     await check(leadRow(page, letter).locator(".chat-agent-pill")).toHaveText(state);
   if (six) {
-    await check(leadRow(page, "F").locator(".chat-lead-team")).toHaveText("1 plan needs you");
-    await check(leadRow(page, "F").locator(".chat-lead-team")).toBeVisible();
+    await check(page.getByRole("heading", { name: /^Lead F ·/ })).toHaveText(
+      "Lead F · 1 plan needs you",
+    );
+    await check(page.getByRole("heading", { name: /^Lead F ·/ })).toBeVisible();
   }
   await check(page.locator(".chat-agents > header")).toContainText("3 running");
 }

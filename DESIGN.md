@@ -874,7 +874,26 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 - **Left rail** (shell): Watch, Files and Changes icon buttons, with Keyboard shortcuts at the
   bottom; the current view's button on raised. The Dock toggle is in the status line.
   Target, not built yet: Agents and a terminal toggle in the rail; Changes queue and history.
-- **Agents rail:** one labeled tile per coding agent, using its team’s tint, border and text tokens, with a status lamp and state caption. The full agent label distinguishes siblings and teams sharing a hue. The flat Chat rail delivers independently of grouped rail work.
+- **Agents rail:** one labeled tile per coding agent, using its team’s tint, border and text tokens,
+  with a status lamp inside the avatar and a wrapping state/plan caption. The folded Oversight rail
+  scrolls vertically, reserves a stable scrollbar gutter and keeps tiles from shrinking. Origins
+  and lifecycle meanings stay unchanged.
+- **Chat teams:** plain summaries use K3 membership, presentation and first-observed team order.
+  A lettered team ring sits beside a separate disclosure; a solid 2px team-hue rule joins members.
+  All plans of one lead share a group with stable team-wide agent ordinals; full labels
+  stay visible and accessible. Teams sharing a hue remain distinct. Person-started lone C stays C.
+  Coding counts exclude leads; working includes working/revising. Existing needs-you and proposed
+  plan attention remain factual. A leadless heading occupies the same position as Lead A:
+  “Plan B · 2 agents · 2 working”. Headings have no action; the existing lead row remains a picker
+  even with members folded.
+- **Chat disclosure and phone:** only the disclosure folds members. Expansion is keyed by team ID
+  for the run and resets on a new run. A folded selected member gives its summary the selected
+  surface without changing its actor, tab, mounted thread, scroll, draft, command or focus.
+  Updates and resizing retain expansion. At 390, teams stay stacked and collapsible above the
+  thread, lone agents stay ungrouped, and Where they work shows wrapping labeled file chips.
+  Each chip names the full agent and observed path, opens the file explicitly, and exposes mode,
+  ranges, functions and pending/conflict facts accessibly. Desktop keeps the 280/300px columns,
+  narrowing to 260/260px; responsive layout uses the same mounted components.
 
 ### Usage tab — built desktop view
 

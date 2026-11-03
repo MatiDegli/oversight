@@ -2,7 +2,7 @@
 
 import json
 from typing import Any, cast
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from backend.tests.agents.lead_helpers import call, lead, scripted, setup_tools, turn
@@ -10,6 +10,8 @@ from backend.tests.agents.lead_helpers import call, lead, scripted, setup_tools,
 from oversight.agents._lead_tools import LEAD_TOOL_SCHEMAS
 from oversight.agents._lead_views import ViewRefusal, parse_view
 from oversight.agents._prompts import LEAD_PROMPT
+from oversight.events import StatusInventoryTooLarge, fold_lead_status, serialize_status
+from oversight.events.view_resolution import capture_view_resolver
 
 VALID = [
     {"kind": "highlight", "agent_ids": ["agent-1"], "paths": ["a.py"]},
@@ -107,7 +109,7 @@ async def test_status_before_view_despite_wake_and_correct_after_refusal() -> No
 @pytest.mark.anyio
 async def test_failed_status_invalidates_previous_eligibility() -> None:
     def overflow():
-        raise ValueError("private diagnostic")
+        raise StatusInventoryTooLarge("private diagnostic")
 
     publish = AsyncMock()
     tools, _ = setup_tools(
@@ -120,6 +122,57 @@ async def test_failed_status_invalidates_previous_eligibility() -> None:
     assert not tools.status_seen and tools.view_S is None
     assert not (await tools.call("show_view", json.dumps(VALID[3]))).ok
     publish.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("fallback_fails", [False, True])
+async def test_status_inventory_overflow_fallback(fallback_fails: bool) -> None:
+    def overflow() -> tuple[int, str]:
+        return 5, serialize_status(5, [], required=[("eligible path", {"path": "a" * 512})] * 100)
+
+    fallback = Mock(return_value=(5, "Committed status without views.\n"))
+    if fallback_fails:
+        fallback.side_effect = ValueError("private diagnostic")
+    publish = AsyncMock()
+    tools, _ = setup_tools(status=overflow, status_without_views=fallback, publish_view=publish)
+    tools.through_seq = 3
+    outcome = await tools.call("status", "{}")
+    fallback.assert_called_once_with()
+    assert outcome.ok is not fallback_fails
+    assert outcome.content == (
+        "Status eligibility exceeds the inventory limit; no views are eligible."
+        if fallback_fails
+        else "Committed status without views.\n"
+        "No views are eligible: the status inventory is over its limit."
+    )
+    assert tools.through_seq == (3 if fallback_fails else 5)
+    assert not tools.status_seen and tools.view_S is None
+    assert not (await tools.call("show_view", json.dumps(VALID[3]))).ok
+    publish.assert_not_awaited()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("source", ["prefix", "horizon"])
+async def test_status_other_value_errors_propagate_without_fallback(source: str) -> None:
+    fallback = Mock(return_value=(5, "status without views"))
+    tools, _ = setup_tools(
+        status=lambda: (5, "status"),
+        status_without_views=fallback,
+        resolve_views=lambda _: lambda _: True,
+    )
+    await tools.call("status", "{}")
+    assert tools.status_seen and tools.view_S == 5
+    if source == "prefix":
+        tools.status = lambda: fold_lead_status([], 5)
+        message = "status requires the complete committed prefix through S"
+    else:
+        tools.resolve_views = lambda seq: capture_view_resolver({}, seq)
+        message = "view horizon is not committed"
+    with pytest.raises(ValueError) as error:
+        await tools.call("status", "{}")
+    assert type(error.value) is ValueError and str(error.value) == message
+    fallback.assert_not_called()
+    assert not tools.status_seen and tools.view_S is None
 
 
 @pytest.mark.anyio

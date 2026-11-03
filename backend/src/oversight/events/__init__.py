@@ -20,7 +20,7 @@ from oversight.events.history import (
     resolution_at,
 )
 from oversight.events.jsonl import LogError, export_run, read_jsonl, write_jsonl
-from oversight.events.lead_fold import fold_lead_status, serialize_status
+from oversight.events.lead_fold import StatusInventoryTooLarge, fold_lead_status, serialize_status
 from oversight.events.lead_wake import is_lead_wake_trigger
 from oversight.events.list_prices import (
     LIST_PRICES,
@@ -119,6 +119,7 @@ __all__ = [
     "RunUsage",
     "Sleep",
     "Spend",
+    "StatusInventoryTooLarge",
     "StoreClosedError",
     "StoredEvent",
     "SupervisionFold",

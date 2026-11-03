@@ -1,4 +1,4 @@
-"""Strict dormant show_view adapter; arguments carry references, never facts."""
+"""Strict show_view adapter; arguments carry references, never facts."""
 
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Literal
@@ -30,7 +30,7 @@ class _Arguments(BaseModel):
 
 
 def parse_view(arguments: str, agent_id: str, seq: int, mask: Callable[[str], str]) -> LeadView:
-    """Validate the future advertised shape, rejecting even irrelevant null fields."""
+    """Validate the advertised shape, rejecting even irrelevant null fields."""
     try:
         args = _Arguments.model_validate_json(arguments)
         fields = args.model_fields_set - {"kind", "caption"}
