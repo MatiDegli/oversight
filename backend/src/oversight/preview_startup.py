@@ -67,15 +67,15 @@ def serialize_preview_startup(report: PreviewStartupReport) -> str:
         size = len(serialized.encode("utf-8", errors="strict"))
     except (TypeError, ValueError, UnicodeError):
         raise ValueError(INVALID) from None
-    if size > 1024:
-        raise ValueError("preview startup report exceeds 1024 UTF-8 bytes")
+    if size > 4096:
+        raise ValueError("preview startup report exceeds 4096 UTF-8 bytes")
     return serialized
 
 
 def validate_preview_startup(serialized: str) -> bool:
     """The carrier accepts only the exact canonical serialization of the closed schema."""
     try:
-        if len(serialized.encode("utf-8", errors="strict")) > 1024:
+        if len(serialized.encode("utf-8", errors="strict")) > 4096:
             return False
         value: object = json.loads(serialized)
         if not isinstance(value, dict):

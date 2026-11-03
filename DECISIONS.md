@@ -4682,10 +4682,11 @@ Linux own-source work starts after this change alongside boundary/gateway/nestin
 Windows preview launch and general declarations follow submission. No native-Windows isolation,
 no-key or no-paid-call guarantee is provided.
 
-The startup disclosure retains the approved 1,024 escaped UTF-8 byte cap and exact frozen
-commands and paths, without truncation or aliases. If the report cannot fit or is invalid,
-LiveRun continues with no index carrier and reviewed-app admission/execution refuses with
-`Reviewed-app startup disclosure is unavailable.` / `not_configured`. Source selection,
-declaration and authority validation errors still refuse startup. Real prepared resources and
-the default runtime can exceed this disclosure budget; enabling those previews requires a
-separately approved cap or path policy before execution can become available.
+The maintainer approved raising the startup disclosure cap to 4,096 escaped UTF-8 bytes on
+2026-11-03 ("Si, subilo a 4096"), superseding the prior 1,024-byte disclosure budget. Exact
+frozen commands and paths remain unchanged, without truncation or aliases. If the report
+cannot fit or is invalid, LiveRun continues with no index carrier and reviewed-app
+admission/execution refuses with `Reviewed-app startup disclosure is unavailable.` /
+`not_configured`. Source selection, declaration and authority validation errors still refuse
+startup. Real prepared resources at the default runtime can now pass disclosure admission;
+reviewed-app execution remains unavailable pending its separately required boundary and supervisor.
