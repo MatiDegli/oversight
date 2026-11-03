@@ -1,8 +1,13 @@
 import type { ChangeFacts, ChangeProposed, RunRuleFinding } from "@contracts";
 import type { State } from "../state";
+import { partitionConfigurationAttribution } from "./configurationAttribution";
 
 export const hasReviewFindings = (facts: ChangeFacts | undefined) =>
-  !!facts && (facts.run_findings.length > 0 || facts.shape != null || facts.shape_complete != null);
+  !!facts &&
+  (facts.run_findings.length > 0 ||
+    facts.shape != null ||
+    facts.shape_complete != null ||
+    partitionConfigurationAttribution(facts.problems).attributions.length > 0);
 
 /** Historical runs belong to the change and agent, but may precede this candidate. */
 export function findingExecution(state: State, proposal: ChangeProposed, seq: number) {

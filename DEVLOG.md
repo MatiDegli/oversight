@@ -82,3 +82,6 @@ One line per day, in Argentina time (ART).
   Composer also exceeds 80 lines:
   its shared draft hooks and active/ended command surfaces stay together to preserve hook order
   and make the terminal early return auditable. These size exceptions remain for reviewer judgment.
+  Added configuration attribution as separate informational review paragraphs with exact-prefix
+  partitioning, attribution-only Details, unchanged HTML pins and synthetic replay captures at
+  1440/390 in dark/day; preserved contracts, recordings and integrity policy, with no paid calls.
