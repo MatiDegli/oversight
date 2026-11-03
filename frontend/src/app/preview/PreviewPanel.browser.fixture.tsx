@@ -10,6 +10,7 @@ import ordinaryLog from "../../../../fixtures/events/handwritten-level1.jsonl?ra
 import { Frame } from "../Frame";
 import { conversationTab, surfaceTab, tabbedView, viewReducer, type View } from "../view";
 import { InitialShellLayout } from "../shell/useShell";
+import { createPreviewHost } from "./previewHost";
 import { createPreviewController } from "./previewController";
 import { PreviewPanel } from "./PreviewPanel";
 import { fakeCandidate, PreviewFakeClock } from "./previewFake";
@@ -127,7 +128,7 @@ function PreviewFixture() {
     <main className="preview-fixture">
       <div className="preview-fixture-caption">Isolated fixture · handwritten fake authority</div>
       <div className="preview-fixture-controls">
-        {(!view.visible || view.owned) && (
+        {
           <button
             type="button"
             onClick={() => {
@@ -136,7 +137,7 @@ function PreviewFixture() {
           >
             See preview
           </button>
-        )}
+        }
         {view.owned && (
           <button
             type="button"
@@ -160,7 +161,19 @@ function PreviewFixture() {
         </label>
       </div>
       <div className="preview-fixture-slot">
-        <PreviewPanel controller={controller} />
+        <PreviewPanel
+          controller={controller}
+          clock={localClock}
+          identity={() => ({
+            label:
+              candidate.agent_id === "agent-a"
+                ? "A"
+                : candidate.agent_id === "agent-b"
+                  ? "B"
+                  : candidate.agent_id.replace(/^agent-/, ""),
+            hue: "A",
+          })}
+        />
       </div>
     </main>
   );
@@ -189,6 +202,19 @@ function initialView(): View {
     tab: conversationTab(tabbedView, shellState, "agent-1"),
   });
 }
+// Frame geometry fixture only: explicit see() is the test's activation, never a product arrival.
+const geometryHost = {
+  ...createPreviewHost(
+    port,
+    localClock,
+    { run: fakeCandidate.run_id, source: "fixture" },
+    () => shellState,
+    () => false,
+  ),
+  controller,
+  subscribe: controller.subscribe,
+  snapshot: () => controller.snapshot().visible,
+};
 function BuiltShell() {
   const [view, setView] = useState(initialView);
   return (
@@ -196,6 +222,7 @@ function BuiltShell() {
       value={params.get("surface")?.startsWith("chat") ? "Chat" : "Oversight"}
     >
       <Frame
+        previewHost={params.get("slot") === "preview" ? geometryHost : undefined}
         state={shellState}
         view={view}
         onNodeTap={() => undefined}

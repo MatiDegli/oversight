@@ -8,6 +8,7 @@ import { presentationFor } from "../../teams/presentation";
 import { EventTime } from "./rows";
 import type { LeadHeader } from "./selectConversation";
 import "./leadViewCards.css";
+import { PreviewOption } from "./PreviewOption";
 
 export interface LeadViewActions {
   onHighlight?: (nodeIds: string[], key: string) => void;
@@ -47,7 +48,7 @@ export function viewCardTitle(view: LeadViewKind): string | null {
     case "moment":
       return "Run moment";
     case "preview":
-      return null;
+      return "Suggested app preview";
     default: {
       const unknown: Exclude<
         LeadViewKind,
@@ -74,6 +75,8 @@ export function LeadViewCard({
   actions?: LeadViewActions;
   replay?: boolean;
 }) {
+  if (event.payload.view.kind === "preview")
+    return <PreviewOption state={state} event={event} replay={replay} />;
   const { caption, through_seq: throughSeq } = event.payload;
   const view = selectCardView(event.payload.view);
   if (view === null) return null;

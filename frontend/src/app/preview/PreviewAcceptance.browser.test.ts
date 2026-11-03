@@ -6,7 +6,10 @@ import {
   type AcceptanceFrame,
 } from "./previewAcceptance.browser.support";
 
-const support = acceptanceSupport();
+import { previewChatSupport, chatSizes } from "./previewChat.browser.support";
+const chatOnly = process.env.OVERSIGHT_PREVIEW_CHAT_ONLY === "1";
+const support = acceptanceSupport(!chatOnly);
+const chatSupport = previewChatSupport(true, chatOnly);
 it("captures 12 real-C form frames and six comparisons with unchanged focus and framing", async () => {
   const frames: AcceptanceFrame[] = [];
   for (const viewport of sizes)
@@ -289,4 +292,57 @@ it.each(["dark", "day"])(
       await session.close();
     }
   },
+);
+
+it.runIf(chatOnly)(
+  "App Chat journey: production click to real-C shop, form, lease, review and authenticated close",
+  async () => {
+    for (const viewport of chatSizes)
+      for (const theme of ["dark", "day"]) {
+        const session = await chatSupport.session(viewport, theme);
+        const { page } = session;
+        try {
+          await page
+            .getByRole("button", { name: "Preview app", exact: true })
+            .scrollIntoViewIfNeeded();
+          await check(
+            page.getByRole("button", { name: "Review change", exact: true }),
+          ).toBeInViewport();
+          await chatSupport.capture(session, "option");
+          await check(page.locator("iframe")).toHaveCount(0);
+          await page.getByRole("button", { name: "Preview app", exact: true }).click();
+          const app = page.frameLocator("iframe");
+          await check(app.getByRole("heading", { name: "Candidate shop" })).toBeVisible({
+            timeout: 20_000,
+          });
+          await check(page.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
+          await check(page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
+          await check(app.locator("output")).toHaveAttribute("data-total-cents", "1500");
+          await chatSupport.capture(session, "ready");
+          await chatSupport.capture(session, "before-form");
+          await app.getByLabel("Coupon", { exact: true }).fill("DEMO10");
+          await app.getByRole("button", { name: "Update cart", exact: true }).click();
+          await check(app.locator("output")).toHaveAttribute("data-total-cents", "1350");
+          await chatSupport.capture(session, "after-coupon");
+          await app.getByLabel(/Product 1/).fill("2");
+          await app.getByRole("button", { name: "Update cart", exact: true }).click();
+          await check(app.locator("output")).toHaveAttribute("data-total-cents", "2250");
+          await chatSupport.capture(session, "after-quantity");
+          await check.poll(() => session.calls.renew, { timeout: 15_000 }).toBeGreaterThan(0);
+          expect(session.calls.form).toBe(2);
+          expect(await session.context.cookies()).toEqual([]);
+          await page.locator(".preview-panel button").click();
+          await check(page.locator(".chat-preview-slot")).toHaveCount(0);
+          expect(session.calls.stop).toBeGreaterThan(0);
+          await check(page.locator("iframe")).toHaveCount(0);
+          await chatSupport.capture(session, "closed");
+          await page.getByRole("button", { name: "Review change", exact: true }).click();
+          await check(page.getByRole("complementary", { name: "Review panel" })).toBeVisible();
+          expect(session.pageErrors).toEqual([]);
+        } finally {
+          await session.close();
+        }
+      }
+  },
+  210_000,
 );

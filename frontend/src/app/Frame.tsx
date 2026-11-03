@@ -1,7 +1,12 @@
+import { presentationFor } from "../teams/presentation";
+import { stateStore } from "../state";
+import { PreviewPanel } from "./preview/PreviewPanel";
+import "./preview/previewChatLayout.css";
+import { PreviewActionsContext, type PreviewActions } from "../agents";
 // eslint-disable-next-line no-restricted-imports -- Shared event-backed admission projection.
 import { leadCapacity } from "../agents/chatLeadSelectors";
 import type { MergeMode, StartAgent, StartLead, StopLead } from "@contracts";
-import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
@@ -40,6 +45,8 @@ const OversightStage = lazy(() =>
 const ReplayBar = lazy(() => import("./replay/ReplayBar"));
 
 export interface FrameProps {
+  previewActions?: PreviewActions;
+  previewHost?: import("./preview/previewHost").PreviewHost;
   chatState?: State;
   readChatState?: () => State | undefined;
   historySession?: { eventSeq: number; back: () => HTMLElement | null };
@@ -130,6 +137,33 @@ export function Frame(input: FrameProps) {
   // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
   const shell = useShell(panelOpen(view), onClosePanel, hiddenChatView === view);
   const open = shell.panelOpen;
+  const previewSlot = useMemo(
+    () =>
+      props.previewHost
+        ? {
+            subscribe: (listener: () => void) =>
+              props.previewHost?.subscribe(listener) ?? (() => {}),
+            snapshot: props.previewHost.snapshot,
+            content: (
+              <PreviewPanel
+                controller={props.previewHost.controller}
+                clock={props.previewHost.clock}
+                elapsed={props.previewHost.elapsed}
+                identity={(id) =>
+                  presentationFor(
+                    stateStore.getState().state,
+                    id ?? props.previewHost?.targetAgent(),
+                  )
+                }
+              />
+            ),
+          }
+        : undefined,
+    [props.previewHost],
+  );
+  useEffect(() => {
+    void props.previewHost?.navigate();
+  }, [props.previewHost, view.activeTab, shell.layout, props.historySession]);
   useEscapeCloses(open, onClosePanel);
   const showNewLead = newLead && !open && shell.layout === "Chat";
   const chatReview = useChatReviewNavigation(state, view, shell, props.onTabAction);
@@ -139,11 +173,13 @@ export function Frame(input: FrameProps) {
     props.onStartAgent !== undefined && shell.layout === "Oversight",
   );
   const newTask = () => {
+    void props.previewHost?.navigate();
     setNewLead(false);
     setHiddenChatView(view);
     requestAnimationFrame(() => task.inputRef.current?.focus());
   };
   const openNewLead = () => {
+    void props.previewHost?.navigate();
     if (leadCapacity(state).atCap) return;
     setHiddenChatView(view);
     setNewLead(true);
@@ -197,135 +233,138 @@ export function Frame(input: FrameProps) {
           </button>
         </div>
       )}
-      <ChatShell
-        state={props.chatState ?? state}
-        readOnly={Boolean(props.historySession)}
-        active={shell.layout === "Chat"}
-        selectedAgentId={
-          !open || showNewLead
-            ? undefined
-            : view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation
-        }
-        onNewTask={newTask}
-        onNewLead={openNewLead}
-        leadDraft={showNewLead}
-        onOpenConversation={
-          props.onOpenConversation
-            ? (id) => {
-                setNewLead(false);
-                props.onOpenConversation?.(id);
-              }
-            : undefined
-        }
-        rail={
-          <LeftRail
-            watching={!open}
-            sidebar={shell.sidebar}
-            onSidebar={shell.openSidebar}
-            onWatch={onClosePanel}
-            onShortcuts={() => {
-              shell.setShortcuts(true);
-            }}
-          />
-        }
-        sidebar={
-          shell.sidebar && (
-            <Sidebar
-              section={shell.sidebar}
-              onClose={() => {
-                shell.openSidebar(shell.sidebar);
+      <PreviewActionsContext value={props.previewActions ?? null}>
+        <ChatShell
+          previewSlot={previewSlot}
+          state={props.chatState ?? state}
+          readOnly={Boolean(props.historySession)}
+          active={shell.layout === "Chat"}
+          selectedAgentId={
+            !open || showNewLead
+              ? undefined
+              : view.tabs?.find((tab) => tab.id === view.activeTab)?.conversation
+          }
+          onNewTask={newTask}
+          onNewLead={openNewLead}
+          leadDraft={showNewLead}
+          onOpenConversation={
+            props.onOpenConversation
+              ? (id) => {
+                  setNewLead(false);
+                  props.onOpenConversation?.(id);
+                }
+              : undefined
+          }
+          rail={
+            <LeftRail
+              watching={!open}
+              sidebar={shell.sidebar}
+              onSidebar={shell.openSidebar}
+              onWatch={onClosePanel}
+              onShortcuts={() => {
+                shell.setShortcuts(true);
               }}
             />
-          )
-        }
-        agents={
-          open && !task.expanded ? (
-            <AgentsRail state={state} />
-          ) : (
-            <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
-          )
-        }
-      >
-        <div className={`shell-center ${shell.maximized && open ? "is-maximized" : ""}`}>
-          <div className="shell-stage">
-            {open && (
-              <FocusPanel
-                {...props}
-                view={view}
-                chat={shell.layout === "Chat"}
-                onGraph={chatReview.onGraph}
-                onViewHighlight={(ids, key) => {
-                  props.onViewHighlight?.(ids, key);
-                  shell.setLayout("Oversight");
-                }}
-                practiceOnly={phone}
-                startAgentAction={task.action}
-                maximized={shell.maximized}
-                onMaximize={shell.toggleMaximize}
-              />
-            )}
-            {showNewLead && (
-              <NewLead
-                state={state}
-                onStart={props.onStartLead}
-                inputRef={leadInput}
-                onOpenSettings={props.onOpenSettings}
+          }
+          sidebar={
+            shell.sidebar && (
+              <Sidebar
+                section={shell.sidebar}
                 onClose={() => {
-                  setNewLead(false);
-                }}
-                onTaskInstead={() => {
-                  leadDraftStore.getState().moveToTask();
-                  newTask();
+                  shell.openSidebar(shell.sidebar);
                 }}
               />
-            )}
-            {shell.layout === "Chat" && !open && !newLead && (
-              <ChatEmpty
-                readOnly={Boolean(props.historySession)}
-                onNewLead={openNewLead}
-                actionAccessory={
-                  <ChatMergeChip state={state} onOpenSettings={props.onOpenSettings} />
-                }
-                state={state}
-                onStart={props.onStartAgent}
-                replayOf={props.replayOf}
-                inputRef={task.inputRef}
-              />
-            )}
-            <div
-              className="oversight-stage"
-              hidden={shell.layout === "Chat"}
-              inert={shell.layout === "Chat"}
-            >
-              {shell.oversightVisited && (
-                <LazyPanel frame={<GraphLoadingFrame />}>
-                  <OversightStage
-                    practice={Boolean(props.practice)}
-                    stacked={phone}
-                    arrival={arrival}
-                    state={state}
-                    view={chatReview.graphView}
-                    onNodeTap={phone ? () => undefined : props.onNodeTap}
-                    layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
-                  />
-                </LazyPanel>
+            )
+          }
+          agents={
+            open && !task.expanded ? (
+              <AgentsRail state={state} />
+            ) : (
+              <AgentsPanel {...props} mergeLabels={arrival.labels} inputRef={task.inputRef} />
+            )
+          }
+        >
+          <div className={`shell-center ${shell.maximized && open ? "is-maximized" : ""}`}>
+            <div className="shell-stage">
+              {open && (
+                <FocusPanel
+                  {...props}
+                  view={view}
+                  chat={shell.layout === "Chat"}
+                  onGraph={chatReview.onGraph}
+                  onViewHighlight={(ids, key) => {
+                    props.onViewHighlight?.(ids, key);
+                    shell.setLayout("Oversight");
+                  }}
+                  practiceOnly={phone}
+                  startAgentAction={task.action}
+                  maximized={shell.maximized}
+                  onMaximize={shell.toggleMaximize}
+                />
               )}
+              {showNewLead && (
+                <NewLead
+                  state={state}
+                  onStart={props.onStartLead}
+                  inputRef={leadInput}
+                  onOpenSettings={props.onOpenSettings}
+                  onClose={() => {
+                    setNewLead(false);
+                  }}
+                  onTaskInstead={() => {
+                    leadDraftStore.getState().moveToTask();
+                    newTask();
+                  }}
+                />
+              )}
+              {shell.layout === "Chat" && !open && !newLead && (
+                <ChatEmpty
+                  readOnly={Boolean(props.historySession)}
+                  onNewLead={openNewLead}
+                  actionAccessory={
+                    <ChatMergeChip state={state} onOpenSettings={props.onOpenSettings} />
+                  }
+                  state={state}
+                  onStart={props.onStartAgent}
+                  replayOf={props.replayOf}
+                  inputRef={task.inputRef}
+                />
+              )}
+              <div
+                className="oversight-stage"
+                hidden={shell.layout === "Chat"}
+                inert={shell.layout === "Chat"}
+              >
+                {shell.oversightVisited && (
+                  <LazyPanel frame={<GraphLoadingFrame />}>
+                    <OversightStage
+                      practice={Boolean(props.practice)}
+                      stacked={phone}
+                      arrival={arrival}
+                      state={state}
+                      view={chatReview.graphView}
+                      onNodeTap={phone ? () => undefined : props.onNodeTap}
+                      layoutKey={`${layoutKey}${phone ? ":phone" : ""}`}
+                    />
+                  </LazyPanel>
+                )}
+              </div>
             </div>
+            {shell.dock && <BottomDock onClose={shell.toggleDock} />}
+            {props.replay && props.onReplayCommit && !props.practice?.active && (
+              <Suspense fallback={<div className="hidden h-[44px] shrink-0 min-[1280px]:block" />}>
+                <ReplayBar
+                  key={props.replay.id}
+                  player={props.replay}
+                  chatState={props.chatState}
+                  readChatState={props.readChatState}
+                  onCommit={props.onReplayCommit}
+                />
+              </Suspense>
+            )}
           </div>
-          {shell.dock && <BottomDock onClose={shell.toggleDock} />}
-          {props.replay && props.onReplayCommit && !props.practice?.active && (
-            <Suspense fallback={<div className="hidden h-[44px] shrink-0 min-[1280px]:block" />}>
-              <ReplayBar
-                key={props.replay.id}
-                player={props.replay}
-                chatState={props.chatState}
-                readChatState={props.readChatState}
-                onCommit={props.onReplayCommit}
-              />
-            </Suspense>
-          )}
-        </div>
-      </ChatShell>
+        </ChatShell>
+      </PreviewActionsContext>
       <StatusLine {...props} dock={shell.dock} onToggleDock={shell.toggleDock} />
       <p className="narrow-notice" role="status">
         This window is too narrow. Widen it to at least 1280 px.
