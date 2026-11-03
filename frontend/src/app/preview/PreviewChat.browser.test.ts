@@ -18,6 +18,29 @@ const support = previewChatSupport();
 const matrix = chatSizes.flatMap((viewport) =>
   ["dark", "day"].map((theme) => ({ viewport, theme })),
 );
+it.each([
+  ["transport/index.ts", 'import.meta.env.MODE === "replay"'],
+  ["transport/index.ts", "export const replaySource = chooseReplaySource("],
+  ["transport/index.ts", "onReplay?.(player);"],
+  ["state/store.ts", "export const stateStore = createStateStore();"],
+  ["transport/live.ts", "      onError?.(error);"],
+  ["transport/live.ts", "          retryWindow = 500;"],
+  ["app/preview/PreviewPanel.tsx", "progress.load(frame);"],
+])("rejects missing or ambiguous proof anchors in %s: %s", async (path, anchor) => {
+  const plugin = support.server?.config.plugins.find(({ name }) => name === "preview-chat-proof");
+  const hook = plugin?.transform;
+  if (!hook) throw new Error("Missing proof transform");
+  const transform = typeof hook === "function" ? hook : hook.handler;
+  const source = await readFile(new URL(`../../${path}`, import.meta.url), "utf8");
+  const duplicate = anchor.startsWith("export const replaySource")
+    ? source.match(/export const replaySource = chooseReplaySource\([\s\S]*?\n\);/)?.[0]
+    : anchor;
+  if (!duplicate) throw new Error("Missing replay selection fixture");
+  for (const drifted of [source.replace(anchor, "/* anchor drift */"), `${source}\n${duplicate}`])
+    expect(() => {
+      Reflect.apply(transform, {}, [drifted, `/src/${path}`]);
+    }).toThrow(`Expected one proof instrumentation anchor in /src/${path}`);
+});
 it.each(["dark", "day"])("keeps Preview app visually primary in %s", async (theme) => {
   const session = await support.session(chatSizes[0], theme);
   try {

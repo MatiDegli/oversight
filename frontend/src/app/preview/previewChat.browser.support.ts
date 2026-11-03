@@ -77,26 +77,37 @@ function counters(events: ServerEvent[], replay: boolean): Plugin {
     name: "preview-chat-proof",
     enforce: "pre",
     transform(source, id) {
+      const replace = (anchor: string | RegExp, replacement: string) => {
+        const count =
+          typeof anchor === "string"
+            ? source.split(anchor).length - 1
+            : [...source.matchAll(new RegExp(anchor.source, "g"))].length;
+        if (count !== 1)
+          throw new Error(
+            `Expected one proof instrumentation anchor in ${id}: ${String(anchor)}; found ${String(count)}`,
+          );
+        source = source.replace(anchor, () => replacement);
+      };
       if (id.endsWith("/transport/index.ts") && replay) {
-        source = source.replace(
+        replace(
           'import.meta.env.MODE === "replay"',
           'new URLSearchParams(location.search).get("replay") === "true"',
         );
-        source = source.replace(
+        replace(
           /export const replaySource = chooseReplaySource\([\s\S]*?\n\);/,
           `export const replaySource = new URLSearchParams(location.search).has("publicRecording") ? chooseReplaySource(recorded.text, "", recorded.provenance) : chooseReplaySource(null, window.coldStartInput ?? ${JSON.stringify(events.map((e) => JSON.stringify(e)).join("\n"))});`,
         );
       }
       if (id.endsWith("/transport/index.ts"))
-        source = source.replace(
-          "onReplay?.(player);",
-          "window.coldStartPlayer = player; onReplay?.(player);",
-        );
+        replace("onReplay?.(player);", "window.coldStartPlayer = player; onReplay?.(player);");
       if (id.endsWith("/state/store.ts"))
-        source += `
+        replace(
+          "export const stateStore = createStateStore();",
+          `export const stateStore = createStateStore();
 window.coldStartTrace = { cursors: [], state: stateStore.getState().state };
 stateStore.subscribe(({ state }) => { window.coldStartTrace.cursors.push(state.lastSeq); window.coldStartTrace.state = state; });
-`;
+`,
+        );
       const targets: [string, string, string][] = [
         ["/shell/ChatShell.tsx", "export function ChatShell(", "  return ("],
         [
@@ -125,17 +136,17 @@ stateStore.subscribe(({ state }) => { window.coldStartTrace.cursors.push(state.l
           source.slice(at);
       }
       if (id.endsWith("/transport/live.ts")) {
-        source = source.replace(
+        replace(
           "      onError?.(error);",
           "      (window.coldStartFailures ??= []).push({ message: String(error), stack: error instanceof Error ? error.stack : undefined }); onError?.(error);",
         );
-        source = source.replace(
+        replace(
           "          retryWindow = 500;",
           '          if (event.type === "preview.status" && event.payload.state === "ready") { window.previewChatTiming ??= {}; window.previewChatTiming.ready ??= Date.now(); }\n          retryWindow = 500;',
         );
       }
       if (id.endsWith("/preview/PreviewPanel.tsx"))
-        source = source.replace(
+        replace(
           "progress.load(frame);",
           "window.previewChatTiming ??= {}; window.previewChatTiming.loaded ??= Date.now(); progress.load(frame);",
         );
