@@ -103,7 +103,9 @@ One line per day, in Argentina time (ART).
   Readiness/lease defaults are 30/600 seconds; controlled wiring does not certify final self-app,
   scripted-story or Windows-browser acceptance. No provider calls or contract changes.
   Qualified the actual prepared offline production build and imports in the Linux root, and the
-  real supervisor/guardian death ordering; completed exact shop/probe/transport and request-aware
-  development-header authorities in both directions. Bounded admission-lock waits by lease/lifetime
+  real supervisor/guardian death ordering. Development-header, shop authority and transport
+  integration remain separately owned prerequisites. Bounded admission-lock waits by lease/lifetime
   and fixed stop/EOF/cancellation before execute; added wiring-level probing-death and invalid-evidence
-  coverage. Retained the absence of final self-app/story/Windows-browser acceptance.
+  coverage. Polling/renewal now preserve supervisor-owned build transitions; provider values reach
+  only the private redaction channel, and failure/log and boundary-input regressions cover the
+  wiring. Retained the absence of final self-app/story/Windows-browser acceptance.

@@ -130,7 +130,7 @@ def test_enabled_profile_still_requires_configuration():
         ({"origins": ("http://foreign.example:8710",)}, "invalid preview origin"),
         ({"readiness_s": 0}, "invalid preview deadline"),
         ({"lease_s": float("nan")}, "invalid preview deadline"),
-        ({"heartbeat_s": 30, "lease_s": 30}, "invalid preview limits"),
+        ({"heartbeat_s": 30}, "invalid preview limits"),
         ({"memory_limit_bytes": 0}, "invalid preview limits"),
         ({"memory_limit_bytes": True}, "invalid preview limits"),
     ],

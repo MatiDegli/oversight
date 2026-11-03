@@ -181,6 +181,7 @@ class Settings:
             "preview_profile",
             replace(
                 self.preview_profile,
+                log_secrets=tuple(k for k in (self.meta_api_key, self.baseten_api_key) if k),
                 backend_port=self.port,
                 vite_port=self.vite_port,
                 trusted_demo=not self.workspace_source and self.preview_profile.trusted_demo,

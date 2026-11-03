@@ -2,13 +2,13 @@
 
 import base64
 import re
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
-from oversight.workspace import PreviewError
+from oversight.workspace import PreviewError, PreviewProfile
 
-from .preview_fakes import harness
+from .preview_fakes import FakeProcess, harness
 
 pytestmark = pytest.mark.anyio
 
@@ -580,5 +580,55 @@ async def test_admission_lock_expiry_drains_without_launch(workspace, monkeypatc
         await h.manager._watcher
         assert h.sink.records[-1].reason == boundary + "_expired"
         assert not h.manager.has_owner and h.manager.registry.read() is None
+    finally:
+        await h.close()
+
+
+async def test_reviewed_build_and_readiness_allowance_begins_at_dequeue(workspace, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from oversight.workspace import preview_lifecycle
+
+    h = await harness(workspace)
+    monkeypatch.setattr(preview_lifecycle, "time", SimpleNamespace(monotonic=h.clock))
+    factory = h.manager.process_factory
+    available = asyncio.Event()
+
+    def parked(registry, port):
+        process = cast(FakeProcess, factory(registry, port))
+        process.launch_gate.clear()
+        available.set()
+        return process
+
+    h.manager.process_factory = parked
+    try:
+        async with workspace.locks(main=True):
+            created = await h.start(wait_ready=False)
+            h.manager.lifecycle.profile = cast(
+                PreviewProfile,
+                SimpleNamespace(
+                    readiness_s=30,
+                    reviewed_app=SimpleNamespace(
+                        launch=SimpleNamespace(
+                            build=(SimpleNamespace(timeout_s=11), SimpleNamespace(timeout_s=13))
+                        )
+                    ),
+                ),
+            )
+            await asyncio.sleep(0)
+            h.clock.now += 9
+        async with asyncio.timeout(5):
+            await available.wait()
+            process = h.processes[-1]
+            await process.launch_started.wait()
+        owner = h.manager.barrier.owner
+        assert owner is not None
+        assert owner.execution_deadline == h.clock.now + 54
+        assert owner.queue_s >= 9
+        h.clock.now += 7
+        process.launch_gate.set()
+        await h.sink.wait("ready", created.preview_id)
+        assert process.ready_budget == 47
     finally:
         await h.close()

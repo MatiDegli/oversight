@@ -51,7 +51,7 @@ it("projects exact generated requests and supplies private bounded fetch policie
   expect(init?.signal).toBeInstanceOf(AbortSignal);
 });
 it("uses the existing injected validators for details and renewal", async () => {
-  const details = { status, url: "http://localhost:19800/" };
+  const details = { status, url: "http://127.0.0.1:19800/" };
   const first = setup(details);
   await expect(first.port.details(id, signal)).resolves.toEqual(details);
   expect(validators.details).toHaveBeenCalledWith(details);
@@ -64,7 +64,7 @@ it("uses the existing injected validators for details and renewal", async () => 
 });
 it.each([
   "https://127.0.0.1:19800/",
-  "http://127.0.0.1:19800/",
+  "http://localhost:19800/",
   "http://127.0.0.1:8710/",
   "http://127.0.0.1:19800/path",
   "http://127.0.0.1:19800/?token=x",
@@ -126,28 +126,4 @@ it("refuses missing no-store, extra receipt keys and validator failures", async 
   await expect(port.renew(id, { lease_token: lease }, signal)).rejects.toThrow(
     "Invalid preview input",
   );
-});
-
-it.each([
-  ["localhost", "127.0.0.1"],
-  ["127.0.0.1", "localhost"],
-])("accepts only the opposite frame for parent %s", async (parent, frame) => {
-  const details = { status, url: `http://${frame}:19800/` };
-  const { request } = setup(details);
-  const port = createLivePreviewPort(`http://${parent}:8710/`, validators, request);
-  await expect(port.details(id, signal)).resolves.toEqual(details);
-  for (const url of [
-    `http://${parent}:19800/`,
-    `http://${frame}:8710/`,
-    `http://${frame}:19800/?token=x`,
-    "http://foreign.invalid:19800/",
-  ]) {
-    request.mockResolvedValueOnce(
-      new Response(JSON.stringify({ status, url }), {
-        status: 200,
-        headers: { "Cache-Control": "no-store" },
-      }),
-    );
-    await expect(port.details(id, signal)).rejects.toThrow();
-  }
 });

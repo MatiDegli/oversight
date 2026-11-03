@@ -51,7 +51,7 @@ it("projects exact generated requests and supplies private bounded fetch policie
   expect(init?.signal).toBeInstanceOf(AbortSignal);
 });
 it("uses the existing injected validators for details and renewal", async () => {
-  const details = { status, url: "http://localhost:19800/" };
+  const details = { status, url: "http://127.0.0.1:19800/" };
   const first = setup(details);
   await expect(first.port.details(id, signal)).resolves.toEqual(details);
   expect(validators.details).toHaveBeenCalledWith(details);
@@ -64,7 +64,7 @@ it("uses the existing injected validators for details and renewal", async () => 
 });
 it.each([
   "https://127.0.0.1:19800/",
-  "http://127.0.0.1:19800/",
+  "http://localhost:19800/",
   "http://127.0.0.1:8710/",
   "http://127.0.0.1:19800/path",
   "http://127.0.0.1:19800/?token=x",

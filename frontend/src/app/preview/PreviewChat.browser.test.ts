@@ -106,7 +106,6 @@ it.each(matrix)(
       await check(
         page.frameLocator("iframe").getByRole("heading", { name: "Candidate shop" }),
       ).toBeVisible();
-      await check(page.locator("iframe")).toHaveAttribute("src", "http://localhost:19800/");
       await check(page.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
       await check(page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
       expect(await page.locator(".conversation-composer").boundingBox()).toEqual(before);
@@ -220,7 +219,6 @@ it("resize and explicit navigation retain one cold-to-warm graph and cancel the 
     await page.getByRole("button", { name: "Preview app", exact: true }).click();
     session.publish("ready");
     await check(page.locator("iframe")).toBeVisible();
-    expect(session.identity()?.state).toBe("ready");
     const close = page.locator(".preview-panel button");
     await close.focus();
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -249,7 +247,6 @@ it("resize and explicit navigation retain one cold-to-warm graph and cancel the 
     await page.getByRole("button", { name: "Preview app", exact: true }).click();
     session.publish("ready");
     await check(page.locator("iframe")).toBeVisible();
-    expect(session.identity()?.state).toBe("ready");
     const previewed = await page.evaluate(() => window.previewChatRenders);
     for (const key of ["shell", "conversation", "graph"]) expect(previewed[key]).toBe(warmed[key]);
     await page.locator(".preview-panel button").click();

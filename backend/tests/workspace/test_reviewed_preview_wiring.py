@@ -161,7 +161,7 @@ async def controlled_execution(
     from .preview_boundary_support import prepared as boundary_fixture
 
     roots = await asyncio.to_thread(boundary_fixture, tmp_path / "boundary")
-    directory = tmp_path / "previews/example"
+    directory = tmp_path / "runtime/previews/example"
     for part in ("state", "logs", "published"):
         (directory / part).mkdir(parents=True, mode=0o700)
     roots = replace(roots, state=directory / "state")
@@ -264,7 +264,7 @@ async def main():
 asyncio.run(main())
 """
     runtime = tmp_path / "runtime"
-    runtime.mkdir()
+    runtime.mkdir(exist_ok=True)
     registry = PreviewRegistry(runtime)
     registry.write(
         dict(version=1, runtime=str(runtime), phase="intent", preview_id="preview-" + "a" * 32)
@@ -938,7 +938,9 @@ asyncio.run(main())
     process = PreviewProcess(registry, port)
     process.public_authority = f"127.0.0.1:{port}"
     profile = SimpleNamespace(
-        readiness_s=120, reviewed_app=SimpleNamespace(launch=SimpleNamespace(build=()))
+        readiness_s=120,
+        reviewed_app=SimpleNamespace(launch=SimpleNamespace(build=())),
+        log_secrets=(),
     )
     pinned = []
     try:
@@ -1134,3 +1136,187 @@ print(json.dumps(dict(parent=parent_error, outside=outside_error, fds=visible)))
         listener.close()
         os.close(control)
         os.close(report)
+
+
+async def test_manager_survives_two_reviewed_build_transitions(
+    workspace, tmp_path, monkeypatch, inputs
+):
+    import threading
+    from types import MethodType
+
+    from oversight.workspace import _reviewed_preview as wiring
+    from oversight.workspace.preview_process import PreviewProcess
+    from oversight.workspace.preview_registry import identity_data
+
+    from .preview_fakes import harness
+    from .test_preview_starting import gated
+
+    h = await harness(workspace)
+    execution, reader, reports, _, roots = await controlled_execution(tmp_path, monkeypatch, inputs)
+    created, process = await gated(h, "ready")
+    execution.registry = h.manager.registry
+    execution.guardian.registry = h.manager.registry
+    h.manager.registry.update(supervisor=identity_data(os.getpid()))
+    process.reviewed = True
+    process.confirmed_live = MethodType(PreviewProcess.confirmed_live, process)
+    execution.spec["commands"].insert(
+        1,
+        dict(
+            argv=["/opt/python/bin/python", "-c", "compile('pass', '<typecheck>', 'exec')"],
+            cwd="/T",
+            timeout_s=10,
+        ),
+    )
+    transitions = asyncio.Queue()
+    releases = [threading.Event(), threading.Event()]
+    loop = asyncio.get_running_loop()
+    calls = 0
+
+    def pause_transition(*_):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            loop.call_soon_threadsafe(transitions.put_nowait, calls - 2)
+            assert releases[calls - 2].wait(10)
+        return roots
+
+    monkeypatch.setattr(wiring, "boundary_roots", pause_transition)
+    task = asyncio.create_task(execution.run())
+    try:
+        assert (await next_report(reports))["kind"] == "confirmed"
+        reader.feed_data(b"execute\n")
+        assert (await next_report(reports))["kind"] == "executing"
+        for index in range(2):
+            async with asyncio.timeout(20):
+                assert await transitions.get() == index
+            data = h.manager.registry.read()
+            assert data is not None and execution.handle is not None
+            assert data["phase"] == "between_commands" and data["boundary_pending"]
+            assert execution.handle.verified_dead
+            for _ in range(2):
+                assert (await h.manager.get(created.preview_id)).state == "starting"
+                assert (
+                    await h.manager.renew(created.preview_id, created.lease_token)
+                ).state == "starting"
+                assert h.manager.has_owner
+            releases[index].set()
+        assert (await next_report(reports))["kind"] == "ready"
+        process.ready_gate.set()
+        await h.sink.wait("ready", created.preview_id)
+        assert await process.confirmed_live()
+    finally:
+        for release in releases:
+            release.set()
+        reader.feed_data(b"stop\n")
+        await asyncio.wait_for(task, 15)
+        await h.close()
+
+
+async def launched_after_output(launch, *args, **kwargs):
+    handle = await launch(*args, **kwargs)
+    for _ in range(500):
+        if "visible" in handle.stdout:
+            return handle
+        await asyncio.sleep(0.01)
+    pytest.fail("controlled command did not emit its diagnostic before timeout")
+
+
+def configure_reviewed_failure(execution, failure, secrets, monkeypatch):
+    from functools import partial
+
+    from oversight.workspace import preview_boundary
+
+    diagnostic = "visible\x1b[31m " + " ".join(secrets)
+    code = f"print({diagnostic!r}, flush=True); "
+    code += "import time; time.sleep(30)" if failure == "timeout" else "raise SystemExit(2)"
+    command = dict(
+        argv=["/opt/python/bin/python", "-c", code],
+        cwd="/T",
+        timeout_s=0.1 if failure == "timeout" else 10,
+    )
+    if failure == "typecheck":
+        execution.spec["commands"].insert(1, command)
+    elif failure != "readiness":
+        execution.spec["commands"][0] = command
+    else:
+        original_attach = execution.attach_gateway
+
+        async def expire_readiness():
+            execution.config["readiness_s"] = 0.2
+            await original_attach()
+
+        monkeypatch.setattr(execution, "attach_gateway", expire_readiness)
+
+    if failure == "timeout":
+        monkeypatch.setattr(
+            preview_boundary,
+            "launch_boundary",
+            partial(launched_after_output, preview_boundary.launch_boundary),
+        )
+
+
+@pytest.mark.parametrize("failure", ["build", "typecheck", "timeout", "readiness"])
+async def test_reviewed_failure_reason_and_sanitized_log(
+    workspace, tmp_path, monkeypatch, inputs, failure
+):
+    import json
+    from types import SimpleNamespace
+
+    from oversight.settings import Settings
+    from oversight.workspace.preview_process import PreviewProcess
+    from oversight.workspace.preview_profile import PreviewProfile
+
+    from .preview_fakes import harness
+    from .test_preview_starting import gated
+
+    h = await harness(workspace)
+    execution, reader, reports, registry, _ = await controlled_execution(
+        tmp_path,
+        monkeypatch,
+        inputs,
+        health_run="stale-run" if failure == "readiness" else "fresh-run",
+    )
+    settings = Settings(meta_api_key="fixture-meta-value", baseten_api_key="fixture-baseten-value")
+    secrets = settings.preview_profile.log_secrets
+    assert secrets == (settings.meta_api_key, settings.baseten_api_key)
+    assert all(secret not in repr(settings.preview_profile) for secret in secrets)
+    configure_reviewed_failure(execution, failure, secrets, monkeypatch)
+    created, process = await gated(h, "ready")
+    process.reader = asyncio.StreamReader()
+    h.manager.lifecycle.profile = cast(
+        PreviewProfile,
+        SimpleNamespace(
+            readiness_s=30, reviewed_app=SimpleNamespace(launch=SimpleNamespace(build=()))
+        ),
+    )
+    task = asyncio.create_task(execution.run())
+    expected = "readiness_timeout" if failure == "readiness" else "launch_failed"
+    try:
+        assert (await next_report(reports))["kind"] == "confirmed"
+        reader.feed_data((json.dumps({"log_secrets": secrets}) + "\nexecute\n").encode())
+        assert (await next_report(reports))["kind"] == "executing"
+        dead = await next_report(reports)
+        await asyncio.wait_for(task, 15)
+        assert dead["kind"] == "dead" and dead["reason"] == expected
+        assert dead["diagnostic"] == ""
+        log = execution.inputs.preview_directory / "logs/build.log"
+        assert log == registry.runtime / "previews/example/logs/build.log"
+        assert log.is_file()
+        text = log.read_text()
+        if failure != "readiness":
+            assert "visible" in text
+        assert "\x1b" not in text and all(secret not in text for secret in secrets)
+        process.reader.feed_data((json.dumps(dead) + "\n").encode())
+        process.ready_result = await PreviewProcess._reviewed_ready(process, 5)
+        assert not process.ready_result
+        process.ready_gate.set()
+        await h.sink.wait("failed", created.preview_id)
+        status = await h.manager.get(created.preview_id)
+        assert status.state == "failed" and status.reason == expected
+        events = repr(h.sink.records) + repr(dead)
+        assert "visible" not in events and all(secret not in events for secret in secrets)
+    finally:
+        reader.feed_data(b"stop\n")
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await h.close()

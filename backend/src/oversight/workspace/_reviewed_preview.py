@@ -373,6 +373,7 @@ class ReviewedExecution:
         self.guardian = ListenerGuardian(registry)
         self.scope = AggregateScope()
         self.authorized = False
+        self.build_command = False
         self.phase = "build"
         self.reason = "launch_failed"
         self.exit_code: int | None = None
@@ -382,6 +383,7 @@ class ReviewedExecution:
         self.entry_uncertain = False
         self.log_text = ""
         self.logged: set[int] = set()
+        self.log_secrets: tuple[str, ...] = ()
 
     def retain(self, handle: BoundaryHandle) -> None:
         self.handle = handle
@@ -414,7 +416,9 @@ class ReviewedExecution:
             if self.stopped.is_set() or time.monotonic() >= min(self.lease, self.absolute):
                 raise ValueError("reviewed execution no longer authorized")
             self.authorized = True
-        await offload(lambda: self.registry.update(phase="executing"))
+        await offload(
+            lambda: self.registry.update(phase="building" if self.build_command else "executing")
+        )
 
     async def command(self, command: dict[str, Any], *, build: bool) -> None:
         import json
@@ -425,6 +429,7 @@ class ReviewedExecution:
 
         assert self.prepared is not None
         prepared = self.prepared
+        self.build_command = build
         env = scrub_preview_env({}, self.prepared)
         payload = dict(
             argv=command["argv"],
@@ -445,8 +450,12 @@ class ReviewedExecution:
             self.policy["build_memory_bytes" if build else "nested_memory_bytes"],
             payload["cores"],
         )
+        await offload(
+            lambda: self.registry.update(
+                phase="between_commands" if self.authorized else "entering", boundary_pending=True
+            )
+        )
         roots = await offload(lambda: boundary_roots(prepared, self.inputs.excluded_roots))
-        await offload(lambda: self.registry.update(phase="entering", boundary_pending=True))
         previous = self.handle
         try:
             handle = await launch_boundary(
@@ -488,7 +497,9 @@ class ReviewedExecution:
             # The sink redacts and strips controls; none of these bytes enter lifecycle events.
             handle = self.handle
             log = SanitizedBuildLog(
-                self.prepared.build_log, max_bytes=self.policy["diagnostics_bytes"]
+                self.prepared.build_log,
+                secrets=self.log_secrets,
+                max_bytes=self.policy["diagnostics_bytes"],
             )
             capture = handle.stdout + handle.stderr
             await offload(lambda: log.write(self.log_text + capture))
@@ -603,6 +614,15 @@ class ReviewedExecution:
                 return
             else:
                 value = json.loads(raw)
+                if "log_secrets" in value:
+                    if (
+                        self.authorized
+                        or not isinstance(value["log_secrets"], list)
+                        or any(not isinstance(secret, str) for secret in value["log_secrets"])
+                    ):
+                        raise ValueError("invalid log redaction configuration")
+                    self.log_secrets = tuple(value["log_secrets"])
+                    continue
                 if time.monotonic() < min(self.lease, self.absolute):
                     self.lease = min(float(value["renew"]), self.absolute)
 

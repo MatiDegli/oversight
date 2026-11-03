@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from oversight.workspace import PreviewProfile, isolation
+from oversight.workspace import PreviewError, PreviewProfile, isolation
 from oversight.workspace import preview_process as client
 from oversight.workspace import preview_supervisor as supervisor
 from oversight.workspace.isolation_entry import FLAGS, HELPER, LAUNCHER, PREVIEW_HELPER
@@ -116,9 +116,9 @@ def test_launch_argv_env_scratch_and_separate_refusal_probe(tmp_path):
         refusal.close()
 
 
+@pytest.mark.parametrize("reviewed", [False, True])
 async def test_backend_handoff_registers_ownership_before_execute_and_closes_listener(
-    monkeypatch,
-    tmp_path,
+    monkeypatch, tmp_path, reviewed
 ):
     registry = PreviewRegistry(tmp_path)
     registry.write({"version": 1, "runtime": str(tmp_path), "phase": "intent"})
@@ -135,13 +135,13 @@ async def test_backend_handoff_registers_ownership_before_execute_and_closes_lis
         return SimpleNamespace(get_pid=lambda: os.getpid()), factory()
 
     async def message():
-        if process.nonce is not None:
+        if b"execute\n" in messages:
             registry.update(phase="executing")
             return {"kind": "executing"}
         data = registry.read()
         assert data is not None and data["phase"] == "owned"
         registry.update(phase="confirmed", namespace=identity_data(os.getpid()))
-        return {"kind": "confirmed", "nonce": "a" * 64}
+        return {"kind": "confirmed", **({} if reviewed else {"nonce": "a" * 64})}
 
     def send(raw):
         if raw == b"execute\n":
@@ -156,11 +156,22 @@ async def test_backend_handoff_registers_ownership_before_execute_and_closes_lis
     monkeypatch.setattr(process, "confirmed_live", AsyncMock(return_value=True))
     readfd, writefd = os.pipe()
     monkeypatch.setattr(client, "open_pidfd", lambda _: readfd)
-    await process.launch(listener, profile())
-    assert listener.fileno() == -1 and messages == [b"launch\n", b"execute\n"]
+    from oversight.settings import Settings
+
+    settings = Settings(meta_api_key="fixture-meta-value", baseten_api_key="fixture-baseten-value")
+    frozen = SimpleNamespace(**vars(settings.preview_profile))
+    frozen.reviewed_app = SimpleNamespace(launch=SimpleNamespace(build=())) if reviewed else None
+    await process.launch(listener, cast(PreviewProfile, frozen))
+    expected = [b"launch\n"]
+    if reviewed:
+        expected.append((json.dumps({"log_secrets": frozen.log_secrets}) + "\n").encode())
+    expected.append(b"execute\n")
+    assert listener.fileno() == -1 and messages == expected
+    assert all(secret not in repr(registry.read()) for secret in frozen.log_secrets)
     argv, kwargs = calls[0]
     assert "-I" in argv and "-B" in argv and str(tmp_path) in argv
     assert "PYTHONPATH" not in kwargs["env"] and "META_API_KEY" not in kwargs["env"]
+    assert all(secret not in repr((argv, kwargs)) for secret in frozen.log_secrets)
     assert process.pipe is not None
     process.pipe.close()
     os.close(process.control)
@@ -498,7 +509,7 @@ def test_reviewed_configuration_never_constructs_shop_argv(tmp_path):
 
 
 @pytest.mark.parametrize("parent,frame", [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")])
-def test_shop_launch_freezes_exact_opposite_authority(tmp_path, parent, frame):
+def test_shop_launch_freezes_parent_without_unlanded_adapter_option(tmp_path, parent, frame):
     app = bind_listener((19685, 19686))
     refusal = socket.socket()
     refusal.bind(("127.0.0.1", 0))
@@ -515,9 +526,47 @@ def test_shop_launch_freezes_exact_opposite_authority(tmp_path, parent, frame):
             parent_authority=f"{parent}:8710",
         )
         argv = cfg["argv"]
-        assert argv[argv.index("--frame-host") + 1] == frame
+        assert "--frame-host" not in argv
         assert argv.count("--oversight-origin") == 1
         assert argv[argv.index("--oversight-origin") + 1] == f"http://{parent}:8710"
     finally:
         app.close()
         refusal.close()
+
+
+@pytest.mark.parametrize(
+    "stage,reason", [("build", "launch_failed"), ("readiness", "readiness_timeout")]
+)
+async def test_reviewed_silent_channel_timeout_keeps_failure_stage(tmp_path, stage, reason):
+    process = PreviewProcess(PreviewRegistry(tmp_path), 19685)
+    process.reader = asyncio.StreamReader()
+    process.stage = stage
+    assert not await process._reviewed_ready(0.01)
+    assert process.reason == reason
+
+
+@pytest.mark.parametrize("phase", ["building", "between_commands"])
+@pytest.mark.parametrize("fault", [None, "supervisor", "guardian", "missing_guardian", "shop"])
+async def test_reviewed_transition_requires_both_durable_owners(tmp_path, phase, fault):
+    registry = PreviewRegistry(tmp_path)
+    live = identity_data(os.getpid())
+    dead = live | {"birth": "0"}
+    registry.write(
+        dict(
+            version=1,
+            runtime=str(tmp_path),
+            phase=phase,
+            supervisor=dead if fault == "supervisor" else live,
+            guardian=None if fault == "missing_guardian" else dead if fault == "guardian" else live,
+            unshare=dead,
+            namespace=dead,
+            boundary={"processes": {"outer": dead}},
+        )
+    )
+    process = PreviewProcess(registry, 19685)
+    process.reviewed = fault != "shop"
+    if fault in {"supervisor", "guardian"}:
+        with pytest.raises(PreviewError, match="ownership is ambiguous"):
+            await process.confirmed_live()
+    else:
+        assert await process.confirmed_live() is (fault is None)

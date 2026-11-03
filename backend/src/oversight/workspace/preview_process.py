@@ -74,8 +74,7 @@ def launch_configuration(
         if parent_authority is not None:
             from oversight.workspace._reviewed_preview import opposite_host
 
-            frame = opposite_host(parent_authority.split(":")[0])
-            argv.extend(("--frame-host", frame))
+            opposite_host(parent_authority.split(":")[0])
             origins = ("http://" + parent_authority,)
         for origin in origins:
             argv.extend(("--oversight-origin", origin))
@@ -217,6 +216,8 @@ class PreviewProcess:
                 if not await self.confirmed_live():
                     raise PreviewError("Live preview launch failed.")
                 self.authorize_execution()
+                if self.reviewed:
+                    self.send((json.dumps({"log_secrets": profile.log_secrets}) + "\n").encode())
                 self.send(b"execute\n")
                 executing = await self.message()
                 if executing.get("kind") != "executing":
@@ -274,7 +275,18 @@ class PreviewProcess:
 
     async def confirmed_live(self) -> bool:
         data = await offload(self.registry.read)
-        if data is None or (data["phase"] != "executing" and data["phase"] != "confirmed"):
+        if data is None:
+            return False
+        if self.reviewed and data["phase"] in {"building", "between_commands"}:
+            # Completed builds may have no live boundary while the trusted supervisor
+            # rehashes/enters the next command. Both durable owners must still be alive.
+            return bool(
+                data.get("boundary")
+                and data.get("guardian")
+                and registered_identity(data["supervisor"]).alive()
+                and registered_identity(data["guardian"]).alive()
+            )
+        if data["phase"] not in {"executing", "confirmed"}:
             return False
         for key in ("supervisor", "unshare", "namespace"):
             if not registered_identity(data[key]).alive():
@@ -328,6 +340,7 @@ class PreviewProcess:
                     self.port, nonce, self.public_authority, reviewed=True
                 )
         except TimeoutError:
+            self.reason = "readiness_timeout" if self.stage == "readiness" else "launch_failed"
             return False
 
     def accept_death(self, message: dict[str, Any]) -> None:

@@ -251,6 +251,8 @@ def validate_ownership(
         "entering": ("supervisor", "unshare"),
         "confirmed": ("supervisor", "unshare", "namespace", "namespaces"),
         "executing": ("supervisor", "unshare", "namespace", "namespaces"),
+        "building": ("supervisor", "unshare", "namespace", "namespaces", "guardian"),
+        "between_commands": ("supervisor", "unshare", "namespace", "namespaces", "guardian"),
         "dead": (),
     }
     phase = data["phase"]
@@ -279,7 +281,7 @@ def validate_ownership(
                 data.get("supervisor", {}).get("pid")
             }:
                 raise ValueError("ambiguous listener guardian birth")
-        if phase == "executing" and not data.get("guardian"):
+        if phase in {"executing", "building", "between_commands"} and not data.get("guardian"):
             raise ValueError("missing listener guardian ownership")
         for value in boundary["namespaces"].values():
             if len(value) != 2 or any(type(v) is not int or v <= 0 for v in value):

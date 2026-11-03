@@ -551,9 +551,8 @@ The request's accepted Host selects one frame name: localhost parents use 127.0.
 127.0.0.1 parents use localhost frames. The gateway uses that exact frame Host/browser Origin and
 only the actual parent as frame-ancestors. The production parent response resolves frame-src from
 that same accepted request; IPv6 and other parent names cannot start this preview. The development
-header uses the request Host and bound Vite port, refusing other authorities. The shop receives one
-exact frame host and parent origin, including in readiness probes; the transport accepts only the
-opposite frame name on a different port. Real adapter and Vite HTTP tests cover both directions.
+header, shop and frontend transport authority changes remain separately owned prerequisites;
+their files retain the accepted baseline.
 Waiting for admission locks is bounded by the earlier lease or absolute deadline and retains the
 corresponding expiry reason. Stop, EOF and cancellation before execute withhold acknowledgement
 and settle verified boundary death within the backend stop bound.

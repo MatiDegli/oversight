@@ -52,7 +52,6 @@ class Config:
     memory_limit_bytes: int
     ready_nonce: str
     origins: tuple[str, ...]
-    frame_host: str = "127.0.0.1"
 
 
 def valid_origin(value: str) -> bool:
@@ -66,7 +65,6 @@ def configuration(argv: list[str] | None = None) -> Config:
     parser = argparse.ArgumentParser(add_help=False, exit_on_error=False, allow_abbrev=False)
     parser.add_argument("--listener-fd", type=int, required=True)
     parser.add_argument("--port", type=int, required=True)
-    parser.add_argument("--frame-host", choices=("localhost", "127.0.0.1"), default="127.0.0.1")
     parser.add_argument("--worktree", required=True)
     parser.add_argument("--memory-limit-bytes", type=int, default=MEMORY_BYTES)
     parser.add_argument("--ready-nonce", required=True)
@@ -90,7 +88,6 @@ def configuration(argv: list[str] | None = None) -> Config:
         args.memory_limit_bytes,
         args.ready_nonce,
         origins,
-        args.frame_host,
     )
 
 
@@ -342,7 +339,7 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self) -> None:
         config = self.preview.config
         origins = self.headers.get_all("Origin", [])
-        if self.headers.get_all("Host", []) != [f"{config.frame_host}:{config.port}"]:
+        if self.headers.get_all("Host", []) != [f"127.0.0.1:{config.port}"]:
             self.send_error(403)
             return
         is_cart = self.command == "POST" and self.path == "/cart"

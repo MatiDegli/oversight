@@ -83,6 +83,7 @@ class PreviewProfile:
     queue_cap: int = 8
     enabled: bool = False
     reviewed_app: ReviewedAppAuthorization | None = None
+    log_secrets: tuple[str, ...] = field(default=(), repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if type(self.enabled) is not bool:

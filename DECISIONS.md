@@ -4799,14 +4799,16 @@ memory/CPU controls are probed outside the root; otherwise disclose exactly “p
 aggregate usage is not enforced”. Python address space, Node heap without small Node RLIMIT_AS,
 lower priority, CPU affinity, admission and sampled RSS/cache monitoring supplement the fallback;
 sampling is not aggregate enforcement. Sanitized build diagnostics never enter lifecycle events.
+Resolved server provider values travel only over the private control pipe to the log redactor,
+never the durable registry or candidate environment. Durable build/transition phases keep polling
+and renewal valid while the supervisor and listener guardian own the next command entry.
 
 The accepted request Host owns the opposite loopback frame name and its exact Host/Origin and parent
-frame-ancestors. Production and development frame-src use that same request, naming only the
-opposite loopback host for the configured pool. The trusted shop adapter receives that exact frame
-host and parent origin; its readiness probe uses the same Host. The transport accepts either parent
-and refuses same-host frames, shared backend ports and foreign destinations. Real adapter and Vite
-HTTP tests cover both directions and authority refusals. Admission-lock waits expire at the earlier
-lease or absolute deadline, retaining the corresponding expiry reason. Stop, EOF or cancellation
+frame-ancestors. Production frame-src uses that same request, naming only the opposite loopback
+host for the configured pool. The Vite header, trusted shop adapter and frontend transport retain
+their accepted baseline; their opposite-name integration remains a separately owned prerequisite.
+Admission-lock waits expire at the earlier lease or absolute deadline, retaining the corresponding
+expiry reason. Stop, EOF or cancellation
 before execution opens no acknowledgement and settles verified boundary death before releasing
 ownership. Logs stay at the startup report's exact path; `wslpath -w` gives the person's Windows/WSL editor path, with no delivered
 desktop log viewer. The 4,096-byte HTML carrier remains unchanged and Health/contracts stay untouched.

@@ -69,7 +69,14 @@ class PreviewLifecycle:
                 if deadline != lease:
                     owner.process.send((f'{{"renew":{lease}}}\n').encode())
                 if not await owner.process.ready(max(0, ready_deadline - time.monotonic())):
-                    owner.reason = "readiness_timeout"
+                    if self.profile.reviewed_app is not None:
+                        owner.reason = (
+                            "readiness_timeout"
+                            if owner.process.reason == "readiness_timeout"
+                            else "launch_failed"
+                        )
+                    else:
+                        owner.reason = "readiness_timeout"
                     return
                 lease, absolute = self.deadlines()
                 if self.clock() >= min(lease, absolute):

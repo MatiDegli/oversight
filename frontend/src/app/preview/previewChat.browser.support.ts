@@ -160,6 +160,7 @@ class ChatSupport {
         : {
             port: 0,
             strictPort: false,
+            headers: { "Content-Security-Policy": "frame-src http://127.0.0.1:19800" },
           },
     });
     this.server = server;
@@ -193,8 +194,6 @@ class ChatSupport {
         return;
       }
       response.setHeader("Content-Type", "text/html");
-      if (!this.real)
-        response.setHeader("Content-Security-Policy", "frame-src http://localhost:19800");
       response.end(this.html);
     });
     await server.listen();
@@ -267,7 +266,7 @@ class ChatSupport {
           body = status;
         } else {
           calls.details++;
-          body = { status, url: status?.state === "ready" ? "http://localhost:19800/" : null };
+          body = { status, url: status?.state === "ready" ? "http://127.0.0.1:19800/" : null };
         }
         await route.fulfill({
           status: path === "/previews" ? 202 : 200,
@@ -275,7 +274,7 @@ class ChatSupport {
           json: body,
         });
       });
-      await context.route("http://localhost:19800/**", (route) =>
+      await context.route("http://127.0.0.1:19800/**", (route) =>
         route.fulfill({
           contentType: "text/html",
           body: '<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font:16px sans-serif;margin:24px"><p>Fixture shop</p><h1>Candidate shop</h1><form><label>Quantity <input value="1" type="number" style="max-width:100%"></label><p><label>Coupon <input value="" style="max-width:100%"></label></p><button>Update cart</button></form><p>Total: <output data-total-cents="1500">1500 cents</output></p></body></html>',
@@ -305,8 +304,7 @@ class ChatSupport {
         void response
           .json()
           .then((value: { status?: PreviewStatus }) => {
-            // Fixture responses observe state; late reads never rewind its server authority.
-            if (this.real && value.status) status = value.status;
+            if (value.status) status = value.status;
             if (value.status?.state === "ready" && readyAt === null) readyAt = Date.now();
           })
           .catch(() => {});
