@@ -4375,3 +4375,13 @@ Tests/plugins may write outside runtime; child interpreters can escape the impor
 concurrent path-replacement races and inherited ACLs remain accepted residuals. No isolation,
 ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
+
+## 2026-11-03 — The app opens in Chat
+
+The maintainer chose Chat as the default after the Chat with leads screens passed review
+(packet a-1102f, question 1; the gate landed in `5b6ebb08`). Live and static replay open in Chat
+without a URL flag or fixture. Oversight is one click away in the view selector, and the graph
+loads on the first switch. Both views retain the same session and shared state.
+
+Rollback: change the single `InitialShellLayout` default in
+`frontend/src/app/shell/useShell.ts` from `"Chat"` to `"Oversight"`.

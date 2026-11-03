@@ -18,6 +18,7 @@ import type { GraphProbeHost } from "../src/graph/probe.ts";
 import { logForScene, lastSeq, planJobs, replayEventsAfter } from "./plan.ts";
 import { streamReplay } from "./replay.ts";
 import { scenes, themes } from "./scenes.ts";
+import { openOversight } from "../src/workspaceView.browser.support.ts";
 
 const VIEWPORT = { width: 1920, height: 1080 };
 // The dot field's clock, held still (dev server only) so every capture shows the same breathing and
@@ -34,16 +35,19 @@ async function clearPreviousSet(out: string): Promise<void> {
   }
 }
 
-async function waitUntilReady(page: Page, seq: number): Promise<void> {
-  await page.locator("main").waitFor({ state: "visible" });
+async function waitUntilReady(page: Page, seq: number, firstView = false): Promise<void> {
+  await page.locator(".shell-frame").waitFor({ state: firstView ? "attached" : "visible" });
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForFunction((expected) => {
-    const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
-    return (
-      document.getElementById("root")?.dataset.seq === String(expected) &&
-      (host?.oversightGraph?.nodeCenters().length ?? 0) > 0
-    );
-  }, seq);
+  await page.waitForFunction(
+    ({ expected, firstView }) => {
+      const host = document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]');
+      return (
+        document.getElementById("root")?.dataset.seq === String(expected) &&
+        (firstView || (host?.oversightGraph?.nodeCenters().length ?? 0) > 0)
+      );
+    },
+    { expected: seq, firstView },
+  );
   // Wait for a rendered frame, not a timed delay.
   await page.evaluate(
     () =>
@@ -139,7 +143,10 @@ async function main(): Promise<number> {
         liveLog = captureLog;
         await writeFile(join(out, `${scene.name}.events`), liveLog);
       }
-      const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
+      const context = await browser.newContext({
+        viewport: scene?.viewport ?? VIEWPORT,
+        deviceScaleFactor: 1,
+      });
       context.setDefaultTimeout(TIMEOUT_MS);
       const page = await context.newPage();
       const pageErrors: string[] = [];
@@ -157,7 +164,8 @@ async function main(): Promise<number> {
         if (job.edgeShape) target.searchParams.set("edge-shape", job.edgeShape);
         target.searchParams.set("field-time", FIELD_TIME);
         await page.goto(target.href, { waitUntil: "load" });
-        await waitUntilReady(page, lastSeq(captureLog));
+        if (!scene?.firstView) await openOversight(page);
+        await waitUntilReady(page, lastSeq(captureLog), scene?.firstView);
         await scene?.prepare?.(page, {
           jsonl: captureLog,
           resume: async () => {
@@ -178,13 +186,15 @@ async function main(): Promise<number> {
         if (pageErrors.length > 0) throw new Error(`page errors: ${pageErrors.join("; ")}`);
         const path = join(out, job.file);
         await page.screenshot({ path });
-        const metrics = await writeSceneMetrics(
-          page,
-          join(out, job.file.replace(/\.png$/, ".json")),
-        );
-        stdout.write(
-          `shots: ${job.file} label minimum ${metrics.minLabelPx.toFixed(2)} CSS px, ${metrics.edgeShape}\n`,
-        );
+        if (!scene?.firstView) {
+          const metrics = await writeSceneMetrics(
+            page,
+            join(out, job.file.replace(/\.png$/, ".json")),
+          );
+          stdout.write(
+            `shots: ${job.file} label minimum ${metrics.minLabelPx.toFixed(2)} CSS px, ${metrics.edgeShape}\n`,
+          );
+        }
         stdout.write(`shots: captured ${job.file} (${String((await stat(path)).size)} bytes)\n`);
       } catch (error) {
         failures += 1;

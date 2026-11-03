@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
@@ -25,6 +26,7 @@ test("actual static two-change practice: local decisions, frozen shell and hones
   page.on("request", (request) => requests.push(new URL(request.url()).pathname));
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/oversight/");
+  await openOversight(page);
   await expect(practice(page)).toHaveCount(0);
   await provenance(page);
   await expect
@@ -174,6 +176,8 @@ test.describe("phone practice", () => {
           requests.push(request.url());
       });
       await page.goto("/oversight/");
+      await expect(page.getByLabel("Repository graph", { exact: true })).toHaveCount(0);
+      await openOversight(page);
       await expect(page.locator(".narrow-notice")).toBeVisible();
       await expect
         .poll(async () => Object.keys((await positions(page)) ?? {}).length)

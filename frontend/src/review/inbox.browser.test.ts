@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium, expect } from "@playwright/test";
@@ -56,12 +57,14 @@ it.each(["dark", "day"])(
         await page.screenshot({ path: `${shots}/${name}-${theme}.png` });
       }
     };
-    const mount = async (end?: number) =>
-      page.evaluate((n) => {
+    const mount = async (end?: number) => {
+      await page.evaluate((n) => {
         (
           window as unknown as { inboxPreview: { mountInbox: (end?: number) => void } }
         ).inboxPreview.mountInbox(n);
       }, end);
+      await openOversight(page);
+    };
     try {
       await page.goto(url);
       await page.evaluate((t) => {

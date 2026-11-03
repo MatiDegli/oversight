@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { launchBrowser } from "../../browserLaunch.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -71,6 +72,7 @@ it.each(Object.keys(themes) as (keyof typeof themes)[])(
           },
           { slot, theme },
         );
+        await openOversight(page);
         await page.evaluate(() => document.fonts.ready);
         const card = page.getByRole("article", { name: `Agent ${slot}`, exact: true });
         await check(card).toBeVisible();

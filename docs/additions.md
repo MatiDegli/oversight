@@ -72,8 +72,8 @@ Build Chat only from an approved sketch round.
 - Review, merge mode and approve rules are shared. Chat opens the same review panel and the
   same merge-mode setting; it shows impact as text plus "See on graph", which switches to
   Oversight with the cone framed.
-- Chat becomes the default only if its screenshots pass review by Mon Nov 2, 2026, 23:00 ART.
-  Otherwise Oversight stays the default and Chat sits behind the switch.
+- Chat is the default, chosen by the maintainer on 2026-11-03 after the Chat with leads
+  screens passed review. Oversight is one click away; the graph loads on that first switch.
 - Chat adds no events, contracts or endpoints. Presence in "Where they work" and marks in the
   Files tree read the existing `agent.focus` event and `change.proposed.files`.
 - Graph and map work comes after Chat and the lead; since 2026-11-01 it may start before the freeze when a slot is free (DECISIONS.md).

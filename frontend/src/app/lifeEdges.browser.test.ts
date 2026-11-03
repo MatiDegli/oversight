@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Locator, type Page } from "@playwright/test";
@@ -50,6 +51,7 @@ async function withPage(width: number, theme: string, test: (page: Page) => Prom
       document.documentElement.dataset.theme = theme;
       window.shellTest.mount();
     }, theme);
+    await openOversight(page);
     await page.locator("[data-graph-clear-area]").waitFor();
     await page.evaluate(() => document.fonts.ready);
     await page.waitForFunction(() => {
@@ -367,6 +369,7 @@ it("keeps a chip popover still while its button presses, excluding editor and gr
     });
     expect(await graph.evaluate((e) => getComputedStyle(e).filter)).toBe("none");
     await page.evaluate(() => window.mountChips());
+    await openOversight(page);
     await page.waitForFunction(
       () =>
         document

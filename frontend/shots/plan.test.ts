@@ -41,10 +41,14 @@ void test("a disabled scene or theme is skipped with the reason, never dropped",
   assert.match(jobs[3]?.skip ?? "", /scene review: the review panel/);
 });
 
-void test("the real list includes the bottom dock in dark; light remains skipped", () => {
+void test("the real list captures Chat startup in both themes and retains the graph scenes", () => {
   const jobs = planJobs(scenes, themes);
   const running = jobs.filter((job) => job.skip === null).map((job) => job.file);
   assert.deepEqual(running, [
+    "first-1280-dark.png",
+    "first-1280-day.png",
+    "first-390-dark.png",
+    "first-390-day.png",
     "watch-dark.png",
     "watch-fit-dark.png",
     "review-dark.png",
@@ -60,6 +64,8 @@ void test("the real list includes the bottom dock in dark; light remains skipped
   assert.deepEqual(
     scenes.map((scene) => scene.name),
     [
+      "first-1280",
+      "first-390",
       "watch",
       "watch-fit",
       "review",

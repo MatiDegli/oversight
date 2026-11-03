@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 import { expect, test as baseTest } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 
@@ -8,7 +9,7 @@ import { holds } from "./level2-log";
 import { interceptCommands, removeRoutes, tapNode } from "./level2-support";
 import {
   editorAssets,
-  expectNoEditorBeforeGraph,
+  expectNoEditorBeforeShell,
   expectFoldedFunction,
   holdPythonGrammar,
   holdUnboundedIdleWork,
@@ -59,7 +60,7 @@ async function expectPython(panel: Locator) {
 }
 
 for (const first of ["file", "live diff", "review"] as const) {
-  test(`no editor before first graph; ${first} still colors Python and shows its contents`, async ({
+  test(`no editor before default Chat; ${first} still colors Python and shows its contents`, async ({
     page,
     baseURL,
   }) => {
@@ -76,6 +77,7 @@ for (const first of ["file", "live diff", "review"] as const) {
     await page.addInitScript(recordEditorStartup);
     await page.addInitScript(installHolds, [holds.live, holds.decisions]);
     await page.goto("/level2");
+    await openOversight(page);
     // Software canvas rendering can stretch the replay's many short event timers on CI.
     await expect(page.locator("#root")).toHaveAttribute("data-seq", String(holds.live.seq - 1), {
       timeout: 60_000,
@@ -83,7 +85,7 @@ for (const first of ["file", "live diff", "review"] as const) {
     await engaged(page, holds.live, 60_000);
 
     const editorRequests = () => requested.filter((url) => editorAssets.has(new URL(url).pathname));
-    await expectNoEditorBeforeGraph(page);
+    await expectNoEditorBeforeShell(page);
     await expect(page.locator(".monaco-editor")).toHaveCount(0);
     const font = page.locator('link[rel="preload"][as="font"]');
     await expect(font).toHaveAttribute("href", /atkinson-hyperlegible-next-latin-400.*\.woff2$/);
@@ -148,9 +150,18 @@ test("the graph waits for the preloaded Next Latin 400 font", async ({ page }) =
     await waiting;
     await route.continue();
   });
+  // Keep speculative loading off while isolating the graph's font gate. Chat otherwise
+  // permits idle editor prefetch before the person enters Oversight.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "connection", {
+      value: { saveData: true },
+      configurable: true,
+    });
+  });
   await page.addInitScript(installHolds, [holds.live]);
   try {
     await page.goto("/level2", { waitUntil: "domcontentloaded" });
+    await openOversight(page);
     await engaged(page, holds.live, 60_000);
     const graph = page.getByLabel("Repository graph", { exact: true });
     expect(await graph.evaluate((host: GraphProbeHost) => host.oversightGraph)).toBeUndefined();

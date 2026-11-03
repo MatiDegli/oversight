@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Page, type Route } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
@@ -61,6 +62,7 @@ export function usageBrowserSupport(cachePrefix = "") {
       route.fulfill({ contentType: "text/html", body: entry.html }),
     );
     await page.goto(`${entry.url}?theme=${options.theme ?? "dark"}&${options.query ?? ""}`);
+    await openOversight(page);
     await check(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
     await page.evaluate((theme) => {
       document.documentElement.dataset.theme = theme;

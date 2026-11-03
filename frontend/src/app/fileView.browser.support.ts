@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { launchBrowser } from "../browserLaunch.support";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -122,6 +123,7 @@ async function preparePage(): Promise<FilePage> {
     await page.evaluate(() => {
       window.fileViewTest.mount();
     });
+    await openOversight(page);
     await page.waitForFunction(
       () =>
         (document

@@ -26,7 +26,8 @@ below are labeled separately.
 
 ## What works today
 
-- On by default: a live graph of the repository and an impact cone of functions possibly affected.
+- Chat opens first; Oversight is one click away and loads the live repository graph and impact cone
+  of functions possibly affected on that first switch.
 - On by default: agents work in their own git worktrees, with reads and edits lit on the graph.
 - On by default: live diff and review with Approve, Reject and Request changes.
 - On by default: four agent slots, configurable up to six (A–F), working in parallel.
