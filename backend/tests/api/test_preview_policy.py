@@ -1,5 +1,8 @@
 """Exact application-port framing and privacy before routing; no Origin or proxy widening."""
 
+import json
+import os
+from html.parser import HTMLParser
 from pathlib import Path
 
 import httpx
@@ -10,6 +13,42 @@ from oversight.api.errors import install_error_handlers
 from oversight.api.preview_policy import frame_policy
 from oversight.api.static import add_static
 from oversight.settings import Settings, resolve_preview_profile
+from oversight.workspace import run_process
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+class HeadChildren(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.in_head = False
+        self.children = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "head":
+            self.in_head = True
+        elif self.in_head:
+            self.children.append((tag, dict(attrs)))
+
+    def handle_endtag(self, tag):
+        if tag == "head":
+            self.in_head = False
+
+
+async def vite_script(script, *args):
+    result = await run_process(
+        ["pnpm", "exec", "node", "--input-type=module", "-e", script, *map(str, args)],
+        cwd=ROOT / "frontend",
+        timeout_s=90,
+        env={
+            "PATH": os.environ["PATH"],
+            "OVERSIGHT_PORT": "8710",
+            "OVERSIGHT_VITE_PORT": "5710",
+            "OVERSIGHT_PREVIEW_PORTS": "19681,19682",
+            "OVERSIGHT_PREVIEW_ORIGINS": "http://127.0.0.1:8710",
+        },
+    )
+    assert result.returncode == 0 and not result.timed_out, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("pool", [(), (19681,), (19681, 19682)])
@@ -102,11 +141,67 @@ def test_malformed_numeric_configuration_raises_without_an_enable_flag(key):
         resolve_preview_profile({f"OVERSIGHT_PREVIEW_{key}": "invalid"}, 8710, None)
 
 
-def test_replay_policy_is_head_prepend_and_never_uses_embedding_origins():
-    config = (Path(__file__).resolve().parents[3] / "frontend/vite.config.ts").read_text()
-    assert 'injectTo: "head-prepend"' in config and "content: \"frame-src 'none'\"" in config
-    assert "OVERSIGHT_PREVIEW_ORIGINS" not in config
-    assert "OVERSIGHT_PREVIEW_PORTS" in config
+@pytest.mark.anyio
+async def test_built_replay_starts_head_with_frame_refusal_even_with_configured_pool(tmp_path):
+    await vite_script(
+        """
+        import { build } from 'vite';
+        await build({mode: 'replay', build: {outDir: process.argv[1]}});
+        """,
+        tmp_path,
+    )
+    document = HeadChildren()
+    document.feed((tmp_path / "index.html").read_text())
+    assert document.children[0] == (
+        "meta",
+        {"http-equiv": "Content-Security-Policy", "content": "frame-src 'none'"},
+    )
+
+
+@pytest.mark.anyio
+async def test_actual_vite_html_responses_carry_exact_pool_header(tmp_path):
+    evidence = tmp_path / "headers.json"
+    await vite_script(
+        """
+        import { createServer } from 'vite';
+        import { writeFile } from 'node:fs/promises';
+        const server = await createServer({server: {port: 0, strictPort: false}});
+        try {
+          await server.listen();
+          const origin = server.resolvedUrls.local[0];
+          const headers = [];
+          for (const path of ['', 'nested/spa']) {
+            const response = await fetch(origin + path, {signal: AbortSignal.timeout(5000)});
+            if (response.status !== 200) throw new Error('Vite HTML unavailable');
+            headers.push(response.headers.get('content-security-policy'));
+            await response.text();
+          }
+          await writeFile(process.argv[1], JSON.stringify(headers));
+        } finally { await server.close(); }
+        """,
+        evidence,
+    )
+    assert (
+        json.loads(evidence.read_text())
+        == ["frame-src http://127.0.0.1:19681 http://127.0.0.1:19682"] * 2
+    )
+
+
+@pytest.mark.anyio
+async def test_general_browser_project_keeps_real_c_suite_in_explicit_project():
+    for project in ("browser", "preview-acceptance"):
+        result = await run_process(
+            ["pnpm", "exec", "vitest", "list", "--project", project, "--filesOnly"],
+            cwd=ROOT / "frontend",
+            timeout_s=30,
+            env={"PATH": os.environ["PATH"]},
+        )
+        assert result.returncode == 0 and not result.timed_out, result.stdout + result.stderr
+        acceptance = "src/app/preview/PreviewAcceptance.browser.test.ts"
+        files = result.stdout.splitlines()
+        assert any(acceptance in path for path in files) == (project == "preview-acceptance")
+        if project == "preview-acceptance":
+            assert len([path for path in files if path.endswith(".test.ts")]) == 1
 
 
 @pytest.mark.anyio

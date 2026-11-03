@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from workspace.preview_fakes import harness
 
 from oversight.api.commands import Commands
 from oversight.api.preview_publication import install_preview_publication
@@ -105,3 +106,43 @@ async def test_terminal_facts_after_resolution_keep_pin_and_reject_unowned_statu
             )
         states = [e.payload.state for e in store.committed_events() if e.type == "preview.status"]
         assert states == ["starting", "ready", "stopping", "stopped"]
+
+
+async def test_halted_proposal_runs_real_manager_through_committed_stop_without_latch(tmp_path):
+    workspace = Workspace(tmp_path / ".runtime", REPO_ROOT / "demo-repo", pytest_pin="9.1.1")
+    await workspace.acquire_runtime()
+    h = None
+    try:
+        await workspace.reset()
+        h = await harness(workspace)
+        async with EventStore(tmp_path / "run.sqlite", RUN) as store:
+            await seed(store)
+            await store.publish(EVENTS[5].payload.model_copy(update={"head_commit": h.head}))
+            await store.publish(EVENTS[2].payload.model_copy(update={"state": "halted"}))
+            create_router(store, "live", cast(Commands, SimpleNamespace(previews=h.manager)))
+            created = await h.manager.start(
+                run_id=RUN, agent_id="agent-1", revision=1, head_commit=h.head
+            )
+            async with asyncio.timeout(5):
+                async for event in store.subscribe():
+                    if (
+                        event.type == "preview.status"
+                        and (await h.manager.get(created.preview_id)).state == "ready"
+                    ):
+                        break
+            assert (await h.manager.get(created.preview_id)).url is not None
+            stopped = await h.manager.stop(created.preview_id, created.lease_token)
+            assert stopped.state == "stopped" and stopped.reason == "closed"
+            states = [
+                e.payload.state for e in store.committed_events() if e.type == "preview.status"
+            ]
+            assert states == ["starting", "ready", "stopping", "stopped"]
+            assert h.processes[0].dead and h.manager.registry.read() is None
+            assert not h.manager.has_owner and not workspace.integrity.main_suspect
+            assert await workspace.main.head() == h.head
+            await h.close()
+            h = None
+    finally:
+        if h is not None:
+            await h.close()
+        workspace.release_runtime()

@@ -59,7 +59,7 @@ async def execute(root: Path) -> int:
                 "--maxWorkers",
                 "2",
                 "--project",
-                "browser",
+                "preview-acceptance",
                 "src/app/preview/PreviewAcceptance.browser.test.ts",
             ],
             env,

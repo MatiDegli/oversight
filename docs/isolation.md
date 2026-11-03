@@ -237,7 +237,7 @@ Native Job/console/grandchild proof remains uncollected; accepted path/ACL resid
 ### Dormant person-owned preview supervision (2026-11-03)
 
 The backend infrastructure conforms to preview contracts 1.19.0. Dormant route/publication wiring
-starts from `e80da860e8142dbc082fdd6fc00903c93264ab8d` on `backend/preview-wiring`.
+uses the run-owned manager and committed events.
 `LiveRun.previews` owns one `PreviewManager`. Its workspace facade exports `PreviewManager`,
 `PreviewProfile`, `PreviewCandidate`, `PreviewCreatedResult`, `PreviewStatusRecord`,
 `PreviewDetailsResult`, `PreviewStatusSink` and `PreviewError`. The awaited status sink is supplied
@@ -438,8 +438,10 @@ authenticated Stop and verified drain before reading the new candidate or reques
 Uncertain stop retains cleanup ownership and blocks replacement. The sandbox is exactly
 `allow-forms`, referrer policy `no-referrer`. Static/Vite `frame-src` lists only exact
 `http://127.0.0.1:<app-port>` destinations from the pool; origins above are never substituted.
-Static replay inserts `frame-src 'none'` near the start of head. These browser policies do not
-remove filesystem/secret/response residuals or grant arbitrary-code containment.
+Static replay inserts `frame-src 'none'` as the first child of head. The
+[policy checks](../backend/tests/api/test_preview_policy.py) inspect built replay with a configured
+pool and actual Vite HTML/SPA headers. These policies do not remove filesystem/secret/response
+residuals or grant arbitrary-code containment.
 
 Acceptance and missing-proof inventory follows in the hand-back. Claims are tied to
 [HTTP matrix](../backend/tests/api/test_previews.py),
@@ -455,10 +457,11 @@ A skip, injected namespace or capture implementation is never collected trust ev
 The November 3 clone acceptance collected 12 Linux Chromium before/after frames and six
 comparisons under `.shots/preview-acceptance/`, with UTC/viewport/theme/error/overflow metadata.
 It did not collect WSL-to-Windows browser proof: the bounded Windows attempt exposed no CDP
-endpoint. The earlier C matrix of 132 state frames and 18 references was absent in this clone
-and was not recaptured. Those gaps do not authorize a trust append or production opening;
-the conditional trust and deferred adapter-provenance decisions remain unappended. Full gates
-and independent review remain the coordinator's responsibility.
+endpoint. C's 132 state frames and 18 references are available read-only at the coordinator's
+`preview-panel-loop/shots-approved/` path; the full matrix was not visually inspected in this round
+or recaptured. Missing Windows proof withholds trust and production opening; the conditional trust
+and deferred adapter-provenance decisions remain unappended. Full gates and independent review
+remain the coordinator's responsibility.
 
 ### Hardening and technical audit recheck
 

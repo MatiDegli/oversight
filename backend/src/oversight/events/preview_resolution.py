@@ -21,7 +21,9 @@ class PreviewProjection:
         if (
             agent is None
             or self.run_id is None
-            or agent.state != "ready_for_review"
+            # A halted drive still proposes its edits before its terminal status. Admission
+            # keeps that unresolved change ready until it is revised or resolved.
+            or agent.state not in {"ready_for_review", "halted"}
             or proposal is None
             or proposal.agent_id != agent_id
             or proposal.change_id != agent.change_id

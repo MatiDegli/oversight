@@ -98,6 +98,17 @@ const testProjects = [
     test: {
       name: "browser",
       include: ["src/**/*.browser.test.{ts,tsx}"],
+      exclude: ["src/app/preview/PreviewAcceptance.browser.test.ts"],
+      maxWorkers: 2,
+      testTimeout: 30_000,
+    },
+  },
+  {
+    extends: true as const,
+    test: {
+      // This suite requires the explicit fake/C backend owned by tools.preview_browser.
+      name: "preview-acceptance",
+      include: ["src/app/preview/PreviewAcceptance.browser.test.ts"],
       maxWorkers: 2,
       testTimeout: 30_000,
     },
