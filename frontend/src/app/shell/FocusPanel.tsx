@@ -76,10 +76,6 @@ const LeadConversationFocus = lazy(() =>
             return (
               <Suspense fallback={<p role="status">Loading plan…</p>}>
                 <article className="thread-plan-card" aria-label={`Plan ${plan.plan_id}`}>
-                  <div className="thread-plan-heading">
-                    <strong>Plan</strong>
-                    <code>{plan.plan_id}</code>
-                  </div>
                   <h3>{plan.task}</h3>
                   <PlanActions
                     state={threadState}

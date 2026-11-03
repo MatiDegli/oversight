@@ -290,6 +290,19 @@ export function dispatchPlanFlow() {
     event("plan.updated", assigned(plan, ["running", "running", "waiting", "waiting"])),
   ]);
 }
+export function assignBeforeStatus() {
+  const plan = required(selectPlanEvidence(current).plans.get("plan-checkout")).payload;
+  emitPlanFlow([
+    event("plan.updated", {
+      ...plan,
+      revision: plan.revision + 1,
+      subtasks:
+        plan.subtasks?.map((task, index) =>
+          index === 2 ? { ...task, agent_id: "awaiting-status", state: "running" } : task,
+        ) ?? null,
+    }),
+  ]);
+}
 export function queuePlanFlow(cancel = false) {
   const plan = required(selectPlanEvidence(current).plans.get("plan-checkout")).payload;
   emitPlanFlow([

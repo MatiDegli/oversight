@@ -44,12 +44,14 @@ export default function LeadThreadRows({
   useLayoutEffect(() => onReady?.(), [onReady]);
   return conversation.entries.map((entry) => {
     if (entry.kind === "lead-status") return null;
-    if (entry.kind === "lead-plan")
+    if (entry.kind === "lead-plan") {
+      if (!renderPlan) return null;
       return (
         <div role="listitem" key={`plan:${entry.planId}`}>
-          {renderPlan?.(entry.planId)}
+          {renderPlan(entry.planId)}
         </div>
       );
+    }
     if (entry.kind === "lead-view") {
       if (viewCardTitle(entry.event.payload.view) === null) return null;
       return (

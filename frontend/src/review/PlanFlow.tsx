@@ -76,7 +76,9 @@ function FlowRow({
             {identity.label}
           </span>
         )}
-        {!identity && <span>No agent assigned</span>}
+        {!identity && (
+          <span>{row.agentId ? "Agent assigned · label not known" : "No agent assigned"}</span>
+        )}
         {row.progress && <span>{row.progress}</span>}
       </div>
       <div className="flow-status">

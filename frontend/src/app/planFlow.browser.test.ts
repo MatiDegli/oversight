@@ -70,6 +70,11 @@ it.each(["Chat", "Oversight"] as const)(
     try {
       const card = page.getByRole("article", { name: "Plan plan-checkout", exact: true });
       await check(card).toBeVisible();
+      await check(
+        card.getByRole("heading", { name: "Input checks across the checkout flow", exact: true }),
+      ).toBeVisible();
+      await check(card.getByText("Plan", { exact: true })).toHaveCount(1);
+      await check(card.getByText("plan-checkout", { exact: true })).toHaveCount(0);
       await check(page.locator(".conversation-entries")).toContainText("I drafted a focused plan.");
       await check(card.locator(".flow-wave")).toHaveCount(2);
       await check(card.getByRole("button", { name: "Queue plan", exact: true })).toBeEnabled();
@@ -206,6 +211,29 @@ it("keeps running plans outside decision counts and exposes failed combined evid
 
 for (const width of [1280, 390])
   for (const theme of ["dark", "day"]) {
+    it(`keeps assignment explicit before agent status at ${String(width)} in ${theme}`, async () => {
+      const page = await open("running", width, theme);
+      try {
+        await page.evaluate(() => {
+          window.planFlowTest.assignBeforeStatus();
+        });
+        const assigned = page.locator('[data-flow-index="2"]');
+        await check(assigned).toContainText("Agent assigned · label not known");
+        await check(assigned).not.toContainText("No agent assigned");
+        await check(assigned.locator(".flow-rail")).toHaveAttribute(
+          "aria-label",
+          /Agent works: Agent assigned · status not known;/,
+        );
+        await check(page.locator('[data-flow-index="3"]')).toContainText("No agent assigned");
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        if (process.env.PLAN_FLOW_SHOTS === "1")
+          await capture(page, `assigned-${String(width)}-${theme}`, "running", width);
+      } finally {
+        await page.close();
+      }
+    });
     it(`wraps long text and eight subtasks without overflow at ${String(width)} in ${theme}`, async () => {
       const page = await open("large", width, theme);
       try {

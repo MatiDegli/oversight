@@ -121,26 +121,14 @@
   border-radius: 12px;
   background: var(--page);
 }
-.thread-plan-heading {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 10px;
-  padding-inline-end: 110px;
-  font-size: 13px;
-}
-.thread-plan-heading strong {
-  font-size: 15px;
-}
-.thread-plan-heading code {
-  color: var(--muted);
-  overflow-wrap: anywhere;
-}
 .thread-plan-card > h3 {
-  margin-top: 6px;
+  margin-top: 0;
   font-size: 15px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+.thread-plan-card:has(.plan-status) > h3 {
+  padding-inline-end: 110px;
 }
 .thread-plan-card .plan-content {
   margin-top: 8px;

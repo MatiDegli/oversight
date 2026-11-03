@@ -144,6 +144,27 @@ it("observed combined execution overrides omission, excludes probes and stale re
   expect(row(replaced)?.steps[3]?.mark).toBe("failed");
 });
 
+it("does not freeze current-revision main evidence at a delayed prior-revision conflict", () => {
+  const conflict = {
+    ...resolution,
+    merge: "conflict" as const,
+    merge_commit: null,
+    conflict: { kind: "merge" as const, paths: [], tests: null },
+  };
+  let state = append(proposed(), "change.resolved", conflict);
+  state = append(state, "change.proposed", { ...proposal, revision: 2, head_commit: "head-2" });
+  expect(row(state)?.steps[3]?.mark).toBe("not needed");
+  // A delayed old resolution is retained by the production fold after the replacement proposal.
+  state = append(state, "change.resolved", conflict);
+  state = append(state, "graph.snapshot", { ...snapshot, commit: "moved-for-revision-2" });
+  expect(row(state)).toMatchObject({ main: "moved", merged: false, word: "Waiting for you" });
+  expect(row(state)?.steps[3]).toEqual({
+    mark: "not known",
+    detail: "Main moved; no combined execution recorded",
+  });
+  expect(row(state)?.steps[3]?.mark).not.toBe("not needed");
+});
+
 it.each(["failed", "error", "timeout"] as const)(
   "shows combined %s counts without manufacturing a merge",
   (outcome) => {

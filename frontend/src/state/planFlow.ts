@@ -1,5 +1,5 @@
 import type { ChangeResolved, Plan, PlanSubtask, SuiteExecution, SuiteResult } from "@contracts";
-import type { ChangeState, State } from "./types";
+import type { ChangeState, EventPosition, State } from "./types";
 
 export const flowSteps = [
   "Agent works",
@@ -79,12 +79,14 @@ function suiteStep(suite?: SuiteResult): FlowStep {
   return step(suite.outcome === "passed" ? "passed" : "failed", `${suite.outcome}: ${counts}`);
 }
 
-function mainMovement(state: State, change: ChangeState | undefined, base: string | null) {
-  const resolution = change?.resolution;
+function mainMovement(
+  state: State,
+  resolution: ChangeResolved | null,
+  resolutionEvent: EventPosition | null | undefined,
+  base: string | null,
+) {
   const terminalSeq =
-    resolution && resolution.decision !== "changes_requested"
-      ? change.resolutionEvent?.seq
-      : undefined;
+    resolution && resolution.decision !== "changes_requested" ? resolutionEvent?.seq : undefined;
   const head = state.mainHeads.findLast((observation) =>
     terminalSeq === undefined
       ? true
@@ -107,7 +109,12 @@ function projectRow(state: State, task: PlanSubtask, index: number, wave: number
     task.state === "cancelled" ||
     resolution?.decision === "rejected" ||
     resolution?.merge === "conflict";
-  const main = mainMovement(state, change, agent?.base_commit ?? null);
+  const main = mainMovement(
+    state,
+    resolution,
+    resolution ? change?.resolutionEvent : undefined,
+    agent?.base_commit ?? null,
+  );
   const proposalTest = execution(state, change, "proposal");
   const combined = execution(state, change, "combined");
   const working = !!agent && ["starting", "working", "revising"].includes(agent.state);
@@ -116,7 +123,11 @@ function projectRow(state: State, task: PlanSubtask, index: number, wave: number
     ? step("passed", "Agent submitted the change")
     : working
       ? step("working", agent.state)
-      : step("not known", agent?.state ?? "No agent assigned");
+      : step(
+          "not known",
+          agent?.state ??
+            (task.agent_id ? "Agent assigned · status not known" : "No agent assigned"),
+        );
   const approval = resolution
     ? step(
         resolution.decision === "approved" ? "passed" : "failed",
