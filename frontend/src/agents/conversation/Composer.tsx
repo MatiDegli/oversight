@@ -52,7 +52,12 @@ export function Composer({
   const [controlKey, setControlKey] = useState(0);
   const captionId = useId();
   const disclosure = composerDisclosure ? (
-    <div className="max-h-[45dvh] min-w-0 overflow-y-auto overscroll-contain pb-[14px] [container-type:inline-size] [&_.preview-startup]:mt-0">
+    <div
+      role="group"
+      aria-label="Conversation details"
+      tabIndex={0}
+      className={`max-h-[45dvh] min-w-0 overflow-y-auto overscroll-contain pb-[14px] [container-type:inline-size] [&_.preview-startup]:mt-0 ${focusRing}`}
+    >
       {composerDisclosure}
     </div>
   ) : null;

@@ -24,6 +24,8 @@ it("renders the header, timeline, notices and composer synchronously", () => {
   expect(html).toContain("<textarea");
   const composer = html.slice(html.indexOf('class="conversation-composer'));
   expect(composer).toContain('aria-label="Fixture startup disclosure"');
+  expect(composer).toContain('role="group" aria-label="Conversation details" tabindex="0"');
+  expect(composer).toContain("focus-visible:outline-text");
   expect(composer.indexOf("Startup facts")).toBeLessThan(composer.indexOf("<textarea"));
   expect(composer).toContain("Merge mode fixture");
   expect(composer).toContain("Send");

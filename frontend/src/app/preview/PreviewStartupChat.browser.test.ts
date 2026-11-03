@@ -178,6 +178,38 @@ it("retains the separate Settings copy and keeps startup frozen across navigatio
   }
 });
 
+it("lets keyboard users read the complete report and continue to composer controls", async () => {
+  const session = await support.open("valid", { width: 390, height: 844 });
+  const { page } = session;
+  try {
+    const details = page.getByRole("group", { name: "Conversation details", exact: true });
+    await details.focus();
+    await details.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await check(details).toBeFocused();
+    const outline = await details.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { width: style.outlineWidth, color: style.outlineColor, text: style.color };
+    });
+    expect(outline.width).toBe("2px");
+    expect(outline.color).toBe(outline.text);
+    await details.press("End");
+    await check
+      .poll(() =>
+        details.evaluate(
+          (element) => element.scrollHeight - element.scrollTop - element.clientHeight,
+        ),
+      )
+      .toBeLessThanOrEqual(1);
+    await check(details.locator(".preview-startup-row").last()).toBeInViewport();
+    await details.press("Tab");
+    await check(page.getByRole("textbox", { name: /Message Agent A/ })).toBeFocused();
+    await safe(session);
+  } finally {
+    await session.close();
+  }
+});
+
 for (const scenario of ["valid", "missing", "invalid"] as const)
   for (const viewport of chatSizes)
     for (const theme of ["dark", "day"])
