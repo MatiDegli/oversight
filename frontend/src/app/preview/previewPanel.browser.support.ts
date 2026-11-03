@@ -1,5 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { expect as check, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect } from "vitest";
@@ -12,6 +14,37 @@ import type { FakeRequest } from "./PreviewPanel.browser.fixture";
 export const shotsDirectory = fileURLToPath(
   new URL("../../../../.shots/preview-chat/fixture/", import.meta.url),
 );
+/** Follow the repository's bounded asyncio Git convention; never guess a capture revision. */
+export async function captureCheckpoint() {
+  const { stdout } = await promisify(execFile)(
+    "python3",
+    [
+      "-c",
+      `import asyncio, json
+async def git(*args):
+    process = await asyncio.create_subprocess_exec(
+        "git", *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    try:
+        out, err = await asyncio.wait_for(process.communicate(), 5)
+    finally:
+        if process.returncode is None:
+            process.kill()
+            await process.wait()
+    if process.returncode:
+        raise RuntimeError(err.decode())
+    return out.decode().strip()
+async def main():
+    head = await git("rev-parse", "--verify", "HEAD")
+    dirty = await git("status", "--porcelain", "--untracked-files=normal")
+    print(json.dumps({"checkpoint": head, "workingTree": bool(dirty)}))
+asyncio.run(main())`,
+    ],
+    { cwd: fileURLToPath(new URL("../../../../", import.meta.url)), timeout: 15_000 },
+  );
+  const checkpoint = JSON.parse(stdout) as { checkpoint: string; workingTree: boolean };
+  if (!/^[a-f0-9]{40}$/.test(checkpoint.checkpoint)) throw new Error("Invalid capture HEAD");
+  return checkpoint;
+}
 export const scenarios = [
   "starting",
   "ready",
@@ -206,6 +239,7 @@ class BrowserSupport {
   async capture(page: Page, scenario: string, viewport: FrameManifest["viewport"], theme: string) {
     const path = `isolated-${scenario}-${String(viewport.width)}-${theme}.png`;
     await page.evaluate(() => document.fonts.ready);
+    const checkpoint = await captureCheckpoint();
     await page.screenshot({ path: `${shotsDirectory}${path}` });
     const data = await this.metrics(page);
     await writeFile(
@@ -216,7 +250,7 @@ class BrowserSupport {
           state: scenario,
           viewport,
           theme,
-          checkpoint: "working-tree",
+          ...checkpoint,
           provenance: "fixture · handwritten authority",
           candidate: await page.evaluate(() => window.previewFixture.snapshot().status),
           console: this.diagnostics.get(page) ?? [],

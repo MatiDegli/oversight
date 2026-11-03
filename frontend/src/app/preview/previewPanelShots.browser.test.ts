@@ -1,6 +1,13 @@
 import { afterAll, expect, it } from "vitest";
+import { readFile } from "node:fs/promises";
 import { expect as check } from "@playwright/test";
-import { previewBrowserSupport, scenarios, sizes } from "./previewPanel.browser.support";
+import {
+  previewBrowserSupport,
+  scenarios,
+  sizes,
+  shotsDirectory,
+  captureCheckpoint,
+} from "./previewPanel.browser.support";
 import type { FrameManifest } from "./previewPanel.browser.support";
 
 const support = previewBrowserSupport("shots");
@@ -13,6 +20,7 @@ afterAll(async () => {
 it.each(cases)(
   "captures 22 states and 3 references at $viewport.width in $theme",
   async ({ viewport, theme }) => {
+    const checkpoint = await captureCheckpoint();
     expect(scenarios).toHaveLength(22);
     let review: FrameManifest | undefined;
     for (const mode of ["review", "usage", "settings"]) {
@@ -47,6 +55,15 @@ it.each(cases)(
           await check(page.getByText("Waiting for verified closure.")).toHaveCount(0);
         }
         const frame = await support.capture(page, scenario, viewport, theme);
+        const manifest: unknown = JSON.parse(
+          await readFile(`${shotsDirectory}${frame.path.replace(/\.png$/, ".json")}`, "utf8"),
+        );
+        expect(manifest).toMatchObject({
+          ...checkpoint,
+          png: frame.path,
+        });
+        expect(checkpoint.checkpoint).toMatch(/^[a-f0-9]{40}$/);
+        expect(typeof checkpoint.workingTree).toBe("boolean");
         frames.push(frame);
         await support.compare(frame, review);
       } finally {

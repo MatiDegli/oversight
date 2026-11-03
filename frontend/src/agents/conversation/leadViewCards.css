@@ -151,12 +151,12 @@
   cursor: pointer;
 }
 .lead-preview-primary {
-  background: var(--ground);
-  color: var(--text);
+  background: var(--text);
+  color: var(--page);
 }
 .lead-preview-secondary {
-  background: var(--text);
-  color: var(--ground);
+  background: transparent;
+  color: var(--text);
 }
 .lead-preview-actions button:focus-visible {
   outline: 2px solid var(--text);
@@ -170,13 +170,4 @@
   .lead-preview-actions button {
     border: 1px solid ButtonText;
   }
-}
-
-:root[data-theme="day"] .lead-preview-primary {
-  background: var(--text);
-  color: var(--page);
-}
-:root[data-theme="day"] .lead-preview-secondary {
-  background: var(--page);
-  color: var(--text);
 }

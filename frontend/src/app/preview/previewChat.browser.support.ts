@@ -7,6 +7,7 @@ import { afterAll, beforeAll, expect } from "vitest";
 import type { PreviewStatus, ServerEvent, StartPreview } from "@contracts";
 import references from "../../../../fixtures/views/reference-cases.json";
 import { launchBrowser } from "../../browserLaunch.support";
+import { captureCheckpoint } from "./previewPanel.browser.support";
 
 export const chatDirectory = fileURLToPath(
   new URL("../../../../.shots/preview-chat/", import.meta.url),
@@ -397,13 +398,14 @@ class ChatSupport {
       : "inapplicable";
     const name = `${state}-${String(viewport.width)}-${theme}`;
     const destination = `${chatDirectory}${this.real ? "real-local" : "fixture"}/${name}`;
+    const checkpoint = await captureCheckpoint();
     await page.screenshot({ path: `${destination}.png` });
     const manifest = {
       png: `${name}.png`,
       state,
       viewport,
       theme,
-      checkpoint: "db7ebf7a + Do 6 working tree",
+      ...checkpoint,
       provenance: this.real
         ? "Real local C shop / scripted fake model / fixture-authored lead inputs / Linux Chromium"
         : "Fixture inputs and shop / Linux Chromium",

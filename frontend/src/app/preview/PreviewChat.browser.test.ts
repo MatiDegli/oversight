@@ -1,11 +1,63 @@
 import type { GraphProbeHost } from "../../graph";
+import { readFile } from "node:fs/promises";
 import { expect as check } from "@playwright/test";
 import { expect, it } from "vitest";
-import { previewChatSupport, chatSizes } from "./previewChat.browser.support";
+import { previewChatSupport, chatSizes, chatDirectory } from "./previewChat.browser.support";
+import { captureCheckpoint } from "./previewPanel.browser.support";
 const support = previewChatSupport();
 const matrix = chatSizes.flatMap((viewport) =>
   ["dark", "day"].map((theme) => ({ viewport, theme })),
 );
+it.each(["dark", "day"])("keeps Preview app visually primary in %s", async (theme) => {
+  const session = await support.session(chatSizes[0], theme);
+  try {
+    const appearance = await session.page.locator(".lead-preview-actions").evaluate((node) => {
+      const primary = node.querySelector(".lead-preview-primary");
+      const secondary = node.querySelector(".lead-preview-secondary");
+      if (!primary || !secondary) throw new Error("Missing preview actions");
+      const token = (name: string) => {
+        const probe = document.createElement("span");
+        probe.style.color = `var(--${name})`;
+        node.append(probe);
+        const color = getComputedStyle(probe).color;
+        probe.remove();
+        return color;
+      };
+      return {
+        primaryFill: getComputedStyle(primary).backgroundColor,
+        primaryText: getComputedStyle(primary).color,
+        secondaryFill: getComputedStyle(secondary).backgroundColor,
+        secondaryText: getComputedStyle(secondary).color,
+        secondaryBorder: getComputedStyle(secondary).borderStyle,
+        text: token("text"),
+        page: token("page"),
+      };
+    });
+    expect(appearance.primaryFill).toBe(appearance.text);
+    expect(appearance.primaryText).toBe(appearance.page);
+    expect(appearance.secondaryFill).toBe("rgba(0, 0, 0, 0)");
+    expect(appearance.secondaryText).toBe(appearance.text);
+    expect(appearance.secondaryBorder).toBe("solid");
+  } finally {
+    await session.close();
+  }
+});
+it("records the capture HEAD and working-tree state beside the Chat PNG", async () => {
+  const session = await support.session();
+  try {
+    const checkpoint = await captureCheckpoint();
+    const manifest = await support.capture(session, "option");
+    expect(manifest).toMatchObject(checkpoint);
+    expect(manifest.checkpoint).toMatch(/^[a-f0-9]{40}$/);
+    const saved: unknown = JSON.parse(
+      await readFile(`${chatDirectory}fixture/option-1920-dark.json`, "utf8"),
+    );
+    expect(saved).toEqual(manifest);
+    expect(typeof (saved as Record<string, unknown>).workingTree).toBe("boolean");
+  } finally {
+    await session.close();
+  }
+});
 it.each(matrix)(
   "proves App option/starting/shop/refusal/replay at $viewport.width in $theme",
   async ({ viewport, theme }) => {
