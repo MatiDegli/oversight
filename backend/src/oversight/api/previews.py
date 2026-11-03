@@ -108,15 +108,16 @@ def add_preview_routes(router: APIRouter, previews: PreviewManager | None) -> No
                 agent_id=value.agent_id,
                 revision=value.revision,
                 head_commit=value.head_commit,
+                parent_authority=request.headers["host"],
             )
         )
         return PreviewCreated(preview_id=record.preview_id, lease_token=record.lease_token)
 
     @routes.get("/previews/{preview_id}")
-    async def details(preview_id: str) -> PreviewDetails:  # pyright: ignore[reportUnusedFunction]
+    async def details(preview_id: str, request: Request) -> PreviewDetails:  # pyright: ignore[reportUnusedFunction]
         manager = live()
         target = identifier(preview_id)
-        record = await _call(lambda: manager.get(target))
+        record = await _call(lambda: manager.get(target, parent_authority=request.headers["host"]))
         return PreviewDetails(
             status=public_status(record), url=record.url if record.state == "ready" else None
         )

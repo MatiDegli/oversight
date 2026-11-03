@@ -36,12 +36,17 @@ class PreviewLifecycle:
     async def start(self, owner: "PreviewOwnership") -> None:
         """Cancellation settles before process.stop can take the channel's sole reader."""
         try:
-            ready_deadline = time.monotonic() + self.profile.readiness_s
-            async with asyncio.timeout(self.profile.readiness_s):
-                # Parent lock ownership never transfers into this task. A server Git lease
-                # first cancels/settles this work at the universal hook.
-                async with self.workspace.locks(main=True, agent_id=owner.candidate.agent_id):
-                    self.authorize(owner)
+            queued = time.monotonic()
+            # Waiting for admission locks is queue time, bounded by the absolute lifetime.
+            async with self.workspace.locks(main=True, agent_id=owner.candidate.agent_id):
+                self.authorize(owner)
+            owner.queue_s += time.monotonic() - queued
+            allowance = self.profile.readiness_s
+            if self.profile.reviewed_app is not None:
+                allowance += sum(c.timeout_s for c in self.profile.reviewed_app.launch.build)
+            ready_deadline = time.monotonic() + allowance
+            owner.execution_deadline = ready_deadline
+            async with asyncio.timeout(allowance):
                 deadline, _ = self.deadlines()
                 await self.launch(owner)
                 if owner.draining or self.barrier.owner is not owner:
@@ -64,7 +69,12 @@ class PreviewLifecycle:
                     self.authorize(owner)
                     await self.transition("ready", None)
         except TimeoutError:
-            owner.reason = owner.reason or "readiness_timeout"
+            reason = "readiness_timeout"
+            if self.profile.reviewed_app is not None and (
+                owner.process is None or owner.process.stage != "readiness"
+            ):
+                reason = "launch_failed"
+            owner.reason = owner.reason or reason
 
     async def supervise(self, owner: "PreviewOwnership") -> None:
         """Observe failures after returning starting; never leak a task exception."""

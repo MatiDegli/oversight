@@ -12,10 +12,16 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from oversight.workspace._reviewed_preview import (
+    opposite_host,
+    retire_registered,
+    reviewed_configuration,
+)
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
 from oversight.workspace.preview_barrier import PreviewBarrier, PreviewOwnership, settle
 from oversight.workspace.preview_lifecycle import PreviewLifecycle, finish_supervision
+from oversight.workspace.preview_preparation import PreparationInputs
 from oversight.workspace.preview_process import PreviewProcess, bind_listener, launch_configuration
 from oversight.workspace.preview_profile import PreviewProfile
 from oversight.workspace.preview_registry import (
@@ -55,6 +61,7 @@ class PreviewManager:
         memory_hold: Callable[[], str | None] = lambda: None,
         clock: Callable[[], float] = time.monotonic,
         process_factory: Callable[[PreviewRegistry, int], PreviewProcess] = PreviewProcess,
+        reviewed_inputs: PreparationInputs | None = None,
     ) -> None:
         self.workspace = workspace
         self.profile = profile or PreviewProfile()
@@ -64,6 +71,9 @@ class PreviewManager:
         self.memory_hold = memory_hold
         self.clock = clock
         self.process_factory = process_factory
+        self.reviewed_inputs = reviewed_inputs
+        self._parent_host = "localhost"
+        self._parent_authority = f"localhost:{self.profile.backend_port}"
         self.registry = PreviewRegistry(workspace.runtime_root)
         self.barrier = PreviewBarrier(workspace, self._transition, self._terminal)
         workspace.previews = self
@@ -137,18 +147,27 @@ class PreviewManager:
         agent_id: str,
         revision: int,
         head_commit: str,
+        parent_authority: str | None = None,
     ) -> PreviewCreatedResult:
         validate_start(run_id, agent_id, revision, head_commit)
         self._admit()
+        if parent_authority is not None:
+            parent_authority = self._validate_parent(parent_authority)
         # Synchronous reservation BEFORE waiting for locks/preflight Git: never evict an owner.
         if self._reserved:
             raise PreviewError("Live preview already has an owner; stop it first.")
         self._reserved = True
+        self._parent_authority = parent_authority or f"localhost:{self.profile.backend_port}"
+        self._parent_host = self._parent_authority.split(":")[0]
+        created_at = self.clock()
+        queued_at = time.monotonic()
         try:
             async with (
+                asyncio.timeout(self.profile.lifetime_s),
                 self.workspace.locks(main=True, agent_id=agent_id),
                 self.workspace.git_lease(),
             ):
+                queued_s = time.monotonic() - queued_at
                 self._admit()
                 assert self.resolve_candidate is not None
                 candidate = await self.resolve_candidate(run_id, agent_id, revision, head_commit)
@@ -177,6 +196,7 @@ class PreviewManager:
                 if not candidate.eligible():
                     raise PreviewError("Live preview candidate changed.")
                 owner = await self.barrier.capture(candidate)
+                owner.queue_s = queued_s
                 self._record = PreviewStatusRecord(
                     "preview-" + uuid.uuid4().hex,
                     candidate.run_id,
@@ -188,7 +208,7 @@ class PreviewManager:
                 )
                 self._token = secrets.token_urlsafe(32)
                 self._deadline = self.clock() + self.profile.lease_s
-                self._absolute = self.clock() + self.profile.lifetime_s
+                self._absolute = created_at + self.profile.lifetime_s
                 await self._emit(self._record)
                 # Admission owns metadata/evidence only. Supervision acquires its own locks.
                 result = PreviewCreatedResult(**asdict(self._record), lease_token=self._token)
@@ -197,6 +217,8 @@ class PreviewManager:
                 self._watcher = asyncio.create_task(self.lifecycle.supervise(owner))
                 return result
         except BaseException as cause:
+            if isinstance(cause, TimeoutError) and self.barrier.owner is not None:
+                self.barrier.owner.reason = "lifetime_expired"
             if self.barrier.owner is None:
                 self._reserved = False
                 self._token = None
@@ -209,11 +231,12 @@ class PreviewManager:
         self._authorize_execution(owner)
         tree, record = owner.candidate.tree, self._record
         assert owner is not None and record is not None
-        listener = bind_listener(self.profile.ports)
+        reviewed = self.profile.reviewed_app
+        listener = bind_listener((reviewed.launch.public_port,) if reviewed else self.profile.ports)
         refusal: socket.socket | None = None
         try:
             refusal = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            refusal.bind(("127.0.0.1", 0))
+            refusal.bind(("127.0.0.1", reviewed.launch.api_port if reviewed else 0))
             refusal.listen(1)
             scratch = self.registry.directory / ("scratch-" + record.preview_id)
             await offload(self.registry.prepare)
@@ -227,6 +250,24 @@ class PreviewManager:
                 refusal,
                 self.clock(),
             )
+            if reviewed is not None:
+                if self.reviewed_inputs is None:
+                    raise PreviewError(
+                        "Reviewed-app preparation is unavailable.", code="not_configured"
+                    )
+                reviewed_inputs = self.reviewed_inputs
+                config["reviewed"] = await offload(
+                    lambda: reviewed_configuration(
+                        self.profile,
+                        reviewed_inputs,
+                        tree.root,
+                        self._parent_authority,
+                        record.run_id,
+                    )
+                )
+                config.pop("argv")
+            config["queue_s"] = owner.queue_s
+            config["execution_deadline"] = owner.execution_deadline
             config["lease_deadline"] = self._deadline
             config["absolute_deadline"] = self._absolute
             data: dict[str, object] = {
@@ -246,6 +287,9 @@ class PreviewManager:
             }
             await offload(lambda: self.registry.write(data))
             owner.process = self.process_factory(self.registry, int(listener.getsockname()[1]))
+            owner.process.public_authority = (
+                f"{opposite_host(self._parent_host)}:{listener.getsockname()[1]}"
+            )
             owner.process.authorize_execution = lambda: self._authorize_execution(owner)
             await owner.process.launch(listener, self.profile)
         finally:
@@ -308,6 +352,12 @@ class PreviewManager:
                 reason = "launch_failed"
         if process and process.exit_code == 73:
             self._disabled = True
+        if (
+            process
+            and process.reason == "memory_limit"
+            and reason in {"app_exited", "readiness_timeout", "launch_failed"}
+        ):
+            reason = "memory_limit"
         failures = {
             "app_exited",
             "readiness_timeout",
@@ -346,7 +396,28 @@ class PreviewManager:
             raise PreviewError("Live preview lease is invalid.", code="forbidden")
         return record
 
-    async def get(self, preview_id: str) -> PreviewDetailsResult:
+    def _validate_parent(self, authority: str) -> str:
+        host, separator, port = authority.partition(":")
+        try:
+            opposite_host(host)
+            if not separator:
+                port = "80"
+            if str(int(port)) != port or int(port) not in {
+                self.profile.backend_port,
+                self.profile.vite_port,
+            }:
+                raise ValueError("invalid preview parent authority")
+        except ValueError:
+            raise PreviewError("Live preview parent is not allowed.", code="forbidden") from None
+        return f"{host}:{port}"
+
+    async def get(
+        self, preview_id: str, *, parent_authority: str | None = None
+    ) -> PreviewDetailsResult:
+        if parent_authority is not None:
+            parent_authority = self._validate_parent(parent_authority)
+            if self._reserved and parent_authority != self._parent_authority:
+                raise PreviewError("Live preview parent changed.", code="forbidden")
         validate_preview_id(preview_id)
         record = self._records.get(preview_id)
         if record is None:
@@ -356,7 +427,7 @@ class PreviewManager:
             record = self._records[preview_id]
         owner = self.barrier.owner
         url = (
-            f"http://127.0.0.1:{owner.process.port}/"
+            f"http://{opposite_host(self._parent_host)}:{owner.process.port}/"
             if record.state == "ready" and owner and owner.process
             else None
         )
@@ -474,6 +545,7 @@ class PreviewManager:
             await reclaim_registered(data)
             if data["phase"] not in {"intent", "dead"} and not data.get("namespace"):
                 raise ValueError("unconfirmed namespace ownership")
+            await offload(lambda: retire_registered(data.get("prepared_cleanup", [])))
             try:
                 await offload(lambda: finish_snapshot(snapshot, self.workspace.integrity))
             except IntegrityError:

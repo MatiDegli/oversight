@@ -254,6 +254,36 @@ def validate_ownership(
         "dead": (),
     }
     phase = data["phase"]
+    if data.get("boundary_pending") and phase != "dead":
+        raise ValueError("incomplete authenticated boundary ownership")
+    if data.get("boundary"):
+        boundary = data["boundary"]
+        if (
+            set(boundary) != {"processes", "namespaces"}
+            or set(boundary["processes"]) != {"outer", "setup", "init"}
+            or set(boundary["namespaces"]) != {"u0", "n0", "u1", "pid", "mount"}
+        ):
+            raise ValueError("incomplete authenticated boundary ownership")
+        if boundary["processes"]["outer"] != data.get("unshare") or boundary["processes"][
+            "init"
+        ] != data.get("namespace"):
+            raise ValueError("boundary ownership mismatch")
+        births = [registered_identity(value) for value in boundary["processes"].values()]
+        if len({identity.pid for identity in births}) != 3 or any(
+            identity.pid == data.get("supervisor", {}).get("pid") for identity in births
+        ):
+            raise ValueError("ambiguous boundary births")
+        if data.get("guardian"):
+            guardian = registered_identity(data["guardian"])
+            if guardian.pid in {identity.pid for identity in births} | {
+                data.get("supervisor", {}).get("pid")
+            }:
+                raise ValueError("ambiguous listener guardian birth")
+        if phase == "executing" and not data.get("guardian"):
+            raise ValueError("missing listener guardian ownership")
+        for value in boundary["namespaces"].values():
+            if len(value) != 2 or any(type(v) is not int or v <= 0 for v in value):
+                raise ValueError("invalid boundary namespace witness")
     if phase not in phases or any(not data.get(key) for key in phases[phase]):
         raise ValueError("invalid ownership phase")
     identities = [
@@ -292,6 +322,25 @@ async def reclaim_registered(data: dict[str, Any]) -> None:
         for key in ("supervisor", "unshare", "namespace")
         if data.get(key)
     }
+    if data.get("boundary_pending"):
+        raise PreviewError("Live preview recovery ownership is incomplete.")
+    if data.get("boundary"):
+        boundary = data["boundary"]
+        if data.get("guardian"):
+            identities["guardian"] = registered_identity(data["guardian"])
+        identities["setup"] = registered_identity(boundary["processes"]["setup"])
+        for key, process, name in (
+            ("u0", "unshare", "user"),
+            ("n0", "unshare", "net"),
+            ("u1", "namespace", "user"),
+            ("pid", "namespace", "pid"),
+            ("mount", "namespace", "mnt"),
+        ):
+            identity = identities[process]
+            if identity.alive():
+                info = os.stat(f"/proc/{identity.pid}/ns/{name}")
+                if list((info.st_dev, info.st_ino)) != list(boundary["namespaces"][key]):
+                    raise PreviewError("Live preview recovery ownership is ambiguous.")
     live = {key: identity for key, identity in identities.items() if identity.alive()}
     if not live:
         return
@@ -313,7 +362,7 @@ async def reclaim_registered(data: dict[str, Any]) -> None:
         for identity in live.values():
             identity.alive()
         await asyncio.sleep(0)
-        for key in ("supervisor", "unshare", "namespace"):
+        for key in ("supervisor", "unshare", "setup", "namespace"):
             if key in pinned and live[key].alive():
                 with contextlib.suppress(ProcessLookupError):
                     kill_pinned(pinned[key])
@@ -321,9 +370,20 @@ async def reclaim_registered(data: dict[str, Any]) -> None:
         if "namespace" in pinned:
             fd = pinned.pop("namespace")
             await verify_preview_namespace_death(fd)
-        for key, fd in tuple(pinned.items()):
-            pinned.pop(key)
-            await verify_preview_namespace_death(fd)
+        guardian = pinned.pop("guardian", None)
+        try:
+            for key, fd in tuple(pinned.items()):
+                pinned.pop(key)
+                await verify_preview_namespace_death(fd)
+            if guardian is not None:
+                if live["guardian"].alive():
+                    with contextlib.suppress(ProcessLookupError):
+                        kill_pinned(guardian)
+                fd, guardian = guardian, None
+                await verify_preview_namespace_death(fd)
+        finally:
+            if guardian is not None:
+                os.close(guardian)
     finally:
         for fd in pinned.values():
             os.close(fd)
