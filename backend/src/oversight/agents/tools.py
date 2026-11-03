@@ -220,6 +220,7 @@ class Toolbox:
         self._tree = tree
         self._test_timeout_s = test_timeout_s
         self._harness = HarnessState(harness_pack)
+        self.queue_wait_s: float | None = None
         self._graph = WorkspaceGraph(tree.root)
         self._read_hashes: dict[str, str] = {}
         """The hash of each file as the agent last saw it: read, or written by its own edit."""
@@ -256,6 +257,7 @@ class Toolbox:
             raise ToolError(f"{path} is a directory") from None
 
     async def call(self, name: str, raw_arguments: str) -> ToolOutcome:
+        self.queue_wait_s = None
         error_kind: Literal["unknown_tool", "invalid_json", "invalid_arguments"] | None = None
         try:
             parsed = json.loads(raw_arguments or "{}")
@@ -485,9 +487,14 @@ class Toolbox:
             edited_path=path,
         )
 
+    def _queue_wait(self, elapsed: float) -> None:
+        self.queue_wait_s = elapsed
+
     async def _run_tests(self) -> ToolOutcome:
         self._harness.tested()
-        run = await self._workspace.run_tests(self._tree, timeout_s=self._test_timeout_s)
+        run = await self._workspace.run_tests(
+            self._tree, timeout_s=self._test_timeout_s, on_queue_wait=self._queue_wait
+        )
         result = run.result
         if result.outcome == "timeout":
             headline = (

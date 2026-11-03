@@ -85,3 +85,6 @@ One line per day, in Argentina time (ART).
   Added configuration attribution as separate informational review paragraphs with exact-prefix
   partitioning, attribution-only Details, unchanged HTML pins and synthetic replay captures at
   1440/390 in dark/day; preserved contracts, recordings and integrity policy, with no paid calls.
+  Added demo/Boltons run_tests queue diagnostics: call-scoped lock contention, throttled path-free
+  backend logs, cancellation-safe elapsed callbacks and server-only completed/interrupted step
+  summaries, with deterministic queue clocks and fake-model HTTP Stop/deadline/no-progress proofs.

@@ -400,7 +400,9 @@ class AgentRun:
                     stopped = interrupted(call.name, call.arguments)
                     if isinstance(error, SuiteInterrupted):
                         stopped = replace(stopped, suite_run=error.run)
-                    await self._report(call.name, stopped, self._since(started))
+                    await self._report(
+                        call.name, self._queue_summary(stopped, deadline), self._since(started)
+                    )
                     raise
 
                 duration_ms = self._since(started)
@@ -408,7 +410,7 @@ class AgentRun:
                 messages.append(
                     {"role": "tool", "tool_call_id": call.id, "content": outcome.content}
                 )
-                await self._report(call.name, outcome, duration_ms)
+                await self._report(call.name, self._queue_summary(outcome, deadline), duration_ms)
                 if outcome.finish_summary is not None:
                     await self.control.wait_for_admission()
                     if not self.control.pending_messages:
@@ -427,6 +429,22 @@ class AgentRun:
                             {"role": "tool", "tool_call_id": skipped.id, "content": "Not run."}
                         )
                     raise
+
+    def _queue_summary(self, outcome: ToolOutcome, deadline: asyncio.Timeout) -> ToolOutcome:
+        """Server-only diagnostics; history and identical-result checks retain exact content."""
+        queued = self._tools.queue_wait_s
+        if queued is None:
+            return outcome
+        until = deadline.when()
+        assert until is not None
+        remaining = max(0.0, until - asyncio.get_running_loop().time())
+        summary = outcome.summary
+        if not summary.endswith((".", "!", "?")):
+            summary += "."
+        return replace(
+            outcome,
+            summary=summary + f" Queued {queued:.1f} s; round budget remaining {remaining:.1f} s.",
+        )
 
     def _since(self, started: float) -> int:
         return round((self._monotonic() - started) * 1000)
