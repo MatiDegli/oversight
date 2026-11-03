@@ -72,6 +72,8 @@ from oversight.graph import (
 )
 from oversight.settings import Settings
 from oversight.workspace import (
+    PreviewCandidate,
+    PreviewError,
     SuiteRun,
     Tree,
     Workspace,
@@ -112,6 +114,7 @@ class ChangeManager:
         spend_lost: Callable[[], bool] = lambda: False,
     ) -> None:
         settings = settings or Settings()
+        self._preview_run_id = run_id
 
         async def committed(payload: EventPayload) -> object:
             receipt = await publish(payload)
@@ -170,6 +173,62 @@ class ChangeManager:
     def spend_received(self, receipt: StoredEvent) -> None:
         """Run-owned port: only the committed seed and explicit Meta-total sites may call it."""
         self._ctx.assessment.spend_received(receipt)
+
+    async def preview_candidate(
+        self,
+        run_id: str,
+        agent_id: str,
+        revision: int,
+        head_commit: str,
+    ) -> PreviewCandidate:
+        """Injected resolution under start admission and main→candidate→Git locks.
+
+        Only coding tasks exist in ChangeState.agents; lead/plan identities have no record.
+        The request supplies identity evidence, never a path, command or launch profile.
+        """
+        ctx = self._ctx
+        rec = ctx.state.agents.get(agent_id)
+        if (
+            not self._preview_run_id
+            or run_id != self._preview_run_id
+            or ctx.state.closing
+            or self.main_suspect
+            or rec is None
+            or rec.state != "ready"
+            or rec.person_intent is not None
+            or rec.revision != revision
+            or revision < 1
+            or rec.head_commit != head_commit
+            or not ctx.workspace.operations.holds(main=True)
+            or not ctx.workspace.operations.holds(agent_id=agent_id)
+        ):
+            raise PreviewError("Live preview requires the current ready coding-agent proposal.")
+        tree = ctx.workspace.worktree(agent_id)
+        if tree is not rec.tree:
+            raise PreviewError("Live preview candidate changed.")
+        if await files.check_main(ctx) is not True:
+            raise PreviewError("Live preview requires trustworthy main.")
+        await ctx.workspace.preview_evidence(tree, revision, head_commit)
+        head = (await ctx.git(tree, "rev-parse", "HEAD")).strip()
+        dirty = await ctx.git(tree, "status", "--porcelain", "--untracked-files=all")
+        if head != head_commit or dirty or ctx.state.agents.get(agent_id) is not rec:
+            raise PreviewError("Live preview requires a clean current worktree.")
+        return PreviewCandidate(
+            run_id,
+            agent_id,
+            rec.change_id,
+            revision,
+            head,
+            tree,
+            lambda: rec.revision == revision and rec.head_commit == head,
+            lambda: (
+                ctx.state.agents.get(agent_id) is rec
+                and rec.state == "ready"
+                and rec.person_intent is None
+                and not ctx.state.closing
+                and not self.main_suspect
+            ),
+        )
 
     def spend_changed(self) -> None:
         """Wake valid armed waits without replacing their target, deadline or latest result."""
@@ -287,7 +346,11 @@ class ChangeManager:
         holds throughout (`WrongState`); `StaleFile` when the file is not the one `base_hash` names.
         R9: with nothing to commit and HEAD still the last proposal's, nothing is sent. A save cut
         short after its write is re-proposed by the next Approve (R1)."""
-        return await files.save_for_review(self._ctx, agent_id, path, content, base_hash)
+        self._preview_write_refusal()
+        try:
+            return await files.save_for_review(self._ctx, agent_id, path, content, base_hash)
+        except PreviewError as error:
+            raise WrongState(str(error)) from None
 
     async def read_file(self, agent_id: AgentId | None, path: str) -> FileContent:
         """GET /files. Main is read under main's lock, which every mutation of main holds from its
@@ -307,7 +370,16 @@ class ChangeManager:
         The same bytes commit nothing. A failed commit restores the file and raises
         `WorkspaceError`; the commit is the save, so a failed rescan after it still answers saved.
         Runs no tests: the next approval tests the combination (R5)."""
-        return await files.save_main(self._ctx, path, content, base_hash)
+        self._preview_write_refusal()
+        try:
+            return await files.save_main(self._ctx, path, content, base_hash)
+        except PreviewError as error:
+            raise WrongState(str(error)) from None
+
+    def _preview_write_refusal(self) -> None:
+        workspace = self._ctx.workspace
+        if workspace.previews and workspace.previews.has_owner and workspace.integrity.main_suspect:
+            raise WrongState("Live preview cleanup is unverified; restart is required.")
 
     async def rescan(self) -> None:
         """POST /graph/rescan: read main again and publish one delta (`rescan`) if anything moved:
@@ -648,6 +720,9 @@ class ChangeManager:
         if rec is None:
             raise ChangeNotFound(agent_id)
         self._take(rec.change_id, STOPPABLE, "stop")
+        previews = self._ctx.workspace.previews
+        if previews is not None and previews.has_owner:
+            return self._decide(rec, self._stop(rec, run))
         if run is None:
             proposal.unreported(self._ctx, rec)
         else:
@@ -704,6 +779,7 @@ class ChangeManager:
     async def _reject(self, rec: ChangeRecord, comment: str | None) -> None:
         await delivery.finish_pending(self._ctx)
         async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+            await self._ctx.workspace.drain_previews(rec.tree)
             assert rec.evidence is not None
             try:
                 validate_decision_target(
@@ -719,6 +795,14 @@ class ChangeManager:
             await delivery.finish(self._ctx, rec)  # main did not change: no rescan and no delta
 
     async def _stop(self, rec: ChangeRecord, run: asyncio.Task[None] | None) -> None:
+        # Stop's first cancellation/terminal effect must follow verified preview cleanup.
+        async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+            await self._ctx.workspace.drain_previews(rec.tree)
+            if run is None:
+                proposal.unreported(self._ctx, rec)
+            elif not run.cancelling() and not run.done():
+                run.cancel()
+                run.add_done_callback(lambda _: proposal.unreported(self._ctx, rec))
         if run is not None:
             # Its end calls `run_ended`, which records its steps and sets `fallback`; a run cut in
             # its proposal's publish records the proposal first (R7). A run that never started
@@ -727,6 +811,7 @@ class ChangeManager:
             await asyncio.wait([run])
         await delivery.finish_pending(self._ctx)
         async with self._ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+            await self._ctx.workspace.drain_previews(rec.tree)
             # Under the agent's lock: a save in review proposes first, and this closes its revision.
             rec.evidence = WriteEvidence(
                 rec.change_id,

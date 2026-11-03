@@ -20,7 +20,7 @@ from typing import Any, Literal
 
 from fastapi import FastAPI
 
-from oversight import _run_controls, runtime_answering, runtime_review
+from oversight import _run_controls, preview_runtime, runtime_answering, runtime_review
 from oversight.agents import (
     BASETEN_BASE_URL,
     META_BASE_URL,
@@ -92,6 +92,8 @@ from oversight.workspace import (
     OPEN_NOTICE,
     TRUST_NOTICE,
     OwnSource,
+    PreviewCandidate,
+    PreviewError,
     Workspace,
     WorkspaceError,
     configure_suite,
@@ -339,6 +341,24 @@ class LiveRun:
         self.dispatcher = Dispatcher(self)
         self.plans = PlanService(self)
         self.leads = LeadService(self)
+        self.previews = preview_runtime.compose(
+            self.workspace,
+            settings.preview_profile,
+            trusted_demo=self._source is None,
+            resolve_candidate=self.preview_candidate,
+            memory_hold=self._memory_hold,
+        )
+
+    async def preview_candidate(
+        self,
+        run_id: str,
+        agent_id: str,
+        revision: int,
+        head_commit: str,
+    ) -> PreviewCandidate:
+        if self._closing or self._manager is None:
+            raise PreviewError("Live preview requires an active run.")
+        return await self._manager.preview_candidate(run_id, agent_id, revision, head_commit)
 
     def _offer(self, slot: Slot, default: SlotDefault) -> None:
         """Load only this slot's own fake script; defaults come from the shared resolver."""
@@ -396,7 +416,9 @@ class LiveRun:
             if self._source is not None:
                 assert not isinstance(self._source, OwnSource)
                 async with self.workspace.guard_nt_cleanup():
-                    await validate_source(self._source, self._settings.runtime_dir)
+                    await validate_source(
+                        self._source, self._settings.runtime_dir, spawn=self.workspace.startup_git
+                    )
             return await self.workspace.reset()
         except BaseException:
             self.workspace.release_runtime()
@@ -536,6 +558,7 @@ class LiveRun:
     async def shutdown(self) -> None:
         """Every step runs, even after one failed or was cancelled; the first such is re-raised."""
         self._closing = True
+        self.previews.close_admission()
         failure: BaseException | None = None
         steps = (
             self.leads.close,
@@ -546,6 +569,7 @@ class LiveRun:
             self._drain_reviews,
             self._stop_runs,
             self._stop_venv,
+            self._drain_previews,
             self._close_manager,
             self._client_factory.aclose,
             self._check_main,
@@ -614,6 +638,9 @@ class LiveRun:
         """Waits for decisions in flight and drains unsent close-outs, before the store closes."""
         if self._manager is not None:
             await self._manager.aclose()
+
+    async def _drain_previews(self) -> None:
+        await preview_runtime.drain_shutdown(self.previews)
 
     async def _check_main(self) -> None:
         """Never a silent `MERGE_HEAD`: unless main is clean, a fatal `error` goes out before the
