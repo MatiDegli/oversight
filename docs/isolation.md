@@ -236,7 +236,7 @@ Native Job/console/grandchild proof remains uncollected; accepted path/ACL resid
 
 ### Dormant person-owned preview supervision (2026-11-03)
 
-The backend infrastructure is implemented independently of the future preview contracts/routes.
+The backend infrastructure conforms to preview contracts 1.19.0; route wiring remains separate.
 `LiveRun.previews` owns one `PreviewManager`. Its workspace facade exports `PreviewManager`,
 `PreviewProfile`, `PreviewCandidate`, `PreviewCreatedResult`, `PreviewStatusRecord`,
 `PreviewDetailsResult`, `PreviewStatusSink` and `PreviewError`. The awaited status sink is supplied
@@ -280,15 +280,26 @@ Only its private exit 74 means `memory_limit`; 70–73 mean `launch_failed`, wit
 profile/session. Other exits/signals remain `app_exited`. Trusted launcher diagnostics are bounded
 and reduced to allowlisted internal facts. No application output, token or URL enters status.
 
-The 32-random-byte lease token stays in backend memory and the initiating result, with constant-time
-comparison, no registry/argv/URL/log/event copy, no revival after expiry, and absolute clamping.
-Renewal emits no heartbeat event. Starting/ready transitions have null reasons; stopping and terminal
-transitions carry closed reason values. Details exposes a server-built URL only while ready.
+IDs are `preview-` plus 32 lowercase UUID4 hex characters; lease tokens encode 32 random bytes as 43
+URL-safe base64 characters without padding. Tokens stay in backend memory and the initiating result,
+with constant-time comparison and no registry/argv/URL/log/event copy. Unexpired starting and ready
+leases renew without heartbeat events, clamped to the original absolute deadline; expiry never
+revives. Starting/ready transitions have null reasons; stopping and terminal transitions carry
+closed reason values. Details exposes a server-built URL only while ready. Unknown IDs refuse as
+`not_found`, known IDs with wrong tokens as `forbidden`, and malformed IDs/bodies as `invalid_request`.
+Disabled, missing or invalid profiles refuse as `not_configured` with `missing=[]`; occupied runtime,
+expiry, stale candidates and shutdown-closed admission refuse as `wrong_state`. Matching-token Stop
+retries are idempotent after verified termination; unverified cleanup retains quarantine and refuses
+as `wrong_state` with `failed/cleanup_unverified`.
 
 Universal server Git coverage is at `Locks.git_lease`, after exclusive acquisition and before yield.
 The hook rechecks integrity after drain; task-owned reentrancy and tree-before-lease ordering remain.
-Start reserves capacity synchronously before any preflight Git and holds the same exclusion through
-snapshot/launch admission, so it never evicts an owner. No application-lifetime tree/Git lock is held.
+Start reserves capacity synchronously before any preflight Git and validates/captures metadata under
+main→worktree→Git locks, so it never evicts an owner. After the awaited starting sink, admission
+returns `starting` while an owned task supervises launch/readiness under one startup deadline.
+Child tasks acquire their own admission locks; no Git lock lasts through readiness or application
+lifetime. Drain settles unfinished launch/readiness before namespace cleanup and prevents later ready
+publication for the drained owner.
 Another agent's Git activity interrupts preview with `mutation`.
 
 | Server path | Coverage |
@@ -304,9 +315,12 @@ Another agent's Git activity interrupts preview with `mutation`.
 
 At the lease boundary cleanup takes no additional tree lock: namespace death precedes the existing
 filesystem-only `finish_snapshot`, before any Git (even stop-time status). Metadata discrepancies
-restore once and suspend rules; uncertainty latches `main_suspect`, as for suites. Candidate comparison
-then uses its own main→worktree locks. Cross-agent Git can proceed after verified restitution while
-comparison remains pending; previewed candidate reuse/merge cannot. Contamination compares clean
+restore once, suspend rules and refuse the triggering Git operation, including stop-time status.
+Verified restoration marks candidate evidence `worktree_changed` without setting `main_suspect` or
+the cleanup-uncertainty latch; uncertainty latches both. Candidate comparison then
+uses its own main→worktree locks, scheduled even when the triggering operation refuses. A later
+independently requested safe Git operation can proceed after verified restitution while comparison
+remains pending; previewed candidate reuse/merge cannot. Contamination compares clean
 launch status against stop `status --porcelain --untracked-files=all`, head and revision. Changed
 evidence records `worktree_changed` and blocks person, rules and standing-grant merges until a new
 revision/head establishes trustworthy evidence. Application-written working files are never silently
@@ -314,8 +328,8 @@ staged, restored or deleted. Explicit guards also precede edits, Request changes
 without Git), Approve, Reject, Stop, worktree removal and profile disable. Final transaction guards
 remain in place. Repeated cancellation retains exclusion through death and metadata restitution.
 
-One failed drain blocks **all server Git and Approve until restart**, retains runtime ownership and
-the registry/quarantine, and refuses the waiting mutation with `wrong_state`. It does not publish
+Unverified namespace death/restoration blocks **all server Git and Approve until restart**, retains
+runtime ownership and the registry/quarantine, and refuses the waiting mutation with `wrong_state`. It does not publish
 stopped or release the port. The generalized cleanup latch preserves the existing Windows message.
 Shutdown closes preview admission at entry and drains immediately before manager close, retaining the
 store through awaited terminal publication; remaining shutdown steps still run after failure.
