@@ -4624,3 +4624,16 @@ Boltons d31d821 snapshot/layout, labeled handwritten; PNGs, comparisons and mani
 under gitignored .shots/team-rail/. This records delivery under existing authority, not a new
 approval. The detailed dispatch governs Impeccable's discovery/delegation defaults; layout,
 polish, audit and critique run in this session without a sketch round or other agents.
+## 2026-11-03 — Remove the one-graph rule
+
+The maintainer removed AGENTS.md's "One graph" rule at 10:59 ART. The repository graph still
+stays visible in the Oversight view; other graph views, such as a compact workflow canvas of
+a lead's plan, may sit beside it and may use Cytoscape.js without a React wrapper. Every
+visual rule in AGENTS.md and DESIGN.md applies to them.
+
+In "A read-only plan flow before the freeze", "so it is not a second graph" no longer
+constrains later work; that view itself is unchanged.
+
+This entry only removes the rule: building another graph view needs its own approved plan.
+
+Reason: a compact node view of a plan is easier to understand and to manipulate than a verbose card.
