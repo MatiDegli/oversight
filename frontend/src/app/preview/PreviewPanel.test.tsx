@@ -146,3 +146,18 @@ it("does not announce successful closure while Stop is pending", () => {
   expect(html).toContain("Waiting for verified closure.");
   expect(html).not.toContain("The preview was closed.");
 });
+it("explains the next action when closure is uncertain without an existing frame", () => {
+  const html = render({ uncertain: true, notice: "closure_unconfirmed" });
+  expect(html).toContain('role="alert"');
+  expect(html).toContain("Closure is unconfirmed");
+  expect(html).toContain("Close to request verified closure.");
+  expect(html).toContain("Another preview cannot start until closure is verified.");
+  expect(html).not.toContain("iframe");
+});
+it("keeps pending closure polite and announces failed commands assertively", () => {
+  expect(render({ pending: true, uncertain: true, notice: "closure_unconfirmed" })).toContain(
+    'role="status"',
+  );
+  for (const notice of ["renewal_failed", "start_failed"] as const)
+    expect(render({ uncertain: true, notice })).toContain('role="alert"');
+});

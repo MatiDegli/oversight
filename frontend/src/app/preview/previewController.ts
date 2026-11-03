@@ -36,6 +36,7 @@ class Controller implements PreviewController {
   #candidate: PreviewCandidate | null = null;
   #epoch = 0;
   #disposed = false;
+  #dismissed = false;
   #detailsEpoch: number | null = null;
   #quarantined = false;
   #cancelStart = false;
@@ -110,7 +111,7 @@ class Controller implements PreviewController {
     if (old && (rank[status.state] < rank[old.state] || (terminal(old) && this.#token !== null)))
       return false;
     if (old && JSON.stringify(old) === JSON.stringify(status)) return false;
-    this.#publish({ status, visible: true });
+    this.#publish({ status, visible: !this.#dismissed });
     if (!active(status)) {
       this.#cancelRenewal();
       if (this.#view.frameUrl) this.#publish({ uncertain: true, notice: "closure_unconfirmed" });
@@ -124,7 +125,7 @@ class Controller implements PreviewController {
       if (this.#matches(status)) this.#accept(status);
     } else if (!this.#flight && status.run_id === this.#identity.run) {
       if (this.#view.status?.preview_id === status.preview_id) this.#accept(status);
-      else this.#publish({ status, visible: true, frameUrl: null, notice: null });
+      else this.#publish({ status, visible: !this.#dismissed, frameUrl: null, notice: null });
     }
   };
   #scheduleRenewal() {
@@ -186,6 +187,7 @@ class Controller implements PreviewController {
   see = (candidate: () => PreviewCandidate | null): Promise<void> => {
     if (this.#disposed || this.#flight || this.#closing || this.#quarantined)
       return Promise.resolve();
+    this.#dismissed = false;
     const observed = this.#view.status;
     if (
       !this.#token &&
@@ -316,11 +318,15 @@ class Controller implements PreviewController {
     await this.#flight;
     if (this.#disposed) return;
     if (!this.#token) {
-      if (!this.#quarantined) this.#publish({ visible: false, pending: false });
+      if (!this.#quarantined) this.#dismiss();
       return;
     }
-    if (await this.#stop()) this.#publish({ visible: false });
+    if (await this.#stop()) this.#dismiss();
   };
+  #dismiss() {
+    this.#dismissed = true;
+    this.#publish({ visible: false, pending: false });
+  }
   navigate = () => this.close();
   setIdentity = async (identity: PreviewIdentity) => {
     if (identity.run === this.#identity.run && identity.source === this.#identity.source) return;

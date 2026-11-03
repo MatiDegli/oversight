@@ -69,6 +69,45 @@ it("renewal rejection cancels renewal, preserves frame and permits verified Clos
   await controller.close();
   expect(controller.snapshot().visible).toBe(false);
 });
+it("keeps an observer's local dismissal through status updates and replacement until See preview", async () => {
+  const { port, controller } = setup();
+  await controller.see(() => fakeCandidate);
+  const observer = createPreviewController(port, clock, identity);
+  observer.observe(port.publicStatus() as PreviewStatus);
+  await observer.close();
+  port.publish("stopping", "closed");
+  observer.observe(port.publicStatus() as PreviewStatus);
+  expect(observer.snapshot()).toMatchObject({ visible: false, status: { state: "stopping" } });
+  await controller.see(() => next);
+  observer.observe(port.publicStatus() as PreviewStatus);
+  expect(observer.snapshot()).toMatchObject({
+    visible: false,
+    owned: false,
+    frameUrl: null,
+    status: { agent_id: "agent-b" },
+  });
+  const before = port.calls.length;
+  await observer.see(() => fakeCandidate);
+  expect(observer.snapshot().visible).toBe(true);
+  expect(port.calls).toHaveLength(before);
+  controller.dispose();
+});
+it("quarantines failed details before a frame is available and allows verified Close", async () => {
+  const { port, controller } = setup();
+  vi.spyOn(port, "details").mockRejectedValue(new Error("Private network error"));
+  await controller.see(() => fakeCandidate);
+  expect(controller.snapshot()).toMatchObject({
+    visible: true,
+    owned: true,
+    uncertain: true,
+    notice: "closure_unconfirmed",
+    frameUrl: null,
+  });
+  await controller.see(() => next);
+  expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+  await controller.close();
+  expect(controller.snapshot()).toMatchObject({ visible: false, owned: false });
+});
 
 it("awaits matching verified stop, then reads the fresh candidate once; repeated clicks do not race", async () => {
   const { port, controller } = setup();

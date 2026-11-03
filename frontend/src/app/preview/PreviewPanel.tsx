@@ -83,12 +83,18 @@ function PanelHeader({
 
 function PanelMessage({ view, label }: { view: PreviewView; label: string }) {
   const status = view.status;
+  const commandFailed = view.uncertain && !view.pending && view.notice !== null;
+  const heading = view.uncertain
+    ? "Closure is unconfirmed"
+    : label === "Ready"
+      ? "Preview is ready"
+      : `${label} preview`;
   const observer =
     !view.owned &&
     status !== null &&
     (status.state === "starting" || status.state === "ready" || status.state === "stopping");
   return (
-    <div className="preview-panel-message" role="status" aria-live="polite">
+    <div className="preview-panel-message" role={commandFailed ? "alert" : "status"}>
       {observer ? (
         <>
           <CircleAlert size={16} aria-hidden="true" />
@@ -102,19 +108,15 @@ function PanelMessage({ view, label }: { view: PreviewView; label: string }) {
         </>
       ) : (
         <>
-          {view.uncertain ? (
+          {commandFailed ? (
+            <X size={16} aria-hidden="true" />
+          ) : view.uncertain ? (
             <CircleAlert size={16} aria-hidden="true" />
           ) : (
             <Clock3 size={16} aria-hidden="true" />
           )}
           <div>
-            <h3>
-              {view.uncertain
-                ? "Closure is unconfirmed"
-                : label === "Ready"
-                  ? "Preview is ready"
-                  : `${label} preview`}
-            </h3>
+            <h3>{heading}</h3>
             {status?.state === "stopping" ? (
               <p>Waiting for verified closure.</p>
             ) : (
@@ -136,6 +138,12 @@ function PanelMessage({ view, label }: { view: PreviewView; label: string }) {
             {view.notice === "start_failed" && (
               <p>
                 The preview could not be confirmed. Replacement is unavailable until closure is
+                verified.
+              </p>
+            )}
+            {view.notice === "closure_unconfirmed" && !view.frameUrl && (
+              <p>
+                Close to request verified closure. Another preview cannot start until closure is
                 verified.
               </p>
             )}

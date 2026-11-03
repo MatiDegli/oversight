@@ -111,6 +111,28 @@ it("replacement waits for verified drainage, reads fresh head and prevents repea
     await session.close();
   }
 });
+it("keeps observer Close dismissed through background updates and a new owner's preview", async () => {
+  const session = await support.session();
+  try {
+    const owner = await session.open();
+    const observer = await session.open("panel", "", "observer");
+    await observer.getByRole("button", { name: "Close", exact: true }).click();
+    await owner.evaluate(() => window.previewFixture.publish("stopping", "closed"));
+    await observer.evaluate(() => window.previewFixture.observePublic());
+    await check(observer.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    await owner.evaluate(() => window.previewFixture.see({ agent_id: "agent-b" }));
+    await observer.evaluate(() => window.previewFixture.observePublic());
+    await check(observer.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
+    const before = session.authority.calls.length;
+    await observer.evaluate(() => window.previewFixture.see());
+    await check(observer.getByText("Preview in use in another tab", { exact: true })).toBeVisible();
+    expect(session.authority.calls).toHaveLength(before);
+    await noErrors(owner);
+    await noErrors(observer);
+  } finally {
+    await session.close();
+  }
+});
 it.each(["reject", "unverified"] as const)(
   "%s stop retains the same frame and blocks replacement",
   async (mode) => {
@@ -124,7 +146,7 @@ it.each(["reject", "unverified"] as const)(
       await page.evaluate(() => window.previewFixture.see({ agent_id: "agent-b" }));
       await page.evaluate(() => window.previewFixture.see());
       await check(page.locator("iframe")).toHaveAttribute("data-original", "true");
-      await check(page.getByRole("status")).toContainText("Closure is unconfirmed");
+      await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
       await check(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
       expect(session.authority.calls.filter((call) => call.kind === "start")).toHaveLength(1);
       await noErrors(page);
@@ -191,7 +213,7 @@ it("bounds an in-session lost Close while the frame stays visible", async () => 
     await page.evaluate(() => {
       window.previewFixture.advance(5_001);
     });
-    await check(page.getByRole("status")).toContainText("Closure is unconfirmed");
+    await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
     await check(page.locator("iframe")).toBeVisible();
     await noErrors(page);
   } finally {
