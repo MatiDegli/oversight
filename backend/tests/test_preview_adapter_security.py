@@ -105,3 +105,47 @@ async def test_shop_csp_sandbox_on_all_responses(tmp_path, path, status):
         assert (
             refused.headers["content-security-policy"] == reply.headers["content-security-policy"]
         )
+
+
+@pytest.mark.parametrize("parent,frame", [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")])
+async def test_real_shop_accepts_only_supervisor_selected_authority(tmp_path, parent, frame):
+    import re
+    from urllib.parse import urlencode
+
+    from oversight.workspace.preview_process import probe_ready
+
+    origin = f"http://{parent}:8710"
+    async with launched(
+        tmp_path, origin=origin, frame_host=frame, extra=("--frame-host", frame)
+    ) as child:
+        assert await probe_ready(child.port, "a" * 64, f"{frame}:{child.port}")
+        response = await child.request(
+            headers=[("Host", f"{frame}:{child.port}"), ("Origin", origin)]
+        )
+        assert response.status == 200
+        response.policy(origin)
+        nonce = re.search(rb'name="nonce" value="([a-f0-9]{64})"', response.body)
+        assert nonce is not None
+        body = urlencode(
+            dict(quantity_1=1, quantity_2=1, coupon="", nonce=nonce[1].decode())
+        ).encode()
+        reply = await child.request(
+            "POST",
+            "/cart",
+            body,
+            [
+                ("Host", f"{frame}:{child.port}"),
+                ("Origin", "null"),
+                ("Content-Type", "application/x-www-form-urlencoded"),
+                ("Content-Length", str(len(body))),
+            ],
+        )
+        assert reply.status == 200
+        for headers in (
+            [("Host", f"{parent}:{child.port}")],
+            [("Host", f"{frame}:{child.port}"), ("Host", f"{frame}:{child.port}")],
+            [("Host", f"{frame}:8710")],
+            [("Host", "foreign.invalid")],
+            [("Host", f"{frame}:{child.port}"), ("Origin", f"http://{frame}:8710")],
+        ):
+            assert (await child.request(headers=headers)).status == 403

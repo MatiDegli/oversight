@@ -39,7 +39,7 @@ function loopback(value: string): URL {
   const url = new URL(value);
   if (
     url.protocol !== "http:" ||
-    url.hostname !== "127.0.0.1" ||
+    !["localhost", "127.0.0.1"].includes(url.hostname) ||
     !url.port ||
     url.pathname !== "/" ||
     url.search ||
@@ -105,8 +105,11 @@ class LivePreviewPort {
   }
   async details(id: string, signal: AbortSignal): Promise<PreviewDetails> {
     const result = this.validators.details(await this.call(path(id), signal));
-    if (result.url !== null && loopback(result.url).port === this.origin.port)
-      throw new Error("Preview shares backend port");
+    if (result.url !== null) {
+      const frame = loopback(result.url);
+      if (frame.hostname === this.origin.hostname || frame.port === this.origin.port)
+        throw new Error("Invalid preview frame authority");
+    }
     return result;
   }
   async renew(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus> {

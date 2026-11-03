@@ -339,6 +339,7 @@ async def test_reviewed_connector_u1_and_gateway_tamper(tmp_path, monkeypatch, i
             execution.spec["public_port"],
             ready["nonce"],
             execution.gateway.public_authority if execution.gateway else "invalid",
+            reviewed=True,
         )
         assert execution.gateway is not None and execution.gateway.alive()
         frame = "127.0.0.1" if parent_host == "localhost" else "localhost"
@@ -438,31 +439,106 @@ async def test_reviewed_teardown(tmp_path, monkeypatch, inputs, trigger):
         await asyncio.gather(task, return_exceptions=True)
 
 
-@pytest.mark.parametrize("fault", ["stale", "dead"])
+@pytest.mark.parametrize("trigger", ["stop", "eof", "cancel"])
+async def test_reviewed_teardown_before_execute(tmp_path, monkeypatch, inputs, trigger):
+    execution, reader, reports, registry, roots = await controlled_execution(
+        tmp_path, monkeypatch, inputs
+    )
+    # The normal launch deadline must exceed the backend stop bound.
+    execution.config["readiness_s"] = 30
+    task = asyncio.create_task(execution.run())
+    try:
+        assert (await next_report(reports))["kind"] == "confirmed"
+        handle = execution.handle
+        assert handle is not None and not execution.execute.is_set()
+        started = asyncio.get_running_loop().time()
+        if trigger == "stop":
+            reader.feed_data(b"stop\n")
+        elif trigger == "eof":
+            reader.feed_eof()
+        else:
+            task.cancel()
+        await asyncio.wait_for(asyncio.shield(task), 14)
+        assert asyncio.get_running_loop().time() - started < 15
+        assert handle.verified_dead and not (roots.tree / "build-completed").exists()
+        report = await next_report(reports)
+        assert report["kind"] == "dead" and "nonce" not in report
+        assert (data := registry.read()) is not None and data["phase"] == "dead"
+    finally:
+        execution.execute.set()  # Release a broken implementation before fixture teardown.
+        execution.stopped.set()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize(
+    "fault", ["stale", "backend_dead", "gateway_dead", "forged", "incomplete", "expired"]
+)
 async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
-    execution, reader, reports, _registry, _roots = await controlled_execution(
+    from oversight.workspace.preview_gateway import PreviewGateway
+    from oversight.workspace.preview_registry import kill_pinned
+
+    execution, reader, reports, registry, _roots = await controlled_execution(
         tmp_path,
         monkeypatch,
         inputs,
-        health_run="stale-run",
+        health_run="stale-run" if fault == "stale" else "fresh-run",
     )
     execution.config["readiness_s"] = 2
+    original = PreviewGateway.probe
+    original_get = PreviewGateway._probe_get
+    probing = asyncio.Event()
+    proceed = asyncio.Event()
+
+    async def probe_get(gateway, path, **kwargs):
+        result = await original_get(gateway, path, **kwargs)
+        if fault.endswith("dead") and path == "/events":
+            # Fresh health and the real service's SSE have succeeded; stop while probing.
+            probing.set()
+            await proceed.wait()
+        return result
+
+    async def probe(gateway, **kwargs):
+        if not fault.endswith("dead"):
+            probing.set()
+            await proceed.wait()
+        if fault == "incomplete":
+            kwargs["workers"] = ()
+        evidence = await original(gateway, **kwargs)
+        if fault == "forged":
+            return replace(evidence)
+        if fault == "expired":
+            gateway.limits = replace(gateway.limits, evidence_s=0.000001)
+            await asyncio.sleep(0.01)
+        return evidence
+
+    monkeypatch.setattr(PreviewGateway, "probe", probe)
+    monkeypatch.setattr(PreviewGateway, "_probe_get", probe_get)
     task = asyncio.create_task(execution.run())
     try:
         assert (await next_report(reports))["kind"] == "confirmed"
         reader.feed_data(b"execute\n")
         assert (await next_report(reports))["kind"] == "executing"
-        if fault == "dead":
-            from oversight.workspace.preview_registry import kill_pinned
-
-            assert execution.handle is not None
+        async with asyncio.timeout(20):
+            assert (await reports.get())["kind"] == "probing"
+            await probing.wait()
+        assert execution.handle is not None and execution.gateway is not None
+        if fault == "backend_dead":
             kill_pinned(execution.handle.pidfds["init"])
+            await execution.handle.wait()
+        elif fault == "gateway_dead":
+            await execution.gateway.close()
+        proceed.set()
         report = await next_report(reports)
         assert report["kind"] == "dead" and "nonce" not in report
+        if fault.endswith("dead"):
+            assert report["reason"] == "app_exited"
         await asyncio.wait_for(task, 10)
-        assert execution.gateway is None or not execution.gateway.alive()
-        assert execution.handle is not None and execution.handle.verified_dead
+        assert not execution.gateway.alive() and execution.handle.verified_dead
+        assert (data := registry.read()) is not None and data["phase"] == "dead"
+        assert reports.empty()
     finally:
+        proceed.set()
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
 

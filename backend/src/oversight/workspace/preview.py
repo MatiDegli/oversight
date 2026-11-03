@@ -249,6 +249,7 @@ class PreviewManager:
                 listener,
                 refusal,
                 self.clock(),
+                parent_authority=self._parent_authority,
             )
             if reviewed is not None:
                 if self.reviewed_inputs is None:

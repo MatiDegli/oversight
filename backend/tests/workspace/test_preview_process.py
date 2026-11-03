@@ -495,3 +495,29 @@ def test_reviewed_configuration_never_constructs_shop_argv(tmp_path):
             1,
         )
     assert "argv" not in config
+
+
+@pytest.mark.parametrize("parent,frame", [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")])
+def test_shop_launch_freezes_exact_opposite_authority(tmp_path, parent, frame):
+    app = bind_listener((19685, 19686))
+    refusal = socket.socket()
+    refusal.bind(("127.0.0.1", 0))
+    refusal.listen()
+    try:
+        cfg = launch_configuration(
+            profile(),
+            tmp_path,
+            tmp_path / "tree",
+            tmp_path / "private",
+            app,
+            refusal,
+            100,
+            parent_authority=f"{parent}:8710",
+        )
+        argv = cfg["argv"]
+        assert argv[argv.index("--frame-host") + 1] == frame
+        assert argv.count("--oversight-origin") == 1
+        assert argv[argv.index("--oversight-origin") + 1] == f"http://{parent}:8710"
+    finally:
+        app.close()
+        refusal.close()

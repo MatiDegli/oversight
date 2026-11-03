@@ -37,9 +37,21 @@ class PreviewLifecycle:
         """Cancellation settles before process.stop can take the channel's sole reader."""
         try:
             queued = time.monotonic()
-            # Waiting for admission locks is queue time, bounded by the absolute lifetime.
-            async with self.workspace.locks(main=True, agent_id=owner.candidate.agent_id):
-                self.authorize(owner)
+            # Convert person-owned clock deadlines to the loop's monotonic clock.
+            while True:
+                lease, absolute = self.deadlines()
+                expires_at = asyncio.get_running_loop().time() + min(lease, absolute) - self.clock()
+                try:
+                    async with asyncio.timeout_at(expires_at):
+                        async with self.workspace.locks(
+                            main=True, agent_id=owner.candidate.agent_id
+                        ):
+                            self.authorize(owner)
+                    break
+                except TimeoutError:
+                    # A valid renewal while queued may move the lease, never the lifetime.
+                    if self.clock() >= min(self.deadlines()):
+                        raise
             owner.queue_s += time.monotonic() - queued
             allowance = self.profile.readiness_s
             if self.profile.reviewed_app is not None:
@@ -69,11 +81,15 @@ class PreviewLifecycle:
                     self.authorize(owner)
                     await self.transition("ready", None)
         except TimeoutError:
-            reason = "readiness_timeout"
-            if self.profile.reviewed_app is not None and (
+            lease, absolute = self.deadlines()
+            if self.clock() >= min(lease, absolute):
+                reason = "lifetime_expired" if self.clock() >= absolute else "lease_expired"
+            elif self.profile.reviewed_app is not None and (
                 owner.process is None or owner.process.stage != "readiness"
             ):
                 reason = "launch_failed"
+            else:
+                reason = "readiness_timeout"
             owner.reason = owner.reason or reason
 
     async def supervise(self, owner: "PreviewOwnership") -> None:

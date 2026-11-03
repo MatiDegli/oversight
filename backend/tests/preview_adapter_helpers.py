@@ -36,10 +36,10 @@ class Reply:
     headers: dict[str, str]
     body: bytes
 
-    def policy(self) -> None:
+    def policy(self, origin: str = ORIGIN) -> None:
         assert self.headers["content-security-policy"] == (
             "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors "
-            + ORIGIN
+            + origin
             + "; sandbox allow-forms"
         )
         assert self.headers["referrer-policy"] == "no-referrer"
@@ -53,6 +53,8 @@ class Child:
     transport: asyncio.SubprocessTransport
     protocol: Process
     port: int
+    origin: str = ORIGIN
+    frame_host: str = "127.0.0.1"
 
     async def exit(self) -> int | None:
         await asyncio.wait_for(asyncio.shield(self.protocol.done), 8)
@@ -66,7 +68,7 @@ class Child:
         body: bytes = b"",
         headers: list[tuple[str, str]] | None = None,
     ) -> Reply:
-        fields = headers if headers is not None else [("Host", f"127.0.0.1:{self.port}")]
+        fields = headers if headers is not None else [("Host", f"{self.frame_host}:{self.port}")]
         raw = f"{method} {path} HTTP/1.1\r\n".encode()
         raw += b"".join(f"{k}: {v}\r\n".encode() for k, v in fields) + b"\r\n" + body
         async with asyncio.timeout(6):
@@ -89,7 +91,7 @@ class Child:
             dict(line.lower().split(": ", 1) for line in lines[1:]),
             content,
         )
-        reply.policy()
+        reply.policy(self.origin)
         return reply
 
     async def ready(self) -> None:
@@ -122,6 +124,8 @@ async def launched(
     extra: tuple[str, ...] = (),
     ready: bool = True,
     interpreter: str = sys.executable,
+    origin: str = ORIGIN,
+    frame_host: str = "127.0.0.1",
 ):
     tree = root or copy_shop(tmp_path)
     sock = listener or socket.socket()
@@ -150,7 +154,7 @@ async def launched(
         "--ready-nonce",
         READY,
         "--oversight-origin",
-        ORIGIN,
+        origin,
         *extra,
     ]
     loop = asyncio.get_running_loop()
@@ -165,7 +169,7 @@ async def launched(
         8,
     )
     sock.close()  # The child owns the only listening copy after handoff.
-    child = Child(transport, protocol, port)
+    child = Child(transport, protocol, port, origin, frame_host)
     try:
         if ready:
             await child.ready()

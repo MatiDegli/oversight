@@ -54,16 +54,48 @@ function serverPorts(command: "serve" | "build") {
     throw new Error("OVERSIGHT_VITE_PORT must differ from OVERSIGHT_PORT");
   return { backendPort, vitePort };
 }
-function previewFrames(command: "serve" | "build", mode: string, backend: number, vite: number) {
+function previewFrames(
+  command: "serve" | "build",
+  mode: string,
+  backend: number,
+  vite: number,
+): Plugin {
   const rawPool = command === "serve" ? process.env.OVERSIGHT_PREVIEW_PORTS || "" : "";
   const pool = rawPool
     ? rawPool.split(",").map((raw) => port("OVERSIGHT_PREVIEW_PORTS", raw.trim()))
     : [];
   if (new Set(pool).size !== pool.length || pool.some((p) => p === backend || p === vite))
     throw new Error("Invalid preview port pool");
-  return mode === "replay" || pool.length === 0
-    ? "frame-src 'none'"
-    : `frame-src ${pool.map((p) => `http://127.0.0.1:${String(p)}`).join(" ")}`;
+  return {
+    name: "preview-frame-authorities",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const hosts = request.rawHeaders.filter(
+          (_, i, fields) => i % 2 === 1 && fields[i - 1]?.toLowerCase() === "host",
+        );
+        const address = server.httpServer?.address();
+        const boundPort = address && typeof address === "object" ? address.port : vite;
+        const match =
+          hosts.length === 1
+            ? /^(localhost|127\.0\.0\.1):([1-9][0-9]{0,4})$/.exec(hosts[0] ?? "")
+            : null;
+        const admitted = match !== null && Number(match[2]) === boundPort;
+        const frame = match?.[1] === "127.0.0.1" ? "localhost" : "127.0.0.1";
+        response.setHeader(
+          "Content-Security-Policy",
+          !admitted || mode === "replay" || pool.length === 0
+            ? "frame-src 'none'"
+            : `frame-src ${pool.map((p) => `http://${frame}:${String(p)}`).join(" ")}`,
+        );
+        if (!admitted) {
+          response.statusCode = 403;
+          response.end();
+          return;
+        }
+        next();
+      });
+    },
+  };
 }
 function previewFramePlugin(mode: string): Plugin {
   return {
@@ -120,6 +152,7 @@ export default defineConfig(({ command, mode }) => {
   return {
     ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
     plugins: [
+      previewFrames(command, mode, backendPort, vitePort),
       previewFramePlugin(mode),
       noticesPlugin(),
       recordedReplayPlugin(),
@@ -136,7 +169,6 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     server: {
-      headers: { "Content-Security-Policy": previewFrames(command, mode, backendPort, vitePort) },
       host: "127.0.0.1",
       port: vitePort,
       strictPort: true,

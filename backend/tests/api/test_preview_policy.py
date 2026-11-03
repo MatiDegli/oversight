@@ -222,17 +222,40 @@ async def test_actual_vite_html_responses_carry_exact_pool_header(tmp_path):
     await vite_script(
         """
         import { createServer } from 'vite';
+        import { request } from 'node:http';
         import { writeFile } from 'node:fs/promises';
         const server = await createServer({server: {port: 0, strictPort: false}});
         try {
           await server.listen();
           const origin = server.resolvedUrls.local[0];
+          const port = new URL(origin).port;
           const headers = [];
-          for (const path of ['', 'nested/spa']) {
-            const response = await fetch(origin + path, {signal: AbortSignal.timeout(5000)});
-            if (response.status !== 200) throw new Error('Vite HTML unavailable');
-            headers.push(response.headers.get('content-security-policy'));
-            await response.text();
+          const get = (path, host) => new Promise((resolve, reject) => {
+            const req = request(new URL(path, origin), {headers: {Host: host}}, (response) => {
+              response.resume();
+              response.on('end', () => resolve({
+                status: response.statusCode,
+                policy: response.headers['content-security-policy']
+              }));
+            });
+            req.setTimeout(5000, () => req.destroy(new Error('request timed out')));
+            req.on('error', reject);
+            req.end();
+          });
+          for (const parent of ['localhost', '127.0.0.1']) {
+            for (const path of ['', 'nested/spa']) {
+              const response = await get(path || '/', `${parent}:${port}`);
+              if (response.status !== 200) throw new Error('Vite HTML unavailable');
+              headers.push(response.policy);
+            }
+          }
+          for (const host of [`evil.invalid:${port}`, `127.0.0.1:8710`,
+                              `localhost:${port}.evil`, `[::1]:${port}`]) {
+            const response = await get('/', host);
+            if (response.status !== 403) {
+              throw new Error(`Vite admitted ${host}: ${response.status}`);
+            }
+            headers.push(response.policy);
           }
           await writeFile(process.argv[1], JSON.stringify(headers));
         } finally { await server.close(); }
@@ -242,6 +265,10 @@ async def test_actual_vite_html_responses_carry_exact_pool_header(tmp_path):
     assert (
         json.loads(evidence.read_text())
         == ["frame-src http://127.0.0.1:19681 http://127.0.0.1:19682"] * 2
+        + ["frame-src http://localhost:19681 http://localhost:19682"] * 2
+        # Vite's built-in foreign-host guard runs before plugin middleware.
+        + [None]
+        + ["frame-src 'none'"] * 3
     )
 
 

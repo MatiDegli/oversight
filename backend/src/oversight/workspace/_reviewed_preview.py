@@ -403,7 +403,14 @@ class ReviewedExecution:
         await offload(lambda: self.registry.update(aggregate_enforced=self.scope.path is not None))
         if not self.authorized:
             self.send(kind="confirmed")
-            await self.execute.wait()
+            execute = asyncio.create_task(self.execute.wait())
+            stopped = asyncio.create_task(self.stopped.wait())
+            try:
+                await asyncio.wait({execute, stopped}, return_when=asyncio.FIRST_COMPLETED)
+            finally:
+                for waiter in (execute, stopped):
+                    waiter.cancel()
+                await asyncio.gather(execute, stopped, return_exceptions=True)
             if self.stopped.is_set() or time.monotonic() >= min(self.lease, self.absolute):
                 raise ValueError("reviewed execution no longer authorized")
             self.authorized = True
@@ -693,6 +700,8 @@ class ReviewedExecution:
                     else "launch_failed"
                 )
         finally:
+            # Unblock the shielded boundary's before_exec hook before settling startup.
+            self.stopped.set()
             for task in (startup, controls, monitor, stop):
                 task.cancel()
             await preserve_ownership(

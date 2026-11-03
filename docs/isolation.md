@@ -551,7 +551,12 @@ The request's accepted Host selects one frame name: localhost parents use 127.0.
 127.0.0.1 parents use localhost frames. The gateway uses that exact frame Host/browser Origin and
 only the actual parent as frame-ancestors. The production parent response resolves frame-src from
 that same accepted request; IPv6 and other parent names cannot start this preview. The development
-header and shop adapter must carry the same contract before both directions are qualified.
+header uses the request Host and bound Vite port, refusing other authorities. The shop receives one
+exact frame host and parent origin, including in readiness probes; the transport accepts only the
+opposite frame name on a different port. Real adapter and Vite HTTP tests cover both directions.
+Waiting for admission locks is bounded by the earlier lease or absolute deadline and retains the
+corresponding expiry reason. Stop, EOF and cancellation before execute withhold acknowledgement
+and settle verified boundary death within the backend stop bound.
 
 Controlled Python backend fixtures exercise actual namespaces, connector and gateway wiring. They
 do not enable the reviewed self app, prove its scripted stories or certify final browser acceptance.

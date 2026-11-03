@@ -106,6 +106,7 @@ it.each(matrix)(
       await check(
         page.frameLocator("iframe").getByRole("heading", { name: "Candidate shop" }),
       ).toBeVisible();
+      await check(page.locator("iframe")).toHaveAttribute("src", "http://localhost:19800/");
       await check(page.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
       await check(page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
       expect(await page.locator(".conversation-composer").boundingBox()).toEqual(before);

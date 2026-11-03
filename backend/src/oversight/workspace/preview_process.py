@@ -51,6 +51,8 @@ def launch_configuration(
     listener: socket.socket,
     refusal: socket.socket,
     now: float,
+    *,
+    parent_authority: str | None = None,
 ) -> dict[str, Any]:
     argv: list[str] = []
     if profile.reviewed_app is None:
@@ -68,7 +70,14 @@ def launch_configuration(
             "--memory-limit-bytes",
             str(profile.memory_limit_bytes),
         ]
-        for origin in profile.origins:
+        origins = profile.origins
+        if parent_authority is not None:
+            from oversight.workspace._reviewed_preview import opposite_host
+
+            frame = opposite_host(parent_authority.split(":")[0])
+            argv.extend(("--frame-host", frame))
+            origins = ("http://" + parent_authority,)
+        for origin in origins:
             argv.extend(("--oversight-origin", origin))
     return {
         "runtime": str(runtime),
@@ -82,7 +91,9 @@ def launch_configuration(
     }
 
 
-async def probe_ready(port: int, nonce: str, authority: str | None = None) -> bool:
+async def probe_ready(
+    port: int, nonce: str, authority: str | None = None, *, reviewed: bool = False
+) -> bool:
     """No Origin or token; no redirects, proxy discovery, compression or unbounded bodies."""
     writer: asyncio.StreamWriter | None = None
     try:
@@ -96,9 +107,7 @@ async def probe_ready(port: int, nonce: str, authority: str | None = None) -> bo
             header = await reader.readuntil(b"\r\n\r\n")
             lines = header.decode("ascii").split("\r\n")
             expected = (
-                {"HTTP/1.1 200 Response"}
-                if authority is not None
-                else {"HTTP/1.1 200 OK", "HTTP/1.0 200 OK"}
+                {"HTTP/1.1 200 Response"} if reviewed else {"HTTP/1.1 200 OK", "HTTP/1.0 200 OK"}
             )
             if lines[0] not in expected:
                 return False
@@ -292,7 +301,9 @@ class PreviewProcess:
                 while time.monotonic() < deadline:
                     if not await self.confirmed_live():
                         return False
-                    if self.nonce and await probe_ready(self.port, self.nonce):
+                    if self.nonce and await probe_ready(
+                        self.port, self.nonce, self.public_authority
+                    ):
                         return await self.confirmed_live()
                     await asyncio.sleep(min(0.05, max(0, deadline - time.monotonic())))
         except TimeoutError:
@@ -314,7 +325,7 @@ class PreviewProcess:
                     return False
                 self.nonce = nonce
                 return await self.confirmed_live() and await probe_ready(
-                    self.port, nonce, self.public_authority
+                    self.port, nonce, self.public_authority, reviewed=True
                 )
         except TimeoutError:
             return False

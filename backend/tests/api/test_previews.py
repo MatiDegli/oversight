@@ -298,6 +298,13 @@ async def test_reviewed_request_host_selects_opposite_frame(preview, parent, fra
         await h.sink.wait("ready", identifier)
         details = await client.get("/previews/" + identifier, headers={"Host": authority})
         assert details.json()["url"] == f"http://{frame}:{h.processes[0].port}/"
+        data = h.manager.registry.read()
+        assert data is not None
+        argv = data["launch"]["argv"]
+        assert argv[argv.index("--frame-host") + 1] == frame
+        assert argv.count("--oversight-origin") == 1
+        assert argv[argv.index("--oversight-origin") + 1] == "http://" + authority
+        assert h.processes[0].public_authority == f"{frame}:{h.processes[0].port}"
         changed = await client.get("/previews/" + identifier, headers={"Host": frame + ":8710"})
         error(changed, "forbidden")
         for host in ("[::1]:8710", "localhost.evil:8710", "evil.test:8710"):
