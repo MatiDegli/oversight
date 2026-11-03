@@ -949,8 +949,8 @@ for (const width of [1920, 1280])
       try {
         await page.getByRole("button", { name: "Fit the graph to the view" }).click();
         await ready(page);
-        // Give the synthetic capture's expanded agent labels room between columns.
-        if (!boltons && width === 1280) await zoomTo(page, 0.25);
+        // Keep the synthetic group header below the summary overlay for a real pointer hover.
+        if (!boltons && width === 1280) await zoomTo(page, 0.21);
         await clearPointer(page);
         expect((await camera(page)).level).toBe("map");
         await unobstructedNames(page);
