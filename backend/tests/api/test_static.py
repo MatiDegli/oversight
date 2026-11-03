@@ -102,7 +102,7 @@ async def test_the_root_is_index_html_and_revalidates(tmp_path: Path, dist: Path
             assert response.status_code == 200
             assert response.text == INDEX_HTML
             assert response.headers["content-type"].startswith("text/html")
-            assert response.headers["cache-control"] == "no-cache"
+            assert response.headers["cache-control"] == "no-store"
 
 
 async def test_a_client_route_falls_back_to_index_html(tmp_path: Path, dist: Path) -> None:
@@ -112,7 +112,7 @@ async def test_a_client_route_falls_back_to_index_html(tmp_path: Path, dist: Pat
             response = await client.get(path)
             assert response.status_code == 200, path
             assert response.text == INDEX_HTML, path
-            assert response.headers["cache-control"] == "no-cache", path
+            assert response.headers["cache-control"] == "no-store", path
 
 
 async def test_hashed_assets_are_cached_for_a_year_and_other_files_revalidate(
@@ -294,3 +294,81 @@ async def test_nt_root_and_regular_client_routes(tmp_path, dist, monkeypatch):
             assert response.status_code == 200 and response.text == INDEX_HTML
         assert (await client.get("/assets/index-abc123.js")).status_code == 200
         assert (await client.get("/ASSETS/no-suffix")).status_code == 404
+
+
+async def test_live_index_startup_report_escaping_and_freshness(tmp_path, dist):
+    import json
+    from dataclasses import replace
+    from html.parser import HTMLParser
+
+    from oversight.preview_startup import PreviewStartupReport, serialize_preview_startup
+
+    class Carrier(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.elements = []
+            self.data = []
+            self.inside = False
+
+        def handle_starttag(self, tag, attrs):
+            self.elements.append((tag, dict(attrs)))
+            self.inside = tag == "script" and dict(attrs).get("id") == "oversight-preview-startup"
+
+        def handle_endtag(self, tag):
+            if tag == "script":
+                self.inside = False
+
+        def handle_data(self, data):
+            if self.inside:
+                self.data.append(data)
+
+    (dist / "index.html").write_text(
+        '<head><script type="module" src="/assets/index-abc123.js"></script></head>'
+    )
+    report = PreviewStartupReport(
+        (("python",),), "/T", "reviewed", (), "fixed", "", "/r/previews/id/logs/build.log"
+    )
+    for restart in (1, 2):
+        frozen = serialize_preview_startup(
+            replace(report, reason=f"restart {restart}", cwd='</script><!--"&>\u2028\u2029\\')
+        )
+        app = FastAPI()
+        assert add_static(app, dist, startup_report=lambda frozen=frozen: frozen)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            for path in ("/", "/index.html", "/review/agent-1"):
+                for _ in range(2):
+                    response = await client.get(
+                        path,
+                        headers={
+                            "If-None-Match": "*",
+                            "If-Modified-Since": "Wed, 01 Jan 2031 00:00:00 GMT",
+                        },
+                    )
+                    assert response.status_code == 200
+                    assert response.headers["cache-control"] == "no-store"
+                    assert "etag" not in response.headers
+                    parsed = Carrier()
+                    parsed.feed(response.text)
+                    carriers = [
+                        attrs
+                        for tag, attrs in parsed.elements
+                        if attrs.get("id") == "oversight-preview-startup"
+                    ]
+                    assert len(carriers) == 1 and carriers[0]["type"] == "application/json"
+                    assert parsed.data == [frozen]
+                    assert json.loads(parsed.data[0])["cwd"] == '</script><!--"&>\u2028\u2029\\'
+                    assert json.loads(parsed.data[0])["reason"] == f"restart {restart}"
+                    assert [tag for tag, _ in parsed.elements] == ["head", "script", "script"]
+                    assert response.text.index("oversight-preview-startup") < response.text.index(
+                        'type="module"'
+                    )
+                    assert "Content-Security-Policy" in response.headers
+    for invalid in (None, "invalid", '{"version":1}'):
+        app = FastAPI()
+        add_static(app, dist, startup_report=lambda invalid=invalid: invalid)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            assert "oversight-preview-startup" not in (await client.get("/")).text

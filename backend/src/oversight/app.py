@@ -75,6 +75,7 @@ from oversight.events import (
 )
 from oversight.graph import WorkspaceGraph, read_layout
 from oversight.limits import SizeLimitError, bounded_text
+from oversight.preview_startup import ENABLE_HINT, reviewed_startup_report
 from oversight.redaction import Redactor
 from oversight.resources import hold_reason, memory_used
 from oversight.runtime_accounting import write_tick
@@ -90,17 +91,22 @@ from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
 from oversight.workspace import (
     OPEN_NOTICE,
+    OVERSIGHT_SELF,
     TRUST_NOTICE,
     OwnSource,
     PreviewCandidate,
     PreviewError,
+    PreviewProfile,
     Workspace,
     WorkspaceError,
+    authorize_reviewed_app,
     configure_suite,
     list_tree,
+    load_preview_app,
     outside_profile,
     preflight_placement,
     select_source,
+    self_inventory,
     valid_agent_id,
     validate_source,
 )
@@ -299,6 +305,12 @@ class LiveRun:
             pytest_options=self._source.pytest_options if self._source else (),
             own_source=own,
             _nt_source_bytes=own is not None,
+            require_demo_python=self._source == OVERSIGHT_SELF,
+            source_inventory=(
+                settings.preview_profile.reviewed_app.inventory
+                if settings.preview_profile.reviewed_app
+                else None
+            ),
         )
         self._own_selection = own
         self._environment_unavailable: str | None = None
@@ -341,6 +353,7 @@ class LiveRun:
         self.dispatcher = Dispatcher(self)
         self.plans = PlanService(self)
         self.leads = LeadService(self)
+        self.preview_startup_serialized: str | None = None
         self.previews = preview_runtime.compose(
             self.workspace,
             settings.preview_profile,
@@ -416,13 +429,70 @@ class LiveRun:
             if self._source is not None:
                 assert not isinstance(self._source, OwnSource)
                 async with self.workspace.guard_nt_cleanup():
-                    await validate_source(
-                        self._source, self._settings.runtime_dir, spawn=self.workspace.startup_git
-                    )
+                    if self._source == OVERSIGHT_SELF:
+                        self.workspace.source_inventory = await self_inventory(
+                            self._source,
+                            self._settings.runtime_dir,
+                            spawn=self.workspace.startup_git,
+                        )
+                    else:
+                        await validate_source(
+                            self._source,
+                            self._settings.runtime_dir,
+                            spawn=self.workspace.startup_git,
+                        )
             return await self.workspace.reset()
         except BaseException:
             self.workspace.release_runtime()
             raise
+
+    async def _prepare_reviewed_preview(self) -> None:
+        if self.preview_startup_serialized is not None:
+            return
+        if self._source != OVERSIGHT_SELF:
+            return
+        settings, profile = self._settings, self.previews.profile
+        if not profile.enabled:
+            _log.warning(ENABLE_HINT)
+            return
+        inventory = self.workspace.source_inventory
+        assert inventory is not None
+        port = profile.ports[0] if profile.ports else 0
+        if port in (settings.port, settings.vite_port):
+            raise ValueError("preview app is not authorized")
+        directory = settings.runtime_dir / "previews" / self.run_id
+
+        def prepare() -> tuple[PreviewProfile, str | None]:
+            launch = load_preview_app(
+                inventory.root,
+                {"OVERSIGHT_PREVIEW_APP": settings.preview_app}
+                if settings.preview_app is not None
+                else {},
+                tree=directory / "tree",
+                state=directory / "state",
+                python=profile.interpreter,
+                node=settings.preview_node,
+                tsc=settings.preview_tsc,
+                vite=settings.preview_vite,
+                api_port=port,
+                public_port=port,
+            )
+            if launch is None:
+                return profile, None
+            frozen = replace(
+                profile, trusted_demo=False, reviewed_app=authorize_reviewed_app(inventory, launch)
+            )
+            frozen.validate()
+            return frozen, reviewed_startup_report(frozen, str(directory / "logs/build.log"))
+
+        frozen, serialized = await asyncio.to_thread(prepare)
+        assert isinstance(frozen, type(profile))
+        self.previews.profile = frozen
+        self.previews.lifecycle.profile = frozen
+        if serialized is not None:
+            _log.warning("%s", serialized)
+            self.preview_startup_serialized = serialized
+            self.previews.startup_report = serialized
 
     async def startup(self) -> None:
         settings = self._settings
@@ -454,6 +524,7 @@ class LiveRun:
                 "this run keeps 60 s."
             )
         base = await self._reset_workspace()
+        await self._prepare_reviewed_preview()
         capability = self.workspace.isolation
         if not capability.available:
             _log.warning("%s Reason: %s", OPEN_NOTICE, capability.reason)
@@ -1308,7 +1379,9 @@ def _live_app(
         )
     )
     if settings.frontend_dist is not None:
-        add_static(app, settings.frontend_dist)  # after the API routes, so they always win
+        add_static(
+            app, settings.frontend_dist, startup_report=lambda: live.preview_startup_serialized
+        )
     app.state.live = live
     app.state.store = live.store
     app.state.layout = live.layout
