@@ -156,10 +156,7 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
                 >
                   {full ? (module.fullName ?? module.name) : module.name}
                 </div>
-                <div
-                  className="map-count"
-                  style={{ visibility: module.agents.length ? "hidden" : hidden }}
-                >
+                <div className="map-count" style={{ visibility: hidden }}>
                   {module.functions
                     ? `${String(module.functions)} ${module.functions === 1 ? "function" : "functions"}`
                     : "empty"}

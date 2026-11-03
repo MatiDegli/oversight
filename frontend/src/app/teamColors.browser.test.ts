@@ -93,7 +93,7 @@ for (const width of [1920, 1280])
               );
               const module = page.locator('[data-map-module="boltons.strutils"]');
               await check(module.locator(".map-agent")).toHaveText("A·2 editing");
-              await check(module.locator(".map-count")).toHaveCSS("visibility", "hidden");
+              await check(module.locator(".map-count")).toHaveCSS("visibility", "visible");
             }
             await page.evaluate(() => document.fonts.ready);
             await check

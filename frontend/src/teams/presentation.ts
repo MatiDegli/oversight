@@ -16,6 +16,21 @@ export type AgentPresentation = Readonly<{
   family: AgentFamily;
   order: number;
 }>;
+
+/** Display order stays independent of runtime seats, including plans sharing a lead. */
+export function compareAgentPresentation(
+  a: AgentPresentation | undefined,
+  b: AgentPresentation | undefined,
+): number {
+  if (!a || !b) return a ? -1 : b ? 1 : 0;
+  return (
+    a.order - b.order ||
+    (a.planId ?? "").localeCompare(b.planId ?? "") ||
+    (a.subtask ?? 0) - (b.subtask ?? 0) ||
+    a.agentId.localeCompare(b.agentId)
+  );
+}
+
 type TeamActivity = {
   hue: PaletteKey;
   order: number;

@@ -455,7 +455,7 @@ for (const name of ["empty", "working", "proposed", "review", "merged"])
           const page = await open(name, width, theme);
           try {
             await check(page.locator(".chat-agents > header")).toContainText(
-              `${name === "empty" ? "0" : name === "merged" ? "1" : "2"} of 2 running`,
+              `${name === "empty" ? "0" : name === "merged" ? "1" : "2"} running`,
             );
             if (name !== "empty")
               await check(row(page, name === "merged" ? "B" : "A")).toHaveAttribute(

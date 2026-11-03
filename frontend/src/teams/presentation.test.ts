@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
 import { applyEvent, createInitialState } from "../state";
 import { parseEvent } from "../transport";
-import { selectPresentation } from "./presentation";
+import { compareAgentPresentation, selectPresentation } from "./presentation";
 
 const opening = parseEvent(log.trim().split("\n")[0] ?? "");
 const ts = "2026-11-02T15:00:00Z";
@@ -93,6 +93,32 @@ const fold = (...tail: ServerEvent[]) =>
     createInitialState(),
   );
 const identities = (...tail: ServerEvent[]) => selectPresentation(fold(...tail)).byAgent;
+
+it("orders presentation by team, plan, numeric subtask and agent ID with unknowns last", () => {
+  const identity = identities(agent("known")).known;
+  if (!identity) throw new Error("Missing identity");
+  const rows = [
+    { ...identity, agentId: "later-team", order: 1, planId: null },
+    { ...identity, agentId: "later-plan", planId: "q", subtask: 1 },
+    { ...identity, agentId: "later-subtask", planId: "p", subtask: 10 },
+    { ...identity, agentId: "b", planId: "p", subtask: 2 },
+    { ...identity, agentId: "a", planId: "p", subtask: 2 },
+    { ...identity, agentId: "no-plan", planId: null, subtask: null },
+  ];
+  const before = structuredClone(rows);
+  expect([...rows].sort(compareAgentPresentation).map((row) => row.agentId)).toEqual([
+    "no-plan",
+    "a",
+    "b",
+    "later-subtask",
+    "later-plan",
+    "later-team",
+  ]);
+  expect(rows).toEqual(before);
+  expect(compareAgentPresentation(identity, undefined)).toBeLessThan(0);
+  expect(compareAgentPresentation(undefined, identity)).toBeGreaterThan(0);
+  expect(compareAgentPresentation(undefined, undefined)).toBe(0);
+});
 
 it("shares lead identity across plans and slots while retaining each plan's indices", () => {
   const rows = identities(

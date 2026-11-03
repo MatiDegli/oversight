@@ -1,4 +1,8 @@
-import { presentationFor } from "../../teams/presentation";
+import {
+  compareAgentPresentation,
+  presentationFor,
+  selectPresentation,
+} from "../../teams/presentation";
 import { presentationLook } from "../../teams/badge";
 import { AgentCard, selectAgentCard, slotUsage, TaskBox } from "../../agents";
 import type { TaskBoxProps } from "../../agents";
@@ -35,10 +39,12 @@ export function AgentsPanel({
   | "replayOf"
 > &
   Pick<TaskBoxProps, "inputRef"> & { mergeLabels?: ReadonlyMap<string, "Merging" | "Merged"> }) {
-  const cards = selectAgents(state).flatMap((agent) => {
-    const data = selectAgentCard(state, agent.agent_id);
-    return data ? [data] : [];
-  });
+  const cards = selectAgents(state)
+    .flatMap((agent) => {
+      const data = selectAgentCard(state, agent.agent_id);
+      return data ? [data] : [];
+    })
+    .sort((a, b) => compareAgentPresentation(a.presentation, b.presentation));
   const slots = slotUsage(state);
   return (
     <aside
@@ -82,12 +88,16 @@ export function AgentsPanel({
 }
 
 export function AgentsRail({ state }: { state: State }) {
+  const identities = selectPresentation(state).byAgent;
+  const agents = selectAgents(state).sort((a, b) =>
+    compareAgentPresentation(identities[a.agent_id], identities[b.agent_id]),
+  );
   return (
     <aside
       aria-label="Agents"
       className="agents-rail flex w-(--agents-rail-width) shrink-0 flex-col items-center gap-3.5 border-l border-divider bg-shell py-3.5"
     >
-      {selectAgents(state).map((agent) => {
+      {agents.map((agent) => {
         const identity = presentationFor(state, agent.agent_id);
         const look = presentationLook(identity);
         const [label, caption] = stateWords[agent.state];

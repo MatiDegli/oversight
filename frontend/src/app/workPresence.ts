@@ -1,4 +1,8 @@
-import { presentationFor, type AgentPresentation } from "../teams/presentation";
+import {
+  compareAgentPresentation,
+  selectPresentation,
+  type AgentPresentation,
+} from "../teams/presentation";
 import type { FocusRange } from "@contracts";
 import type { State } from "../state";
 
@@ -56,13 +60,14 @@ function currentFiles(state: State, agentId: string): WorkFile[] {
 export function selectWorkPresence(state: State) {
   const current: WorkGroup[] = [],
     pending: WorkGroup[] = [];
-  const agents = Object.values(state.agents).sort(
-    (a, b) => a.slot.localeCompare(b.slot) || a.agent_id.localeCompare(b.agent_id),
+  const identities = selectPresentation(state).byAgent;
+  const agents = Object.values(state.agents).sort((a, b) =>
+    compareAgentPresentation(identities[a.agent_id], identities[b.agent_id]),
   );
   for (const agent of agents) {
     const identity = {
       agentId: agent.agent_id,
-      presentation: presentationFor(state, agent.agent_id),
+      presentation: identities[agent.agent_id],
     };
     if (agent.state === "working" || agent.state === "revising") {
       const files = currentFiles(state, agent.agent_id);
