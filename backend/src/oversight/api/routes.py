@@ -10,6 +10,8 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from oversight.api.commands import Commands, add_command_routes
 from oversight.api.errors import ApiError
+from oversight.api.preview_publication import install_preview_publication
+from oversight.api.previews import add_preview_routes
 from oversight.changes import ChangeNotFound
 from oversight.events import (
     EventStore,
@@ -61,8 +63,17 @@ def create_router(
     """Live mode passes `commands`; without it, as in a replay, every command answers 501."""
     router = APIRouter()
     add_command_routes(router, commands, run_id=store.run_id)
-    run_limits: Limits | None = None
+    previews = getattr(commands, "previews", None) if mode == "live" else None
+    if previews is not None:
+        install_preview_publication(store, previews)
+    add_preview_routes(router, previews)
+    _add_stream_routes(router, store)
+    _add_observation_routes(router, store, mode, missing_settings)
+    _add_graph_routes(router, store, change_graph)
+    return router
 
+
+def _add_stream_routes(router: APIRouter, store: EventStore) -> None:
     def resume_point(
         after: Annotated[str | None, Query()] = None,
         run: str | None = None,
@@ -92,6 +103,13 @@ def create_router(
         async for event in store.subscribe(after):
             yield ServerSentEvent(raw_data=event.envelope, id=str(event.seq))
 
+
+def _add_observation_routes(
+    router: APIRouter,
+    store: EventStore,
+    mode: Literal["live", "replay"],
+    missing_settings: list[MissingSetting] | None,
+) -> None:
     @router.get("/history")
     async def history(  # pyright: ignore[reportUnusedFunction]
         after_seq: str = "0",
@@ -112,6 +130,24 @@ def create_router(
     @router.get("/usage")
     async def usage() -> UsageView:  # pyright: ignore[reportUnusedFunction]
         return build_usage_view(store.run_id, store.committed_events())
+
+    @router.get("/health")
+    async def health() -> Health:  # pyright: ignore[reportUnusedFunction]
+        return Health(
+            ok=True,
+            run_id=store.run_id,
+            contract_version=CONTRACT_VERSION,
+            mode=mode,
+            missing_settings=missing_settings or [],
+        )
+
+
+def _add_graph_routes(
+    router: APIRouter,
+    store: EventStore,
+    change_graph: Callable[[str], GraphSnapshot] | None,
+) -> None:
+    run_limits: Limits | None = None
 
     @router.get("/graph")
     async def graph() -> GraphResponse:  # pyright: ignore[reportUnusedFunction]
@@ -153,15 +189,3 @@ def create_router(
             )
         except NodeNotFoundError:
             raise ApiError("not_found", f"there is no node {node!r} in this graph") from None
-
-    @router.get("/health")
-    async def health() -> Health:  # pyright: ignore[reportUnusedFunction]
-        return Health(
-            ok=True,
-            run_id=store.run_id,
-            contract_version=CONTRACT_VERSION,
-            mode=mode,
-            missing_settings=missing_settings or [],
-        )
-
-    return router

@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import TypeAdapter, ValidationError
 
 from oversight.events.graph_fold import apply_delta
+from oversight.events.preview_resolution import project_previews
 from oversight_contracts.events import ServerEvent
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.views import LeadView, LeadViewKind, ViewPath
@@ -37,6 +38,8 @@ class ViewProjection:
     files: set[tuple[str, str]] = field(default_factory=set[tuple[str, str]])
     behaviors: set[str] = field(default_factory=set[str])
     moments: dict[int, str] = field(default_factory=dict[int, str])
+    previews: set[str] = field(default_factory=set[str])
+    preview_leads: set[str] = field(default_factory=set[str])
 
     def resolve(self, view: LeadViewKind) -> list[str | int | tuple[str, str]]:
         """Omit unavailable identities; callers retain the original request separately."""
@@ -60,7 +63,7 @@ class ViewProjection:
             case "behavior":
                 return [view.change_id] if view.change_id in self.behaviors else []
             case "preview":
-                return []
+                return [view.agent_id] if view.agent_id in self.previews else []
             case "moment":
                 return [view.event_seq] if view.event_seq in self.moments else []
 
@@ -112,6 +115,8 @@ def _canonical(path: str) -> bool:
 
 def project_views(events: Iterable[ServerEvent]) -> ViewProjection:
     """Fold the same current graph/change/focus and latest whole facts as the UI."""
+    events = tuple(events)
+    preview = project_previews(events)
     projection = ViewProjection()
     graph: GraphSnapshot | None = None
     agents: dict[str, str] = {}
@@ -167,6 +172,10 @@ def project_views(events: Iterable[ServerEvent]) -> ViewProjection:
             case _:
                 pass
     _resolve_nodes(projection, graph, agents, focus, changes)
+    projection.previews = {
+        agent for agent in preview.agents if preview.candidate(agent) is not None
+    }
+    projection.preview_leads = preview.leads
     for change_id, change in changes.items():
         proposal = change.get("proposal")
         if proposal:
@@ -206,7 +215,11 @@ def capture_view_resolver(
     if not 0 <= through_seq <= len(events):
         raise ValueError("view horizon is not committed")
     projection = project_views(events[seq] for seq in range(1, through_seq + 1))
-    return lambda view: view.through_seq == through_seq and projection.accepts(view.view)
+    return lambda view: (
+        view.through_seq == through_seq
+        and (view.view.kind != "preview" or view.agent_id in projection.preview_leads)
+        and projection.accepts(view.view)
+    )
 
 
 def resolve_view_references(
@@ -215,4 +228,7 @@ def resolve_view_references(
     """Resolve at the displayed prefix, with the request's original moment horizon."""
     if request.view.kind == "moment" and request.view.event_seq > request.through_seq:
         return []
-    return project_views(events).resolve(request.view)
+    projection = project_views(events)
+    if request.view.kind == "preview" and request.agent_id not in projection.preview_leads:
+        return []
+    return projection.resolve(request.view)

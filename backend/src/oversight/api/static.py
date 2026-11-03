@@ -22,6 +22,7 @@ from starlette.routing import Match, Route
 from starlette.types import Scope
 
 from oversight.api.errors import error_response
+from oversight.api.preview_policy import frame_policy
 
 API_PATHS = frozenset(
     {
@@ -111,6 +112,19 @@ def _respond(target: Path, root: Path) -> FileResponse:
     )
 
 
+def _frames(request: Request) -> str:
+    settings = getattr(request.app.state, "settings", None)
+    if settings is None:
+        return frame_policy()
+    try:
+        return frame_policy(
+            settings.preview_profile.ports, reserved=(settings.port, settings.vite_port)
+        )
+    except ValueError:
+        # Invalid/disabled preview configuration cannot widen framing to an API authority.
+        return frame_policy()
+
+
 def add_static(app: FastAPI, dist: Path) -> bool:
     """Serve the build in `dist` after the app's own routes. False, and nothing added, without
     `dist/index.html`: a source checkout that was never built has no UI to serve."""
@@ -124,14 +138,19 @@ def add_static(app: FastAPI, dist: Path) -> bool:
             return error_response("not_found", "no such resource")
         target = _file_under(root, relative or INDEX)
         if target is not None:
-            return _respond(target, root)
+            response = _respond(target, root)
+            if target.suffix == ".html":
+                response.headers["Content-Security-Policy"] = _frames(request)
+            return response
         looks_like_file = relative.partition("/")[0] == ASSETS or "." in relative.rpartition("/")[2]
         if sys.platform == "win32" and relative.partition("/")[0].casefold() == ASSETS:
             looks_like_file = True
         index = _file_under(root, INDEX)
         if looks_like_file or index is None:
             return error_response("not_found", "no such resource")
-        return _respond(index, root)
+        response = _respond(index, root)
+        response.headers["Content-Security-Policy"] = _frames(request)
+        return response
 
     # A sync endpoint runs in a worker thread: its file system calls never block the event loop.
     app.router.routes.append(_UiRoute("/{path:path}", serve, methods=["GET"]))
