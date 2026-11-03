@@ -41,7 +41,7 @@ beforeAll(async () => {
   browser = await launchBrowser({
     webGL: true,
     softwareRendering: true,
-    args: ["--disable-features=LocalNetworkAccessChecks"],
+    args: sweep ? ["--disable-features=LocalNetworkAccessChecks"] : [],
   });
   if (process.env.MAP_LINES_SHOTS === "1") await mkdir(shots, { recursive: true });
 }, 60_000);

@@ -3730,7 +3730,7 @@ crosses this change.
 The maintainer confirmed that the thread lives per run and is lost on server restart.
 Persistence is a later design step; restart already stops the lead today.
 
-### C1 round 1 — Loading surfaces and field readiness
+## C1 round 1 — Loading surfaces and field readiness
 
 The coordinator's Nov 1 review reproduced a cold-stage race: the graph hosts were absent
 while the stage loaded, then Cytoscape could become ready before the nested field import.
@@ -3831,6 +3831,7 @@ a pointed dimmed module reveals its full name. The neutral decision chip counts 
 conflicting changes touching the group; the top bar counts the entire inbox, including plans
 and questions, so these counts need not match. Exact test-to-module calls supply "tested by";
 tests stay hidden in the product and their name-prefix rule is unit-tested only.
+
 ## 2026-11-01 — C4 proposal evidence and change-local cost
 
 Chat's current proposal card joins the retained proposal position and exact change/revision/head.
@@ -4196,6 +4197,7 @@ fixture, browser interaction, stress, contrast and capture proof accounts for mo
 The local evidence regressions additionally guard missing files, wrong comparisons, startup
 chunk accounting and stale slice totals. The work remains within the authorized agents slice;
 C3–C6 and L3 remain pending.
+
 ## 2026-11-01 — New-parameter calls evidence
 
 Approved at 16:20 ART (19:20 UTC), all six answers override the sketch's conflicting markup,
@@ -4225,7 +4227,7 @@ The maintainer approved packet b-1102f at 2026-11-02T14:34:16Z: “Sí, aprobalo
 
 The approved sketch is a reference outside the repository; the design is built in code against DESIGN.md (the maintainer, 2026-11-02T18:19:25Z). Six existing palette families supply team hues. A seventh team skips teams with pending changes and reuses the hue of the longest-idle remaining team; when every team has a pending change, it uses the longest-idle team. Letters distinguish shared hues. This answer overrides the seventh-team image.
 
-K3 delivers colors and labels, including the flat Chat rail. K3r follows with collapsible groups, the leadless heading “Plan B · 2 agents · 2 working”, stacked groups above the thread at 390, ungrouped lone agents and work chips. Lead headings are plain group headings; lead picking, lead threads and Stop per lead belong to K2.
+K3 delivers colors and labels, including the flat Chat rail. K3r now provides collapsible groups, the leadless heading “Plan B · 2 agents · 2 working”, stacked groups above the thread at 390, ungrouped lone agents and work chips, as recorded in “Grouped Chat rail completes Q2/Q3 and folded scrolling” (2026-11-03). Lead headings are plain group headings; lead picking, lead threads and Stop per lead belong to K2.
 
 The approved departures retain the map-r1 base, hidden tests, “ready” on pending node chips, neutral card actions, the approved legend, pending agents in the running count and dock clipping at the 20% zoom floor. The product pluralizes decision counts and retains “Click a group to frame it”. Existing later Conversation title decisions remain in force. No contract or capacity change.
 
@@ -4235,9 +4237,11 @@ The maintainer requested design directly in code without a sketch round. This ov
 Impeccable shape's brief-confirmation stop for this work. Findings follow the built Details
 and New-parameter calls typography and disclosure anatomy; DESIGN.md governs their layout,
 neutral evidence language and phone behavior.
+
 ## 2026-11-02 — Chat starts with a direct task; leads join the Agents list
 
 The maintainer approved packet a-1102c on Nov 2 at 13:42 ART. Chat opens on the direct task: the built task box and Start agent come first; a lead is the quieter second option, as New lead in the Agents header and as a link under the box. Leads and direct tasks are peers in one Agents list, in start order; a lead's row carries its team's hue and letter and its agents follow it. The header count stays the slots held; leads hold no slot. Slot cards show the model only; the letter comes from the team rule once the agent starts. Before any lead has started, the New lead form says its limits are set before Oversight starts, with no numbers. No contract, endpoint or event change.
+
 ## 2026-11-02 — A lead reply names what woke it
 
 Approved by the maintainer on 2026-11-02. Contracts 1.17.0 adds nullable `LeadReply.woken_by`:
@@ -4339,6 +4343,7 @@ and consecutive-failure brake (6 failures) remain fixed. The global spending bra
 refusal, neither a person setting nor a queue: every selected Meta lead checks at start, message
 admission and each model-call boundary, with durable ledger accounting before usage publication.
 Baseten keeps its existing accounting and Meta-brake exemption; in-flight call semantics remain.
+
 ## 2026-11-02 — Map light follows module cells at a fixed screen spread
 
 The map uses the approved October 31 sketch values: `map-light-near` at 30px,
@@ -4380,6 +4385,7 @@ agents; DESIGN.md's 15px body/16px title roles and existing tokens remain author
 approved raster is a layout reference, not authority for unpublished numbers, ended inputs or
 model selection. K2c notices/timeline and K3 grouping remain separate; this slice compacts rows
 without adding member collapse. Captures remain explicitly handwritten, not a real recording.
+
 ## 2026-11-02 — Enable validated native Windows own-repository COPY
 
 The maintainer approved the AGENTS.md source/environment wording on November 2, 2026,
@@ -4475,6 +4481,7 @@ event supports, which breaks the rule that status comes from tool calls and neve
 they cannot be held to DESIGN.md; and they add code execution in the person's browser. The next
 step, after the hackathon, is composition from a closed set of typed primitives with the same
 reference resolution (README, Next).
+
 ## 2026-11-03 — Dormant preview uses the shared Git lease and durable ownership
 
 Person-owned preview infrastructure uses Linux isolation C and an external trusted supervisor and
@@ -4508,6 +4515,7 @@ Fake tests establish ordering and refusal only. Real host/browser GET/form POST 
 listener, fresh-connection refusal, setsid teardown and crash acceptance belong to Front F. C retains
 filesystem/secret/response risks, and the inherited address-space cap is per process rather than an
 aggregate fork cap. The dormant outcome grants neither arbitrary-code containment nor public opening.
+
 ## 2026-11-03 — Refuse source Git config file indirection before inspection
 
 Approved by the maintainer on November 2, 2026 at 22:40 ART (2026-11-03T01:40Z), including
@@ -4550,6 +4558,7 @@ no-new-events/contracts restriction for this feature only. Contract order remain
 
 Reason: person-driven preview infrastructure can ship without disturbing gen-ui's
 locked model-facing scope, prompt pins, probe or recording.
+
 ## 2026-11-03 — Make server cuts visible in the lead's view
 
 Each lead history appends its cumulative dropped-exchange count to the opening task and budgets
@@ -4559,6 +4568,7 @@ whole, so only its length may add an overrun. Queue reads keep the longest sourc
 whole entries whose JSON fits 20,000 characters, preserve run_id and seq, and state the exact count
 omitted outside the JSON. Prompts, contracts, authority and lifecycle stay unchanged.
 Reason: server cuts must be visible and must never hand the lead broken JSON.
+
 ## 2026-11-02 — Live preview may open on finish when the person set it
 
 "Live preview may open on finish when the person set it" — the person's setting is the cause, so the
@@ -4566,6 +4576,7 @@ panel still follows what the person does; focus and scroll never move; a review 
 "Open preview when done" is off by default.
 
 Reason: the person's setting is the cause, so the panel still follows what the person does; focus and scroll never move; a review or a preview in use is never replaced. "Open preview when done" is off by default.
+
 ## 2026-11-03 — The app opens in Chat
 
 The maintainer chose Chat as the default after the Chat with leads screens passed review
@@ -4587,6 +4598,7 @@ The maintainer explicitly requires the pending-change evidence review without de
 This supersedes Impeccable critique's independent-subagent requirement: assess the rendered
 design first, then the detector evidence in this session, and disclose the reduced independence.
 No additional design approval is implied.
+
 ## 2026-11-03 — Accept uv's hard-linked own-venv import metadata
 
 The maintainer decided to accept uv's hard-linked site-packages import metadata in an own venv

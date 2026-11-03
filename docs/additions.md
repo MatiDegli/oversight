@@ -107,7 +107,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 2 | Behavior diff | Backend and review rows on main — `2896b29`; shared inputs `647d545`, methods/properties `2cfe760`, object arguments `8a4a2ec`, unprobed reasons `f44dd62`; graph count chips and sample popovers `f6d7e2a`; supplied new-parameter observations `2122430` (dedicated UI remains) | Yes |
 | 3 | Agent harness pack | On main — opt-in pack `42976ee`, runner wiring `b4446cc` | No |
 | 4 | Measured impact cone | On main — caller evidence `1c50382`, GET /impact `920e930`, review rows `09865ec`/`d3f64fd`, review rework `cf1e536`; graph caller words `5ba8584` | Yes |
-| 5 | Live overlap between agents | Partial — shared edits and change-lifetime reads `1e51e51`, graph overlap `e4cec56`; edit-inside-another-cone review fact remains absent | No |
+| 5 | Live overlap between agents | Partial — shared edits and change-lifetime reads `1e51e51`, graph overlap `e4cec56`; review's **Other pending changes** shows bounded current-graph cone membership with explicit limits; deeper edit facts remain | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
 | 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; manual review route still 501 | No |
 | 8 | Merge by rules, follow main and Revert (package 1) | Partial — start capability `1824a46`, Revert route `69aaee8`, person preemption `a2aaa6a`, idle follow-main F5a `769d0c7`, protected-path authority `1b1ed44`; F5b, Settings and Revert UI delivered; F10 opens activation with fake-only HTTP/SSE evidence, recorded replay and three clean starts; every fresh run starts in Ask me | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
@@ -472,8 +472,12 @@ name the shared nodes and never block on their own: they warn, and the person de
 
 Live overlap is built (`1e51e51`, `e4cec56`): `state/overlap.ts:selectOverlap` returns sharedEdits
 and readOfOthers; `state/applyAgentEvent.ts:applyAgentEvent` retains changeReads and
-`agents/AgentCard.tsx` renders card facts. The graph uses pending-both and live cones. Review has
-no edit-inside-another-agent’s-cone fact yet. No contract addition; replay shares the live reducer.
+`agents/AgentCard.tsx` renders card facts. The graph uses pending-both and live cones. Review's
+**Other pending changes** section (`review/ConeOverlapSection.tsx`, `review/coneOverlap.ts`)
+names edited nodes in other pending changes' currently computed cones, with explicit missing-data,
+parse, sequence and bounded-cone limitations. This membership is not historical edit proof, a
+behavior conflict, complete overlap coverage or a blocking gate. Deeper edit facts remain a
+follow-up. No contract addition; replay shares the live reducer.
 Search focus is capped, so observed reads are not a complete audit. Once item 18 supplies messages,
 notify the later agent as a separate turn; notification in its next tool result remains Next.
 
