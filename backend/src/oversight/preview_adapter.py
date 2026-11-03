@@ -7,6 +7,7 @@ This module starts no processes and owns no Oversight events or lifecycle.
 
 import argparse
 import importlib
+import io
 import json
 import os
 import re
@@ -18,6 +19,7 @@ from dataclasses import dataclass
 from html import escape
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from time import monotonic
 from typing import Any, NoReturn, cast
 from urllib.parse import parse_qsl, urlsplit
 
@@ -125,8 +127,10 @@ class Shop:
             self.models = importlib.import_module("shop.models")
             provenance(root)
             self.pricing = importlib.import_module("shop.pricing")
-        except (ModuleNotFoundError, FileNotFoundError):
-            fatal(72)
+        except ModuleNotFoundError as error:
+            if error.name == "shop" or (error.name and error.name.startswith("shop.")):
+                fatal(72)
+            raise
         finally:
             provenance(root)
 
@@ -145,7 +149,11 @@ class Shop:
                 product = self.call(self.models.Product, sku, name, price)
                 self.call(cart.add, product, quantity)
         subtotal = self.call(cart.total)
+        if type(subtotal) is not int:
+            raise ValueError
         total = self.call(self.pricing.apply_coupon, subtotal, coupon)
+        if type(total) is not int:
+            raise ValueError
         formatted = self.call(self.models.format_cents, total)
         return total, self.call(str, formatted)
 
@@ -247,7 +255,28 @@ class Server(HTTPServer):
         # Never publish exceptions originating from candidate code.
 
 
+class DeadlineReader(socket.SocketIO):
+    """Apply one read deadline even when buffered reads receive a slow byte stream."""
+
+    def __init__(self, connection: socket.socket):
+        super().__init__(connection, "rb")
+        self.connection = connection
+        self.deadline = monotonic() + IO_TIMEOUT
+
+    def readinto(self, b: Any) -> int | None:
+        remaining = self.deadline - monotonic()
+        if remaining <= 0:
+            raise TimeoutError
+        self.connection.settimeout(remaining)
+        return super().readinto(b)
+
+
 class Handler(BaseHTTPRequestHandler):
+    def setup(self) -> None:
+        super().setup()
+        self.rfile.close()
+        self.rfile = io.BufferedReader(DeadlineReader(self.connection))
+
     @property
     def preview(self) -> Server:
         return cast(Server, self.server)
@@ -274,6 +303,7 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cache-Control", "no-store")
+        self.connection.settimeout(IO_TIMEOUT)
         self.end_headers()
         self.wfile.write(body)
 
@@ -326,11 +356,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self.render((1, 1), "")
         elif is_cart:
-            self.submit()
+            self.submit_cart()
         else:
             self.send_error(404 if self.command in ("GET", "POST") else 405)
 
-    def submit(self) -> None:
+    def submit_cart(self) -> None:
         lengths = self.headers.get_all("Content-Length", [])
         if (
             self.headers.get_all("Transfer-Encoding")

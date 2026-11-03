@@ -88,6 +88,57 @@ async def test_dynamic_text_is_escaped(tmp_path):
         assert b"&quot;" in response.body and b"&amp;" in response.body
 
 
+@pytest.mark.parametrize("stage", ["subtotal", "coupon"])
+@pytest.mark.parametrize("value", ["'<img src=x>'", "1500.5", "True"])
+async def test_non_integer_candidate_totals_are_refused(tmp_path, stage, value):
+    root = copy_shop(tmp_path)
+    if stage == "subtotal":
+        with (root / "shop/cart.py").open("a") as stream:
+            stream.write(f"\nCart.total = lambda self: {value}\n")
+    with (root / "shop/pricing.py").open("a") as stream:
+        result = "1500" if stage == "subtotal" else value
+        stream.write(f"\ndef apply_coupon(total, coupon): return {result}\n")
+    with (root / "shop/models.py").open("a") as stream:
+        stream.write("\ndef format_cents(total): return str(total)\n")
+    async with launched(tmp_path, root=root) as child:
+        reply = await child.request()
+        assert reply.status == 500 and reply.body == b"Preview request refused.\n"
+
+
+@pytest.mark.parametrize("stage", ["request_line", "headers", "body"])
+async def test_dripping_reads_share_one_connection_deadline(tmp_path, stage):
+    async with launched(tmp_path) as child:
+        async with asyncio.timeout(6):
+            reader, writer = await asyncio.open_connection("127.0.0.1", child.port)
+            prefix = b"G"
+            if stage != "request_line":
+                prefix = f"POST /cart HTTP/1.1\r\nHost: 127.0.0.1:{child.port}\r\n".encode()
+            if stage == "body":
+                prefix += (
+                    b"Origin: null\r\nContent-Type: application/x-www-form-urlencoded\r\n"
+                    b"Content-Length: 4096\r\n\r\n"
+                )
+
+            async def drip():
+                writer.write(prefix)
+                await writer.drain()
+                while True:
+                    await asyncio.sleep(0.2)
+                    writer.write(b"x")
+                    await writer.drain()
+
+            sender = asyncio.create_task(drip())
+            try:
+                response = await asyncio.wait_for(reader.read(), 3.5)
+                assert b" 408 " in response and response.endswith(b"Preview request refused.\n")
+            finally:
+                sender.cancel()
+                await asyncio.gather(sender, return_exceptions=True)
+                writer.close()
+                await writer.wait_closed()
+        assert (await child.request(path="/_oversight_ready")).status == 200
+
+
 @pytest.mark.parametrize(
     "body",
     [

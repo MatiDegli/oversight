@@ -263,6 +263,36 @@ async def test_two_totals_stop_before_revision_and_final_rejection():
     assert not backend.owned and not any("approve" in path for _, path in log)
 
 
+@pytest.mark.parametrize(
+    "ancestors,accepted",
+    [
+        (ORIGIN + " http://localhost:5710 http://127.0.0.1:5710", True),
+        ("http://localhost:5710 " + ORIGIN, True),
+        ("http://localhost:5710", False),
+        (ORIGIN + " *", False),
+        (ORIGIN + " http://*.example.com", False),
+        (ORIGIN + "; script-src 'unsafe-inline'", False),
+    ],
+)
+async def test_document_accepts_backend_among_explicit_csp_origins(ancestors, accepted):
+    response = httpx.Response(
+        200,
+        text='<form action="/cart" method="post"><input type="hidden" name="nonce" '
+        f'value="{"a" * 64}"></form><output data-total-cents="1500"></output>',
+        headers={
+            "Content-Security-Policy": "default-src 'none'; form-action 'self'; "
+            "base-uri 'none'; frame-ancestors " + ancestors,
+            "Referrer-Policy": "no-referrer",
+            "Cache-Control": "no-store",
+        },
+    )
+    if accepted:
+        assert story.document(response, ORIGIN).total == 1500
+    else:
+        with pytest.raises(story.ScenarioError, match="CSP"):
+            story.document(response, ORIGIN)
+
+
 @pytest.mark.parametrize("failure", ["shop", "open"])
 async def test_failure_closes_preview_before_discard(failure):
     backend = Backend(fail=failure)

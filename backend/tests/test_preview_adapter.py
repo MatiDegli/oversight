@@ -230,6 +230,19 @@ async def test_missing_shop_source_is_provenance_refusal(tmp_path):
         assert await child.exit() == 72
 
 
+@pytest.mark.parametrize("failure", ["dependency", "file"])
+async def test_candidate_import_failure_is_unclassified(tmp_path, failure):
+    root = copy_shop(tmp_path)
+    with (root / "shop/cart.py").open("a") as stream:
+        stream.write(
+            "\nimport absent_preview_dependency\n"
+            if failure == "dependency"
+            else "\nopen('/nonexistent/preview-resource')\n"
+        )
+    async with launched(tmp_path, root=root, ready=False) as child:
+        assert await child.exit() == 1
+
+
 async def test_actual_late_import_symlink_escape(tmp_path):
     root = copy_shop(tmp_path)
     foreign = tmp_path / "foreign.py"

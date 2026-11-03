@@ -199,9 +199,16 @@ class Document(HTMLParser):
 
 def document(response: httpx.Response, origin: str) -> Document:
     require(response.status_code == 200, "Candidate request failed")
+    prefix = "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors "
+    csp = response.headers.get("content-security-policy", "")
+    ancestors = csp.removeprefix(prefix).split(" ")
     require(
-        response.headers.get("content-security-policy")
-        == ("default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors " + origin),
+        csp.startswith(prefix)
+        and origin in ancestors
+        and all(
+            re.fullmatch(r"http://(?:localhost|127\.0\.0\.1|\[::1\])(?::[1-9][0-9]{0,4})?", value)
+            for value in ancestors
+        ),
         "Candidate CSP differs",
     )
     require(
