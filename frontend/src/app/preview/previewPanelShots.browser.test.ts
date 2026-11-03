@@ -36,6 +36,15 @@ it.each(cases)(
         await check(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
         if (scenario === "ready" || scenario === "failed-stop" || scenario === "stopping-closed")
           await check(page.locator("iframe")).toBeVisible();
+        if (scenario === "stopping-closed") {
+          await check(page.locator(".preview-panel-state")).toHaveText("Stopping");
+          await check(page.getByRole("status")).toContainText("Waiting for verified closure.");
+        }
+        if (scenario === "failed-stop") {
+          await check(page.locator(".preview-panel-state")).toHaveText("Ready");
+          await check(page.getByRole("alert")).toContainText("Closure is unconfirmed");
+          await check(page.getByText("Waiting for verified closure.")).toHaveCount(0);
+        }
         const frame = await support.capture(page, scenario, viewport, theme);
         frames.push(frame);
         await support.compare(frame, review);

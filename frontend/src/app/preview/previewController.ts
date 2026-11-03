@@ -41,6 +41,8 @@ class Controller implements PreviewController {
   #dismissed = false;
   #detailsEpoch: number | null = null;
   #quarantined = false;
+  #startDeadlinePassed = false;
+  #startDeadlineOff: (() => void) | null = null;
   #cancelStart = false;
   #renewOff: (() => void) | null = null;
   #flight: Promise<void> | null = null;
@@ -125,6 +127,7 @@ class Controller implements PreviewController {
   }
   #release(status: PreviewStatus) {
     this.#cancelRenewal();
+    this.#startDeadlineOff?.();
     ++this.#epoch;
     this.#token = null;
     this.#id = null;
@@ -145,19 +148,21 @@ class Controller implements PreviewController {
     if (this.#token) {
       if (this.#matches(status)) this.#accept(status);
     } else if (!this.#flight && status.run_id === this.#identity.run) {
-      // A failed start may still have reached the server. Only its matching
-      // public termination can release quarantine; Close merely hides the panel.
+      // After the start deadline, the run's single slot can also prove that a
+      // different preview holds it, or that the run's preview has ended.
       if (
         this.#quarantined &&
         this.#candidate &&
-        sameCandidate(status, this.#candidate) &&
-        (!this.#id || status.preview_id === this.#id)
+        ((sameCandidate(status, this.#candidate) &&
+          (!this.#id || status.preview_id === this.#id) &&
+          confirmed(status)) ||
+          (this.#startDeadlinePassed &&
+            (confirmed(status) ||
+              (!sameCandidate(status, this.#candidate) &&
+                (active(status) || status.state === "stopping")))))
       ) {
-        this.#id = status.preview_id;
-        if (confirmed(status)) {
-          this.#release(status);
-          return;
-        }
+        this.#release(status);
+        return;
       }
       if (this.#view.status?.preview_id === status.preview_id) this.#accept(status);
       else this.#publish({ status, visible: !this.#dismissed, frameUrl: null, notice: null });
@@ -220,9 +225,15 @@ class Controller implements PreviewController {
     }
   };
   see = (candidate: () => PreviewCandidate | null): Promise<void> => {
-    if (this.#disposed || this.#flight || this.#closing || this.#quarantined)
-      return Promise.resolve();
+    if (this.#disposed || this.#flight || this.#closing) return Promise.resolve();
     this.#dismissed = false;
+    if (this.#quarantined) {
+      this.#publish({
+        visible: true,
+        ...(!this.#token && { notice: "start_failed", uncertain: true }),
+      });
+      return Promise.resolve();
+    }
     const observed = this.#view.status;
     if (
       !this.#token &&
@@ -264,6 +275,11 @@ class Controller implements PreviewController {
       head_commit: candidate.head_commit,
     };
     const epoch = ++this.#epoch;
+    this.#startDeadlineOff?.();
+    this.#startDeadlinePassed = false;
+    this.#startDeadlineOff = this.#clock.schedule(() => {
+      this.#startDeadlinePassed = true;
+    }, 5_000);
     this.#candidate = observed;
     this.#publish({
       visible: true,
@@ -292,6 +308,7 @@ class Controller implements PreviewController {
       if (this.#cancelled()) await this.#stop();
       else this.#scheduleRenewal();
     } catch {
+      if (!this.#current(epoch)) return;
       this.#quarantined = true;
       this.#publish({ pending: false, uncertain: true, notice: "start_failed" });
     }
@@ -360,10 +377,18 @@ class Controller implements PreviewController {
   navigate = () => this.close();
   setIdentity = async (identity: PreviewIdentity) => {
     if (identity.run === this.#identity.run && identity.source === this.#identity.source) return;
+    const runChanged = identity.run !== this.#identity.run;
     this.#identity = { ...identity };
     ++this.#epoch;
     await this.close();
-    if (!this.#token && !this.#quarantined) this.#publish({ status: null });
+    if (!this.#token && runChanged) {
+      this.#startDeadlineOff?.();
+      this.#quarantined = false;
+      this.#candidate = null;
+      this.#id = null;
+    }
+    if (!this.#token && !this.#quarantined)
+      this.#publish({ status: null, uncertain: false, notice: null });
   };
   dispose = () => {
     if (this.#disposed) return;
@@ -371,6 +396,7 @@ class Controller implements PreviewController {
     this.#cancelStart = true;
     ++this.#epoch;
     this.#cancelRenewal();
+    this.#startDeadlineOff?.();
     for (const request of this.#requests) request.abort();
     const id = this.#id,
       token = this.#token;

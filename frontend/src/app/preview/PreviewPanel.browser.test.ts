@@ -29,6 +29,10 @@ it.each(scenarios)("mounts %s with fixed copy and persistent Close", async (scen
       await check(page.getByRole("status")).toContainText("Preview in use in another tab");
       await check(page.locator("iframe")).toHaveCount(0);
     }
+    if (scenario === "stopping-closed") {
+      await check(page.locator(".preview-panel-state")).toHaveText("Stopping");
+      await check(page.getByRole("status")).toContainText("Waiting for verified closure.");
+    }
     await noErrors(page);
   } finally {
     await session.close();
@@ -133,19 +137,30 @@ it("keeps observer Close dismissed through background updates and a new owner's 
     await session.close();
   }
 });
-it("dismisses start_failed locally and permits See preview only after authoritative expiry", async () => {
+it("recovers a rejected agent-b start while agent-a owns the slot", async () => {
   const session = await support.session();
   try {
     const owner = await session.open();
-    const page = await session.open(); // Start races the public status and is rejected as in use.
+    const page = await session.open("panel", "agent=agent-b"); // Start races public observation.
     expect(await page.evaluate(() => window.previewFixture.snapshot().notice)).toBe("start_failed");
     const before = session.authority.calls.length;
     await page.getByRole("button", { name: "Close", exact: true }).press("Enter");
     await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
     await page.getByRole("button", { name: "See preview", exact: true }).click();
+    await check(page.getByRole("alert")).toContainText("The preview could not be confirmed.");
+    await page.getByRole("button", { name: "Close", exact: true }).click();
     await page.evaluate(() => window.previewFixture.observePublic());
     await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);
     expect(session.authority.calls).toHaveLength(before);
+    await page.getByRole("button", { name: "See preview", exact: true }).click();
+    await check(page.getByRole("alert")).toContainText("The preview could not be confirmed.");
+    await check(page.getByText("Preview in use in another tab", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.evaluate(() => {
+      window.previewFixture.advance(5_000);
+    });
+    await page.evaluate(() => window.previewFixture.observePublic());
+    expect(await page.evaluate(() => window.previewFixture.snapshot().uncertain)).toBe(false);
     session.clock.advance(30_001);
     await page.evaluate(() => window.previewFixture.observePublic());
     await check(page.getByRole("complementary", { name: "Live preview panel" })).toHaveCount(0);

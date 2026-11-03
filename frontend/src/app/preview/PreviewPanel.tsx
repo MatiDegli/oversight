@@ -11,6 +11,8 @@ const states = {
   stopped: "Stopped",
   failed: "Failed",
 } as const;
+const startFailedCopy =
+  "The preview could not be confirmed. Replacement is unavailable until closure is verified.";
 /** The caller allocates a slot explicitly; this component never navigates or moves focus. */
 export function PreviewPanel({ controller }: { controller: PreviewController }) {
   const view = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
@@ -104,6 +106,7 @@ function PanelMessage({ view, label }: { view: PreviewView; label: string }) {
               Close dismisses this panel only. Wait for ownership to expire before opening a preview
               here.
             </p>
+            {view.notice === "start_failed" && <p>{startFailedCopy}</p>}
           </div>
         </>
       ) : (
@@ -135,12 +138,7 @@ function PanelMessage({ view, label }: { view: PreviewView; label: string }) {
                 unavailable.
               </p>
             )}
-            {view.notice === "start_failed" && (
-              <p>
-                The preview could not be confirmed. Replacement is unavailable until closure is
-                verified.
-              </p>
-            )}
+            {view.notice === "start_failed" && <p>{startFailedCopy}</p>}
             {view.notice === "closure_unconfirmed" && !view.frameUrl && (
               <p>
                 Close to request verified closure. Another preview cannot start until closure is

@@ -238,7 +238,7 @@ it("bounds lost stop delivery and relies on fake authority lease expiry", async 
   expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
 });
 it.each(["reject", "deadline"])(
-  "locally dismisses a %s start but blocks retry until matching verified termination",
+  "locally dismisses a %s start and reopens blocked retry with failure feedback",
   async (mode) => {
     const { port, controller } = setup();
     await port.start(fakeCandidate, new AbortController().signal);
@@ -255,16 +255,17 @@ it.each(["reject", "deadline"])(
     const candidate = vi.fn(() => next);
     await controller.see(candidate);
     controller.observe({ ...fakeStatus("stopped", "lease_expired"), run_id: "other" });
-    controller.observe({ ...fakeStatus("stopped", "lease_expired"), agent_id: "other" });
+    controller.observe(fakeStatus("ready"));
     controller.observe(fakeStatus("failed", "cleanup_unverified"));
     controller.observe({
-      ...fakeStatus("stopped", "lease_expired"),
+      ...fakeStatus("failed", "cleanup_unverified"),
       preview_id: `preview-${"f".repeat(32)}`,
     });
     await controller.see(candidate);
     expect(candidate).not.toHaveBeenCalled();
     expect(port.calls).toHaveLength(calls);
-    expect(controller.snapshot().visible).toBe(false);
+    expect(controller.snapshot()).toMatchObject({ visible: true, notice: "start_failed" });
+    await controller.close();
     port.expire();
     controller.observe(port.publicStatus() as PreviewStatus);
     expect(controller.snapshot()).toMatchObject({ visible: false, uncertain: false });
@@ -273,6 +274,48 @@ it.each(["reject", "deadline"])(
     controller.dispose();
   },
 );
+it.each(["starting", "ready", "stopping", "ended"] as const)(
+  "recovers a rejected agent-b start from agent-a's %s slot after the deadline",
+  async (proof) => {
+    const { port, controller } = setup();
+    await port.start(fakeCandidate, new AbortController().signal);
+    const start = vi.spyOn(port, "start");
+    await controller.see(() => next);
+    await controller.close();
+    await controller.see(() => next);
+    expect(controller.snapshot()).toMatchObject({ visible: true, notice: "start_failed" });
+    if (proof === "ended") port.expire();
+    else port.publish(proof, proof === "stopping" ? "closed" : null);
+    controller.observe(port.publicStatus() as PreviewStatus);
+    await controller.see(() => next);
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(controller.snapshot().uncertain).toBe(true);
+    await vi.advanceTimersByTimeAsync(5_000);
+    controller.observe({ ...(port.publicStatus() as PreviewStatus), run_id: "other" });
+    expect(controller.snapshot().uncertain).toBe(true);
+    controller.observe(port.publicStatus() as PreviewStatus);
+    expect(controller.snapshot()).toMatchObject({ owned: false, uncertain: false, notice: null });
+    if (proof !== "ended") {
+      await controller.see(() => next);
+      expect(start).toHaveBeenCalledTimes(1);
+      port.expire();
+      controller.observe(port.publicStatus() as PreviewStatus);
+    }
+    await controller.see(() => next);
+    expect(controller.snapshot()).toMatchObject({ owned: true, status: { agent_id: "agent-b" } });
+    controller.dispose();
+  },
+);
+it("drops tokenless start quarantine on a new run after a request never reached the server", async () => {
+  const { port, controller } = setup();
+  const start = vi.spyOn(port, "start").mockRejectedValueOnce(new Error("Offline"));
+  await controller.see(() => next);
+  await controller.setIdentity({ run: "new-run", source: "live-b" });
+  await controller.see(() => ({ ...next, run_id: "new-run" }));
+  expect(start).toHaveBeenCalledTimes(2);
+  expect(controller.snapshot()).toMatchObject({ owned: true, status: { run_id: "new-run" } });
+  controller.dispose();
+});
 it.each(["reject", "unverified", "lost"] as const)(
   "keeps authoritative status after %s stop and permits local Close after expiry",
   async (mode) => {

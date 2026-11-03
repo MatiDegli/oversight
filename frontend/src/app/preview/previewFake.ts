@@ -119,6 +119,7 @@ export class PreviewFake implements PreviewPort {
     this.#authorize(id, body);
     this.calls.push({ kind: "stop", id });
     if (this.stopMode === "lost") return new Promise<PreviewStatus>(() => undefined);
+    if (this.stopMode !== "reject") this.publish("stopping", "closed");
     if (this.gate) await this.gate.promise;
     if (this.stopMode === "reject") throw new Error("Private child output must never be rendered");
     if (this.stopMode === "unverified") {

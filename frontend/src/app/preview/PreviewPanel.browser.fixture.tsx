@@ -249,9 +249,12 @@ async function mountScenario() {
   )
     await api.observePublic();
   else {
-    await api.see();
-    if (scenario === "stopping-closed") void controller.close();
-    else if (scenario === "failed-stop") await api.see({ agent_id: "agent-b" });
+    await api.see(params.get("agent") === "agent-b" ? { agent_id: "agent-b" } : undefined);
+    if (scenario === "stopping-closed") {
+      void controller.close();
+      await Promise.resolve();
+      await api.observePublic();
+    } else if (scenario === "failed-stop") await api.see({ agent_id: "agent-b" });
     else if (scenario.startsWith("failed-"))
       await api.publish("failed", scenario.slice(7) as PreviewReason);
     else if (scenario.startsWith("stopped-"))

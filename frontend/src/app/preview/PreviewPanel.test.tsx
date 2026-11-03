@@ -122,6 +122,17 @@ it("uses exact isolation and observer copy, never gives observers an iframe", ()
   expect(html).not.toContain("iframe");
   expect(html.match(/<button/g)).toHaveLength(1);
 });
+it("keeps blocked start feedback visible alongside another preview's public state", () => {
+  const html = render({
+    status: fakeStatus("ready"),
+    owned: false,
+    uncertain: true,
+    notice: "start_failed",
+  });
+  expect(html).toContain('role="alert"');
+  expect(html).toContain("The preview could not be confirmed.");
+  expect(html).not.toContain("iframe");
+});
 it("only mounts owned ready details and retains an existing frame during uncertain closure", () => {
   const url = "https://frame.invalid/app";
   for (const state of ["ready", "stopping", "failed"] as const) {
