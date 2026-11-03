@@ -4674,3 +4674,18 @@ constrains later work; that view itself is unchanged.
 This entry only removes the rule: building another graph view needs its own approved plan.
 
 Reason: a compact node view of a plan is easier to understand and to manipulate than a verbose card.
+
+## 2026-11-03 — Chat preview follows the frozen startup report
+
+Reuse the memoized `previewStartup()` reader and `PreviewStartupPanel` from Settings in the
+selected Chat conversation's composer, including coding agents and leads. A valid report is
+visible before activation and preserves current preview eligibility. A present but invalid
+report shows the panel's existing explanation once, disables only Preview app and refuses
+activation in the action handler and host, both before publishing a slot and when resolving
+a deferred candidate. A missing carrier adds no Chat markup, spacing or restriction: the
+existing shop path stays unchanged. Review change and every non-preview action retain their
+existing behavior. Replay, historical, stale-reference and capability restrictions still apply.
+
+Reason: the person can inspect startup facts before choosing a preview; malformed startup
+facts cannot start a reviewed app. This front proves fixture indexes only, without backend
+carrier delivery or any controller/lifecycle change.

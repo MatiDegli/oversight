@@ -1,12 +1,13 @@
 import { presentationFor } from "../teams/presentation";
 import { stateStore } from "../state";
+import { previewStartup } from "./preview/previewStartup";
 import { PreviewPanel } from "./preview/PreviewPanel";
 import "./preview/previewChatLayout.css";
 import { PreviewActionsContext, type PreviewActions } from "../agents";
 // eslint-disable-next-line no-restricted-imports -- Shared event-backed admission projection.
 import { leadCapacity } from "../agents/chatLeadSelectors";
 import type { MergeMode, StartAgent, StartLead, StopLead } from "@contracts";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
@@ -117,6 +118,16 @@ export function Frame(input: FrameProps) {
         onDecide: undefined,
       }
     : input;
+  const startup = previewStartup();
+  const startupId = useId();
+  const previewActions = props.previewActions
+    ? {
+        ...props.previewActions,
+        ...(startup.kind === "invalid" && {
+          previewRestriction: { describedBy: `${startupId}-description` },
+        }),
+      }
+    : null;
   const { state, onClosePanel } = props;
   const arrival = useMergeArrival(state);
   const phone = usePhonePractice(props.practice?.active ?? false);
@@ -233,7 +244,7 @@ export function Frame(input: FrameProps) {
           </button>
         </div>
       )}
-      <PreviewActionsContext value={props.previewActions ?? null}>
+      <PreviewActionsContext value={previewActions}>
         <ChatShell
           previewSlot={previewSlot}
           state={props.chatState ?? state}

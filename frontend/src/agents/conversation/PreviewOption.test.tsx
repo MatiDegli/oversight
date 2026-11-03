@@ -1,10 +1,20 @@
 import type { LeadViewEvent, ServerEvent } from "@contracts";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import fixture from "../../../../fixtures/views/reference-cases.json";
 import { applyEvent, createInitialState } from "../../state";
-import { PreviewActionsContext } from "./PreviewActionsContext";
+import type { ReactElement, ReactNode } from "react";
+import { PreviewActionsContext, type PreviewActions } from "./PreviewActionsContext";
 import { PreviewOption } from "./PreviewOption";
+const context = vi.hoisted(() => ({ current: undefined as PreviewActions | undefined }));
+vi.mock("react", async (original) => {
+  const actual = await original<typeof import("react")>();
+  return {
+    ...actual,
+    useContext: (value: typeof PreviewActionsContext) =>
+      context.current ?? actual.useContext(value),
+  };
+});
 function setup() {
   const state = (fixture.events as ServerEvent[])
     .slice(0, 6)
@@ -94,4 +104,68 @@ it("withholds both capabilities for historical Chat retained from a live session
   );
   expect(html.match(/disabled=""/g)).toHaveLength(2);
   expect(html).toContain("Historical view");
+});
+
+it.each(["valid", "missing", "invalid"] as const)(
+  "restricts only preview for %s startup through the context seam",
+  (kind) => {
+    const { state, event } = setup();
+    const html = renderToStaticMarkup(
+      <PreviewActionsContext
+        value={{
+          state,
+          readState: () => state,
+          onPreview: vi.fn(),
+          onReview: vi.fn(),
+          previewRestriction:
+            kind === "invalid" ? { describedBy: "startup-description" } : undefined,
+        }}
+      >
+        <PreviewOption state={state} event={event} />
+      </PreviewActionsContext>,
+    );
+    expect(html.match(/disabled=""/g) ?? []).toHaveLength(kind === "invalid" ? 1 : 0);
+    expect(html.includes('aria-describedby="startup-description"')).toBe(kind === "invalid");
+    expect(html).not.toContain("The preview startup report");
+    expect(html).toContain('class="lead-preview-secondary">Review change');
+  },
+);
+
+type ButtonProps = {
+  children?: ReactNode;
+  onClick?: (event: { currentTarget: HTMLButtonElement }) => void;
+};
+function buttons(node: ReactNode): ReactElement<ButtonProps>[] {
+  if (Array.isArray(node)) return node.flatMap((child: ReactNode) => buttons(child));
+  if (!node || typeof node !== "object" || !("props" in node)) return [];
+  const element = node as ReactElement<ButtonProps>;
+  return element.type === "button" ? [element] : buttons(element.props.children);
+}
+it("guards a direct handler call for invalid startup while Review still resolves fresh evidence", () => {
+  const { state, event } = setup();
+  const onPreview = vi.fn(),
+    onReview = vi.fn(),
+    readState = vi.fn(() => state);
+  context.current = {
+    state,
+    readState,
+    onPreview,
+    onReview,
+    previewRestriction: { describedBy: "startup-description" },
+  };
+  try {
+    const [preview, review] = buttons(PreviewOption({ state, event }));
+    const click = { currentTarget: {} as HTMLButtonElement };
+    preview?.props.onClick?.(click);
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(readState).not.toHaveBeenCalled();
+    review?.props.onClick?.(click);
+    expect(readState).toHaveBeenCalledOnce();
+    expect(onReview).toHaveBeenCalledOnce();
+    state.leadViews = {};
+    review?.props.onClick?.(click);
+    expect(onReview).toHaveBeenCalledOnce();
+  } finally {
+    context.current = undefined;
+  }
 });
