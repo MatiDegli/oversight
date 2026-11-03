@@ -220,6 +220,7 @@ it("resize and explicit navigation retain one cold-to-warm graph and cancel the 
     await page.getByRole("button", { name: "Preview app", exact: true }).click();
     session.publish("ready");
     await check(page.locator("iframe")).toBeVisible();
+    expect(session.identity()?.state).toBe("ready");
     const close = page.locator(".preview-panel button");
     await close.focus();
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -248,6 +249,7 @@ it("resize and explicit navigation retain one cold-to-warm graph and cancel the 
     await page.getByRole("button", { name: "Preview app", exact: true }).click();
     session.publish("ready");
     await check(page.locator("iframe")).toBeVisible();
+    expect(session.identity()?.state).toBe("ready");
     const previewed = await page.evaluate(() => window.previewChatRenders);
     for (const key of ["shell", "conversation", "graph"]) expect(previewed[key]).toBe(warmed[key]);
     await page.locator(".preview-panel button").click();

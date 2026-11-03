@@ -305,7 +305,8 @@ class ChatSupport {
         void response
           .json()
           .then((value: { status?: PreviewStatus }) => {
-            if (value.status) status = value.status;
+            // Fixture responses observe state; late reads never rewind its server authority.
+            if (this.real && value.status) status = value.status;
             if (value.status?.state === "ready" && readyAt === null) readyAt = Date.now();
           })
           .catch(() => {});
