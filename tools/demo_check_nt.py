@@ -570,7 +570,10 @@ async def prepare_own_fixture(scratch: Path, *, layout: str = "packages/foo/src"
             "pytest-asyncio==1.3.0",
         ],
     ):
-        result = await run_process(argv, cwd=scratch, timeout_s=300)
+        # source_nt.py:1080 rejects hardlinked environment files.
+        result = await run_process(
+            argv, cwd=scratch, timeout_s=300, env=os.environ | {"UV_LINK_MODE": "copy"}
+        )
         if result.returncode != 0 or result.timed_out:
             raise smoke.SmokeError("disposable fixture environment setup failed")
     site = source / ".venv/Lib/site-packages"

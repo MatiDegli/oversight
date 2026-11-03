@@ -4,6 +4,7 @@ import importlib
 import sys
 import tempfile
 from functools import wraps
+from itertools import islice
 from pathlib import Path
 
 import pytest
@@ -112,10 +113,22 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout, rea
     )  # injected demo_python must never be used
     try:
         await live.startup()
-        assert live._environment_unavailable is None, [
-            f"{call}: {type(error).__name__}: {error} (context: {error.__context__!r})"
-            for call, error in readiness_errors
-        ]
+        assert live._environment_unavailable is None, {
+            "readiness_errors": [
+                f"{call}: {type(error).__name__}: {error} (context: {error.__context__!r})"
+                for call, error in readiness_errors
+            ],
+            "venv_files_with_st_nlink_ne_1": list(
+                islice(
+                    (
+                        path.relative_to(fixture.source / ".venv").as_posix()
+                        for path in (fixture.source / ".venv").rglob("*")
+                        if path.is_file() and path.stat().st_nlink != 1
+                    ),
+                    10,
+                )
+            ),
+        }
         assert not any(tmp_path.rglob("FILTER_SENTINEL"))
         assert (live.workspace.main.root / "crlf.py").read_bytes() == b"line = 1\r\n"
         (live.workspace.main.root / "crlf.py").write_bytes(b"line = 1\r\n")
