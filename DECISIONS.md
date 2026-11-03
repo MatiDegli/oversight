@@ -4581,3 +4581,26 @@ The maintainer explicitly requires the pending-change evidence review without de
 This supersedes Impeccable critique's independent-subagent requirement: assess the rendered
 design first, then the detector evidence in this session, and disclose the reduced independence.
 No additional design approval is implied.
+## 2026-11-03 — Accept uv's hard-linked own-venv import metadata
+
+The maintainer decided to accept uv's hard-linked site-packages import metadata in an own venv
+after the coordinator measured default Windows uv 0.12.17 with an editable hatchling project
+and one dependency: link count 1 for `Scripts/python.exe`, `pyvenv.cfg`, the base home
+`python.exe`, every `RECORD`, `INSTALLER`, `direct_url.json` and `_virtualenv.pth`, and link
+count 2 for `_editable_impl_<name>.pth`, `METADATA` and package files, with the second name
+in the same user's uv cache. The exception is fixed once to
+`<repository>/.venv/Lib/site-packages`: only regular files strictly inside that root may have
+`st_nlink >= 1`; directories, `Scripts/python.exe`, `pyvenv.cfg`, the base home `python.exe`,
+the configured `executable` and everything outside that root still require `st_nlink == 1`.
+Containment is lexical and case-insensitive, without resolving links or following reparse points.
+Other hard-linked environment files retain the typed refusal and fixed startup notice with
+`uv sync --reinstall --link-mode copy` or `UV_LINK_MODE=copy` as the remedy.
+
+Reason: only the person's own processes can create links in their venv; Git cannot carry them.
+The admitted files are only parsed as import metadata; their content reaches no notice, agent
+or copy. Type, ACL, stream, offline/recall, placement, budget and handle/path identity checks stay
+in force, including comparison of link counts. Git metadata and source-tree readers keep their
+default single-link requirement.
+
+Residual risk: a linked file can also change through its uv cache name. The token recheck after
+each read refuses a change observed during that read; it cannot prevent later cache writes.

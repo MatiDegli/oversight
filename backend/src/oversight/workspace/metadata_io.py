@@ -114,7 +114,13 @@ def directory(path: Path, deadline: float) -> Generator[int | Path]:
 
 
 def read_at(
-    fd: int | Path, name: str, path: Path, budget: Budget, *, kind: str = "Git metadata"
+    fd: int | Path,
+    name: str,
+    path: Path,
+    budget: Budget,
+    *,
+    kind: str = "Git metadata",
+    allow_hardlinks: bool = False,
 ) -> Entry | None:
     remaining(budget.deadline)
     if isinstance(fd, Path):
@@ -130,7 +136,11 @@ def read_at(
     if stat.S_ISDIR(info.st_mode):
         budget.charge(0)
         return Entry(stat.S_IMODE(info.st_mode), None)
-    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_nlink < 1
+        or (info.st_nlink != 1 and not allow_hardlinks)
+    ):
         raise IntegrityError(f"nonregular or linked {kind}", str(path))
     limit = MAX_INDEX if name == "index" and kind == "Git metadata" else MAX_FILE
     if info.st_size > limit:
@@ -147,7 +157,7 @@ def read_at(
             info.st_dev,
             info.st_ino,
             info.st_mode & mode_mask,
-            1,
+            info.st_nlink,
         ):
             raise IntegrityError(f"{kind} changed during open", str(path))
         if isinstance(fd, Path) and nt_token(
@@ -183,12 +193,12 @@ def read_at(
     return Entry(stat.S_IMODE(info.st_mode), b"".join(chunks))
 
 
-def read_entry(path: Path, budget: Budget) -> Entry | None:
+def read_entry(path: Path, budget: Budget, *, allow_hardlinks: bool = False) -> Entry | None:
     if sys.platform == "win32":
         nt_name(path.name)
     try:
         with directory(path.parent, budget.deadline) as fd:
-            return read_at(fd, path.name, path, budget)
+            return read_at(fd, path.name, path, budget, allow_hardlinks=allow_hardlinks)
     except FileNotFoundError:
         return None
 

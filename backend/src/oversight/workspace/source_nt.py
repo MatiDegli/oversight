@@ -63,6 +63,15 @@ from oversight.workspace.source_config import check_source_config
 MAX_GIT = 8 * 1024 * 1024
 PHASE_SECONDS = 10
 REMEDY = "Use short private local NTFS nonsynced folders; use a separate clone for overlap."
+HARDLINKED_ENVIRONMENT_NOTICE = (
+    "Own-source environment unavailable: the original venv is hard-linked "
+    "(uv's default on Windows); recreate it with `uv sync --reinstall --link-mode copy` "
+    "(or set UV_LINK_MODE=copy)."
+)
+
+
+class HardlinkedEnvironmentError(OSError):
+    """The original environment contains a file with more than one hard link."""
 
 
 def refuse(reason: str) -> OSError:
@@ -1058,12 +1067,32 @@ class EnvironmentIO:
     """Private forced-NT boundary; injected placements never enable public selection."""
 
     deadline: float
+    site: Path
     preflight: Callable[[str], None] = preflight_placement
     bind: Callable[[str], Path] = Path
     sensitive: Callable[[Path], bool] = case_sensitive_directory
     streams: Callable[[Path], Generator[str]] = stream_names
 
-    def check(self, path: Path, *, directory: bool) -> None:
+    def _allows_hardlinks(self, path: Path) -> bool:
+        return _inside(self.site, path) and not _inside(path, self.site)
+
+    def _check_links(
+        self, path: Path, info: os.stat_result, *, require_single_link: bool = False
+    ) -> None:
+        if info.st_nlink != 1 and not (
+            not require_single_link
+            and stat.S_ISREG(info.st_mode)
+            and info.st_nlink >= 1
+            and self._allows_hardlinks(path)
+        ):
+            raise HardlinkedEnvironmentError(
+                "Windows source refused: environment file is hard-linked "
+                "(uv's default on Windows); "
+                "recreate the environment with uv sync --reinstall --link-mode copy "
+                "(or UV_LINK_MODE=copy)"
+            )
+
+    def check(self, path: Path, *, directory: bool, require_single_link: bool = False) -> None:
         short_path(str(path))
         for part in path.parts[1:]:
             nt_name(part)
@@ -1071,18 +1100,22 @@ class EnvironmentIO:
         self.preflight(str(parent))  # Placement validation accepts directories, not executables.
         existing_parents(parent, sensitive=self.sensitive)
         check_directory(parent, self.deadline, time.monotonic, self.sensitive, self.streams)
+        if directory and sys.platform == "win32":
+            # POSIX directory link counts include child directories; NT's do not.
+            self._check_links(path, path.lstat())
         if not directory:
             if getattr(path.lstat(), "st_file_attributes", 0) & (0x1000 | 0x40000 | 0x400000):
                 raise refuse("offline or recall environment file")
             check_streams(path, self.deadline, time.monotonic, self.streams)
             with open_nt(path) as handle:
                 opened = os.fstat(handle.fileno())
-                if opened.st_nlink != 1 or nt_token(opened) != nt_token(path.lstat()):
+                self._check_links(path, opened, require_single_link=require_single_link)
+                if nt_token(opened) != nt_token(path.lstat()):
                     raise refuse("unsafe environment file")
 
     def read(self, path: Path, budget: Budget) -> bytes:
         self.check(path, directory=False)
-        entry = read_entry(path, budget)
+        entry = read_entry(path, budget, allow_hardlinks=self._allows_hardlinks(path))
         if entry is None or entry.data is None:
             raise refuse("missing environment metadata")
         return entry.data
@@ -1092,15 +1125,15 @@ def prepare_environment(
     source: NtSource, tree: Path, deadline: float, *, io: EnvironmentIO | None = None
 ) -> OwnEnvironment:
     """Read only the original venv. No builder, copy, installation or fallback is allowed."""
-    io = io or EnvironmentIO(deadline)
+    venv = source.root / ".venv"
+    io = io or EnvironmentIO(deadline, venv / "Lib/site-packages")
     io.deadline = min(io.deadline, deadline)
     mapping = False
     try:
-        venv = source.root / ".venv"
-        for path in (venv, venv / "Scripts", venv / "Lib", venv / "Lib/site-packages", tree):
+        for path in (venv, venv / "Scripts", venv / "Lib", io.site, tree):
             io.check(path, directory=True)
         python = venv / "Scripts/python.exe"
-        io.check(python, directory=False)
+        io.check(python, directory=False, require_single_link=True)
         config = io.read(venv / "pyvenv.cfg", Budget(deadline)).decode("utf-8")
         values: dict[str, str] = {}
         for line in config.splitlines():
@@ -1114,12 +1147,12 @@ def prepare_environment(
         home = io.bind(absolute_drive(values["home"]))
         for path in (home, home / "Lib"):
             io.check(path, directory=True)
-        io.check(home / "python.exe", directory=False)
+        io.check(home / "python.exe", directory=False, require_single_link=True)
         if "executable" in values:
             executable_path = io.bind(absolute_drive(values["executable"]))
             if executable_path != home / "python.exe":
                 raise ValueError("inconsistent base executable")
-            io.check(executable_path, directory=False)
+            io.check(executable_path, directory=False, require_single_link=True)
         mapping = True
         roots, packages = editable_imports(source, tree, io)
         guard = json.dumps(
@@ -1131,6 +1164,8 @@ def prepare_environment(
             )
         )
         return OwnEnvironment(python, roots, guard)
+    except HardlinkedEnvironmentError:
+        raise HardlinkedEnvironmentError(HARDLINKED_ENVIRONMENT_NOTICE) from None
     except (
         OSError,
         ValueError,
@@ -1205,7 +1240,7 @@ def editable_imports(
     source: NtSource, tree: Path, io: EnvironmentIO
 ) -> tuple[tuple[Path, ...], tuple[str, ...]]:
     """Static bounded metadata only. Recompute for this tree, never import a finder here."""
-    site = source.root / ".venv/Lib/site-packages"
+    site = io.site
     budget = Budget(io.deadline)
     children: list[Path] = []
     for child in site.iterdir():
