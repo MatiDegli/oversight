@@ -58,6 +58,30 @@ def confined_store(store: Path, runs_dir: Path) -> Path:
     return store
 
 
+def _replace_recording(candidate: Path, out: Path) -> None:
+    """Swap a validated export and its receipt, restoring the receipt if the export fails."""
+    metadata = provenance_path(out)
+    previous = candidate.parent / "previous.provenance.json"
+    had_receipt = metadata.exists()
+    if had_receipt:
+        previous.write_bytes(metadata.read_bytes())
+    provenance_path(candidate).replace(metadata)
+    try:
+        candidate.replace(out)
+    except OSError:
+        try:
+            if had_receipt:
+                previous.replace(metadata)
+            else:
+                metadata.unlink()
+        except OSError as error:
+            raise RecordError(
+                "could not export the run or restore the previous receipt; "
+                "the build gate will refuse the recording"
+            ) from error
+        raise
+
+
 def record_run(
     store_path: Path,
     out: Path,
@@ -108,10 +132,9 @@ def record_run(
                 + "\n",
                 encoding="utf-8",
             )
-            # The two renames are not atomic: if the export rename fails, the new receipt
-            # remains with the old log. The build gate in recording.load_recording refuses it.
-            marker.replace(metadata)
-            candidate.replace(out)
+            # A failed export rename restores the previous pair (or removes a new receipt).
+            # Only a failed receipt rollback leaves a pair that the build gate refuses.
+            _replace_recording(candidate, out)
     except (RecordError, ValueError, OSError, sqlite3.Error) as error:
         if isinstance(error, RecordError):
             raise
