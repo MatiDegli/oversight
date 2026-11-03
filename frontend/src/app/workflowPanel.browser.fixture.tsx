@@ -11,6 +11,7 @@ import { Frame } from "./Frame";
 import { InitialShellLayout, type ShellLayout } from "./shell/useShell";
 import { conversationTab, openReview, surfaceTab, tabbedView, viewReducer } from "./view";
 import { flowEvents, flowPlan, type FlowScene } from "./planFlow.browser.fixture";
+import { resolved } from "./chatAgents.fixture";
 
 export type WorkflowOptions = {
   layout?: ShellLayout;
@@ -176,3 +177,7 @@ export function removeSelected() {
 }
 export const prefixLength = () => source.length;
 export const currentSeq = () => stateStore.getState().state.lastSeq;
+
+export function settleReview() {
+  append(resolved("flow-2"));
+}

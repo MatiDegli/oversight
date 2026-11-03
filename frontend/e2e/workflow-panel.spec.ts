@@ -225,6 +225,23 @@ test("built inbox launcher retains the inbox and the repository graph", async ({
   await expect(page.getByRole("region", { name: "Decisions inbox" })).toBeVisible();
 });
 
+test("built evidence withdraws a focused Review action without losing focus", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "Open workflow", exact: true }).click();
+  await steps(page).nth(1).click();
+  const review = panel(page).getByRole("button", { name: "Review change" });
+  await review.focus();
+  await page.evaluate(() => {
+    (window as WorkflowWindow).workflowTest.settleReview();
+  });
+  await expect(review).toBeFocused();
+  await expect(review).toBeDisabled();
+  await review.press("Space");
+  expect(await page.evaluate(() => (window as WorkflowWindow).workflowTest.navigation)).toEqual([]);
+  await review.press("Tab");
+  await expect(review).toHaveCount(0);
+});
+
 for (const layout of ["Chat", "Oversight"] as const)
   for (const width of [1280, 1920])
     for (const theme of ["dark", "day"]) {

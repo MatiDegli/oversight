@@ -48,6 +48,10 @@
   background: var(--raised);
   border-color: var(--text);
 }
+.workflow-panel button[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: default;
+}
 .workflow-panel button:focus-visible,
 .plan-flow .workflow-launch:focus-visible {
   outline: 2px solid var(--text);

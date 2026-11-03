@@ -214,3 +214,25 @@ it("keeps the graph instance, camera and docks while workflow evidence refreshes
     await page.close();
   }
 });
+
+it("withdraws Review navigation without dropping focus when a decision arrives", async () => {
+  const page = await open();
+  try {
+    await page.getByRole("button", { name: "Open workflow", exact: true }).click();
+    await steps(page).nth(1).click();
+    const review = panel(page).getByRole("button", { name: "Review change" });
+    await review.focus();
+    await page.evaluate(() => {
+      window.workflowTest.settleReview();
+    });
+    await check(review).toBeFocused();
+    await check(review).toHaveAttribute("aria-disabled", "true");
+    await review.press("Enter");
+    expect(await page.evaluate(() => window.workflowTest.navigation)).toEqual([]);
+    await review.press("Tab");
+    await check(review).toHaveCount(0);
+    await check(steps(page).nth(1)).toHaveAttribute("aria-pressed", "true");
+  } finally {
+    await page.close();
+  }
+});

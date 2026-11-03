@@ -977,6 +977,7 @@ always carries its word. Role, model and mode say Not known. Review change uses 
 proposal/status eligibility and navigation, with no mutation controls. Keyboard order is Close,
 numbered steps, then detail actions. Enter/Space select; Escape or Close restores launcher focus.
 Updates preserve focus; a disappearing selected step clears selection and focuses Close.
+A focused Review change that loses eligibility stays inert until focus leaves, then disappears.
 
 ### Settings tab
 
