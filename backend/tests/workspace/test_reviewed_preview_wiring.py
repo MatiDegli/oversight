@@ -998,3 +998,63 @@ async def test_reviewed_prepared_copy_recovery_ownership(inputs, tmp_path):
         retire_registered(records)  # Death after cleanup but before registry clear is recoverable.
 
     await asyncio.to_thread(exercise)
+
+
+async def test_reviewed_boundary_listener_and_escape_denial(tmp_path):
+    import json
+    import socket
+
+    from oversight.workspace.preview_boundary import launch_boundary
+
+    from .preview_boundary_support import config, prepared
+
+    roots = await asyncio.to_thread(prepared, tmp_path / "boundary")
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    listener.listen()
+    control, report = os.pipe()
+    for fd in (control, report, listener.fileno()):
+        os.set_inheritable(fd, True)
+    try:
+        payload = f"""
+import json, os, socket
+from pathlib import Path
+paths = [{str(ROOT / ".env")!r}, '/proc/self/root' + {str(ROOT / ".env")!r},
+         '/proc/{os.getpid()}/fd/{listener.fileno()}', '/mnt', '/run/WSL']
+for path in paths:
+    try: os.stat(path)
+    except OSError: pass
+    else: raise AssertionError('excluded path visible')
+visible = []
+for entry in Path('/proc/self/fd').iterdir():
+    try: os.readlink(entry)
+    except OSError: continue
+    visible.append(entry.name)
+assert set(visible) == {{'0','1','2'}}
+assert 'WSL_INTEROP' not in os.environ and 'META_API_KEY' not in os.environ
+with socket.socket() as client:
+    client.settimeout(1)
+    parent_error = client.connect_ex(('127.0.0.1', {listener.getsockname()[1]}))
+    assert parent_error != 0
+with socket.socket() as client:
+    client.settimeout(1)
+    outside_error = client.connect_ex(('1.1.1.1', 443))
+    assert outside_error != 0
+try: socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM)
+except OSError as error: assert error.errno == 1
+else: raise AssertionError('AF_VSOCK allowed')
+print(json.dumps(dict(parent=parent_error, outside=outside_error, fds=visible)))
+"""
+        handle = await launch_boundary(config(payload), roots)
+        try:
+            await handle.wait()
+            assert handle.returncode == 0, handle.stderr
+            data = json.loads(handle.stdout)
+            assert data["parent"] == 111 and data["outside"] == 101
+            assert handle.verified_dead
+        finally:
+            await handle.stop_verified()
+    finally:
+        listener.close()
+        os.close(control)
+        os.close(report)

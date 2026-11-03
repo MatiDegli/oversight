@@ -265,7 +265,7 @@ class PreviewManager:
                         record.run_id,
                     )
                 )
-                config.pop("argv")
+                config.pop("argv", None)
             config["queue_s"] = owner.queue_s
             config["execution_deadline"] = owner.execution_deadline
             config["lease_deadline"] = self._deadline

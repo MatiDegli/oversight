@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from oversight.workspace import isolation
+from oversight.workspace import PreviewProfile, isolation
 from oversight.workspace import preview_process as client
 from oversight.workspace import preview_supervisor as supervisor
 from oversight.workspace.isolation_entry import FLAGS, HELPER, LAUNCHER, PREVIEW_HELPER
@@ -476,3 +476,22 @@ async def test_stop_owns_report_reader_after_incomplete_handoff(tmp_path, acknow
     async with asyncio.timeout(5):
         await process.stop()
     assert process.dead and process.reported_dead and process.reason == "closed"
+
+
+def test_reviewed_configuration_never_constructs_shop_argv(tmp_path):
+    frozen = SimpleNamespace(**vars(profile()))
+    frozen.reviewed_app, frozen.adapter = object(), None
+    with socket.socket() as listener, socket.socket() as refusal:
+        for owned in (listener, refusal):
+            owned.bind(("127.0.0.1", 0))
+            owned.listen()
+        config = launch_configuration(
+            cast(PreviewProfile, frozen),
+            tmp_path,
+            tmp_path / "T",
+            tmp_path / "scratch",
+            listener,
+            refusal,
+            1,
+        )
+    assert "argv" not in config

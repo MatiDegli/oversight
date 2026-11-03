@@ -52,25 +52,27 @@ def launch_configuration(
     refusal: socket.socket,
     now: float,
 ) -> dict[str, Any]:
-    argv = [
-        str(profile.interpreter),
-        "-I",
-        "-B",
-        str(profile.adapter),
-        "--listener-fd",
-        str(listener.fileno()),
-        "--port",
-        str(listener.getsockname()[1]),
-        "--worktree",
-        str(worktree),
-        "--memory-limit-bytes",
-        str(profile.memory_limit_bytes),
-    ]
-    for origin in profile.origins:
-        argv.extend(("--oversight-origin", origin))
+    argv: list[str] = []
+    if profile.reviewed_app is None:
+        argv = [
+            str(profile.interpreter),
+            "-I",
+            "-B",
+            str(profile.adapter),
+            "--listener-fd",
+            str(listener.fileno()),
+            "--port",
+            str(listener.getsockname()[1]),
+            "--worktree",
+            str(worktree),
+            "--memory-limit-bytes",
+            str(profile.memory_limit_bytes),
+        ]
+        for origin in profile.origins:
+            argv.extend(("--oversight-origin", origin))
     return {
         "runtime": str(runtime),
-        "argv": argv,
+        **({"argv": argv} if argv else {}),
         "scratch": str(scratch),
         "env": {key: str(scratch) for key in ("HOME", "TMP", "TEMP")},
         "refusal_port": refusal.getsockname()[1],
