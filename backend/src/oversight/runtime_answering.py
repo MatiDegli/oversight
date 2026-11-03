@@ -3,13 +3,21 @@
 from oversight.agents import UNAVAILABLE_PRODUCERS, AnsweringError, validate_answering
 from oversight.api import ApiError
 from oversight.events import EventStore
+from oversight.nested_clients import NestedPolicy
 from oversight_contracts.decisions import DecisionRef
 
 
-def admit(reference: DecisionRef | None, store: EventStore) -> None:
+def admit(
+    reference: DecisionRef | None, store: EventStore, *, policy: NestedPolicy | None = None
+) -> None:
     """Only the terminal-check producer exists today. No production override opens the others."""
     if reference is None:
         return
+    if policy is not None:
+        try:
+            policy.admit("answering")
+        except ValueError as error:
+            raise ApiError("wrong_state", str(error)) from None
     if reference.kind in UNAVAILABLE_PRODUCERS:
         raise ApiError("wrong_state", UNAVAILABLE_PRODUCERS[reference.kind])
     try:

@@ -124,6 +124,8 @@ class LeadService:
         await message(self, agent_id, text)
 
     def _profile(self, model: str | None) -> ModelProfile:
+        if self.live.nested_policy is not None:
+            return self.live.nested_profile("lead", model)
         default = self.live._slot_profiles["A"]
         default = default if default.provider == "fake" else MUSE_SPARK
         profiles = {p.id: p for p in (MUSE_SPARK, MUSE_SPARK_OPEN, default)}
