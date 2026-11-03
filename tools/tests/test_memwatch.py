@@ -138,7 +138,13 @@ class InnerRun:
     stderr: str
 
 
-def inner_pytest(directory: Path, source: str, *args: str, cap_gb: str = INNER_CAP_GB) -> InnerRun:
+def inner_pytest(
+    directory: Path,
+    source: str,
+    *args: str,
+    cap_gb: str = INNER_CAP_GB,
+    deadline_s: int = RUN_DEADLINE_S,
+) -> InnerRun:
     """Run `source` as a test file in a fresh pytest with the memwatch plugin, outside this
     repository's configuration. However this function ends, the inner process does not outlive it:
     a deadline, an error, or the per-test timeout of this run (an exception raised from inside
@@ -155,7 +161,7 @@ def inner_pytest(directory: Path, source: str, *args: str, cap_gb: str = INNER_C
         text=True,
     )
     try:
-        stdout, stderr = process.communicate(timeout=RUN_DEADLINE_S)
+        stdout, stderr = process.communicate(timeout=deadline_s)
     finally:
         if process.poll() is None:
             process.kill()
@@ -258,8 +264,13 @@ def test_a_test_that_outlives_the_timeout_fails_alone_with_its_name(tmp_path: Pa
 XDIST = ("-n", "2", "--max-worker-restart=0")  # what make check passes, with two workers
 XDIST_CAP_GB = "1.2"  # the budget of the run: 1229 MiB, so 614 MiB for each of two workers
 XDIST_HELD_MIB = 900  # above a worker's share, and below the whole budget
+# Starting two workers under load can consume the plain deadline. Allow three minutes, with
+# twice that outer timeout so the deadline still leaves room to kill and reap the inner run.
+XDIST_RUN_DEADLINE_S = 180
+XDIST_TEST_TIMEOUT_S = 360
 
 
+@pytest.mark.timeout(XDIST_TEST_TIMEOUT_S)
 def test_a_worker_over_its_share_ends_the_run_naming_itself_and_none_is_restarted(
     tmp_path: Path,
 ) -> None:
@@ -276,6 +287,7 @@ def test_a_worker_over_its_share_ends_the_run_naming_itself_and_none_is_restarte
         """,
         *XDIST,
         cap_gb=XDIST_CAP_GB,
+        deadline_s=XDIST_RUN_DEADLINE_S,
     )
     assert run.returncode != 0, run.stdout + run.stderr
     lines = memory_cap_lines(run.stderr)
@@ -287,6 +299,7 @@ def test_a_worker_over_its_share_ends_the_run_naming_itself_and_none_is_restarte
     assert "replacing crashed worker" not in run.stdout + run.stderr, "a worker was restarted"
 
 
+@pytest.mark.timeout(XDIST_TEST_TIMEOUT_S)
 def test_the_time_cap_fails_one_test_in_a_worker_and_the_rest_run(tmp_path: Path) -> None:
     run = inner_pytest(
         tmp_path,
@@ -303,6 +316,7 @@ def test_the_time_cap_fails_one_test_in_a_worker_and_the_rest_run(tmp_path: Path
         "-o",
         "timeout=1",
         cap_gb="8",
+        deadline_s=XDIST_RUN_DEADLINE_S,
     )
     assert run.returncode == 1, run.stdout + run.stderr
     assert "Failed: Timeout (>1.0s) from pytest-timeout." in run.stdout
@@ -310,6 +324,7 @@ def test_the_time_cap_fails_one_test_in_a_worker_and_the_rest_run(tmp_path: Path
     assert "1 failed, 1 passed" in run.stdout
 
 
+@pytest.mark.timeout(XDIST_TEST_TIMEOUT_S)
 def test_a_worker_shares_the_process_group_and_the_scope_of_its_controller(tmp_path: Path) -> None:
     """tools/bounded.sh ends a process group and tools/capped.sh holds a cgroup, both from the
     controller's side: a worker in either of its own would escape the outer bound or the 10G."""
@@ -329,6 +344,7 @@ def test_a_worker_shares_the_process_group_and_the_scope_of_its_controller(tmp_p
         """,
         *XDIST,
         cap_gb="8",
+        deadline_s=XDIST_RUN_DEADLINE_S,
     )
     assert run.returncode == 0, run.stdout + run.stderr
     parent, same_group, same_scope = (tmp_path / "worker.txt").read_text().split()
@@ -386,6 +402,17 @@ def test_the_wait_for_an_inner_pytest_ends_before_the_per_test_timeout_with_room
     seconds = float(request.config.getini("timeout"))
     assert seconds >= 2 * RUN_DEADLINE_S, "the deadline must pass well before pytest-timeout fires"
     assert RUN_DEADLINE_S >= 2 * INNER_WAIT_S, "an inner run may take as long as its own wait"
+    assert XDIST_RUN_DEADLINE_S >= 2 * INNER_WAIT_S, "a worker may wait as long as a plain test"
+    for test in (
+        test_a_worker_over_its_share_ends_the_run_naming_itself_and_none_is_restarted,
+        test_the_time_cap_fails_one_test_in_a_worker_and_the_rest_run,
+        test_a_worker_shares_the_process_group_and_the_scope_of_its_controller,
+    ):
+        marks = [mark for mark in getattr(test, "pytestmark", ()) if mark.name == "timeout"]
+        assert len(marks) == 1, f"{test.__name__} must declare its outer timeout"
+        assert float(marks[0].args[0]) >= 2 * XDIST_RUN_DEADLINE_S, (
+            f"{test.__name__} must leave room for the inner deadline and cleanup"
+        )
 
 
 def test_over_the_cap_the_watchdog_signals_no_process_and_only_ends_its_own(
