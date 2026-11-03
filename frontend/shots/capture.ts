@@ -1,6 +1,6 @@
 // Captures 1920x1080 PNGs of the served UI into .shots/, one per enabled scene and theme, named
-// `<scene>-<theme>[-<edge-shape>].png`, replacing the previous set. Started by make shots, which serves
-// the replay and Vite first:
+// `<scene>-<theme>[-<edge-shape>].png`, each with a same-stem JSON evidence file, replacing the
+// previous set. Started by make shots, which serves the replay and Vite first:
 //
 //   node shots/capture.ts --url http://127.0.0.1:5711/ --log ../fixtures/events/x.jsonl --out ../.shots
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -61,12 +61,8 @@ async function waitUntilReady(page: Page, seq: number, firstView = false): Promi
   );
 }
 
-export async function writeSceneMetrics(page: Page, path: string) {
-  const metrics = await page.evaluate(() => {
-    const probe = document.querySelector<GraphProbeHost>(
-      '[aria-label="Repository graph"]',
-    )?.oversightGraph;
-    if (!probe) throw new Error("Graph renderer missing");
+export async function probeWebglRenderer(page: Page): Promise<string> {
+  return page.evaluate(() => {
     const canvas = document.createElement("canvas");
     const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
     const debug = gl?.getExtension("WEBGL_debug_renderer_info");
@@ -79,8 +75,25 @@ export async function writeSceneMetrics(page: Page, path: string) {
           ? plain
           : "unavailable";
     gl?.getExtension("WEBGL_lose_context")?.loseContext();
-    return { ...probe.metrics(), webglRenderer };
+    return webglRenderer;
   });
+}
+
+export async function writeSceneMetrics(page: Page, path: string) {
+  const graphMetrics = await page.evaluate(() => {
+    const probe = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    if (!probe) throw new Error("Graph renderer missing");
+    return probe.metrics();
+  });
+  const metrics = { ...graphMetrics, webglRenderer: await probeWebglRenderer(page) };
+  await writeFile(path, JSON.stringify(metrics, null, 2) + "\n");
+  return metrics;
+}
+
+export async function writeFirstViewMetrics(page: Page, path: string) {
+  const metrics = { firstView: true, webglRenderer: await probeWebglRenderer(page) };
   await writeFile(path, JSON.stringify(metrics, null, 2) + "\n");
   return metrics;
 }
@@ -186,11 +199,11 @@ async function main(): Promise<number> {
         if (pageErrors.length > 0) throw new Error(`page errors: ${pageErrors.join("; ")}`);
         const path = join(out, job.file);
         await page.screenshot({ path });
-        if (!scene?.firstView) {
-          const metrics = await writeSceneMetrics(
-            page,
-            join(out, job.file.replace(/\.png$/, ".json")),
-          );
+        const metricsPath = join(out, job.file.replace(/\.png$/, ".json"));
+        if (scene?.firstView) {
+          await writeFirstViewMetrics(page, metricsPath);
+        } else {
+          const metrics = await writeSceneMetrics(page, metricsPath);
           stdout.write(
             `shots: ${job.file} label minimum ${metrics.minLabelPx.toFixed(2)} CSS px, ${metrics.edgeShape}\n`,
           );
