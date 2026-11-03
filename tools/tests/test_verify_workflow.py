@@ -215,7 +215,8 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
 
 
 WINDOWS_PATHS = (
-    "backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, "
+    "desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, "
+    "docs/**, "
     "README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, "
     "pyproject.toml, uv.lock, conftest.py, Makefile"
 )
@@ -257,7 +258,7 @@ def assert_windows_policy(text: str) -> None:
         "steps",
     }
     assert job["name"] == "windows advisory" and job["runs-on"] == "windows-latest"
-    assert job["timeout-minutes"] == "30"
+    assert job["timeout-minutes"] == "75"
     assert mapping(job["permissions"]) == {"contents": "read"}
     assert mapping(mapping(job["defaults"])["run"]) == {"shell": "pwsh"}
     assert mapping(job["env"]) == {
@@ -290,7 +291,9 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
         "if-no-files-found: error\nretention-days: 7",
     }
     assert UPLOAD in (WORKFLOWS / "ci.yml").read_text()
-    assert len(items) == 20
+    assert len(items) == 23
+    assert_windows_desktop_checks(items[18:21])
+    items = items[:18] + items[21:]
     assert items[7:9] == [
         {"uses": GITLEAKS},
         {
@@ -335,6 +338,41 @@ def assert_windows_steps(items: list[dict[str, str]]) -> None:
     }
     assert all((WORKFLOWS.parents[1] / path).is_file() for path in files)
     assert_windows_runtime_checks(items)
+
+
+def assert_windows_desktop_checks(items: list[dict[str, str]]) -> None:
+    commands = [
+        (
+            "Desktop Rust toolchain",
+            "rustup toolchain install 1.98.0 --profile minimal --component rustfmt\n"
+            "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+            "rustup default 1.98.0\n"
+            "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+        ),
+        (
+            "Seed desktop Cargo store",
+            "cargo fetch --locked --manifest-path desktop/Cargo.toml\n"
+            "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+        ),
+        (
+            "Portable desktop checks",
+            "$env:CARGO_NET_OFFLINE = 'true'\n"
+            "$timer = [System.Diagnostics.Stopwatch]::StartNew()\n"
+            "cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check\n"
+            "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+            "cargo --offline test --locked --manifest-path desktop/Cargo.toml "
+            "-p oversight-desktop-core\n"
+            "if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+            "$timer.Stop()\n"
+            '"Portable desktop checks: $($timer.Elapsed.TotalSeconds) seconds; '
+            'executable/size/native shell acceptance deferred." | '
+            "Set-Content nt-evidence/desktop.txt",
+        ),
+    ]
+    assert items == [
+        {"name": name, "if": WINDOWS_NATIVE_IF, "run": "|\n" + command}
+        for name, command in commands
+    ]
 
 
 def assert_windows_runtime_checks(items: list[dict[str, str]]) -> None:
@@ -422,7 +460,14 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
         ("permissions: {}", "permissions: write-all"),
         ("contents: read", "contents: write"),
         ("shell: pwsh", "shell: bash"),
-        ("timeout-minutes: 30", "timeout-minutes: 300"),
+        ("timeout-minutes: 75", "timeout-minutes: 300"),
+        ("desktop/**, ", ""),
+        ("rustup toolchain install 1.98.0", "rustup toolchain install stable"),
+        ("cargo fetch --locked", "cargo fetch"),
+        ("cargo --offline --locked fmt", "cargo fmt"),
+        ("cargo --offline test --locked", "cargo test --locked"),
+        ("$env:CARGO_NET_OFFLINE = 'true'", "$env:CARGO_NET_OFFLINE = 'false'"),
+        ("executable/size/native shell acceptance deferred.", "shell accepted."),
         ("persist-credentials: false", "persist-credentials: true"),
         ("uv sync --frozen", "uv sync"),
         ("      - id: frontend_build\n", "      - id: other_build\n"),
@@ -456,7 +501,7 @@ def test_windows_rejects_policy_regressions(old: str, new: str) -> None:
         assert_windows_policy(text.replace(old, new, 1))
 
 
-@pytest.mark.parametrize("index", range(10, 18))
+@pytest.mark.parametrize("index", range(10, 21))
 @pytest.mark.parametrize(
     "condition",
     [

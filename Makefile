@@ -190,6 +190,16 @@ BOUNDARIES := tools/tests/test_eslint_boundaries.py
 GATES := check-python check-contracts check-frontend check-secrets check-notices
 PARALLEL := --no-print-directory -j4 --output-sync=target
 
+.PHONY: check-desktop
+check-desktop: export CARGO_NET_OFFLINE := true
+check-desktop: ## standalone portable desktop fmt/tests; seed Cargo online first; outside GATES
+	@command -v cargo >/dev/null && command -v rustfmt >/dev/null || \
+		{ echo 'check-desktop requires Rust 1.98 and rustfmt, prepared before going offline.' >&2; exit 1; }
+	@$(NO_KEYS) cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check || \
+		{ echo 'Desktop formatting failed; prepare Rust 1.98/rustfmt before going offline.' >&2; exit 1; }
+	@$(NO_KEYS) cargo --offline test --locked --manifest-path desktop/Cargo.toml -p oversight-desktop-core || \
+		{ echo 'Desktop tests failed. For a missing store, seed online: cargo fetch --locked --manifest-path desktop/Cargo.toml' >&2; exit 1; }
+
 check: ## every gate, in parallel groups; tests capped at 10G, 120 s each and 15 min in all; no credits
 	@$(MAKE) $(PARALLEL) $(GATES)
 
