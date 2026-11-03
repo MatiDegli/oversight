@@ -342,6 +342,14 @@ export function App() {
         openFile={onOpenFile}
       >
         <Frame
+          previewActions={{
+            state: historical?.chat ?? state,
+            readState: () => stateStore.getState().state,
+            readOnlyReason: !canCommand
+              ? "Preview and review are unavailable in replay."
+              : undefined,
+            onReview: canCommand ? (candidate) => onReview(candidate.change_id) : undefined,
+          }}
           state={state}
           chatState={historical?.chat}
           readChatState={readChatState}

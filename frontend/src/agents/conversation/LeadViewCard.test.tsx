@@ -60,12 +60,13 @@ it("selects all four known cards and renders nothing for unknown kinds", () => {
   expect(viewCardTitle(unknown)).toBeNull();
   expect(render(unknown)).toBe("");
 });
-it("renders no card or title for a dormant preview view", () => {
+it("renders a compact preview option with an explicit unavailable reason", () => {
   const preview: LeadViewKind = { kind: "preview", agent_id: "agent-1" };
-  expect(viewCardTitle(preview)).toBeNull();
-  expect(render(preview)).toBe("");
+  expect(viewCardTitle(preview)).toBe("Suggested app preview");
+  expect(render(preview)).toContain("Suggested app preview");
+  expect(render(preview)).toContain("unavailable in this run");
 });
-it("adds no listitem for a preview view while retaining a supported card", () => {
+it("retains preview and supported card listitems", () => {
   const state = events.reduce(applyEvent, createInitialState());
   const entries = (
     [
@@ -87,7 +88,7 @@ it("adds no listitem for a preview view while retaining a supported card", () =>
       renderView={(entry) => <LeadViewCard state={state} event={entry.event} header={header} />}
     />,
   );
-  expect(html.match(/role="listitem"/g)).toHaveLength(1);
+  expect(html.match(/role="listitem"/g)).toHaveLength(2);
   expect(html).toContain('aria-label="Run moment"');
 });
 it("derives highlight labels/counts from nodes and retains escaped, attributed speech", () => {
