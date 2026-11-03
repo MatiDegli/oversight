@@ -226,6 +226,7 @@ class LeadService:
             slots=len(self.live._slots),
             mask=self.live._redactor,
             status=lambda: self.live.store.lead_status(include_views=True),
+            status_without_views=self.live.store.lead_status,
             agent_id=lead.status.agent_id,
             resolve_views=self.live.store.view_resolver,
             publish_view=publish_view,

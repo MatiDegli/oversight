@@ -195,6 +195,7 @@ class LeadTools:
         limits: LeadLimits | None = None,
         mask: Callable[[str], str] = str,
         status: Callable[[], tuple[int, str]] | None = None,
+        status_without_views: Callable[[], tuple[int, str]] | None = None,
         agent_id: str = "agent-1",
         resolve_views: Callable[[int], Callable[[LeadView], bool]] | None = None,
         publish_view: Callable[[LeadView], Awaitable[None]] | None = None,
@@ -205,6 +206,7 @@ class LeadTools:
         self.plan_ids: list[str] = []
         self.mask = mask
         self.status = status
+        self.status_without_views = status_without_views
         self.through_seq: int | None = None
         self.agent_id, self.resolve_views, self.publish_view = agent_id, resolve_views, publish_view
         self.status_seen = False
@@ -284,8 +286,14 @@ class LeadTools:
             seq, content = self.status()
             resolver = self.resolve_views(seq) if self.resolve_views is not None else None
         except ValueError:
+            if self.status_without_views is None:
+                return LeadOutcome(
+                    "Status eligibility exceeds the inventory limit; no views are eligible.", False
+                )
+            seq, content = self.status_without_views()
+            self.through_seq = max(self.through_seq or 0, seq)
             return LeadOutcome(
-                "Status eligibility exceeds the inventory limit; no views are eligible.", False
+                content + "No views are eligible: the status inventory is over its limit."
             )
         self.through_seq = max(self.through_seq or 0, seq)
         self.status_seen, self.view_S, self._view_resolver = True, seq, resolver

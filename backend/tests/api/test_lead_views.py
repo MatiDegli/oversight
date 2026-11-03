@@ -189,37 +189,77 @@ async def test_status_window_is_frozen_until_next_successful_status(tmp_path: Pa
         ).ok
 
 
-async def test_production_inventory_overflow_invalidates_previous_status(tmp_path: Path) -> None:
+async def overflow_inventory(s) -> None:
     from oversight_contracts.graph import GraphNode, GraphSnapshot
 
+    await s.store.publish(
+        GraphSnapshot(
+            version="overflow",
+            commit="base",
+            edges=[],
+            parse_errors=[],
+            positions={},
+            nodes=[
+                GraphNode(
+                    id=f"node-{i}",
+                    kind="function",
+                    name="long",
+                    qualname=f"long{i}",
+                    path=f"package_{i:03}/module_with_a_long_name.py",
+                    start_line=1,
+                    end_line=1,
+                    parent_id=None,
+                    is_test=False,
+                )
+                for i in range(300)
+            ],
+        )
+    )
+    with pytest.raises(ValueError, match="inventory limit"):
+        s.store.lead_status(include_views=True)
+
+
+async def test_production_inventory_overflow_invalidates_previous_status(tmp_path: Path) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), ThreadModels()) as s:
         _, tools = await prepared(s)
-        await s.store.publish(
-            GraphSnapshot(
-                version="overflow",
-                commit="base",
-                edges=[],
-                parse_errors=[],
-                positions={},
-                nodes=[
-                    GraphNode(
-                        id=f"node-{i}",
-                        kind="function",
-                        name="long",
-                        qualname=f"long{i}",
-                        path=f"path{i}/" + "a" * 490,
-                        start_line=1,
-                        end_line=1,
-                        parent_id=None,
-                        is_test=False,
-                    )
-                    for i in range(100)
-                ],
-            )
-        )
+        await overflow_inventory(s)
         before = s.store.committed_events()
+        seq, content = s.store.lead_status()
         outcome = await tools.call("status", "{}")
-        assert not outcome.ok and "no views are eligible" in outcome.content
+        assert outcome.ok
+        assert outcome.content == (
+            content + "No views are eligible: the status inventory is over its limit."
+        )
+        assert tools.through_seq == seq
         assert not tools.status_seen and tools.view_S is None
+        assert tools._view_resolver is None
         assert not (await tools.call("show_view", '{"kind":"behavior","change_id":"change-1"}')).ok
         assert s.store.committed_events() == before
+
+
+async def test_scripted_overflow_status_keeps_state_and_refuses_views(tmp_path: Path) -> None:
+    models = ThreadModels()
+    async with asyncio.timeout(DEADLINE_S), live_server(two_fakes(tmp_path), models) as s:
+        await prepared(s)
+        await overflow_inventory(s)
+        models.scripts.append(
+            [
+                turn(call("status")),
+                turn(call("show_view", kind="behavior", change_id="change-1")),
+                turn(call("finish", reply="Status remains available.")),
+            ]
+        )
+        before = await send(s)
+        events = [e for e in s.events() if e.seq > before]
+        assert not any(e.type == "lead.view" for e in events)
+        reply = next(e.payload for e in events if e.type == "lead.reply")
+        assert reply.text == "Status remains available." and reply.cut is None
+        assert reply.through_seq is not None and reply.through_seq > before
+        observations = str(models.built[-1].requests)
+        assert f"Committed status through seq {reply.through_seq}." in observations
+        assert "Omitted whole entries:" in observations
+        assert "No views are eligible: the status inventory is over its limit." in observations
+        assert "View refused." in observations
+        assert "eligible path data:" not in observations
+        statuses = [e.payload.step for e in events if e.type == "lead.status"]
+        assert statuses == [0, 1, 3]
