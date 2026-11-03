@@ -1,7 +1,11 @@
 """The bounded inert startup carrier shares one exact serialization with the console."""
 
 import json
+import logging
+import shutil
+import sys
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -107,7 +111,8 @@ async def test_reviewed_startup_console_index_identity(tmp_path, monkeypatch, ca
     from oversight.app import create_app
     from oversight.settings import Settings
 
-    with TemporaryDirectory(prefix="op-") as short:
+    # The positive carrier case needs bounded paths regardless of the runner's TMPDIR.
+    with TemporaryDirectory(prefix="op-", dir="/tmp" if sys.platform == "linux" else None) as short:
         tmp_path = Path(short)
         runtime, _original, _, resources = await self_checkout(tmp_path, monkeypatch)
         dist = tmp_path / "dist"
@@ -159,3 +164,105 @@ async def test_reviewed_startup_console_index_identity(tmp_path, monkeypatch, ca
                 assert "Enable with OVERSIGHT_PREVIEW_ENABLED=true" in caplog.messages
         finally:
             live.workspace.release_runtime()
+
+
+async def oversize_app(tmp_path, monkeypatch, default_runtime):
+    from workspace.preview_fakes import profile
+    from workspace.test_self_profile import self_checkout
+
+    from oversight.app import create_app
+    from oversight.settings import REPO_ROOT, Settings
+    from oversight.workspace.source import self_inventory
+
+    # Exercise long disposable paths and actual prepared resources at the default runtime.
+    root = tmp_path / ("long-runtime-" * 12)
+    runtime, _original, source, resources = await self_checkout(root, monkeypatch)
+    if default_runtime:
+        node = shutil.which("node")
+        assert node is not None
+        resources = {
+            "python": Path(sys.executable),
+            "node": Path(node),
+            "tsc": REPO_ROOT / "frontend/node_modules/typescript/bin/tsc",
+            "vite": REPO_ROOT / "frontend/node_modules/vite/bin/vite.js",
+        }
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text('<script type="module" src="/app.js"></script>')
+    settings = Settings(
+        runtime_dir=Settings.runtime_dir if default_runtime else runtime,
+        workspace_source="oversight-self",
+        demo_python=Path(sys.executable),
+        frontend_dist=dist,
+        preview_profile=replace(profile(), interpreter=resources["python"]),
+        preview_node=resources["node"],
+        preview_tsc=resources["tsc"],
+        preview_vite=resources["vite"],
+    )
+    app = create_app(settings)
+    if default_runtime:
+        # Verify the real default paths without resetting/writing the development runtime.
+        app.state.live.workspace.source_inventory = await self_inventory(source, runtime)
+    return app
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("default_runtime", [False, True])
+async def test_oversize_startup_report_refuses_only_preview(
+    tmp_path, monkeypatch, caplog, default_runtime
+):
+    import httpx
+
+    from oversight.preview_startup import reviewed_startup_report
+    from oversight.workspace import PreviewError
+
+    app = await oversize_app(tmp_path, monkeypatch, default_runtime)
+    live = app.state.live
+    settings = live._settings
+    calls = []
+
+    def forbidden_process(*args):
+        calls.append(args)
+        raise AssertionError("undisclosed preview must never spawn")
+
+    live.previews.process_factory = forbidden_process
+    caplog.set_level(logging.WARNING, logger="oversight.app")
+    try:
+        if default_runtime:
+            await live._prepare_reviewed_preview()
+        else:
+            await live.startup()
+        frozen = live.previews.profile
+        assert frozen.reviewed_app is not None and not frozen.trusted_demo
+        assert live.previews.lifecycle.profile is frozen
+        build_log = settings.runtime_dir / "previews" / live.run_id / "logs/build.log"
+        with pytest.raises(ValueError, match="exceeds 1024 UTF-8 bytes"):
+            reviewed_startup_report(frozen, str(build_log))
+        assert live.preview_startup_serialized is None
+        assert live.previews.startup_report is None
+        assert "Reviewed-app startup disclosure is unavailable; preview refused." in caplog.messages
+        for action in (
+            live.previews.start(
+                run_id=live.run_id, agent_id="agent-1", revision=1, head_commit="a" * 40
+            ),
+            live.previews._launch(None),  # pyright: ignore[reportArgumentType]
+        ):
+            with pytest.raises(
+                PreviewError, match="Reviewed-app startup disclosure is unavailable"
+            ) as caught:
+                await action
+            assert caught.value.code == "not_configured"
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url=f"http://127.0.0.1:{settings.port}"
+        ) as client:
+            for path in ("/", "/index.html", "/settings"):
+                response = await client.get(path)
+                assert response.status_code == 200
+                assert "oversight-preview-startup" not in response.text
+            if not default_runtime:
+                assert (await client.get("/graph")).status_code == 200
+        assert calls == [] and not live.previews.has_owner
+        assert "must never expose secret marker" not in caplog.text
+    finally:
+        if not default_runtime:
+            await live.shutdown()

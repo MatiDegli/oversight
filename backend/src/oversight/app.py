@@ -483,7 +483,12 @@ class LiveRun:
                 profile, trusted_demo=False, reviewed_app=authorize_reviewed_app(inventory, launch)
             )
             frozen.validate()
-            return frozen, reviewed_startup_report(frozen, str(directory / "logs/build.log"))
+            try:
+                serialized = reviewed_startup_report(frozen, str(directory / "logs/build.log"))
+            except ValueError:
+                _log.warning("Reviewed-app startup disclosure is unavailable; preview refused.")
+                serialized = None
+            return frozen, serialized
 
         frozen, serialized = await asyncio.to_thread(prepare)
         assert isinstance(frozen, type(profile))

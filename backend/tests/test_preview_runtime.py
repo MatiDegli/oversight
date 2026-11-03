@@ -276,6 +276,7 @@ async def test_shutdown_restored_metadata_finalizes_before_store_close(tmp_path,
 
 
 async def test_reviewed_self_authorization_is_separate_and_nonexecuting(tmp_path, monkeypatch):
+    import sys
     from dataclasses import replace
     from pathlib import Path
     from tempfile import TemporaryDirectory
@@ -292,7 +293,8 @@ async def test_reviewed_self_authorization_is_separate_and_nonexecuting(tmp_path
     )
     from oversight.workspace.source import self_inventory
 
-    short = TemporaryDirectory(prefix="op-")
+    # Keep this valid-disclosure case independent of the runner's potentially long TMPDIR.
+    short = TemporaryDirectory(prefix="op-", dir="/tmp" if sys.platform == "linux" else None)
     tmp_path = Path(short.name)
     runtime, original, source, resources = await self_checkout(tmp_path, monkeypatch)
     inventory = await self_inventory(source, runtime)

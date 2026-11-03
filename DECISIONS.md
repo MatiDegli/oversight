@@ -4681,3 +4681,11 @@ Origin-less HTTP writes remain allowed by current API policy. These residuals re
 Linux own-source work starts after this change alongside boundary/gateway/nesting work. Native
 Windows preview launch and general declarations follow submission. No native-Windows isolation,
 no-key or no-paid-call guarantee is provided.
+
+The startup disclosure retains the approved 1,024 escaped UTF-8 byte cap and exact frozen
+commands and paths, without truncation or aliases. If the report cannot fit or is invalid,
+LiveRun continues with no index carrier and reviewed-app admission/execution refuses with
+`Reviewed-app startup disclosure is unavailable.` / `not_configured`. Source selection,
+declaration and authority validation errors still refuse startup. Real prepared resources and
+the default runtime can exceed this disclosure budget; enabling those previews requires a
+separately approved cap or path policy before execution can become available.
