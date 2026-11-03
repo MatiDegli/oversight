@@ -4604,3 +4604,23 @@ default single-link requirement.
 
 Residual risk: a linked file can also change through its uv cache name. The token recheck after
 each read refuses a change observed during that read; it cannot prevent later cache writes.
+
+## 2026-11-03 — Grouped Chat rail completes Q2/Q3 and folded scrolling
+
+K3r implements the existing Q2/Q3 authority in “Built map and Chat refinements” and the K3
+shared presentation rules, under the coordinator's scoped frontend dispatch. Chat wraps the
+landed lead/member rows by stable team ID and first-observed team order: plain summary, team
+ring, separate disclosure and solid 2px member rule. Leadless Q2 is “Plan B · 2 agents · 2 working”;
+lone C remains ungrouped. Counts exclude leads and reuse needs-you/proposed-plan evidence.
+Run-local collapse retains the selected actor, thread, draft, command and focus; only a new run
+resets it. Lead picking, per-lead threads, Stop, reference cards and Back retain their owners.
+
+Q3 keeps stacked collapsible groups above the thread at 390 and exposes observed-work chips
+through the existing file-navigation context, including full collision identity and accessible
+ranges, functions, modes and conflicts. Desktop columns remain. The folded Oversight rail
+scrolls with stable gutter, nonshrinking wrapping tiles and lamps contained inside avatars.
+Proof uses parsed handwritten envelopes and production applyEvent/Frame over the original
+Boltons d31d821 snapshot/layout, labeled handwritten; PNGs, comparisons and manifests stay
+under gitignored .shots/team-rail/. This records delivery under existing authority, not a new
+approval. The detailed dispatch governs Impeccable's discovery/delegation defaults; layout,
+polish, audit and critique run in this session without a sketch round or other agents.

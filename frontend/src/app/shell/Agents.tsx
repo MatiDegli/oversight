@@ -110,7 +110,7 @@ export function AgentsRail({ state }: { state: State }) {
             key={agent.agent_id}
             role="group"
             aria-label={`Agent ${identity?.label ?? "unknown"}: ${label}`}
-            className="flex flex-col items-center gap-1.5"
+            className="agents-rail-tile flex flex-col items-center gap-1.5"
           >
             <span
               data-agent-origin={agent.agent_id}
@@ -119,7 +119,7 @@ export function AgentsRail({ state }: { state: State }) {
               {identity?.planContext?.shortLabel ?? identity?.label ?? "?"}
               <span
                 aria-hidden="true"
-                className={`absolute -top-1 -right-1 size-(--status-lamp-size) rounded-full border-(length:--agent-border-width) ${look.border} ${lamp}`}
+                className={`agents-rail-lamp absolute top-0 right-0 size-(--status-lamp-size) rounded-full border-(length:--agent-border-width) ${look.border} ${lamp}`}
               />
             </span>
             {identity?.planContext && (
