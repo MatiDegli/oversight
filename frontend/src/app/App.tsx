@@ -103,8 +103,11 @@ export function App() {
   const { history, session: historical } = useViewHistory(replay);
   const readChatState = useCallback(() => history?.getSnapshot()?.chat, [history]);
   useEffect(() => {
-    setView((current) => reconcileReferenceHighlight(state, current));
-  }, [state]);
+    // A no-op setter can leave a pending lane across consecutive synchronous store commits.
+    // Reconcile only invalid targets; unchanged references need no React update.
+    if (reconcileReferenceHighlight(state, view) !== view)
+      setView((current) => reconcileReferenceHighlight(state, current));
+  }, [state, view]);
   const previewPermission = useRef(false);
   useEffect(() => {
     previewPermission.current = commands !== null && historical === null;
