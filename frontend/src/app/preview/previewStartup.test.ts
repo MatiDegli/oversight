@@ -124,21 +124,33 @@ it("accepts inclusive command, argument and dependency count bounds", () => {
       expect(read({ ...report, argv, dependencies }).kind).toBe("valid");
 });
 
-it("measures delivered UTF-8 bytes before parsing, without trimming or truncating", () => {
+it.each([1356, 4096])("preserves a report of %i delivered UTF-8 bytes", (size) => {
   const base = JSON.stringify({ ...report, reason: "" });
   const bytes = new TextEncoder().encode(base).byteLength;
-  const text = JSON.stringify({ ...report, reason: "é" + "x".repeat(1024 - bytes - 2) });
-  expect(new TextEncoder().encode(text)).toHaveLength(1024);
+  const expected = { ...report, reason: "é" + "x".repeat(size - bytes - 2) };
+  const text = JSON.stringify(expected);
+  expect(new TextEncoder().encode(text)).toHaveLength(size);
+  expect(readPreviewStartup(documentWith(element(text)))).toEqual({
+    kind: "valid",
+    report: expected,
+  });
+});
+
+it("rejects 4097 delivered UTF-8 bytes without trimming or truncating", () => {
+  const base = JSON.stringify(report);
+  const bytes = new TextEncoder().encode(base).byteLength;
+  const text = base + " ".repeat(4096 - bytes);
+  expect(new TextEncoder().encode(text)).toHaveLength(4096);
   expect(readPreviewStartup(documentWith(element(text))).kind).toBe("valid");
   expect(readPreviewStartup(documentWith(element(text + " ")))).toEqual({ kind: "invalid" });
   expect(readPreviewStartup(documentWith(element(" " + text)))).toEqual({ kind: "invalid" });
 });
 
 it("rejects compact JSON whose carrier escapes exceed the byte limit", () => {
-  const text = JSON.stringify({ ...report, reason: "<".repeat(120) });
-  expect(new TextEncoder().encode(text).byteLength).toBeLessThan(1024);
+  const text = JSON.stringify({ ...report, reason: "<".repeat(650) });
+  expect(new TextEncoder().encode(text).byteLength).toBeLessThan(4096);
   const escaped = text.replaceAll("<", "\\u003c");
-  expect(new TextEncoder().encode(escaped).byteLength).toBeGreaterThan(1024);
+  expect(new TextEncoder().encode(escaped).byteLength).toBeGreaterThan(4096);
   expect(readPreviewStartup(documentWith(element(escaped)))).toEqual({ kind: "invalid" });
 });
 

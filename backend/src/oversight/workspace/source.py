@@ -1,11 +1,14 @@
 """Workspace source selection. Profiles and prepared own-copy startup never fetch a source."""
 
 import hashlib
+import hmac
 import ntpath
 import os
+import stat
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,6 +16,7 @@ from oversight.workspace._platform import executable, preflight_placement
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
 from oversight.workspace.metadata_io import Budget, Entry, read_entry, replace_file
+from oversight.workspace.preview_launch_spec import FileIdentity, plain_path
 from oversight.workspace.runner import Spawn, run_process
 from oversight.workspace.source_config import check_source_config
 
@@ -127,6 +131,226 @@ BOLTONS = SourceProfile(
     pytest_options=("--doctest-modules",),
 )
 
+OVERSIGHT_SELF = SourceProfile(
+    name="oversight-self",
+    upstream="reviewed local checkout; no startup fetch",
+    commit="c08eca088bfa790c8273fe6e41c4e0f2e5f94902",
+    checkout_dir="sources/oversight-self",
+    provenance="oversight-self@c08eca08 (filtered disposable copy)",
+    pytest_targets=("demo-repo/tests",),
+    pytest_options=("-c", "demo-repo/pyproject.toml", "--rootdir=.", "--confcutdir=demo-repo"),
+)
+SELF_PIN_REFUSAL = "oversight-self: reviewed clean pinned checkout required"
+SELF_INVENTORY_REFUSAL = "oversight-self: unsafe or incomplete source inventory"
+_INVENTORY_KEY = os.urandom(32)
+
+
+def _source_token(path: Path) -> tuple[int, ...]:
+    plain_path(path)
+    info = path.lstat()
+    if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+        raise ValueError(SELF_INVENTORY_REFUSAL)
+    if stat.S_ISREG(info.st_mode) and info.st_nlink != 1:
+        raise ValueError(SELF_INVENTORY_REFUSAL)
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_mode,
+        info.st_size,
+        info.st_mtime_ns,
+        info.st_ctime_ns,
+        info.st_nlink,
+    )
+
+
+def _self_git_files(root: Path, commit: str) -> tuple[tuple[FileIdentity, ...], tuple[Path, ...]]:
+    head = root / ".git/HEAD"
+    identities = [FileIdentity.read(head), FileIdentity.read(root / ".git/index")]
+    text = head.read_text(encoding="ascii").strip()
+    missing: tuple[Path, ...] = ()
+    if text.startswith("ref: refs/heads/"):
+        relative = text.removeprefix("ref: ")
+        if any(p in {"", ".", ".."} for p in relative.split("/")) or "\\" in relative:
+            raise ValueError(SELF_INVENTORY_REFUSAL)
+        reference = root / ".git" / relative
+        if reference.exists():
+            identities.append(FileIdentity.read(reference))
+        else:
+            missing = (reference,)
+            identities.append(FileIdentity.read(root / ".git/packed-refs"))
+    elif text != commit:
+        raise ValueError(SELF_INVENTORY_REFUSAL)
+    return tuple(identities), missing
+
+
+@dataclass(frozen=True)
+class SourceInventory:
+    root: Path
+    commit: str
+    entries: tuple[FileIdentity, ...]
+    digest: str
+    observed: tuple[tuple[Path, tuple[int, ...]], ...] = ()
+    git_files: tuple[FileIdentity, ...] = ()
+    missing_refs: tuple[Path, ...] = ()
+    proof: bytes = field(default=b"", repr=False)
+
+    def _signature(self) -> bytes:
+        return hmac.digest(_INVENTORY_KEY, repr(replace(self, proof=b"")).encode(), "sha256")
+
+    def verify(self) -> None:
+        try:
+            if not hmac.compare_digest(self.proof, self._signature()):
+                raise ValueError(SELF_INVENTORY_REFUSAL)
+            plain_path(self.root)
+            for path, token in self.observed:
+                if _source_token(path) != token:
+                    raise ValueError(SELF_INVENTORY_REFUSAL)
+            if any(os.path.lexists(path) for path in self.missing_refs):
+                raise ValueError(SELF_INVENTORY_REFUSAL)
+            for entry in (*self.entries, *self.git_files):
+                entry.verify()
+        except (OSError, ValueError, RuntimeError):
+            raise ValueError(SELF_INVENTORY_REFUSAL) from None
+
+
+def self_input_allowed(name: str) -> bool:
+    from oversight.workspace.secret_paths import is_secret_path
+
+    excluded = {
+        ".git",
+        "node_modules",
+        ".runtime",
+        ".venv",
+        "__pycache__",
+        ".pytest_cache",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".cache",
+        ".shots",
+        "htmlcov",
+        ".tox",
+        ".npm",
+        ".pnpm-store",
+        ".vite",
+        "__pypackages__",
+    }
+    parts = name.split("/")
+    return (
+        not any(part.casefold() in excluded for part in parts)
+        and name.casefold() != "frontend/dist"
+        and not name.casefold().startswith("frontend/dist/")
+        and not name.endswith((".pyc", ".pyo", ".coverage"))
+        and not is_secret_path(name, nt=True)
+    )
+
+
+async def self_inventory(
+    profile: SourceProfile, runtime: Path, *, spawn: Spawn = run_process
+) -> SourceInventory:
+    """Only this reviewed profile may provide the copier's tracked-file allowlist."""
+    if profile != OVERSIGHT_SELF:
+        raise ValueError(SELF_PIN_REFUSAL)
+    try:
+        root = await validate_source(profile, runtime, spawn=spawn)
+    except ValueError:
+        raise ValueError(SELF_PIN_REFUSAL) from None
+    try:
+        return await _self_inventory(profile, root, runtime, spawn)
+    except (OSError, ValueError, RuntimeError):
+        raise ValueError(SELF_INVENTORY_REFUSAL) from None
+
+
+async def _self_inventory(
+    profile: SourceProfile, root: Path, runtime: Path, spawn: Spawn
+) -> SourceInventory:
+    result = await spawn(
+        [
+            "git",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            f"core.hooksPath={os.devnull}",
+            "ls-files",
+            "--stage",
+            "-z",
+        ],
+        cwd=root,
+        timeout_s=30,
+        env=SOURCE_GIT_ENV,
+        output_cap=2 * 1024 * 1024,
+    )
+    try:
+        if (
+            result.returncode != 0
+            or result.timed_out
+            or result.truncated
+            or not result.stdout
+            or not result.stdout.endswith("\0")
+        ):
+            raise ValueError(SELF_INVENTORY_REFUSAL)
+        entries: list[FileIdentity] = []
+        observed: dict[Path, tuple[int, ...]] = {root: _source_token(root)}
+        names: set[str] = set()
+        total = 0
+        for record in result.stdout[:-1].split("\0"):
+            metadata, name = record.split("\t", 1)
+            mode, blob, stage = metadata.split(" ")
+            if (
+                mode not in {"100644", "100755"}
+                or stage != "0"
+                or len(blob) != 40
+                or any(c not in "0123456789abcdef" for c in blob)
+                or name in names
+                or len(names) >= 10000
+                or "\ufffd" in name
+                or not name
+                or any(p in {"", ".", ".."} for p in name.split("/"))
+                or "\\" in name
+                or ":" in name
+                or name.startswith("/")
+                or any(ord(c) < 32 for c in name)
+            ):
+                raise ValueError(SELF_INVENTORY_REFUSAL)
+            names.add(name)
+            # Validate type even for excluded inputs, without opening their contents.
+            path = root / name
+            plain_path(path)
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+                raise ValueError(SELF_INVENTORY_REFUSAL)
+            for observed_path in (path, *path.parents):
+                if not observed_path.is_relative_to(root):
+                    break
+                token = _source_token(observed_path)
+                if observed.setdefault(observed_path, token) != token:
+                    raise ValueError(SELF_INVENTORY_REFUSAL)
+            if self_input_allowed(name):
+                entry = await offload(partial(FileIdentity.read, path))
+                total += entry.token[2]
+                if total > 128 * 1024 * 1024:
+                    raise ValueError(SELF_INVENTORY_REFUSAL)
+                entries.append(entry)
+        git_files, missing_refs = await offload(partial(_self_git_files, root, profile.commit))
+        inventory = SourceInventory(
+            root,
+            profile.commit,
+            tuple(entries),
+            hashlib.sha256(
+                "".join(
+                    f"{e.path.relative_to(root).as_posix()}\0{e.sha256}\0" for e in entries
+                ).encode()
+            ).hexdigest(),
+            tuple(observed.items()),
+            git_files,
+            missing_refs,
+        )
+        inventory = replace(inventory, proof=inventory._signature())  # pyright: ignore[reportPrivateUsage]
+        await offload(inventory.verify)
+        await validate_source(profile, runtime, spawn=spawn)
+        return inventory
+    except (OSError, ValueError, RuntimeError):
+        raise ValueError(SELF_INVENTORY_REFUSAL) from None
+
 
 def select_source(name: str) -> SourceProfile | OwnSource | None:
     """Select demo/profile first; native Windows paths require prepared COPY startup.
@@ -136,7 +360,7 @@ def select_source(name: str) -> SourceProfile | OwnSource | None:
     """
     if not name:
         return None
-    profiles = {BOLTONS.name: BOLTONS}
+    profiles = {p.name: p for p in (BOLTONS, OVERSIGHT_SELF)}
     if name in profiles:
         return profiles[name]
     if sys.platform == "win32" and (ntpath.splitdrive(name)[0] or name.startswith(("/", "\\"))):
@@ -149,6 +373,18 @@ def select_source(name: str) -> SourceProfile | OwnSource | None:
 
 async def validate_source(
     profile: SourceProfile, runtime_root: Path, *, spawn: Spawn = run_process
+) -> Path:
+    """Keep the self refusal fixed without changing other profiles' diagnostics."""
+    try:
+        return await _validate_pinned_source(profile, runtime_root, spawn=spawn)
+    except (OSError, ValueError, RuntimeError):
+        if profile.name == OVERSIGHT_SELF.name:
+            raise ValueError(SELF_PIN_REFUSAL) from None
+        raise
+
+
+async def _validate_pinned_source(
+    profile: SourceProfile, runtime_root: Path, *, spawn: Spawn
 ) -> Path:
     """Verify a real, clean pinned checkout before any runtime reset or graph export."""
     root = profile.checkout(runtime_root)
@@ -181,7 +417,12 @@ async def validate_source(
             timeout_s=30,
             env=SOURCE_GIT_ENV,
         )
-        if head.returncode != 0 or head.timed_out or head.stdout.strip() != profile.commit:
+        if (
+            head.returncode != 0
+            or head.timed_out
+            or head.truncated
+            or head.stdout.strip() != profile.commit
+        ):
             raise ValueError(f"{profile.name}: checkout must be at {profile.commit}. {FETCH_HINT}")
         status = await spawn(
             [binary, *flags, "status", "--porcelain", "--untracked-files=all"],
@@ -189,7 +430,7 @@ async def validate_source(
             timeout_s=30,
             env=SOURCE_GIT_ENV,
         )
-        if status.returncode != 0 or status.timed_out or status.stdout.strip():
+        if status.returncode != 0 or status.timed_out or status.truncated or status.stdout.strip():
             raise ValueError(f"{profile.name}: dirty or unreadable checkout. {FETCH_HINT}")
     except OSError as error:
         raise ValueError(f"{profile.name}: cannot verify checkout. {FETCH_HINT}") from error

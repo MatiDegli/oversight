@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "app": "oversight-self",
+  "mode": "static-api",
+  "build": [
+    {"argv": ["{node}", "{tsc}", "--noEmit"], "cwd": "frontend", "timeout_s": 120},
+    {"argv": ["{node}", "{vite}", "build", "--outDir", "{state}/dist"], "cwd": "frontend", "timeout_s": 120}
+  ],
+  "start": {"argv": ["{python}", "-m", "uvicorn", "oversight.app:create_app", "--factory", "--host", "127.0.0.1", "--port", "{public_port}"], "cwd": ".", "timeout_s": 30},
+  "readiness": {"api": "http://127.0.0.1:{api_port}/health", "public": "http://127.0.0.1:{public_port}/"}
+}

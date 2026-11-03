@@ -30,6 +30,10 @@ export const hostileFixture = {
   build_log: "/runtime/build.log",
   reason: hostileText,
 };
+export const largeFixture: PreviewStartupReport = {
+  ...startupFixture,
+  cwd: "/runtime/reviewed-app/" + "directory/".repeat(80),
+};
 const multilingualText = "مرحبا עברית 漢字🙂 " + "x".repeat(32);
 export const multilingualFixture: PreviewStartupReport = {
   version: 1,
@@ -51,9 +55,10 @@ export function carrierText(report: PreviewStartupReport) {
 }
 export const fixtureTexts = {
   valid: carrierText(startupFixture),
+  large: carrierText(largeFixture),
   missing: undefined,
   invalid: "{}",
-  oversized: carrierText({ ...startupFixture, reason: "x".repeat(1025) }),
+  oversized: carrierText({ ...startupFixture, reason: "x".repeat(4097) }),
   hostile: carrierText(hostileFixture),
   multilingual: carrierText(multilingualFixture),
 };

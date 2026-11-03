@@ -58,6 +58,8 @@ class PreviewManager:
     ) -> None:
         self.workspace = workspace
         self.profile = profile or PreviewProfile()
+        self.startup_report: str | None = None
+        self.startup_report_valid: Callable[[str], bool] = lambda _: False
         self.resolve_candidate = resolve_candidate
         self.memory_hold = memory_hold
         self.clock = clock
@@ -110,6 +112,14 @@ class PreviewManager:
             self.profile.validate()
         except ValueError:
             raise PreviewError("Live preview profile is disabled.", code="not_configured") from None
+        if self.profile.reviewed_app is not None:
+            if self.startup_report is None or not self.startup_report_valid(self.startup_report):
+                raise PreviewError(
+                    "Reviewed-app startup disclosure is unavailable.", code="not_configured"
+                )
+            raise PreviewError(
+                "Reviewed-app preview execution is not available.", code="not_configured"
+            )
         if sys.platform == "win32" or not self.workspace.isolation.available:
             raise PreviewError(ISOLATION_MESSAGE)
         self.workspace.integrity.before_git()
