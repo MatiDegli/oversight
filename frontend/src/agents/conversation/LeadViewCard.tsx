@@ -4,7 +4,7 @@ import { resolveViewReferences } from "../../state";
 // eslint-disable-next-line no-restricted-imports -- Reuse the current-candidate evidence block without eagerly loading it in the shell.
 import { BehaviorDiff } from "../../review/BehaviorDiff";
 import { agentSlotStyle } from "../../theme";
-import { teamIdentities } from "../chatAgentSelectors";
+import { presentationFor } from "../../teams/presentation";
 import { EventTime } from "./rows";
 import type { LeadHeader } from "./selectConversation";
 import "./leadViewCards.css";
@@ -262,11 +262,11 @@ function MomentReference({
 
 function AgentReference({ state, agentId }: { state: State; agentId: string | null }) {
   if (agentId === null) return <>No agent</>;
-  const identity = teamIdentities(state).get(agentId);
+  const identity = presentationFor(state, agentId);
   if (!identity) return <>Agent unavailable</>;
   return (
     <span className="lead-view-agent" style={agentSlotStyle(identity.hue)}>
-      {identity.member === 0 ? "Lead" : "Agent"} {identity.letter}
+      {identity.kind === "lead" && !state.agents[agentId] ? "Lead" : "Agent"} {identity.label}
     </span>
   );
 }

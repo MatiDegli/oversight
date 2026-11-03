@@ -121,55 +121,71 @@ it("shows live moment facts without rewind and supplies an explicit action only 
   expect(render(view)).not.toContain("<button");
   expect(render(view, 12, null, true)).toContain("View event 6");
 });
-it("uses the referenced agent's team label and hue independently of the caption's lead", () => {
-  const sequence: ServerEvent[] = [
-    ...events.slice(0, 2),
-    {
-      seq: 0,
-      ts: required(events[0]).ts,
-      type: "plan.updated",
-      payload: {
-        plan_id: "p",
-        started_by: "agent-9",
-        revision: 1,
-        task: "Inspect",
-        graph_version: "g1",
-        state: "planning",
-        subtasks: null,
-        detail: null,
-        queued_task_id: null,
+it.each(["moment", "files"] as const)(
+  "uses the referenced agent's team label and hue in %s independently of the caption's lead",
+  (kind) => {
+    const sequence: ServerEvent[] = [
+      ...events.slice(0, 2),
+      {
+        seq: 0,
+        ts: required(events[0]).ts,
+        type: "plan.updated",
+        payload: {
+          plan_id: "p",
+          started_by: "agent-9",
+          revision: 1,
+          task: "Inspect",
+          graph_version: "g1",
+          state: "planning",
+          subtasks: ["agent-1", "agent-2"].map((agent_id) => ({
+            agent_id,
+            task: "Inspect subtask",
+            zone: { node_ids: [], paths: [] },
+            depends_on: [],
+            state: "running" as const,
+          })),
+          detail: null,
+          queued_task_id: null,
+        },
       },
-    },
-    ...events
-      .slice(2, 12)
-      .map((event) =>
-        event.type === "agent.status"
-          ? { ...event, payload: { ...event.payload, plan_id: "p" } }
-          : event,
-      ),
-  ];
-  const state = sequence.reduce(
-    (state, event, index) => applyEvent(state, { ...event, seq: index + 1 }),
-    createInitialState(),
-  );
-  const event: LeadViewEvent = {
-    seq: 14,
-    ts: required(events[0]).ts,
-    type: "lead.view",
-    payload: {
-      agent_id: "other-lead",
-      through_seq: 13,
-      caption: null,
-      view: { kind: "moment", event_seq: 7 },
-    },
-  };
-  const html = renderToStaticMarkup(
-    <LeadViewCard state={state} event={event} header={{ ...header, hue: "B", letter: "B" }} />,
-  );
-  expect(html).toContain("Agent A·1");
-  expect(html).toMatch(/<dd[^>]*>.*--slot-text:var\(--agent-a-text\).*Agent A·1/);
-  expect(html).not.toContain("agent-1");
-});
+      ...events
+        .slice(2, 12)
+        .map((event) =>
+          event.type === "agent.status"
+            ? { ...event, payload: { ...event.payload, plan_id: "p" } }
+            : event,
+        ),
+    ];
+    const state = sequence.reduce(
+      (state, event, index) => applyEvent(state, { ...event, seq: index + 1 }),
+      createInitialState(),
+    );
+    const event: LeadViewEvent = {
+      seq: 14,
+      ts: required(events[0]).ts,
+      type: "lead.view",
+      payload: {
+        agent_id: "other-lead",
+        through_seq: 13,
+        caption: null,
+        view:
+          kind === "moment"
+            ? { kind: "moment", event_seq: 7 }
+            : { kind: "files", references: [{ change_id: "change-1", path: "a.py" }] },
+      },
+    };
+    const html = renderToStaticMarkup(
+      <LeadViewCard state={state} event={event} header={{ ...header, hue: "B", letter: "B" }} />,
+    );
+    expect(html).toContain("Agent A·1");
+    if (kind === "moment")
+      expect(html).toMatch(/<dd[^>]*>.*--slot-text:var\(--agent-a-text\).*Agent A·1/);
+    expect(html).toMatch(
+      /class="lead-view-agent"[^>]*--slot-text:var\(--agent-a-text\).*Agent A·1/,
+    );
+    expect(html).not.toContain("agent-1");
+  },
+);
 it("puts views between status and later replies in the lead's sequence-ordered thread", () => {
   const state = events.reduce(applyEvent, createInitialState());
   const appended: ServerEvent[] = [
