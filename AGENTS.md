@@ -42,15 +42,13 @@ DESIGN.md (every visual rule), DECISIONS.md (each decision with its reason; it w
   missing token usage is unknown, never zero; the spending brake refuses new runs above 90% of the credits.
 - Frontend: Cytoscape.js and fcose without a React wrapper; Monaco from the local package, never a CDN; one pure event
   reducer shared by live runs and replay. The static build plays a bundled recorded run, always labeled as real.
-- The product's agents work in worktrees under .runtime/worktrees/, on a disposable copy of demo-repo/, a pinned
-  profile or the person's selected repository; never in worktrees of this repository or in the selected original.
+- Product agents use disposable worktrees under .runtime/worktrees/; nested agents use .runtime/previews/<id>/state/worktrees/. Sources are demo-repo, a pinned profile or the person’s selected repository. Agents never work in development worktrees of the running Oversight or in the selected original.
 
 ## Product agent safety
 - Tools are list_files, read_file, search, edit_file, run_tests and finish. There is no shell tool.
 - Every path is validated inside the agent's worktree; no tool returns the content of an obvious secret file.
-- run_tests runs one fixed command, with a timeout, in the disposable tested tree: in the demo's own virtual
-  environment, or for a selected own repository on native Windows, in its validated .venv with imports mapped to the
-  copy. The person sets that repository's test limit at startup (OVERSIGHT_TEST_TIMEOUT_S); the model never changes it.
+- run_tests uses a fixed startup test specification. Demo and source profiles use Oversight’s prepared demo-venv or an explicitly supplied equivalent; own repositories use their validated environment. Project imports map to the disposable tested tree. Profiles declare their test scope; own repositories retain whole-repository discovery. The person owns own-repository test timeouts; the model never changes the specification or timeout.
+- Preview launch selection is person override, then the original source’s validated declaration, then supported startup detection. The demo shop uses Oversight's trusted adapter. Invalid explicit inputs refuse without fallback. The person sees commands, reason, limits and platform trust before execution. The specification stays fixed; the model can edit code it executes. Preview uses disposable tested inputs, platform-specific ownership and verified cleanup. On Linux, the verified namespace/allowlisted-root boundary covers only the reviewed-app preview’s build, startup and descendants. Separate run_tests and shop-adapter launches retain network/PID isolation without filesystem isolation; covering them is a later front. Native Windows runs trusted code as the person without credential isolation.
 - An agent's status comes from its tool calls, never from its text. Runs without progress stop.
 
 ## UI invariants
