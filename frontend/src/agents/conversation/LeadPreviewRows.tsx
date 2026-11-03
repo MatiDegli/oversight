@@ -22,17 +22,21 @@ export default function LeadPreviewRows({
         {renderView?.(entry)}
       </div>
     );
-  return groupLeadPreviews(conversation.entries).map(({ entry, previews, fallback }) => (
+  const rows = groupLeadPreviews(conversation.entries).flatMap(({ entry, previews, fallback }) => [
+    { entry, fallback },
+    ...previews.map((preview) => ({ entry: preview, fallback: false })),
+  ]);
+  // Flat keyed siblings move the existing option DOM when a late reply arrives, retaining focus.
+  return rows.map(({ entry, fallback }) => (
     <Fragment key={`${entry.kind}:${String(entry.seq)}`}>
-      {fallback ? (
-        option(entry, true)
+      {entry.kind === "lead-view" && entry.event.payload.view.kind === "preview" ? (
+        option(entry, fallback)
       ) : (
         <LeadThreadRows
           conversation={{ ...conversation, entries: [entry] }}
           renderView={renderView}
         />
       )}
-      {previews.map((preview) => option(preview))}
     </Fragment>
   ));
 }

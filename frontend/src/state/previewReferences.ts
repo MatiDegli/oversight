@@ -28,7 +28,30 @@ export function resolvePreviewReference(state: State, request: LeadView): Previe
     return unavailable("The referenced change has no current proposal.");
   if (agent.state !== "ready_for_review" && agent.state !== "halted")
     return unavailable("The referenced agent is not ready for preview.");
+  const observed = state.decisionEvents.findLast(
+    (event) =>
+      event.type === "agent.status" &&
+      event.payload.agent_id === agent.agent_id &&
+      event.seq <= request.through_seq,
+  );
+  if (
+    observed?.type !== "agent.status" ||
+    observed.payload.change_id !== change.change_id ||
+    (observed.payload.state !== "ready_for_review" && observed.payload.state !== "halted")
+  )
+    return unavailable("The agent was not ready at the suggestion’s observed horizon.");
   const seq = change.proposalEvent?.seq;
+  const pinned = state.decisionEvents.find(
+    (event) => event.type === "change.proposed" && event.seq === seq,
+  );
+  if (
+    pinned?.type !== "change.proposed" ||
+    pinned.payload.agent_id !== agent.agent_id ||
+    pinned.payload.change_id !== change.change_id ||
+    pinned.payload.revision !== proposal.revision ||
+    pinned.payload.head_commit !== proposal.head_commit
+  )
+    return unavailable("The suggested revision is no longer available.");
   if (
     !seq ||
     seq > request.through_seq ||

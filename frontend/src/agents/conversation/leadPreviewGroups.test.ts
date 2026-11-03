@@ -6,7 +6,7 @@ const status = (seq: number, state = "working"): LeadEntry => ({
   kind: "lead-status",
   seq,
   ts: "same",
-  status: { agent_id: "lead", state } as never,
+  status: { agent_id: "lead", revision: 1, state } as never,
 });
 const view = (seq: number, kind = "preview", lead = "lead"): LeadEntry => ({
   kind: "lead-view",
@@ -84,4 +84,11 @@ it("a later matching reply groups a prefix without requiring text or changing th
   expect(groupLeadPreviews(prefix)[1]?.fallback).toBe(true);
   expect(groupLeadPreviews([...prefix, reply(3)])[1]?.previews).toHaveLength(1);
   expect(prefix).toHaveLength(2);
+});
+
+it("does not infer an opening turn from an incomplete status prefix", () => {
+  const current = status(1);
+  if (current.kind !== "lead-status") throw new Error("Missing status");
+  current.status.revision = 4;
+  expect(groupLeadPreviews([current, view(2), reply(3)])[1]?.fallback).toBe(true);
 });

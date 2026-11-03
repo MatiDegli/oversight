@@ -1,3 +1,4 @@
+import type { GraphProbeHost } from "../../graph";
 import { expect as check, type Page } from "@playwright/test";
 import { expect, it } from "vitest";
 import { deferred, fakeCandidate } from "./previewFake";
@@ -18,7 +19,10 @@ it.each(scenarios)("mounts %s with fixed copy and persistent Close", async (scen
     const reason = previewReasons.find(
       (reason) => scenario === `failed-${reason}` || scenario === `stopped-${reason}`,
     );
-    if (reason) await check(page.getByRole("status")).toContainText(previewReasonCopy[reason]);
+    if (reason)
+      await check(
+        page.getByRole(reason === "cleanup_unverified" ? "alert" : "status"),
+      ).toContainText(previewReasonCopy[reason]);
     if (scenario === "isolation-before-launch") {
       await check(page.getByRole("status")).toContainText(
         "Live preview unavailable: isolation C is unavailable for this session.",
@@ -366,6 +370,16 @@ it.each(surfaces)("fake opening facts leave the built %s surface untouched", asy
   try {
     const page = await session.open("surface", `surface=${surface}`);
     await page.waitForTimeout(100); // Let the existing lazy shell settle before measuring it.
+    await page
+      .getByRole("button", { name: surface.startsWith("chat") ? "Chat" : "Oversight", exact: true })
+      .focus();
+    if (await page.getByRole("img", { name: "Repository graph" }).count())
+      await page.waitForFunction(() => {
+        const graph = document.querySelector<GraphProbeHost>(
+          '[aria-label="Repository graph"]',
+        )?.oversightGraph;
+        return graph && !graph.animating();
+      });
     const facts = () =>
       page.evaluate(() => ({
         active: document.querySelector('[aria-selected="true"]')?.textContent,
@@ -452,6 +466,7 @@ it.each([1920, 1280, 390])(
     const session = await support.session({ width, height: width === 1920 ? 1080 : 844 });
     try {
       const page = await session.open("surface", "surface=chat-wide&slot=preview");
+      await check(page.locator(".conversation-composer")).toBeVisible();
       const rail = await page.locator(".chat-agents").boundingBox();
       const before = await page.locator(".shell-center").boundingBox();
       await page.evaluate(() => window.previewFixture.see());

@@ -46,7 +46,13 @@ export function PreviewPanel({
   identity?: (agentId: string | undefined) => { label: string; hue: PaletteKey } | undefined;
   replay?: boolean;
 }) {
-  const view = useSyncExternalStore(controller.subscribe, controller.snapshot, controller.snapshot);
+  const snapshot = useSyncExternalStore(
+    controller.subscribe,
+    controller.snapshot,
+    controller.snapshot,
+  );
+  const view =
+    snapshot.status?.reason === "cleanup_unverified" ? { ...snapshot, uncertain: true } : snapshot;
   const [progress] = useState(frameProgress);
   if (!view.visible) return null;
   const status = view.status;
@@ -151,6 +157,7 @@ function PreviewPhase({
   const [seconds, setSeconds] = useState(elapsed);
   const waiting =
     !replay &&
+    (view.owned || view.notice === "opening" || view.pending) &&
     !view.uncertain &&
     (view.pending ||
       view.status?.state === "starting" ||

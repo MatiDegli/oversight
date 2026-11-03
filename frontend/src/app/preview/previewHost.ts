@@ -32,6 +32,7 @@ export function createPreviewHost(
   let refreshAgain = false;
   let generation = 0;
   let clickedAt = 0;
+  let targetAgent: string | undefined;
   const listeners = new Set<() => void>();
   const publish = (next: boolean) => {
     if (open === next || disposed) return;
@@ -101,6 +102,7 @@ export function createPreviewHost(
       navigate: close,
     },
     clock,
+    targetAgent: () => targetAgent,
     elapsed: () => Math.max(0, Math.floor((now() - clickedAt) / 1000)),
     snapshot: () => open,
     subscribe(listener: () => void) {
@@ -118,6 +120,7 @@ export function createPreviewHost(
         !resolvePreviewReference(read(), request).candidate
       )
         return;
+      targetAgent = request.view.kind === "preview" ? request.view.agent_id : undefined;
       closeRequested = false;
       frameHidden = false;
       clickedAt = now();

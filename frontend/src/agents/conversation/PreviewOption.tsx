@@ -32,12 +32,22 @@ export function PreviewOption({
     (!actions?.onPreview || !actions.onReview
       ? "Live preview actions are unavailable in this session."
       : null);
-  const activate = (kind: "preview" | "review") => {
+  const activate = (kind: "preview" | "review", origin: HTMLButtonElement) => {
     if (readOnly || !actions || reason) return;
     const fresh = resolvePreviewReference(actions.readState(), request);
     if (!fresh.candidate) return;
-    if (kind === "preview") actions.onPreview?.(request);
-    else actions.onReview?.(fresh.candidate);
+    if (kind === "preview") {
+      actions.onPreview?.(request);
+      // The person's activation can reveal the full option after the column narrows.
+      requestAnimationFrame(() => {
+        if (!origin.isConnected || !matchMedia("(min-width: 768px)").matches) return;
+        const list = origin.closest<HTMLElement>(".conversation-timeline");
+        const option = origin.closest<HTMLElement>(".lead-preview-option");
+        if (!list || !option) return;
+        const below = option.getBoundingClientRect().bottom - list.getBoundingClientRect().bottom;
+        if (below > 0) list.scrollTop += below + 8;
+      });
+    } else actions.onReview?.(fresh.candidate);
   };
   return (
     <div className="lead-preview-option" aria-label="Suggested app preview">
@@ -59,7 +69,9 @@ export function PreviewOption({
             type="button"
             className="lead-preview-primary"
             disabled={Boolean(reason)}
-            onClick={() => { activate("preview"); }}
+            onClick={(event) => {
+              activate("preview", event.currentTarget);
+            }}
           >
             Preview app
           </button>
@@ -67,7 +79,9 @@ export function PreviewOption({
             type="button"
             className="lead-preview-secondary"
             disabled={Boolean(reason)}
-            onClick={() => { activate("review"); }}
+            onClick={(event) => {
+              activate("review", event.currentTarget);
+            }}
           >
             Review change
           </button>

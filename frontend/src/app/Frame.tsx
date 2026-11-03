@@ -149,7 +149,12 @@ export function Frame(input: FrameProps) {
                 controller={props.previewHost.controller}
                 clock={props.previewHost.clock}
                 elapsed={props.previewHost.elapsed}
-                identity={(id) => presentationFor(stateStore.getState().state, id)}
+                identity={(id) =>
+                  presentationFor(
+                    stateStore.getState().state,
+                    id ?? props.previewHost?.targetAgent(),
+                  )
+                }
               />
             ),
           }

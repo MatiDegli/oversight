@@ -12,19 +12,29 @@ function setup() {
   const agent = state.agents["agent-1"];
   if (!agent) throw new Error("Missing agent");
   state.agents[agent.agent_id] = { ...agent, state: "ready_for_review" };
+  state.decisionEvents.push({
+    type: "agent.status",
+    seq: 7,
+    ts: "2026-11-03T00:00:00Z",
+    payload: {
+      ...agent,
+      state: "ready_for_review",
+      change_id: state.agents[agent.agent_id]?.change_id ?? agent.change_id,
+    },
+  });
   const event: LeadViewEvent = {
     type: "lead.view",
-    seq: 7,
+    seq: 8,
     ts: "same",
     payload: {
       agent_id: "lead",
-      through_seq: 6,
+      through_seq: 7,
       caption: "<script>caption</script>",
       view: { kind: "preview", agent_id: agent.agent_id },
     },
   };
   state.leadViews.lead = [event];
-  state.lastSeq = 7;
+  state.lastSeq = 8;
   return { state, event };
 }
 it("uses team text/label, escapes subordinate speech, and offers both capabilities", () => {
@@ -61,4 +71,27 @@ it("shows one reason and no actions for a stale suggestion", () => {
   const html = renderToStaticMarkup(<PreviewOption state={state} event={event} />);
   expect(html).toContain("unavailable in this run");
   expect(html).not.toContain("<button");
+});
+
+it("withholds both capabilities for historical Chat retained from a live session", () => {
+  const { state, event } = setup();
+  const html = renderToStaticMarkup(
+    <PreviewActionsContext
+      value={{
+        state,
+        readState: () => state,
+        readOnlyReason: "Historical view: preview and review are unavailable.",
+        onPreview: () => {
+          throw new Error("inert");
+        },
+        onReview: () => {
+          throw new Error("inert");
+        },
+      }}
+    >
+      <PreviewOption state={state} event={event} />
+    </PreviewActionsContext>,
+  );
+  expect(html.match(/disabled=""/g)).toHaveLength(2);
+  expect(html).toContain("Historical view");
 });

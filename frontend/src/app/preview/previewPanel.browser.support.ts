@@ -50,9 +50,11 @@ class BrowserSupport {
   url = "";
   contexts = new Set<BrowserContext>();
   errors = new WeakMap<Page, string[]>();
+  diagnostics = new WeakMap<Page, { type: string; text: string }[]>();
   constructor(readonly suffix: string) {}
   async start() {
     const server = await createServer({
+      appType: "custom",
       root: fileURLToPath(new URL("../../../", import.meta.url)),
       cacheDir: `${shotsDirectory}cache-${this.suffix}`,
       optimizeDeps: { entries: ["src/app/preview/PreviewPanel.browser.fixture.tsx"] },
@@ -63,6 +65,16 @@ class BrowserSupport {
       "/",
       '<!doctype html><html><body><div id="root"></div><script type="module">import "/src/theme/index.css"; import "/src/app/preview/PreviewPanel.browser.fixture.tsx";</script></body></html>',
     );
+    server.middlewares.use((request, response, next) => {
+      if (request.url?.split("?")[0] !== "/") {
+        next();
+        return;
+      }
+      response.setHeader("Content-Type", "text/html");
+      // The isolated fixture serves exactly one synthetic frame origin; production keeps its pool policy.
+      response.setHeader("Content-Security-Policy", "frame-src https://preview-frame.invalid");
+      response.end(this.html);
+    });
     await server.listen();
     this.url = server.resolvedUrls?.local[0] ?? "";
     if (!this.url) throw new Error("Missing preview fixture URL");
@@ -77,7 +89,7 @@ class BrowserSupport {
   async session(
     options: { width?: number; height?: number; theme?: string; scenario?: string } = {},
   ) {
-    const { browser, url, html, contexts, errors } = this;
+    const { browser, url, contexts, errors, diagnostics } = this;
     if (!browser) throw new Error("Preview browser is unavailable");
     const clock = new PreviewFakeClock();
     const authority = new PreviewFake(clock);
@@ -100,15 +112,17 @@ class BrowserSupport {
     await context.exposeBinding("previewBoundary", (_source, request: FakeRequest) =>
       dispatch(authority, request),
     );
-    await this.route(context, options.theme ?? "dark", url, html);
+    await this.route(context, options.theme ?? "dark", url);
     async function open(mode = "panel", extra = "", selectedScenario = scenario) {
       const page = await context.newPage();
       const pageErrors: string[] = [];
       errors.set(page, pageErrors);
+      const consoleMessages: { type: string; text: string }[] = [];
+      diagnostics.set(page, consoleMessages);
       page.on("pageerror", (error) => pageErrors.push(error.message));
       page.on("console", (message) => {
-        if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
-          pageErrors.push(message.text());
+        consoleMessages.push({ type: message.type(), text: message.text() });
+        if (message.type() === "error") pageErrors.push(message.text());
       });
       await page.goto(
         `${url}?mode=${mode}&theme=${options.theme ?? "dark"}&scenario=${selectedScenario}&${extra}`,
@@ -144,7 +158,7 @@ class BrowserSupport {
     }
     return { authority, clock, context, open, close };
   }
-  async route(context: BrowserContext, theme: string, url: string, html: string) {
+  async route(context: BrowserContext, theme: string, url: string) {
     await context.route("**/*", async (route) => {
       const request = route.request(),
         target = new URL(request.url());
@@ -155,8 +169,6 @@ class BrowserSupport {
         });
       if (target.origin !== new URL(url).origin) throw new Error("Unexpected external request");
       if (target.pathname === "/usage") return route.fulfill({ json: recorded });
-      if (request.isNavigationRequest() && target.pathname === "/")
-        return route.fulfill({ contentType: "text/html", body: html });
       return route.continue();
     });
   }
@@ -206,6 +218,32 @@ class BrowserSupport {
           theme,
           checkpoint: "working-tree",
           provenance: "fixture · handwritten authority",
+          candidate: await page.evaluate(() => window.previewFixture.snapshot().status),
+          console: this.diagnostics.get(page) ?? [],
+          appOverflow: await (async () => {
+            const frame = page.frames().find((item) => item.parentFrame());
+            return frame
+              ? frame.evaluate(() =>
+                  Math.max(
+                    0,
+                    document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                  ),
+                )
+              : "inapplicable";
+          })(),
+          overflowDetails: await page.evaluate(() =>
+            Object.fromEntries(
+              ["html", "body", ".conversation-panel", ".preview-panel"].map((selector) => {
+                const node = document.querySelector(selector);
+                return [
+                  selector,
+                  node?.clientWidth
+                    ? Math.max(0, node.scrollWidth - node.clientWidth)
+                    : "inapplicable",
+                ];
+              }),
+            ),
+          ),
           reducedMotion: "reduce",
           fontReady: await page.evaluate(() => document.fonts.status),
           rectangles: await page.evaluate(() =>

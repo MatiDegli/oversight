@@ -51,7 +51,16 @@ export function groupLeadPreviews(entries: readonly LeadEntry[]): PreviewGroup[]
     } else {
       if (evidence.answers_seq !== null) continue;
       if (priorReply && (start.seq <= priorReply.seq || !evidence.woken_by?.length)) continue;
-      if (!priorReply && evidence.woken_by !== null) continue;
+      if (!priorReply) {
+        const origin = entries.find((e) => e.kind === "lead-status" && e.status.agent_id === lead);
+        if (
+          origin?.kind !== "lead-status" ||
+          origin.status.revision !== 1 ||
+          !["starting", "working"].includes(origin.status.state) ||
+          evidence.woken_by !== null
+        )
+          continue;
+      }
     }
     attached.set(reply.seq, [...(attached.get(reply.seq) ?? []), entry]);
     grouped.add(entry.seq);

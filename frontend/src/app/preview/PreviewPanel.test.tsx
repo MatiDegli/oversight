@@ -195,3 +195,10 @@ it("replay panel fixtures never mount a live frame even with owned ready details
   expect(html).toContain("inert");
   expect(html).not.toContain("iframe");
 });
+
+it("never presents cleanup_unverified as a verified refusal before a frame exists", () => {
+  const html = render({ status: fakeStatus("failed", "cleanup_unverified"), uncertain: false });
+  expect(html).toContain("Closure is unconfirmed");
+  expect(html).not.toContain("Preview refused");
+  expect(html).not.toContain("iframe");
+});

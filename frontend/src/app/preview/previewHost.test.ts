@@ -20,15 +20,34 @@ function setup() {
       proposal: change.proposal && { ...change.proposal, change_id: "change-agent-1" },
     },
   };
-  state.agents[agent.agent_id] = { ...agent, state: "ready_for_review", change_id: "change-agent-1" };
+  state.agents[agent.agent_id] = {
+    ...agent,
+    state: "ready_for_review",
+    change_id: "change-agent-1",
+  };
+  state.decisionEvents.push({
+    type: "agent.status",
+    seq: 7,
+    ts: "2026-11-03T00:00:00Z",
+    payload: {
+      ...agent,
+      state: "ready_for_review",
+      change_id: state.agents[agent.agent_id]?.change_id ?? agent.change_id,
+    },
+  });
+  state.decisionEvents = state.decisionEvents.map((event) =>
+    event.type === "change.proposed"
+      ? { ...event, payload: { ...event.payload, change_id: "change-agent-1" } }
+      : event,
+  );
   const request: LeadView = {
     agent_id: "lead",
-    through_seq: 6,
+    through_seq: 7,
     caption: null,
     view: { kind: "preview", agent_id: agent.agent_id },
   };
-  state.leadViews.lead = [{ type: "lead.view", seq: 7, ts: "same", payload: request }];
-  state.lastSeq = 7;
+  state.leadViews.lead = [{ type: "lead.view", seq: 8, ts: "same", payload: request }];
+  state.lastSeq = 8;
   const port = new PreviewFake(previewClock);
   let allowed = true;
   const host = createPreviewHost(
