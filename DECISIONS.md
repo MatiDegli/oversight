@@ -4375,3 +4375,5 @@ Tests/plugins may write outside runtime; child interpreters can escape the impor
 concurrent path-replacement races and inherited ACLs remain accepted residuals. No isolation,
 ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
+
+2026-11-03 — Dormant views with references. Following maintainer OK of the exact diff, contracts 1.18.0 adds lead.view with highlight, files, behavior and moment. PR1 ships validated reference infrastructure, eligible status inventory and event readers; show_view remains absent from the advertised tool table and dispatch. Prompt bytes and prompt_version remain unchanged. This supersedes the no-new-events/contracts restriction for this feature only. No visible cards or paid calls are released by PR1.

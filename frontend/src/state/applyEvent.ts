@@ -1,5 +1,6 @@
 import type { ServerEvent } from "@contracts";
 
+import { applyThreadEvent } from "./applyThreadEvent";
 import { applyAgentEvent } from "./applyAgentEvent";
 import { applyUpdate, applyProposal, applyResolution, applyReview } from "./applyChangeEvent";
 import { applyEvidenceEvent } from "./applyEvidenceEvent";
@@ -25,25 +26,10 @@ export function applyEvent(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
+    case "lead.view":
     case "lead.reply":
-      return {
-        ...next,
-        leadReplies: {
-          ...state.leadReplies,
-          [event.payload.agent_id]: [...(state.leadReplies[event.payload.agent_id] ?? []), event],
-        },
-      };
     case "agent.message":
-      return {
-        ...next,
-        messages: {
-          ...state.messages,
-          [event.payload.agent_id]: [
-            ...(state.messages[event.payload.agent_id] ?? []),
-            { seq: event.seq, ts: event.ts, text: event.payload.text },
-          ],
-        },
-      };
+      return applyThreadEvent(state, next, event);
     case "grant.created":
     case "grant.revoked":
       return { ...next, grantEvents: [...state.grantEvents, event] };

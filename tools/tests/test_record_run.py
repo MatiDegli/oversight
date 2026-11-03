@@ -486,3 +486,46 @@ def test_recording_refuses_second_cross_review_resolution(same_review: bool) -> 
     text = "\n".join(json.dumps(row) for row in [*rows, review, resolved, duplicate])
     with pytest.raises(recording.RecordError, match="only one cross_review"):
         recording.validate_text(text, fake_fixture=True)
+
+
+@pytest.mark.parametrize("included", [False, True])
+def test_view_caption_withholding_and_explicit_inclusion(tmp_path: Path, included: bool) -> None:
+    from oversight_contracts.views import LeadView, MomentView
+
+    view = LeadView(
+        agent_id="agent-1",
+        through_seq=1,
+        caption="Masked speech [redacted]",
+        view=MomentView(kind="moment", event_seq=1),
+    )
+    store = real_store(tmp_path, extra=view)
+    out = tmp_path / "views.jsonl"
+    record_run.record_run(store, out, include_message_text=included)
+    row = json.loads(out.read_text().splitlines()[-1])
+    assert row["payload"]["caption"] == (view.caption if included else None)
+    assert recording.load_recording(out)["text"] == out.read_text()
+
+
+def test_unmodified_rows_keep_exact_exported_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = real_store(tmp_path)
+    out = tmp_path / "views.jsonl"
+    original = record_run.export_run
+    captured = []
+
+    def export_with_spaces(source, target):
+        original(source, target)
+        text = (
+            "\n".join(
+                json.dumps(json.loads(line), separators=(", ", ": "))
+                for line in target.read_text().splitlines()
+            )
+            + "\n"
+        )
+        target.write_text(text)
+        captured.append(text)
+
+    monkeypatch.setattr(record_run, "export_run", export_with_spaces)
+    record_run.record_run(store, out)
+    assert out.read_text() == captured[0]

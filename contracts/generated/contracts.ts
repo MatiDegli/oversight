@@ -32,6 +32,7 @@ export type RuleId =
   | "protected_paths";
 export type JsonValue = unknown;
 export type FactsSummaryLine = string;
+export type ViewPath = string;
 export type NodeKind = "module" | "class" | "function" | "method";
 export type EdgeId = string;
 export type EdgeKind = "imports" | "calls" | "inherits";
@@ -60,6 +61,7 @@ export type SettingName =
   | "OVERSIGHT_BUDGET_USD"
   | "MUSE_SPARK_INPUT_USD_PER_M"
   | "MUSE_SPARK_OUTPUT_USD_PER_M";
+export type HighlightRef = AgentRef | PathRef;
 export type ServerEvent =
   | RunStartedEvent
   | GraphSnapshotEvent
@@ -83,9 +85,12 @@ export type ServerEvent =
   | RevertResolvedEvent
   | QueueUpdatedEvent
   | LeadStatusEvent
+  | LeadViewEvent
   | LeadReplyEvent
   | GrantCreatedEvent
   | GrantRevokedEvent;
+export type ViewCaption = string;
+export type LeadViewKind = HighlightView | FilesView | BehaviorView | MomentView;
 export type UsageCoverage = "complete" | "missing_metrics" | "incomplete";
 
 /**
@@ -180,6 +185,16 @@ export interface AgentMessageSent {
    * Null only in an export for publication that withheld it.
    */
   text: MessageText | null;
+}
+/**
+ * One committed agent reference.
+ */
+export interface AgentRef {
+  /**
+   * Reference discriminator.
+   */
+  kind: "agent";
+  agent_id: AgentId;
 }
 export interface AgentStatus {
   agent_id: AgentId;
@@ -475,6 +490,16 @@ export interface BehaviorDiffRow1 {
    * Repeated fresh-process executions disagreed; never stable change evidence.
    */
   unstable: boolean;
+}
+/**
+ * Measured behavior for the displayed candidate.
+ */
+export interface BehaviorView {
+  /**
+   * View discriminator.
+   */
+  kind: "behavior";
+  change_id: ChangeId;
 }
 export interface Budget {
   budget_usd: number;
@@ -897,6 +922,13 @@ export interface ChangeFactsRecordedEvent {
    */
   type: "change.facts_recorded";
   payload: ChangeFacts;
+}
+/**
+ * One exact recorded change/file pair.
+ */
+export interface ChangeFileRef {
+  change_id: ChangeId;
+  path: ViewPath;
 }
 /**
  * One change against its own base commit.
@@ -1611,6 +1643,19 @@ export interface FileSaved {
   path: WorkspacePath;
   hash: string;
 }
+/**
+ * Exact recorded files, including resolved changes.
+ */
+export interface FilesView {
+  /**
+   * View discriminator.
+   */
+  kind: "files";
+  /**
+   * One to eight distinct change/file pairs.
+   */
+  references: ChangeFileRef[];
+}
 export interface GrantCreated {
   reason: GrantReason;
   scope: GrantScope;
@@ -1731,6 +1776,29 @@ export interface Health {
   contract_version: string;
   mode: "live" | "replay";
   missing_settings: MissingSetting[];
+}
+/**
+ * One repository path reference.
+ */
+export interface PathRef {
+  /**
+   * Reference discriminator.
+   */
+  kind: "path";
+  path: ViewPath;
+}
+/**
+ * References to highlight on a person's click.
+ */
+export interface HighlightView {
+  /**
+   * View discriminator.
+   */
+  kind: "highlight";
+  /**
+   * One to eight distinct references.
+   */
+  references: HighlightRef[];
 }
 /**
  * One bounded page of historical event envelopes.
@@ -2221,6 +2289,49 @@ export interface LeadLimits {
   task_chars: number;
 }
 /**
+ * Envelope for one committed lead view.
+ */
+export interface LeadViewEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  /**
+   * Event discriminator.
+   */
+  type: "lead.view";
+  payload: LeadView;
+}
+/**
+ * A lead's reference-only view request.
+ */
+export interface LeadView {
+  agent_id: AgentId;
+  /**
+   * Successful status horizon, earlier than this event.
+   */
+  through_seq: number;
+  /**
+   * Masked optional speech; null when omitted or withheld.
+   */
+  caption: ViewCaption | null;
+  view: LeadViewKind;
+}
+/**
+ * One committed event; navigation is replay-only.
+ */
+export interface MomentView {
+  /**
+   * View discriminator.
+   */
+  kind: "moment";
+  /**
+   * Referenced committed sequence, no later than through_seq.
+   */
+  event_seq: number;
+}
+/**
  * The lead.reply envelope.
  */
 export interface LeadReplyEvent {
@@ -2667,4 +2778,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.17.0";
+export const CONTRACT_VERSION = "1.18.0";

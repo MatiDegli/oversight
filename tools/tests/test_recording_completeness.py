@@ -175,3 +175,58 @@ def test_passing_candidate_replaces_both_files_only_after_validation(
     assert metadata.read_bytes() != before[1]
     assert recording.load_recording(out)["text"] == out.read_text()
     assert not list(tmp_path.glob(".record-*"))
+
+
+def test_matching_withheld_receipt_refuses_non_null_view_caption(tmp_path: Path) -> None:
+    rows = rows_for()
+    rows.append(
+        {
+            "type": "lead.view",
+            "ts": rows[-1]["ts"],
+            "payload": {
+                "agent_id": "agent-1",
+                "through_seq": 1,
+                "caption": "Masked speech",
+                "view": {"kind": "moment", "event_seq": 1},
+            },
+        }
+    )
+    text = encode(rows)
+    out = tmp_path / "views.jsonl"
+    out.write_text(text)
+    events = [recording.SERVER_EVENT.validate_json(line) for line in text.splitlines()]
+    recording.provenance_path(out).write_text(recording.receipt(text, events).model_dump_json())
+    with pytest.raises(
+        recording.RecordError, match="caption requires an included exporter receipt"
+    ):
+        recording.load_recording(out)
+
+
+def test_failed_caption_export_preserves_previous_pair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    out = tmp_path / "views.jsonl"
+    record_run.record_run(write_store(tmp_path / "good", encode(rows_for())), out)
+    before = out.read_bytes(), recording.provenance_path(out).read_bytes()
+    rows = rows_for()
+    rows.append(
+        {
+            "type": "lead.view",
+            "ts": rows[-1]["ts"],
+            "payload": {
+                "agent_id": "agent-1",
+                "through_seq": 1,
+                "caption": "Masked speech",
+                "view": {"kind": "moment", "event_seq": 1},
+            },
+        }
+    )
+    store = write_store(tmp_path / "next", encode(rows))
+
+    def refuse(path):
+        raise recording.RecordError("secret scan refused candidate")
+
+    monkeypatch.setattr(record_run, "scan_secrets", refuse)
+    with pytest.raises(recording.RecordError):
+        record_run.record_run(store, out)
+    assert (out.read_bytes(), recording.provenance_path(out).read_bytes()) == before
