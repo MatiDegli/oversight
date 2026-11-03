@@ -1,14 +1,18 @@
 """Source config is listed in isolation before any query can act on its settings."""
 
+import asyncio
 import os
 import sys
+import tempfile
+import threading
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from oversight.workspace.runner import ProcessResult, run_process
+from oversight.workspace.locks import offload
+from oversight.workspace.runner import NtCleanupError, ProcessResult, run_process
 from oversight.workspace.source import BOLTONS, FETCH_HINT, SOURCE_GIT_ENV, validate_source
 from oversight.workspace.source_config import MAX_CONFIG_OUTPUT, check_source_config
 from oversight.workspace.source_nt import inventory
@@ -122,7 +126,10 @@ async def test_pinned_commondir_refuses_before_any_spawn(
     assert "private-" not in str(error.value)
 
 
-async def test_both_listings_use_cwd_as_ceiling_and_preserve_caller_options(tmp_path: Path) -> None:
+@pytest.mark.parametrize("relative", [False, True])
+async def test_both_listings_use_empty_cwd_and_parent_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative: bool
+) -> None:
     git_dir = tmp_path / "source/.git"
     git_dir.mkdir(parents=True)
     for filename in ("config", "config.worktree"):
@@ -136,6 +143,15 @@ async def test_both_listings_use_cwd_as_ceiling_and_preserve_caller_options(tmp_
     }
     before = supplied_env.copy()
     calls: list[str] = []
+    directories: list[Path] = []
+    event_loop_thread = threading.get_ident()
+    original_temporary_directory = tempfile.TemporaryDirectory
+
+    def temporary_directory(*args, **kwargs):
+        assert threading.get_ident() != event_loop_thread
+        return original_temporary_directory(*args, **kwargs)
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", temporary_directory)
 
     async def recording(
         argv: Sequence[str],
@@ -146,19 +162,27 @@ async def test_both_listings_use_cwd_as_ceiling_and_preserve_caller_options(tmp_
         output_cap: int = 262144,
     ) -> ProcessResult:
         assert argv[0] == "caller-git"
-        calls.append(Path(argv[argv.index("--file") + 1]).name)
-        assert cwd == git_dir.parent.parent
+        path = Path(argv[argv.index("--file") + 1])
+        assert path.is_absolute() and path.parent == git_dir
+        calls.append(path.name)
+        assert not any(arg.startswith("--git-dir") for arg in argv)
+        assert cwd == await offload(cwd.resolve)
+        assert await offload(lambda: list(cwd.iterdir())) == []
+        assert not cwd.is_relative_to(git_dir.parent)
+        assert cwd not in directories and all(not previous.exists() for previous in directories)
+        directories.append(cwd)
         assert env == {
             **SOURCE_GIT_ENV,
-            "GIT_CEILING_DIRECTORIES": str(cwd),
+            "GIT_CEILING_DIRECTORIES": str(cwd.parent),
             "CALLER_SETTING": "retained",
         }
         assert timeout_s == 7.5
         assert output_cap == MAX_CONFIG_OUTPUT
         return ProcessResult(0, "", "", False, False, 0)
 
+    monkeypatch.chdir(tmp_path)
     await check_source_config(
-        git_dir,
+        Path("source/.git") if relative else git_dir,
         git="caller-git",
         spawn=recording,
         env=supplied_env,
@@ -167,9 +191,59 @@ async def test_both_listings_use_cwd_as_ceiling_and_preserve_caller_options(tmp_
     )
     assert calls == ["config", "config.worktree"]
     assert supplied_env == before
+    assert all(not directory.exists() for directory in directories)
 
 
-async def test_real_git_enclosing_repository_cannot_inject_config(tmp_path: Path) -> None:
+@pytest.mark.parametrize("failure", [asyncio.CancelledError, NtCleanupError])
+async def test_listing_directory_removed_when_spawn_raises(tmp_path: Path, failure) -> None:
+    git_dir = tmp_path / "source/.git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "config").touch()
+    directories: list[Path] = []
+
+    async def interrupted(argv, *, cwd, **kwargs) -> ProcessResult:
+        directories.append(cwd)
+        raise failure("interrupted")
+
+    with pytest.raises(failure):
+        await check_source_config(
+            git_dir,
+            git="git",
+            spawn=interrupted,
+            env=SOURCE_GIT_ENV,
+            time_left=lambda: 10,
+            refuse=ValueError,
+        )
+    assert len(directories) == 1
+    assert all(not directory.exists() for directory in directories)
+
+
+async def test_temporary_root_inside_source_is_refused_before_creation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git_dir = tmp_path / "source/.git"
+    git_dir.mkdir(parents=True)
+    (git_dir / "config").touch()
+    monkeypatch.setattr(tempfile, "tempdir", str(git_dir.parent))
+
+    async def forbidden(*args, **kwargs) -> ProcessResult:
+        pytest.fail("Git spawned with a temporary directory inside the source")
+
+    with pytest.raises(ValueError, match="cannot list Git config"):
+        await check_source_config(
+            git_dir,
+            git="git",
+            spawn=forbidden,
+            env=SOURCE_GIT_ENV,
+            time_left=lambda: 10,
+            refuse=ValueError,
+        )
+    assert list(git_dir.parent.iterdir()) == [git_dir]
+
+
+async def test_real_git_enclosing_repository_cannot_inject_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     enclosing = tmp_path / "enclosing"
     enclosing.mkdir()
     result = await run_process(
@@ -177,30 +251,39 @@ async def test_real_git_enclosing_repository_cannot_inject_config(tmp_path: Path
     )
     assert result.returncode == 0, result.stderr
     (enclosing / ".git/config").write_text("[private-invalid-section\n")
-    git_dir = enclosing / "listing/source/.git"
+    temporary_root = enclosing / "listing"
+    temporary_root.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(temporary_root))
+    git_dir = tmp_path / "source/.git"
     git_dir.mkdir(parents=True)
     for filename in ("config", "config.worktree"):
-        path = git_dir / filename
-        path.write_text("[core]\nexcludesFile = local-ignore\n")
-        # Git ignores a ceiling equal to its starting cwd without the null git-dir.
-        result = await run_process(
-            [
-                "git",
-                "--no-pager",
-                "config",
-                "--file",
-                str(path),
-                "--no-includes",
-                "--null",
-                "--list",
-            ],
-            cwd=git_dir.parent.parent,
-            timeout_s=10,
-            env={**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(git_dir.parent.parent)},
+        (git_dir / filename).write_text("[core]\nexcludesFile = local-ignore\n")
+    directories: list[Path] = []
+
+    async def guarded(argv, *, cwd, env=None, **kwargs) -> ProcessResult:
+        assert env is not None
+        assert cwd.parent == temporary_root.resolve()
+        directories.append(cwd)
+        # With no ceiling, discovery reaches the enclosing repository's invalid config.
+        control = await run_process(
+            argv,
+            cwd=cwd,
+            env={k: v for k, v in env.items() if k != "GIT_CEILING_DIRECTORIES"},
+            **kwargs,
         )
-        assert result.returncode != 0
-        assert "bad config" in result.stderr and ".git/config" in result.stderr
-    await check(git_dir, {**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(tmp_path)})
+        assert control.returncode != 0
+        assert "bad config" in control.stderr and ".git/config" in control.stderr
+        return await run_process(argv, cwd=cwd, env=env, **kwargs)
+
+    await check_source_config(
+        git_dir,
+        git="git",
+        spawn=guarded,
+        env={**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(tmp_path)},
+        time_left=lambda: 10,
+        refuse=ValueError,
+    )
+    assert len(directories) == 2 and all(not directory.exists() for directory in directories)
 
 
 @pytest.mark.parametrize("caller", ["inventory", "validation"])
@@ -212,6 +295,7 @@ async def test_refusal_precedes_all_source_queries(
     tmp_path: Path, caller: str, filename: str, fault: str
 ) -> None:
     calls: list[tuple[str, ...]] = []
+    directories: list[Path] = []
     private = "private-value-must-not-appear"
     result = ProcessResult(0, f"include.path\n{private}\0", "", False, False, 0)
     if fault != "include":
@@ -235,7 +319,6 @@ async def test_refusal_precedes_all_source_queries(
         calls.append(tuple(argv))
         assert tuple(argv[1:]) == (
             "--no-pager",
-            f"--git-dir={os.devnull}",
             "config",
             "--file",
             str(config),
@@ -243,18 +326,20 @@ async def test_refusal_precedes_all_source_queries(
             "--null",
             "--list",
         )
-        assert cwd == config.parent.parent.parent
+        assert await offload(lambda: list(cwd.iterdir())) == []
+        assert not cwd.is_relative_to(config.parent.parent)
+        directories.append(cwd)
         assert 0 < timeout_s <= (10 if caller == "inventory" else 30)
         assert output_cap == MAX_CONFIG_OUTPUT
         assert env is not None
-        assert env["GIT_CEILING_DIRECTORIES"] == str(cwd)
+        assert env["GIT_CEILING_DIRECTORIES"] == str(cwd.parent)
         assert env["GIT_CONFIG_NOSYSTEM"] == "1" and env["GIT_OPTIONAL_LOCKS"] == "0"
         # Git must not be pointed at the original while it lists the original's config.
         assert "GIT_DIR" not in env and "GIT_WORK_TREE" not in env
         if caller == "inventory":
             assert env["GIT_CONFIG_GLOBAL"] == "nul"
         else:
-            assert env == {**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(cwd)}
+            assert env == {**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(cwd.parent)}
         if fault in {"oserror", "raised-timeout"}:
             raise (OSError if fault == "oserror" else TimeoutError)(private)
         return result
@@ -274,6 +359,7 @@ async def test_refusal_precedes_all_source_queries(
         with pytest.raises(ValueError) as error:
             await validate_source(BOLTONS, tmp_path, spawn=recording)
     assert len(calls) == 1
+    assert all(not directory.exists() for directory in directories)
     assert private not in str(error.value)
     assert f".git/{filename}" in str(error.value)
 
@@ -325,7 +411,7 @@ async def test_inventory_config_listing_shares_selection_deadline(tmp_path: Path
             argv: Sequence[str], *, timeout_s: float, **kwargs: object
         ) -> ProcessResult:
             nonlocal elapsed
-            assert argv[1:4] == ["--no-pager", f"--git-dir={os.devnull}", "config"]
+            assert argv[1:3] == ["--no-pager", "config"]
             timeouts.append(timeout_s)
             elapsed += 5
             return ProcessResult(0, "core.bare\nfalse\0", "", False, False, 0)
