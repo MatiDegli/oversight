@@ -108,24 +108,24 @@ async function capture(page: Page, state: "plans" | "queued", width: number, the
       return {
         focus: document.querySelector(".focus-panel")?.getBoundingClientRect().width,
         gutter: getComputedStyle(content.closest("article") as HTMLElement).paddingInline,
-        circle: style(".plan-circle").width,
-        subtaskGap: style("li").columnGap,
+        circle: style(".flow-node").width,
+        subtaskGap: style(".flow-row").columnGap,
         actionHeight: style("button").height,
         actionGap: style(".plan-controls").columnGap,
-        taskSize: style("li p").fontSize,
-        taskLine: style("li p").lineHeight,
+        taskSize: style(".flow-task").fontSize,
+        taskLine: style(".flow-task").lineHeight,
       };
     });
   console.log("Lead actions measurements", { state, width, theme, ...metrics });
   expect(metrics).toEqual({
     focus: width === 1920 ? 880 : 608,
     gutter: "22px",
-    circle: "20px",
+    circle: "24px",
     subtaskGap: "12px",
     actionHeight: "34px",
     actionGap: "8px",
-    taskSize: "14px",
-    taskLine: "19.6px",
+    taskSize: "14.5px",
+    taskLine: "20px",
   });
   const directory = fileURLToPath(new URL("../../../.shots/lead-actions/", import.meta.url));
   await mkdir(directory, { recursive: true });
@@ -211,7 +211,7 @@ it.each([
       const orders = inbox.locator("article").filter({
         has: page.getByRole("heading", { name: "Roll back failed orders", exact: true }),
       });
-      await expect(cart.locator(".plan-piece li")).toHaveCount(2);
+      await expect(cart.locator(".plan-piece .flow-row")).toHaveCount(2);
       await expect(orders.getByRole("button", { name: "Queue plan" })).toBeEnabled();
       await expect(inbox.locator("article").first()).toContainText("Inventory.reserve");
       expect(loaded.some((u) => u.includes("/PlanActions.tsx"))).toBe(true);
@@ -323,7 +323,7 @@ it.each([
       const queued = inbox.getByRole("region", { name: "Queued, waiting for slots" });
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
       await checkClosedAndReopen();
-      await expect(queued.locator("li")).toHaveCount(4);
+      await expect(queued.locator(".flow-row")).toHaveCount(4);
       const groupHeading = queued.getByRole("heading", { name: "Queued, waiting for slots" });
       await expect(groupHeading).toHaveText("Queued, waiting for slots");
       await expect(groupHeading).toHaveCSS("font-size", "11.5px");
@@ -394,7 +394,7 @@ it.each([
       });
       await expect(queued).toContainText("Starting");
       await expect(queued.getByRole("button")).toHaveCount(0);
-      await expect(queued.locator(".plan-piece li")).toHaveCount(3);
+      await expect(queued.locator(".plan-piece .flow-row")).toHaveCount(3);
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
       await closeForEvent();
       await page.evaluate(() => {
@@ -501,7 +501,7 @@ it("keeps plan pieces readable through App's replay path without mutation reques
         .evaluate((p) => getComputedStyle(p).color),
     );
     releaseChunk();
-    await expect(inbox.locator(".plan-piece li")).toHaveCount(5);
+    await expect(inbox.locator(".plan-piece .flow-row")).toHaveCount(5);
     expect(await rowLayout()).toEqual(eagerLayout);
     expect(await groupLayout()).toEqual(eagerGroup);
     await expect(inbox.getByText(/^Replay of a hand-written demo fixture:/).first()).toBeVisible();
@@ -513,9 +513,9 @@ it("keeps plan pieces readable through App's replay path without mutation reques
       a.update({ revision: 2, queued_task_id: a.queueItem.queued_task_id }, {});
     });
     const queued = inbox.getByRole("region", { name: "Queued, waiting for slots" });
-    await expect(queued.locator(".plan-piece li")).toHaveCount(3);
+    await expect(queued.locator(".plan-piece .flow-row")).toHaveCount(3);
     await expect(queued.getByRole("button")).toHaveCount(0);
-    await expect(inbox.locator(".plan-piece li")).toHaveCount(5);
+    await expect(inbox.locator(".plan-piece .flow-row")).toHaveCount(5);
     expect(sent).toEqual([]);
     await page.evaluate(() => {
       window.leadActions.update({
