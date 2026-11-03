@@ -22,7 +22,7 @@ from oversight.agents import (
     Usage,
     UsageLedger,
 )
-from oversight.agents.client import CALL_SCOPE, CallScope, ModelReply
+from oversight.agents.client import CALL_SCOPE, CallScope, ContextLengthError, ModelReply
 
 pytestmark = pytest.mark.anyio
 
@@ -134,6 +134,48 @@ async def test_client_errors_are_not_retried() -> None:
     sleeps: list[float] = []
     with pytest.raises(ModelAPIError, match="HTTP 400"):
         await client(api, sleeps).complete(USER, TOOLS)
+    assert sleeps == [] and len(api.bodies) == 1
+
+
+@pytest.mark.parametrize("code", [400, 413])
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"message": "private provider detail", "code": "context_length_exceeded"},
+        {"message": "The input exceeds the model's maximum context length."},
+        {"message": "Input exceeds the model token limit."},
+        {"message": "Input exceeds\nthe model's maximum context length."},
+        {"message": "This model's maximum context length is 100 tokens; you requested 200."},
+    ],
+)
+async def test_context_length_errors_are_plain_and_never_retried(code: int, body: dict) -> None:
+    api = FakeApi(httpx.Response(code, json={"error": body}), ok())
+    sleeps: list[float] = []
+    with pytest.raises(ContextLengthError) as raised:
+        await client(api, sleeps).complete(USER, TOOLS)
+    assert str(raised.value) == (
+        "This agent's conversation is longer than the model accepts; start a new agent to continue."
+    )
+    assert sleeps == [] and len(api.bodies) == 1
+
+
+@pytest.mark.parametrize(
+    "code,body",
+    [
+        (400, {"message": "The max_completion_tokens exceeds the output token limit."}),
+        (400, {"message": "Set max_completion_tokens below the maximum context length of 100."}),
+        (400, {"message": "The request is invalid."}),
+        (413, {"message": "Uploaded file too large."}),
+        (422, {"code": "context_length_exceeded"}),
+    ],
+)
+async def test_other_refusals_keep_the_generic_error(code: int, body: dict) -> None:
+    api = FakeApi(httpx.Response(code, json={"error": body}), ok())
+    sleeps: list[float] = []
+    with pytest.raises(ModelAPIError) as raised:
+        await client(api, sleeps).complete(USER, TOOLS)
+    assert type(raised.value) is ModelAPIError
+    assert str(raised.value) == f"model API error: HTTP {code}"
     assert sleeps == [] and len(api.bodies) == 1
 
 
