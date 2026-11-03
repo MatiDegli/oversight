@@ -65,7 +65,7 @@ async def test_decision_tools_are_unknown_and_change_nothing() -> None:
         outcome = await tools.call(name, "{}")
         assert not outcome.ok and outcome.content == (
             f"Unknown tool {name}. The lead's tools are graph, list_files, read_file, "
-            "queue, request_plan, finish and status."
+            "status, queue, request_plan, show_view and finish."
         )
     run, _, _ = lead(ScriptedModel(load_script(FIXTURES / "lead-forbidden-tools.json")), tools)
     end = await run.run()
@@ -92,6 +92,7 @@ def test_lead_tool_schemas_offer_no_zone_or_decision_field() -> None:
         "status",
         "queue",
         "request_plan",
+        "show_view",
         "finish",
     ]
     serialized = json.dumps(LEAD_TOOL_SCHEMAS)
@@ -343,6 +344,12 @@ async def test_scripted_thread_retains_exchanges_and_reads_fresh_status() -> Non
     assert following.reply.through_seq == 10
     assert "I can explain" in str(model.requests[1]) and "Check again" in str(model.requests[1])
     assert not tools.plan_ids
+    marker = "\n[Server dropped 2 earlier exchanges.]"
+    run.history.history_chars = len(run.prompt) + len(run.task) + len(marker) + len("Last check")
+    model = scripted([dict(text="Checked again.", usage={})])
+    run.make_client = lambda: model
+    assert (await run.run("Last check", 11)).state == "idle"
+    assert model.requests[0][1] == {"role": "user", "content": run.task + marker}
 
 
 @pytest.mark.parametrize("pack", [False, True])

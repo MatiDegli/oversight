@@ -59,6 +59,11 @@ it("selects all four known cards and renders nothing for unknown kinds", () => {
   expect(viewCardTitle(unknown)).toBeNull();
   expect(render(unknown)).toBe("");
 });
+it("renders no card or title for a dormant preview view", () => {
+  const preview: LeadViewKind = { kind: "preview", agent_id: "agent-1" };
+  expect(viewCardTitle(preview)).toBeNull();
+  expect(render(preview)).toBe("");
+});
 it("derives highlight labels/counts from nodes and retains escaped, attributed speech", () => {
   const html = render({ kind: "highlight", references: [{ kind: "agent", agent_id: "agent-1" }] });
   expect(html).toContain("Show 3 nodes on graph");

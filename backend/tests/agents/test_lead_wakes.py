@@ -217,13 +217,15 @@ async def test_wake_preserves_tools_accounting_and_per_turn_limits():
     end = await run.run(notice=ServerNotice("Server notice: data", 12, (12,)), woken_by=[12])
     assert end.reply and end.reply.cut == "tool_calls" and end.reply.woken_by == [12]
     assert run.steps == 2 and run.turn_steps == 1 and run.turns == 1 and record.await_count == 2
-    assert [cast(Any, t)["function"]["name"] for t in model.tool_requests[0]] == [
-        "graph",
-        "list_files",
-        "read_file",
-        "status",
-        "queue",
-        "request_plan",
-        "finish",
-    ]
+    for client in models:
+        assert [cast(Any, t)["function"]["name"] for t in client.tool_requests[0]] == [
+            "graph",
+            "list_files",
+            "read_file",
+            "status",
+            "queue",
+            "request_plan",
+            "show_view",
+            "finish",
+        ]
     propose.assert_not_awaited()

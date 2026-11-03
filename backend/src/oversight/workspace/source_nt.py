@@ -58,6 +58,7 @@ from oversight.workspace.metadata_io import (
 from oversight.workspace.runner import Spawn, run_process
 from oversight.workspace.secret_paths import is_secret_path
 from oversight.workspace.source import BOLTONS, SourceProfile
+from oversight.workspace.source_config import check_source_config
 
 MAX_GIT = 8 * 1024 * 1024
 PHASE_SECONDS = 10
@@ -297,6 +298,15 @@ async def inventory(
             raise refuse("Git output exceeds 8 MiB")
         return result.stdout
 
+    await offload(lambda: verify_sentinel(sentinel, lock_fd))
+    await check_source_config(
+        source.root / ".git",
+        git=git,
+        spawn=spawn,
+        env=env,
+        time_left=lambda: remaining(deadline, clock),
+        refuse=refuse,
+    )
     head = await query("rev-parse", "--verify", "HEAD")
     if re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})\n", head) is None:
         raise refuse("malformed source HEAD")

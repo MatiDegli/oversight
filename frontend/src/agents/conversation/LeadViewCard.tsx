@@ -24,6 +24,8 @@ function selectCardView(view: LeadViewKind): CardView | null {
     case "behavior":
     case "moment":
       return view;
+    case "preview":
+      return null;
     default: {
       const unknown: Exclude<LeadViewKind, CardView> = view;
       // eslint-disable-next-line @typescript-eslint/no-meaningless-void-operator -- Today never; future contract kinds intentionally render nothing.
@@ -44,6 +46,8 @@ export function viewCardTitle(view: LeadViewKind): string | null {
       return "Measured behavior";
     case "moment":
       return "Run moment";
+    case "preview":
+      return null;
     default: {
       const unknown: Exclude<
         LeadViewKind,

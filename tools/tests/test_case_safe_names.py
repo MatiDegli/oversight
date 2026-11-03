@@ -5,6 +5,8 @@ from collections import defaultdict
 from itertools import combinations
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOTS = ("backend", "frontend", "tools", "contracts", "fixtures")
 MODULE_EXTENSIONS = {".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".py"}
@@ -77,3 +79,86 @@ def test_checker_catches_case_only_modules_and_allows_test_suffix(tmp_path: Path
     assert case_collisions(tmp_path) == []
     (tmp_path / "Foo.tsx").touch()
     assert case_collisions(tmp_path) == ["Foo.tsx <-> foo.ts"]
+
+
+@pytest.mark.parametrize(
+    ("paths", "expected"),
+    [
+        pytest.param(("foo/", "Foo/"), ["Foo <-> foo"], id="directories"),
+        pytest.param(("foo/", "Foo.py"), ["Foo.py <-> foo"], id="module-directory"),
+        pytest.param(("Foo/", "foo.py"), ["Foo <-> foo.py"], id="directory-module"),
+        pytest.param(("foo/", "foo.py"), [], id="same-case-module-directory"),
+        pytest.param(("foo.py", "Foo.ts"), ["Foo.ts <-> foo.py"], id="cross-extension"),
+        pytest.param(("foo.py", "foo.ts"), [], id="same-case-cross-extension"),
+        pytest.param(("foo.py", "Foo.TS"), ["Foo.TS <-> foo.py"], id="uppercase-extension"),
+        pytest.param(("foo.d.py", "Foo.d.ts"), ["Foo.d.ts <-> foo.d.py"], id="declaration-stem"),
+        pytest.param(("foo.d.py", "foo.d.ts"), [], id="same-case-declaration-stem"),
+        pytest.param(("foo.py", "Foo.d.ts"), [], id="declaration-retains-dot-d"),
+        pytest.param(("readme.md", "README.md"), ["README.md <-> readme.md"], id="non-module-name"),
+        pytest.param(("readme.md", "README.txt"), [], id="non-module-extensions"),
+        pytest.param(
+            ("parent/foo/", "parent/Foo.py"),
+            ["parent/Foo.py <-> parent/foo"],
+            id="nested-parent-path",
+        ),
+        pytest.param(
+            ("z/foo.py", "z/Foo.py", "a/foo.ts", "a/Foo.ts"),
+            ["a/Foo.ts <-> a/foo.ts", "z/Foo.py <-> z/foo.py"],
+            id="sorted-parents",
+        ),
+        pytest.param(
+            ("foo.tsx", "foo.ts", "Foo.ts"),
+            ["Foo.ts <-> foo.ts", "Foo.ts <-> foo.tsx"],
+            id="sorted-deduplicated-pairs",
+        ),
+    ],
+)
+def test_checker_sibling_pairs(tmp_path: Path, paths: tuple[str, ...], expected: list[str]) -> None:
+    for relative in paths:
+        path = tmp_path / relative
+        if relative.endswith("/"):
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+
+    assert case_collisions(tmp_path) == expected
+
+
+@pytest.mark.parametrize("output", ["node_modules", "dist", "__pycache__", "Node_Modules"])
+def test_checker_prunes_build_output(tmp_path: Path, output: str) -> None:
+    generated = tmp_path / output
+    generated.mkdir()
+    for name in ("foo.py", "Foo.py"):
+        (generated / name).touch()
+        (tmp_path / name).touch()
+
+    assert case_collisions(generated) == ["Foo.py <-> foo.py"]
+    assert case_collisions(tmp_path) == ["Foo.py <-> foo.py"]
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [("Node_Modules", "node_modules"), ("DIST", "dist"), ("__PYCACHE__", "__pycache__")],
+)
+def test_checker_reports_build_output_siblings(tmp_path: Path, left: str, right: str) -> None:
+    for name in (right, left):
+        output = tmp_path / name
+        output.mkdir()
+        (output / "Foo.py").touch()
+        (output / "foo.py").touch()
+
+    assert case_collisions(tmp_path) == [f"{left} <-> {right}"]
+
+
+def test_checker_does_not_follow_directory_symlinks(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "Foo.py").touch()
+    (target / "foo.py").touch()
+    root = tmp_path / "scan"
+    root.mkdir()
+    (root / "linked").symlink_to(target, target_is_directory=True)
+
+    assert case_collisions(target) == ["Foo.py <-> foo.py"]
+    assert case_collisions(root) == []

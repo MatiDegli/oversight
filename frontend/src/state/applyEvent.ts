@@ -32,6 +32,8 @@ function applyEnvelope(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
+    case "preview.status":
+      return next;
     case "lead.view":
     case "lead.reply":
     case "agent.message":

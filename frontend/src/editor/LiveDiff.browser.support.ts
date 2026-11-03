@@ -36,7 +36,7 @@ afterAll(async () => {
   await server?.close();
 });
 
-export async function withPage(test: (page: Page) => Promise<void>) {
+export async function withPage(test: (page: Page) => Promise<void>, { clock = false } = {}) {
   if (!browser) throw new Error("Browser was not started");
   const page = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
   page.setDefaultTimeout(15_000);
@@ -48,6 +48,8 @@ export async function withPage(test: (page: Page) => Promise<void>) {
       errors.push(message.text());
   });
   try {
+    // Install before navigation so Monaco cannot capture the native timer functions.
+    if (clock) await page.clock.install();
     // Avoid starting the application's transport: only the editor fixture is mounted.
     await page.route("**/", (route) =>
       route.fulfill({

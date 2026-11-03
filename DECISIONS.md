@@ -4409,3 +4409,81 @@ event supports, which breaks the rule that status comes from tool calls and neve
 they cannot be held to DESIGN.md; and they add code execution in the person's browser. The next
 step, after the hackathon, is composition from a closed set of typed primitives with the same
 reference resolution (README, Next).
+## 2026-11-03 — Dormant preview uses the shared Git lease and durable ownership
+
+Person-owned preview infrastructure uses Linux isolation C and an external trusted supervisor and
+adapter, without product-agent shell/tools, contract changes or new routes. The eight internal
+workspace facade names compile against current contracts 1.17.0. Production opening stays disabled,
+including when explicit trusted startup paths, ports, origins and limits are configured.
+
+Reason: endpoint guards cannot cover every server Git spawn or a ready Request changes without Git.
+The task-reentrant shared Git lease is the universal exclusion, with verified namespace death and
+existing metadata snapshot restitution before any waiting Git. It takes no additional tree lock
+beneath the lease; candidate comparison uses its proper lock afterwards and pending evidence cannot
+merge. Person, rules and standing-grant approval keep their final transaction guards and share the
+contamination refusal. A failed drain retains runtime ownership and blocks all Git/Approve until
+restart. Registered process births and namespace identities, persisted before execution release,
+permit narrow pidfd reclamation before normal orphan refusal and reset; unknown processes/listeners
+never authorize a kill. Changed recovered worktrees retain quarantine rather than being reset.
+
+Interruption cost: any agent's Git activity ends the preview with `mutation`, followed by metadata
+restitution and candidate comparison. One runtime has one owner; selecting another agent requires
+authenticated Stop and verified termination before a fresh Start. No tree/Git lock lasts for the
+application's lifetime. Lease renewal carries no lifecycle event. Shutdown keeps the committed event
+writer open through the terminal sink and drains immediately before manager close.
+
+Fake tests establish ordering and refusal only. Real host/browser GET/form POST through the inherited
+listener, fresh-connection refusal, setsid teardown and crash acceptance belong to Front F. C retains
+filesystem/secret/response risks, and the inherited address-space cap is per process rather than an
+aggregate fork cap. The dormant outcome grants neither arbitrary-code containment nor public opening.
+## 2026-11-03 — Refuse source Git config file indirection before inspection
+
+Approved by the maintainer on November 2, 2026 at 22:40 ART (2026-11-03T01:40Z), including
+the behavior change that these repositories are refused. Before the first repository Git query,
+native own-source inventory and pinned-profile validation list `.git/config` and, when present,
+`.git/config.worktree` through `git config --file ... --no-includes --null --list`, outside the
+source checkout, with the caller's runner, environment and timeout. Missing configs are allowed;
+failed, timed-out, truncated or malformed listings refuse inspection. Refusals name only the
+config file and key, never its value.
+
+Refuse `include.path`, `includeIf.*.path` and `core.excludesFile` values that are absolute, UNC,
+drive-prefixed or start with `~` or `%(prefix)`: source inspection must not follow
+repository-configured arbitrary files, especially UNC paths that can initiate Windows SMB
+authentication. Ordinary core, remote and branch settings and relative excludes files remain
+accepted. Pinned `rev-parse` and `status` also disable fsmonitor and hooks without overriding
+checkout line-ending or symlink settings. Fresh runtime repositories still use `git init` and never
+inherit the original config or hooks.
+
+Residual risk: a filter driver planted in the pinned checkout's config needs local write access
+and stays out of scope. The existing concurrent source-replacement races remain accepted.
+
+2026-11-03 — Views with references in the lead’s Chat thread. Following explicit maintainer contract/tool approval, PR2 advertises show_view over PR1’s contracts 1.18.0. One closed tool appends validated references; state supplies every displayed fact. Cards re-resolve at the displayed state; missing references are omitted, and an all-missing card retains its caption and explanatory line. Only a person’s click changes graph scope or historical position. Moment rewind is replay-only; Chat survives it and Back restores the pre-click position, paused. This slice precedes Tauri and supersedes the no-graph-work restriction for this feature only. The closed lead tool table is graph, list_files, read_file, status, queue, request_plan, show_view, finish, superseding the lists in the 2026-10-31 lead-limits and 2026-11-01 thread decisions. PR1 leaves prompt_version unchanged; PR2 moves baseline agent-v1-4a2fa60c5ec6 to agent-v1-9b54c5a17a31 and pack agent-v1-6d75a680fc65 to agent-v1-084c4f11b6b2. Configured variants are recomputed. No paid comparison crosses this prompt change.
+
+## 2026-11-03 — Dormant preview references and person-owned preview lifecycle
+
+Following maintainer approval of this exact diff, contracts 1.19.0 extends LeadViewKind
+with PreviewView, whose only reference is the target agent. The server derives the
+agent's current change. Preview ships as a reader plus strict server validation;
+preview remains absent from the advertised show_view enum, lead prompt and
+preview-specific status inventory. This does not amend gen-ui's approved tool table,
+prompt_version or probe scope. Model preview suggestions require a later separately
+authorized amendment and matching probe.
+
+The person-driven API creates a preview and returns an unguessable lease token.
+Renewal and stop require that token. preview.status records lifecycle transitions
+without a token, URL or application output; live GET supplies the current frame URL.
+Replay never starts an app or connects to historical localhost. This supersedes the
+no-new-events/contracts restriction for this feature only. Contract order remains
+1.18.0, 1.19.0, then 1.20.0 for merge rehearsal.
+
+Reason: person-driven preview infrastructure can ship without disturbing gen-ui's
+locked model-facing scope, prompt pins, probe or recording.
+## 2026-11-03 — Make server cuts visible in the lead's view
+
+Each lead history appends its cumulative dropped-exchange count to the opening task and budgets
+the whole marker alongside reservations, current human text and the current notice. If their sum
+exceeds the history budget, only the opening task representation clamps to zero; the marker stays
+whole, so only its length may add an overrun. Queue reads keep the longest source-order prefix of
+whole entries whose JSON fits 20,000 characters, preserve run_id and seq, and state the exact count
+omitted outside the JSON. Prompts, contracts, authority and lifecycle stay unchanged.
+Reason: server cuts must be visible and must never hand the lead broken JSON.

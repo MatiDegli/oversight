@@ -101,8 +101,17 @@ class MomentView(ContractModel):
     """Referenced committed sequence, no later than through_seq."""
 
 
+class PreviewView(ContractModel):
+    """A dormant reference to an agent's current preview candidate."""
+
+    kind: Literal["preview"]
+    """View discriminator."""
+    agent_id: AgentId
+    """Target coding agent; the server derives its current change."""
+
+
 type LeadViewKind = Annotated[
-    HighlightView | FilesView | BehaviorView | MomentView, Field(discriminator="kind")
+    HighlightView | FilesView | BehaviorView | MomentView | PreviewView, Field(discriminator="kind")
 ]
 """Closed union of grounded view requests."""
 

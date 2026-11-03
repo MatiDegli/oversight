@@ -88,9 +88,27 @@ export type ServerEvent =
   | LeadViewEvent
   | LeadReplyEvent
   | GrantCreatedEvent
-  | GrantRevokedEvent;
+  | GrantRevokedEvent
+  | PreviewStatusEvent;
 export type ViewCaption = string;
-export type LeadViewKind = HighlightView | FilesView | BehaviorView | MomentView;
+export type LeadViewKind = HighlightView | FilesView | BehaviorView | MomentView | PreviewView;
+export type PreviewId = string;
+export type PreviewState = "starting" | "ready" | "stopping" | "stopped" | "failed";
+export type PreviewReason =
+  | "closed"
+  | "lease_expired"
+  | "lifetime_expired"
+  | "mutation"
+  | "shutdown"
+  | "app_exited"
+  | "readiness_timeout"
+  | "launch_failed"
+  | "isolation_unavailable"
+  | "memory_limit"
+  | "cleanup_unverified"
+  | "worktree_changed"
+  | "profile_disabled";
+export type PreviewLeaseToken = string;
 export type UsageCoverage = "complete" | "missing_metrics" | "incomplete";
 
 /**
@@ -2332,6 +2350,16 @@ export interface MomentView {
   event_seq: number;
 }
 /**
+ * A dormant reference to an agent's current preview candidate.
+ */
+export interface PreviewView {
+  /**
+   * View discriminator.
+   */
+  kind: "preview";
+  agent_id: AgentId;
+}
+/**
  * The lead.reply envelope.
  */
 export interface LeadReplyEvent {
@@ -2371,6 +2399,40 @@ export interface LeadReply {
   cut: ("tool_calls" | "model_calls" | "time" | "spend_brake") | null;
 }
 /**
+ * Envelope for a public preview lifecycle transition.
+ */
+export interface PreviewStatusEvent {
+  /**
+   * From 1, +1 per event within a run, no gaps; assigned by the single writer.
+   */
+  seq: number;
+  ts: Timestamp;
+  /**
+   * Event discriminator.
+   */
+  type: "preview.status";
+  payload: PreviewStatus;
+}
+/**
+ * Public lifecycle facts; also the lease and stop response.
+ */
+export interface PreviewStatus {
+  preview_id: PreviewId;
+  run_id: RunId;
+  agent_id: AgentId;
+  change_id: ChangeId;
+  /**
+   * Candidate revision pinned at launch.
+   */
+  revision: number;
+  head_commit: NonEmptyText;
+  state: PreviewState;
+  /**
+   * Public cause; null until a stopping or failure cause exists.
+   */
+  reason: PreviewReason | null;
+}
+/**
  * The created coordination lead.
  */
 export interface LeadCreated {
@@ -2387,6 +2449,29 @@ export interface PlanCreated {
  */
 export interface PlanRevision {
   revision: number;
+}
+/**
+ * 202 from POST /previews; execution has not yet become ready.
+ */
+export interface PreviewCreated {
+  preview_id: PreviewId;
+  lease_token: PreviewLeaseToken;
+}
+/**
+ * 200 from GET /previews/{id}; live runtime information only.
+ */
+export interface PreviewDetails {
+  status: PreviewStatus;
+  /**
+   * Server-built loopback frame URL only while ready; otherwise null.
+   */
+  url: NonEmptyText | null;
+}
+/**
+ * Required body for POST /previews/{id}/lease and /stop.
+ */
+export interface PreviewTokenRequest {
+  lease_token: PreviewLeaseToken;
 }
 /**
  * The queue item revision observed by the person.
@@ -2530,6 +2615,18 @@ export interface StartLead {
    * The offered Meta profile, or default.
    */
   model?: NonEmptyText | null;
+}
+/**
+ * POST /previews: start the observed agent candidate.
+ */
+export interface StartPreview {
+  run_id: RunId;
+  agent_id: AgentId;
+  /**
+   * Observed proposed revision.
+   */
+  revision: number;
+  head_commit: NonEmptyText;
 }
 /**
  * Stop the observed lead state.
@@ -2778,4 +2875,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.18.0";
+export const CONTRACT_VERSION = "1.19.0";

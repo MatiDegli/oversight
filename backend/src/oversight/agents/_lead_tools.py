@@ -104,6 +104,64 @@ def build_lead_tool_schemas(limits: LeadLimits) -> list[ToolSchema]:
             ["task", "subtasks"],
         ),
         _function(
+            "show_view",
+            "Show current state from committed references; never supply facts.",
+            {
+                "kind": {"type": "string", "enum": ["highlight", "files", "behavior", "moment"]},
+                "agent_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {"type": "string", "pattern": r"^agent-[1-9]\d*$"},
+                },
+                "paths": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512,
+                        "pattern": (
+                            r"^(?:\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*"
+                            r"\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*$"
+                        ),
+                    },
+                },
+                "files": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "change_id": {"type": "string", "pattern": r"^change-[1-9]\d*$"},
+                            "path": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 512,
+                                "pattern": (
+                                    r"^(?:\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*"
+                                    r"\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*$"
+                                ),
+                            },
+                        },
+                        "required": ["change_id", "path"],
+                    },
+                },
+                "change_id": {"type": "string", "pattern": r"^change-[1-9]\d*$"},
+                "event_seq": {"type": "integer", "minimum": 1},
+                "caption": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": r"\S",
+                },
+            },
+            ["kind"],
+        ),
+        _function(
             "finish",
             "Answer this turn; a plan is optional.",
             {"reply": {"type": "string", "minLength": 1, "maxLength": 4096}},
@@ -123,6 +181,25 @@ class LeadOutcome:
     finish: bool = False
 
 
+def _queue_text(snapshot: QueueSnapshot) -> str:
+    """Keep the longest whole-entry prefix within the JSON character budget."""
+    first, last = 0, len(snapshot.tasks)
+    while first < last:
+        count = (first + last + 1) // 2
+        candidate = snapshot.model_copy(update={"tasks": snapshot.tasks[:count]})
+        if len(candidate.model_dump_json(exclude_none=True)) <= 20_000:
+            first = count
+        else:
+            last = count - 1
+    content = snapshot.model_copy(update={"tasks": snapshot.tasks[:first]}).model_dump_json(
+        exclude_none=True
+    )
+    omitted = len(snapshot.tasks) - first
+    if omitted:
+        content += f"\n(Queue truncated: {omitted} entries omitted.)"
+    return content
+
+
 class LeadTools:
     def __init__(
         self,
@@ -137,6 +214,7 @@ class LeadTools:
         limits: LeadLimits | None = None,
         mask: Callable[[str], str] = str,
         status: Callable[[], tuple[int, str]] | None = None,
+        status_without_views: Callable[[], tuple[int, str]] | None = None,
         agent_id: str = "agent-1",
         resolve_views: Callable[[int], Callable[[LeadView], bool]] | None = None,
         publish_view: Callable[[LeadView], Awaitable[None]] | None = None,
@@ -147,6 +225,7 @@ class LeadTools:
         self.plan_ids: list[str] = []
         self.mask = mask
         self.status = status
+        self.status_without_views = status_without_views
         self.through_seq: int | None = None
         self.agent_id, self.resolve_views, self.publish_view = agent_id, resolve_views, publish_view
         self.status_seen = False
@@ -154,6 +233,8 @@ class LeadTools:
         self._view_resolver: Callable[[LeadView], bool] | None = None
 
     async def call(self, name: str, arguments: str) -> LeadOutcome:
+        if name == "show_view":
+            return await self.show_view(arguments)
         models: dict[str, type[_Empty]] = {
             "graph": _Empty,
             "status": _Empty,
@@ -166,7 +247,7 @@ class LeadTools:
         if name not in models:
             return LeadOutcome(
                 f"Unknown tool {name}. The lead's tools are graph, list_files, read_file, "
-                "queue, request_plan, finish and status.",
+                "status, queue, request_plan, show_view and finish.",
                 False,
             )
         try:
@@ -206,10 +287,7 @@ class LeadTools:
                 paths + ("\n(Listing truncated at 2,000 entries.)" if tree.truncated else "")
             )
         if name == "queue":
-            content = self.queue().model_dump_json(exclude_none=True)
-            if len(content) > 20_000:
-                content = content[:20_000] + "\n(Queue truncated at 20,000 characters.)"
-            return LeadOutcome(content)
+            return LeadOutcome(_queue_text(self.queue()))
         raise RuntimeError("Unknown lead tool outcome.")
 
     def reset_views(self) -> None:
@@ -224,15 +302,21 @@ class LeadTools:
             seq, content = self.status()
             resolver = self.resolve_views(seq) if self.resolve_views is not None else None
         except ValueError:
+            if self.status_without_views is None:
+                return LeadOutcome(
+                    "Status eligibility exceeds the inventory limit; no views are eligible.", False
+                )
+            seq, content = self.status_without_views()
+            self.through_seq = max(self.through_seq or 0, seq)
             return LeadOutcome(
-                "Status eligibility exceeds the inventory limit; no views are eligible.", False
+                content + "No views are eligible: the status inventory is over its limit."
             )
         self.through_seq = max(self.through_seq or 0, seq)
         self.status_seen, self.view_S, self._view_resolver = True, seq, resolver
         return LeadOutcome(content)
 
     async def show_view(self, arguments: str) -> LeadOutcome:
-        """Dormant callback only: deliberately absent from call() and the tool table."""
+        """Publish one reference-only view after this turn's successful status."""
         try:
             content = await show_view(
                 arguments,

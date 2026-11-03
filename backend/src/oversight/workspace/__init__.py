@@ -56,6 +56,16 @@ from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, pars
 from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
 from oversight.workspace.measured_report import CallReport, CallTarget, Invocation
+from oversight.workspace.preview import PreviewManager
+from oversight.workspace.preview_profile import PreviewProfile
+from oversight.workspace.preview_types import (
+    PreviewCandidate,
+    PreviewCreatedResult,
+    PreviewDetailsResult,
+    PreviewError,
+    PreviewStatusRecord,
+    PreviewStatusSink,
+)
 from oversight.workspace.probes import base_probe_checkout
 from oversight.workspace.revert import (
     InverseCandidate,
@@ -125,6 +135,14 @@ __all__ = [
     "MergeGuard",
     "NtSource",
     "OwnSource",
+    "PreviewCandidate",
+    "PreviewCreatedResult",
+    "PreviewDetailsResult",
+    "PreviewError",
+    "PreviewManager",
+    "PreviewProfile",
+    "PreviewStatusRecord",
+    "PreviewStatusSink",
     "ProcessResult",
     "RenderedCriteria",
     "RunProblem",

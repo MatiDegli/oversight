@@ -52,6 +52,25 @@ it("records neither gaps, rejected graph applications nor events without a run",
   expect(state.gap).toBe(true);
   expect(state.eventFacts[3]).toBeUndefined();
 });
+it("leaves event facts unchanged for an accepted dormant preview status", () => {
+  const state = events.reduce(applyEvent, createInitialState());
+  const next = applyEvent(state, {
+    seq: state.lastSeq + 1,
+    ts: "2026-11-03T00:00:01.000Z",
+    type: "preview.status",
+    payload: {
+      preview_id: "preview-" + "a".repeat(32),
+      run_id: "run-20261027-140312",
+      agent_id: "agent-1",
+      change_id: "change-1",
+      revision: 1,
+      head_commit: "c1",
+      state: "starting",
+      reason: null,
+    },
+  });
+  expect(next.eventFacts).toBe(state.eventFacts);
+});
 it("retains accepted moments after more than 32 later milestones, bounded by both horizons", () => {
   let state = events.slice(0, 6).reduce(applyEvent, createInitialState());
   for (let i = 0; i < 40; i++)

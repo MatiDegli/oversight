@@ -259,6 +259,17 @@ _APPROVED_ATTACHMENTS = {
     "ModelAttemptFailedEvent",
     "ParameterExtensionDiff",
     "ConfirmExamples",
+    "PreviewView",
+    "PreviewId",
+    "PreviewLeaseToken",
+    "PreviewState",
+    "PreviewReason",
+    "StartPreview",
+    "PreviewCreated",
+    "PreviewTokenRequest",
+    "PreviewStatus",
+    "PreviewDetails",
+    "PreviewStatusEvent",
 }
 
 

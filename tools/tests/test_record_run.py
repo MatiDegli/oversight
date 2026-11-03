@@ -108,28 +108,51 @@ def test_exports_a_complete_store(tmp_path: Path) -> None:
     }
 
 
-def test_failed_export_replace_preserves_log_and_build_gate_refuses_receipt(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "failure,has_previous",
+    [("export", True), ("export", False), ("restore", True), ("receipt", True)],
+    ids=["previous-pair", "no-previous-recording", "restore-fails", "receipt-rename-fails"],
+)
+def test_failed_replace_preserves_previous_pair_or_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str, has_previous: bool
 ) -> None:
     out = tmp_path / "recorded.jsonl"
-    record_run.record_run(real_store(tmp_path), out)
-    previous_log = out.read_bytes()
-    previous_receipt = recording.provenance_path(out).read_bytes()
+    metadata = recording.provenance_path(out)
+    previous_log = previous_receipt = None
+    if has_previous:
+        record_run.record_run(real_store(tmp_path), out)
+        previous_log = out.read_bytes()
+        previous_receipt = metadata.read_bytes()
     store = real_store(tmp_path / "next", extra=step("Read shop/cart.py"))
     replace = Path.replace
+    receipt_replacements: list[Path] = []
 
-    def fail_export_replace(source: Path, target: Path) -> Path:
+    def fail_replace(source: Path, target: Path) -> Path:
         if target == out:
-            raise OSError("export replacement failed")
+            raise PermissionError("export replacement failed")
+        if target == metadata:
+            receipt_replacements.append(source)
+            if failure == "receipt" or (failure == "restore" and len(receipt_replacements) == 2):
+                raise PermissionError("receipt replacement failed")
         return replace(source, target)
 
-    monkeypatch.setattr(Path, "replace", fail_export_replace)
-    with pytest.raises(record_run.RecordError, match="could not export"):
+    monkeypatch.setattr(Path, "replace", fail_replace)
+    message = "restore.*build gate.*refuse" if failure == "restore" else "could not export"
+    with pytest.raises(record_run.RecordError, match=message):
         record_run.record_run(store, out)
+    if not has_previous:
+        assert not out.exists()
+        assert not metadata.exists()
+        return
     assert out.read_bytes() == previous_log
-    assert recording.provenance_path(out).read_bytes() != previous_receipt
-    with pytest.raises(recording.RecordError, match="provenance does not match"):
-        recording.load_recording(out)
+    if failure == "restore":
+        assert len(receipt_replacements) == 2
+        assert metadata.read_bytes() != previous_receipt
+        with pytest.raises(recording.RecordError, match="provenance does not match"):
+            recording.load_recording(out)
+    else:
+        assert metadata.read_bytes() == previous_receipt
+        assert recording.load_recording(out)["text"] == out.read_text()
 
 
 @pytest.mark.parametrize(

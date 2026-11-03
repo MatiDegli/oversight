@@ -208,6 +208,26 @@ def test_dormant_status_is_byte_identical_to_base_capture() -> None:
     )
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("include_views", [False, True])
+async def test_public_status_modes_match_builder_without_changing_default(
+    tmp_path: Path, include_views: bool
+) -> None:
+    from backend.tests.events.test_lead_view import EVENTS
+
+    async with EventStore(tmp_path / "run.sqlite", "run-20261103-000000") as store:
+        for event in EVENTS[1:12]:
+            await store.publish(event.payload)
+        events = store.committed_events()
+        assert store.lead_status(include_views=include_views) == fold_lead_status(
+            events, store.last_seq, include_views=include_views
+        )
+        assert (
+            "eligible moment data:" in store.lead_status(include_views=include_views)[1]
+        ) is include_views
+        assert store.lead_status() == store.lead_status(include_views=False)
+
+
 def test_invalid_paths_never_count_toward_eligible_overflow() -> None:
     from oversight.events import ViewProjection
 

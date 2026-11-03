@@ -332,8 +332,9 @@ async def test_profile_cleanup_failure_keeps_runtime_lock(tmp_path, monkeypatch,
         asyncio.CancelledError("profile stopped") if cancelled else ValueError("profile failed")
     )
 
-    async def validate(*args):
+    async def validate(*args, spawn):
         # validate_source wraps an OSError; run_process chains cancellation to its failure.
+        assert spawn == live.workspace.startup_git
         raise pending from cleanup
 
     monkeypatch.setattr(app, "validate_source", validate)
