@@ -386,8 +386,9 @@ new candidate work waits for the maintainer’s order.
 Configuration attribution compares captured Git trees with the current locked change base.
 Agent notes and frozen proposal problems are bounded and advisory; integrity authority is unchanged.
 Ignored/external inputs and whole-file relevance remain explicit limitations.
-The review facts list these notes with the other analysis limitations after “Incomplete:”,
-joined by "; ". The stable `configuration attribution: ` prefix enables separate rendering later.
+The review facts render each note as its own line, apart from “Incomplete:”, which still joins
+the other analysis limitations with "; ". The stable `configuration attribution: ` prefix
+already enables this separate rendering.
 
 Give the person at most three lines covering the request, actual edits, tests added/run, other
 results changed and cost. Derive them from task/status, change, execution and usage events, never

@@ -13,13 +13,25 @@ def test_inventory_describes_current_configuration_note_rendering() -> None:
     attribution = facts.lstrip().split("\n\n", 1)[0]
     normalized = " ".join(attribution.split())
     assert (
-        "The review facts list these notes with the other analysis limitations "
-        'after “Incomplete:”, joined by "; ".'
+        "The review facts render each note as its own line, apart from “Incomplete:”, "
+        'which still joins the other analysis limitations with "; ".'
     ) in normalized
     assert (
-        "The stable `configuration attribution: ` prefix enables separate rendering later."
+        "The stable `configuration attribution: ` prefix already enables this separate rendering."
     ) in normalized
-    assert "each note as its own line" not in normalized
+
+
+def test_configuration_decision_describes_current_note_rendering() -> None:
+    decisions = (ROOT / "DECISIONS.md").read_text(encoding="utf-8")
+    entry = decisions.split(
+        "## 2026-11-03 — Configuration attribution stays advisory "
+        "and uses the current change base\n",
+        1,
+    )[1].split("\n## ", 1)[0]
+    assert (
+        "The current frontend renders each note as its own line, apart from “Incomplete:”, "
+        'which still joins the other analysis limitations with "; ".'
+    ) in " ".join(entry.split())
 
 
 def test_configuration_decision_records_authorized_scope_without_coordination_names() -> None:

@@ -4622,7 +4622,8 @@ and summary before step publication, then retain that content in model history. 
 and Git comparison remain in `changes`; `agents` imports neither. Proposal notes are frozen in
 `FactsEvidence.problems`, never `SuiteRun.problems`, with prefix `configuration attribution: `.
 Display limits are five paths for steps and twenty for proposals, separately identified as
-display omissions. The current frontend renders these analysis limitations under “Incomplete:”.
+display omissions. The current frontend renders each note as its own line, apart from
+“Incomplete:”, which still joins the other analysis limitations with "; ".
 ## 2026-11-03 — Grouped Chat rail completes Q2/Q3 and folded scrolling
 
 K3r implements the existing Q2/Q3 authority in “Built map and Chat refinements” and the K3
