@@ -188,9 +188,9 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
       true,
     );
     expect(
-      (await appearance(page, "node.pending[pendingAgents *= '|agent-1|']"))[0]?.borderColor,
+      (await appearance(page, `node.pending[pendingAgents *= "|${a.agent_id}|"]`))[0]?.borderColor,
     ).not.toBe(
-      (await appearance(page, "node.pending[pendingAgents *= '|agent-2|']"))[0]?.borderColor,
+      (await appearance(page, `node.pending[pendingAgents *= "|${b.agent_id}|"]`))[0]?.borderColor,
     );
     await expect(page.getByRole("status", { name: "Review queue" })).toContainText("Decisions · 2");
     await expect(review).toHaveCount(0);
@@ -420,7 +420,7 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
       .poll(() => sent.at(-1))
       .toEqual({ path: `/agents/${b.agent_id}/stop`, method: "POST", body: null });
     await expect(cardB.getByText("Stopping: waiting for the discarded change.")).toBeVisible();
-    expect(await nodeIds(page, "node.pending[pendingAgents *= '|agent-2|']")).toEqual(
+    expect(await nodeIds(page, `node.pending[pendingAgents *= "|${b.agent_id}|"]`)).toEqual(
       bProposal.graph.nodes_modified.toSorted(),
     );
     await release(page, holds.stop);
@@ -429,8 +429,8 @@ test("level 2 over replay: parallel agents, impact, revisions, edits, spend, sto
     await expect(cardB.getByRole("button", { name: "Stop and discard", exact: true })).toHaveCount(
       0,
     );
-    expect(await nodeIds(page, "node.pending[pendingAgents *= '|agent-2|']")).toEqual([]);
-    expect(await nodeIds(page, "node.pending[pendingAgents *= '|agent-1|']")).not.toEqual([]);
+    expect(await nodeIds(page, `node.pending[pendingAgents *= "|${b.agent_id}|"]`)).toEqual([]);
+    expect(await nodeIds(page, `node.pending[pendingAgents *= "|${a.agent_id}|"]`)).not.toEqual([]);
     await cardA.getByRole("button", { name: "Review change" }).click();
     await expect(editable).toHaveAttribute("data-state", "clean");
     await expect(approve).toBeEnabled();

@@ -71,17 +71,27 @@ it.each(["selection", "review", "diff"] as const)(
 );
 
 const model = () => selectChatChange(chatReviewState(), "change-1");
-it.each([true, false])(
-  "identifies the comparison author with an agent slot present: %s",
-  (present) => {
+it.each(["known", "retained", "unknown"])(
+  "identifies the comparison author from team evidence: %s",
+  (evidence) => {
     const state = chatReviewState();
-    if (!present) delete state.agents["agent-1"];
+    required(state.agents["agent-1"]).slot = "C";
+    if (evidence !== "known") delete state.agents["agent-1"];
+    if (evidence === "unknown")
+      state.decisionEvents = state.decisionEvents.filter(
+        (event) => event.type !== "agent.status" || event.payload.agent_id !== "agent-1",
+      );
     const output = html(
       <ChatChangeCard state={state} changeId="change-1" seq={62} reviewing={false} />,
     );
-    const author = present ? "A" : "agent-1";
+    const author = evidence === "unknown" ? "unknown" : "A";
     expect(output).toContain(`Agent ${author} says`);
     expect(output).toContain(`After · Agent ${author}</span>`);
+    expect(output).toContain(
+      evidence === "unknown"
+        ? '<div class="chat-proposal">'
+        : 'class="chat-proposal" style="--slot-graphic:var(--agent-a)',
+    );
   },
 );
 it("joins the exact retained proposal position, facts and assessment", () => {

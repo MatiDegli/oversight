@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import type { FrameProps } from "../Frame";
+import { presentationFor } from "../../teams/presentation";
 import { GraphLink } from "./ChatChangeCard";
 import { ReviewFocus } from "./ReviewFocus";
 import "./chatReview.css";
@@ -37,7 +38,7 @@ export function ChatReview({
     };
   }, []);
   const tabs = Boolean(chat && review && narrow);
-  const slot = agentId ? props.state.agents[agentId]?.slot : undefined;
+  const label = presentationFor(props.state, agentId)?.label ?? "unknown";
   const change = review ? props.state.changes[review] : undefined;
   const reviewState =
     change?.resolution?.merge === "merged"
@@ -81,9 +82,7 @@ export function ChatReview({
                 document.getElementById(`${id}-${next}-tab`)?.focus();
               }}
             >
-              {tab === "conversation"
-                ? `Agent ${slot ?? "?"} · conversation`
-                : `Review · ${reviewState}`}
+              {tab === "conversation" ? `Agent ${label} · conversation` : `Review · ${reviewState}`}
             </button>
           ))}
         </div>
