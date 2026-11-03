@@ -65,8 +65,7 @@ async function open(scene: RailScene = "chat-busy", width = 1920, theme = "dark"
 const disclosure = (page: Page, title = "Lead A") =>
   page.getByRole("button", { name: `Members of ${title}`, exact: true });
 const timeline = (page: Page) => page.getByRole("list", { name: "Conversation timeline" });
-const draft = (page: Page) =>
-  page.getByRole("textbox", { name: "Message Agent A·1", exact: true });
+const draft = (page: Page) => page.getByRole("textbox", { name: "Message Agent A·1", exact: true });
 async function inspect(page: Page, name: string) {
   await mkdir(evidenceRoot, { recursive: true });
   await page.screenshot({

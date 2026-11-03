@@ -4622,6 +4622,7 @@ without a wire field. Unknown remains unknown; equal known commits permit not ne
 observed combined suites win, and terminal evidence excludes a change's own merge.
 Reason: the person can follow dependencies and merge evidence without opening another panel,
 and every agent keeps one unambiguous label across all of a lead's plans.
+
 ## 2026-11-03 — Grouped Chat rail completes Q2/Q3 and folded scrolling
 
 K3r implements the existing Q2/Q3 authority in “Built map and Chat refinements” and the K3
