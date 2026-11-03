@@ -4425,3 +4425,13 @@ Residual risk: a filter driver planted in the pinned checkout's config needs loc
 and stays out of scope. The existing concurrent source-replacement races remain accepted.
 
 2026-11-03 — Views with references in the lead’s Chat thread. Following explicit maintainer contract/tool approval, PR2 advertises show_view over PR1’s contracts 1.18.0. One closed tool appends validated references; state supplies every displayed fact. Cards re-resolve at the displayed state; missing references are omitted, and an all-missing card retains its caption and explanatory line. Only a person’s click changes graph scope or historical position. Moment rewind is replay-only; Chat survives it and Back restores the pre-click position, paused. This slice precedes Tauri and supersedes the no-graph-work restriction for this feature only. The closed lead tool table is graph, list_files, read_file, status, queue, request_plan, show_view, finish, superseding the lists in the 2026-10-31 lead-limits and 2026-11-01 thread decisions. PR1 leaves prompt_version unchanged; PR2 moves baseline agent-v1-4a2fa60c5ec6 to agent-v1-9b54c5a17a31 and pack agent-v1-6d75a680fc65 to agent-v1-084c4f11b6b2. Configured variants are recomputed. No paid comparison crosses this prompt change.
+
+## 2026-11-03 — Make server cuts visible in the lead's view
+
+Each lead history appends its cumulative dropped-exchange count to the opening task and budgets
+the whole marker alongside reservations, current human text and the current notice. If their sum
+exceeds the history budget, only the opening task representation clamps to zero; the marker stays
+whole, so only its length may add an overrun. Queue reads keep the longest source-order prefix of
+whole entries whose JSON fits 20,000 characters, preserve run_id and seq, and state the exact count
+omitted outside the JSON. Prompts, contracts, authority and lifecycle stay unchanged.
+Reason: server cuts must be visible and must never hand the lead broken JSON.

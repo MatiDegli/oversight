@@ -461,6 +461,8 @@ finish(reply) needs no plan; ordinary text also replies. Only the person queues 
 merge authority is unchanged. Shared spend still hard-refuses Meta calls; Baseten stays exempt.
 Masked replies fit 4,096 characters; `OVERSIGHT_LEAD_HISTORY_CHARS` defaults to 24000, keeping whole
 exchanges without old tools. Like the other lead settings, it is process-fixed and has no maximum.
+The opening task carries a cumulative dropped-exchange marker; queue reads keep whole JSON entries
+within 20,000 characters and report the exact number omitted.
 status folds one committed prefix, fences escaped fields at 200 characters and omits whole entries
 within 20,000 characters; through_seq is the maximum committed status or server-digest horizon
 observed this turn, or null.
