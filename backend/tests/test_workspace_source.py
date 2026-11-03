@@ -2,13 +2,14 @@
 
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from live_helpers import live_server, live_settings
 
 from oversight.app import create_app
-from oversight.workspace import run_process
+from oversight.workspace import run_process, source_nt
 from oversight.workspace.source import BOLTONS
 
 
@@ -83,21 +84,37 @@ async def test_wrong_pin_refuses_startup_before_reset(tmp_path: Path) -> None:
     assert not (settings.runtime_dir / "workspace").exists()
 
 
-@pytest.mark.parametrize(
-    "source", [r"C:\private\project", "C:/private/project", r"\\host\share\project"]
-)
-def test_public_nt_path_refusal_before_construction(
-    tmp_path: Path, source: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.mark.parametrize("source", [r"C:\private\project", "C:/private/project"])
+def test_public_nt_path_prepared_before_construction(tmp_path, source, monkeypatch):
     settings = live_settings(tmp_path, workspace_source=source)
+    calls = []
+    prepare = source_nt.prepare_source
 
-    def forbidden(*args: object, **kwargs: object) -> None:
-        pytest.fail("path selector reached Workspace/EventStore/reset/source Git")
+    def prepared(raw, runtime, ide, venv):
+        assert raw == source and runtime == str(settings.runtime_dir)
+        result = prepare(
+            raw,
+            "C:/runtime",
+            "C:/ide",
+            venv,
+            preflight=lambda path: calls.append(path),
+            inspect=lambda _: None,
+            bind=lambda path: (
+                settings.runtime_dir if path == r"C:\runtime" else tmp_path / "source"
+            ),
+        )
+        calls.append("prepared")
+        return result
 
-    monkeypatch.setattr("oversight.app.Workspace", forbidden)
-    monkeypatch.setattr("oversight.app.EventStore", forbidden)
-    monkeypatch.setattr("oversight.workspace.source.run_process", forbidden)
-    monkeypatch.setattr("oversight.app.preflight_placement", lambda _: None)
-    monkeypatch.setattr("oversight.app.sys.platform", "win32")
-    with pytest.raises(ValueError, match="OVERSIGHT_WORKSPACE_SOURCE"):
+    def workspace(*args, **kwargs):
+        assert calls[-1] == "prepared" and len(calls) == 5
+        assert kwargs["own_source"].source_path == r"C:\private\project"
+        raise RuntimeError("prepared before Workspace/EventStore")
+
+    monkeypatch.setattr("oversight.workspace.source.sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(source_nt, "prepare_source", prepared)
+    monkeypatch.setattr("oversight.app.Workspace", workspace)
+    monkeypatch.setattr("oversight.app.EventStore", lambda *a, **kw: pytest.fail("early store"))
+    monkeypatch.setattr(source_nt, "run_process", lambda *a, **kw: pytest.fail("early source Git"))
+    with pytest.raises(RuntimeError, match="prepared before Workspace/EventStore"):
         create_app(settings)

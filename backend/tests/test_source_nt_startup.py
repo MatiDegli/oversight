@@ -1,7 +1,11 @@
-"""Private startup composition: injected NT boundaries, never public path enablement."""
+"""Public startup ordering with injected NT filesystem seams; no native acceptance."""
 
 import asyncio
+import os
+import stat
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -10,20 +14,46 @@ from workspace.test_source_nt_copy import fixture, stage
 
 from oversight import app
 from oversight.agents import ScriptedModel, TaskClients, parse_script
-from oversight.workspace import InvalidPath, NtSource, OwnSource, SuiteRun, core, source_nt
+from oversight.workspace import InvalidPath, NtSource, SuiteRun, core, source_nt
+from oversight.workspace._platform import preflight_placement
 from oversight_contracts.commands import SaveFile, StartAgent
 from oversight_contracts.events import CaseResult, SuiteResult
+
+
+def native_selection(monkeypatch):
+    # Inject only selector OS detection, leaving host runner/Path semantics intact.
+    monkeypatch.setattr("oversight.workspace.source.sys", SimpleNamespace(platform="win32"))
+
+
+def previous_runtime(tmp_path):
+    sentinel = tmp_path / ".runtime/workspace/preserve"
+    sentinel.parent.mkdir(parents=True)
+    sentinel.write_bytes(b"prior runtime")
+    return sentinel
 
 
 async def selected(tmp_path, monkeypatch, **settings):
     root = tmp_path / "source"
     root.mkdir()
-    config = two_fakes(tmp_path, **settings)
+    config = two_fakes(tmp_path, workspace_source="C:/private/source", **settings)
     own = NtSource(root, config.runtime_dir, "C:\\private\\source", "C:\\private\\runtime")
     await fixture(own)
-    monkeypatch.setattr(app, "select_source", lambda _: OwnSource(own.source_path))
-    monkeypatch.setattr(OwnSource, "prepare", lambda *args: own)
-    live = app.LiveRun(config)
+    native_selection(monkeypatch)
+    prepare = source_nt.prepare_source
+
+    def prepared(raw, runtime, ide, venv):
+        return prepare(
+            raw,
+            own.runtime_path,
+            "C:/ide",
+            venv,
+            preflight=lambda _: None,
+            inspect=lambda _: None,
+            bind=lambda path: own.runtime if path == own.runtime_path else own.root,
+        )
+
+    monkeypatch.setattr(source_nt, "prepare_source", prepared)
+    live = app.create_app(config).state.live
 
     async def staging():
         assert live.workspace._lock_fd is not None
@@ -33,9 +63,27 @@ async def selected(tmp_path, monkeypatch, **settings):
     return live, own
 
 
-@pytest.mark.parametrize("bad", ["C:relative", r"C:\private\..\source", r"\\host\share"])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        r"\\host\share",
+        r"\\?\C:\project",
+        r"\\.\C:\project",
+        "relative",
+        "C:relative",
+        "C:/a/../b",
+        "C:/a:s",
+        "C:/GIT~1",
+        "C:/a.",
+        "C:/a ",
+        "C:/CON",
+        "C:/a//b",
+        "C:/a?b",
+    ],
+)
 def test_lexical_checks_precede_all_filesystem_and_construction(tmp_path, monkeypatch, bad):
-    monkeypatch.setattr(app, "select_source", lambda _: OwnSource(bad))
+    previous = previous_runtime(tmp_path)
+    native_selection(monkeypatch)
 
     def forbidden(*args, **kwargs):
         pytest.fail("lexical refusal reached filesystem or constructor")
@@ -44,12 +92,65 @@ def test_lexical_checks_precede_all_filesystem_and_construction(tmp_path, monkey
     monkeypatch.setattr(app, "EventStore", forbidden)
     monkeypatch.setattr(Path, "resolve", forbidden)
     monkeypatch.setattr(source_nt, "preflight_placement", forbidden)
-    with pytest.raises((OSError, InvalidPath)):
-        app.create_app(live_settings(tmp_path))
+    with pytest.raises((OSError, InvalidPath, ValueError)):
+        app.create_app(live_settings(tmp_path, workspace_source=bad))
+    assert previous.read_bytes() == b"prior runtime"
+
+
+@pytest.mark.parametrize("placement", ["runtime", "ide", "venv"])
+def test_every_placement_lexically_validated_before_io(tmp_path, monkeypatch, placement):
+    previous = previous_runtime(tmp_path)
+    native_selection(monkeypatch)
+    real_prepare = source_nt.prepare_source
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("invalid placement reached I/O, constructors or source Git")
+
+    def prepare(raw, runtime, ide, venv):
+        paths = dict(source=raw, runtime="C:/runtime", ide="C:/ide", venv=venv)
+        paths[placement] = "C:/unsafe/../placement"
+        return real_prepare(
+            paths["source"],
+            paths["runtime"],
+            paths["ide"],
+            paths["venv"],
+            preflight=forbidden,
+            bind=forbidden,
+        )
+
+    monkeypatch.setattr(source_nt, "prepare_source", prepare)
+    monkeypatch.setattr(app, "Workspace", forbidden)
+    monkeypatch.setattr(app, "EventStore", forbidden)
+    monkeypatch.setattr(source_nt, "run_process", forbidden)
+    with pytest.raises((OSError, InvalidPath), match="segments are not allowed"):
+        app.create_app(live_settings(tmp_path, workspace_source="C:/source"))
+    assert previous.read_bytes() == b"prior runtime"
+
+
+@pytest.mark.parametrize("source", ["C:/runtime", "C:/runtime/inside", "C:/"])
+def test_public_overlap_precedes_io_and_construction(tmp_path, monkeypatch, source):
+    previous = previous_runtime(tmp_path)
+    native_selection(monkeypatch)
+    real_prepare = source_nt.prepare_source
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("overlap reached I/O or construction")
+
+    def prepare(raw, runtime, ide, venv):
+        return real_prepare(raw, "C:/runtime", "D:/ide", venv, preflight=forbidden)
+
+    monkeypatch.setattr(source_nt, "prepare_source", prepare)
+    monkeypatch.setattr(app, "Workspace", forbidden)
+    monkeypatch.setattr(app, "EventStore", forbidden)
+    monkeypatch.setattr(source_nt, "run_process", forbidden)
+    with pytest.raises(OSError, match="overlap"):
+        app.create_app(live_settings(tmp_path, workspace_source=source))
+    assert previous.read_bytes() == b"prior runtime"
 
 
 @pytest.mark.parametrize("placement", ["ide", "runtime", "source", "venv"])
 def test_all_placements_precede_constructors(tmp_path, monkeypatch, placement):
+    previous = previous_runtime(tmp_path)
     paths = dict(ide=r"C:\ide", runtime=r"C:\runtime", source=r"C:\source", venv=r"C:\source\.venv")
     called = []
 
@@ -58,22 +159,89 @@ def test_all_placements_precede_constructors(tmp_path, monkeypatch, placement):
         if path == paths[placement]:
             raise OSError("placement refused")
 
-    def prepare(self, runtime, ide):
-        return source_nt.prepare_source(
-            *[paths[k] for k in ("source", "runtime", "ide", "venv")], preflight=preflight
+    real_prepare = source_nt.prepare_source
+
+    def prepare(raw, runtime, ide, venv):
+        return real_prepare(
+            *[paths[k] for k in ("source", "runtime", "ide", "venv")],
+            preflight=preflight,
+            inspect=lambda _: None,
         )
 
-    monkeypatch.setattr(app, "select_source", lambda _: OwnSource(paths["source"]))
-    monkeypatch.setattr(OwnSource, "prepare", prepare)
+    native_selection(monkeypatch)
+    monkeypatch.setattr(source_nt, "prepare_source", prepare)
     monkeypatch.setattr(app, "Workspace", lambda *a, **kw: pytest.fail("constructed workspace"))
     monkeypatch.setattr(app, "EventStore", lambda *a, **kw: pytest.fail("constructed store"))
     with pytest.raises(OSError, match="placement refused"):
-        app.LiveRun(live_settings(tmp_path))
+        app.LiveRun(live_settings(tmp_path, workspace_source=paths["source"]))
     assert called[-1] == paths[placement]
+    assert previous.read_bytes() == b"prior runtime"
+
+
+@pytest.mark.parametrize("fault", ["network", "ReFS", "reparse"])
+def test_public_placement_refuses_unsafe_volume_or_entry(tmp_path, monkeypatch, fault):
+    native_selection(monkeypatch)
+    real_prepare = source_nt.prepare_source
+    previous = previous_runtime(tmp_path)
+
+    def preflight(path):
+        if path != r"C:\source":
+            return
+        volume = (
+            4 if fault == "network" else 3,
+            "ReFS" if fault == "ReFS" else "NTFS",
+            r"\Device\HarddiskVolume1",
+        )
+        preflight_placement(
+            path,
+            nt=True,
+            query=lambda _: volume,
+            synced=[],
+            lstat=lambda _: cast(
+                os.stat_result, SimpleNamespace(st_mode=stat.S_IFDIR, st_file_attributes=0x400)
+            ),
+        )
+
+    def prepare(raw, runtime, ide, venv):
+        return real_prepare(
+            raw, "C:/runtime", "C:/ide", venv, preflight=preflight, inspect=lambda _: None
+        )
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("unsafe placement reached constructors or source Git")
+
+    monkeypatch.setattr(source_nt, "prepare_source", prepare)
+    monkeypatch.setattr(app, "Workspace", forbidden)
+    monkeypatch.setattr(app, "EventStore", forbidden)
+    monkeypatch.setattr(source_nt, "run_process", forbidden)
+    with pytest.raises(OSError, match=r"fixed local NTFS|reparse"):
+        app.create_app(live_settings(tmp_path, workspace_source="C:/source"))
+    assert previous.read_bytes() == b"prior runtime"
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("refusal", ["lock/job", "prior", "trust", "stage", "reset", None])
+async def test_public_selected_content_refusal_preserves_previous(tmp_path, monkeypatch):
+    live, own = await selected(tmp_path, monkeypatch)
+    # Inventory is real; a selected linked file must refuse before reset or raw copying.
+    (own.root / "new.py").unlink()
+    (own.root / "new.py").symlink_to(own.root / "a.py")
+    previous = own.runtime / "workspace/preserve"
+    previous.parent.mkdir(parents=True)
+    previous.write_bytes(b"prior runtime")
+    original = (own.root / "a.py").read_bytes()
+    reset = AsyncMock(side_effect=AssertionError("destruction after unsafe inventory"))
+    monkeypatch.setattr(live.workspace, "reset", reset)
+    with pytest.raises((OSError, InvalidPath), match=r"linked|regular|reparse"):
+        await live._reset_workspace()
+    reset.assert_not_awaited()
+    assert previous.read_bytes() == b"prior runtime"
+    assert (own.root / "a.py").read_bytes() == original
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "refusal", ["lock/job", "prior", "isolation", "trust", "stage", "reset", None]
+)
 async def test_startup_order_and_refusal_preserves_previous(tmp_path, monkeypatch, refusal):
     live, own = await selected(tmp_path, monkeypatch)
     workspace = live.workspace
@@ -103,10 +271,9 @@ async def test_startup_order_and_refusal_preserves_previous(tmp_path, monkeypatc
         ("reset", "reset"),
     ):
         monkeypatch.setattr(workspace, target, step(name))
+    monkeypatch.setattr(workspace, "check_isolation", step("isolation"))
     monkeypatch.setattr(live, "_disclose_source", step("trust"))
     # Staging's type/metadata handoff is exercised with real staging in the next tests.
-    from types import SimpleNamespace
-
     monkeypatch.setattr(
         workspace,
         "stage_own_source",
@@ -130,7 +297,7 @@ async def test_startup_order_and_refusal_preserves_previous(tmp_path, monkeypatc
             await live._reset_workspace()
     else:
         assert await live._reset_workspace() == "base"
-    order = ["lock/job", "prior", "trust", "stage", "reset"]
+    order = ["lock/job", "prior", "isolation", "trust", "stage", "reset"]
     assert calls == order[: order.index(refusal) + 1] if refusal else calls == order
     assert (previous / "preserve").read_bytes() == b"prior runtime"
 
@@ -193,9 +360,10 @@ async def test_profile_cleanup_failure_keeps_runtime_lock(tmp_path, monkeypatch,
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("limit,wall", [(75, 600), (300, 1200)])
-async def test_real_staging_readiness_limits_and_original_preservation(
+async def test_real_staging_and_stubbed_two_agent_suite_forwarding(
     tmp_path, monkeypatch, caplog, limit, wall
 ):
+    # This suite stub proves forwarding/composition only; native fixtures prove admission.
     live, own = await selected(tmp_path, monkeypatch, test_timeout_s=limit)
     before = {
         str(p.relative_to(own.root)): p.read_bytes() for p in own.root.rglob("*") if p.is_file()
@@ -305,8 +473,19 @@ async def test_staged_reset_cancellation_cleans_only_before_destruction(tmp_path
 @pytest.mark.anyio
 @pytest.mark.parametrize("stop", ["inventory", "validate", "stage", None])
 async def test_workspace_stage_adapter_order_and_refusals(tmp_path, monkeypatch, stop):
-    live, _ = await selected(tmp_path, monkeypatch)
+    live, own = await selected(tmp_path, monkeypatch)
     calls = []
+    previous = own.runtime / "workspace/preserve"
+    previous.parent.mkdir(parents=True)
+    previous.write_bytes(b"prior runtime")
+    original = (own.root / "a.py").read_bytes()
+    monkeypatch.setattr(
+        live.workspace,
+        "stage_own_source",
+        lambda: core.Workspace.stage_own_source(live.workspace),
+    )
+    reset = AsyncMock(side_effect=AssertionError("destruction before validated staging"))
+    monkeypatch.setattr(live.workspace, "reset", reset)
 
     def action(name):
         def call(*args, **kwargs):
@@ -326,10 +505,13 @@ async def test_workspace_stage_adapter_order_and_refusals(tmp_path, monkeypatch,
     try:
         if stop:
             with pytest.raises(OSError, match=stop):
-                await core.Workspace.stage_own_source(live.workspace)
+                await live._reset_workspace()
         else:
             assert await core.Workspace.stage_own_source(live.workspace) == "stage"
         sequence = ["inventory", "validate", "stage"]
         assert calls == sequence[: sequence.index(stop) + 1] if stop else calls == sequence
+        reset.assert_not_awaited()
+        assert previous.read_bytes() == b"prior runtime"
+        assert (own.root / "a.py").read_bytes() == original
     finally:
         live.workspace.release_runtime()

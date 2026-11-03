@@ -84,6 +84,7 @@ it.each(["review", "live diff"])("%s facts use Mono only for data", async (surfa
     }
     const facts = page.getByLabel("Facts", { exact: true });
     await browserExpect(facts).toBeVisible();
+    // Font families compute incorrectly until fonts load; withPage does not wait for them.
     await page.evaluate(() => document.fonts.ready);
     for (const outcome of ["passed", "failed", "error", "timeout"] as const) {
       const value = structuredClone(through(20));

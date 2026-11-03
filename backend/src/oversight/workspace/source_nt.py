@@ -1,8 +1,8 @@
-"""Internal NT source selection, staging and recovery; never a public selector.
+"""NT source preparation, staging and recovery behind the public native Windows selector.
 
-Future wiring must preflight before constructors, then hold the runtime lock/server Job,
-guard the previous runtime and disclose trust before calling source Git. Staging must
-validate this inventory again before reset. See DECISIONS.md and docs/workspace-source.md.
+Startup preflights before constructors, then holds the runtime lock/server Job, guards the
+previous runtime and discloses trust before source Git. Validated staging precedes reset;
+selection alone grants no copy or test authority. See DECISIONS.md and docs/workspace-source.md.
 """
 
 import ast

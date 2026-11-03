@@ -91,14 +91,15 @@ it.each([false, true])(
     ]);
     expect(html).toMatch(/comparison-bound[^>]*>[^<]*<\/p><section aria-label="Details"/);
     expect(html).toContain("<details><summary");
+    expect(html).toContain("Structural analysis was not recorded.");
     expect(html.indexOf('aria-label="Details"')).toBeGreaterThan(
       html.indexOf('aria-label="What was compared"'),
     );
-    // Byte-for-byte hashes rendered from ReviewBody at the approved base SHA.
+    // ReviewBody render hashes with the null-analysis explanation in existing Details.
     expect(createHash("sha256").update(html).digest("hex")).toBe(
       phone
-        ? "3e65a31f8f7f4ad2d873d437d9be10d8d0625676a9cd113a440e30896b7c04d3"
-        : "cb6850f229d0572e7f00593fc07c45afa18a798e9b47bc77819ee0f3505c5180",
+        ? "058703cce4e500f4e1fdcaf6c1253d68ef86023d9ded6af729792e5b181a3da1"
+        : "d16182d7a814fc37c5979e6f3243c33de723a32f4eec25b499d0da18089a1616",
     );
   },
 );

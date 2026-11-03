@@ -44,6 +44,8 @@ export function useRelocatedDetails() {
         details.open = detailsNodes.current[i]?.open ?? false;
       });
     detailsNodes.current = next;
+    // An unmounted disclosure belongs to the previous evidence, not a later arrival.
+    if (!next.length) focusedDetail.current = null;
     const previous = focusedDetail.current;
     if (previous && !previous.element.isConnected && document.activeElement === document.body) {
       const replacement = root.current

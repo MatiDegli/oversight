@@ -4219,6 +4219,13 @@ comments and copy:
    as the muted sentence. It explains count separation without suggesting additional measurement
    or an unsupported binding interpretation.
 
+
+## 2026-11-02 — Findings designed in the built review
+
+The maintainer requested design directly in code without a sketch round. This overrides
+Impeccable shape's brief-confirmation stop for this work. Findings follow the built Details
+and New-parameter calls typography and disclosure anatomy; DESIGN.md governs their layout,
+neutral evidence language and phone behavior.
 ## 2026-11-02 — Chat starts with a direct task; leads join the Agents list
 
 The maintainer approved packet a-1102c on Nov 2 at 13:42 ART. Chat opens on the direct task: the built task box and Start agent come first; a lead is the quieter second option, as New lead in the Agents header and as a link under the box. Leads and direct tasks are peers in one Agents list, in start order; a lead's row carries its team's hue and letter and its agents follow it. The header count stays the slots held; leads hold no slot. Slot cards show the model only; the letter comes from the team rule once the agent starts. Before any lead has started, the New lead form says its limits are set before Oversight starts, with no numbers. No contract, endpoint or event change.
@@ -4253,8 +4260,8 @@ neither model nor lead can extend the catalog or acquire approval authority.
 The watcher coalesces for five seconds from the first trigger, accumulates during work, and
 admits only an idle open lead under its lock. Only a committed reply's observation horizon
 prunes seen triggers. A person's Send wins until a wake claims working and takes pending
-triggers only after message commitment and the final open checks. The maintainer's resolved
-mixed-turn interpretation is explicit: that reply has the accepted message's `answers_seq`
+triggers only after message commitment and the final open checks. The coordinator's ruling of
+2026-11-02 fixes the mixed-turn interpretation: that reply has the accepted message's `answers_seq`
 only, with `woken_by=None`. Its digest triggers count as seen through the committed
 `through_seq`; they do not get another wake merely to obtain wake correlation. A wake sends
 no human-message event and names all consumed seqs, including omitted digest lines, in sorted
@@ -4263,7 +4270,7 @@ Every runtime reply after the opening one has exactly one of `answers_seq` and `
 Historical null/null replies keep validating; the runtime invariant does not change log validation.
 
 The person-owned run snapshot adds `OVERSIGHT_LEAD_WAKES`: default 3, no configured maximum,
-0 disables wake execution, and invalid or negative values stop configuration. Admission checks
+0 disables wake execution, and invalid or negative values fail startup. Admission checks
 the existing provider-applicable spending brake and wake cap and preserves the last thread
 turn for the person. An admitted wake spends one wake and one turn. A refusal spends neither;
 while idle and holding the lock through publication, it records an existing lead-status
@@ -4283,6 +4290,7 @@ The service owns and retains watchers, cancels them at terminalization, and canc
 shutdown gathers while the store remains open. Closing is set before initialization can spawn
 another watcher. Restart is still a fresh run, without restored leads, pending triggers, wakes
 or model calls; the run-local lifetime and per-turn budget decisions above remain in force.
+
 ## 2026-11-02 — Several leads with person-set limits
 
 K1 was approved by the maintainer on 2026-11-02. This explicitly supersedes the singleton
@@ -4363,3 +4371,29 @@ agents; DESIGN.md's 15px body/16px title roles and existing tokens remain author
 approved raster is a layout reference, not authority for unpublished numbers, ended inputs or
 model selection. K2c notices/timeline and K3 grouping remain separate; this slice compacts rows
 without adding member collapse. Captures remain explicitly handwritten, not a real recording.
+## 2026-11-02 — Enable validated native Windows own-repository COPY
+
+The maintainer approved the AGENTS.md source/environment wording on November 2, 2026,
+at 11:15 ART (14:15Z): “Si, vamos con ese cambio”. The previous demo-only source and test
+environment wording becomes false when validated native Windows COPY is public. This entry
+supersedes the closed-selector status in the earlier internal-selection and private-composition
+entries without changing their historical delivery claims.
+
+Empty demo and the exact pinned Boltons profile retain precedence and behavior. Only native
+Windows accepts own-repository drive paths, through preparation before constructors, the runtime
+lock/server Job, prior-runtime protection and trust disclosure before source Git, and validated
+staging before reset. An own-selected Workspace refuses unstaged reset before destructive work.
+Product agents own disposable copies and worktrees under `.runtime/worktrees/`, never the
+selected original or this repository. Approval changes only the disposable copy; binary export,
+check and explicit manual apply, and exact-hash discard remain the recovery boundary.
+
+Own suites use the validated original `.venv` with imports mapped to each disposable tested
+tree. Shared readiness/suite environments require the trusted plugin and import guard, retain
+plugin autoload and exclude inherited credentials. Readiness keeps its separate deadline;
+suite preparation, probe and tests share the frozen person-owned startup timeout. The model
+cannot change it. Missing environments leave graph access available and never trigger a builder.
+
+Tests/plugins may write outside runtime; child interpreters can escape the import guard;
+concurrent path-replacement races and inherited ACLs remain accepted residuals. No isolation,
+ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
+Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.

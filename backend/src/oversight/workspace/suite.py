@@ -1,9 +1,9 @@
-"""The test runner: one fixed pytest command, in the demo repo's own environment.
+"""Fixed pytest execution in the demo environment or a validated original own-source venv.
 
-The command runs with cwd at the tree's root. The interpreter, plugin directory, report file and
-HOME are absolute and derived from the runtime root; the plugin lives outside the tree. This module
-is called under the tree's lock, and the result is parsed from the plugin's report, never from
-pytest's text.
+The command runs with cwd at the disposable tree's root. Interpreter/plugin paths are absolute;
+HOME and reports stay under runtime. Own-source imports map the original venv to the tested copy.
+The trusted plugin lives outside the tree. This module runs under the tree's lock and parses
+results from the plugin's report, never from pytest's text.
 """
 
 import asyncio
@@ -367,6 +367,31 @@ def _pytest_argv(
     ]
 
 
+def own_source_environment(
+    own: OwnEnvironment, plugin_dir: Path, runtime_root: Path, tree_root: Path
+) -> dict[str, str]:
+    """Shared readiness/suite policy; artifacts belong only to the actual suite.
+
+    Construct from constants and validated paths, never the inherited environment.
+    Own code keeps plugin autoload, with the trusted plugin and copy import guard required.
+    """
+    _require_guard(own.guard, tree_root)
+    assert own.guard is not None
+    home = str(runtime_root / "tmp" / "home")
+    return {
+        "HOME": home,
+        "TEMP": home,
+        "TMP": home,
+        "PYTHONPATH": (";" if sys.platform == "win32" else ":").join(
+            map(str, (plugin_dir, tree_root, *own.roots))
+        ),
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONHASHSEED": "0",
+        "OVERSIGHT_TRUSTED_PLUGIN": str(plugin_dir / "oversight_report.py"),
+        "OVERSIGHT_IMPORT_GUARD": own.guard,
+    }
+
+
 async def run_suite(
     *,
     python: Path,
@@ -407,19 +432,10 @@ async def run_suite(
                 own = await offload(lambda: _own_prepare(tree_root, deadline))
             except OSError as error:
                 raise OwnSourceTestsUnavailable(str(error), redact) from error
-            _require_guard(own.guard, tree_root)
             python = own.python
+            own_env = own_source_environment(own, plugin_dir, runtime_root, tree_root)
             env.pop("PYTEST_DISABLE_PLUGIN_AUTOLOAD")
-            env.update(
-                PYTHONPATH=(";" if sys.platform == "win32" else ":").join(
-                    map(str, (plugin_dir, tree_root, *own.roots))
-                ),
-                TEMP=env["HOME"],
-                TMP=env["HOME"],
-                OVERSIGHT_TRUSTED_PLUGIN=str(plugin_dir / "oversight_report.py"),
-            )
-            if own.guard is not None:
-                env["OVERSIGHT_IMPORT_GUARD"] = own.guard
+            env.update(own_env)
             await _probe_environment(python, tree_root, env, deadline, _clock, spawn)
             argv = _pytest_argv(python, junit, case_ids, pytest_targets, pytest_options)
         if measured_targets is not None:

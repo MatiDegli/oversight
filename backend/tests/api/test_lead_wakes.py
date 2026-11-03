@@ -287,8 +287,13 @@ async def test_refusal_decision_and_publish_hold_idle_lock(tmp_path: Path, monke
         sending = asyncio.create_task(
             s.client.post("/leads/agent-1/message", json={"text": "Human"})
         )
-        await asyncio.sleep(0)
-        assert owned(s).lock.locked() and owned(s).phase == "idle" and not sending.done()
+        await spin(lambda: owned(s).humans_waiting == 1)
+        assert (
+            owned(s).lock.locked()
+            and owned(s).phase == "idle"
+            and owned(s).humans_waiting == 1
+            and not sending.done()
+        )
         assert len(factory.built) == 1 and not any(e.type == "agent.message" for e in s.events())
         assert owned(s).revision == revision
         assert (owned(s).turns, owned(s).wakes) == counters
@@ -332,6 +337,10 @@ async def test_refusal_once_per_reason_until_next_turn(tmp_path: Path, monkeypat
         old_revision = owned(s).revision
         clock.advance(5)
         await spin(lambda: len(notices(s)) == 1)
+        first_notice = notices(s)[0].payload
+        assert first_notice.state == "idle"
+        assert first_notice.detail == "Skipped a wake: the thread's wake limit was reached."
+        assert first_notice.revision == old_revision + 1
         for _ in range(3):
             await next_trigger(s)
             await wake(s.live.leads, owned(s))
@@ -342,6 +351,10 @@ async def test_refusal_once_per_reason_until_next_turn(tmp_path: Path, monkeypat
         await next_trigger(s)
         clock.advance(5)
         await spin(lambda: len(notices(s)) == 2)
+        second_notice = notices(s)[1].payload
+        assert second_notice.state == "idle"
+        assert second_notice.detail == "Skipped a wake: the thread's wake limit was reached."
+        assert second_notice.revision > first_notice.revision
 
 
 async def test_failed_refusal_publication_keeps_pending_and_retryable_notice(

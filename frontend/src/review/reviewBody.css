@@ -517,3 +517,47 @@
     margin-top: 0;
   }
 }
+
+.review-findings {
+  margin-top: 24px;
+  font-size: 15px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+.review-findings h3,
+.finding-kind {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.review-findings code {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.finding-list > li {
+  padding-block: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+.finding-list > li > * + *,
+.finding-source > * + * {
+  margin-top: 4px;
+}
+.finding-sequence,
+.finding-references,
+.finding-bound {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+.finding-references li + li {
+  margin-top: 4px;
+}
+.finding-references li > span {
+  display: block;
+}
+.review-details > details > summary:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}

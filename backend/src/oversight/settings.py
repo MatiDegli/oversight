@@ -55,8 +55,8 @@ class Settings:
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
     workspace_source: str = ""
-    """OVERSIGHT_WORKSPACE_SOURCE: raw selection; empty demo or pinned profile.
-    Own-copy composition is private; public repository paths still refuse."""
+    """OVERSIGHT_WORKSPACE_SOURCE: empty demo, pinned profile, or a native Windows drive path.
+    Own repositories require validated preparation and staged disposable COPY startup."""
     layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
     """The preset layout, `{node_id: {x, y}}`; a missing or unusable file means the graph has no
     positions. OVERSIGHT_LAYOUT may be relative, and then starts at the repository root, not at the
@@ -351,8 +351,8 @@ def resolve_lead_setting(values: Mapping[str, str], field: str) -> int:
 
 
 def resolve_lead_wakes(values: Mapping[str, str]) -> int:
-    """Zero disables execution; no configured or decimal-conversion maximum."""
-    raw = values.get("OVERSIGHT_LEAD_WAKES", "3")
+    """Absent or empty means 3; zero disables; no configured or decimal-conversion maximum."""
+    raw = values.get("OVERSIGHT_LEAD_WAKES") or "3"
     if not raw.isascii() or not raw.isdecimal():
         raise ValueError("OVERSIGHT_LEAD_WAKES must be a nonnegative whole number")
     result = 0

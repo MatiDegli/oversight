@@ -103,7 +103,7 @@ export interface State {
   changeReads: Record<string, string[]>;
   changes: Record<string, ChangeState>;
   usage: UsageTick | null;
-  /** Accepted run-local calls; null attribution is never assigned to the selected agent. */
+  /** Run-local cost per exact change (including null); latest metadata, ordered by last tick. */
   usageTicks: UsageTick[];
   budgetMarks: BudgetMark[];
   spendUnknown: boolean;

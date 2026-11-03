@@ -2,11 +2,17 @@
 
 Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
 
-The maintainer decided this on 2026-10-31. Build only after the cut line, and only if time
-remains, after a plan that gets the double review, because it touches git and integrity.
-The demo path (`demo-repo/`, `make demo`, `make demo-check`) does not change.
+Native Windows own-repository COPY startup is implemented through W4c2. Changes to Git and integrity
+still require a plan and double review. The demo path (`demo-repo/`, `make demo`, `make demo-check`)
+does not change.
 
-- Oversight never copies the person's repository. It creates a session branch
+On native Windows, Oversight opens a validated disposable copy of the selected repository and never
+writes changes back automatically. The session-branch, follow-main, personal-edit-layer and
+final-integration workflow below is a later design, not current COPY behavior.
+
+## Future session design
+
+- Oversight creates a session branch
   (`oversight/session-...`) at their last commit, checked out in a worktree under `.runtime/`,
   and that branch is Oversight's main. Agents branch from the session's tip; their worktrees
   are worktrees of the person's repository under `.runtime/worktrees/`.
@@ -30,9 +36,12 @@ The demo path (`demo-repo/`, `make demo`, `make demo-check`) does not change.
   as unavailable.
 - Agent commits keep the repository's git hooks disabled.
 
+## Current COPY test limits
+
 Set `OVERSIGHT_TEST_TIMEOUT_S` before starting an own-repository run (seconds, default 60;
 no policy maximum, with a nine-significant-digit parsing bound). Demo and Boltons keep 60 seconds;
-public own-source selection remains closed pending enablement. The agent's time limit per round is
+public native Windows COPY selection is enabled; native qualification remains pending. The agent's
+time limit per round is
 `max(600, 3*T + 300)` seconds. Both stay fixed for the run; the model cannot change them.
 The console says `Test limit: {T} s. Agent time limit: {W} s per round. These settings stay fixed for this run.`
 For a nondefault setting on demo/Boltons it also says
@@ -45,19 +54,14 @@ set a different limit when starting the next run.
 
 Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
 
-After level 2, once the cut line is drawn and only if time remains, build opening the
-person's own repository first. After the hackathon, the Tauri shell comes next, with
-the backend inside WSL; the native Windows and macOS backend ports follow it.
-Item 20, the minimal native Windows port, therefore moves after the hackathon and
-after the Tauri shell: a per-OS layer in `backend/src/oversight/workspace/`
-(process-tree cleanup, file locks, no-follow file opens) that runs in the existing
-mode without isolation (network open; rules, Revert and added-test probes disabled).
-Windows isolation also remains after the hackathon.
+The minimal native Windows backend precedes Tauri; validated own-repository COPY startup is enabled.
+Native qualification remains pending. Tauri, broader platform ports, macOS and native Windows
+isolation remain later work.
 
 ## Current Windows delivery (2026-11-02)
 
 DECISIONS.md's copied-own residual approval supersedes the older session-only scope above.
-Private startup copies raw bytes, protects prior runtimes and uses only the original venv.
-Private import/result admission is integrated. Public paths still refuse; enablement precedes qualification.
+Public native Windows COPY startup copies raw bytes, protects prior runtimes and uses only the
+validated original venv, with imports mapped to the tested copy and guarded result admission.
 Neither Windows machine has qualified this workflow; advisory CI remains unrequired.
 See [trust, limits and the fake template](workspace-source.md#chosen-repository-template).

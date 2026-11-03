@@ -1,4 +1,4 @@
-"""Injected NT own-source policy, without enabling public source selection."""
+"""Injected NT byte policy beneath public native Windows own-source selection."""
 
 import hashlib
 import json
@@ -348,7 +348,7 @@ async def test_installation_precedes_first_add(
 
 @pytest.mark.parametrize("autocrlf", ["true", "false"])
 async def test_edit_merge_export_byte_parity(tmp_path: Path, autocrlf: str) -> None:
-    """Exercise runtime merge seams directly; public selection/Approve startup stays closed."""
+    """Exercise byte-policy merge seams directly; public startup is covered separately."""
     files = {
         ".gitattributes": b"* text=auto\n*.py text\n*.bin binary\n",
         "nested/.gitattributes": b"* eol=crlf\r\n",

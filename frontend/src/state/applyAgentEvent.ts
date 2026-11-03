@@ -98,10 +98,20 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
       // The status names a profile; the tick's model is the provider's reported API id.
       const modelId = state.agents[tick.agent_id]?.model;
       const profile = state.run?.models.find((model) => model.id === modelId);
+      const changeBefore = state.usageTicks.find(
+        (entry) => entry.change_id === tick.change_id,
+      )?.cost_usd;
+      const changeCost =
+        tick.cost_usd === null || changeBefore === null
+          ? null
+          : (changeBefore ?? 0) + tick.cost_usd;
       return {
         ...next,
         usage: tick,
-        usageTicks: [...state.usageTicks, tick],
+        usageTicks: [
+          ...state.usageTicks.filter((entry) => entry.change_id !== tick.change_id),
+          { ...tick, cost_usd: changeCost },
+        ],
         budgetMarks,
         modelWaits,
         agentCosts: { ...state.agentCosts, [tick.agent_id]: cost },

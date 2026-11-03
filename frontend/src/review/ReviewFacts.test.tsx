@@ -72,38 +72,41 @@ const execution: SuiteExecution = {
 };
 
 describe("review evidence", () => {
-  it.each(["b", "c"] as const)("preserves the entire non-panel markup for %s", (name) => {
-    const view = headerState(name);
-    // Freeze the accepted input as well as its non-panel output; c now uses public reasons.
-    if (name === "c") {
-      const current = view.changeFacts["change-1"]?.at(-1);
-      if (!current) throw new Error("Missing facts");
-      current.measured_cone = structuredClone(measuredFacts[1]?.measured_cone ?? []);
-      const caller = current.measured_cone[2];
-      if (!caller) throw new Error("Missing caller");
-      caller.not_probed = "budget exhausted";
-      current.behavior_diff = [
-        {
-          node_id: "shop.pricing:compute_price",
-          compared_count: 2,
-          differing_count: 0,
-          rows: [
-            { inputs: "unit_price=int:100", before: "int:500", after: "int:700", unstable: true },
-          ],
-          not_probed: null,
-        },
-      ];
-    }
-    const proposal = view.changes["change-1"]?.proposal;
-    if (!proposal) throw new Error("Missing proposal");
-    const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
-    // Whole-output pins measured on the accepted 1ac8382 tip.
-    expect(createHash("sha256").update(html).digest("hex"), html).toBe(
-      name === "b"
-        ? "4a1d2fccb8372fd478e338a99ba77a20ac8eb489dcc496939ca603025dbbf620"
-        : "4b136f2685b3c0454e8cec31889d5fa96f5a43a1a5584d484f52ffcf55b6cb3e",
-    );
-  });
+  it.each(["b", "c"] as const)(
+    "preserves non-panel evidence alongside structural availability for %s",
+    (name) => {
+      const view = headerState(name);
+      // Freeze the accepted input as well as its non-panel output; c now uses public reasons.
+      if (name === "c") {
+        const current = view.changeFacts["change-1"]?.at(-1);
+        if (!current) throw new Error("Missing facts");
+        current.measured_cone = structuredClone(measuredFacts[1]?.measured_cone ?? []);
+        const caller = current.measured_cone[2];
+        if (!caller) throw new Error("Missing caller");
+        caller.not_probed = "budget exhausted";
+        current.behavior_diff = [
+          {
+            node_id: "shop.pricing:compute_price",
+            compared_count: 2,
+            differing_count: 0,
+            rows: [
+              { inputs: "unit_price=int:100", before: "int:500", after: "int:700", unstable: true },
+            ],
+            not_probed: null,
+          },
+        ];
+      }
+      const proposal = view.changes["change-1"]?.proposal;
+      if (!proposal) throw new Error("Missing proposal");
+      const html = renderToStaticMarkup(<ReviewFacts state={view} proposal={proposal} />);
+      // Whole-output pins include the explicit not-recorded structural state.
+      expect(createHash("sha256").update(html).digest("hex"), html).toBe(
+        name === "b"
+          ? "91a9640747745902514798e79df4d27de268245b8fd3337aaf8e0db4fe024608"
+          : "bd1f9fed25a8ee2d38543f57909c31a7b65ae21fed56a250a7503495eb656d67",
+      );
+    },
+  );
   const panelHtml = (record: ChangeFacts) =>
     renderToStaticMarkup(
       <ReviewFacts

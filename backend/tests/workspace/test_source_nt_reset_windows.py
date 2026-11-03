@@ -1,4 +1,4 @@
-"""Native internal handoffs; public NT path selection remains refused."""
+"""Native staging/reset handoffs beneath enabled public Windows COPY startup."""
 
 import sys
 from pathlib import Path

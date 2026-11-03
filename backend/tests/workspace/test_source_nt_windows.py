@@ -1,4 +1,4 @@
-"""Private native composition fixtures; skipped Linux cases are never NT acceptance."""
+"""Public native composition fixtures; skipped Linux cases are never NT acceptance."""
 
 import importlib
 import sys
@@ -9,7 +9,7 @@ import pytest
 from live_helpers import live_settings
 
 from oversight import app
-from oversight.workspace import OwnSource, SuiteUnavailable, base_probe_checkout
+from oversight.workspace import SuiteUnavailable, base_probe_checkout
 
 from . import test_platform_windows as process
 
@@ -58,7 +58,7 @@ async def assert_combined_failure_then_repair(workspace, fixture, agent):
 
 
 @pytest.mark.parametrize("layout", ["packages/foo/src", "backend/src"])
-async def test_original_venv_each_copy_and_guard_admission(tmp_path, monkeypatch, layout):
+async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout):
     tmp_path = Path(tempfile.mkdtemp(prefix="ov-"))
     fixture = await driver.prepare_own_fixture(tmp_path, layout=layout)
     before = {
@@ -73,8 +73,9 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, monkeypatch
             "test_async.py",
         )
     }
-    monkeypatch.setattr(app, "select_source", lambda _: OwnSource(str(fixture.source)))
-    live = app.LiveRun(live_settings(tmp_path))  # injected demo_python must never be used
+    live = app.LiveRun(
+        live_settings(tmp_path, workspace_source=str(fixture.source))
+    )  # injected demo_python must never be used
     try:
         await live.startup()
         assert live._environment_unavailable is None
@@ -107,15 +108,14 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, monkeypatch
         driver.cleanup(tmp_path)
 
 
-async def test_missing_original_venv_still_serves_graph(tmp_path, monkeypatch):
+async def test_missing_original_venv_still_serves_graph(tmp_path):
     tmp_path = Path(tempfile.mkdtemp(prefix="ov-"))
     source = tmp_path / "source"
     source.mkdir()
     (source / "code.py").write_text("value = 1\n", encoding="utf-8")
     for args in (("init", "-q", "-b", "main"), ("add", "."), ("commit", "-qm", "Fixture")):
         await driver.fixture_git(source, *args)
-    monkeypatch.setattr(app, "select_source", lambda _: OwnSource(str(source)))
-    live = app.LiveRun(live_settings(tmp_path))
+    live = app.LiveRun(live_settings(tmp_path, workspace_source=str(source)))
     try:
         await live.startup()
         assert live._environment_unavailable is not None and live.store.graph()[1] is not None

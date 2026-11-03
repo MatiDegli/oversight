@@ -57,7 +57,11 @@ authority. Use status for the full current observation; a digest does not replac
 Summarize completed plans for the person. Approval waiting is a notice, never permission to act."""
 
 
-LEAD_PROMPT = build_lead_prompt(LEAD_LIMITS) + "\n\n" + SERVER_NOTICE_PROMPT
+def lead_system_prompt(limits: LeadLimits) -> str:
+    return build_lead_prompt(limits) + "\n\n" + SERVER_NOTICE_PROMPT
+
+
+LEAD_PROMPT = lead_system_prompt(LEAD_LIMITS)
 
 
 HISTORY_STUB = "[Lines {first}-{last} of {path}: a later read of this path covers these lines.]"
@@ -74,11 +78,7 @@ def prompt_version(
 ) -> str:
     """A hash of the selected system, revision, plan and lead prompts, and both tool tables."""
     limits = lead_limits if lead_limits is not None else LEAD_LIMITS
-    lead_prompt = (
-        build_lead_prompt(limits) + "\n\n" + SERVER_NOTICE_PROMPT
-        if lead_limits is not None
-        else LEAD_PROMPT
-    )
+    lead_prompt = lead_system_prompt(limits) if lead_limits is not None else LEAD_PROMPT
     schemas = build_lead_tool_schemas(limits) if lead_limits is not None else LEAD_TOOL_SCHEMAS
     policy = ""
     if history_prune_tokens is not None:

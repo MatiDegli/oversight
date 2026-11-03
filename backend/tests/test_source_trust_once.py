@@ -51,7 +51,7 @@ def test_marker_sorted_union_canonical_path_and_outside_profile(tmp_path):
         {"decision_model": "unavailable", "cross_review": True, "review_model": "unknown"},
     ],
 )
-def test_provider_union_includes_callable_lead_and_planner_without_credentials(
+def test_provider_union_covers_offered_profiles_and_both_callable_leads(
     tmp_path, monkeypatch, config
 ):
     def forbidden(*args, **kwargs):
@@ -60,8 +60,11 @@ def test_provider_union_includes_callable_lead_and_planner_without_credentials(
     monkeypatch.setattr(app, "OpenAIClient", forbidden)
     live = app.LiveRun(live_settings(tmp_path, **config))
     providers = live._source_providers()
-    assert {"meta", "baseten"} <= set(providers)
-    assert ("fake" in providers) == (config.get("agent_model", "fake") == "fake")
+    assert providers == (
+        ("baseten", "fake", "meta")
+        if config.get("agent_model", "fake") == "fake"
+        else ("baseten", "meta")
+    )
     assert live._settings.meta_api_key is live._settings.baseten_api_key is None
 
 

@@ -42,17 +42,19 @@ streaming/resumed `/events`, with its own runtime/cache. Defaults are checked fr
 without binding 8710/5710. CI invokes that target. Future terminal controls layer same-authority,
 authentication and IPv4 listener requirements on this policy; see approved guard decisions G1–G3.
 
-At live startup, the workspace takes a runtime lock, removes the previous workspace and
-worktrees, copies [demo-repo](demo-repo) and creates an initial git commit on `main`.
-Main lives at `.runtime/workspace/`; product agent worktrees live at
-`.runtime/worktrees/{agent_id}`, outside the parsed main tree. Run logs, the spend ledger
-and the separate demo test environment survive this reset.
+At live startup, the workspace takes a runtime lock and checks preservation state before resetting the disposable
+workspace and worktrees. It copies demo-repo/, a pinned profile or the selected own repository and creates an initial
+git commit on `main`. Native Windows own-source startup validates and stages the copy before destruction and refuses
+to discard changed prior own-source work without the person's exact-hash authorization.
+Main lives at `.runtime/workspace/`; product agent worktrees live at `.runtime/worktrees/{agent_id}`, outside the
+parsed main tree. Run logs, the spend ledger and the separate demo test environment survive this reset.
 
 The backend runs `git init` in the copied workspace. `.runtime/` is gitignored.
 The demo template is plain files with no git of its own: a Python project written here,
 with 4–6 modules, 20–40 functions and tests, and one central function with many callers.
-After the hackathon, `desktop/` will hold a Tauri shell with the backend inside WSL,
-before the native Windows and macOS backend ports. The demo runs in the browser.
+The browser demo remains supported. The minimal native Windows backend and validated own-repository
+COPY startup are implemented. Native qualification remains pending. The Tauri shell, broader
+platform ports and macOS remain later work.
 See [Opening the person's own repository](docs/own-repository.md) for its separate plan and rules.
 
 ## Data flow
@@ -72,9 +74,10 @@ See [Opening the person's own repository](docs/own-repository.md) for its separa
    during shutdown. Closed controls cannot restart a paused gate.
 4. The loop offers `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`.
    There is no shell tool. Paths stay within the worktree. Reads are bounded. An edit needs
-   a unique old-text match and the hash from the agent's last read. Tests use the demo's
-   own environment and a fixed command with a timeout. Status follows tool execution and
-   human run controls, never model text.
+   a unique old-text match and the hash from the agent's last read. Tests run in the disposable tested tree with a
+   fixed pytest command and a timeout. Demo and pinned profiles use the runtime's demo environment; selected own
+   repositories on native Windows use their validated original virtual environment with imports mapped to the copy.
+   Status follows tool execution and human run controls, never model text.
 5. Every completed tool call emits `agent.step`. Read focus precedes the step; `list_files`
    sends none, and `search` focuses only its first five matching nodes. Successful edits publish
    `change.updated`, edit focus and then the step. Updates carry full original and modified file
