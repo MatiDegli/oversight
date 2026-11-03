@@ -265,8 +265,14 @@ it("ships the inbox headline before any lazy plan and removes the obsolete hero 
   ]) {
     expect(inbox).toContain("<h2>Decisions waiting for you</h2>");
     expect(inbox).not.toContain("<style>");
+    // Plan geometry uses --flow-gutter; the obsolete headline count must stay in CSS.
     expect(inbox).not.toContain('class="inbox-count" style=');
   }
+  // Preserve the original blanket guard for the eager heading itself. The whole-card
+  // replacement below permits custom properties only, including the lazy flow gutter.
+  expect(
+    renderToStaticMarkup(<InboxHeading count={3} agents={1} steps={3} minutes={0} />),
+  ).not.toContain('style="');
   expect(eager).toMatch(
     /\.inbox-heading h2\s*\{[^}]*font-size: 20px;[^}]*font-weight: 700;[^}]*line-height: 1\.3;/s,
   );

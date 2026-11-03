@@ -8,6 +8,7 @@ import { launchBrowser } from "../browserLaunch.support";
 import type { GraphProbeHost } from "../graph/probe";
 import type * as fixture from "./planFlow.browser.fixture";
 import type { FlowLayout, FlowScene } from "./planFlow.browser.fixture";
+import { writeCaptureMatrix } from "./planFlowEvidence.testSupport";
 
 declare global {
   interface Window {
@@ -288,6 +289,7 @@ async function capture(page: Page, basename: string, scene: FlowScene, width: nu
     ];
     return {
       provenance: "Synthetic scripted event scene, rendered by production components",
+      theme: document.documentElement.dataset.theme,
       width: innerWidth,
       documentWidth: document.documentElement.scrollWidth,
       selectors: Object.fromEntries(
@@ -365,6 +367,14 @@ for (const theme of ["dark", "day"])
       }
     },
   );
+
+it.skipIf(process.env.PLAN_FLOW_SHOTS !== "1")(
+  "stages the complete capture matrix for delivery and re-inspection",
+  async () => {
+    const matrix = await writeCaptureMatrix(new URL("../../../.shots/plan-flow/", import.meta.url));
+    expect(matrix.captures).toHaveLength(26);
+  },
+);
 
 it("uses one-line rows above six when the built thread has room", async () => {
   const page = await open("large", 1920);
