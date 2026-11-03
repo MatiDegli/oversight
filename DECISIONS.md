@@ -4479,8 +4479,14 @@ reference resolution (README, Next).
 
 Person-owned preview infrastructure uses Linux isolation C and an external trusted supervisor and
 adapter, without product-agent shell/tools, contract changes or new routes. The eight internal
-workspace facade names compile against current contracts 1.17.0. Production opening stays disabled,
-including when explicit trusted startup paths, ports, origins and limits are configured.
+workspace facade names compiled against contracts 1.17.0. Production opening initially stayed
+disabled, including when explicit trusted startup paths, ports, origins and limits were configured.
+
+Amended 2026-11-03 by the preview opening switch and its documentation review fix:
+`OVERSIGHT_PREVIEW_ENABLED` is a frozen startup opt-in, default false, accepting only literal
+`true` or `false`. Enabling it permits the mounted preview API only with the existing trusted-demo,
+exact absolute adapter, interpreter, ports/origins and Linux isolation C requirements satisfied.
+It grants no additional source or adapter trust, filesystem isolation or machine/browser qualification.
 
 Reason: endpoint guards cannot cover every server Git spawn or a ready Request changes without Git.
 The task-reentrant shared Git lease is the universal exclusion, with verified namespace death and

@@ -101,6 +101,7 @@ def test_documented_configuration_and_reason_inventory_are_exact():
 
     docs = (Path(__file__).resolve().parents[3] / "docs/isolation.md").read_text()
     defaults = {
+        "ENABLED": False,
         "ADAPTER": None,
         "PYTHON": None,
         "PORTS": (),
@@ -114,6 +115,7 @@ def test_documented_configuration_and_reason_inventory_are_exact():
     assert all(f"`OVERSIGHT_PREVIEW_{name}`" in docs for name in defaults)
     assert all(f"`{reason}`" in docs for reason in get_args(PreviewReason))
     profile = resolve_preview_profile({}, 8710, None)
+    assert profile.enabled is defaults["ENABLED"]
     assert (profile.adapter, profile.interpreter, profile.ports, profile.origins) == (
         None,
         None,
@@ -131,6 +133,51 @@ def test_documented_configuration_and_reason_inventory_are_exact():
     assert resolve_preview_profile(
         {"OVERSIGHT_PREVIEW_ORIGINS": " http://127.0.0.1:8710"}, 8710, None
     ).origins == (" http://127.0.0.1:8710",)
+
+
+def test_documented_preview_opening_requires_explicit_opt_in_and_retains_limits():
+    docs = (ROOT / "docs/isolation.md").read_text()
+    policy = " ".join(docs.split("### Dormant person-owned preview supervision", 1)[1].split())
+    assert "`PreviewProfile.production_open` returns the frozen `enabled` flag" in policy
+    assert (
+        "`POST /previews` only when every trusted-demo, configuration and isolation C check"
+        in policy
+    )
+    assert "No inferred enablement or unisolated fallback exists" in policy
+    assert "exact absolute `backend/src/oversight/preview_adapter.py`" in policy
+    assert "filesystem" in policy and "not isolated" in policy
+    row = next(
+        line for line in docs.splitlines() if line.startswith("| `OVERSIGHT_PREVIEW_ENABLED`")
+    )
+    assert "| `false` |" in row
+    assert "literal `true` or `false`" in row and "raise" in row
+    assert "There is no production opening switch" not in policy
+    assert "No enable flag" not in policy
+    assert "Production opening remains disabled" not in policy
+
+
+def test_preview_example_and_decision_document_the_default_closed_switch():
+    example = (ROOT / ".env.example").read_text()
+    assignments = [
+        line for line in example.splitlines() if line.startswith("OVERSIGHT_PREVIEW_ENABLED=")
+    ]
+    assert assignments == ["OVERSIGHT_PREVIEW_ENABLED=false"]
+    assert not resolve_preview_profile(
+        dict(line.split("=", 1) for line in assignments), 8710, None
+    ).enabled
+    comments = " ".join(example.replace("# ", "").split())
+    assert "literal true or false" in comments and "default false" in comments
+    assert "trusted demo" in comments and "isolation C" in comments
+    assert "absolute adapter" in comments and "not isolated" in comments
+    decisions = (
+        (ROOT / "DECISIONS.md")
+        .read_text()
+        .split(
+            "## 2026-11-03 — Dormant preview uses the shared Git lease and durable ownership", 1
+        )[1]
+        .split("\n## ", 1)[0]
+    )
+    assert "OVERSIGHT_PREVIEW_ENABLED" in decisions and "default false" in decisions
 
 
 def test_capture_inventory_distinguishes_uninspected_matrix_from_missing_windows_proof():

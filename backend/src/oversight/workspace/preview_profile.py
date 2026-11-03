@@ -1,4 +1,4 @@
-"""Frozen person-owned startup configuration. There is no production opening switch."""
+"""Frozen person-owned startup configuration; opening grants no executable authority."""
 
 import hashlib
 import math
@@ -22,6 +22,11 @@ class PreviewProfile:
     lifetime_s: float = 900
     readiness_s: float = 10
     memory_limit_bytes: int = 536870912
+    enabled: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.enabled) is not bool:
+            raise ValueError("preview enabled flag must be boolean")
 
     @property
     def configured(self) -> bool:
@@ -29,7 +34,7 @@ class PreviewProfile:
 
     @property
     def production_open(self) -> bool:
-        return False
+        return self.enabled
 
     @property
     def fingerprint(self) -> str:
@@ -37,7 +42,7 @@ class PreviewProfile:
 
     def validate(self) -> None:
         """Partial/invalid configuration refuses execution, never supplies a fallback."""
-        if not self.configured or not self.trusted_demo:
+        if not self.enabled or not self.configured or not self.trusted_demo:
             raise ValueError("preview profile is disabled")
         assert self.adapter is not None and self.interpreter is not None
         expected = Path(__file__).resolve().parents[1] / "preview_adapter.py"

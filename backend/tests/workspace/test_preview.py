@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import asdict, replace
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -250,7 +251,116 @@ async def test_two_concurrent_starts_cannot_evict_each_other(workspace):
 def test_status_reason_shape_is_closed():
     with pytest.raises(ValueError):
         PreviewStatusRecord("p", "r", "a", "c", 1, "head", "stopped")
-    assert not profile().production_open
+    assert not PreviewProfile().production_open
+
+
+@pytest.mark.parametrize("phase", ["admission", "starting", "handoff"])
+async def test_switch_checks_admission_and_execution(workspace, phase):
+    h = await harness(workspace)
+    release, entered = asyncio.Event(), asyncio.Event()
+    factory = h.manager.process_factory
+
+    async def sink(record):
+        await h.sink(record)
+        if record.state == "starting" and phase == "starting":
+            entered.set()
+            await release.wait()
+
+    def gated(registry, port):
+        process = factory(registry, port)
+        assert isinstance(process, FakeProcess)
+        process.launch_gate = release
+        entered.set()
+        return process
+
+    h.manager.set_status_sink(sink)
+    if phase == "handoff":
+        h.manager.process_factory = gated
+    try:
+        if phase == "admission":
+            h.manager.profile = replace(h.manager.profile, enabled=False)
+            with pytest.raises(PreviewError) as caught:
+                await h.start()
+            assert str(caught.value) == "Live preview profile is disabled."
+            assert_wire_error(caught.value, "not_configured")
+            assert h.processes == [] and h.sink.records == []
+        else:
+            async with asyncio.timeout(5):
+                starting = asyncio.create_task(h.start(wait_ready=False))
+                await entered.wait()
+                if phase == "handoff":
+                    await h.processes[0].launch_started.wait()
+                    assert h.manager.lifecycle.profile.enabled
+                owner = h.manager.barrier.owner
+                assert owner is not None
+                h.manager.profile = replace(h.manager.profile, enabled=False)
+                release.set()
+                created = await starting
+                await h.sink.wait("failed", created.preview_id)
+                assert h.manager._watcher is not None
+                await h.manager._watcher
+                assert owner.launch_task is not None
+                error = owner.launch_task.exception()
+                assert isinstance(error, PreviewError)
+                assert str(error) == "Live preview profile is disabled."
+                assert_wire_error(error, "not_configured")
+            assert h.sink.records[-1].reason == "launch_failed"
+            assert all("execute" not in process.order for process in h.processes)
+            assert all(process.dead for process in h.processes)
+            assert h.manager.registry.read() is None
+            if phase == "starting":
+                assert h.processes == []
+        assert not h.manager.has_owner
+    finally:
+        release.set()
+        await h.close()
+
+
+@pytest.mark.parametrize(
+    "fault,message",
+    [
+        ("source", "preview profile is disabled"),
+        ("adapter", "preview adapter must be the trusted absolute adapter"),
+        ("relative_adapter", "preview adapter must be the trusted absolute adapter"),
+        ("interpreter", "preview interpreter must be absolute"),
+        ("missing", "preview executables are unavailable"),
+        ("backend_port", "invalid preview port pool"),
+        ("vite_port", "invalid preview port pool"),
+    ],
+)
+async def test_enabled_does_not_grant_source_or_adapter_trust(workspace, fault, message):
+    from oversight.settings import Settings
+
+    h = await harness(workspace)
+    missing: dict[str, Any] = asdict(profile())
+    missing["interpreter"] = Path("/missing-preview/bin/python")
+    profiles = {
+        "adapter": replace(profile(), adapter=Path("/untrusted/adapter.py")),
+        "relative_adapter": replace(profile(), adapter=Path("preview_adapter.py")),
+        "interpreter": replace(profile(), interpreter=Path("python")),
+        "missing": PreviewProfile(**missing),
+    }
+    if fault == "source":
+        selected = Settings(workspace_source="boltons-d31d821", preview_profile=profile())
+        h.manager.profile = selected.preview_profile
+    elif fault in {"backend_port", "vite_port"}:
+        port = h.manager.profile.ports[0]
+        selected = Settings(
+            port=port if fault == "backend_port" else 8710,
+            vite_port=port if fault == "vite_port" else None,
+            preview_profile=profile(),
+        )
+        h.manager.profile = selected.preview_profile
+    else:
+        h.manager.profile = profiles[fault]
+    assert h.manager.profile.production_open
+    with pytest.raises(ValueError, match=f"^{message}$"):
+        h.manager.profile.validate()
+    with pytest.raises(PreviewError) as caught:
+        await h.start()
+    assert str(caught.value) == "Live preview profile is disabled."
+    assert_wire_error(caught.value, "not_configured")
+    assert h.processes == [] and h.sink.records == [] and not h.manager.has_owner
 
 
 async def test_readiness_failure_requires_verified_cleanup_before_reuse(workspace):
