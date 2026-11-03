@@ -133,16 +133,18 @@ def add_static(
     app: FastAPI,
     dist: Path,
     *,
-    startup_report: Callable[[], str | None] = lambda: None,
+    startup_report: Callable[[], str | None] | None = None,
 ) -> bool:
     """Serve the build in `dist` after the app's own routes. False, and nothing added, without
-    `dist/index.html`: a source checkout that was never built has no UI to serve."""
+    `dist/index.html`: a source checkout that was never built has no UI to serve.
+    The parent live app supplies the report callback, including when no report is enabled;
+    other static callers retain their file responses and cache policy."""
     root = dist.resolve()
     if not (root / INDEX).is_file():
         return False
 
     def respond(target: Path) -> Response:
-        if target != root / INDEX:
+        if startup_report is None or target != root / INDEX:
             return _respond(target, root)
         html = target.read_text(encoding="utf-8", errors="strict")
         serialized = startup_report()

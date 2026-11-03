@@ -719,7 +719,10 @@ class Workspace:
 
     def _populate(self) -> None:
         (self._root / "tmp" / "home").mkdir(mode=DIR_MODE, parents=True)
-        copy_template(self._template, self._main.root, inventory=self.source_inventory)
+        if self.source_inventory is None:
+            copy_template(self._template, self._main.root)
+        else:
+            copy_template(self._template, self._main.root, inventory=self.source_inventory)
 
     def _write_excludes(self) -> None:
         info = self._main.root / ".git" / "info"

@@ -54,7 +54,7 @@ async def ui_app(tmp_path: Path, dist: Path) -> AsyncIterator[tuple[FastAPI, htt
         app = FastAPI()
         app.include_router(create_router(store, "live"))
         install_error_handlers(app)
-        assert add_static(app, dist)
+        assert add_static(app, dist, startup_report=lambda: None)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             yield app, client
