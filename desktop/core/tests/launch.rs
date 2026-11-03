@@ -13,7 +13,8 @@ impl CloneRoot {
         let fixture_parent = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
-            .join("target/test-fixtures");
+            .join("target")
+            .join("test-fixtures");
         let root = fixture_parent.join(format!(
             "oversight-desktop-{}-{}-space español 日本",
             std::process::id(),
@@ -39,6 +40,41 @@ impl Drop for CloneRoot {
     fn drop(&mut self) {
         fs::remove_dir_all(&self.0).unwrap();
     }
+}
+
+#[cfg(windows)]
+#[test]
+fn fixture_root_is_a_native_drive_path() {
+    let root = CloneRoot::new();
+    assert!(root.0.to_str().is_some_and(native_drive_path));
+}
+
+#[cfg(windows)]
+#[test]
+fn launch_paths_remain_native_drive_paths() {
+    let root = CloneRoot::new();
+    let launch = Launch::new(&root.0, false).unwrap();
+    assert!(launch.cwd.to_str().is_some_and(native_drive_path));
+    assert!(launch.program.to_str().is_some_and(native_drive_path));
+}
+
+#[cfg(unix)]
+#[test]
+fn launch_preserves_validated_root_spelling() {
+    let root = CloneRoot::new();
+    let mut spelling = root.0.as_os_str().to_os_string();
+    spelling.push("/.");
+    let spelled_root = PathBuf::from(spelling);
+    let launch = Launch::new(&spelled_root, false).unwrap();
+    assert_eq!(launch.cwd.as_os_str(), spelled_root.as_os_str());
+    assert_eq!(
+        launch.program.as_os_str(),
+        spelled_root
+            .join(".venv")
+            .join("Scripts")
+            .join("python.exe")
+            .as_os_str()
+    );
 }
 
 #[test]
@@ -75,10 +111,10 @@ fn native_path_refuses_wsl_unc_device_relative_and_ambiguous_components() {
 fn argv_preserves_spaces_and_unicode_without_shell_interpolation_or_reload() {
     let root = CloneRoot::new();
     let launch = Launch::new(&root.0, false).unwrap();
-    assert_eq!(launch.cwd, fs::canonicalize(&root.0).unwrap());
+    assert_eq!(launch.cwd, root.0);
     assert_eq!(
         launch.program,
-        fs::canonicalize(root.0.join(".venv/Scripts/python.exe")).unwrap()
+        root.0.join(".venv").join("Scripts").join("python.exe")
     );
     assert_eq!(launch.args, ["-m", "oversight", "serve"]);
     assert_eq!(launch.env.len(), 4);
@@ -142,6 +178,7 @@ fn refuses_relative_missing_and_non_file_prerequisites_before_launch() {
         "frontend/dist/index.html",
     ] {
         let root = CloneRoot::new();
+        assert!(Launch::new(&root.0, false).is_ok());
         let path = root.0.join(relative);
         if path.is_dir() {
             fs::remove_dir(&path).unwrap();

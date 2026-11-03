@@ -55,8 +55,10 @@ impl Launch {
             ]);
         }
         Ok(Self {
-            cwd: fs::canonicalize(root)?,
-            program: fs::canonicalize(root.join(".venv/Scripts/python.exe"))?,
+            // Validation already excludes traversal and links. Canonicalizing on
+            // Windows would replace these native drive paths with device paths.
+            cwd: root.to_path_buf(),
+            program: root.join(".venv").join("Scripts").join("python.exe"),
             args: ["-m".into(), "oversight".into(), "serve".into()],
             env,
             remove_env: [
