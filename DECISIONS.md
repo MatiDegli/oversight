@@ -4607,8 +4607,8 @@ each read refuses a change observed during that read; it cannot prevent later ca
 
 ## 2026-11-03 — Configuration attribution stays advisory and uses the current change base
 
-The maintainer's packet 1102a, plan revision 2, authorizes the first backend diagnostic front
-for demo/Boltons agent suites and proposal review. Compare immutable captured Git trees against
+The maintainer authorized advisory configuration attribution for demo/Boltons agent suites and
+proposal review. Compare immutable captured Git trees against
 `rec.base_commit` read under the agent lock, including after Request changes moves that base.
 Reuse the existing seven configuration basenames plus exact-case `conftest.py` at any depth;
 whole-file differences qualify without proving pytest relevance. The integrity predicate,

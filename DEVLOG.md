@@ -82,6 +82,6 @@ One line per day, in Argentina time (ART).
   Composer also exceeds 80 lines:
   its shared draft hooks and active/ended command surfaces stay together to preserve hook order
   and make the terminal early return auditable. These size exceptions remain for reviewer judgment.
-  Added packet 1102a's backend configuration attribution from captured Git objects and the current
+  Added backend configuration attribution from captured Git objects and the current
   locked record base, with bounded advisory notes in agent history/steps and frozen proposal facts;
   kept the integrity veto unchanged and added fake-only moving-base, failure and sequencing proofs.
