@@ -33,3 +33,5 @@ export { selectOverlap } from "./overlap";
 export type { Overlap, OverlapEntry } from "./overlap";
 
 export { selectMergeMode } from "./mergeMode";
+
+export { MOMENT_EVENT_TYPES, resolveViewReferences } from "./viewReferences";

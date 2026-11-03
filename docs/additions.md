@@ -702,6 +702,12 @@ Edit, post-dispatch plan tracking and partition completeness production remain i
 This is narrower than the
 earlier ambition to have the lead start agents for proof 2.
 
+Dormant views with references use contracts 1.18.0: four closed kinds, strict masked-caption
+validation, committed-prefix eligibility, ordered event readers and shared Python/TypeScript
+resolution fixtures. Status inventory is opt-in and off in production. Tool advertisement,
+dispatch, prompt changes and visible cards remain absent. Exports withhold captions under the
+existing message-text receipt; inclusion requires the existing explicit authorization.
+
 ### Saved agent flows
 
 After the lead, extend package 12's shipped Start an agent here with a short list of repository
