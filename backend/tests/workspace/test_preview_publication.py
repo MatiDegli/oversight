@@ -113,6 +113,10 @@ async def test_publication_cancel_and_partial_setup(tmp_path):
     (source / "index.html").write_bytes(b"x" * 1024)
     with pytest.raises(ValueError):
         await publish_build(source, source / "published")
+    linked = tmp_path / "linked-parent"
+    linked.symlink_to(source, target_is_directory=True)
+    with pytest.raises(OSError):
+        await publish_build(source, linked / "published")
     task = asyncio.create_task(publish_build(source, tmp_path / "published"))
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -451,3 +455,38 @@ async def test_publication_path_metadata_budget(tmp_path, limit, allowed):
                 source, tmp_path / "published", budgets=OutputBudgets(path_bytes=limit)
             )
     assert not (tmp_path / "published").exists()
+
+
+async def test_publication_closes_directory_before_failed_cleanup(tmp_path, monkeypatch):
+    import errno
+
+    from oversight.workspace import preview_publication as publication
+
+    source, destination = tmp_path / "tree", tmp_path / "published"
+    source.mkdir()
+    (source / "index.html").write_text("data")
+    handles = []
+    anchor, close = publication._anchor, publication.PublishedBuild.close
+
+    def track(path):
+        fd = anchor(path)
+        if path == destination:
+            handles.append(fd)
+        return fd
+
+    def fail(*args):
+        raise OSError("injected copy failure")
+
+    def checked_close(build):
+        for fd in handles:
+            with pytest.raises(OSError) as error:
+                os.fstat(fd)
+            assert error.value.errno == errno.EBADF
+        close(build)
+
+    monkeypatch.setattr(publication, "_anchor", track)
+    monkeypatch.setattr(publication, "_copy", fail)
+    monkeypatch.setattr(publication.PublishedBuild, "close", checked_close)
+    with pytest.raises(OSError, match="injected copy failure"):
+        await publish_build(source, destination)
+    assert handles and not destination.exists()

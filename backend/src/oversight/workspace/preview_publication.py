@@ -207,7 +207,7 @@ def _anchor(path: Path) -> int:
         with contextlib.ExitStack() as stack:
             root = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
             stack.callback(os.close, root)
-            return _linux_open(root, str(path.absolute()).lstrip("/"), anchor=True)
+            return _linux_open(root, str(path.absolute()).lstrip("/") or ".", anchor=True)
     if sys.platform == "win32":
         return _windows_open(None, "\\??\\" + str(path.absolute()))
     raise OSError("verified publication is unavailable on this platform")
@@ -382,16 +382,34 @@ def _copy(item: _Pinned, output: BinaryIO, deadline: float) -> None:
         raise ValueError("publication byte verification failed")
 
 
+def _placement(root: int, destination: Path, stack: contextlib.ExitStack, deadline: float) -> None:
+    identity = _identity(os.fstat(root))[:2]
+    # Compare pinned identities, including NT short-name and bind-mount aliases.
+    # Neither source traversal nor supervisor-parent validation follows reparses.
+    for parent in (destination.parent, *destination.parent.parents):
+        _deadline(deadline)
+        fd = _anchor(parent)
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISDIR(info.st_mode) or _identity(info)[:2] == identity:
+                raise ValueError("publication destination must be outside tested tree")
+            if parent == destination.parent:
+                stack.callback(os.close, fd)
+                fd = -1
+        finally:
+            if fd >= 0:
+                os.close(fd)
+
+
 def _publish(source: Path, destination: Path, budgets: OutputBudgets) -> PublishedBuild:
     deadline = time.monotonic() + budgets.seconds
-    source, destination = source.absolute(), destination.absolute()
-    if source.resolve() in (destination.resolve(), *destination.resolve().parents):
-        raise ValueError("publication destination must be outside tested tree")
+    source, destination = Path(os.path.abspath(source)), Path(os.path.abspath(destination))
     with contextlib.ExitStack() as stack:
         root = _anchor(source)
         stack.callback(os.close, root)
         if not stat.S_ISDIR(os.fstat(root).st_mode):
             raise ValueError("publication root must be a directory")
+        _placement(root, destination, stack, deadline)
         pinned = _inventory(root, source, budgets, stack, deadline)
         outputs = _Outputs()
         files = [item for item in pinned if item.names is None]
@@ -405,34 +423,36 @@ def _publish(source: Path, destination: Path, budgets: OutputBudgets) -> Publish
         destination.mkdir(mode=0o700)  # Exclusive fresh supervisor-owned output directory.
         try:
             published_root = _anchor(destination)
-            stack.callback(os.close, published_root)
-            for index, item in enumerate(files):
-                _deadline(deadline)
-                path = destination / str(index)
-                with path.open("x+b") as output:
-                    _copy(item, output, deadline)
-                    copied_identity = _identity(os.fstat(output.fileno()))
-                fd = _open(published_root, str(index))
-                try:
-                    # NT may finalize write timestamps when the writer closes. The
-                    # private output must retain device/inode/type/link count/byte size.
-                    if _identity(os.fstat(fd))[:5] != copied_identity[:5]:
-                        raise ValueError("published output identity changed")
-                    outputs.streams[item.relative] = os.fdopen(fd, "rb")
-                    fd = -1
-                finally:
-                    if fd >= 0:
-                        os.close(fd)
-                path.chmod(0o400)
-            _verify(pinned, budgets, deadline)
-            current = _anchor(source)
             try:
-                if _identity(os.fstat(current)) != pinned[0].identity:
-                    raise ValueError("publication root replaced")
+                for index, item in enumerate(files):
+                    _deadline(deadline)
+                    path = destination / str(index)
+                    with path.open("x+b") as output:
+                        _copy(item, output, deadline)
+                        copied_identity = _identity(os.fstat(output.fileno()))
+                    fd = _open(published_root, str(index))
+                    try:
+                        # NT may finalize write timestamps when the writer closes. The
+                        # private output must retain device/inode/type/link count/byte size.
+                        if _identity(os.fstat(fd))[:5] != copied_identity[:5]:
+                            raise ValueError("published output identity changed")
+                        outputs.streams[item.relative] = os.fdopen(fd, "rb")
+                        fd = -1
+                    finally:
+                        if fd >= 0:
+                            os.close(fd)
+                    path.chmod(0o400)
+                _verify(pinned, budgets, deadline)
+                current = _anchor(source)
+                try:
+                    if _identity(os.fstat(current)) != pinned[0].identity:
+                        raise ValueError("publication root replaced")
+                finally:
+                    os.close(current)
+                _deadline(deadline)
+                return build
             finally:
-                os.close(current)
-            _deadline(deadline)
-            return build
+                os.close(published_root)
         except BaseException:
             build.close()
             raise
