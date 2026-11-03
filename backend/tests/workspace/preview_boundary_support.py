@@ -5,6 +5,8 @@ import json
 import os
 import shutil
 import struct
+import sys
+import sysconfig
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -30,14 +32,18 @@ def prepared(directory: Path) -> Inputs:
     directory.mkdir(parents=True, exist_ok=True)
     for name in ("tree", "state", "scratch", "python/bin", "python/lib", "deps"):
         (directory / name).mkdir(parents=True, exist_ok=True)
-    shutil.copy2("/usr/bin/python3.12", directory / "python/bin/python3.12")
-    (directory / "python/bin/python").symlink_to("python3.12")
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    shutil.copy2(Path(sys.base_prefix) / "bin" / version, directory / "python/bin" / version)
+    (directory / "python/bin/python").symlink_to(version)
     shutil.copytree(
-        "/usr/lib/python3.12",
-        directory / "python/lib/python3.12",
+        sysconfig.get_path("stdlib"),
+        directory / "python/lib" / version,
         ignore=shutil.ignore_patterns("__pycache__", "config-*", "sitecustomize.py"),
         symlinks=True,
     )
+    # Standalone builds resolve libpython through $ORIGIN/../lib inside the boundary.
+    for library in Path(sysconfig.get_config_var("LIBDIR")).glob(f"lib{version}*.so*"):
+        shutil.copy2(library, directory / "python/lib" / library.name)
     (directory / "deps/verified.txt").write_text("temporary dependency fixture\n")
     mounts = [ReadOnlyMount(directory / "python", "/opt/python", "python", "")]
     mounts += [ReadOnlyMount(directory / "deps", "/opt/deps", "dependencies", "")]
