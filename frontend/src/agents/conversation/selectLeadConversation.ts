@@ -55,6 +55,8 @@ export function selectLeadConversation(state: State, leadId: string): LeadConver
       };
     }),
   );
+  for (const event of state.leadViews[leadId] ?? [])
+    entries.push({ kind: "lead-view", seq: event.seq, event });
   const profile = state.run?.models.find((model) => model.id === current.payload.model);
   const progress = leadProgress(statuses, replies);
   return {
