@@ -563,7 +563,7 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 
 **The Team or State Rule.** A hue identifies a team or a state (green passed or added, red failed, removed or destructive). Team = lead, else plan, else agent, through the shared team selector. Nothing else gets a hue: no brand color, accent or decorative gradient. Counters across teams are neutral.
 
-**The Never Alone Rule.** Every team hue comes with a team letter or agent label. An agent label is letter·n, where n is its plan subtask index plus one; a person-started lone agent uses its letter alone. Append " · plan k" only when labels collide across plans of one lead, where k is the plan's first-observed order within its lead. Every state color comes with a word, sign (`+`, `-`) or icon.
+**The Never Alone Rule.** Every team hue comes with a team letter or agent label. A lead's agents use letter·n with stable team-wide ordinals in first-observed plan/subtask order. Reserve waiting and ended siblings; later plans continue the sequence. Local subtask identifiers remain separate. Leadless plans retain local numbering, and a person-started lone agent uses its letter alone. Every state color comes with a word, sign (`+`, `-`) or icon.
 
 **The No Amber Rule.** There are no yellow or amber warnings. A warning is said in words with an
 icon, in neutral colors.
@@ -912,31 +912,36 @@ Static aggregate bundling and the phone Usage layout remain deferred. The Missin
 uses recorded-run context over a mocked available backend. At 390px the full IDE retains
 its narrow-window notice, intentionally differing from the phone feasibility sheets.
 
-### Lead plan actions — first slice built
+### Lead plan actions and progress
 
-Premises: main `6ab92e7`, applied to the moved code on `54dc64d`; approved sketch packet
-b-1101a item 3 (2026-11-01, 01:03:27 ART). Decisions lazily loads proposed plan pieces:
-numbered subtasks, dependency conditions and a derived first-wave explanation. Queue plan
-uses the displayed plan revision; Reject plan opens an optional labeled comment with Reject
-plan and Keep plan. Linked proposed plans move below decisions into Queued, waiting for slots
-and stop counting. Observed queued/blocked items offer Take out of the queue with their own
-revision; dispatching withholds those actions. Failed lead plans retain their quoted detail
-under Ended without running. Both labels use the Group type (600, 11.5px, 0.08em tracking,
-uppercase styling), with readable sentence case in the DOM. Replay reads these pieces with
-source-aware words and no mutation controls.
+One lazy plan card serves the lead thread in Chat and Oversight and the decisions inbox,
+using the winning plan revision at the displayed event prefix. The lead row stays intact.
+Queue plan uses that revision. Reject plan offers an optional saved comment and Keep plan.
+Queued/blocked items offer Take out of the queue with the queue revision. Pending attempts
+are shared across mounted copies; observed dispatch removes controls and the first-wave
+explanation. Replay and history suppress commands. Event arrivals never open or focus anything.
 
-Plan rows use 12px vertical / 22px horizontal padding; the piece begins 8px below its title,
-with a solid 1px border, 12px radius, card-to-card-end fill and top-highlight. Its header uses
-10px 16px 8px padding / 10px gaps, and subtask rows 7px 16px / 20px neutral circles / 12px gaps.
-Rows grow with wrapped text. Titles are Next 15px/600, tasks 14px/1.4, conditions 13px/1.3,
-Plan 15.5px/700, captions 13px; numbers/counts use Mono, piece counts 13.5px. The inbox headline
-is 20px/700/1.3 without a separate hero numeral. Actions wrap: 34px high, 8px radius/gaps,
-14px/600 and 14px horizontal padding. Comments are 34px, on inset; focus is 2px text, offset
-2px. Existing theme roles supply every color, including day mode; Queue uses text/page,
-hover text-hover; Reject pairs failed-text with its word and X. Failures remain neutral with X.
-The existing 880/608px focus panel, 56px rails, graph minimum and scrolling remain owned by
-the shell. Edit, lead composer/card lifecycle and post-dispatch Plan tracking remain pending;
-the reserved Plan focus tab is not implemented by this slice.
+The solid bordered plan piece keeps its header, queue pill, card fill and 12px radius.
+HTML rows group into dependency waves; SVG lines occupy a left gutter. Stable local #n
+identifiers name prerequisites, and visible agent labels come from shared team presentation.
+The shared key reads Agent works › Proposal tests › Approval › Combined tests, if main moved
+› Merged. Each row has a five-step rail, distinct glyphs, a text legend, accessible step
+names and an evidence-backed state word. Unknown facts remain explicit. Approval alone
+never means merged. Known equal main/base permits not needed; an observed combined suite
+wins. Terminal inference excludes the row's own merge and later main observations.
+
+Wave and inbox group labels use Group typography: 600/11.5px/0.08em, uppercase styling.
+Tasks use Next 14.5px/20px, conditions and rail words 13px; numbers/counts use Mono.
+Above six subtasks, rows use one line where the card is at least 680px wide. Phone Chat
+wraps tasks, key and metadata, placing the rail below the task. A scoped phone-width rule
+gives plan controls and evidence links 44px targets; desktop controls remain 34px.
+No sideways scrolling, canvas, pan or zoom is introduced. Every color uses a theme token;
+solid row nodes never borrow pending-change dashes. The dispatched count adds · N merged.
+
+Requested running plans appear in Running plans without becoming decisions or inflating
+pending counts. Queued, waiting for slots and Ended without running remain separate groups;
+terminal plans leave Running plans. The shell retains its graph, tabs and scroll ownership.
+Plan editing, locks, optional gates and the reserved Plan focus tab remain unimplemented.
 
 ### Settings tab
 
@@ -1027,7 +1032,7 @@ introduces no animation. Folded cards and opaque graph text plates mask straight
 Open frames retain their translucent body fill and stay below their rows during edge hover;
 straight lines can show through that fill.
 
-**Agent labels.** Hue means team; label means agent. Use the same label on graph work chips and markers, cards, Conversation, inbox, file presence and rails. Use letter·n for plan subtasks and the letter alone for a person-started lone agent. Append " · plan k" only when labels collide across plans of one lead, where k is the plan's first-observed order within its lead. Compact tiles and map chips show the short label with a separate "plan k" caption; the map's first line retains the state word. Labels are never inferred from runtime seats or palette families. For example, a plan’s second subtask is "Agent A·2"; colliding first subtasks are "Agent A·1 · plan 1" and "Agent A·1 · plan 2"; a person-started lone agent is "Agent A". No avatars, beads or mascots.
+**Agent labels.** Hue means team; label means agent. Use the same label on graph work chips and markers, cards, Conversation, inbox, file presence and rails. Lead-owned plans use stable team-wide letter·n ordinals in first-observed plan/subtask order, including reserved waiting and ended siblings. A later plan continues A·3, A·4 rather than restarting A·1. For example, "Agent A·2" keeps its label after a later plan starts. Revisions, delayed assignments and reused runtime seats retain identity. Local subtask numbers still identify dependencies. Leadless plans keep local numbering; a person-started lone agent uses its letter alone. Labels never derive from runtime seats or palette families. No avatars, beads or mascots.
 
 **Distance badges.** A 20px circle filled with text, the distance as a page-colored number, 12px,
 weight 700. Neutral: the cone is about the code, not an agent.

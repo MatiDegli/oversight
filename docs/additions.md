@@ -113,7 +113,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 8 | Merge by rules, follow main and Revert (package 1) | Partial — start capability `1824a46`, Revert route `69aaee8`, person preemption `a2aaa6a`, idle follow-main F5a `769d0c7`, protected-path authority `1b1ed44`; F5b, Settings and Revert UI delivered; F10 opens activation with fake-only HTTP/SSE evidence, recorded replay and three clean starts; every fresh run starts in Ask me | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
 | 9 | A change card with three states | Partial — producer `3786310`, witnesses `3068b81`, answer guards `2efd586`, projection `f4ab346`, mounted inbox/answers/grants `7c25429`, lead-plan display `bf9fb04`; rules-resolution rendering built, activation open; mode state folded, assessment/Revert retained in decisionEvents for selectors | Yes |
 | 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived totals `bf36052`, agent-hours `95e40e5`, dated prices `56b5f18`, GET /usage, team grouping and desktop aggregate Usage built; live period grouping remains | Yes — stored aggregates; event-derived totals need none |
-| 11 | One plan, server-computed zones and task queue (package 6) | Partial — standalone queue `c820fbf`, dependency contracts `bb9dc43`, plan service/routes and internal dependency dispatch `efd592f`, metered single-subtask generation `f907e41`; partition core `deb7148` remains unwired; lead-plan inbox display `bf9fb04` and Queue/Reject/Keep built; Edit and post-dispatch plan tracking remain | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
+| 11 | One plan, server-computed zones and task queue (package 6) | Partial — standalone queue `c820fbf`, dependency contracts `bb9dc43`, plan service/routes and internal dependency dispatch `efd592f`, metered single-subtask generation `f907e41`; partition core `deb7148` remains unwired; lead-plan inbox display `bf9fb04` and Queue/Reject/Keep and read-only post-dispatch tracking built; Edit remains | Yes — subtask dependencies and a relaxed plan validator for sequential/single-agent starts |
 | — | [Lead agent](#lead-agent) | Runtime on main `6818b3b` — lead routes and metered plan proposals; requests plans only, without starting agents or merging | No — lead routes and `started_by` reserved |
 | — | [Saved agent flows](#saved-agent-flows) | Queued — picker absent at `8b9b589`; after the lead, extends package 12 `c1c19c6` | No while filling task text; a distinct role or tool limits need maintainer review |
 | 12 | Examples before code | Partial — E1 selector and bounded examples call `1539ab2`, E3 human-confirmation ports and E4 criteria/check libraries built; E2 runtime admission and public wiring remain | Yes |
@@ -564,7 +564,7 @@ one pending decision per change (`eef7daa`). The inbox is mounted in
 `app/shell/FocusPanel.tsx`, counted in `app/TopBar.tsx`, and sends answers, grants and
 revocations (`7c25429`, `review/DecisionInbox.tsx`). Lead-plan rows landed in `bf9fb04`;
 `state/decisionLifecycle.ts:recordPlanEntries` retains each requested plan while proposed and
-`DecisionInbox` renders its text. Queue/Reject/Keep are built; Edit and post-dispatch plan tracking remain.
+`DecisionInbox` renders its text. Queue/Reject/Keep and read-only post-dispatch tracking are built; Edit remains.
 
 The inbox shipped with item 9; remaining live state wiring keeps the same item numbers, anchors
 and queue order. Visual follow-ups still require the maintainer’s shot review.
@@ -665,11 +665,11 @@ live (`backend/src/oversight/api/commands.py`). Queue routes are live, with the 
 FIFO dispatcher wired (`c820fbf`); plan queueing and dependency dispatch landed in `efd592f`
 (`runtime_plans.py:PlanService.dispatch_plan`, `changes/_plans.py:ready`). Lead-plan inbox display
 landed in `bf9fb04` (`state/decisionLifecycle.ts:recordPlanEntries`, `review/DecisionInbox.tsx`).
-Queue/Reject/Keep are built; Edit and post-dispatch plan tracking remain.
+Queue/Reject/Keep and read-only post-dispatch tracking are built; Edit remains.
 plan.updated is retained in decisionEvents for that projection,
 although `applyEvidenceEvent` has no separate plan/queue state fold. Finishing alone
-does not free a retained worktree's slot. Contracts 1.8.0 (`bb9dc43`, P1–P5) now allow one
-to six subtasks, validated dependencies and sequential/single-agent starts. The runtime service,
+does not free a retained worktree's slot. Contracts 1.16.0 allow nonempty plans without a subtask maximum, validated dependencies and
+sequential/single-agent starts. Six is a configurable runtime default, not a contract ceiling. The runtime service,
 rather than the schemas, starts and dispatches plans.
 A partition heuristic does not prove independence; speed claims wait for the split bench.
 
@@ -702,7 +702,8 @@ POST /leads/{id}/stop). It reads repository context and requests plans through
 `PlanService.create_and_propose`; it does not start agents, approve plans, review or merge.
 The person starts a proposed plan through plan routes; the server owns dispatch and zones.
 The inbox displays each requested plan (`bf9fb04`); Queue is wired to plan start, and Reject/Keep are built;
-Edit, post-dispatch plan tracking and partition completeness production remain item 11 work.
+Read-only post-dispatch tracking is built in the lead thread and Running plans inbox group;
+Edit and partition completeness production remain item 11 work.
 This is narrower than the
 earlier ambition to have the lead start agents for proof 2.
 
@@ -710,7 +711,7 @@ K2b adds the event-derived operational header, per-lead observed-revision Stop p
 terminal publication, noninteractive ended composer, observed cut captions, published-cap guards
 and backend-default-only New lead. Its fake-only browser fixtures include stopped and six-lead
 scenes; lifecycle/freshness notices and timeline treatment remain K2c, grouping/hues remain K3,
-and plan tracking is still pending. No backend, contract or generated schema changes.
+and read-only plan tracking is built. No backend, contract or generated schema changes.
 
 Reference views use the shipped contracts 1.18.0 and ordered readers: highlight, exact changed
 files, current measured behavior and moment cards now render in lead Chat. Successful-envelope

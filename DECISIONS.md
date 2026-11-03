@@ -4604,3 +4604,21 @@ default single-link requirement.
 
 Residual risk: a linked file can also change through its uv cache name. The token recheck after
 each read refuses a change observed during that read; it cannot prevent later cache writes.
+
+## 2026-11-03 — Team-wide agent ordinals and read-only plan progress
+
+The maintainer's November 3 approval supersedes the per-plan numbering and collision
+captions in “Team hue and agent label” and the former DESIGN label rules. Lead-owned plans
+use stable team-wide ordinals in first-observed plan/subtask order: later plans continue
+A·3, A·4. Waiting and ended siblings reserve their numbers. Revisions, delayed assignment
+and runtime seat reuse preserve identity. Local subtask indices, team hue, lead identity,
+leadless plans and standalone agents retain their existing meanings.
+
+The read-only flow renders inside the shared plan card in both lead-thread layouts and
+the inbox, including Running plans. Existing commands remain the only mutations; pending
+attempts are shared, dispatch removes controls, and replay/history suppress them. Main
+movement derives from accepted event-prefix observations and the assigned agent's base,
+without a wire field. Unknown remains unknown; equal known commits permit not needed,
+observed combined suites win, and terminal evidence excludes a change's own merge.
+Reason: the person can follow dependencies and merge evidence without opening another panel,
+and every agent keeps one unambiguous label across all of a lead's plans.
