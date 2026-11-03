@@ -72,3 +72,10 @@ One line per day, in Argentina time (ART).
   and removed duplicate ended copy.
 
 - 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls.
+  K2b size rationale: chatLeads.browser.test.ts (967 lines), chatLeads.browser.fixture.tsx
+  (589 lines) and lifecycleScene (97 lines) remain together because the six-lead scene table and
+  lifecycle proofs are inherently tabular. The fixture keeps valid event sequences beside their
+  scene definitions; the browser suite keeps Stop, cap, density and capture assertions together
+  so their shared lifecycle evidence can be reviewed in context. Composer also exceeds 80 lines:
+  its shared draft hooks and active/ended command surfaces stay together to preserve hook order
+  and make the terminal early return auditable. These size exceptions remain for reviewer judgment.
