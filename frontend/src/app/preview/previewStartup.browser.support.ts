@@ -30,6 +30,19 @@ export const hostileFixture = {
   build_log: "/runtime/build.log",
   reason: hostileText,
 };
+const multilingualText = "مرحبا עברית 漢字🙂 " + "x".repeat(32);
+export const multilingualFixture: PreviewStartupReport = {
+  version: 1,
+  argv: [[multilingualText, multilingualText]],
+  cwd: multilingualText,
+  reason: multilingualText,
+  dependencies: [multilingualText],
+  limits: multilingualText,
+  platform_residual: multilingualText,
+  build_log: multilingualText,
+  enable_hint: multilingualText,
+  agents_label: multilingualText,
+};
 export function carrierText(report: PreviewStartupReport) {
   return JSON.stringify(report).replace(
     /[<>&\u2028\u2029]/gu,
@@ -42,6 +55,7 @@ export const fixtureTexts = {
   invalid: "{}",
   oversized: carrierText({ ...startupFixture, reason: "x".repeat(1025) }),
   hostile: carrierText(hostileFixture),
+  multilingual: carrierText(multilingualFixture),
 };
 export type StartupScenario = keyof typeof fixtureTexts;
 export interface StartupSession {

@@ -5,6 +5,7 @@ import {
   fixtureTexts,
   hostileFixture,
   hostileText,
+  multilingualFixture,
   StartupBrowser,
   startupFixture,
   type StartupSession,
@@ -101,6 +102,59 @@ it("keeps the startup report frozen across Settings close, document edits and re
     await check(page.getByRole("region", { name: "Preview startup", exact: true })).toContainText(
       startupFixture.reason,
     );
+    await safe(session);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each([
+  [1280, 800],
+  [390, 844],
+])("keeps mixed-script values reachable at 200%% magnification at %i×%i", async (width, height) => {
+  const session = await support.open("multilingual");
+  const { page } = session;
+  try {
+    expect(new TextEncoder().encode(fixtureTexts.multilingual).byteLength).toBeLessThanOrEqual(
+      1024,
+    );
+    await page.getByRole("button", { name: "Maximize focus panel", exact: true }).click();
+    await page.setViewportSize({ width, height });
+    const panel = page.getByRole("region", { name: "Preview startup", exact: true });
+    await panel.evaluate((element) => {
+      // Magnify fixed-pixel theme type too; changing the root font size would leave it unchanged.
+      element.style.zoom = "2";
+    });
+    expect(await panel.locator("code.preview-startup-token").allTextContents()).toEqual(
+      multilingualFixture.argv[0],
+    );
+    const values = panel.locator(".preview-startup-row > dd");
+    for (const index of [2, 3, 5, 6, 7, 8, 9])
+      expect(await values.nth(index).textContent()).toBe(multilingualFixture.cwd);
+    expect(await panel.locator("ul > li").allTextContents()).toEqual(
+      multilingualFixture.dependencies,
+    );
+    const geometry = await panel.evaluate((element) => {
+      const frame = element.parentElement;
+      const end = element.querySelector(".preview-startup-row:last-child dd");
+      if (!frame || !end) throw new Error("Missing startup disclosure or scroll frame");
+      frame.scrollTop = frame.scrollHeight;
+      return {
+        overflow: Math.max(
+          frame.scrollWidth - frame.clientWidth,
+          element.scrollWidth - element.clientWidth,
+          ...[...element.querySelectorAll("dd, code, li")].map(
+            (node) => node.scrollWidth - node.clientWidth,
+          ),
+        ),
+        scrolled: frame.scrollTop,
+        end: end.getBoundingClientRect().bottom,
+        bottom: frame.getBoundingClientRect().bottom,
+      };
+    });
+    expect(geometry.overflow).toBeLessThanOrEqual(1);
+    expect(geometry.scrolled).toBeGreaterThan(0);
+    expect(geometry.end).toBeLessThanOrEqual(geometry.bottom);
     await safe(session);
   } finally {
     await page.close();
