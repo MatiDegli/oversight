@@ -423,7 +423,7 @@ session. Historical command capabilities are withheld. Highlights frame on click
 first graph mount without a panel, and prune missing IDs without changing the frame key.
 
 `show_view` is advertised and dispatched with the moved prompt version: baseline
-`agent-v1-9b54c5a17a31` and pack `agent-v1-084c4f11b6b2` (DECISIONS, November 3).
+`agent-v1-9d084b21af2c` and pack `agent-v1-3dc7d749888a` (DECISIONS, November 3).
 Remaining release gates are the separately authorized paid probe and prompt validation,
 a real recording and bundle replacement. Until those pass, the verified Oct 27 public
 recording remains bundled.
