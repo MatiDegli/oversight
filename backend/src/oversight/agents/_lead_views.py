@@ -14,6 +14,10 @@ class ViewRefusal(ValueError):
     """A sanitized, corrective refusal that emits no event."""
 
 
+class PreviewUnavailable(ViewRefusal):
+    """Server admission failed; never include its underlying diagnostic."""
+
+
 type References[T] = Annotated[list[T], Field(min_length=1, max_length=8)]
 
 
@@ -92,11 +96,14 @@ async def show_view(
     mask: Callable[[str], str],
     resolve: Callable[[LeadView], bool] | None,
     publish: Callable[[LeadView], Awaitable[None]] | None,
+    preview_available: Callable[[], bool] = lambda: False,
 ) -> str:
     """Resolve against the successful status snapshot before asking to publish."""
     if seq is None or resolve is None or publish is None:
         raise ViewRefusal("Call status successfully in this turn before requesting a view.")
     view = parse_view(arguments, agent_id, seq, mask)
+    if view.view.kind == "preview" and not preview_available():
+        raise PreviewUnavailable
     if not resolve(view):
         raise ViewRefusal(
             "References are unavailable at the observed status; call status and correct them."

@@ -56,6 +56,16 @@ async def test_committed_current_candidate_resolves_without_advertising_inventor
         assert projection.resolve(view.view) == ["agent-1"]
         assert store.view_resolver(store.last_seq)(view)
         assert not any("preview" in label for label, _ in projection.inventory())
+        assert [
+            (label, row)
+            for label, row in projection.inventory(include_previews=True)
+            if label == "eligible preview"
+        ] == [("eligible preview", {"agent_id": "agent-1"})]
+        assert "eligible preview data:" not in store.lead_status(include_views=True)[1]
+        assert (
+            "eligible preview data:"
+            in store.lead_status(include_views=True, include_previews=True)[1]
+        )
         published = await store.publish(view)
         assert published.seq == len(events) + 1
         envelope = store.committed_events()[-1]

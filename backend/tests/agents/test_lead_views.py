@@ -117,6 +117,7 @@ async def test_status_before_view_despite_wake_and_correct_after_refusal() -> No
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda v: v.view.kind == "moment",
+        preview_available=lambda: True,
         publish_view=publish,
     )
     tools.through_seq = 5
@@ -143,7 +144,10 @@ async def test_failed_status_invalidates_previous_eligibility() -> None:
 
     publish = AsyncMock()
     tools, _ = setup_tools(
-        status=lambda: (1, "status"), resolve_views=lambda _: lambda _: True, publish_view=publish
+        status=lambda: (1, "status"),
+        resolve_views=lambda _: lambda _: True,
+        preview_available=lambda: True,
+        publish_view=publish,
     )
     await tools.call("status", "{}")
     tools.status = overflow
@@ -164,7 +168,12 @@ async def test_status_inventory_overflow_fallback(fallback_fails: bool) -> None:
     if fallback_fails:
         fallback.side_effect = ValueError("private diagnostic")
     publish = AsyncMock()
-    tools, _ = setup_tools(status=overflow, status_without_views=fallback, publish_view=publish)
+    tools, _ = setup_tools(
+        status=overflow,
+        status_without_views=fallback,
+        preview_available=lambda: True,
+        publish_view=publish,
+    )
     tools.through_seq = 3
     outcome = await tools.call("status", "{}")
     fallback.assert_called_once_with()
@@ -226,7 +235,10 @@ async def test_status_view_finish_keeps_budgets_without_view_step(
 ) -> None:
     publish = AsyncMock()
     tools, _ = setup_tools(
-        status=lambda: (5, "status"), resolve_views=lambda _: lambda _: True, publish_view=publish
+        status=lambda: (5, "status"),
+        resolve_views=lambda _: lambda _: True,
+        preview_available=lambda: True,
+        publish_view=publish,
     )
     turns = [turn(call("status"))]
     if correct:
@@ -300,6 +312,7 @@ async def test_view_dispatch_preserves_per_turn_cut(accepted: bool, budget: str)
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda _: accepted,
+        preview_available=lambda: True,
         publish_view=publish,
     )
     model = scripted([turn(call("status")), turn(call("show_view", **VALID[3]))])
@@ -318,6 +331,7 @@ async def test_view_dispatch_preserves_repetition_brake(accepted: bool) -> None:
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda _: accepted,
+        preview_available=lambda: True,
         publish_view=publish,
     )
     model = scripted([turn(call("status")), turn(*[call("show_view", **VALID[3])] * 4)])
@@ -335,6 +349,7 @@ async def test_view_dispatch_preserves_consecutive_failure_brake() -> None:
     tools, _ = setup_tools(
         status=lambda: (5, "status"),
         resolve_views=lambda _: lambda _: False,
+        preview_available=lambda: True,
         publish_view=publish,
     )
     model = scripted(
@@ -353,7 +368,9 @@ async def test_view_dispatch_preserves_consecutive_failure_brake() -> None:
 
 def test_preview_identity_constraints_and_person_authority() -> None:
     schema = next(
-        item["function"] for item in LEAD_TOOL_SCHEMAS if item["function"]["name"] == "show_view"
+        cast(dict[str, Any], item["function"])
+        for item in LEAD_TOOL_SCHEMAS
+        if cast(dict[str, Any], item["function"])["name"] == "show_view"
     )
     props = schema["parameters"]["properties"]
     assert props["agent_id"] == props["agent_ids"]["items"]
@@ -372,3 +389,17 @@ def test_preview_identity_constraints_and_person_authority() -> None:
         "160-character limit",
     ):
         assert wording in LEAD_PROMPT
+
+
+@pytest.mark.anyio
+async def test_preview_availability_defaults_off_even_with_resolvable_reference() -> None:
+    publish = AsyncMock()
+    tools, _ = setup_tools(
+        status=lambda: (5, "status"), resolve_views=lambda _: lambda _: True, publish_view=publish
+    )
+    await tools.call("status", "{}")
+    result = await tools.call("show_view", json.dumps(VALID[-1]))
+    assert not result.ok and result.content == (
+        "Preview unavailable on this server. Call status again after availability changes."
+    )
+    publish.assert_not_awaited()
