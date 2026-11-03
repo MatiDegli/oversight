@@ -141,3 +141,8 @@ it("renders no ordinary-failure frame and hides only after dismissal", () => {
   expect(render({ status: fakeStatus("failed", "launch_failed") })).not.toContain("iframe");
   expect(render({ visible: false })).toBe("");
 });
+it("does not announce successful closure while Stop is pending", () => {
+  const html = render({ status: fakeStatus("stopping", "closed"), uncertain: true });
+  expect(html).toContain("Waiting for verified closure.");
+  expect(html).not.toContain("The preview was closed.");
+});

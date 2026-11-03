@@ -4375,3 +4375,11 @@ Tests/plugins may write outside runtime; child interpreters can escape the impor
 concurrent path-replacement races and inherited ACLs remain accepted residuals. No isolation,
 ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
+
+## 2026-11-02 — Live preview may open on finish when the person set it
+
+"Live preview may open on finish when the person set it" — the person's setting is the cause, so the
+panel still follows what the person does; focus and scroll never move; a review or a preview in use is never replaced.
+"Open preview when done" is off by default.
+
+Reason: the person's setting is the cause, so the panel still follows what the person does; focus and scroll never move; a review or a preview in use is never replaced. "Open preview when done" is off by default.

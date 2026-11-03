@@ -115,7 +115,11 @@ function PanelMessage({ view, label }: { view: PreviewView; label: string }) {
                   ? "Preview is ready"
                   : `${label} preview`}
             </h3>
-            {status?.reason && <p>{previewReasonCopy[status.reason]}</p>}
+            {status?.state === "stopping" ? (
+              <p>Waiting for verified closure.</p>
+            ) : (
+              status?.reason && <p>{previewReasonCopy[status.reason]}</p>
+            )}
             {!status?.reason && !view.uncertain && (
               <p>
                 {label === "Ready"
