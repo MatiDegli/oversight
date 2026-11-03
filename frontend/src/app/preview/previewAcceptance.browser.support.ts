@@ -134,7 +134,10 @@ class AcceptanceSupport {
       .toBe("ready");
     const frame = page.frameLocator("iframe");
     await check(frame.getByRole("heading", { name: "Candidate shop" })).toBeVisible();
-    await check(page.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
+    await check(page.locator("iframe")).toHaveAttribute(
+      "sandbox",
+      "allow-scripts allow-same-origin allow-forms",
+    );
     await check(page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
     return frame;
   }
