@@ -581,6 +581,8 @@ async def prepare_own_fixture(scratch: Path, *, layout: str = "packages/foo/src"
     (metadata / "direct_url.json").write_text(
         json.dumps({"url": source.as_uri(), "dir_info": {"editable": True}}), encoding="utf-8"
     )
+    # Associate this distribution with its path mapping for static package discovery.
+    (metadata / "RECORD").write_text("own_fixture.pth,,\n", encoding="utf-8")
     # Deliberately no top_level.txt: static discovery must use the translated root.
     script = scratch / "own-source-edit.json"
     script.write_text(

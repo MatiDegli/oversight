@@ -3,13 +3,14 @@
 import importlib
 import sys
 import tempfile
+from functools import wraps
 from pathlib import Path
 
 import pytest
 from live_helpers import live_settings
 
 from oversight import app
-from oversight.workspace import SuiteUnavailable, base_probe_checkout
+from oversight.workspace import SuiteUnavailable, base_probe_checkout, core
 
 from . import test_platform_windows as process
 
@@ -26,6 +27,34 @@ pytestmark = [
 def long_temp_dir() -> Path:
     """Keep paths short while expanding Windows 8.3 aliases before native validation."""
     return Path(tempfile.mkdtemp(prefix="ov-")).resolve()
+
+
+@pytest.fixture
+def readiness_errors(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, OSError]]:
+    """Retain readiness failures while letting production handle the same exception."""
+    errors: list[tuple[str, OSError]] = []
+    prepare = core.prepare_environment  # pyright: ignore[reportPrivateImportUsage]
+    probe = core.probe_environment  # pyright: ignore[reportPrivateImportUsage]
+
+    @wraps(prepare)
+    def record_prepare(*args, **kwargs):
+        try:
+            return prepare(*args, **kwargs)
+        except OSError as error:
+            errors.append(("prepare_environment", error))
+            raise
+
+    @wraps(probe)
+    async def record_probe(*args, **kwargs):
+        try:
+            return await probe(*args, **kwargs)
+        except OSError as error:
+            errors.append(("probe_environment", error))
+            raise
+
+    monkeypatch.setattr(core, "prepare_environment", record_prepare)
+    monkeypatch.setattr(core, "probe_environment", record_probe)
+    return errors
 
 
 async def assert_combined_failure_then_repair(workspace, fixture, agent):
@@ -63,7 +92,7 @@ async def assert_combined_failure_then_repair(workspace, fixture, agent):
 
 
 @pytest.mark.parametrize("layout", ["packages/foo/src", "backend/src"])
-async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout):
+async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout, readiness_errors):
     tmp_path = long_temp_dir()
     fixture = await driver.prepare_own_fixture(tmp_path, layout=layout)
     before = {
@@ -83,7 +112,10 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout):
     )  # injected demo_python must never be used
     try:
         await live.startup()
-        assert live._environment_unavailable is None
+        assert live._environment_unavailable is None, [
+            f"{call}: {type(error).__name__}: {error} (context: {error.__context__!r})"
+            for call, error in readiness_errors
+        ]
         assert not any(tmp_path.rglob("FILTER_SENTINEL"))
         assert (live.workspace.main.root / "crlf.py").read_bytes() == b"line = 1\r\n"
         (live.workspace.main.root / "crlf.py").write_bytes(b"line = 1\r\n")
