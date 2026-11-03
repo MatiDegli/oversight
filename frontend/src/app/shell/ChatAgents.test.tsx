@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import { FilesProvider } from "../FilesContext";
 import { WhereTheyWork } from "./WhereTheyWork";
 import { event } from "../chatAgents.fixture";
+import { AgentsRail } from "./Agents";
 import { ChatAgents } from "./ChatAgents";
 import { ChatAgentsFrame } from "./ChatShell";
 import { fold, scenario } from "../chatAgents.fixture";
@@ -96,3 +97,20 @@ it("exposes phone work chips with explicit file targets and graph-independent ob
   expect(openFile).not.toHaveBeenCalled();
 });
 
+it("keeps eleven folded origins and lamps inside nonshrinking tiles", () => {
+  const state = fold([
+    ...scenario("working"),
+    ...Array.from({ length: 9 }, (_, i) =>
+      event("agent.status", {
+        ...Object.values(fold(scenario("working")).agents)[0]!,
+        agent_id: `extra-${String(i)}`,
+        change_id: `extra-${String(i)}`,
+      }),
+    ),
+  ]);
+  const html = renderToStaticMarkup(<AgentsRail state={state} />);
+  expect(html.match(/data-agent-origin=/g)).toHaveLength(11);
+  expect(html.match(/agents-rail-tile/g)).toHaveLength(11);
+  expect(html.match(/agents-rail-lamp absolute top-0 right-0/g)).toHaveLength(11);
+  expect(html).not.toContain("-top-1");
+});

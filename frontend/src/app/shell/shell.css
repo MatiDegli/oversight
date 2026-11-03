@@ -284,3 +284,21 @@
 .focus-body [aria-label="Decision"] > [role="status"]:empty {
   display: none;
 }
+
+.agents-rail {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+.agents-rail-tile {
+  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
+  padding-inline: 2px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.agents-rail-tile > span:not([data-agent-origin]) {
+  max-width: 100%;
+}
