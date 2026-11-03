@@ -31,12 +31,16 @@ describe("lead thread compatibility", () => {
         const after = applyEvent(before, event);
         expect(after).toEqual({
           ...before,
+          eventFacts: {
+            ...before.eventFacts,
+            [event.seq]: { type: event.type, ts, agentId: event.payload.agent_id },
+          },
           lastSeq: event.seq,
           clock: ts,
           leadReplies: { [event.payload.agent_id]: [event] },
         });
         for (const key of Object.keys(before) as (keyof typeof before)[]) {
-          if (!["lastSeq", "clock", "leadReplies"].includes(key))
+          if (!["lastSeq", "clock", "leadReplies", "eventFacts"].includes(key))
             expect(after[key]).toBe(before[key]);
         }
         expect(applyEvent(after, event)).toEqual({ ...after, gap: true });
@@ -73,6 +77,10 @@ describe("lead thread compatibility", () => {
     };
     expect(applyEvent(before, event)).toEqual({
       ...before,
+      eventFacts: {
+        ...before.eventFacts,
+        [event.seq]: { type: event.type, ts, agentId: event.payload.agent_id },
+      },
       lastSeq: event.seq,
       clock: ts,
       decisionEvents: [...before.decisionEvents, event],

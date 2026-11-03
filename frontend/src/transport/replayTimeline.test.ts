@@ -41,3 +41,9 @@ describe("replay timeline", () => {
     expect(() => replayPrefix(broken, replayOffsets(broken), Infinity)).toThrow(/graph version/);
   });
 });
+
+it("uses an inclusive sequence ceiling when all timestamps are equal", () => {
+  const equal = events.slice(0, 6).map((event) => ({ ...event, ts: required(events[0]).ts }));
+  expect(replayPrefix(equal, replayOffsets(equal), 0, 3).lastSeq).toBe(3);
+  expect(replayPrefix(equal, replayOffsets(equal), 0).lastSeq).toBe(6);
+});

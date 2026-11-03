@@ -61,7 +61,7 @@ export function replayMarks(
 }
 
 /** Close through navigation's history rules, without opening or activating a new subject. */
-export function reconcileReplayView(view: View, state: State): View {
+export function reconcileReplayView(view: View, state: State, chatState = state): View {
   const nodes = new Set(
     [
       ...(state.graph?.nodes ?? []),
@@ -72,7 +72,14 @@ export function reconcileReplayView(view: View, state: State): View {
   const valid = (tab: Pick<FocusTab, "review" | "diff" | "conversation" | "file">) => {
     if (tab.review && !state.changes[tab.review]?.proposal) return false;
     if (tab.diff && !state.changes[tab.diff.changeId]?.files[tab.diff.path]) return false;
-    if (tab.conversation && !state.agents[tab.conversation]) return false;
+    if (
+      tab.conversation &&
+      !chatState.agents[tab.conversation] &&
+      !chatState.decisionEvents.some(
+        (event) => event.type === "lead.status" && event.payload.agent_id === tab.conversation,
+      )
+    )
+      return false;
     if (tab.file) {
       if (tab.file.agentId && !state.agents[tab.file.agentId]) return false;
       const path = tab.file.path;
@@ -93,6 +100,7 @@ export function reconcileReplayView(view: View, state: State): View {
   if (!view.tabs && !valid(view)) next = { ...next, review: null, diff: null, file: null };
   return {
     ...next,
+    referenceHighlight: undefined,
     selected: hasNode(next.selected) ? next.selected : null,
     tabs: next.tabs?.map((tab) => ({
       ...tab,

@@ -12,6 +12,7 @@ export interface ChatAgentSelection {
   onOpenConversation?: (agentId: string) => void;
 }
 export interface ChatStartActions {
+  readOnly?: boolean;
   leadDraft?: boolean;
   onNewTask?: () => void;
   onNewLead?: () => void;
@@ -27,6 +28,7 @@ export function ChatAgentsFrame({
   onNewTask,
   onNewLead,
   leadDraft,
+  readOnly,
   ...selection
 }: ChatAgentsFrameProps) {
   const count = slotUsage(state);
@@ -44,15 +46,15 @@ export function ChatAgentsFrame({
           </span>
         )}
         <div className="chat-start-actions">
-          <button type="button" className="chat-new-task" onClick={onNewTask}>
+          <button type="button" className="chat-new-task" disabled={readOnly} onClick={onNewTask}>
             <Plus size={15} aria-hidden="true" />
             New task
           </button>
           <button
             type="button"
-            aria-disabled={leadCapacity(state).atCap}
+            aria-disabled={readOnly || leadCapacity(state).atCap}
             onClick={() => {
-              if (!leadCapacity(state).atCap) onNewLead?.();
+              if (!readOnly && !leadCapacity(state).atCap) onNewLead?.();
             }}
           >
             <GitFork size={15} aria-hidden="true" />
@@ -89,6 +91,7 @@ export function ChatShell({
   onNewTask,
   onNewLead,
   leadDraft,
+  readOnly,
   ...selection
 }: ChatAgentSelection &
   ChatStartActions & {
@@ -109,6 +112,7 @@ export function ChatShell({
           onNewTask={onNewTask}
           onNewLead={onNewLead}
           leadDraft={leadDraft}
+          readOnly={readOnly}
           {...selection}
         />
       )}
@@ -123,7 +127,7 @@ export function ChatShell({
   );
 }
 
-export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActions) {
+export function ChatEmpty({ onNewLead, readOnly, ...props }: TaskBoxProps & ChatStartActions) {
   const { state } = props;
   return (
     <div className="chat-empty">
@@ -139,9 +143,9 @@ export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActio
           </p>
           <button
             type="button"
-            aria-disabled={leadCapacity(state).atCap}
+            aria-disabled={readOnly || leadCapacity(state).atCap}
             onClick={() => {
-              if (!leadCapacity(state).atCap) onNewLead?.();
+              if (!readOnly && !leadCapacity(state).atCap) onNewLead?.();
             }}
           >
             <GitFork size={15} aria-hidden="true" />

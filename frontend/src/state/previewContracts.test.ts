@@ -44,7 +44,7 @@ describe("dormant preview contract readers", () => {
   it.each([0, 1, 6, 15])("resolves nothing at prefix %i", (count) => {
     const prefix = events.slice(0, count);
     const state = prefix.reduce(applyEvent, createInitialState());
-    expect(resolveViewReferences(state, { ...request, through_seq: count }, prefix)).toEqual([]);
+    expect(resolveViewReferences(state, { ...request, through_seq: count })).toEqual([]);
   });
 
   it("registers preview.status and changes only sequence, gap and clock bookkeeping", () => {
@@ -57,7 +57,7 @@ describe("dormant preview contract readers", () => {
       if (key !== "lastSeq" && key !== "clock" && key !== "gap")
         expect(after[key as keyof typeof after]).toBe(before[key as keyof typeof before]);
     }
-    expect(resolveViewReferences(after, request, [...events, status])).toEqual([]);
+    expect(resolveViewReferences(after, request)).toEqual([]);
     expect(applyEvent(before, { ...status, seq: status.seq + 1 }).gap).toBe(true);
     expect(applyEvent(createInitialState(), { ...status, seq: 1 }).gap).toBe(true);
   });
@@ -87,9 +87,7 @@ describe("dormant preview contract readers", () => {
           expect(replayStore.getState().state).toEqual(
             displayed.reduce(applyEvent, createInitialState()),
           );
-          expect(resolveViewReferences(replayStore.getState().state, request, displayed)).toEqual(
-            [],
-          );
+          expect(resolveViewReferences(replayStore.getState().state, request)).toEqual([]);
         } finally {
           replay.stop();
         }
