@@ -4375,3 +4375,31 @@ Tests/plugins may write outside runtime; child interpreters can escape the impor
 concurrent path-replacement races and inherited ACLs remain accepted residuals. No isolation,
 ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
+
+## 2026-11-03 — Dormant preview uses the shared Git lease and durable ownership
+
+Person-owned preview infrastructure uses Linux isolation C and an external trusted supervisor and
+adapter, without product-agent shell/tools, contract changes or new routes. The eight internal
+workspace facade names compile against current contracts 1.17.0. Production opening stays disabled,
+including when explicit trusted startup paths, ports, origins and limits are configured.
+
+Reason: endpoint guards cannot cover every server Git spawn or a ready Request changes without Git.
+The task-reentrant shared Git lease is the universal exclusion, with verified namespace death and
+existing metadata snapshot restitution before any waiting Git. It takes no additional tree lock
+beneath the lease; candidate comparison uses its proper lock afterwards and pending evidence cannot
+merge. Person, rules and standing-grant approval keep their final transaction guards and share the
+contamination refusal. A failed drain retains runtime ownership and blocks all Git/Approve until
+restart. Registered process births and namespace identities, persisted before execution release,
+permit narrow pidfd reclamation before normal orphan refusal and reset; unknown processes/listeners
+never authorize a kill. Changed recovered worktrees retain quarantine rather than being reset.
+
+Interruption cost: any agent's Git activity ends the preview with `mutation`, followed by metadata
+restitution and candidate comparison. One runtime has one owner; selecting another agent requires
+authenticated Stop and verified termination before a fresh Start. No tree/Git lock lasts for the
+application's lifetime. Lease renewal carries no lifecycle event. Shutdown keeps the committed event
+writer open through the terminal sink and drains immediately before manager close.
+
+Fake tests establish ordering and refusal only. Real host/browser GET/form POST through the inherited
+listener, fresh-connection refusal, setsid teardown and crash acceptance belong to Front F. C retains
+filesystem/secret/response risks, and the inherited address-space cap is per process rather than an
+aggregate fork cap. The dormant outcome grants neither arbitrary-code containment nor public opening.
