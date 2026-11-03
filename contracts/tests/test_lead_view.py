@@ -8,7 +8,7 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from oversight_contracts.events import ServerEvent
-from oversight_contracts.views import LeadView, ViewPath
+from oversight_contracts.views import LeadView, PreviewView, ViewPath
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = json.loads((ROOT / "fixtures/contracts/views-1.18.json").read_text())
@@ -103,3 +103,21 @@ def test_generated_schema_retains_literal_descriptions() -> None:
         == "One committed event; navigation is replay-only."
     )
     assert definitions["LeadViewEvent"]["description"] == "Envelope for one committed lead view."
+
+
+def test_preview_names_target_separately_from_requesting_lead() -> None:
+    view = LeadView(
+        agent_id="agent-9",
+        through_seq=15,
+        view=PreviewView(kind="preview", agent_id="agent-1"),
+    )
+    assert view.agent_id == "agent-9"
+    assert isinstance(view.view, PreviewView)
+    assert view.view.agent_id == "agent-1"
+    assert LeadView.model_validate_json(view.model_dump_json()) == view
+    assert list(view.view.model_dump()) == ["kind", "agent_id"]
+    for extra in ("change_id", "profile_version"):
+        with pytest.raises(ValidationError):
+            PreviewView.model_validate(view.view.model_dump() | {extra: "chosen"})
+    with pytest.raises(ValidationError):
+        PreviewView(kind="preview", agent_id="agent-0")

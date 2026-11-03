@@ -4425,3 +4425,23 @@ Residual risk: a filter driver planted in the pinned checkout's config needs loc
 and stays out of scope. The existing concurrent source-replacement races remain accepted.
 
 2026-11-03 — Views with references in the lead’s Chat thread. Following explicit maintainer contract/tool approval, PR2 advertises show_view over PR1’s contracts 1.18.0. One closed tool appends validated references; state supplies every displayed fact. Cards re-resolve at the displayed state; missing references are omitted, and an all-missing card retains its caption and explanatory line. Only a person’s click changes graph scope or historical position. Moment rewind is replay-only; Chat survives it and Back restores the pre-click position, paused. This slice precedes Tauri and supersedes the no-graph-work restriction for this feature only. The closed lead tool table is graph, list_files, read_file, status, queue, request_plan, show_view, finish, superseding the lists in the 2026-10-31 lead-limits and 2026-11-01 thread decisions. PR1 leaves prompt_version unchanged; PR2 moves baseline agent-v1-4a2fa60c5ec6 to agent-v1-9b54c5a17a31 and pack agent-v1-6d75a680fc65 to agent-v1-084c4f11b6b2. Configured variants are recomputed. No paid comparison crosses this prompt change.
+
+## 2026-11-03 — Dormant preview references and person-owned preview lifecycle
+
+Following maintainer approval of this exact diff, contracts 1.19.0 extends LeadViewKind
+with PreviewView, whose only reference is the target agent. The server derives the
+agent's current change. Preview ships as a reader plus strict server validation;
+preview remains absent from the advertised show_view enum, lead prompt and
+preview-specific status inventory. This does not amend gen-ui's approved tool table,
+prompt_version or probe scope. Model preview suggestions require a later separately
+authorized amendment and matching probe.
+
+The person-driven API creates a preview and returns an unguessable lease token.
+Renewal and stop require that token. preview.status records lifecycle transitions
+without a token, URL or application output; live GET supplies the current frame URL.
+Replay never starts an app or connects to historical localhost. This supersedes the
+no-new-events/contracts restriction for this feature only. Contract order remains
+1.18.0, 1.19.0, then 1.20.0 for merge rehearsal.
+
+Reason: person-driven preview infrastructure can ship without disturbing gen-ui's
+locked model-facing scope, prompt pins, probe or recording.

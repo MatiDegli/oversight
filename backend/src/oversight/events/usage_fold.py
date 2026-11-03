@@ -177,6 +177,7 @@ def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
                 | "lead.view"
                 | "grant.created"
                 | "grant.revoked"
+                | "preview.status"
             ):
                 pass  # These events consume seqs but provide no accounting observations.
             case _:

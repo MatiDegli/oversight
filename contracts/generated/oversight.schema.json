@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.18.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.19.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -3988,7 +3988,8 @@
           "behavior": "#/$defs/BehaviorView",
           "files": "#/$defs/FilesView",
           "highlight": "#/$defs/HighlightView",
-          "moment": "#/$defs/MomentView"
+          "moment": "#/$defs/MomentView",
+          "preview": "#/$defs/PreviewView"
         },
         "propertyName": "kind"
       },
@@ -4004,6 +4005,9 @@
         },
         {
           "$ref": "#/$defs/MomentView"
+        },
+        {
+          "$ref": "#/$defs/PreviewView"
         }
       ]
     },
@@ -4998,6 +5002,204 @@
         "dynamic_dispatch"
       ],
       "type": "string"
+    },
+    "PreviewCreated": {
+      "additionalProperties": false,
+      "description": "202 from POST /previews; execution has not yet become ready.",
+      "properties": {
+        "preview_id": {
+          "$ref": "#/$defs/PreviewId"
+        },
+        "lease_token": {
+          "$ref": "#/$defs/PreviewLeaseToken"
+        }
+      },
+      "required": [
+        "preview_id",
+        "lease_token"
+      ],
+      "title": "PreviewCreated",
+      "type": "object"
+    },
+    "PreviewDetails": {
+      "additionalProperties": false,
+      "description": "200 from GET /previews/{id}; live runtime information only.",
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/PreviewStatus"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NonEmptyText"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Server-built loopback frame URL only while ready; otherwise null."
+        }
+      },
+      "required": [
+        "status",
+        "url"
+      ],
+      "title": "PreviewDetails",
+      "type": "object"
+    },
+    "PreviewId": {
+      "pattern": "^preview-[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "PreviewLeaseToken": {
+      "pattern": "^[A-Za-z0-9_-]{43}$",
+      "type": "string"
+    },
+    "PreviewReason": {
+      "enum": [
+        "closed",
+        "lease_expired",
+        "lifetime_expired",
+        "mutation",
+        "shutdown",
+        "app_exited",
+        "readiness_timeout",
+        "launch_failed",
+        "isolation_unavailable",
+        "memory_limit",
+        "cleanup_unverified",
+        "worktree_changed",
+        "profile_disabled"
+      ],
+      "type": "string"
+    },
+    "PreviewState": {
+      "enum": [
+        "starting",
+        "ready",
+        "stopping",
+        "stopped",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "PreviewStatus": {
+      "additionalProperties": false,
+      "description": "Public lifecycle facts; also the lease and stop response.",
+      "properties": {
+        "preview_id": {
+          "$ref": "#/$defs/PreviewId"
+        },
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "change_id": {
+          "$ref": "#/$defs/ChangeId"
+        },
+        "revision": {
+          "description": "Candidate revision pinned at launch.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        },
+        "state": {
+          "$ref": "#/$defs/PreviewState"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreviewReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Public cause; null until a stopping or failure cause exists."
+        }
+      },
+      "required": [
+        "preview_id",
+        "run_id",
+        "agent_id",
+        "change_id",
+        "revision",
+        "head_commit",
+        "state",
+        "reason"
+      ],
+      "title": "PreviewStatus",
+      "type": "object"
+    },
+    "PreviewStatusEvent": {
+      "additionalProperties": false,
+      "description": "Envelope for a public preview lifecycle transition.",
+      "properties": {
+        "seq": {
+          "description": "From 1, +1 per event within a run, no gaps; assigned by the single writer.",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "ts": {
+          "$ref": "#/$defs/Timestamp"
+        },
+        "type": {
+          "const": "preview.status",
+          "description": "Event discriminator.",
+          "type": "string"
+        },
+        "payload": {
+          "$ref": "#/$defs/PreviewStatus"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "type",
+        "payload"
+      ],
+      "title": "PreviewStatusEvent",
+      "type": "object"
+    },
+    "PreviewTokenRequest": {
+      "additionalProperties": false,
+      "description": "Required body for POST /previews/{id}/lease and /stop.",
+      "properties": {
+        "lease_token": {
+          "$ref": "#/$defs/PreviewLeaseToken"
+        }
+      },
+      "required": [
+        "lease_token"
+      ],
+      "title": "PreviewTokenRequest",
+      "type": "object"
+    },
+    "PreviewView": {
+      "additionalProperties": false,
+      "description": "A dormant reference to an agent's current preview candidate.",
+      "properties": {
+        "kind": {
+          "const": "preview",
+          "description": "View discriminator.",
+          "type": "string"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        }
+      },
+      "required": [
+        "kind",
+        "agent_id"
+      ],
+      "title": "PreviewView",
+      "type": "object"
     },
     "QueueRevision": {
       "additionalProperties": false,
@@ -6196,6 +6398,7 @@
           "merge_mode.changed": "#/$defs/MergeModeChangedEvent",
           "model.attempt_failed": "#/$defs/ModelAttemptFailedEvent",
           "plan.updated": "#/$defs/PlanUpdatedEvent",
+          "preview.status": "#/$defs/PreviewStatusEvent",
           "queue.updated": "#/$defs/QueueUpdatedEvent",
           "revert.resolved": "#/$defs/RevertResolvedEvent",
           "run.started": "#/$defs/RunStartedEvent",
@@ -6282,6 +6485,9 @@
         },
         {
           "$ref": "#/$defs/GrantRevokedEvent"
+        },
+        {
+          "$ref": "#/$defs/PreviewStatusEvent"
         }
       ]
     },
@@ -6547,6 +6753,34 @@
         "task"
       ],
       "title": "StartLead",
+      "type": "object"
+    },
+    "StartPreview": {
+      "additionalProperties": false,
+      "description": "POST /previews: start the observed agent candidate.",
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/RunId"
+        },
+        "agent_id": {
+          "$ref": "#/$defs/AgentId"
+        },
+        "revision": {
+          "description": "Observed proposed revision.",
+          "exclusiveMinimum": 0,
+          "type": "integer"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/NonEmptyText"
+        }
+      },
+      "required": [
+        "run_id",
+        "agent_id",
+        "revision",
+        "head_commit"
+      ],
+      "title": "StartPreview",
       "type": "object"
     },
     "StopLead": {
