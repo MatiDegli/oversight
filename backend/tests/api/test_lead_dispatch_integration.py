@@ -110,6 +110,11 @@ async def test_two_large_lead_plans_dispatch_dependencies_through_shared_seats(
             assert "already requested 1 plans" in str(client.requests)
             assert label + " ready" in str(client.requests[0])
             assert other + " ready" not in str(client.requests[0])
+        # Dispatch reserves both seats before launching them sequentially. Wait for actual
+        # owners under the enclosing timeout so a pending launch cannot change this snapshot.
+        await s.until(
+            lambda _: all(holder not in {None, "starting"} for holder in s.live._slots.values())
+        )
         slots = dict(s.live._slots)
         stopped = s.live.leads.leads["agent-1"]
         assert (
