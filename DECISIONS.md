@@ -4404,3 +4404,22 @@ Fake tests establish ordering and refusal only. Real host/browser GET/form POST 
 listener, fresh-connection refusal, setsid teardown and crash acceptance belong to Front F. C retains
 filesystem/secret/response risks, and the inherited address-space cap is per process rather than an
 aggregate fork cap. The dormant outcome grants neither arbitrary-code containment nor public opening.
+## 2026-11-03 — Refuse source Git config file indirection before inspection
+
+Approved by the maintainer on November 2, 2026 at 22:40 ART (2026-11-03T01:40Z), including
+the behavior change that these repositories are refused. Before the first repository Git query,
+native own-source inventory and pinned-profile validation list `.git/config` and, when present,
+`.git/config.worktree` through `git config --file ... --no-includes --null --list`, outside the
+source checkout, with the caller's runner, environment and timeout. Missing configs are allowed;
+failed, timed-out, truncated or malformed listings refuse inspection. Refusals name only the
+config file and key, never its value.
+
+Refuse `include.path`, `includeIf.*.path` and absolute, UNC or drive-prefixed
+`core.excludesFile` values: source inspection must not follow repository-configured arbitrary
+files, especially UNC paths that can initiate Windows SMB authentication. Ordinary core, remote
+and branch settings and relative excludes files remain accepted. Pinned `rev-parse` and `status`
+also disable fsmonitor and hooks without overriding checkout line-ending or symlink settings.
+Fresh runtime repositories still use `git init` and never inherit the original config or hooks.
+
+Residual risk: a filter driver planted in the pinned checkout's config needs local write access
+and stays out of scope. The existing concurrent source-replacement races remain accepted.
