@@ -401,15 +401,30 @@ def _placement(root: int, destination: Path, stack: contextlib.ExitStack, deadli
                 os.close(fd)
 
 
-def _publish(source: Path, destination: Path, budgets: OutputBudgets) -> PublishedBuild:
+def _publish(
+    source: Path, destination: Path, tested_tree: Path, budgets: OutputBudgets
+) -> PublishedBuild:
     deadline = time.monotonic() + budgets.seconds
     source, destination = Path(os.path.abspath(source)), Path(os.path.abspath(destination))
+    tested_tree = Path(os.path.abspath(tested_tree))
     with contextlib.ExitStack() as stack:
-        root = _anchor(source)
-        stack.callback(os.close, root)
+        tested = _anchor(tested_tree)
+        stack.callback(os.close, tested)
+        if not stat.S_ISDIR(os.fstat(tested).st_mode):
+            raise ValueError("tested tree must be a directory")
+        root = tested
+        if source != tested_tree:
+            root = (
+                _open(tested, str(source.relative_to(tested_tree)))
+                if tested_tree in source.parents
+                else _anchor(source)
+            )
+            stack.callback(os.close, root)
         if not stat.S_ISDIR(os.fstat(root).st_mode):
             raise ValueError("publication root must be a directory")
         _placement(root, destination, stack, deadline)
+        if root != tested:
+            _placement(tested, destination, stack, deadline)
         pinned = _inventory(root, source, budgets, stack, deadline)
         outputs = _Outputs()
         files = [item for item in pinned if item.names is None]
@@ -462,14 +477,23 @@ DEFAULT_OUTPUT_BUDGETS = OutputBudgets()
 
 
 async def publish_build(
-    source: Path, destination: Path, *, budgets: OutputBudgets = DEFAULT_OUTPUT_BUDGETS
+    source: Path,
+    destination: Path,
+    *,
+    tested_tree: Path,
+    budgets: OutputBudgets = DEFAULT_OUTPUT_BUDGETS,
 ) -> PublishedBuild:
-    """Caller transfers ownership of returned handles; cancellation closes eventual output.
+    """Publish outside the explicit tested tree and untrusted output root.
+
+    The supervisor supplies the actual T, including when output lives in child state.
+    Caller transfers ownership of returned handles; cancellation closes eventual output.
 
     File IO runs off the event loop. Cancellation waits for the bounded copy worker before
     returning, so no unpublished output or descriptors can outlive this operation.
     """
-    task = asyncio.create_task(asyncio.to_thread(_publish, source, destination, budgets))
+    task = asyncio.create_task(
+        asyncio.to_thread(_publish, source, destination, tested_tree, budgets)
+    )
     try:
         return await asyncio.shield(task)
     except asyncio.CancelledError:

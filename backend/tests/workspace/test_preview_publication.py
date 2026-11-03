@@ -7,9 +7,16 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from oversight.workspace.preview_publication import OutputBudgets, publish_build, request_path
+from oversight.workspace.preview_publication import OutputBudgets, request_path
+from oversight.workspace.preview_publication import publish_build as _publish_build
 
 pytestmark = pytest.mark.anyio
+
+
+async def publish_build(source, destination, *, budgets=None):
+    if budgets is None:
+        return await _publish_build(source, destination, tested_tree=source)
+    return await _publish_build(source, destination, tested_tree=source, budgets=budgets)
 
 
 async def test_publication_pinned_handles_and_swaps(tmp_path):
@@ -157,7 +164,7 @@ async def test_publication_pinned_handles_and_swaps_during_copy(tmp_path, monkey
 
     monkeypatch.setattr(publication, "_copy", racing_copy)
     with pytest.raises((OSError, ValueError)):
-        await publication.publish_build(source, tmp_path / "published")
+        await publication.publish_build(source, tmp_path / "published", tested_tree=source)
     assert not (tmp_path / "published").exists()
 
 
@@ -490,3 +497,25 @@ async def test_publication_closes_directory_before_failed_cleanup(tmp_path, monk
     with pytest.raises(OSError, match="injected copy failure"):
         await publish_build(source, destination)
     assert handles and not destination.exists()
+
+
+async def test_publication_destination_outside_entire_tested_tree(tmp_path):
+    tree = tmp_path / "tree"
+    output = tree / "dist"
+    output.mkdir(parents=True)
+    (output / "index.html").write_text("build")
+    with pytest.raises(ValueError, match="outside tested tree"):
+        await _publish_build(output, tree / "published", tested_tree=tree)
+    verified = await _publish_build(output, tmp_path / "published", tested_tree=tree)
+    try:
+        assert verified.read("index.html") == b"build"
+    finally:
+        verified.close()
+    child_output = tmp_path / "child-state"
+    child_output.mkdir()
+    (child_output / "index.html").write_text("build")
+    verified = await _publish_build(child_output, tmp_path / "published", tested_tree=tree)
+    try:
+        assert verified.read("index.html") == b"build"
+    finally:
+        verified.close()
