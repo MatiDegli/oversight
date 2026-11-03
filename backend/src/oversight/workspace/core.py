@@ -358,9 +358,13 @@ class Workspace:
     @asynccontextmanager
     async def mutation(self, tree: Tree) -> AsyncGenerator[None]:
         """Hold the shared admission through a non-Git effect, under the caller's tree lock."""
+        if self._cleanup_unverified:
+            self.integrity.before_git()
+        if self.previews is None or not self.previews.has_owner:
+            yield
+            return
         async with self.git_lease():
-            if self.previews is not None:
-                await self.previews.barrier.compare(tree)
+            await self.previews.barrier.compare(tree)
             yield
 
     async def drain_previews(self, tree: Tree) -> None:

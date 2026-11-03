@@ -15,6 +15,45 @@ from .preview_fakes import FakeProcess, harness, profile
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize("ending", ["closed", "mutation", "lease_expired"])
+async def test_authenticated_stop_retries_return_final_record_without_drain(
+    workspace, monkeypatch, ending
+):
+    from unittest.mock import AsyncMock
+
+    h = await harness(workspace)
+    created = await h.start()
+    if ending == "closed":
+        final = await h.manager.stop(created.preview_id, created.lease_token)
+    else:
+        if ending == "mutation":
+            await h.tree.head()
+            await h.manager.barrier.finish_pending()
+        else:
+            h.clock.now += h.manager.profile.lease_s
+            await h.manager.get(created.preview_id)
+        final = h.sink.records[-1]
+    assert final.state == "stopped" and final.reason == ending
+    assert await h.manager.stop(created.preview_id, created.lease_token) is final
+    assert h.manager._token is None
+    assert created.lease_token not in repr(h.manager._terminal_tokens)
+    replacement = await h.start()
+    records = list(h.sink.records)
+    with monkeypatch.context() as patch:
+        drain = AsyncMock(side_effect=AssertionError("terminal retry drained a new owner"))
+        patch.setattr(h.manager, "drain", drain)
+        assert await h.manager.stop(created.preview_id, created.lease_token) is final
+        with pytest.raises(PreviewError, match="expired"):
+            await h.manager.renew(created.preview_id, created.lease_token)
+        for token in ("wrong", replacement.lease_token):
+            with pytest.raises(PreviewError) as caught:
+                await h.manager.stop(created.preview_id, token)
+            assert caught.value.code == "forbidden"
+        drain.assert_not_awaited()
+    assert h.sink.records == records and not h.processes[-1].dead
+    await h.close()
+
+
 async def test_public_interface_and_sink_excludes_output_url_and_token(workspace):
     for name in (
         "PreviewManager",

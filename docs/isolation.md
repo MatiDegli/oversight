@@ -320,6 +320,16 @@ stopped or release the port. The generalized cleanup latch preserves the existin
 Shutdown closes preview admission at entry and drains immediately before manager close, retaining the
 store through awaited terminal publication; remaining shutdown steps still run after failure.
 
+A recovery refusal keeps its registry across restarts; restarting alone cannot release quarantine.
+Exit the server first. Inspect `worktrees/<agent>` and preserve any application-written changes.
+Using the registered identities, verify that the owned processes have ended and Git metadata has
+been restored before releasing ownership; ambiguous identities never authorize killing by PID or
+port. After this manual recovery, remove `preview-owner/owner.json` and any leftover
+`preview-owner/owner.pending`, then restart. This explicitly releases the preserved preview and
+allows normal startup/reset to proceed; copy out wanted files before that reset. The same release
+applies to incomplete owned/entering phases, partial writes, changed profiles or boot/process
+identities, and changed worktrees. Keep quarantine when death or restitution remains unverified.
+
 `runtime/preview-owner/owner.json` is private, atomic and fsynced, outside reset-deleted directories.
 It records profile/runtime fingerprint, preview/candidate identity, port, boot/process births,
 supervisor/unshare/confirmed namespace identities, phase and recoverable metadata snapshot, never

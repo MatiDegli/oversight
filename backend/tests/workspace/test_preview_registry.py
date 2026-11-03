@@ -225,3 +225,52 @@ async def test_invalid_phase_is_quarantined_before_any_registered_signal(workspa
         await h.manager.recover()
     assert sent == [] and workspace.integrity.main_suspect
     await h.close()
+
+
+@pytest.mark.parametrize("fault", ["owned", "entering", "partial", "profile", "boot", "files"])
+async def test_manual_release_after_recovery_refusal_allows_fresh_startup(
+    workspace, make_workspace, fault
+):
+    from oversight.workspace import IntegrityError, PreviewManager
+    from oversight.workspace.preview_registry import identity_data
+
+    h = await harness(workspace)
+    await h.start()
+    await h.processes[0].stop()  # Fake namespace/process death has been verified.
+    data = h.manager.registry.read()
+    assert data is not None
+    if fault in {"owned", "entering"}:
+        data["phase"] = fault
+    elif fault == "profile":
+        data["profile"] = "previous-profile"
+    elif fault == "boot":
+        data["supervisor"] = identity_data(os.getpid()) | {"boot": "previous-boot"}
+    elif fault == "files":
+        (h.tree.root / "app-written.txt").write_text("preserve me")
+    h.manager.registry.write(data)
+    if fault == "partial":
+        h.manager.registry.pending.write_text("incomplete")
+    h.manager.barrier.owner = None
+    h.manager._reserved = False
+    with pytest.raises(PreviewError) as caught:
+        await h.manager.recover()
+    message = str(caught.value)
+    assert "inspect worktrees/<agent>" in message
+    assert "remove preview-owner/owner.json" in message and "owner.pending" in message
+    assert workspace._cleanup_unverified and workspace.runtime_owned
+    with pytest.raises(IntegrityError, match="main_suspect"):
+        await h.tree.write_text("blocked.txt", "no effect", expected_hash=None)
+    assert not (h.tree.root / "blocked.txt").exists()
+    await h.close()
+    # Simulate process exit (releasing its lock) and the documented manual recovery.
+    workspace._cleanup_unverified = False
+    workspace.release_runtime()
+    if fault == "files":
+        assert (h.tree.root / "app-written.txt").read_text() == "preserve me"
+    h.manager.registry.path.unlink()
+    h.manager.registry.pending.unlink(missing_ok=True)
+    fresh = make_workspace()
+    PreviewManager(fresh)
+    await fresh.acquire_runtime()
+    assert fresh.runtime_owned and not fresh.integrity.main_suspect
+    assert await fresh.reset()

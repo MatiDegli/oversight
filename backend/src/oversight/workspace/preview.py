@@ -1,6 +1,7 @@
 """Person-owned preview lifecycle. Production routes/opening are deliberately absent."""
 
 import asyncio
+import hashlib
 import secrets
 import socket
 import sys
@@ -62,6 +63,7 @@ class PreviewManager:
         self._records: dict[str, PreviewStatusRecord] = {}
         self._record: PreviewStatusRecord | None = None
         self._token: str | None = None
+        self._terminal_tokens: dict[str, bytes] = {}
         self._reserved = False
         self._closed = False
         self._disabled = False
@@ -294,6 +296,10 @@ class PreviewManager:
         await self._transition("failed" if reason in failures else "stopped", reason)
         if await offload(self.registry.read) is not None:
             await offload(self.registry.clear)
+        if self._record is not None and self._token is not None:
+            self._terminal_tokens[self._record.preview_id] = hashlib.sha256(
+                self._token.encode()
+            ).digest()
         self._token = None
         self._reserved = False
         if self._watcher is not None and self._watcher is not asyncio.current_task():
@@ -303,9 +309,15 @@ class PreviewManager:
         record = self._records.get(preview_id)
         # Compare even unknown IDs; no token value enters exception text.
         matched = secrets.compare_digest(
-            token.encode(), (self._token or secrets.token_hex(32)).encode()
+            hashlib.sha256(token.encode()).digest(),
+            self._terminal_tokens.get(preview_id)
+            or hashlib.sha256((self._token or secrets.token_hex(32)).encode()).digest(),
         )
-        if record is None or self._record is not record or not matched:
+        if (
+            record is None
+            or (self._record is not record and preview_id not in self._terminal_tokens)
+            or not matched
+        ):
             raise PreviewError("Live preview lease is invalid.", code="forbidden")
         return record
 
@@ -325,7 +337,8 @@ class PreviewManager:
         return PreviewDetailsResult(**asdict(record), url=url)
 
     async def renew(self, preview_id: str, lease_token: str) -> PreviewStatusRecord:
-        self._authenticate(preview_id, lease_token)
+        if self._authenticate(preview_id, lease_token).state != "ready":
+            raise PreviewError("Live preview lease has expired.")
         await self._check_owner()
         record = self._records[preview_id]
         if record.state != "ready":
@@ -337,14 +350,15 @@ class PreviewManager:
         return record  # No transition, no heartbeat event.
 
     async def stop(self, preview_id: str, lease_token: str) -> PreviewStatusRecord:
-        self._authenticate(preview_id, lease_token)
+        record = self._authenticate(preview_id, lease_token)
+        if preview_id in self._terminal_tokens:
+            return record
         await self.drain("closed")
         return self._records[preview_id]
 
     async def drain(self, reason: PreviewReason) -> None:
         owner = self.barrier.owner
         if owner is None:
-            self.workspace.integrity.before_git()
             return
         owner.reason = owner.reason or reason
         try:
@@ -449,5 +463,8 @@ class PreviewManager:
         except BaseException:
             self.workspace.refuse_unverified_cleanup(preview=True)
             raise PreviewError(
-                "Live preview recovery is unverified; restart is required."
+                "Live preview recovery is unverified; exit the server, inspect "
+                "worktrees/<agent> and preserve changes, verify registered processes are gone "
+                "and Git metadata is restored, then remove preview-owner/owner.json "
+                "(and owner.pending if present) and restart."
             ) from None

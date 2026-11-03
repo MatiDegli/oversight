@@ -16,6 +16,59 @@ from .preview_fakes import harness
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize("report", [b"", b'{"kind":"unverified"}\n'])
+async def test_real_process_stop_refuses_missing_supervisor_death_proof(workspace, report):
+    import os
+
+    from oversight.workspace.preview_process import PreviewProcess
+    from oversight.workspace.preview_supervisor import control_reader
+
+    h = await harness(workspace)
+    created = await h.start()
+    owner = h.manager.barrier.owner
+    assert owner is not None
+    process = PreviewProcess(h.manager.registry, h.processes[0].port)
+    owner.process = process
+    read_report, write_report = os.pipe()
+    process.reader, process.pipe = await control_reader(read_report)
+    if report:
+        os.write(write_report, report)
+    os.close(write_report)  # Supervisor death/failed cleanup: no authenticated dead report.
+    registry_before = h.manager.registry.path.read_bytes()
+    with pytest.raises(PreviewError, match="cleanup is unverified"):
+        await h.manager.stop(created.preview_id, created.lease_token)
+    assert not process.dead and not process.reported_dead and not owner.snapshot_finished
+    assert workspace._cleanup_unverified and workspace.integrity.main_suspect
+    assert h.manager.registry.path.read_bytes() == registry_before
+    assert h.manager.barrier.owner is owner and h.manager.has_owner
+    assert h.sink.records[-1].state == "failed"
+    assert h.sink.records[-1].reason == "cleanup_unverified"
+    assert not any(record.state == "stopped" for record in h.sink.records)
+    workspace.release_runtime()
+    assert workspace.runtime_owned
+    await h.close()
+
+
+@pytest.mark.parametrize("configured", [False, True])
+async def test_dormant_mutations_do_not_wait_for_git_or_require_git_policy(
+    workspace, monkeypatch, configured
+):
+    h = await harness(workspace) if configured else None
+    tree = h.tree if h else await workspace.create_worktree("agent-1")
+    workspace.nt_source_bytes = True  # File-only operation before NT Git policy installation.
+    workspace.integrity.main_suspect = True
+
+    def forbidden():
+        pytest.fail("dormant edit acquired a Git lease")
+
+    monkeypatch.setattr(workspace, "git_lease", forbidden)
+    await tree.write_text("note.txt", "preserved bytes\r\n", expected_hash=None)
+    assert (tree.root / "note.txt").read_bytes() == b"preserved bytes\r\n"
+    if h:
+        await h.manager.drain("shutdown")
+        await h.close()
+
+
 async def test_cross_agent_git_waits_through_death_restoration_and_cancellation(
     workspace,
     monkeypatch,
