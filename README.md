@@ -47,6 +47,12 @@ below are labeled separately.
 - In progress: server-computed plan zones, Edit and post-dispatch plan tracking; Queue/Reject/Keep, plan routes, dependency dispatch and the task queue are built.
 - On by default: standing grant selection, listing and revocation; automatic use requires explicitly selected rules mode and current grant/evidence checks.
 - On by default: a lead runtime that requests plans for the person's approval; it never starts coding agents or merges changes.
+- Built, not yet released: Lead Chat renders highlight, exact changed-file, measured behavior
+  and moment references from committed events. A click opens the graph or read-only diff;
+  moments show live event facts and rewind only in replay, retaining Chat with an explicit Back.
+  Synthetic browser fixtures cover these interactions; the public replay still uses the real
+  Oct 27 recording. Producer activation, matching prompt validation and any new recording
+  remain separate release gates.
 
 Muse Spark through the Meta Model API writes the changes. In the bundled recorded run, agent B
 wrote with Muse Spark Open through Baseten. Cross-review with Muse Spark Open is optional and off
@@ -70,12 +76,6 @@ is not the current main count: Oct 29, 2026,
 - 13 collisions between two fronts found only at landing, after both were accepted.
 - 243 merges to main and 1,126 commits on main since the kickoff.
 - Tests are 59% of tracked Python and TypeScript source lines, excluding generated contracts, fixtures and the demo repository.
-
-Lead Chat renders highlight, exact changed-file, measured behavior and moment references from
-committed events. A click opens the graph or read-only diff; moments show live event facts and
-rewind only in replay, retaining Chat with an explicit Back. Synthetic browser fixtures cover
-these interactions; the public replay still uses the real Oct 27 recording. Producer activation,
-matching prompt validation and any new recording remain separate release gates.
 
 ## Built during the hackathon
 

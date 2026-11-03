@@ -350,8 +350,9 @@ function required<T>(value: T | undefined): T {
   return value;
 }
 
-it("prunes a reference target without changing its frame key and clears it on navigation or a new run", async () => {
-  const { reconcileReferenceHighlight, viewReducer, tabbedView } = await import("./view");
+it("prunes only rendered references without changing the target and clears it on navigation or a new run", async () => {
+  const { reconcileReferenceHighlight, referenceHighlightIds, viewReducer, tabbedView } =
+    await import("./view");
   const { default: fixture } = await import("../../../fixtures/views/reference-cases.json");
   const { applyEvent, createInitialState } = await import("../state");
   const state = (fixture.events as unknown as import("@contracts").ServerEvent[]).reduce(
@@ -367,7 +368,8 @@ it("prunes a reference target without changing its frame key and clears it on na
     },
   };
   const pruned = reconcileReferenceHighlight(state, target);
-  expect(pruned.referenceHighlight).toEqual({ ...target.referenceHighlight, nodeIds: ["n1"] });
+  expect(referenceHighlightIds(state, pruned)).toEqual(["n1"]);
+  expect(pruned).toBe(target);
   expect(reconcileReferenceHighlight(state, pruned)).toBe(pruned);
   expect(viewReducer(pruned, { type: "watch" }).referenceHighlight).toBeUndefined();
   expect(

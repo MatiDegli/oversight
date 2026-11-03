@@ -100,6 +100,7 @@ export function reconcileReplayView(view: View, state: State, chatState = state)
   if (!view.tabs && !valid(view)) next = { ...next, review: null, diff: null, file: null };
   return {
     ...next,
+    referenceHighlight: undefined,
     selected: hasNode(next.selected) ? next.selected : null,
     tabs: next.tabs?.map((tab) => ({
       ...tab,

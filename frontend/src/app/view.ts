@@ -335,16 +335,13 @@ export function referenceHighlightIds(state: State, view: View): string[] | null
   for (const change of Object.values(state.changes))
     if (change.status !== "approved" && change.status !== "rejected")
       change.graph.nodes_added.forEach((node) => ids.add(node.id));
-  return target.nodeIds.filter((id) => ids.has(id));
+  const resolved = target.nodeIds.filter((id) => ids.has(id));
+  return resolved.length ? resolved : null;
 }
 
-/** Discard a stale run target and permanently prune removed IDs without a new frame key. */
+/** Clear stale or empty targets; render-time pruning preserves returning IDs and the frame key. */
 export function reconcileReferenceHighlight(state: State, view: View): View {
-  const target = view.referenceHighlight;
-  if (!target) return view;
-  const nodeIds = referenceHighlightIds(state, view);
-  if (nodeIds === null) return { ...view, referenceHighlight: undefined };
-  return nodeIds.length === target.nodeIds.length
-    ? view
-    : { ...view, referenceHighlight: { ...target, nodeIds } };
+  return view.referenceHighlight && referenceHighlightIds(state, view) === null
+    ? { ...view, referenceHighlight: undefined }
+    : view;
 }

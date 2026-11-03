@@ -4,6 +4,7 @@ import { resolveViewReferences } from "../../state";
 // eslint-disable-next-line no-restricted-imports -- Reuse the current-candidate evidence block without eagerly loading it in the shell.
 import { BehaviorDiff } from "../../review/BehaviorDiff";
 import { agentSlotStyle } from "../../theme";
+import { teamIdentities } from "../chatAgentSelectors";
 import { EventTime } from "./rows";
 import type { LeadHeader } from "./selectConversation";
 import "./leadViewCards.css";
@@ -144,7 +145,12 @@ function CardContents({
                 <code>{path}</code>
                 <span className="lead-view-note">
                   {" "}
-                  · {changeId} · {state.changes[changeId]?.status}
+                  ·{" "}
+                  <AgentReference
+                    state={state}
+                    agentId={state.changes[changeId]?.agent_id ?? null}
+                  />{" "}
+                  · {state.changes[changeId]?.status}
                 </span>
               </button>
             </li>
@@ -235,7 +241,9 @@ function MomentReference({
           <EventTime ts={fact.ts} />
         </dd>
         <dt>Agent</dt>
-        <dd>{fact.agentId ?? "No agent"}</dd>
+        <dd>
+          <AgentReference state={state} agentId={fact.agentId} />
+        </dd>
       </dl>
       {replay ? (
         <button type="button" disabled={!onMoment} onClick={() => onMoment?.(seq)}>
@@ -245,5 +253,16 @@ function MomentReference({
         <p className="lead-view-note">Rewind available in replay.</p>
       )}
     </>
+  );
+}
+
+function AgentReference({ state, agentId }: { state: State; agentId: string | null }) {
+  if (agentId === null) return <>No agent</>;
+  const identity = teamIdentities(state).get(agentId);
+  if (!identity) return <>Agent unavailable</>;
+  return (
+    <span className="lead-view-agent" style={agentSlotStyle(identity.hue)}>
+      {identity.member === 0 ? "Lead" : "Agent"} {identity.letter}
+    </span>
   );
 }

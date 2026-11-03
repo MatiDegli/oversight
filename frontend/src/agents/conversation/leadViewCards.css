@@ -18,8 +18,11 @@
   color: var(--muted);
   font-size: 13px;
 }
-.lead-view-card > header strong {
+.lead-view-card > header strong,
+.lead-view-agent {
   color: var(--slot-text);
+}
+.lead-view-card > header strong {
   font-weight: 600;
 }
 .lead-view-card h3 {

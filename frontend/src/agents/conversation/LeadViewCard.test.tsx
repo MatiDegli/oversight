@@ -90,6 +90,8 @@ it("uses exact file references, including merged changes", () => {
   );
   expect(html).toContain("a.py");
   expect(html).toContain("approved");
+  expect(html).toContain("Agent A");
+  expect(html).not.toContain("change-1");
   expect(html).not.toContain("change-2");
 });
 it("uses only the current candidate's latest measured behavior and shared limitations", () => {
@@ -107,10 +109,61 @@ it("uses only the current candidate's latest measured behavior and shared limita
 it("shows live moment facts without rewind and supplies an explicit action only in replay", () => {
   const view: LeadViewKind = { kind: "moment", event_seq: 6 };
   expect(render(view)).toContain("change.proposed");
-  expect(render(view)).toContain("agent-1");
+  expect(render(view)).toContain("Agent A");
+  expect(render(view)).not.toContain("agent-1");
+  expect(render(view)).toContain("--slot-text:var(--agent-a-text)");
   expect(render(view)).toContain("Rewind available in replay.");
   expect(render(view)).not.toContain("<button");
   expect(render(view, 12, null, true)).toContain("View event 6");
+});
+it("uses the referenced agent's team label and hue independently of the caption's lead", () => {
+  const sequence: ServerEvent[] = [
+    ...events.slice(0, 2),
+    {
+      seq: 0,
+      ts: required(events[0]).ts,
+      type: "plan.updated",
+      payload: {
+        plan_id: "p",
+        started_by: "agent-9",
+        revision: 1,
+        task: "Inspect",
+        graph_version: "g1",
+        state: "planning",
+        subtasks: null,
+        detail: null,
+        queued_task_id: null,
+      },
+    },
+    ...events
+      .slice(2, 12)
+      .map((event) =>
+        event.type === "agent.status"
+          ? { ...event, payload: { ...event.payload, plan_id: "p" } }
+          : event,
+      ),
+  ];
+  const state = sequence.reduce(
+    (state, event, index) => applyEvent(state, { ...event, seq: index + 1 }),
+    createInitialState(),
+  );
+  const event: LeadViewEvent = {
+    seq: 14,
+    ts: required(events[0]).ts,
+    type: "lead.view",
+    payload: {
+      agent_id: "other-lead",
+      through_seq: 13,
+      caption: null,
+      view: { kind: "moment", event_seq: 7 },
+    },
+  };
+  const html = renderToStaticMarkup(
+    <LeadViewCard state={state} event={event} header={{ ...header, hue: "B", letter: "B" }} />,
+  );
+  expect(html).toContain("Agent A·1");
+  expect(html).toMatch(/<dd[^>]*>.*--slot-text:var\(--agent-a-text\).*Agent A·1/);
+  expect(html).not.toContain("agent-1");
 });
 it("puts views between status and later replies in the lead's sequence-ordered thread", () => {
   const state = events.reduce(applyEvent, createInitialState());
