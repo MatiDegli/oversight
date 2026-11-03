@@ -10,7 +10,7 @@ import { CardEvidence, eventTime } from "./ChangeCard";
 import { CrossReviewNote } from "./CrossReviewNote";
 import { mergedRuleWords } from "./evidenceWords";
 import { hasReviewFindings } from "./reviewFindings";
-import { ConeOverlap } from "./ConeOverlap";
+import { ConeOverlap } from "./ConeOverlapSection";
 import { ReviewFacts } from "./ReviewFacts";
 import { NewParameterCalls } from "./NewParameterCalls";
 import { parameterExtensions } from "./parameterExtensions";

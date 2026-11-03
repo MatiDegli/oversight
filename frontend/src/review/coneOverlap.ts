@@ -1,4 +1,5 @@
-import { liveImpact } from "../graph";
+// eslint-disable-next-line no-restricted-imports -- Reuse the pure cone calculation without loading the graph renderer in Chat.
+import { liveImpact } from "../graph/impact";
 import { selectPendingChanges, type State } from "../state";
 
 export type ConeLimitation =

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ConeOverlap } from "./ConeOverlap";
+import { ConeOverlap } from "./ConeOverlapSection";
 import { ChevronRight } from "lucide-react";
 import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
 

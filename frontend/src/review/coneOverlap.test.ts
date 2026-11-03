@@ -5,7 +5,7 @@ import { applyEvent, createInitialState, createStateStore, type State } from "..
 import { presentationFor } from "../teams/presentation";
 // eslint-disable-next-line no-restricted-imports -- Exercise the actual replay seek implementation.
 import { createReplayPlayer } from "../transport/replayPlayer";
-import { ConeOverlap } from "./ConeOverlap";
+import { ConeOverlap } from "./ConeOverlapSection";
 import {
   coneEvents,
   coneState,

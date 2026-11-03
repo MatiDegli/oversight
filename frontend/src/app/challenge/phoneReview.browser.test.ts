@@ -118,7 +118,13 @@ it.each(["dark", "day"])(
             await page
               .locator(".review-body > *")
               .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label"))),
-          ).toEqual(["Review lead", "Agent note", null]);
+          ).toEqual(["Review lead", "Agent note", null, "Other pending changes"]);
+          const overlap = page.getByRole("region", { name: "Other pending changes" });
+          await check(overlap).toHaveCount(1);
+          await check(overlap).toContainText(
+            "Based on the current graph and its limits; other intersections may be missing.",
+          );
+          await check(overlap.locator(".cone-peer")).toHaveText(index === 1 ? "A" : "B");
           await check(page.locator('[aria-label="Facts"] li')).toHaveText(
             index === 1
               ? ["2 files", "+9 −0", "29 passed", "No exact callers"]
