@@ -131,12 +131,13 @@ const idle = () => () => {};
 /** Only this small boundary subscribes to slot intent; sibling columns retain their positions. */
 function ChatRightColumn({ slot }: { slot?: ChatPreviewSlot }) {
   const open = useSyncExternalStore(slot?.subscribe ?? idle, slot?.snapshot ?? closed, closed);
-  return open ? (
-    <div className="chat-preview-slot">{slot?.content}</div>
-  ) : (
-    <ChatWorkFrame>
-      <WhereTheyWork />
-    </ChatWorkFrame>
+  return (
+    <>
+      <ChatWorkFrame>
+        <WhereTheyWork />
+      </ChatWorkFrame>
+      {open && <div className="chat-preview-slot">{slot?.content}</div>}
+    </>
   );
 }
 

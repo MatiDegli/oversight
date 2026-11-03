@@ -57,7 +57,12 @@ from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
 from oversight.workspace.measured_report import CallReport, CallTarget, Invocation
 from oversight.workspace.preview import PreviewManager
-from oversight.workspace.preview_profile import PreviewProfile
+from oversight.workspace.preview_launch_spec import PreviewLaunchSpec, load_preview_app
+from oversight.workspace.preview_profile import (
+    PreviewProfile,
+    ReviewedAppAuthorization,
+    authorize_reviewed_app,
+)
 from oversight.workspace.preview_types import (
     PreviewCandidate,
     PreviewCreatedResult,
@@ -81,13 +86,16 @@ from oversight.workspace.runner import ProcessResult, Spawn, run_process
 from oversight.workspace.secret_paths import SECRET_FILE_REFUSAL, is_secret_path, secret_refusal
 from oversight.workspace.source import (
     BOLTONS,
+    OVERSIGHT_SELF,
     SOURCE_GIT_ENV,
     TRUST_NOTICE,
     OwnSource,
+    SourceInventory,
     SourceProfile,
     outside_profile,
     remember_trust,
     select_source,
+    self_inventory,
     validate_source,
 )
 from oversight.workspace.source_nt import NtSource
@@ -106,6 +114,7 @@ __all__ = [
     "MAX_TESTS",
     "MAX_XML_BYTES",
     "OPEN_NOTICE",
+    "OVERSIGHT_SELF",
     "PER_CALL_TIMEOUT_S",
     "SECRET_FILE_REFUSAL",
     "SOURCE_GIT_ENV",
@@ -139,13 +148,16 @@ __all__ = [
     "PreviewCreatedResult",
     "PreviewDetailsResult",
     "PreviewError",
+    "PreviewLaunchSpec",
     "PreviewManager",
     "PreviewProfile",
     "PreviewStatusRecord",
     "PreviewStatusSink",
     "ProcessResult",
     "RenderedCriteria",
+    "ReviewedAppAuthorization",
     "RunProblem",
+    "SourceInventory",
     "SourceProfile",
     "Spawn",
     "StaleFile",
@@ -160,6 +172,7 @@ __all__ = [
     "WorkspaceError",
     "apply_inverse",
     "assign_job",
+    "authorize_reviewed_app",
     "base_probe_checkout",
     "check_content",
     "classify_inverse",
@@ -172,6 +185,7 @@ __all__ = [
     "is_secret_path",
     "job_pids",
     "list_tree",
+    "load_preview_app",
     "outside_profile",
     "parse_cases",
     "parse_junit",
@@ -186,6 +200,7 @@ __all__ = [
     "run_process",
     "secret_refusal",
     "select_source",
+    "self_inventory",
     "split_relative",
     "terminate_job",
     "unlink_retry",

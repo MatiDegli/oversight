@@ -4716,3 +4716,49 @@ provider results and recordings retain their original versions, including
 
 Reason: the lead can ground a useful suggestion in this server's actual availability
 without acquiring execution authority or replacing the person's review decision.
+## 2026-11-03 — Reviewed self-profile, launch declaration and startup disclosure
+
+The maintainer approved the source/worktree, fixed startup test specification and preview launch
+selection paragraphs now in AGENTS.md. This entry supersedes conflicting older selection and
+trust text. Selection is person override, then the original source's validated declaration, then
+supported startup detection. Invalid explicit inputs refuse without fallback. The shop retains its
+trusted adapter. This slice implements only a closed version-1 oversight-self/static-api declaration;
+startup detection and general declarations remain unavailable. A declaration freezes commands,
+not confinement: Vite configuration and backend startup execute edited repository code.
+
+The reviewed local source pin is c08eca088bfa790c8273fe6e41c4e0f2e5f94902. No startup fetch or
+moving-main selection is authorized. The filtered tracked-file inventory, declaration and prepared
+executable/dependency hashes mint separate reviewed-app authority; selected sources never gain
+demo trust. Self tests reuse an explicitly prepared demo Python, with demo-repo/tests scoped from
+T and demo-repo's config, with no pythonpath override. Own-source whole-repository discovery and
+the person's test timeout remain unchanged. No paid-run authorization is granted.
+
+Native Windows supports trusted repositories only. The exact warning is:
+“Native Windows: trusted repository code, same-user execution; original credentials and parent API remain accessible; no no-key/no-paid-call guarantee.”
+
+Health.preview_startup is approved for the next free minor assigned at landing; this change assigns
+no version and leaves Health/contracts untouched. Meanwhile the parent live index carries one inert
+oversight-preview-startup JSON script, identical to the bounded console serialization, before app
+scripts, with no-store. The consumer owner must use textContent, JSON.parse, strict validation and
+text nodes only; missing/invalid data disables reviewed-app actions. Nondismissible “Preview startup”
+disclosure is required in the selected-agent Chat composer and Settings before actions. Consumer
+rendering acceptance remains pending; this carrier does not implement or certify that rendering.
+
+Reviewed-app execution remains unavailable at admission and execution. Actual builds, nested
+execution, dependency installation, Linux filesystem boundary, gateway and nesting supervisor are
+not delivered. The Linux verified namespace/allowlisted-root boundary described in the approved
+policy is a required future capability, not an isolation claim for this scaffold. Current run_tests
+and shop launches retain namespace-only network/PID isolation without filesystem isolation;
+Origin-less HTTP writes remain allowed by current API policy. These residuals remain open.
+Linux own-source work starts after this change alongside boundary/gateway/nesting work. Native
+Windows preview launch and general declarations follow submission. No native-Windows isolation,
+no-key or no-paid-call guarantee is provided.
+
+The maintainer approved raising the startup disclosure cap to 4,096 escaped UTF-8 bytes on
+2026-11-03 ("Si, subilo a 4096"), superseding the prior 1,024-byte disclosure budget. Exact
+frozen commands and paths remain unchanged, without truncation or aliases. If the report
+cannot fit or is invalid, LiveRun continues with no index carrier and reviewed-app
+admission/execution refuses with `Reviewed-app startup disclosure is unavailable.` /
+`not_configured`. Source selection, declaration and authority validation errors still refuse
+startup. Real prepared resources at the default runtime can now pass disclosure admission;
+reviewed-app execution remains unavailable pending its separately required boundary and supervisor.

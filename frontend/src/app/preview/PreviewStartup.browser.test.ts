@@ -5,6 +5,7 @@ import {
   fixtureTexts,
   hostileFixture,
   hostileText,
+  largeFixture,
   multilingualFixture,
   StartupBrowser,
   startupFixture,
@@ -33,7 +34,7 @@ async function safe(session: StartupSession) {
   expect(session.navigations).toEqual([page.url()]);
 }
 
-it.each(["valid", "missing", "invalid", "oversized", "hostile"] as const)(
+it.each(["valid", "large", "missing", "invalid", "oversized", "hostile"] as const)(
   "reads the initial %s fixture index through real Settings navigation",
   async (scenario) => {
     const session = await support.open(scenario);
@@ -52,9 +53,16 @@ it.each(["valid", "missing", "invalid", "oversized", "hostile"] as const)(
       );
       if (text !== undefined)
         expect(await page.locator("#oversight-preview-startup").textContent()).toBe(text);
-      if (scenario === "valid" || scenario === "hostile") {
-        expect(new TextEncoder().encode(text).byteLength).toBeLessThanOrEqual(1024);
-        const report = scenario === "valid" ? startupFixture : hostileFixture;
+      if (scenario === "valid" || scenario === "large" || scenario === "hostile") {
+        const bytes = new TextEncoder().encode(text).byteLength;
+        expect(bytes).toBeLessThanOrEqual(4096);
+        if (scenario === "large") expect(bytes).toBeGreaterThan(1024);
+        const report =
+          scenario === "valid"
+            ? startupFixture
+            : scenario === "large"
+              ? largeFixture
+              : hostileFixture;
         const values: [string, string][] = [
           ["Version", "1"],
           ["Working directory", report.cwd],
@@ -116,7 +124,7 @@ it.each([
   const { page } = session;
   try {
     expect(new TextEncoder().encode(fixtureTexts.multilingual).byteLength).toBeLessThanOrEqual(
-      1024,
+      4096,
     );
     await page.getByRole("button", { name: "Maximize focus panel", exact: true }).click();
     await page.setViewportSize({ width, height });
