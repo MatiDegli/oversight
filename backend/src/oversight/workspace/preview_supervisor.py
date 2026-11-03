@@ -117,7 +117,9 @@ class Supervisor:
 
     async def enter(self) -> None:
         config = self.config
-        argv = [*config["argv"], "--ready-nonce", self.nonce]
+        argv = list(config["argv"])
+        origin = argv.index("--oversight-origin") if "--oversight-origin" in argv else len(argv)
+        argv[origin:origin] = ["--ready-nonce", self.nonce]
         command, descriptors = preview_launch(
             Path(config["runtime"]),
             argv,

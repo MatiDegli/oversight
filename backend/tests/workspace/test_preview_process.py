@@ -274,7 +274,7 @@ async def test_supervisor_persists_confirmed_owner_before_ack_and_cleans_on_eof(
     report_read, report_write = os.pipe()
     config = {
         "runtime": str(tmp_path),
-        "argv": ["/demo/python"],
+        "argv": ["/demo/python", "--oversight-origin", "http://127.0.0.1:8710"],
         "scratch": str(tmp_path),
         "env": {},
         "refusal_port": 45678,
@@ -305,6 +305,7 @@ async def test_supervisor_persists_confirmed_owner_before_ack_and_cleans_on_eof(
     def command(*args, **kwargs):
         assert kwargs["refusal_port"] == 45678
         assert kwargs["listener"] == owner.listener
+        assert args[1] == ["/demo/python", "--ready-nonce", owner.nonce, *config["argv"][1:]]
         return ["trusted-launcher"], (owner.entry_write, owner.ack_read, owner.listener)
 
     async def cleanup(transport, collector, init):
