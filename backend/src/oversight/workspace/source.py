@@ -155,7 +155,12 @@ async def validate_source(
     if sys.platform == "win32":
         await offload(lambda: preflight_placement(root))
         await offload(lambda: preflight_placement(root / ".git"))
-    if root.resolve() != root or not (root / ".git").is_dir() or (root / ".git").is_symlink():
+    if (
+        root.resolve() != root
+        or not (root / ".git").is_dir()
+        or (root / ".git").is_symlink()
+        or await offload(lambda: os.path.lexists(root / ".git/commondir"))
+    ):
         raise ValueError(f"{profile.name}: missing or unsafe checkout at {root}. {FETCH_HINT}")
     binary = "git"
     if sys.platform == "win32":

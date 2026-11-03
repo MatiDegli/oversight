@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from oversight.workspace.runner import ProcessResult, run_process
-from oversight.workspace.source import BOLTONS, SOURCE_GIT_ENV, validate_source
+from oversight.workspace.source import BOLTONS, FETCH_HINT, SOURCE_GIT_ENV, validate_source
 from oversight.workspace.source_config import MAX_CONFIG_OUTPUT, check_source_config
 from oversight.workspace.source_nt import inventory
 
@@ -92,6 +92,117 @@ async def test_missing_configs_need_no_git(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.parametrize("kind", ["file", "directory", "dangling-symlink"])
+@pytest.mark.parametrize("config_present", [False, True])
+async def test_pinned_commondir_refuses_before_any_spawn(
+    tmp_path: Path, kind: str, config_present: bool
+) -> None:
+    git_dir = BOLTONS.checkout(tmp_path) / ".git"
+    git_dir.mkdir(parents=True)
+    if config_present:
+        (git_dir / "config").touch()
+    commondir = git_dir / "commondir"
+    if kind == "file":
+        commondir.write_text("private-common-directory\n")
+    elif kind == "directory":
+        commondir.mkdir()
+    else:
+        try:
+            commondir.symlink_to(tmp_path / "private-missing-common-directory")
+        except OSError:
+            pytest.skip("symlinks unavailable")
+
+    async def forbidden(*args: object, **kwargs: object) -> ProcessResult:
+        pytest.fail("Git spawned before refusing commondir")
+
+    with pytest.raises(ValueError, match="unsafe checkout") as error:
+        await validate_source(BOLTONS, tmp_path, spawn=forbidden)
+    assert FETCH_HINT in str(error.value)
+    assert BOLTONS.name in str(error.value)
+    assert "private-" not in str(error.value)
+
+
+async def test_both_listings_use_cwd_as_ceiling_and_preserve_caller_options(tmp_path: Path) -> None:
+    git_dir = tmp_path / "source/.git"
+    git_dir.mkdir(parents=True)
+    for filename in ("config", "config.worktree"):
+        (git_dir / filename).touch()
+    supplied_env = {
+        **SOURCE_GIT_ENV,
+        "GIT_DIR": str(git_dir),
+        "GIT_WORK_TREE": str(git_dir.parent),
+        "GIT_CEILING_DIRECTORIES": str(tmp_path.parent),
+        "CALLER_SETTING": "retained",
+    }
+    before = supplied_env.copy()
+    calls: list[str] = []
+
+    async def recording(
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: Mapping[str, str] | None = None,
+        output_cap: int = 262144,
+    ) -> ProcessResult:
+        assert argv[0] == "caller-git"
+        calls.append(Path(argv[argv.index("--file") + 1]).name)
+        assert cwd == git_dir.parent.parent
+        assert env == {
+            **SOURCE_GIT_ENV,
+            "GIT_CEILING_DIRECTORIES": str(cwd),
+            "CALLER_SETTING": "retained",
+        }
+        assert timeout_s == 7.5
+        assert output_cap == MAX_CONFIG_OUTPUT
+        return ProcessResult(0, "", "", False, False, 0)
+
+    await check_source_config(
+        git_dir,
+        git="caller-git",
+        spawn=recording,
+        env=supplied_env,
+        time_left=lambda: 7.5,
+        refuse=ValueError,
+    )
+    assert calls == ["config", "config.worktree"]
+    assert supplied_env == before
+
+
+async def test_real_git_enclosing_repository_cannot_inject_config(tmp_path: Path) -> None:
+    enclosing = tmp_path / "enclosing"
+    enclosing.mkdir()
+    result = await run_process(
+        ["git", "init", "-q"], cwd=enclosing, timeout_s=10, env=SOURCE_GIT_ENV
+    )
+    assert result.returncode == 0, result.stderr
+    (enclosing / ".git/config").write_text("[private-invalid-section\n")
+    git_dir = enclosing / "listing/source/.git"
+    git_dir.mkdir(parents=True)
+    for filename in ("config", "config.worktree"):
+        path = git_dir / filename
+        path.write_text("[core]\nexcludesFile = local-ignore\n")
+        # Git ignores a ceiling equal to its starting cwd without the null git-dir.
+        result = await run_process(
+            [
+                "git",
+                "--no-pager",
+                "config",
+                "--file",
+                str(path),
+                "--no-includes",
+                "--null",
+                "--list",
+            ],
+            cwd=git_dir.parent.parent,
+            timeout_s=10,
+            env={**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(git_dir.parent.parent)},
+        )
+        assert result.returncode != 0
+        assert "bad config" in result.stderr and ".git/config" in result.stderr
+    await check(git_dir, {**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(tmp_path)})
+
+
 @pytest.mark.parametrize("caller", ["inventory", "validation"])
 @pytest.mark.parametrize("filename", ["config", "config.worktree"])
 @pytest.mark.parametrize(
@@ -124,6 +235,7 @@ async def test_refusal_precedes_all_source_queries(
         calls.append(tuple(argv))
         assert tuple(argv[1:]) == (
             "--no-pager",
+            f"--git-dir={os.devnull}",
             "config",
             "--file",
             str(config),
@@ -135,13 +247,14 @@ async def test_refusal_precedes_all_source_queries(
         assert 0 < timeout_s <= (10 if caller == "inventory" else 30)
         assert output_cap == MAX_CONFIG_OUTPUT
         assert env is not None
+        assert env["GIT_CEILING_DIRECTORIES"] == str(cwd)
         assert env["GIT_CONFIG_NOSYSTEM"] == "1" and env["GIT_OPTIONAL_LOCKS"] == "0"
         # Git must not be pointed at the original while it lists the original's config.
         assert "GIT_DIR" not in env and "GIT_WORK_TREE" not in env
         if caller == "inventory":
             assert env["GIT_CONFIG_GLOBAL"] == "nul"
         else:
-            assert env == SOURCE_GIT_ENV
+            assert env == {**SOURCE_GIT_ENV, "GIT_CEILING_DIRECTORIES": str(cwd)}
         if fault in {"oserror", "raised-timeout"}:
             raise (OSError if fault == "oserror" else TimeoutError)(private)
         return result
@@ -212,7 +325,7 @@ async def test_inventory_config_listing_shares_selection_deadline(tmp_path: Path
             argv: Sequence[str], *, timeout_s: float, **kwargs: object
         ) -> ProcessResult:
             nonlocal elapsed
-            assert argv[1:3] == ["--no-pager", "config"]
+            assert argv[1:4] == ["--no-pager", f"--git-dir={os.devnull}", "config"]
             timeouts.append(timeout_s)
             elapsed += 5
             return ProcessResult(0, "core.bare\nfalse\0", "", False, False, 0)

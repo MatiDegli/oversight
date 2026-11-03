@@ -42,7 +42,11 @@ async def check_source_config(
     refuse: Callable[[str], Exception],
 ) -> None:
     """Fail closed before source queries; the caller owns the deadline and refusal type."""
+    listing_cwd = git_dir.parent.parent
     listing_env = {name: value for name, value in env.items() if name.upper() not in REPOSITORY_ENV}
+    # Git can ignore a ceiling equal to its starting cwd. The null git-dir below also
+    # prevents discovery, without pointing Git at the source before it is inspected.
+    listing_env["GIT_CEILING_DIRECTORIES"] = str(listing_cwd)
     for name in ("config", "config.worktree"):
         path = git_dir / name
         label = f".git/{name}"
@@ -59,6 +63,7 @@ async def check_source_config(
                 [
                     git,
                     "--no-pager",
+                    f"--git-dir={os.devnull}",
                     "config",
                     "--file",
                     str(path),
@@ -66,7 +71,7 @@ async def check_source_config(
                     "--null",
                     "--list",
                 ],
-                cwd=git_dir.parent.parent,
+                cwd=listing_cwd,
                 env=listing_env,
                 timeout_s=time_left(),
                 output_cap=MAX_CONFIG_OUTPUT,
