@@ -27,6 +27,7 @@ export function ConversationPanel({
   renderResolution,
   renderView,
   renderProposed,
+  composerDisclosure,
   ...controls
 }: ConversationPanelProps) {
   const { header, entries } = conversation;
@@ -119,7 +120,12 @@ export function ConversationPanel({
           {conversation.kind !== "lead" && <Notices conversation={conversation} />}
         </div>
       </div>
-      <Composer key={header.agentId} header={header} {...controls} />
+      <Composer
+        key={header.agentId}
+        header={header}
+        composerDisclosure={composerDisclosure}
+        {...controls}
+      />
     </section>
   );
 }
