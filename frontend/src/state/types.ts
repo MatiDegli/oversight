@@ -73,6 +73,12 @@ export interface AgentMessage {
   text: string | null;
 }
 
+export interface EventFact {
+  type: import("@contracts").ServerEvent["type"];
+  ts: string;
+  agentId: string | null;
+}
+
 export interface State {
   run: RunStarted | null;
   mergeMode: MergeModeState | null;
@@ -82,6 +88,7 @@ export interface State {
     { type: "grant.created" | "grant.revoked" }
   >[];
   lastSeq: number;
+  eventFacts: Record<number, EventFact>;
   gap: boolean;
   graph: GraphSnapshot | null;
   agents: Record<string, AgentStatus>;
@@ -133,6 +140,7 @@ export function createInitialState(): State {
     runStartedAt: null,
     grantEvents: [],
     lastSeq: 0,
+    eventFacts: {},
     gap: false,
     graph: null,
     agents: {},

@@ -23,6 +23,7 @@ export interface ReplayPlayer {
   play: () => void;
   pause: () => void;
   seek: (position: number) => void;
+  seekSeq: (seq: number, position?: number) => void;
   restart: () => void;
   setSpeed: (speed: ReplayRate) => void;
   dispose: () => void;
@@ -91,16 +92,22 @@ export function createReplayPlayer({
       Math.min(40, (snapshot.duration - snapshot.position) / snapshot.speed),
     );
   };
-  const seek = (position: number, status = snapshot.status) => {
+  const seek = (position: number, status = snapshot.status, throughSeq = Infinity) => {
     if (abort.signal.aborted || !snapshot.events.length) return;
     cancel();
     const clamped = Math.max(0, Math.min(snapshot.duration, Number.isNaN(position) ? 0 : position));
-    const state = replayPrefix(snapshot.events, snapshot.offsets, clamped);
+    const state = replayPrefix(snapshot.events, snapshot.offsets, clamped, throughSeq);
     store.setState({ state });
     anchor = performance.now();
     publish({
       position: clamped,
-      status: clamped >= snapshot.duration ? "ended" : status === "ended" ? "paused" : status,
+      status: Number.isFinite(throughSeq)
+        ? "paused"
+        : clamped >= snapshot.duration
+          ? "ended"
+          : status === "ended"
+            ? "paused"
+            : status,
       revision: snapshot.revision + 1,
     });
     schedule();
@@ -135,6 +142,11 @@ export function createReplayPlayer({
       };
     },
     seek,
+    seekSeq: (seq, position) => {
+      const index = snapshot.events.findIndex((event) => event.seq === seq);
+      if (index < 0) return;
+      seek(position ?? snapshot.offsets[index] ?? 0, "paused", seq);
+    },
     restart: () => {
       seek(0, "playing");
     },
@@ -158,7 +170,7 @@ export function createReplayPlayer({
       if (abort.signal.aborted) return;
       if (![1, 2, 4].includes(speed)) throw new Error("Replay rate must be 1, 2 or 4");
       cancel();
-      advance(positionNow());
+      if (snapshot.status === "playing") advance(positionNow());
       publish({ speed });
       schedule();
     },

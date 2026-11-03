@@ -48,6 +48,13 @@ below are labeled separately.
 - In progress: server-computed plan zones, Edit and post-dispatch plan tracking; Queue/Reject/Keep, plan routes, dependency dispatch and the task queue are built.
 - On by default: standing grant selection, listing and revocation; automatic use requires explicitly selected rules mode and current grant/evidence checks.
 - On by default: a lead runtime that requests plans for the person's approval; it never starts coding agents or merges changes.
+- Built, not yet released: Lead Chat renders highlight, exact changed-file, measured behavior
+  and moment references from committed events. A click opens the graph or read-only diff;
+  moments show live event facts and rewind only in replay, retaining Chat with an explicit Back.
+  Synthetic browser fixtures cover these interactions; the public replay still uses the real
+  Oct 27 recording. `show_view` is advertised and dispatched with the moved prompt version
+  (DECISIONS, November 3). The separately authorized paid probe and prompt validation,
+  a real recording and bundle replacement remain release gates.
 
 Muse Spark through the Meta Model API writes the changes. In the bundled recorded run, agent B
 wrote with Muse Spark Open through Baseten. Cross-review with Muse Spark Open is optional and off
@@ -97,6 +104,13 @@ static build requires the recording and its receipt; UI tests select their own f
 
 ## Next
 
+- Per-agent live previews side by side, each agent's own app running from its worktree.
+- Run Oversight on its own repository.
+- After the hackathon: views composed from a closed set of typed primitives (a table, a
+  before/after comparison, a list of references, a test timeline), with every value still
+  resolved from a reference to the run's events. Components written by the model and run in a
+  sandbox stay out of the Oversight and Chat views: they could show a value no event supports
+  and cannot be held to DESIGN.md.
 - Saved agent flows: after the lead, pick a repository flow with a target and expected checks, review or edit its filled task text, then start the agent.
 - Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
 - A red agent to look for counterexamples to a proposed change.

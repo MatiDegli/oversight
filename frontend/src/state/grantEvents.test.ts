@@ -35,6 +35,11 @@ it("parses grant event lines and retains their envelopes without changing agents
     }).not.toThrow();
     expect(next).toEqual({
       ...state,
+      eventFacts: Object.fromEntries(
+        events
+          .slice(0, event.seq)
+          .map((event) => [event.seq, { type: event.type, ts, agentId: null }]),
+      ),
       lastSeq: event.seq,
       clock: ts,
       grantEvents: events.slice(0, event.seq),

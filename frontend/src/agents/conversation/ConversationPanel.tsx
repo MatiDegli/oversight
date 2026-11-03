@@ -6,12 +6,16 @@ import { BudgetNotice, Notices } from "./Notices";
 import { TimelineEntry } from "./rows";
 import type { Conversation, ConversationEntry, LeadConversation } from "./selectConversation";
 
+export { LeadViewCard } from "./LeadViewCard";
 export { selectLeadConversation } from "./selectLeadConversation";
 
 const LeadThreadRows = lazy(() => import("./LeadThreadRows"));
 
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation | LeadConversation;
+  renderView?: (
+    entry: Extract<LeadConversation["entries"][number], { kind: "lead-view" }>,
+  ) => ReactNode;
   renderResolution?: (entry: Extract<ConversationEntry, { kind: "resolution" }>) => ReactNode;
   renderProposed?: (entry: Extract<ConversationEntry, { kind: "proposed" }>) => ReactNode;
   onOpenDiff?: (changeId: string) => void;
@@ -21,6 +25,7 @@ export function ConversationPanel({
   conversation,
   onOpenDiff,
   renderResolution,
+  renderView,
   renderProposed,
   ...controls
 }: ConversationPanelProps) {
@@ -72,6 +77,7 @@ export function ConversationPanel({
             <Suspense fallback={<p role="status">Loading lead conversation…</p>}>
               <LeadThreadRows
                 conversation={conversation}
+                renderView={renderView}
                 onReady={() => {
                   if (atBottom.current && list.current)
                     list.current.scrollTop = list.current.scrollHeight;

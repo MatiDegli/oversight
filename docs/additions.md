@@ -702,17 +702,22 @@ Edit, post-dispatch plan tracking and partition completeness production remain i
 This is narrower than the
 earlier ambition to have the lead start agents for proof 2.
 
-Dormant views with references use contracts 1.18.0: four closed kinds, strict masked-caption
-validation, committed-prefix eligibility, ordered event readers and shared Python/TypeScript
-resolution fixtures. Status inventory is opt-in and off in production. Tool advertisement,
-dispatch, prompt changes and visible cards remain absent. Exports withhold captions under the
-existing message-text receipt; inclusion requires the existing explicit authorization.
-
 K2b adds the event-derived operational header, per-lead observed-revision Stop pending through
 terminal publication, noninteractive ended composer, observed cut captions, published-cap guards
 and backend-default-only New lead. Its fake-only browser fixtures include stopped and six-lead
 scenes; lifecycle/freshness notices and timeline treatment remain K2c, grouping/hues remain K3,
 and plan tracking is still pending. No backend, contract or generated schema changes.
+
+Reference views use the shipped contracts 1.18.0 and ordered readers: highlight, exact changed
+files, current measured behavior and moment cards now render in lead Chat. Successful-envelope
+metadata supports live moment facts; replay navigation keeps Chat outside the sought fold and
+Back restores the saved offset and sequence, paused. Synthetic browser evidence covers all four
+kinds, withheld captions, eight long-path references, cold graph framing, exact merged-file diff
+and history in dark/day at 1280/390. Exports retain the existing caption withholding and inclusion
+receipt behavior. `show_view` is advertised and dispatched with the moved prompt version
+(DECISIONS, November 3). Remaining release gates are the separately authorized paid probe and
+prompt validation, a real recording and bundle replacement. The verified Oct 27 public bundle
+stays in place. Merge rehearsal has its own one-page plan outside this slice.
 
 ### Saved agent flows
 

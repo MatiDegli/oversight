@@ -18,7 +18,6 @@ export const MOMENT_EVENT_TYPES: ReadonlySet<ServerEvent["type"]> = new Set([
 export function resolveViewReferences(
   state: State,
   request: LeadView,
-  events: readonly ServerEvent[] = [],
 ): (string | number | [string, string])[] {
   const view = request.view;
   switch (view.kind) {
@@ -34,14 +33,20 @@ export function resolveViewReferences(
       return [];
     case "moment":
       return view.event_seq <= request.through_seq &&
-        events.some(
-          (event) =>
-            event.seq === view.event_seq &&
-            event.seq <= state.lastSeq &&
-            MOMENT_EVENT_TYPES.has(event.type),
-        )
+        view.event_seq <= state.lastSeq &&
+        state.eventFacts[view.event_seq] !== undefined &&
+        MOMENT_EVENT_TYPES.has(state.eventFacts[view.event_seq]?.type ?? "run.started")
         ? [view.event_seq]
         : [];
+    default: {
+      const unknown: Exclude<
+        LeadViewKind,
+        { kind: "highlight" | "files" | "behavior" | "moment" }
+      > = view;
+      // eslint-disable-next-line @typescript-eslint/no-meaningless-void-operator -- Today never; future contract kinds intentionally render nothing.
+      void unknown;
+      return [];
+    }
   }
 }
 

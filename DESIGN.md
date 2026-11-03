@@ -568,6 +568,34 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 **The No Amber Rule.** There are no yellow or amber warnings. A warning is said in words with an
 icon, in neutral colors.
 
+## Lead reference cards
+
+Lead Chat places highlight, files, behavior and moment cards in envelope sequence order. Cards
+use a solid neutral border on page, the lead's team text token plus its letter, and the existing
+15px speech / 16px title / 13px supporting hierarchy. Caption is escaped plain speech with lead
+and event-time attribution; a null caption says “Caption omitted or withheld in this source.”
+Never use caption claims as facts. Long paths and eight references wrap within the card at 390px;
+file paths and node identities use Mono. Controls have visible text-token keyboard focus.
+
+Contents, labels and counts resolve from the displayed state on every fold. Missing references
+are omitted without removing the original request or caption. An all-missing card says
+“No referenced items are available at this point in the run.” The provenance line is
+“Requested through event N; references follow current state.” Only N changes.
+
+No arrival opens a panel, changes layout, seeks or takes focus. A highlight click switches to
+Oversight, lights the resolved nodes and frames once, including the first graph mount without
+an open panel. Navigation and a new run clear it; pruning missing IDs does not move the camera.
+A file click opens that exact change/path's read-only recorded diff, even after merge/rejection.
+Behavior reuses the measured Input/Before/After component and its current-candidate limitations.
+
+Moment facts show event type, time and agent, or “No agent”. Live moments say
+“Rewind available in replay.” and offer no rewind action. A replay click pauses first and saves
+Chat plus the exact position/sequence outside the fold. Historical graph/panels/evidence use the
+inclusive sought prefix; Chat keeps the originating card and later replies. The stable banner
+“Viewing event N · Back” stays outside the timeline. Back restores the saved position and sequence,
+paused. Historical mutation controls are disabled; ordinary replay navigation and source changes
+clear the Chat override. Unknown view kinds render nothing.
+
 ## Typography
 
 **Body Font:** Atkinson Hyperlegible Next (with sans-serif)

@@ -40,6 +40,12 @@ const OversightStage = lazy(() =>
 const ReplayBar = lazy(() => import("./replay/ReplayBar"));
 
 export interface FrameProps {
+  chatState?: State;
+  readChatState?: () => State | undefined;
+  historySession?: { eventSeq: number; back: () => void };
+  onViewMoment?: (seq: number) => void;
+  onViewHighlight?: (nodeIds: string[], key: string) => void;
+  onViewFile?: (changeId: string, path: string) => void;
   replay?: ReplayPlayer | null;
   onReplayCommit?: (reconcile: (view: View) => View) => void;
   practice?: { active: boolean; open: () => void; content: ReactNode; focus: FocusTab };
@@ -87,7 +93,23 @@ export interface FrameProps {
 }
 
 /** Fixed zones compose around one persistent graph instance. */
-export function Frame(props: FrameProps) {
+export function Frame(input: FrameProps) {
+  const props: FrameProps = input.historySession
+    ? {
+        ...input,
+        onStartAgent: undefined,
+        onStartLead: undefined,
+        onStopLead: undefined,
+        onStopAgent: undefined,
+        onMessageLead: undefined,
+        onMessageAgent: undefined,
+        onPauseAgent: undefined,
+        onResumeAgent: undefined,
+        onSetMergeMode: undefined,
+        onRevert: undefined,
+        onDecide: undefined,
+      }
+    : input;
   const { state, onClosePanel } = props;
   const arrival = useMergeArrival(state);
   const phone = usePhonePractice(props.practice?.active ?? false);
@@ -148,15 +170,27 @@ export function Frame(props: FrameProps) {
       <TopBar
         state={state}
         layout={shell.layout}
-        onLayout={shell.setLayout}
+        onLayout={(layout) => {
+          if (view.referenceHighlight) props.onTabAction?.({ type: "clear-reference" });
+          shell.setLayout(layout);
+        }}
         onOpenQueue={props.onOpenQueue}
         onOpenSettings={props.onOpenSettings}
         onOpenUsage={props.onOpenUsage}
         onOpenPalette={shell.openPalette}
         practice={props.practice}
       />
+      {props.historySession && (
+        <div className="view-history-banner" role="status">
+          Viewing event {props.historySession.eventSeq} ·{" "}
+          <button type="button" onClick={props.historySession.back}>
+            Back
+          </button>
+        </div>
+      )}
       <ChatShell
-        state={state}
+        state={props.chatState ?? state}
+        readOnly={Boolean(props.historySession)}
         active={shell.layout === "Chat"}
         selectedAgentId={
           !open || showNewLead
@@ -211,6 +245,10 @@ export function Frame(props: FrameProps) {
                 view={view}
                 chat={shell.layout === "Chat"}
                 onGraph={chatReview.onGraph}
+                onViewHighlight={(ids, key) => {
+                  props.onViewHighlight?.(ids, key);
+                  shell.setLayout("Oversight");
+                }}
                 practiceOnly={phone}
                 startAgentAction={task.action}
                 maximized={shell.maximized}
@@ -234,6 +272,7 @@ export function Frame(props: FrameProps) {
             )}
             {shell.layout === "Chat" && !open && !newLead && (
               <ChatEmpty
+                readOnly={Boolean(props.historySession)}
                 onNewLead={openNewLead}
                 actionAccessory={
                   <ChatMergeChip state={state} onOpenSettings={props.onOpenSettings} />
@@ -270,6 +309,8 @@ export function Frame(props: FrameProps) {
               <ReplayBar
                 key={props.replay.id}
                 player={props.replay}
+                chatState={props.chatState}
+                readChatState={props.readChatState}
                 onCommit={props.onReplayCommit}
               />
             </Suspense>

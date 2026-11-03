@@ -7,7 +7,7 @@ import { DetailControls, GraphHeading, Legend, ZoomControls } from "../GraphOver
 import type { MergeArrival } from "../useMergeArrival";
 import { fieldInput } from "../fieldScope";
 import { graphScope } from "../graphScope";
-import { changeNodeIds, panelOpen } from "../view";
+import { changeNodeIds, panelOpen, referenceHighlightIds } from "../view";
 import type { View } from "../view";
 
 export function GraphStage({
@@ -43,21 +43,25 @@ export function GraphStage({
   const words = useMemo(() => (shown ? selectConeWords(state, shown) : null), [state, shown]);
   const shownChange = shown === null ? undefined : state.changes[shown];
   const tab = view.tabs?.find((candidate) => candidate.id === view.activeTab);
+  const referenceIds = referenceHighlightIds(state, view);
   const frameIds = useMemo(
     () =>
-      tab
+      referenceIds ??
+      (tab
         ? [...tab.frameIds]
         : shownChange
           ? changeNodeIds(shownChange)
           : view.file && view.selected
             ? [view.selected]
-            : null,
-    [tab, shownChange, view.file, view.selected],
+            : null),
+    [referenceIds, tab, shownChange, view.file, view.selected],
   );
   const scopeKey =
+    (referenceIds ? view.referenceHighlight?.frameKey : undefined) ??
     tab?.frameKey ??
     (view.review === null ? (shown ?? view.file?.path ?? null) : `review:${view.review}`);
-  const frameKey = open ? (layoutKey ? `${scopeKey ?? "file"}:${layoutKey}` : scopeKey) : null;
+  const frameKey =
+    open || referenceIds ? (layoutKey ? `${scopeKey ?? "file"}:${layoutKey}` : scopeKey) : null;
   const [framing, setFraming] = useState<{
     key: string | null;
     outOfView: ReadonlySet<string>;
@@ -85,6 +89,7 @@ export function GraphStage({
         selectedId={view.selected}
         onNodeTap={onNodeTap}
         panelOpen={open}
+        referenceFrame={referenceIds !== null}
         preserveCamera={view.activeTab === "usage"}
         litIds={litIds}
         frameIds={frameIds}

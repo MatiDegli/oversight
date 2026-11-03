@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 import { Check, Pause, Play, RotateCcw, X } from "lucide-react";
-import { stateStore } from "../../state";
+import { stateStore, type State } from "../../state";
 import { presentationStyle } from "../../teams/presentation";
 import type { ReplayPlayer } from "../../transport";
 import type { View } from "../view";
@@ -12,8 +12,12 @@ import "./replay.css";
 export default function ReplayBar({
   player,
   onCommit,
+  chatState,
+  readChatState,
 }: {
   player: ReplayPlayer;
+  chatState?: State;
+  readChatState?: () => State | undefined;
   onCommit: (reconcile: (view: View) => View) => void;
 }) {
   const snapshot = useSyncExternalStore(player.subscribe, player.getSnapshot);
@@ -45,9 +49,15 @@ export default function ReplayBar({
   const tooltip = dismissed ? undefined : mark;
   const ghost = tooltip?.offset ?? preview;
   useEffect(() => {
-    const state = stateStore.getState().state;
-    onCommit((view) => reconcileReplayView(view, state));
-  }, [player, revision, onCommit]);
+    // Read when the updater executes: an older passive effect may settle after a seek.
+    onCommit((view) =>
+      reconcileReplayView(
+        view,
+        stateStore.getState().state,
+        readChatState ? readChatState() : chatState,
+      ),
+    );
+  }, [player, revision, onCommit, chatState, readChatState]);
   const pointerPosition = (event: PointerEvent<HTMLDivElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     return Math.max(0, Math.min(duration, ((event.clientX - box.left) / box.width) * duration));

@@ -27,8 +27,11 @@ import {
   surfaceTab,
   conversationTab,
   openChange,
+  openChangeFile,
+  reconcileReferenceHighlight,
   openReview,
 } from "./view";
+import { useViewHistory } from "./useViewHistory";
 import type { View } from "./view";
 
 type PlanCapability = NonNullable<ContextType<typeof DecisionContext>["planActions"]>;
@@ -72,6 +75,11 @@ export function App() {
     setFiles(createRecordedFiles(() => stateStore.getState().state));
   }, []);
   const state = useStore(stateStore, (store) => store.state);
+  const { history, session: historical } = useViewHistory(replay);
+  const readChatState = useCallback(() => history?.getSnapshot()?.chat, [history]);
+  useEffect(() => {
+    setView((current) => reconcileReferenceHighlight(state, current));
+  }, [state]);
   const stopSession = useRef(() => {});
   const practice = usePractice(
     setView,
@@ -310,13 +318,14 @@ export function App() {
         : next;
     });
   }, []);
+  const canCommand = commands !== null && historical === null;
   return (
     <DecisionContext
       value={{
         attempts,
-        onDecide: commands ? onDecide : undefined,
-        revokeGrant: commands?.revokeGrant,
-        planActions: commands
+        onDecide: canCommand ? onDecide : undefined,
+        revokeGrant: canCommand ? commands.revokeGrant : undefined,
+        planActions: canCommand
           ? {
               attempts: planAttempts,
               send: (plan, action, queue, comment) => {
@@ -327,13 +336,41 @@ export function App() {
         replayOf: replayBuild ? replaySource.kind : undefined,
       }}
     >
-      <FilesProvider state={state} loadTree={commands?.getTree} openFile={onOpenFile}>
+      <FilesProvider
+        state={state}
+        loadTree={canCommand ? commands.getTree : undefined}
+        openFile={onOpenFile}
+      >
         <Frame
           state={state}
+          chatState={historical?.chat}
+          readChatState={readChatState}
+          historySession={
+            historical && history
+              ? { eventSeq: historical.eventSeq, back: history.back }
+              : undefined
+          }
+          onViewMoment={history?.open}
+          onViewHighlight={(nodeIds, key) => {
+            setView((current) => ({
+              ...current,
+              referenceHighlight: {
+                nodeIds,
+                frameKey: `${key}:${String(performance.now())}`,
+                runId: state.run?.run_id ?? "",
+              },
+            }));
+          }}
+          onViewFile={(changeId, path) => {
+            setView((current) => {
+              const next = openChangeFile(state, changeId, path);
+              return next ? navigateView(current, next, state) : current;
+            });
+          }}
           replay={replay}
           onReplayCommit={onReplayCommit}
           practice={practice}
-          files={files}
+          files={historical ? createRecordedFiles(() => stateStore.getState().state) : files}
           view={view}
           onNodeTap={onNodeTap}
           canOpenChange={(changeId) => openChange(state, view, changeId) !== null}

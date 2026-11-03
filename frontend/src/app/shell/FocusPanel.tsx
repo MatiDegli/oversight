@@ -38,15 +38,40 @@ const LeadConversationFocus = lazy(() =>
       onStopLead,
       chat,
       onOpenSettings,
-    }: Pick<FrameProps, "state" | "onMessageLead" | "onStopLead" | "onOpenSettings"> & {
+      chatState,
+      onViewMoment,
+      onViewHighlight,
+      onViewFile,
+      replay,
+    }: Pick<
+      FrameProps,
+      | "state"
+      | "onMessageLead"
+      | "onStopLead"
+      | "onOpenSettings"
+      | "chatState"
+      | "onViewMoment"
+      | "onViewHighlight"
+      | "onViewFile"
+      | "replay"
+    > & {
       agentId: string;
       chat?: boolean;
     }) => {
-      const conversation = module.selectLeadConversation(state, agentId);
+      const conversation = module.selectLeadConversation(chatState ?? state, agentId);
       if (!conversation) return null;
       return (
         <module.ConversationPanel
           conversation={conversation}
+          renderView={(entry) => (
+            <module.LeadViewCard
+              state={state}
+              event={entry.event}
+              header={conversation.header}
+              replay={Boolean(replay)}
+              actions={{ onMoment: onViewMoment, onHighlight: onViewHighlight, onFile: onViewFile }}
+            />
+          )}
           actionAccessory={
             chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
           }
@@ -259,6 +284,11 @@ export function FocusPanel(
 /** The same adapter and mounted conversation serve both shell layouts. */
 function ConversationFocus({
   state,
+  chatState,
+  onViewMoment,
+  onViewHighlight,
+  onViewFile,
+  replay,
   agentId,
   onMessageAgent,
   onMessageLead,
@@ -276,14 +306,24 @@ function ConversationFocus({
   onReview,
   onGraph,
 }: FrameProps & { agentId: string; chat?: boolean; onGraph?: (id: string) => void }) {
-  const conversation = selectConversation(state, agentId, state.messages[agentId] ?? []);
+  const threadState = chatState ?? state;
+  const conversation = selectConversation(
+    threadState,
+    agentId,
+    threadState.messages[agentId] ?? [],
+  );
   if (!conversation) {
-    const lead = selectChatLeads(state).find((row) => row.id === agentId);
+    const lead = selectChatLeads(threadState).find((row) => row.id === agentId);
     if (lead)
       return (
         <LazyPanel key={agentId} frame={<LeadConversationFrame lead={lead} />}>
           <LeadConversationFocus
             state={state}
+            chatState={chatState}
+            onViewMoment={onViewMoment}
+            onViewHighlight={onViewHighlight}
+            onViewFile={onViewFile}
+            replay={replay}
             agentId={agentId}
             onMessageLead={onMessageLead}
             onStopLead={onStopLead}
