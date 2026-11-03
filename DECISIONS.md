@@ -4411,10 +4411,15 @@ Native compilation, nested Jobs, console delivery, rendering and acceptance cann
 in this Linux session. See [desktop status](desktop/README.md) and the
 [prospective runbook](README.md#future-tauri-shell-runbook).
 
-Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed in license-report.md, used unmodified.
+Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed below, used unmodified.
 
-The grant covers the five reported MPL crates, Unicode-3.0 obligations including unicode-ident,
-and both reported Zlib crates; it does not widen policy for other dependencies or licenses.
+The granted crates present in `desktop/Cargo.lock`, grouped by license, are:
+
+- MPL-2.0: none.
+- Unicode-3.0: unicode-ident 1.0.27.
+- Zlib: none.
+
+The grant does not widen policy for other dependencies or licenses.
 The delivered Windows-target metadata resolves five external crates, each with an MIT option.
 All eleven external lockfile entries were also checked against registry manifests: only the
 inactive unicode-ident entry needs the recorded Unicode-3.0 grant. There are no unapproved

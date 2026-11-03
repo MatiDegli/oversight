@@ -334,16 +334,21 @@ new candidate work waits for the maintainer’s order.
   merge and tests still work. Needs a per-repository test command with JUnit output and an approved
   sketch first.
 - Conditional pre-freeze Tauri spike, after the maintainer's other feature: the
-  [portable desktop core](../desktop/README.md) is implemented and tested, with a standalone
-  offline target and native Windows core lane. The Windows executable, complete Tauri lock/license
+  [portable desktop core](../desktop/README.md) is implemented and tested on Linux with a standalone
+  offline target. The native Windows core lane exists but has not run yet.
+  The Windows executable, complete Tauri lock/license
   reconciliation, nested Jobs/console lifecycle, WebView2/UI proof and duration/size are deferred.
   The [future runbook](../README.md#future-tauri-shell-runbook) wraps the advanced native backend;
   no WSL bridge or native picker. Cut: November 3, 17:00 ART; freeze: 20:00 ART.
 - The minimal native Windows backend and public own-repository COPY are implemented;
   their native qualification remains pending. Broader platform ports and macOS follow as
-  separate fronts. Windows isolation follows its port; until then OPEN_NOTICE and existing
-  capability restrictions stay in force. Any dependency outside policy requires approval;
-  the desktop Rust license grant is scoped in DECISIONS.md.
+  separate fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
+  process-tree cleanup, file locks, no-follow file opens), then a test-isolation design for each OS.
+  A minimal Windows port, the per-OS layer in the mode without isolation, is item 20 below; on
+  2026-11-01 the maintainer ranked it immediately after the conversational lead and Chat, ahead
+  of the other displaced fronts, superseding its after-Tauri order (DECISIONS.md). Windows isolation follows that port. Until a port has its own isolation, it runs
+  in the existing mode without isolation (network open; rules, Revert and added-test probes disabled).
+  Any new dependency follows the license list; filelock (Unlicense) needs the maintainer's OK.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
