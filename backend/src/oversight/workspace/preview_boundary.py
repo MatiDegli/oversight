@@ -152,7 +152,8 @@ def _validate(config: BoundaryConfig, roots: RootInputs) -> None:
             not math.isfinite(t) or t <= 0
             for t in (config.launch_timeout_s, config.lifetime_s, config.cleanup_timeout_s)
         )
-        or not 0 <= config.output_cap <= 1024 * 1024
+        or type(config.output_cap) is not int
+        or config.output_cap < 0
     ):
         raise BoundaryUnavailable("invalid boundary limits")
     _environment(config)
@@ -594,12 +595,15 @@ async def _launch(
     roots: RootInputs,
     abort: asyncio.Event,
     before_exec: Callable[[BoundaryHandle], Awaitable[None]] | None,
+    on_ownership: Callable[[BoundaryHandle], None] | None,
 ) -> _Handle:
     owner = _Handle(config)
     fds: list[int] = []
     report = ack = -1
     reader: asyncio.Task[bytes] | None = None
     try:
+        if on_ownership is not None:
+            on_ownership(owner)
         async with asyncio.timeout(config.launch_timeout_s):
             await asyncio.to_thread(_validate, config, roots)
             config_fd = _configuration(config, roots, owner, fds)
@@ -681,9 +685,11 @@ async def launch_boundary(
     roots: RootInputs,
     *,
     before_exec: Callable[[BoundaryHandle], Awaitable[None]] | None = None,
+    on_ownership: Callable[[BoundaryHandle], None] | None = None,
 ) -> BoundaryHandle:
     """Authenticate and acknowledge entry; cancellation retains ownership until cleanup.
 
+    on_ownership retains the cleanup handle before any spawn; it grants no execution authority.
     before_exec runs after authentication and before the sole execution acknowledgement.
     A persistence/authorization failure never opens execution.
     All deadlines are seconds. A failed gate raises BoundaryUnavailable; there is no
@@ -691,7 +697,7 @@ async def launch_boundary(
     them. The caller must not close, transfer to T, or use them after verified death.
     """
     abort = asyncio.Event()
-    pending = asyncio.create_task(_launch(config, roots, abort, before_exec))
+    pending = asyncio.create_task(_launch(config, roots, abort, before_exec, on_ownership))
     try:
         return await asyncio.shield(pending)
     except asyncio.CancelledError:
