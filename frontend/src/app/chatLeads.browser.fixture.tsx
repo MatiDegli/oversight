@@ -9,6 +9,14 @@ import { createCommandClient, parseEvent } from "../transport";
 import { leadDraftStore } from "../agents/leadDraftModel";
 // eslint-disable-next-line no-restricted-imports -- Same persistent TaskBox used by production.
 import { taskBoxStore } from "../agents/taskBoxModel";
+import {
+  FullFilesCapture,
+  ReferenceGraphHarness,
+  ViewCardsHarness,
+  viewScenario,
+  prepareViewReplay,
+  viewReplaySnapshot,
+} from "./leadViews.browser.fixture";
 import { Frame } from "./Frame";
 import { App } from "./App";
 import { InitialShellLayout } from "./shell/useShell";
@@ -562,6 +570,34 @@ export const chatLeadsTest = {
       ),
     );
   },
+  mountFullFilesCapture() {
+    root?.unmount();
+    stateStore.setState({ state: fold(viewScenario()) });
+    root = createRoot(required(document.getElementById("root")));
+    flushSync(() => root?.render(<FullFilesCapture />));
+  },
+  mountReferenceGraph() {
+    root?.unmount();
+    stateStore.setState({ state: fold(viewScenario()) });
+    root = createRoot(required(document.getElementById("root")));
+    flushSync(() => root?.render(<ReferenceGraphHarness />));
+  },
+  async mountViews(replay = false, live = true) {
+    root?.unmount();
+    await prepareViewReplay(false);
+    stateStore.setState({
+      state: fold(viewScenario().map((event) => parseEvent(JSON.stringify(event)))),
+    });
+    await prepareViewReplay(replay);
+    root = createRoot(required(document.getElementById("root")));
+    flushSync(() =>
+      root?.render(
+        <InitialShellLayout value="Chat">
+          <ViewCardsHarness live={live} />
+        </InitialShellLayout>,
+      ),
+    );
+  },
   deliver(events: ServerEvent[]) {
     let seq = stateStore.getState().state.lastSeq;
     flushSync(() => {
@@ -570,6 +606,7 @@ export const chatLeadsTest = {
         .applyEvents(events.map((item) => parseEvent(JSON.stringify({ ...item, seq: ++seq }))));
     });
   },
+  viewReplaySnapshot,
   work: () => {
     const { agents, changes } = stateStore.getState().state;
     return { agents, changes };

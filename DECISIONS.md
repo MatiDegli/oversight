@@ -4399,3 +4399,13 @@ ACL hardening or preparation-budget change is granted. Native qualification on t
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
 
 2026-11-03 — Dormant views with references. Following maintainer OK of the exact diff, contracts 1.18.0 adds lead.view with highlight, files, behavior and moment. PR1 ships validated reference infrastructure, eligible status inventory and event readers; show_view remains absent from the advertised tool table and dispatch. Prompt bytes and prompt_version remain unchanged. This supersedes the no-new-events/contracts restriction for this feature only. No visible cards or paid calls are released by PR1.
+
+## 2026-11-03 — Lead views stay a closed catalog of typed kinds
+
+The lead picks a kind, its references and a caption; the frontend draws each kind with its own
+component and resolves every value from the run's state. Considered and left out: components
+written by the model and rendered in a sandboxed frame. They would let a view show a value no
+event supports, which breaks the rule that status comes from tool calls and never from text;
+they cannot be held to DESIGN.md; and they add code execution in the person's browser. The next
+step, after the hackathon, is composition from a closed set of typed primitives with the same
+reference resolution (README, Next).

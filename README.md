@@ -71,6 +71,12 @@ is not the current main count: Oct 29, 2026,
 - 243 merges to main and 1,126 commits on main since the kickoff.
 - Tests are 59% of tracked Python and TypeScript source lines, excluding generated contracts, fixtures and the demo repository.
 
+Lead Chat renders highlight, exact changed-file, measured behavior and moment references from
+committed events. A click opens the graph or read-only diff; moments show live event facts and
+rewind only in replay, retaining Chat with an explicit Back. Synthetic browser fixtures cover
+these interactions; the public replay still uses the real Oct 27 recording. Producer activation,
+matching prompt validation and any new recording remain separate release gates.
+
 ## Built during the hackathon
 
 - The hackathon runs from 2026-10-26 at 12:00 ET to 2026-11-04 at 21:00 ET (13:00 to
@@ -96,6 +102,13 @@ static build requires the recording and its receipt; UI tests select their own f
 
 ## Next
 
+- Per-agent live previews side by side, each agent's own app running from its worktree.
+- Run Oversight on its own repository.
+- After the hackathon: views composed from a closed set of typed primitives (a table, a
+  before/after comparison, a list of references, a test timeline), with every value still
+  resolved from a reference to the run's events. Components written by the model and run in a
+  sandbox stay out of the Oversight and Chat views: they could show a value no event supports
+  and cannot be held to DESIGN.md.
 - Saved agent flows: after the lead, pick a repository flow with a target and expected checks, review or edit its filled task text, then start the agent.
 - Hidden test sets: extend beyond the external hidden grading already present in `tools/eval`.
 - A red agent to look for counterexamples to a proposed change.

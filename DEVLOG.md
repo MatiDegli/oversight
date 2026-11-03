@@ -70,4 +70,4 @@ One line per day, in Argentina time (ART).
   lead start, cap guards and compact lead rows with fake-only lifecycle and responsive capture proof.
   Rechecked the layout and clarify references in full, fixed the 390px capped-action overflow,
   and removed duplicate ended copy.
-- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls.
+- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls. Added event-derived reference cards, metadata-only moment facts, exact replay history/Back with retained Chat, click-owned graph framing and exact recorded-file diffs; synthetic responsive evidence, no paid calls or bundle replacement.

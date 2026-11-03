@@ -965,3 +965,244 @@ async function capture(page: Page, name: string, width: number, theme: string) {
     ),
   );
 }
+
+async function openViews(width = 1280, theme = "dark", replay = false, live = true) {
+  const page = await open("chat-start", width, theme, live);
+  await page.evaluate(({ replay, live }) => window.chatLeadsTest.mountViews(replay, live), {
+    replay,
+    live,
+  });
+  await check(page.getByRole("article", { name: "Run moment" })).toBeVisible();
+  return page;
+}
+async function captureView(page: Page, name: string, width: number, theme: string) {
+  if (process.env.CHAT_LEADS_SHOTS !== "1") return;
+  const path = `${shots}views/synthetic-${name}-${String(width)}-${theme}.png`;
+  await mkdir(`${shots}views`, { recursive: true });
+  await page.screenshot({ path, animations: "disabled" });
+}
+it("keeps the originating card and later reply, focus and Back through exact replay history", async () => {
+  const page = await openViews();
+  const requests: string[] = [];
+  await page.route("**/leads/**", (route) => {
+    requests.push(route.request().method());
+    return route.fulfill({ status: 202 });
+  });
+  await page.evaluate(() => window.chatLeadsTest.mountViews(true, true));
+  const moment = page.getByRole("article", { name: "Run moment" });
+  const action = moment.getByRole("button", { name: "View event 6" });
+  const before = await page.evaluate(() => window.chatLeadsTest.viewReplaySnapshot());
+  await action.click();
+  await check(page.getByRole("status").filter({ hasText: "Viewing event 6" })).toBeVisible();
+  await check(action).toBeFocused();
+  await check(moment).toBeVisible();
+  await check(
+    page.getByText("Later reply: all original cards remain in Chat.", { exact: true }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => window.chatLeadsTest.viewReplaySnapshot().seq)).toBe(6);
+  await check(page.getByRole("textbox", { name: "Message to lead" })).toHaveCount(0);
+  await check(page.getByRole("button", { name: "Stop lead", exact: true })).toHaveCount(0);
+  await check(newLead(page)).toHaveAttribute("aria-disabled", "true");
+  await check(newTask(page)).toBeDisabled();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await check(page.getByText("Viewing event 6", { exact: false })).toHaveCount(0);
+  const returned = await page.evaluate(() => window.chatLeadsTest.viewReplaySnapshot());
+  expect(returned.seq).toBe(before.seq);
+  expect(returned.snapshot?.position).toBe(before.snapshot?.position);
+  expect(returned.snapshot?.status).toBe("paused");
+  await check(page.getByRole("article")).toHaveCount(4);
+  expect(requests).toEqual([]);
+  await page.close();
+});
+it("shows live moment facts without rewind and never moves focus on arriving views", async () => {
+  const page = await openViews();
+  const moment = page.getByRole("article", { name: "Run moment" });
+  await check(moment.getByText("change.proposed", { exact: false })).toBeVisible();
+  await check(moment.getByText("Rewind available in replay.", { exact: true })).toBeVisible();
+  await check(moment.getByRole("button")).toHaveCount(0);
+  const input = page.locator(".conversation-composer textarea");
+  await input.focus();
+  await page.evaluate(() => {
+    window.chatLeadsTest.deliver([
+      {
+        type: "lead.view",
+        seq: 0,
+        ts: "2026-11-03T00:01:00Z",
+        payload: {
+          agent_id: "agent-9",
+          through_seq: 6,
+          caption: "Synthetic arrival",
+          view: { kind: "moment", event_seq: 6 },
+        },
+      },
+    ]);
+  });
+  await check(input).toBeFocused();
+  await check(page.getByRole("article")).toHaveCount(5);
+  await page.close();
+});
+it("opens the merged exact recorded file and keeps its diff read-only", async () => {
+  const page = await openViews();
+  const file = page.getByRole("article", { name: "Changed files" }).getByRole("button").last();
+  await file.click();
+  await check(page.getByRole("tab", { name: /Live diff/ })).toBeVisible();
+  await check(page.getByText("# synthetic after", { exact: false }).first()).toBeVisible();
+  const editors = page.locator('.monaco-editor [role="textbox"]');
+  await check(editors.first()).toHaveAttribute("aria-autocomplete", "none");
+  await page.close();
+});
+it("frames a cold graph from highlight and clears reference lighting on navigation", async () => {
+  const page = await openViews();
+  await check(page.getByLabel("Graph stage")).toHaveCount(0);
+  await page.getByRole("article", { name: "Graph references" }).getByRole("button").click();
+  const stage = page.getByLabel("Graph stage");
+  await check(stage).toBeVisible();
+  await page.waitForFunction(() => {
+    const el = document.querySelector<
+      HTMLElement & {
+        oversightGraph?: { animating(): boolean; nodeCenters(selector?: string): unknown[] };
+      }
+    >('[aria-label="Repository graph"]');
+    return el?.oversightGraph && !el.oversightGraph.animating();
+  });
+  const dimmedCount = () =>
+    page.evaluate(() => {
+      const graph = document.querySelector<
+        HTMLElement & { oversightGraph?: { appearance(selector: string): unknown[] } }
+      >('[aria-label="Repository graph"]')?.oversightGraph;
+      return graph?.appearance("node.dimmed").length;
+    });
+  expect(await dimmedCount()).toBe(1);
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await check(page.getByRole("article", { name: "Graph references" })).toBeVisible();
+  await page.getByRole("button", { name: "Oversight", exact: true }).click();
+  await expect.poll(dimmedCount).toBe(0);
+  await page.close();
+});
+for (const theme of ["dark", "day"])
+  for (const width of [1280, 390]) {
+    it(`fits synthetic reference cards and history at ${String(width)} in ${theme}`, async () => {
+      const page = await openViews(width, theme);
+      try {
+        await check(page.getByRole("article")).toHaveCount(4);
+        for (const [title, name] of [
+          ["Graph references", "highlight"],
+          ["Changed files", "files-eight-long-paths"],
+          ["Measured behavior", "behavior"],
+          ["Run moment", "live-moment"],
+        ] as const) {
+          const card = page.getByRole("article", { name: title });
+          await card.scrollIntoViewIfNeeded();
+          if (name === "behavior") await card.getByText("Samples (1)", { exact: true }).click();
+          expect(await card.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          ).toBe(true);
+          if (name === "files-eight-long-paths")
+            await check(card.getByRole("button")).toHaveCount(8);
+          await captureView(page, name, width, theme);
+        }
+        await page.evaluate(() => window.chatLeadsTest.mountViews(true, true));
+        await page.getByRole("button", { name: "View event 6", exact: true }).click();
+        await check(page.getByRole("button", { name: "Back", exact: true })).toBeVisible();
+        await captureView(page, "historical-banner", width, theme);
+        await page.getByRole("button", { name: "Back", exact: true }).click();
+        await check(page.getByRole("article", { name: "Run moment" })).toBeVisible();
+        await captureView(page, "returned-chat", width, theme);
+        if (process.env.CHAT_LEADS_SHOTS === "1") {
+          await page.evaluate(() => {
+            window.chatLeadsTest.mountFullFilesCapture();
+          });
+          await check(page.getByRole("article").getByRole("button")).toHaveCount(8);
+          await page.screenshot({
+            path: `${shots}views/synthetic-files-eight-long-paths-full-${String(width)}-${theme}.png`,
+            fullPage: true,
+            animations: "disabled",
+          });
+        }
+      } finally {
+        await page.close();
+      }
+    });
+  }
+
+it("frames references on first mount without a panel and keeps the camera when an ID disappears", async () => {
+  const page = await openViews();
+  await page.evaluate(() => {
+    window.chatLeadsTest.mountReferenceGraph();
+  });
+  const probe = () =>
+    page.evaluate(() => {
+      const host = document.querySelector<
+        HTMLElement & {
+          oversightGraph?: {
+            animating(): boolean;
+            renderedBox(id: string): { x1: number; x2: number; y1: number; y2: number } | null;
+            zoom(): number;
+            pan(): { x: number; y: number };
+          };
+        }
+      >('[aria-label="Repository graph"]');
+      const graph = host?.oversightGraph;
+      return graph
+        ? {
+            animating: graph.animating(),
+            zoom: graph.zoom(),
+            pan: graph.pan(),
+            target: graph.renderedBox("n1"),
+            width: host.clientWidth,
+            height: host.clientHeight,
+          }
+        : null;
+    });
+  await expect.poll(probe).toMatchObject({ animating: false });
+  const before = await probe();
+  expect(before?.height).toBeGreaterThan(0);
+  expect(before?.target).not.toBeNull();
+  expect(before?.target?.x1).toBeGreaterThanOrEqual(0);
+  expect(before?.target?.x2).toBeLessThanOrEqual(before?.width ?? 0);
+  await page.evaluate(() => {
+    window.chatLeadsTest.deliver([
+      {
+        seq: 0,
+        ts: "2026-11-03T00:01:00Z",
+        type: "graph.delta",
+        payload: {
+          from_version: "g1",
+          to_version: "g3",
+          cause: "rescan",
+          commit: "base",
+          nodes_added: [],
+          nodes_changed: [],
+          nodes_removed: ["n2"],
+          edges_added: [],
+          edges_changed: [],
+          edges_removed: [],
+          parse_errors: [],
+        },
+      },
+    ]);
+  });
+  const after = await probe();
+  expect(after?.zoom).toBe(before?.zoom);
+  expect(after?.pan).toEqual(before?.pan);
+  await page.close();
+});
+
+it("clears historical Chat on ordinary replay controls and source replacement", async () => {
+  const page = await openViews(1280, "dark", true);
+  const moment = () => page.getByRole("button", { name: "View event 6", exact: true });
+  await moment().click();
+  await page.getByRole("slider", { name: "Position in the recording" }).press("End");
+  await check(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
+  await check(page.getByRole("article")).toHaveCount(4);
+  await moment().click();
+  await page.getByRole("button", { name: "Restart", exact: true }).click();
+  await check(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.chatLeadsTest.mountViews(true, true));
+  await moment().click();
+  await page.evaluate(() => window.chatLeadsTest.mountViews(false, true));
+  await check(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
+  await check(page.getByText("Rewind available in replay.", { exact: true })).toBeVisible();
+  await page.close();
+});

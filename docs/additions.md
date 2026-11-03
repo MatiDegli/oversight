@@ -708,11 +708,15 @@ and backend-default-only New lead. Its fake-only browser fixtures include stoppe
 scenes; lifecycle/freshness notices and timeline treatment remain K2c, grouping/hues remain K3,
 and plan tracking is still pending. No backend, contract or generated schema changes.
 
-Dormant views with references use contracts 1.18.0: four closed kinds, strict masked-caption
-validation, committed-prefix eligibility, ordered event readers and shared Python/TypeScript
-resolution fixtures. Status inventory is opt-in and off in production. Tool advertisement,
-dispatch, prompt changes and visible cards remain absent. Exports withhold captions under the
-existing message-text receipt; inclusion requires the existing explicit authorization.
+Reference views use the shipped contracts 1.18.0 and ordered readers: highlight, exact changed
+files, current measured behavior and moment cards now render in lead Chat. Successful-envelope
+metadata supports live moment facts; replay navigation keeps Chat outside the sought fold and
+Back restores the saved offset and sequence, paused. Synthetic browser evidence covers all four
+kinds, withheld captions, eight long-path references, cold graph framing, exact merged-file diff
+and history in dark/day at 1280/390. Exports retain the existing caption withholding and inclusion
+receipt behavior. Producer activation and final prompt/version verification remain separately
+gated, as do matching paid authorization, validation and a real recording. The verified Oct 27
+public bundle stays in place. Merge rehearsal has its own one-page plan outside this slice.
 
 ### Saved agent flows
 

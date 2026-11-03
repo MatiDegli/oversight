@@ -377,14 +377,34 @@ a cut in ordinary/live validation; publication validation also accepts withheld 
 cut under the existing message-text receipt. Both message event types withhold text and `lead.view` withholds captions by default
 on export;
 explicit inclusion authorization includes the stored masked text and captions. No new wire receipt fields exist.
-`lead.view` is a dormant reference-only event with highlight, files, behavior and moment kinds.
-The strict adapter masks captions and resolves all references against the successful status
-prefix before publication under the lead lock; stopping or closing refuses without events.
-The sink checks horizons and committed moment membership in constant work, excluding batch-local
-targets. `show_view` is absent from advertised tools and dispatch; prompt bytes and version stay
-unchanged. Readers retain ordered requests per lead and resolve identities against displayed state.
-Behavior requires measured evidence for the current revision/head; files require exact recorded
-change/path pairs. No visible cards or model calls are added.
+`lead.view` is a reference-only event with highlight, files, behavior and moment kinds. The
+strict adapter masks captions and resolves references against the successful status prefix before
+publication under the lead lock; stopping or closing refuses without events. The sink checks
+horizons and committed moment membership in constant work, excluding batch-local targets.
+Frontend readers retain ordered requests per lead and draw cards in envelope order. Every displayed
+fold re-resolves identities; missing references disappear while the original request and plain
+caption remain. Files require exact recorded change/path pairs, including resolved changes.
+Behavior uses the shared current-revision/head evidence selector and measured Input/Before/After;
+no caption substitutes for evidence. Unknown future kinds render nothing.
+
+Accepted envelopes add metadata-only `eventFacts[seq] = {type, ts, agentId}` after successful
+application; rejected applications and gaps add nothing. A start resets the per-run facts and
+records itself. Metadata has no payload, caption or full envelope, and is not capped at the
+32-milestone admission window. Moment rendering checks both the request's through_seq and the
+displayed lastSeq against the shared milestone catalog. Live moments show facts without rewind.
+
+Replay moment navigation pauses before saving position, lastSeq and the Chat state in an
+app-owned history session outside the reducer store. `seekSeq` rebuilds the retained event prefix
+through an inclusive sequence ceiling, including when timestamps coincide. Historical graph,
+panels and card evidence use that prefix; Chat retains every pre-click entry. Back restores both
+the offset and sequence, paused. Ordinary seek/play/restart and source replacement clear the
+session. Historical command capabilities are withheld. Highlights frame on click, even on the
+first graph mount without a panel, and prune missing IDs without changing the frame key.
+
+Producer advertisement, dispatch and final prompt/version verification are separately gated;
+these readers do not activate tools or make model calls. Visible release requires the matching
+authorization, prompt validation and real recording; otherwise readers remain available and the
+verified existing public recording remains bundled.
 
 `LeadStatus.state` gains `idle` between turns; `done` remains accepted for historical logs.
 L1 accepts replies as no-ops: only envelope sequence/clock bookkeeping advances, with no messages,
@@ -467,8 +487,7 @@ observed this turn, or null.
 L3 owns Chat/composer, freshness/cut/withheld UI, plan links, graph/focus, fixture exclusion,
 approval keyboard protection, the 50-turn cost fixture and separate Playwright coverage.
 
-A keyword-only `include_views` flag on status builders defaults to false; production leaves it
-off, preserving the previous status bytes. When enabled, status orders header, inventory/usage,
+A keyword-only `include_views` flag on status builders defaults to false; activation chooses it explicitly. When enabled, status orders header, inventory/usage,
 complete eligible agent/path, change/path, measured-behavior and moment rows, then ordinary rows.
 Reference strings pass through the escaping serializer with a 512-character cap. Noncanonical
 paths never become eligible or count toward overflow. The latest 32 committed milestones are
