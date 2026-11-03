@@ -364,13 +364,16 @@ class EventStore:
     def last_seq(self) -> int:
         return len(self._events)
 
-    def lead_status(self, *, include_views: bool = False) -> tuple[int, str]:
+    def lead_status(
+        self, *, include_views: bool = False, include_previews: bool = False
+    ) -> tuple[int, str]:
         """Fold one committed prefix without copying or exposing the full event log."""
         through_seq = self.last_seq
         return fold_lead_status(
             CommittedLeadPrefix(self._reference_events, through_seq),
             through_seq,
             include_views=include_views,
+            include_previews=include_previews,
         )
 
     def committed_event(self, seq: int) -> ServerEvent | None:

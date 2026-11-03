@@ -22,3 +22,6 @@ export type { ConversationControls } from "./conversation/Composer";
 
 export const loadConversationPanel = () => import("./conversation/ConversationPanel");
 export { ConversationPanelHeader } from "./conversation/ConversationPanelHeader";
+
+export { PreviewActionsContext } from "./conversation/PreviewActionsContext";
+export type { PreviewActions } from "./conversation/PreviewActionsContext";

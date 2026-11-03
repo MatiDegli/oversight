@@ -1,9 +1,13 @@
 import { Children, isValidElement, type ReactNode, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import { createInitialState } from "../../state";
+import { previewStartup, type PreviewStartupResult } from "../preview/previewStartup";
 import { SettingsPanel } from "./SettingsPanel";
 import { mergeModePending } from "./mergeModeAttempt";
+
+vi.mock("../preview/previewStartup", () => ({ previewStartup: vi.fn() }));
+beforeEach(() => vi.mocked(previewStartup).mockReset().mockReturnValue({ kind: "missing" }));
 
 const state = { ...createInitialState(), mergeMode: { mode: "ask_me", revision: 0 } as const };
 function buttons(node: ReactNode): ReactElement<Record<string, unknown>>[] {
@@ -27,6 +31,8 @@ it.each([null, "ask_me", "merge_when_safe"] as const)(
     const html = renderToStaticMarkup(tree);
     for (const words of [
       "Merge mode",
+      "Preview startup",
+      "Not enabled on this server.",
       "Who lets a finished change into main.",
       "Every change waits for your decision.",
       "A change merges by itself only when every rule holds. Otherwise it waits for you.",
@@ -92,4 +98,47 @@ it("shows a refusal until revision changes and labels read-only replay", () => {
   expect(renderToStaticMarkup(<SettingsPanel state={state} />)).toContain(
     "Setting the merge mode is not available in a replay.",
   );
+});
+
+it.each<PreviewStartupResult>([
+  { kind: "missing" },
+  { kind: "invalid" },
+  {
+    kind: "valid",
+    report: {
+      version: 1,
+      argv: [["pnpm", "build"]],
+      cwd: "/workspace/app",
+      reason: "Settings fixture",
+      dependencies: [],
+      limits: "256 MiB; 300 s",
+      platform_residual: "",
+      build_log: "/runtime/build.log",
+      enable_hint: "Set OVERSIGHT_PREVIEW_ENABLED=1",
+      agents_label: "Agent A",
+    },
+  },
+])("mounts the $kind disclosure after merge mode through the shared reader", (result) => {
+  vi.mocked(previewStartup).mockReturnValue(result);
+  const html = renderToStaticMarkup(<SettingsPanel state={state} />);
+  expect(previewStartup).toHaveBeenCalledExactlyOnceWith();
+  expect(html).toContain('aria-labelledby="settings-preview-startup-heading"');
+  expect(html.match(/id="settings-preview-startup-heading"/gu)).toHaveLength(1);
+  expect(html.match(/<h2\b/gu)).toHaveLength(2);
+  expect(html).not.toContain(">Settings</h2>");
+  expect(html.indexOf("Preview startup")).toBeGreaterThan(
+    html.indexOf("Setting the merge mode is not available in a replay."),
+  );
+  const message =
+    result.kind === "valid"
+      ? "Settings fixture"
+      : result.kind === "missing"
+        ? "Not enabled on this server."
+        : "The preview startup report is invalid, so reviewed-app previews stay off.";
+  expect(html).toContain(message);
+  const onSetMergeMode = vi.fn();
+  const cards = buttons(SettingsPanel({ state, onSetMergeMode }));
+  expect(cards).toHaveLength(2);
+  expect(cards.map((card) => card.props["aria-pressed"])).toEqual([true, false]);
+  expect(onSetMergeMode).not.toHaveBeenCalled();
 });

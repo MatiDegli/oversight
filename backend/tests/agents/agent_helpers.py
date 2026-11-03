@@ -46,6 +46,7 @@ class Recorder:
         self.suites: list[SuiteRun] = []
         self.edit_result: bool | Exception = True
         self.propose_result: bool | Exception = True
+        self.suite_note: str | None = None
 
     async def publish(self, payload: EventPayload) -> None:
         self.log.append((type(payload).__name__, payload))
@@ -56,8 +57,9 @@ class Recorder:
             raise self.edit_result
         return self.edit_result
 
-    async def tests_executed(self, agent_id: str, run: SuiteRun) -> None:
+    async def tests_executed(self, agent_id: str, run: SuiteRun) -> str | None:
         self.suites.append(run)
+        return self.suite_note
 
     async def proposed(
         self, agent_id: str, summary: str | None, *, declaration: FinishDeclaration | None = None

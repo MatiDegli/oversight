@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
@@ -271,7 +272,10 @@ async def test_suite_summary_precedes_large_output(
     from oversight.workspace import SuiteRun
     from oversight_contracts.events import SuiteResult
 
-    async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+    async def run_tests(
+        self: Workspace, tree: Tree, *, timeout_s: float, on_queue_wait: Callable[[float], None]
+    ) -> SuiteRun:
+        on_queue_wait(0.0)
         assert timeout_s == 75
         return SuiteRun(
             result=SuiteResult(
@@ -327,7 +331,10 @@ async def test_suite_output_truncation_boundary(
     from oversight.workspace import SuiteRun
     from oversight_contracts.events import SuiteResult
 
-    async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+    async def run_tests(
+        self: Workspace, tree: Tree, *, timeout_s: float, on_queue_wait: Callable[[float], None]
+    ) -> SuiteRun:
+        on_queue_wait(0.0)
         return SuiteRun(
             result=SuiteResult(
                 outcome="failed", passed=1, failed=1, skipped=0, duration_ms=5, failed_tests=[]
@@ -416,7 +423,10 @@ async def test_passing_suite_returns_only_counts_and_keeps_full_evidence(
         output="pytest session output\n" * 1000,
     )
 
-    async def run_tests(self: Workspace, tree: Tree, *, timeout_s: float) -> SuiteRun:
+    async def run_tests(
+        self: Workspace, tree: Tree, *, timeout_s: float, on_queue_wait: Callable[[float], None]
+    ) -> SuiteRun:
+        on_queue_wait(0.0)
         return run
 
     monkeypatch.setattr(Workspace, "run_tests", run_tests)

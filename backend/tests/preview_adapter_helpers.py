@@ -38,7 +38,9 @@ class Reply:
 
     def policy(self) -> None:
         assert self.headers["content-security-policy"] == (
-            "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors " + ORIGIN
+            "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors "
+            + ORIGIN
+            + "; sandbox allow-forms"
         )
         assert self.headers["referrer-policy"] == "no-referrer"
         assert self.headers["cache-control"] == "no-store"

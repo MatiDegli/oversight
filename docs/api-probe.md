@@ -96,3 +96,37 @@ A minimal probe approved by the maintainer made two calls on `https://api.meta.a
 - `GET /models` lists muse-spark-1.1, muse-spark-1.2, muse-spark-1.2-contributor, muse-spark-1.3 and muse-spark-1.3-contributor, plus muse-image-1.0, muse-voice-transcribe-1.0 and muse-wonder-1.0.
 - One native tool call on `muse-spark-1.3-contributor` with `reasoning_effort` "low" returned finish_reason=tool_calls with one read_file call and its path argument, in 2.54 s. Usage reported: 544 prompt tokens and 133 completion tokens, of which 65 were reasoning, and 0 cached. The response echoes the model id.
 - Contributor mode shares prompts and completions with Meta for training, which is why it costs less. The code the agents see is public.
+
+## Lead preview suggestion: prepared expectations (2026-11-03)
+
+`preview_suggestion` is an explicit opt-in case for packet b-preview, items 1–2. It has
+only offline proof so far, using scripted transports and the production lead loop, prompt,
+closed tool schema, strict argument adapter and event-store reference validation. No paid
+provider run has been made for this case. It is absent from the default checks.
+
+The bounded synthetic scenario `lead-preview-admitted-proposal-v1` supplies a current
+unresolved coding proposal and an admitted server inventory, then asks to see and try the
+app. Passing requires fresh successful `status`, exactly one valid
+`show_view(kind="preview", agent_id="agent-2")` with a short caption, and a final answer
+that leaves opening, review and Approve with the person. The server derives the proposal;
+the model supplies no change identity, revision, head, URL, command, profile or token.
+An ordinary textual offer, missing status, wrong reference, malformed or extra fields,
+missing caption, skipped check or exhausted budget cannot pass. A conservative wording
+check tests the final answer; the maintainer must also read that answer in the details.
+
+The case reports its production prompt version and scenario identity. Calls and retries
+share the existing eight-call cap, with explicit production reasoning and bounded output.
+It writes only a reference event in a temporary synthetic log; it neither starts an
+application nor calls preview lifecycle endpoints, and makes no opening or release claim.
+
+The maintainer's separate paid invocation, **pending and not executed in this front**, is:
+
+```bash
+uv run --frozen python tools/probe_api.py meta --checks preview_suggestion \
+  --report /tmp/oversight-preview-suggestion-report.md \
+  --details /tmp/oversight-preview-suggestion-details.json
+```
+
+Review both artifacts and the reported version before making a provider-evidence claim.
+These explicit destinations preserve the historical generated provider blocks above.
+Historical recordings and their original prompt versions remain unchanged.

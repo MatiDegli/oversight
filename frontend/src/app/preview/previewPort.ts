@@ -1,7 +1,8 @@
-import type { AgentId, RunId, NonEmptyText } from "@contracts";
+import type { AgentId, RunId, NonEmptyText, PreviewCreated, PreviewTokenRequest } from "@contracts";
 import type { PreviewDetails, PreviewStatus } from "./previewTypes";
 
 export interface PreviewCandidate {
+  change_id?: string;
   run_id: RunId;
   agent_id: AgentId;
   revision: number;
@@ -22,13 +23,10 @@ export interface PreviewIdentity {
  * no retries. A start/stop timeout quarantines the preview until verified drainage.
  */
 export interface PreviewPort {
-  start(
-    input: PreviewCandidate,
-    signal: AbortSignal,
-  ): Promise<{ preview_id: string; lease_token: string }>;
+  start(input: PreviewCandidate, signal: AbortSignal): Promise<PreviewCreated>;
   details(id: string, signal: AbortSignal): Promise<PreviewDetails>;
-  renew(id: string, body: { lease_token: string }, signal: AbortSignal): Promise<PreviewStatus>;
-  stop(id: string, body: { lease_token: string }, signal: AbortSignal): Promise<PreviewStatus>;
+  renew(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus>;
+  stop(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus>;
 }
 export interface PreviewClock {
   schedule(callback: () => void, delay: number): () => void;

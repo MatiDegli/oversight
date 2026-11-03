@@ -14,7 +14,7 @@ from oversight.workspace.snapshot import finish_snapshot
 pytestmark = pytest.mark.anyio
 
 
-def test_explicit_configuration_is_frozen_and_production_opening_stays_disabled(monkeypatch):
+def test_default_configuration_is_frozen_and_production_opening_stays_disabled(monkeypatch):
     from oversight.workspace import PreviewProfile
 
     monkeypatch.setattr(PreviewProfile, "validate_files", lambda self: None)
@@ -26,10 +26,12 @@ def test_explicit_configuration_is_frozen_and_production_opening_stays_disabled(
         "OVERSIGHT_PREVIEW_ORIGINS": "http://127.0.0.1:8710",
     }
     frozen = resolve_preview_profile(values, 8710, None)
-    frozen.validate()
+    with pytest.raises(ValueError, match=r"^preview profile is disabled$"):
+        frozen.validate()
     values["OVERSIGHT_PREVIEW_PORTS"] = "8710"
     assert frozen.ports == (19681, 19682) and not frozen.production_open
-    with pytest.raises(ValueError):
+    values["OVERSIGHT_PREVIEW_ENABLED"] = "true"
+    with pytest.raises(ValueError, match=r"^invalid preview port pool$"):
         resolve_preview_profile(values, 8710, None).validate()
     assert not resolve_preview_profile({}, 8710, None).configured
 
@@ -43,9 +45,27 @@ async def test_composition_has_one_manager_and_generic_profiles_remain_disabled(
     )
     assert run.previews is run.workspace.previews
     assert run.previews.profile.trusted_demo is (not source)
-    assert not run.previews.profile.production_open
+    assert run.previews.profile.production_open
+    if source:
+        with pytest.raises(ValueError, match=r"^preview profile is disabled$"):
+            run.previews.profile.validate()
     with pytest.raises(PreviewError):
         await run.previews.start(run_id="wrong", agent_id="agent-1", revision=1, head_commit="head")
+
+
+async def test_composition_cannot_promote_untrusted_profile(tmp_path):
+    from dataclasses import replace
+
+    run = LiveRun(
+        Settings(
+            runtime_dir=tmp_path / ".runtime",
+            preview_profile=replace(profile(), trusted_demo=False),
+        )
+    )
+    assert run.previews is run.workspace.previews
+    assert run.previews.profile.enabled and not run.previews.profile.trusted_demo
+    with pytest.raises(ValueError, match=r"^preview profile is disabled$"):
+        run.previews.profile.validate()
 
 
 async def prepare_run(tmp_path):
@@ -72,7 +92,7 @@ async def prepare_run(tmp_path):
 
 
 @pytest.mark.parametrize("failed", [False, True])
-async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, monkeypatch, failed):
+async def test_enabled_shutdown_retains_drain_order(tmp_path, monkeypatch, failed):
     run, head, processes = await prepare_run(tmp_path)
     order = []
 
@@ -94,7 +114,8 @@ async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, m
     finish = finish_snapshot
 
     def snapshot(*args):
-        assert process.dead
+        assert process.dead and process.order[-1] == "namespace_dead"
+        order.append("namespace_dead")
         order.append("snapshot_finished")
         finish(*args)
 
@@ -103,6 +124,8 @@ async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, m
 
     async def store_close():
         assert run.previews._watcher is not None and run.previews._watcher.done()
+        if not failed:
+            assert process.dead and order.index("namespace_dead") < order.index("stopped")
         order.append("store_close")
 
     monkeypatch.setattr(barriers, "finish_snapshot", snapshot)
@@ -113,6 +136,8 @@ async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, m
             await run.shutdown()
         assert "stopped" not in order and "snapshot_finished" not in order
         assert run.workspace.runtime_owned and run.workspace.integrity.main_suspect
+        assert run.previews.has_owner and run.previews.registry.read() is not None
+        assert not process.dead
         assert run.previews._watcher is not None
         run.previews._watcher.cancel()
         await asyncio.gather(run.previews._watcher, return_exceptions=True)
@@ -123,7 +148,8 @@ async def test_shutdown_keeps_sink_and_store_until_verified_terminal(tmp_path, m
         )
         assert not run.workspace.runtime_owned
     assert order.index("manager_close") < order.index("store_close")
-    with pytest.raises(PreviewError):
+    run.previews.profile = profile()
+    with pytest.raises(PreviewError, match=r"^Live preview admission is closed\.$"):
         await run.previews.start(
             run_id="run-20261103-000000", agent_id="agent-1", revision=1, head_commit=head
         )
@@ -247,3 +273,88 @@ async def test_shutdown_restored_metadata_finalizes_before_store_close(tmp_path,
         if finalizer is not None:
             async with asyncio.timeout(5):
                 await finalizer
+
+
+async def test_reviewed_self_authorization_is_separate_and_nonexecuting(tmp_path, monkeypatch):
+    import sys
+    from dataclasses import replace
+    from pathlib import Path
+    from tempfile import TemporaryDirectory
+
+    from workspace.test_self_profile import self_checkout
+
+    from oversight.preview_runtime import compose
+    from oversight.preview_startup import reviewed_startup_report
+    from oversight.workspace import (
+        ReviewedAppAuthorization,
+        Workspace,
+        authorize_reviewed_app,
+        load_preview_app,
+    )
+    from oversight.workspace.source import self_inventory
+
+    # Keep this valid-disclosure case independent of the runner's potentially long TMPDIR.
+    short = TemporaryDirectory(prefix="op-", dir="/tmp" if sys.platform == "linux" else None)
+    tmp_path = Path(short.name)
+    runtime, original, source, resources = await self_checkout(tmp_path, monkeypatch)
+    inventory = await self_inventory(source, runtime)
+    launch = load_preview_app(original, {}, **resources)
+    assert launch is not None
+    authority = authorize_reviewed_app(inventory, launch)
+    frozen = replace(
+        profile(), trusted_demo=False, reviewed_app=authority, interpreter=resources["python"]
+    )
+    frozen.validate()
+    assert not frozen.trusted_demo
+    with pytest.raises(ValueError, match="preview app is not authorized"):
+        ReviewedAppAuthorization(inventory, launch).validate()
+    with pytest.raises(ValueError, match="preview app is not authorized"):
+        replace(authority, launch=replace(launch, mode="forged")).validate()
+    for selected in ("", "boltons-d31d821", "C:/own"):
+        with pytest.raises(ValueError, match="preview app is not authorized"):
+            Settings(workspace_source=selected, preview_app="explicit override")
+        with pytest.raises(ValueError, match="preview app is not authorized"):
+            Settings(workspace_source=selected, preview_profile=frozen)
+    workspace = Workspace(
+        runtime,
+        original,
+        pytest_pin="9.1.1",
+        source_inventory=inventory,
+        demo_python=resources["python"],
+    )
+
+    async def candidate(*args):
+        raise AssertionError("candidate resolution must not run")
+
+    manager = compose(
+        workspace,
+        frozen,
+        trusted_demo=False,
+        resolve_candidate=candidate,
+        memory_hold=lambda: None,
+    )
+    calls = []
+
+    def forbidden_process(*args):
+        calls.append(args)
+        raise AssertionError("reviewed scaffold must not spawn")
+
+    manager.process_factory = forbidden_process
+
+    async def refused(message):
+        with pytest.raises(PreviewError, match=message) as caught:
+            manager._admit()
+        assert caught.value.code == "not_configured"
+
+    await refused("Reviewed-app startup disclosure is unavailable")
+    manager.startup_report = "invalid"
+    await refused("Reviewed-app startup disclosure is unavailable")
+    manager.startup_report = reviewed_startup_report(frozen, "/r/previews/id/logs/build.log")
+    await refused("Reviewed-app preview execution is not available")
+    with pytest.raises(PreviewError, match="Reviewed-app preview execution is not available"):
+        await manager._launch(None)  # pyright: ignore[reportArgumentType]
+    assert calls == [] and not manager.has_owner
+    resources["node"].write_text("stale executable")
+    with pytest.raises(ValueError, match="preview app is not authorized"):
+        authority.validate()
+    await refused("Live preview profile is disabled")

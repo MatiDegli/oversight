@@ -1,5 +1,6 @@
 import type { LeadView, LeadViewKind, ServerEvent } from "@contracts";
 
+import { resolvePreviewReference, type PreviewResolution } from "./previewReferences";
 import { selectLiveDiff } from "./selectors";
 import type { State } from "./types";
 
@@ -13,6 +14,7 @@ export const MOMENT_EVENT_TYPES: ReadonlySet<ServerEvent["type"]> = new Set([
   "lead.reply",
   "error",
 ]);
+const previewTargets = new WeakMap<PreviewResolution, string[]>();
 
 /** Resolve identities again at the displayed state; retain the original request separately. */
 export function resolveViewReferences(
@@ -29,8 +31,15 @@ export function resolveViewReferences(
         .map((ref): [string, string] => [ref.change_id, ref.path]);
     case "behavior":
       return hasMeasuredBehavior(state, view.change_id) ? [view.change_id] : [];
-    case "preview":
-      return [];
+    case "preview": {
+      const resolved = resolvePreviewReference(state, request);
+      let targets = previewTargets.get(resolved);
+      if (!targets) {
+        targets = resolved.candidate ? [resolved.candidate.change_id] : [];
+        previewTargets.set(resolved, targets);
+      }
+      return targets;
+    }
     case "moment":
       return view.event_seq <= request.through_seq &&
         view.event_seq <= state.lastSeq &&

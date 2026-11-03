@@ -40,11 +40,26 @@ const request: LeadView = {
   view: { kind: "preview", agent_id: "agent-1" },
 };
 
-describe("dormant preview contract readers", () => {
-  it.each([0, 1, 6, 15])("resolves nothing at prefix %i", (count) => {
+describe("preview contract readers", () => {
+  it.each([0, 1, 6, 15])("refuses unavailable proposals at prefix %i", (count) => {
     const prefix = events.slice(0, count);
     const state = prefix.reduce(applyEvent, createInitialState());
     expect(resolveViewReferences(state, { ...request, through_seq: count })).toEqual([]);
+  });
+
+  it("resolves an eligible retained suggestion in live and replay folds", () => {
+    const prefix = events.slice(0, 6);
+    const agent = prefix.find((event) => event.type === "agent.status");
+    if (agent?.type !== "agent.status") throw new Error("Missing agent");
+    const eligible: ServerEvent[] = [
+      ...prefix,
+      { ...agent, seq: 7, payload: { ...agent.payload, state: "ready_for_review" } },
+      { type: "lead.view", seq: 8, ts: status.ts, payload: { ...request, through_seq: 7 } },
+    ];
+    const state = eligible.reduce(applyEvent, createInitialState());
+    const retained = state.leadViews[request.agent_id]?.[0];
+    expect(retained).toBeDefined();
+    if (retained) expect(resolveViewReferences(state, retained.payload)).toEqual(["change-1"]);
   });
 
   it("registers preview.status and changes only sequence, gap and clock bookkeeping", () => {

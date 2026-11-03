@@ -9,7 +9,7 @@ import type { Conversation, ConversationEntry, LeadConversation } from "./select
 export { LeadViewCard } from "./LeadViewCard";
 export { selectLeadConversation } from "./selectLeadConversation";
 
-const LeadThreadRows = lazy(() => import("./LeadThreadRows"));
+const LeadPreviewRows = lazy(() => import("./LeadPreviewRows"));
 
 export interface ConversationPanelProps extends ConversationControls {
   conversation: Conversation | LeadConversation;
@@ -77,7 +77,7 @@ export function ConversationPanel({
         <div ref={content} className="conversation-entries">
           {conversation.kind === "lead" ? (
             <Suspense fallback={<p role="status">Loading lead conversation…</p>}>
-              <LeadThreadRows
+              <LeadPreviewRows
                 conversation={conversation}
                 renderView={renderView}
                 renderPlan={renderPlan}

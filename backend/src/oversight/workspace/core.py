@@ -11,7 +11,7 @@ import re
 import shutil
 import sys
 import time
-from collections.abc import AsyncGenerator, Mapping, Sequence
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from functools import partial
@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from oversight.workspace.preview import PreviewManager
+    from oversight.workspace.source import SourceInventory
 
 from oversight.limits import bounded_text
 from oversight.workspace._platform import (
@@ -74,7 +75,7 @@ from oversight.workspace.integrity import (
     veto_index,
 )
 from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, refuse_orphans
-from oversight.workspace.locks import Locks, offload
+from oversight.workspace.locks import Locks, QueueWait, offload
 from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import (
@@ -280,6 +281,8 @@ class Workspace:
         pytest_options: tuple[str, ...] = (),
         _nt_source_bytes: bool = False,
         own_source: NtSource | None = None,
+        source_inventory: "SourceInventory | None" = None,
+        require_demo_python: bool = False,
     ) -> None:
         if own_source is not None and not _nt_source_bytes:
             raise ValueError("own source requires the raw-byte policy")
@@ -310,6 +313,9 @@ class Workspace:
         self._literal_initial_add = False
         self._root = runtime_root
         self._template = template
+        self.source_inventory = source_inventory
+        if (require_demo_python or source_inventory is not None) and demo_python is None:
+            raise ValueError("oversight-self: prepared demo Python is required")
         self._pytest_pin = pytest_pin
         self._pytest_targets = pytest_targets
         self._pytest_options = pytest_options
@@ -512,9 +518,9 @@ class Workspace:
             )
 
     @asynccontextmanager
-    async def git_lease(self) -> AsyncGenerator[None]:
+    async def git_lease(self, *, _queue: QueueWait | None = None) -> AsyncGenerator[None]:
         """Shared by server Git, suites and future Revert; acquire after all tree/mode locks."""
-        async with self._locks.git_lease():
+        async with self._locks.git_lease(queue=_queue):
             if sys.platform == "win32":
                 if self._lock_fd is None:
                     raise WorkspaceBusy("Git requires the runtime lock sentinel")
@@ -713,7 +719,10 @@ class Workspace:
 
     def _populate(self) -> None:
         (self._root / "tmp" / "home").mkdir(mode=DIR_MODE, parents=True)
-        copy_template(self._template, self._main.root)
+        if self.source_inventory is None:
+            copy_template(self._template, self._main.root)
+        else:
+            copy_template(self._template, self._main.root, inventory=self.source_inventory)
 
     def _write_excludes(self) -> None:
         info = self._main.root / ".git" / "info"
@@ -999,16 +1008,20 @@ class Workspace:
         spawn: Spawn | None = None,
         isolation: IsolationPolicy = "best_effort",
         measured_targets: tuple[CallTarget, ...] | None = None,
+        on_queue_wait: Callable[[float], None] | None = None,
     ) -> SuiteRun:
         """Run fixed tests in the disposable `tree` under its lock and a timeout.
 
         Demo/profiles use the runtime demo venv; own sources use their validated original
         venv with imports mapped to this copy, without building or installing anything.
+        For demo/Boltons, `on_queue_wait` receives cumulative blocked lock seconds,
+        starting at zero, synchronously on acquisition or interruption (before cancellation).
         """
         async with (
-            self.locks(main=True, agent_id=tree.agent_id),
+            QueueWait(on_queue_wait, enabled=self._own_source is None) as queue,
+            self._locks.acquire(main=True, agent_id=tree.agent_id, queue=queue),
             tree.section(locked=False),
-            self.git_lease(),
+            self.git_lease(_queue=queue),
         ):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
             if measured_targets is not None:

@@ -34,7 +34,7 @@ type ParsedSettingName = (
 
 
 def read_env_file(path: Path) -> dict[str, str]:
-    """Parse KEY=VALUE lines; blank lines and comments are skipped, quotes around values removed."""
+    """Parse KEY=VALUE lines, preserving the literal preview opt-in for startup validation."""
     values: dict[str, str] = {}
     if not path.is_file():
         return values
@@ -42,8 +42,10 @@ def read_env_file(path: Path) -> dict[str, str]:
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
-        key, _, value = line.partition("=")
-        values[key.strip()] = value.strip().strip("\"'")
+        key, _, value = raw.partition("=")
+        key = key.strip()
+        # Validate after environment precedence, without normalizing this literal-only flag.
+        values[key] = value if key == "OVERSIGHT_PREVIEW_ENABLED" else value.strip().strip("\"'")
     return values
 
 
@@ -151,16 +153,29 @@ class Settings:
     )
     """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
     demo_python: Path | None = None
+    """Explicit prepared interpreter with pytest; required for oversight-self, never built there.
+    No environment variable: supplied by the person-owned composition or a test fixture."""
     preview_profile: PreviewProfile = field(default_factory=PreviewProfile)
-    """Explicit trusted preview startup configuration; production opening remains disabled."""
-    """Tests only, no variable: an interpreter with pytest, used instead of building the demo
-    venv."""
+    """Frozen opt-in, demo trust clamp and separately verified reviewed-app authorization."""
+    preview_app: str | None = None
+    """Person override: absolute path to a UTF-8 JSON declaration, never command text."""
+    preview_node: Path | None = None
+    preview_tsc: Path | None = None
+    preview_vite: Path | None = None
+    """Person-owned absolute prepared resources; declarations cannot set them or install them."""
     frontend_dist: Path | None = None
     """The built frontend the live app serves, or `None` for none. No variable: `load` sets
     frontend/dist, and a test that builds `Settings` itself gets no UI unless it passes one."""
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        if self.preview_app is not None and self.workspace_source != "oversight-self":
+            # An explicit reviewed-app selection must never fall through to the shop adapter.
+            raise ValueError("preview app is not authorized")
+        if self.preview_profile.reviewed_app is not None:
+            if self.workspace_source != "oversight-self":
+                raise ValueError("preview app is not authorized")
+            self.preview_profile.reviewed_app.validate()
         object.__setattr__(
             self,
             "preview_profile",
@@ -203,6 +218,16 @@ class Settings:
         port, vite_port = resolve_ports(merged)
         return cls(
             preview_profile=resolve_preview_profile(merged, port, vite_port),
+            preview_app=merged.get("OVERSIGHT_PREVIEW_APP"),
+            preview_node=Path(merged["OVERSIGHT_PREVIEW_NODE"])
+            if merged.get("OVERSIGHT_PREVIEW_NODE")
+            else None,
+            preview_tsc=Path(merged["OVERSIGHT_PREVIEW_TSC"])
+            if merged.get("OVERSIGHT_PREVIEW_TSC")
+            else None,
+            preview_vite=Path(merged["OVERSIGHT_PREVIEW_VITE"])
+            if merged.get("OVERSIGHT_PREVIEW_VITE")
+            else None,
             host=merged.get("OVERSIGHT_HOST", cls.host),
             port=port,
             vite_port=vite_port,
@@ -290,9 +315,13 @@ def resolve_preview_profile(
     def duration(name: str, default: float) -> float:
         return float(values.get("OVERSIGHT_PREVIEW_" + name, str(default)))
 
+    enabled = values.get("OVERSIGHT_PREVIEW_ENABLED", "false")
+    if enabled not in {"true", "false"}:
+        raise ValueError("OVERSIGHT_PREVIEW_ENABLED must be true or false")
     raw_ports = values.get("OVERSIGHT_PREVIEW_PORTS", "")
     ports = tuple(int(item) for item in raw_ports.split(",")) if raw_ports else ()
     return PreviewProfile(
+        enabled=enabled == "true",
         adapter=Path(values["OVERSIGHT_PREVIEW_ADAPTER"])
         if values.get("OVERSIGHT_PREVIEW_ADAPTER")
         else None,

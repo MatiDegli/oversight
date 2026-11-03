@@ -3,6 +3,7 @@ import json
 import stat
 import sys
 from collections.abc import Mapping, Sequence
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -376,3 +377,247 @@ async def test_ordinary_environment_and_spawn_argv_are_exact(tmp_path, profile, 
         pytest_options=profile.pytest_options if profile else (),
     )
     assert result.result.outcome == "passed"
+
+
+class QueueClock:
+    """Advance only diagnostic time, leaving suite and event-loop deadlines intact."""
+
+    def __init__(self):
+        self.now = 0.0
+        self.timers = []
+
+    def call_later(self, delay, callback):
+        timer = asyncio.TimerHandle(self.now + delay, callback, (), asyncio.get_running_loop())
+        self.timers.append((timer, callback))
+        return timer
+
+    async def advance(self, seconds):
+        self.now += seconds
+        for timer, callback in self.timers.copy():
+            if timer.cancelled():
+                self.timers.remove((timer, callback))
+            elif timer.when() <= self.now:
+                self.timers.remove((timer, callback))
+                callback()
+        await settle_queue()
+
+
+async def settle_queue():
+    for _ in range(30):
+        await asyncio.sleep(0)
+
+
+@pytest.fixture
+async def queue_workspace(tmp_path, template, profile):
+    from oversight.workspace import Workspace
+
+    workspace = Workspace(
+        tmp_path / ".runtime",
+        template,
+        pytest_pin="9.1.1",
+        pytest_targets=profile.pytest_targets if profile else (),
+        pytest_options=profile.pytest_options if profile else (),
+    )
+    await workspace.acquire_runtime()
+    try:
+        await workspace.reset()
+        yield workspace, await workspace.create_worktree("agent-1")
+    finally:
+        workspace.release_runtime()
+
+
+async def hold_queue_lock(workspace, boundary, entered, release):
+    async with workspace.locks(
+        main=boundary == "main",
+        agent_id="agent-1"
+        if boundary == "worktree"
+        else "holder"
+        if boundary == "Git lease"
+        else None,
+    ):
+        if boundary == "Git lease":
+            async with workspace.git_lease():
+                entered.set()
+                await release.wait()
+        else:
+            entered.set()
+            await release.wait()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("profile", [None, BOLTONS], ids=["demo", "boltons"])
+@pytest.mark.parametrize(
+    "boundaries", [(), ("main",), ("worktree",), ("Git lease",), ("main", "worktree", "Git lease")]
+)
+async def test_run_tests_queue_logs_throttled(
+    queue_workspace, profile, boundaries, monkeypatch, caplog
+):
+    from oversight.workspace.locks import QueueWait
+
+    workspace, tree = queue_workspace
+    clock = QueueClock()
+    monkeypatch.setattr("oversight.workspace.locks.monotonic", lambda: clock.now)
+    monkeypatch.setattr("oversight.workspace.locks.get_running_loop", lambda: clock)
+    caplog.set_level("WARNING", logger="oversight.workspace.locks")
+    delivered, observed, stamps, starts = [], [], [], []
+    waiting = asyncio.Queue()
+    begin = QueueWait.begin
+
+    def observe(self, category):
+        begin(self, category)
+        observed.append(category)
+        starts.append(clock.now)
+        waiting.put_nowait(category)
+
+    monkeypatch.setattr(QueueWait, "begin", observe)
+    original_log = QueueWait._log_if_due
+
+    def log(self):
+        before = len(caplog.records)
+        original_log(self)
+        if len(caplog.records) != before:
+            stamps.append(clock.now)
+
+    monkeypatch.setattr(QueueWait, "_log_if_due", log)
+    owner = None
+    sentinel = object()
+
+    async def suite(*args, **kwargs):
+        assert asyncio.current_task() is owner
+        assert workspace.operations.holds(main=True)
+        assert workspace.operations.holds(agent_id="agent-1")
+        assert kwargs["pytest_targets"] == (profile.pytest_targets if profile else ())
+        clock.now += 11  # execution is excluded
+        return sentinel
+
+    monkeypatch.setattr("oversight.workspace.core.guarded_suite", suite)
+    verify = tree.verify_root
+
+    def verify_root():
+        verify()
+        clock.now += 7  # root verification is excluded
+
+    monkeypatch.setattr(tree, "verify_root", verify_root)
+    releases, holders = [], []
+    for boundary in boundaries:
+        entered, release = asyncio.Event(), asyncio.Event()
+        holders.append(asyncio.create_task(hold_queue_lock(workspace, boundary, entered, release)))
+        releases.append(release)
+        await entered.wait()
+
+    async def call():
+        nonlocal owner
+        owner = asyncio.current_task()
+        if not boundaries:
+            # Reentrant acquisition must remain immediate and owned by this task.
+            async with workspace.locks(main=True, agent_id="agent-1"), workspace.git_lease():
+                return await workspace.run_tests(tree, timeout_s=60, on_queue_wait=delivered.append)
+        return await workspace.run_tests(tree, timeout_s=60, on_queue_wait=delivered.append)
+
+    task = asyncio.create_task(call())
+    expected_wait = 0.0
+    for index, release in enumerate(releases):
+        async with asyncio.timeout(5):
+            assert await waiting.get() == boundaries[index]
+        await settle_queue()
+        before = len(stamps)
+        last = stamps[-1]
+        await clock.advance(29 - (clock.now - last))
+        assert len(stamps) == before
+        await clock.advance(1)
+        assert stamps[-1] - last == 30
+        await clock.advance(5)
+        expected_wait += clock.now - starts[index]
+        release.set()
+        await holders[index]
+    assert await task is sentinel
+    assert observed == list(boundaries)
+    assert delivered[-1] == expected_wait
+    assert len(stamps) == (len(boundaries) + 1 if boundaries else 0)
+    assert all(b - a == 30 for a, b in pairwise(stamps))
+    messages = [r.getMessage() for r in caplog.records]
+    assert len({m.split()[1] for m in messages}) == (1 if boundaries else 0)
+    assert all(str(workspace.runtime_root) not in m and "agent-1" not in m for m in messages)
+    assert all(timer.cancelled() for timer, _ in clock.timers)
+    assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("profile", [None, BOLTONS], ids=["demo", "boltons"])
+@pytest.mark.parametrize("boundary", ["main", "worktree", "Git lease"])
+async def test_cancel_while_waiting_records_elapsed(queue_workspace, boundary, monkeypatch):
+    from oversight.workspace.locks import QueueWait
+
+    workspace, tree = queue_workspace
+    now = 10.0
+    monkeypatch.setattr("oversight.workspace.locks.monotonic", lambda: now)
+    waiting, entered, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    delivered = []
+    begin = QueueWait.begin
+
+    def observe(self, category):
+        begin(self, category)
+        waiting.set()
+
+    monkeypatch.setattr(QueueWait, "begin", observe)
+    holder = asyncio.create_task(hold_queue_lock(workspace, boundary, entered, release))
+    await entered.wait()
+    task = asyncio.create_task(
+        workspace.run_tests(tree, timeout_s=60, on_queue_wait=delivered.append)
+    )
+    await waiting.wait()
+    now = 18.25
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert delivered == [0.0, 8.25]
+    assert not holder.done()
+    release.set()
+    await holder
+    async with workspace.locks(main=True, agent_id="agent-1"), workspace.git_lease():
+        pass
+    assert workspace.operations.idle
+    assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("profile", [None, BOLTONS], ids=["demo", "boltons"])
+async def test_unqueued_run_tests_reports_zero(queue_workspace, monkeypatch, caplog):
+    workspace, tree = queue_workspace
+    delivered = []
+    owner = asyncio.current_task()
+    sentinel = object()
+
+    async def suite(*args, **kwargs):
+        assert asyncio.current_task() is owner
+        return sentinel
+
+    monkeypatch.setattr("oversight.workspace.core.guarded_suite", suite)
+    caplog.set_level("WARNING", logger="oversight.workspace.locks")
+    assert await workspace.run_tests(tree, timeout_s=60, on_queue_wait=delivered.append) is sentinel
+    assert delivered == [0.0] and not caplog.records
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("profile", [None])
+async def test_own_source_wait_diagnostics_remain_disabled(queue_workspace, monkeypatch, caplog):
+    workspace, tree = queue_workspace
+    monkeypatch.setattr(workspace, "_own_source", object())
+    entered, release = asyncio.Event(), asyncio.Event()
+    delivered = []
+    holder = asyncio.create_task(hold_queue_lock(workspace, "main", entered, release))
+    await entered.wait()
+    caplog.set_level("WARNING", logger="oversight.workspace.locks")
+    task = asyncio.create_task(
+        workspace.run_tests(tree, timeout_s=60, on_queue_wait=delivered.append)
+    )
+    await settle_queue()
+    assert not task.done()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert delivered == [] and not caplog.records
+    release.set()
+    await holder
+    assert workspace.operations.idle
+    assert not [t for t in asyncio.all_tasks() if t.get_name() == "run_tests queue observer"]

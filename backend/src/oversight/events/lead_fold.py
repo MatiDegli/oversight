@@ -204,7 +204,11 @@ def _render_rows(
 
 
 def fold_lead_status(
-    events: Iterable[ServerEvent], through_seq: int, *, include_views: bool = False
+    events: Iterable[ServerEvent],
+    through_seq: int,
+    *,
+    include_views: bool = False,
+    include_previews: bool = False,
 ) -> tuple[int, str]:
     # The caller supplies a repeatable bounded view, never a live iterator past S. Each pass
     # reads borrowed envelopes synchronously and never mutates them or consults runtime state.
@@ -240,7 +244,7 @@ def fold_lead_status(
         )
         for key, value in usage.by_change.items()
     )
-    required.extend(project_views(events).inventory())
+    required.extend(project_views(events).inventory(include_previews=include_previews))
     return through_seq, serialize_status(through_seq, rows[1:], required=required)
 
 

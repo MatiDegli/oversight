@@ -23,9 +23,9 @@ export interface AcceptanceFrame {
   pageErrors: string[];
   overflow: { page: number; panel: number; frame: number };
 }
-export function acceptanceSupport() {
+export function acceptanceSupport(enabled = true) {
   const support = new AcceptanceSupport();
-  beforeAll(() => support.start(), 60_000);
+  beforeAll(() => (enabled ? support.start() : undefined), 60_000);
   afterAll(() => support.dispose());
   return support;
 }

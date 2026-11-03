@@ -1,3 +1,4 @@
+import type { PreviewStatusEvent } from "@contracts";
 import { apply, parseEvent } from "./events";
 import type { Transport, TransportStore } from "./events";
 
@@ -14,6 +15,7 @@ export interface LiveOptions {
   /** One failure per streak; `null` when a reopened stream is healthy again. */
   onError?: (error: unknown) => void;
   onOpen?: () => void;
+  onPreviewStatus?: (event: PreviewStatusEvent) => void;
 }
 
 export function startLive({
@@ -21,6 +23,7 @@ export function startLive({
   openStream = (url) => new EventSource(url),
   onError,
   onOpen,
+  onPreviewStatus,
 }: LiveOptions): Transport {
   let stopped = false;
   let stream: EventStream | undefined;
@@ -69,8 +72,15 @@ export function startLive({
         if (stopped || current !== stream) return;
         try {
           const event = parseEvent(message.data);
+          const previous = store.getState().state.lastSeq;
           if (!apply(store, event))
             throw new Error(`Live sequence or graph version mismatch at ${String(event.seq)}`);
+          if (
+            event.type === "preview.status" &&
+            event.seq === previous + 1 &&
+            store.getState().state.lastSeq === event.seq
+          )
+            onPreviewStatus?.(event);
           retryWindow = 500;
           reported = false;
           badEvent = false;

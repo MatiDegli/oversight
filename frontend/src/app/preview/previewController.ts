@@ -16,6 +16,7 @@ const confirmed = (status: PreviewStatus) =>
   terminal(status) && status.reason !== "cleanup_unverified";
 const sameCandidate = (status: PreviewStatus, candidate: PreviewCandidate) =>
   status.run_id === candidate.run_id &&
+  (candidate.change_id === undefined || status.change_id === candidate.change_id) &&
   status.agent_id === candidate.agent_id &&
   status.revision === candidate.revision &&
   status.head_commit === candidate.head_commit;
@@ -280,7 +281,10 @@ class Controller implements PreviewController {
     this.#startDeadlineOff = this.#clock.schedule(() => {
       this.#startDeadlinePassed = true;
     }, 5_000);
-    this.#candidate = observed;
+    this.#candidate = {
+      ...observed,
+      ...(candidate.change_id && { change_id: candidate.change_id }),
+    };
     this.#publish({
       visible: true,
       pending: true,
@@ -301,7 +305,10 @@ class Controller implements PreviewController {
       if (!this.#current(epoch)) return;
       this.#token = receipt.lease_token;
       this.#id = receipt.preview_id;
-      this.#candidate = observed;
+      this.#candidate = {
+        ...observed,
+        ...(candidate.change_id && { change_id: candidate.change_id }),
+      };
       this.#publish({ notice: null });
       await this.refresh();
       this.#publish({ pending: false });
@@ -339,6 +346,7 @@ class Controller implements PreviewController {
     this.#publish({
       pending: true,
       notice: "closure_unconfirmed",
+      frameUrl: null,
       uncertain: true,
     });
     try {
@@ -362,9 +370,14 @@ class Controller implements PreviewController {
   }
   close = async () => {
     this.#cancelStart = true;
+    this.#publish({ frameUrl: null });
     await this.#flight;
     if (this.#disposed) return;
     if (!this.#token) {
+      if (this.#quarantined) {
+        this.#publish({ visible: true, pending: false, uncertain: true });
+        return;
+      }
       this.#dismiss();
       return;
     }
