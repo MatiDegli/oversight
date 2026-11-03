@@ -18,6 +18,10 @@ after where proved, and optional behavior comparisons and measured caller eviden
 Nothing reaches main without your approval or rules you explicitly set.
 The lead composes constrained generative UI in Chat with `show_view`: closed reference kinds, values from committed events; built, not released.
 
+![Oversight with two working agents, the repository graph and an inline inventory diff](docs/readme/oversight-view.png)
+
+Current UI replaying the real recorded run (`fixtures/events/recorded-demo.jsonl`; Oct 27, 2026); this edit has no exact callers.
+
 ## Features
 
 “On” means available by default, not that a model runs without a request. Optional evidence needs
@@ -26,7 +30,7 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Feature | What it does | Meta models | Default |
 | --- | --- | --- | --- |
 | Lead Chat and plans | Discuss tasks; approve a proposed plan before the server queues its agents. | Muse Spark, Muse Spark Open | On |
-| Constrained generative UI | The lead composes Chat reference views through `show_view`, from closed kinds; every value resolves from committed events. Release validation remains. | Muse Spark, Muse Spark Open | Built, not released |
+| Constrained generative UI | Lead Chat composes closed highlight, changed-file, behavior and moment reference views from committed events through `show_view`, advertised and dispatched. Synthetic proofs exist; release awaits the paid probe, prompt validation and real recording. | Muse Spark, Muse Spark Open | Built, not released |
 | Parallel coding agents | Four slots by default, up to six; each agent edits and tests in its own worktree with six fixed tools and no shell. | Muse Spark, Muse Spark Open | On |
 | Agent harness | Add syntax checks, bounded search feedback and a test-before-finish guard. | None | Opt-in (`OVERSIGHT_HARNESS_PACK`) |
 | Repository graph and impact cone | See reads, edits, shared work and bounded possible effects, with module, function and detail views. | None | On |
@@ -41,6 +45,10 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Live demo preview | Open one agent's demo shop proposal at a time; reviewed-app execution remains unavailable. | None | Opt-in (`OVERSIGHT_PREVIEW_ENABLED`) |
 | Replay and practice | Play the bundled real run without a backend and compare your decisions with the recorded ones. | None | On |
 | Sources and platforms | Start with the demo; select prepared pinned profiles, including Oversight's reviewed copy, or validated native Windows copies. Linux/WSL is the verified path. | None | On |
+
+![Review showing a failed test, a loosened assertion and a later pass beside the impact cone](docs/readme/review.png)
+
+Current UI with hand-written example data showing a test failure, an assertion edit and a later pass.
 
 - The static replay build plays `fixtures/events/recorded-demo.jsonl` by default; its
   label comes from provenance: `Recorded run · Oct 27, 2026`.
@@ -61,6 +69,18 @@ Both use the official OpenAI SDK, with `low` reasoning set on every real call. T
 brake refuses new runs above 90%. Replies become whole-message events, never one event per token;
 SQLite writes are batched. Tests and `make check` use scripted fake models and spend no credits.
 The [Oct 30 detection results](tools/eval/detection/RESULTS.md) record a US$0.0513 run using both Meta models; every arm failed its declared criteria.
+
+```mermaid
+flowchart TD
+  person["Person · no model"] --> lead["Lead · Muse Spark by default"]
+  lead --> plan["Plan approval by the person · no model"]
+  plan --> agents["Coding agents in worktrees · Muse Spark by default"]
+  agents --> evidence["Evidence: tests and impact cone · no model"]
+  evidence --> review["Cross-review, opt-in · Muse Spark Open by default"]
+  review --> approve["Approve by the person · no model"]
+  evidence --> approve
+  approve --> main["main · no model"]
+```
 
 ## Design principles
 
