@@ -29,6 +29,7 @@ from typing import Any
 
 from oversight.agents import AgentTask, LedgerFile, Publish, ReviewOutcome, RunEnd
 from oversight.changes import _approval as approval
+from oversight.changes import _configuration as configuration
 from oversight.changes import _cross_review as cross_review
 from oversight.changes import _delivery as delivery
 from oversight.changes import _examples as examples
@@ -300,10 +301,18 @@ class ChangeManager:
         """Send `change.updated` for an edit on disk; `False` after sending an `error` instead."""
         return await proposal.file_edited(self._ctx, agent_id, path)
 
-    async def tests_executed(self, agent_id: AgentId, run: SuiteRun) -> None:
+    async def tests_executed(self, agent_id: AgentId, run: SuiteRun) -> str | None:
         rec = self._ctx.state.agents[agent_id]
         async with self._ctx.workspace.locks(agent_id=agent_id):
             await publish_suite(self._ctx, rec, run, phase="agent", revision=None)
+            if self._ctx.workspace.nt_source_bytes:
+                return None
+            try:
+                return await configuration.attribution(
+                    self._ctx, rec.tree, rec.base_commit, run.tested_tree, limit=5
+                )
+            except Exception as error:
+                return configuration.unknown(f"comparison failed ({type(error).__name__})")
 
     async def proposed(
         self,

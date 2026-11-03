@@ -4611,6 +4611,25 @@ default single-link requirement.
 Residual risk: a linked file can also change through its uv cache name. The token recheck after
 each read refuses a change observed during that read; it cannot prevent later cache writes.
 
+## 2026-11-03 — Configuration attribution stays advisory and uses the current change base
+
+The maintainer authorized advisory configuration attribution for demo/Boltons agent suites and
+proposal review. Compare immutable captured Git trees against
+`rec.base_commit` read under the agent lock, including after Request changes moves that base.
+Reuse the existing seven configuration basenames plus exact-case `conftest.py` at any depth;
+whole-file differences qualify without proving pytest relevance. The integrity predicate,
+inventory and veto remain unchanged. Ignored files are not compared and external inputs remain
+unknown. A failed or incomplete comparison produces a bounded unknown note, preserving suite
+evidence, cancellation and evidence-publication failures.
+
+The one cross-module exception is the atomic change to `agents.ChangeSink.tests_executed`, its
+`changes` implementation and the agent loop caller: return the server note, add it to content
+and summary before step publication, then retain that content in model history. Classification
+and Git comparison remain in `changes`; `agents` imports neither. Proposal notes are frozen in
+`FactsEvidence.problems`, never `SuiteRun.problems`, with prefix `configuration attribution: `.
+Display limits are five paths for steps and twenty for proposals, separately identified as
+display omissions. The current frontend renders each note as its own line, apart from
+“Incomplete:”, which still joins the other analysis limitations with "; ".
 ## 2026-11-03 — Grouped Chat rail completes Q2/Q3 and folded scrolling
 
 K3r implements the existing Q2/Q3 authority in “Built map and Chat refinements” and the K3
