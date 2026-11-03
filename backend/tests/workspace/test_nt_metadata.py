@@ -3,6 +3,7 @@
 import os
 import stat
 import time
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -12,9 +13,90 @@ from oversight.workspace import metadata_io as metadata
 from oversight.workspace.metadata_io import Budget, Entry
 
 
+def token_stat(
+    *, mode=stat.S_IFREG | 0o666, ino=42, dev=7, nlink=1, size=5, mtime_ns=123456789, ctime_ns=123
+):
+    return os.stat_result(
+        (mode, ino, dev, nlink, 0, 0, size, 0, 0, 0),
+        {"st_mtime_ns": mtime_ns, "st_ctime_ns": ctime_ns, "st_birthtime_ns": ctime_ns},
+    )
+
+
+@pytest.mark.parametrize("execute", [0o001, 0o010, 0o100, 0o111])
+def test_nt_token_ignores_name_derived_execute_bits(execute):
+    before = token_stat()
+    after = token_stat(mode=before.st_mode | execute)
+    assert metadata.nt_token(before) == metadata.nt_token(after)
+    assert metadata.nt_token(before) == (7, 42, stat.S_IFREG | 0o666, 1, 5, 123456789, 123)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"mode": stat.S_IFDIR | 0o666},
+        {"mode": stat.S_IFREG | 0o444},
+        {"ino": 43},
+        {"dev": 8},
+        {"nlink": 2},
+        {"size": 6},
+        {"mtime_ns": 123456790},
+        {"ctime_ns": 124},
+    ],
+    ids=["type", "readonly", "inode", "device", "links", "size", "mtime-ns", "creation-ns"],
+)
+def test_nt_token_keeps_other_identity_fields(changes):
+    assert metadata.nt_token(token_stat()) != metadata.nt_token(token_stat(**changes))
+
+
 def stat_fields(info, **changes):
     fields = {name: getattr(info, name) for name in dir(info) if name.startswith("st_")}
     return SimpleNamespace(**(fields | changes))
+
+
+def inject_name_execute_bits(monkeypatch, path):
+    lstat = Path.lstat
+
+    def named_stat(target, *args, **kwargs):
+        info = lstat(target, *args, **kwargs)
+        return stat_fields(info, st_mode=info.st_mode | 0o111) if target == path else info
+
+    monkeypatch.setattr(Path, "lstat", named_stat)
+
+
+def test_environment_check_accepts_name_derived_execute_bits(tmp_path, monkeypatch):
+    from .test_source_nt_env import environment
+
+    source, _, io = environment(tmp_path)
+    path = source.root / ".venv/Scripts/python.exe"
+    inject_name_execute_bits(monkeypatch, path)
+    io.check(path, directory=False)
+
+
+@pytest.mark.parametrize("kind", ["Git metadata", "working file"])
+def test_native_read_accepts_name_derived_execute_bits(tmp_path, monkeypatch, kind):
+    path = tmp_path / "make.bat"
+    path.write_bytes(b"stable\r\n\x1a")
+    inject_name_execute_bits(monkeypatch, path)
+    entry = metadata.read_at(tmp_path, path.name, path, Budget(time.monotonic() + 5), kind=kind)
+    assert entry is not None and entry.data == path.read_bytes()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX descriptor-relative mode comparison")
+def test_posix_read_still_compares_execute_bits(tmp_path, monkeypatch):
+    path = tmp_path / "input"
+    path.write_bytes(b"stable")
+    fstat = os.fstat
+
+    def opened(fd):
+        info = fstat(fd)
+        return stat_fields(info, st_mode=info.st_mode ^ 0o111)
+
+    monkeypatch.setattr(os, "fstat", opened)
+    deadline = time.monotonic() + 5
+    with metadata.directory(tmp_path, deadline) as fd:
+        assert isinstance(fd, int)
+        with pytest.raises(IntegrityError, match="changed during open"):
+            metadata.read_at(fd, path.name, path, Budget(deadline))
 
 
 def inject_native_times(monkeypatch, path, *, change=None):
