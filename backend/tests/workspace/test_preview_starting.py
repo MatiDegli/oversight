@@ -247,15 +247,37 @@ async def test_starting_occupies_capacity_before_preflight_git(workspace, monkey
 
 
 @pytest.mark.parametrize("phase", ["launch", "ready"])
-async def test_one_startup_deadline_and_cleanup_before_capacity_release(workspace, phase):
+async def test_one_startup_deadline_and_cleanup_before_capacity_release(
+    workspace, monkeypatch, phase
+):
     import asyncio
     from dataclasses import replace
+    from types import SimpleNamespace
+
+    from oversight.workspace import preview_lifecycle
+
+    timeouts, budgets = [], []
+
+    def startup_timeout(delay):
+        budgets.append(delay)
+        timer = asyncio.timeout(None)
+        timeouts.append(timer)
+        return timer
+
+    # Expire the real cancellation scope only after reaching the boundary under test.
+    monkeypatch.setattr(
+        preview_lifecycle,
+        "asyncio",
+        SimpleNamespace(**(vars(asyncio) | {"timeout": startup_timeout})),
+    )
 
     h = await harness(workspace)
     h.manager.profile = replace(h.manager.profile, readiness_s=0.1)
     try:
         created, process = await gated(h, phase)
+        assert budgets == [0.1] and len(timeouts) == 1
         process.stop_gate.clear()
+        timeouts[0].reschedule(asyncio.get_running_loop().time())
         async with asyncio.timeout(5):
             await process.stop_started.wait()
         assert h.manager.has_owner and h.manager.registry.read() is not None
@@ -264,6 +286,7 @@ async def test_one_startup_deadline_and_cleanup_before_capacity_release(workspac
         await h.sink.wait("failed", created.preview_id)
         assert h.manager._watcher is not None
         await h.manager._watcher
+        assert timeouts[0].expired()
         assert h.sink.records[-1].reason == "readiness_timeout"
         assert not h.manager.has_owner and process.dead and h.manager.registry.read() is None
     finally:

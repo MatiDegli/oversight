@@ -30,6 +30,20 @@ def long_temp_dir() -> Path:
     return Path(tempfile.mkdtemp(prefix="ov-")).resolve()
 
 
+def venv_link_diagnostics(venv: Path) -> list[str]:
+    """Bound readiness diagnostics to ten venv-relative non-directory paths."""
+    return list(
+        islice(
+            (
+                path.relative_to(venv).as_posix()
+                for path in venv.rglob("*")
+                if path.is_file() and path.stat().st_nlink != 1
+            ),
+            10,
+        )
+    )
+
+
 @pytest.fixture
 def readiness_errors(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, OSError]]:
     """Retain readiness failures while letting production handle the same exception."""
@@ -118,16 +132,7 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout, rea
                 f"{call}: {type(error).__name__}: {error} (context: {error.__context__!r})"
                 for call, error in readiness_errors
             ],
-            "venv_files_with_st_nlink_ne_1": list(
-                islice(
-                    (
-                        path.relative_to(fixture.source / ".venv").as_posix()
-                        for path in (fixture.source / ".venv").rglob("*")
-                        if path.is_file() and path.stat().st_nlink != 1
-                    ),
-                    10,
-                )
-            ),
+            "venv_files_with_st_nlink_ne_1": venv_link_diagnostics(fixture.source / ".venv"),
         }
         assert not any(tmp_path.rglob("FILTER_SENTINEL"))
         assert (live.workspace.main.root / "crlf.py").read_bytes() == b"line = 1\r\n"
