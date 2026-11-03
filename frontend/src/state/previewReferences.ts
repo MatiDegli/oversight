@@ -1,0 +1,55 @@
+import type { LeadView, StartPreview } from "@contracts";
+import type { State } from "./types";
+
+export type ResolvedPreview = StartPreview & { change_id: string };
+export type PreviewResolution =
+  { candidate: ResolvedPreview; reason: null } | { candidate: null; reason: string };
+
+/** Resolve the observed proposal, never a newer candidate carrying the same agent id. */
+export function resolvePreviewReference(state: State, request: LeadView): PreviewResolution {
+  const unavailable = (reason: string): PreviewResolution => ({ candidate: null, reason });
+  if (request.view.kind !== "preview") return unavailable("This is not a preview reference.");
+  if (!state.run || state.gap || request.through_seq > state.lastSeq)
+    return unavailable("The run evidence is incomplete.");
+  // Membership in the displayed run prevents an old retained Chat suggestion crossing a run reset.
+  if (!(state.leadViews[request.agent_id] ?? []).some((event) => event.payload === request))
+    return unavailable("This suggestion is unavailable in this run.");
+  const agent = state.agents[request.view.agent_id];
+  const change = agent && state.changes[agent.change_id];
+  const proposal = change?.proposal;
+  if (
+    !agent ||
+    !change ||
+    !proposal ||
+    proposal.agent_id !== agent.agent_id ||
+    proposal.change_id !== agent.change_id ||
+    change.agent_id !== agent.agent_id
+  )
+    return unavailable("The referenced change has no current proposal.");
+  if (agent.state !== "ready_for_review" && agent.state !== "halted")
+    return unavailable("The referenced agent is not ready for preview.");
+  const seq = change.proposalEvent?.seq;
+  if (
+    !seq ||
+    seq > request.through_seq ||
+    !Number.isSafeInteger(proposal.revision) ||
+    proposal.revision <= 0 ||
+    !proposal.head_commit.trim()
+  )
+    return unavailable("The suggested revision is no longer available.");
+  if (
+    Object.values(change.fileUpdateSeq ?? {}).some((update) => update > seq) ||
+    (change.resolution && change.resolution.merge !== "conflict")
+  )
+    return unavailable("The referenced change was edited or resolved.");
+  return {
+    candidate: {
+      run_id: state.run.run_id,
+      agent_id: agent.agent_id,
+      change_id: change.change_id,
+      revision: proposal.revision,
+      head_commit: proposal.head_commit,
+    },
+    reason: null,
+  };
+}

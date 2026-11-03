@@ -1,5 +1,6 @@
 import type { LeadView, LeadViewKind, ServerEvent } from "@contracts";
 
+import { resolvePreviewReference } from "./previewReferences";
 import { selectLiveDiff } from "./selectors";
 import type { State } from "./types";
 
@@ -29,8 +30,10 @@ export function resolveViewReferences(
         .map((ref): [string, string] => [ref.change_id, ref.path]);
     case "behavior":
       return hasMeasuredBehavior(state, view.change_id) ? [view.change_id] : [];
-    case "preview":
-      return [];
+    case "preview": {
+      const resolved = resolvePreviewReference(state, request);
+      return resolved.candidate ? [resolved.candidate.change_id] : [];
+    }
     case "moment":
       return view.event_seq <= request.through_seq &&
         view.event_seq <= state.lastSeq &&
