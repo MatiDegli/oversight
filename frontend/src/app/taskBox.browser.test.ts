@@ -47,13 +47,18 @@ afterAll(async () => {
 
 async function withPage(
   test: (page: Page) => Promise<void>,
-  options: { width?: number; theme?: string; chat?: boolean } = {},
+  options: {
+    width?: number;
+    theme?: string;
+    chat?: boolean;
+    reducedMotion?: "reduce" | "no-preference";
+  } = {},
 ) {
   if (!browser) throw new Error("Browser was not started");
   const width = options.width ?? 1600;
   const page = await browser.newPage({
     viewport: { width, height: width === 1920 ? 1080 : width === 1280 ? 800 : 900 },
-    reducedMotion: "reduce",
+    reducedMotion: options.reducedMotion,
   });
   page.setDefaultTimeout(15_000);
   const errors: string[] = [];
@@ -473,6 +478,6 @@ for (const width of [1920, 1280])
           await browserExpect(box(page)).toHaveCount(0);
           expect(await calls(page)).toEqual([]);
         },
-        { width, theme, chat: true },
+        { width, theme, chat: true, reducedMotion: "reduce" },
       );
     });
