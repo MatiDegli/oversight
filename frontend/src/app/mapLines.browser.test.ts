@@ -18,6 +18,13 @@ import type {} from "./mapLines.browser.fixture";
 
 let server: ViteDevServer, browser: Browser, url: string, html: string;
 const boltons = readBoltonsSnapshot();
+const sweep = process.env.MAP_SWEEP_FINDING;
+const phase = process.env.MAP_SWEEP_PHASE ?? "after";
+const checkpoint = process.env.MAP_SWEEP_CHECKPOINT ?? "working tree";
+const sweepRoot =
+  process.env.MAP_SWEEP_OUTPUT ??
+  fileURLToPath(new URL("../../../.shots/nit-sweep-b11/", import.meta.url));
+const frameErrors = new WeakMap<Page, { pageErrors: string[]; consoleErrors: string[] }>();
 const shots = fileURLToPath(new URL("../../../.shots/map-lines/", import.meta.url));
 beforeAll(async () => {
   server = await createServer({
@@ -31,7 +38,11 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await launchBrowser({ webGL: true, softwareRendering: true });
+  browser = await launchBrowser({
+    webGL: true,
+    softwareRendering: true,
+    args: ["--disable-features=LocalNetworkAccessChecks"],
+  });
   if (process.env.MAP_LINES_SHOTS === "1") await mkdir(shots, { recursive: true });
 }, 60_000);
 afterAll(async () => {
@@ -67,6 +78,12 @@ async function setup(width = 1920, theme = "dark", real = false) {
   const page = await browser.newPage({
     viewport: { width, height: width === 1280 ? 800 : 1080 },
     reducedMotion: "reduce",
+  });
+  const errors = { pageErrors: [] as string[], consoleErrors: [] as string[] };
+  frameErrors.set(page, errors);
+  page.on("pageerror", (error) => errors.pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.consoleErrors.push(message.text());
   });
   await page.route("**/?field-time=2", (route) =>
     route.fulfill({ contentType: "text/html", body: html }),
@@ -139,7 +156,7 @@ async function unobstructedNames(page: Page) {
       return labels.flatMap((label) => {
         const b = label.getBoundingClientRect();
         return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
-          ? [{ agent: agent.textContent, label: label.textContent }]
+          ? [{ agent: agent.textContent, label: label.textContent, a: a.toJSON(), b: b.toJSON() }]
           : [];
       });
     });
@@ -647,9 +664,10 @@ async function mapTextContrast(page: Page, id: string, theme: string) {
         return [...context.getImageData(0, 0, 1, 1).data];
       };
       const ground = color(getComputedStyle(canvas).getPropertyValue("--ground"));
-      const panel = color(
-        getComputedStyle(cell.parentElement?.querySelector(".map-panel") ?? cell).backgroundColor,
-      );
+      const panelElement = cell.parentElement?.querySelector(".map-panel");
+      const panelStyle = getComputedStyle(panelElement ?? cell);
+      const panel = panelElement ? color(panelStyle.backgroundColor) : [0, 0, 0, 0];
+      panel[3] = (panel[3] ?? 0) * Number(panelStyle.opacity);
       const over = (a: number[], b: number[]) =>
         a
           .slice(0, 3)
@@ -666,7 +684,7 @@ async function mapTextContrast(page: Page, id: string, theme: string) {
       const contrast = (a: number[], b: number[]) =>
         (Math.max(luminance(a), luminance(b)) + 0.05) /
         (Math.min(luminance(a), luminance(b)) + 0.05);
-      return [...cell.querySelectorAll(".map-count, .map-agent")].map((el) => {
+      return [...cell.querySelectorAll(".map-name, .map-count, .map-agent")].map((el) => {
         const bounds = el.getBoundingClientRect();
         const style = getComputedStyle(el);
         const foreground = color(style.color);
@@ -692,6 +710,9 @@ async function mapTextContrast(page: Page, id: string, theme: string) {
         if (!pixel) throw new Error("Missing GPU pixel");
         return {
           text: el.textContent,
+          hook: el.className,
+          visible: style.visibility,
+          panelOpacity: panelStyle.opacity,
           lamp: hottest,
           unmasked: contrast(foreground, over(panel, hottest.color)),
           actual: contrast(
@@ -900,6 +921,102 @@ async function measureEvidence(page: Page) {
   expect(measured.line).toBe("1.4px");
   return measured;
 }
+/** Per-frame evidence is persisted before its gates can fail. */
+async function captureSweep(page: Page, name: string, width: number, theme: string) {
+  if (!sweep) return;
+  const directory = `${sweepRoot}/${sweep}/${phase}`;
+  await mkdir(directory, { recursive: true });
+  const stem = `${directory}/${name}-${String(width)}-${theme}`;
+  const measurements = await page.evaluate(() => {
+    const rect = (el: Element) => el.getBoundingClientRect().toJSON();
+    const graph = document.querySelector<GraphProbeHost>(
+      '[aria-label="Repository graph"]',
+    )?.oversightGraph;
+    const canvas = document.querySelector<FieldHost>(
+      '[aria-label="Graph stage"] canvas[aria-hidden]',
+    );
+    const overflow = (el: Element) => ({
+      surface: el.getAttribute("aria-label") ?? el.tagName,
+      positive: Math.max(0, el.scrollWidth - el.clientWidth),
+    });
+    return {
+      camera: { zoom: graph?.zoom(), pan: graph?.pan() },
+      publishedLevel: graph?.level(),
+      pointer: [...document.querySelectorAll(":hover")].map((el) => ({
+        tag: el.tagName,
+        module: el.getAttribute("data-map-module"),
+      })),
+      masks: canvas?.oversightField?.masks(),
+      labels: [...document.querySelectorAll("[data-map-module]")].map((cell) => ({
+        module: cell.getAttribute("data-map-module"),
+        cell: rect(cell),
+        labels: [...cell.querySelectorAll(".map-name, .map-count, .map-agent")].map((el) => ({
+          text: el.textContent,
+          hook: el.className,
+          rect: rect(el),
+          visibility: getComputedStyle(el).visibility,
+          background: getComputedStyle(el).backgroundColor,
+        })),
+      })),
+      panels: [...document.querySelectorAll(".map-panel")].map((el) => ({
+        group: el.getAttribute("data-map-group"),
+        opacity: getComputedStyle(el).opacity,
+        rect: rect(el),
+      })),
+      overflow: [
+        document.documentElement,
+        document.body,
+        ...document.querySelectorAll('[aria-label="Graph stage"], [aria-label="Repository graph"]'),
+      ].map(overflow),
+    };
+  });
+  const pool =
+    name === "group"
+      ? null
+      : await measurePool(page, boltons ? "boltons.strutils" : "library.module_01");
+  const contrast =
+    name === "map"
+      ? await mapTextContrast(page, boltons ? "boltons.strutils" : "library.module_01", theme)
+      : null;
+  const errors = frameErrors.get(page);
+  await page.screenshot({ path: `${stem}.png` });
+  await writeFile(
+    `${stem}.json`,
+    JSON.stringify(
+      {
+        png: `${stem}.png`,
+        finding: sweep,
+        phase,
+        checkpoint,
+        uncommittedEdit: process.env.MAP_SWEEP_EDIT ?? "capture harness only",
+        provenance: boltons
+          ? "offline Boltons graph with hand-written map events"
+          : "synthetic map fixture with hand-written events (Boltons unavailable)",
+        snapshot: boltons
+          ? {
+              path: ".runtime/graphs/boltons-d31d821.snapshot.json",
+              commit: boltons.commit,
+              nodes: boltons.nodes.length,
+              layout: "fixtures/layouts/boltons-d31d821.json",
+            }
+          : "synthetic",
+        viewport: page.viewportSize(),
+        theme,
+        fieldClock: 2,
+        reducedMotion: true,
+        ...measurements,
+        pool,
+        contrast,
+        ...errors,
+      },
+      null,
+      2,
+    ),
+  );
+  expect(errors).toEqual({ pageErrors: [], consoleErrors: [] });
+  for (const overflow of measurements.overflow) expect(overflow.positive).toBe(0);
+  if (name !== "group") expect(measurements.publishedLevel).toBe("map");
+}
 async function captureCone(
   page: Page,
   width: number,
@@ -943,6 +1060,7 @@ for (const width of [1920, 1280])
       const page = await setup(width, theme, true);
       const pools: Record<string, Awaited<ReturnType<typeof measurePool>>> = {};
       const capture = async (name: string) => {
+        await captureSweep(page, name, width, theme);
         if (name !== "group")
           pools[name] = await measurePool(page, boltons ? "boltons.strutils" : "library.module_01");
         if (process.env.MAP_LINES_SHOTS === "1")
