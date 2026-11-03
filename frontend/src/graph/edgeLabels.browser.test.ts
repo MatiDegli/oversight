@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { launchBrowser } from "../browserLaunch.support";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -369,6 +370,7 @@ it.for(["boltons", "demo"])(
         }),
       );
       await page.goto(url);
+      await openOversight(page);
       await page.waitForFunction(() => (window.edgeLabelGraph as Core | undefined)?.nodes().length);
       await page.evaluate(() => document.fonts.ready);
       await page.evaluate(

@@ -137,7 +137,9 @@ for (const first of ["file", "live diff", "review"] as const) {
   });
 }
 
-test("the graph waits for the preloaded Next Latin 400 font", async ({ page }) => {
+test("Chat prefetches after its shell while the graph waits for the Next Latin 400 font", async ({
+  page,
+}) => {
   const editorRequests: string[] = [];
   page.on("request", (request) => {
     if (editorAssets.has(new URL(request.url()).pathname)) editorRequests.push(request.url());
@@ -150,22 +152,37 @@ test("the graph waits for the preloaded Next Latin 400 font", async ({ page }) =
     await waiting;
     await route.continue();
   });
-  // Keep speculative loading off while isolating the graph's font gate. Chat otherwise
-  // permits idle editor prefetch before the person enters Oversight.
-  await page.addInitScript(() => {
-    Object.defineProperty(navigator, "connection", {
-      value: { saveData: true },
-      configurable: true,
-    });
-  });
+  await page.addInitScript(recordEditorStartup);
   await page.addInitScript(installHolds, [holds.live]);
   try {
     await page.goto("/level2", { waitUntil: "domcontentloaded" });
+    await expect(page.locator(".chat-shell")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Chat", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(page.getByLabel("Repository graph", { exact: true })).toHaveCount(0);
     await openOversight(page);
     await engaged(page, holds.live, 60_000);
     const graph = page.getByLabel("Repository graph", { exact: true });
     expect(await graph.evaluate((host: GraphProbeHost) => host.oversightGraph)).toBeUndefined();
-    expect(editorRequests).toEqual([]);
+    // Leave ordinary idle prefetch enabled: it must run after Chat, even with the font held.
+    await expect.poll(() => editorRequests.length).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => window.editorStartup.idleFired)).toBeGreaterThan(0);
+    const timing = await page.evaluate(
+      (assets) => {
+        const resources = performance
+          .getEntriesByType("resource")
+          .filter((entry) => assets.includes(new URL(entry.name).pathname));
+        return { ...window.editorStartup, starts: resources.map((entry) => entry.startTime) };
+      },
+      [...editorAssets],
+    );
+    expect(timing.firstShellAt).toBeGreaterThan(0);
+    expect(timing.idleAfterShell).toBe(true);
+    expect(timing.starts.length).toBeGreaterThan(0);
+    expect(timing.starts.every((start) => start >= timing.firstShellAt)).toBe(true);
+    expect(await graph.evaluate((host: GraphProbeHost) => host.oversightGraph)).toBeUndefined();
     releaseFont();
     await expect
       .poll(() =>

@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { launchBrowser } from "../../browserLaunch.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -56,6 +57,7 @@ async function openCardPage(commands = true) {
   await page.evaluate((enabled) => {
     window.readyTest.mount(enabled);
   }, commands);
+  await openOversight(page);
   await page.evaluate(() => document.fonts.ready);
   return page;
 }
@@ -201,6 +203,7 @@ it.each(["task", "steps", "diff", "stop"] as const)(
       await page.evaluate(() => {
         window.readyTest.mount();
       });
+      await openOversight(page);
       await page.evaluate(() => document.fonts.ready);
       const card = page.getByRole("article", { name: "Agent A", exact: true });
       const focus =

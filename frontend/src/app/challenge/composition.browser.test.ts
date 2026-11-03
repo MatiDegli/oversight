@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { launchBrowser } from "../../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
@@ -45,6 +46,11 @@ async function visit(index: number, path: string, run: (page: Page) => Promise<v
     const origin = servers[index]?.resolvedUrls?.local[0];
     if (!origin) throw new Error("Missing Vite server");
     await page.goto(new URL(path, origin).href);
+    await openOversight(page);
+    await check(page.getByRole("button", { name: "Oversight", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
     await run(page);
   } finally {
     await page.close();

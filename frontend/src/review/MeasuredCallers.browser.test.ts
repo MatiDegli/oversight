@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { ChangeFacts } from "@contracts";
@@ -53,6 +54,7 @@ async function mount(page: Page, theme: string) {
       "position:fixed;bottom:4px;left:300px;color:var(--muted);font-size:var(--caption-size);z-index:100";
     document.body.append(provenance);
   }, theme);
+  await openOversight(page);
   await page.getByRole("button", { name: /^Decisions:/ }).click();
   await page.locator(".monaco-diff-editor").first().waitFor();
   await page.waitForFunction(() =>
