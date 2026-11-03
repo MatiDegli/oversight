@@ -1,0 +1,68 @@
+[
+  {
+    "seq": 16,
+    "ts": "2026-11-03T00:00:00.000Z",
+    "type": "lead.view",
+    "payload": {
+      "agent_id": "agent-9",
+      "through_seq": 15,
+      "caption": null,
+      "view": {
+        "kind": "highlight",
+        "references": [
+          {
+            "kind": "agent",
+            "agent_id": "agent-1"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "seq": 16,
+    "ts": "2026-11-03T00:00:00.000Z",
+    "type": "lead.view",
+    "payload": {
+      "agent_id": "agent-9",
+      "through_seq": 15,
+      "caption": null,
+      "view": {
+        "kind": "files",
+        "references": [
+          {
+            "change_id": "change-1",
+            "path": "a.py"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "seq": 16,
+    "ts": "2026-11-03T00:00:00.000Z",
+    "type": "lead.view",
+    "payload": {
+      "agent_id": "agent-9",
+      "through_seq": 15,
+      "caption": null,
+      "view": {
+        "kind": "behavior",
+        "change_id": "change-1"
+      }
+    }
+  },
+  {
+    "seq": 16,
+    "ts": "2026-11-03T00:00:00.000Z",
+    "type": "lead.view",
+    "payload": {
+      "agent_id": "agent-9",
+      "through_seq": 15,
+      "caption": null,
+      "view": {
+        "kind": "moment",
+        "event_seq": 6
+      }
+    }
+  }
+]

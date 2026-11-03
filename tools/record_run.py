@@ -90,6 +90,9 @@ def record_run(
                     if row["type"] in {"agent.message", "lead.reply"}:
                         row["payload"]["text"] = None
                         line = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
+                    elif row["type"] == "lead.view":
+                        row["payload"]["caption"] = None
+                        line = json.dumps(row, ensure_ascii=False, separators=(",", ":"))
                     lines.append(line)
                 text = "\n".join(lines) + "\n"
                 candidate.write_text(text, encoding="utf-8", newline="\n")

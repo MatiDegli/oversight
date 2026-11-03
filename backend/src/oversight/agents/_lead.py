@@ -105,6 +105,7 @@ class LeadRun:
     ) -> LeadEnd:
         self.turns = self.failures = self.turn_steps = 0
         self.seen.clear()
+        self.tools.reset_views()
         self.tools.through_seq = notice.through_seq if notice is not None else None
         self.notice, self.woken_by = notice, woken_by
         self.human, self.answers_seq, self.text = human, answers_seq, None
@@ -179,7 +180,8 @@ class LeadRun:
                 if outcome.finish:
                     self.text = outcome.content
                     return self._reply()
-                await self.on_step(outcome.plan_id)
+                if call.name != "show_view":
+                    await self.on_step(outcome.plan_id)
                 self._cancelled()
                 key = (call.name, _canonical(call.arguments), outcome.content)
                 self.seen[key] += 1
