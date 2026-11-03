@@ -66,3 +66,6 @@ One line per day, in Argentina time (ART).
   labeled the synthetic wake attribution fixture with its generator provenance.
   Enabled validated native Windows own-repository COPY with staged-only reset and shared guarded test
   environments, retaining original preservation and pending two-machine native qualification.
+- **2026-11-03:** Added the bounded desktop spike's portable Rust launch, health and lifecycle
+  policy with offline tests, a standalone gate and native Windows core lane; recorded the scoped
+  license grant and prospective runbook. Deferred the executable and native lifecycle/UI acceptance.

@@ -810,8 +810,13 @@ candidate if it is smaller than Muse Spark Open), "possible" call edges drawn th
 grey, and inheritance edges.
 
 The minimal native Windows backend and validated own-repository COPY startup are implemented;
-native qualification remains pending. Tauri, broader platform ports, macOS and native Windows
-isolation remain later work. See [Opening the person's own repository](own-repository.md) for the
+native qualification remains pending. The conditional pre-freeze Tauri spike follows the
+maintainer's other feature and retains that advanced native backend. Only the portable Rust
+launch/readiness/cleanup core and standalone checks are delivered; the executable, native
+lifecycle/UI proof, duration/size and independent shell review are deferred. See the
+[future native runbook](../README.md#future-tauri-shell-runbook). Cut: November 3, 17:00 ART;
+freeze: 20:00 ART. No WSL bridge, native picker or change to existing capability restrictions.
+Broader platform ports, macOS and native Windows isolation remain later work. See [Opening the person's own repository](own-repository.md) for the
 current COPY boundary and later session design.
 
 A level is done when its demo runs three times in a row from a clean start, with one command
