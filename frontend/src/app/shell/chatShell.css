@@ -368,9 +368,26 @@
     overflow-y: auto;
   }
   .chat-shell > .left-rail,
-  .chat-shell > .shell-sidebar,
-  .chat-shell > .chat-work {
+  .chat-shell > .shell-sidebar {
     display: none;
+  }
+  .chat-shell > .chat-work {
+    display: flex;
+    order: 1;
+    width: 100%;
+    border-left: 0;
+    border-bottom: 1px solid var(--divider);
+  }
+  .chat-shell > .shell-center {
+    order: 2;
+  }
+  .chat-shell .chat-work > header {
+    height: auto;
+    min-height: 40px;
+    padding: 8px 16px;
+  }
+  .chat-shell .chat-work .chat-side-body {
+    overflow: visible;
   }
   .chat-shell > .chat-agents {
     width: 100%;

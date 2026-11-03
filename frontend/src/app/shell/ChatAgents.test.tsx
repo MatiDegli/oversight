@@ -1,5 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
+import { FilesProvider } from "../FilesContext";
+import { WhereTheyWork } from "./WhereTheyWork";
+import { event } from "../chatAgents.fixture";
 import { ChatAgents } from "./ChatAgents";
 import { ChatAgentsFrame } from "./ChatShell";
 import { fold, scenario } from "../chatAgents.fixture";
@@ -69,3 +72,27 @@ it("retains full collision labels, lead targets and the New lead draft", () => {
   expect(html).toContain('data-agent-origin="agent-b"');
   expect(html).toContain('aria-label="New lead draft"');
 });
+
+it("exposes phone work chips with explicit file targets and graph-independent observed ranges", () => {
+  const state = fold([
+    ...scenario("working"),
+    event("agent.focus", {
+      agent_id: "agent-a",
+      mode: "edit",
+      node_ids: [],
+      ranges: [{ path: "long/observed/path.py", start_line: 12, end_line: 24 }],
+    }),
+  ]);
+  const openFile = vi.fn();
+  const html = renderToStaticMarkup(
+    <FilesProvider state={state} openFile={openFile}>
+      <WhereTheyWork />
+    </FilesProvider>,
+  );
+  expect(html).toContain('aria-label="Open long/observed/path.py · Agent A · Editing"');
+  expect(html).toContain('aria-description="lines 12 to 24"');
+  expect(html).toContain('class="work-chip"');
+  expect(html).toContain('class="work-path"');
+  expect(openFile).not.toHaveBeenCalled();
+});
+

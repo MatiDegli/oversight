@@ -93,3 +93,61 @@
   font-size: 13px;
   line-height: 1.45;
 }
+.where-they-work .work-chip {
+  display: none;
+}
+@media (width < 768px) {
+  .chat-shell .where-they-work {
+    min-height: 0;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 16px 12px;
+  }
+  .chat-shell .work-group {
+    display: contents;
+  }
+  .chat-shell .work-group > h3,
+  .chat-shell .work-divider,
+  .chat-shell .work-footer,
+  .chat-shell .work-file > svg,
+  .chat-shell .work-file-content {
+    display: none;
+  }
+  .chat-shell .work-file {
+    display: contents;
+  }
+  .chat-shell .work-chip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 1px solid var(--slot-graphic);
+    border-radius: var(--radius-control);
+    background: var(--panel);
+    text-align: left;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+  .chat-shell .work-chip:hover {
+    background: var(--raised);
+  }
+  .chat-shell .work-chip:focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  .work-chip-path {
+    min-width: 0;
+    font-family: var(--font-mono);
+  }
+  .work-chip-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+  }
+}
