@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 // Exact fake-only backend recording; public replay semantics and the shared reducer.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -51,6 +52,7 @@ test("rules recording: provenance, reasons, Revert and Needs you remain read-onl
   });
   await page.addInitScript(installHolds, Object.values(holds));
   await page.goto("/rules");
+  await openOversight(page);
   await engaged(page, holds.merge);
   const review = page.getByRole("complementary", { name: "Review panel" });
   await page

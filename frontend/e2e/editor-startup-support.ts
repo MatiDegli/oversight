@@ -75,16 +75,30 @@ declare global {
   interface Window {
     editorStartup: {
       firstGraphAt: number;
+      firstShellAt: number;
       idleScheduled: number;
       idleFired: number;
-      idleAfterGraph: boolean;
+      idleAfterShell: boolean;
     };
   }
 }
 
 /** Observe a real Cytoscape canvas draw, independently of the app's readiness signal. */
 export function recordEditorStartup() {
-  const probe = { firstGraphAt: 0, idleScheduled: 0, idleFired: 0, idleAfterGraph: true };
+  const probe = {
+    firstGraphAt: 0,
+    firstShellAt: 0,
+    idleScheduled: 0,
+    idleFired: 0,
+    idleAfterShell: true,
+  };
+  const shell = new MutationObserver(() => {
+    if (document.querySelector(".chat-shell")) {
+      probe.firstShellAt = performance.now();
+      shell.disconnect();
+    }
+  });
+  shell.observe(document, { childList: true, subtree: true });
   window.editorStartup = probe;
   // eslint-disable-next-line @typescript-eslint/unbound-method -- Reflect.apply preserves each canvas's receiver.
   const draw = CanvasRenderingContext2D.prototype.drawImage;
@@ -102,7 +116,7 @@ export function recordEditorStartup() {
     window.requestIdleCallback = (callback, options) => {
       if (options?.timeout !== 2_000) return idle(callback, options);
       probe.idleScheduled += 1;
-      probe.idleAfterGraph &&= probe.firstGraphAt > 0;
+      probe.idleAfterShell &&= probe.firstShellAt > 0;
       return idle((deadline) => {
         probe.idleFired += 1;
         callback(deadline);
@@ -110,17 +124,18 @@ export function recordEditorStartup() {
     };
 }
 
-export async function expectNoEditorBeforeGraph(page: Page) {
+export async function expectNoEditorBeforeShell(page: Page) {
   const timing = await page.evaluate(
     (assets) => {
-      const firstGraphAt = window.editorStartup.firstGraphAt;
+      const { firstGraphAt, firstShellAt } = window.editorStartup;
       return {
         firstGraphAt,
+        firstShellAt,
         early: performance
           .getEntriesByType("resource")
           .filter(
             (entry) =>
-              assets.includes(new URL(entry.name).pathname) && entry.startTime < firstGraphAt,
+              assets.includes(new URL(entry.name).pathname) && entry.startTime < firstShellAt,
           )
           .map((entry) => entry.name),
       };
@@ -128,5 +143,6 @@ export async function expectNoEditorBeforeGraph(page: Page) {
     [...editorAssets],
   );
   expect(timing.firstGraphAt).toBeGreaterThan(0);
+  expect(timing.firstShellAt).toBeGreaterThan(0);
   expect(timing.early).toEqual([]);
 }

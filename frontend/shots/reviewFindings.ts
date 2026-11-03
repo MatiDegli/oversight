@@ -1,3 +1,4 @@
+import { openOversight } from "../src/workspaceView.browser.support.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
 import type { FindingState } from "../src/review/ReviewFindings.fixture";
@@ -50,6 +51,7 @@ export async function prepareFindingFrame(page: Page, frame: (typeof findingFram
     await document.fonts.ready;
   }, frame);
   if (frame.width >= 1280) {
+    await openOversight(page);
     await page.getByRole("button", { name: "Functions", exact: true }).click();
     await page.getByRole("button", { name: "Review change", exact: true }).click();
   }

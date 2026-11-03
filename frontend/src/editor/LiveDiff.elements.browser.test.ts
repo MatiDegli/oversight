@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { readFileSync } from "node:fs";
 
 import type { ServerEvent } from "@contracts";
@@ -71,6 +72,7 @@ it.each(["review", "live diff"])("%s facts use Mono only for data", async (surfa
       },
       through(surface === "review" ? 20 : 12),
     );
+    await openOversight(page);
     await page
       .getByRole("button", {
         name: surface === "review" ? "Review change" : "Live diff",
@@ -143,6 +145,7 @@ for (const [element, text] of [
       await page.evaluate((value) => {
         window.panelTest.renderApp(value);
       }, state);
+      await openOversight(page);
       await page.getByRole("button", { name: "Live diff", exact: true }).click();
       const live = page.locator(panel);
       await browserExpect(live.getByText(text, { exact: true })).toBeVisible();
@@ -160,6 +163,7 @@ it("keeps live diff facts updated without switching to review or taking focus", 
     await page.evaluate((value) => {
       window.panelTest.renderApp(value);
     }, state);
+    await openOversight(page);
     await page.getByRole("button", { name: "Live diff", exact: true }).click();
     await browserExpect(page.locator(`${panel} [aria-label="Facts"]`)).toBeVisible();
     await page.evaluate(() => {
@@ -212,6 +216,7 @@ it("keeps last steps visible below Monaco with bounded scrolling and stable focu
     await page.evaluate((input) => {
       window.panelTest.renderApp(input);
     }, value);
+    await openOversight(page);
     await page.getByRole("button", { name: "Live diff", exact: true }).click();
     const live = page.locator(panel);
     const rows = live.getByRole("list", { name: "Agent A steps, newest first" });

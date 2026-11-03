@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 import { expect, test } from "@playwright/test";
 
 import { engaged, installHolds, release } from "./holds";
@@ -5,7 +6,7 @@ import { holds } from "./level2-log";
 import { interceptCommands, removeRoutes } from "./level2-support";
 import {
   editorAssets,
-  expectNoEditorBeforeGraph,
+  expectNoEditorBeforeShell,
   implementation,
   recordEditorStartup,
 } from "./editor-startup-support";
@@ -13,7 +14,7 @@ import {
 test.afterEach(async ({ page }) => removeRoutes(page));
 
 for (const idle of ["native", "timeout fallback"] as const) {
-  test(`watch prefetches the shared editor once after drawing, using ${idle}`, async ({ page }) => {
+  test(`Chat prefetches the shared editor once after opening, using ${idle}`, async ({ page }) => {
     if (idle === "timeout fallback")
       await page.addInitScript(() => {
         Object.defineProperty(window, "requestIdleCallback", {
@@ -27,17 +28,18 @@ for (const idle of ["native", "timeout fallback"] as const) {
     page.on("request", (request) => requested.push(new URL(request.url()).pathname));
     await interceptCommands(page);
     await page.goto("/level2");
+    await openOversight(page);
     // Editor specs allow a minute because software canvas rendering stretches replay event timers.
     await engaged(page, holds.live, 60_000);
     await expect
       .poll(() => requested.filter((path) => path === `/${implementation}`).length)
       .toBe(1);
-    await expectNoEditorBeforeGraph(page);
+    await expectNoEditorBeforeShell(page);
     if (idle === "native")
       expect(await page.evaluate(() => window.editorStartup)).toMatchObject({
         idleScheduled: 1,
         idleFired: 1,
-        idleAfterGraph: true,
+        idleAfterShell: true,
       });
     await expect(page.locator(".monaco-editor")).toHaveCount(0);
     await release(page, holds.live);
@@ -67,6 +69,7 @@ test("Save-Data skips speculative editor requests after the graph and still perm
   page.on("request", (request) => requested.push(new URL(request.url()).pathname));
   await interceptCommands(page);
   await page.goto("/level2");
+  await openOversight(page);
   await engaged(page, holds.live, 60_000);
   await release(page, holds.live);
   await engaged(page, holds.decisions, 60_000);
@@ -77,5 +80,5 @@ test("Save-Data skips speculative editor requests after the graph and still perm
     .getByRole("button", { name: "Review change" })
     .click();
   await expect(page.locator(".monaco-diff-editor")).toBeVisible();
-  await expectNoEditorBeforeGraph(page);
+  await expectNoEditorBeforeShell(page);
 });

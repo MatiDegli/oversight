@@ -1,6 +1,7 @@
 // Reproduce the watch comparison with `make test-browser`. Only the reference response lifts the
 // cap to 1.5; production source stays capped at one. Both shots use the same browser DPR, viewport,
 // graph, theme and frozen field clock, so only the field's drawing buffer changes.
+import { openOversight } from "../../workspaceView.browser.support";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
@@ -68,6 +69,7 @@ async function capture(page: Page, ratio: number) {
   await page.evaluate(() => {
     window.fieldTest.mount("watch");
   });
+  await openOversight(page);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(() => {
     const { graph, field } = window.fieldTest.elements();
@@ -150,6 +152,7 @@ it.runIf(process.env.LIFE_SHOTS === "1")(
       await page.evaluate(() => {
         window.fieldTest.mount("rest");
       });
+      await openOversight(page);
       await page.evaluate(() => document.fonts.ready);
       await page.waitForFunction(() => {
         const { graph, field } = window.fieldTest.elements();
@@ -175,6 +178,7 @@ it.runIf(process.env.LIFE_SHOTS === "1")(
       await page.evaluate(() => {
         window.fieldTest.mount("waiting");
       });
+      await openOversight(page);
       const travel = await page.evaluate(async () => {
         // Let the mounted waiting scene settle before applying the real merge event.
         await new Promise<void>((resolve) =>

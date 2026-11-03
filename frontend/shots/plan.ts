@@ -71,7 +71,7 @@ export interface Job {
 
 export function planJobs(scenes: readonly Scene[], themes: readonly Theme[]): Job[] {
   return scenes.flatMap((scene) =>
-    themes.flatMap((theme) =>
+    (scene.themes ?? themes).flatMap((theme) =>
       (scene.edgeShapes ?? [undefined]).map((edgeShape) => {
         let skip: string | null = null;
         if (!scene.enabled) skip = `scene ${scene.name}: ${scene.needs ?? "disabled"}`;

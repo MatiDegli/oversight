@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 import { readFileSync } from "node:fs";
 
 import { expect, test } from "@playwright/test";
@@ -63,7 +64,7 @@ test("Chat rules receipt opens the recorded review", async ({ page }) => {
   await page.goto("/rules");
   await engaged(page, hold);
   const workspace = page.getByRole("group", { name: "Workspace view", exact: true });
-  await workspace.getByRole("button", { name: "Oversight", exact: true }).click();
+  await openOversight(page);
   await page
     .getByRole("article", { name: "Agent A", exact: true })
     .getByRole("button", { name: "Conversation", exact: true })

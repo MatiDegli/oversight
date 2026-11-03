@@ -160,3 +160,11 @@ export function nodeIds(page: Page, selector: string) {
       .sort();
   }, selector);
 }
+
+/** The production app starts in Chat; graph scenarios enter through the person's selector. */
+export async function openOversight(page: Page) {
+  await page
+    .getByRole("group", { name: "Workspace view" })
+    .getByRole("button", { name: "Oversight", exact: true })
+    .click();
+}

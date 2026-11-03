@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 import { readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -51,6 +52,14 @@ async function openFile(page: Page, path: string) {
 async function start(page: Page) {
   await page.clock.install();
   await page.goto("/oversight/");
+  await expect(
+    page
+      .getByRole("group", { name: "Workspace view" })
+      .getByRole("button", { name: "Chat", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Repository graph", { exact: true })).toHaveCount(0);
+  await expect(row(page)).toBeVisible();
+  await openOversight(page);
   await expect(row(page)).toBeVisible();
   await row(page).getByRole("button", { name: "Pause", exact: true }).click();
   await expect
@@ -62,6 +71,39 @@ async function start(page: Page) {
     .toBe(true);
   await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
 }
+
+test("static replay opens in Chat and its controls play, pause, seek and restart", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto("/oversight/");
+  const chat = page
+    .getByRole("group", { name: "Workspace view" })
+    .getByRole("button", { name: "Chat", exact: true });
+  await expect(chat).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Repository graph", { exact: true })).toHaveCount(0);
+  expect(new URL(page.url()).search).toBe("");
+  await expect(row(page)).toBeVisible();
+  await row(page).getByRole("button", { name: "Pause", exact: true }).click();
+  await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+  await seek(page, 8);
+  await expect(row(page)).toContainText("Paused");
+  const position = Number(await slider(page).getAttribute("aria-valuenow"));
+  await row(page).getByRole("button", { name: "Play", exact: true }).click();
+  await page.clock.runFor(2000);
+  await expect(slider(page)).toHaveAttribute("aria-valuenow", String(position + 2000));
+  await prefix(page, position + 2000);
+  await row(page).getByRole("button", { name: "Pause", exact: true }).click();
+  const paused = await slider(page).getAttribute("aria-valuenow");
+  await page.clock.runFor(2000);
+  await expect(slider(page)).toHaveAttribute("aria-valuenow", paused ?? "");
+  await row(page).getByRole("button", { name: "Restart", exact: true }).click();
+  await expect(slider(page)).toHaveAttribute("aria-valuenow", "0");
+  await prefix(page, 0);
+  await expect(row(page)).toContainText("Playing");
+  await expect(chat).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Repository graph", { exact: true })).toHaveCount(0);
+});
 
 test("real App controls preserve prefixes, navigation, files and session ownership", async ({
   page,
