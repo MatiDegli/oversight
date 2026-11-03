@@ -1,4 +1,4 @@
-import { openOversight } from "../src/workspaceView.browser.support";
+import { openOversight } from "../src/workspaceView.browser.support.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
 import type { FindingState } from "../src/review/ReviewFindings.fixture";
