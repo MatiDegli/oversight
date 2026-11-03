@@ -65,7 +65,7 @@ async def test_decision_tools_are_unknown_and_change_nothing() -> None:
         outcome = await tools.call(name, "{}")
         assert not outcome.ok and outcome.content == (
             f"Unknown tool {name}. The lead's tools are graph, list_files, read_file, "
-            "queue, request_plan, finish and status."
+            "status, queue, request_plan, show_view and finish."
         )
     run, _, _ = lead(ScriptedModel(load_script(FIXTURES / "lead-forbidden-tools.json")), tools)
     end = await run.run()
@@ -92,6 +92,7 @@ def test_lead_tool_schemas_offer_no_zone_or_decision_field() -> None:
         "status",
         "queue",
         "request_plan",
+        "show_view",
         "finish",
     ]
     serialized = json.dumps(LEAD_TOOL_SCHEMAS)

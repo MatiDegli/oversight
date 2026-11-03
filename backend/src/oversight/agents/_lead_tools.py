@@ -104,6 +104,64 @@ def build_lead_tool_schemas(limits: LeadLimits) -> list[ToolSchema]:
             ["task", "subtasks"],
         ),
         _function(
+            "show_view",
+            "Show current state from committed references; never supply facts.",
+            {
+                "kind": {"type": "string", "enum": ["highlight", "files", "behavior", "moment"]},
+                "agent_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {"type": "string", "pattern": r"^agent-[1-9]\d*$"},
+                },
+                "paths": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512,
+                        "pattern": (
+                            r"^(?:\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*"
+                            r"\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*$"
+                        ),
+                    },
+                },
+                "files": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "change_id": {"type": "string", "pattern": r"^change-[1-9]\d*$"},
+                            "path": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 512,
+                                "pattern": (
+                                    r"^(?:\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*/)*"
+                                    r"\.?[A-Za-z0-9_-][A-Za-z0-9_.-]*$"
+                                ),
+                            },
+                        },
+                        "required": ["change_id", "path"],
+                    },
+                },
+                "change_id": {"type": "string", "pattern": r"^change-[1-9]\d*$"},
+                "event_seq": {"type": "integer", "minimum": 1},
+                "caption": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160,
+                    "pattern": r"\S",
+                },
+            },
+            ["kind"],
+        ),
+        _function(
             "finish",
             "Answer this turn; a plan is optional.",
             {"reply": {"type": "string", "minLength": 1, "maxLength": 4096}},
@@ -154,6 +212,8 @@ class LeadTools:
         self._view_resolver: Callable[[LeadView], bool] | None = None
 
     async def call(self, name: str, arguments: str) -> LeadOutcome:
+        if name == "show_view":
+            return await self.show_view(arguments)
         models: dict[str, type[_Empty]] = {
             "graph": _Empty,
             "status": _Empty,
@@ -166,7 +226,7 @@ class LeadTools:
         if name not in models:
             return LeadOutcome(
                 f"Unknown tool {name}. The lead's tools are graph, list_files, read_file, "
-                "queue, request_plan, finish and status.",
+                "status, queue, request_plan, show_view and finish.",
                 False,
             )
         try:
@@ -232,7 +292,7 @@ class LeadTools:
         return LeadOutcome(content)
 
     async def show_view(self, arguments: str) -> LeadOutcome:
-        """Dormant callback only: deliberately absent from call() and the tool table."""
+        """Publish one reference-only view after this turn's successful status."""
         try:
             content = await show_view(
                 arguments,
