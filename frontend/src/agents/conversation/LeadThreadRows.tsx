@@ -2,6 +2,7 @@ import { agentSlotStyle } from "../../theme";
 import { EventTime, TimelineEntry } from "./rows";
 import { useLayoutEffect, type ReactNode } from "react";
 import type { LeadConversation } from "./selectConversation";
+import { viewCardTitle } from "./LeadViewCard";
 
 function cutText(entry: Extract<LeadConversation["entries"][number], { kind: "lead-reply" }>) {
   const { cut } = entry.event.payload;
@@ -41,12 +42,14 @@ export default function LeadThreadRows({
   useLayoutEffect(() => onReady?.(), [onReady]);
   return conversation.entries.map((entry) => {
     if (entry.kind === "lead-status" || entry.kind === "lead-plan") return null;
-    if (entry.kind === "lead-view")
+    if (entry.kind === "lead-view") {
+      if (viewCardTitle(entry.event.payload.view) === null) return null;
       return (
         <div role="listitem" key={`view:${String(entry.seq)}`}>
           {renderView?.(entry)}
         </div>
       );
+    }
     return (
       <div role="listitem" key={`${entry.kind}:${String(entry.seq)}`}>
         {entry.kind !== "lead-reply" ? (

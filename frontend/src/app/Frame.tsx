@@ -42,7 +42,7 @@ const ReplayBar = lazy(() => import("./replay/ReplayBar"));
 export interface FrameProps {
   chatState?: State;
   readChatState?: () => State | undefined;
-  historySession?: { eventSeq: number; back: () => void };
+  historySession?: { eventSeq: number; back: () => HTMLElement | null };
   onViewMoment?: (seq: number) => void;
   onViewHighlight?: (nodeIds: string[], key: string) => void;
   onViewFile?: (changeId: string, path: string) => void;
@@ -183,7 +183,16 @@ export function Frame(input: FrameProps) {
       {props.historySession && (
         <div className="view-history-banner" role="status">
           Viewing event {props.historySession.eventSeq} ·{" "}
-          <button type="button" onClick={props.historySession.back}>
+          <button
+            type="button"
+            onClick={() => {
+              const origin = props.historySession?.back();
+              // Restore focus only for Back, after React commits the restored conversation.
+              requestAnimationFrame(() => {
+                if (origin?.isConnected) origin.focus();
+              });
+            }}
+          >
             Back
           </button>
         </div>

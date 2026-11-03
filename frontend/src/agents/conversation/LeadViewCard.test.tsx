@@ -5,6 +5,7 @@ import fixture from "../../../../fixtures/views/reference-cases.json";
 import { applyEvent, createInitialState } from "../../state";
 import type { LeadHeader } from "./selectConversation";
 import { LeadViewCard, viewCardTitle } from "./LeadViewCard";
+import LeadThreadRows from "./LeadThreadRows";
 import { selectLeadConversation } from "./selectLeadConversation";
 
 const events = fixture.events as ServerEvent[];
@@ -63,6 +64,31 @@ it("renders no card or title for a dormant preview view", () => {
   const preview: LeadViewKind = { kind: "preview", agent_id: "agent-1" };
   expect(viewCardTitle(preview)).toBeNull();
   expect(render(preview)).toBe("");
+});
+it("adds no listitem for a preview view while retaining a supported card", () => {
+  const state = events.reduce(applyEvent, createInitialState());
+  const entries = (
+    [
+      { kind: "moment", event_seq: 6 },
+      { kind: "preview", agent_id: "agent-1" },
+    ] satisfies LeadViewKind[]
+  ).map((view, index) => {
+    const event: LeadViewEvent = {
+      seq: 100 + index,
+      ts: required(events[0]).ts,
+      type: "lead.view",
+      payload: { agent_id: "agent-9", through_seq: 12, caption: null, view },
+    };
+    return { kind: "lead-view" as const, seq: event.seq, event };
+  });
+  const html = renderToStaticMarkup(
+    <LeadThreadRows
+      conversation={{ kind: "lead", header, entries }}
+      renderView={(entry) => <LeadViewCard state={state} event={entry.event} header={header} />}
+    />,
+  );
+  expect(html.match(/role="listitem"/g)).toHaveLength(1);
+  expect(html).toContain('aria-label="Run moment"');
 });
 it("derives highlight labels/counts from nodes and retains escaped, attributed speech", () => {
   const html = render({ kind: "highlight", references: [{ kind: "agent", agent_id: "agent-1" }] });
