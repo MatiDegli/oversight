@@ -439,3 +439,43 @@ it("measures only the allocated surface behind the existing narrow Usage notice"
     await session.close();
   }
 });
+
+it.each([1920, 1280, 390])(
+  "allocates the real Chat Frame slot and restores activity at %i",
+  async (width) => {
+    const session = await support.session({ width, height: width === 1920 ? 1080 : 844 });
+    try {
+      const page = await session.open("surface", "surface=chat-wide&slot=preview");
+      const rail = await page.locator(".chat-agents").boundingBox();
+      const before = await page.locator(".shell-center").boundingBox();
+      await page.evaluate(() => window.previewFixture.see());
+      await check(page.locator(".chat-preview-slot")).toBeVisible();
+      await check(page.getByRole("complementary", { name: "Where they work" })).toHaveCount(0);
+      const panel = await page.locator(".chat-preview-slot").boundingBox();
+      const conversation = await page.locator(".shell-center").boundingBox();
+      expect(panel?.width).toBeGreaterThan(width === 390 ? 380 : (conversation?.width ?? 0));
+      expect(await page.locator(".chat-agents").boundingBox()).toEqual(rail);
+      await check(page.getByRole("img", { name: "Repository graph" })).toHaveCount(0);
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await check(page.locator(".chat-preview-slot")).toHaveCount(0);
+      expect(await page.locator(".shell-center").boundingBox()).toEqual(before);
+      await check(page.locator(".chat-work")).toHaveCount(1);
+      if (width === 390) await check(page.locator(".chat-work")).toBeHidden();
+      else await check(page.locator(".chat-work")).toBeVisible();
+      await noErrors(page);
+    } finally {
+      await session.close();
+    }
+  },
+);
+it.each([1920, 1280, 390])("captures the available pre-redesign panel at %i", async (width) => {
+  for (const theme of ["dark", "day"]) {
+    const viewport = { width, height: width === 1920 ? 1080 : width === 1280 ? 800 : 844 };
+    const session = await support.session({ ...viewport, theme });
+    try {
+      await support.capture(await session.open(), "before-ready", viewport, theme);
+    } finally {
+      await session.close();
+    }
+  }
+});

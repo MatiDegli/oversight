@@ -4,7 +4,7 @@ import { Plus, GitFork } from "lucide-react";
 import { TaskBox, slotUsage, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
 import { ChatAgents } from "./ChatAgents";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { WhereTheyWork } from "./WhereTheyWork";
 
 export interface ChatAgentSelection {
@@ -88,6 +88,7 @@ export function ChatShell({
   onNewLead,
   leadDraft,
   readOnly,
+  previewSlot,
   ...selection
 }: ChatAgentSelection &
   ChatStartActions & {
@@ -97,6 +98,7 @@ export function ChatShell({
     rail: ReactNode;
     sidebar: ReactNode;
     agents: ReactNode;
+    previewSlot?: ChatPreviewSlot;
   }) {
   return (
     <div className={`shell-workspace ${active ? "chat-shell" : ""}`}>
@@ -114,12 +116,27 @@ export function ChatShell({
       )}
       {children}
       {!active && agents}
-      {active && (
-        <ChatWorkFrame>
-          <WhereTheyWork />
-        </ChatWorkFrame>
-      )}
+      {active && <ChatRightColumn slot={previewSlot} />}
     </div>
+  );
+}
+
+export interface ChatPreviewSlot {
+  subscribe: (listener: () => void) => () => void;
+  snapshot: () => boolean;
+  content: ReactNode;
+}
+const closed = () => false;
+const idle = () => () => {};
+/** Only this small boundary subscribes to slot intent; sibling columns retain their positions. */
+function ChatRightColumn({ slot }: { slot?: ChatPreviewSlot }) {
+  const open = useSyncExternalStore(slot?.subscribe ?? idle, slot?.snapshot ?? closed, closed);
+  return open ? (
+    <div className="chat-preview-slot">{slot?.content}</div>
+  ) : (
+    <ChatWorkFrame>
+      <WhereTheyWork />
+    </ChatWorkFrame>
   );
 }
 

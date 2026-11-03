@@ -1,0 +1,28 @@
+/* The rail keeps its owned width. Only the conversation/app allocation changes. */
+.chat-shell:has(> .chat-preview-slot) > .shell-center {
+  flex: 0 0 clamp(340px, 18vw, 380px);
+  min-width: 0;
+}
+.chat-preview-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-inline-start: 1px solid var(--divider);
+  background: var(--page);
+}
+.chat-shell:has(> .chat-preview-slot) .conversation-entries {
+  max-width: 100%;
+}
+@media (max-width: 767px) {
+  .chat-preview-slot {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    border: 0;
+  }
+  /* The underlying conversation retains its layout and exact scroll position. */
+  .chat-shell:has(> .chat-preview-slot) > .shell-center {
+    flex: 1 0 auto;
+  }
+}

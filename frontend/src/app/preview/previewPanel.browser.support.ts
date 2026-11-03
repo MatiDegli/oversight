@@ -10,7 +10,7 @@ import { previewReasons } from "./previewTypes";
 import type { FakeRequest } from "./PreviewPanel.browser.fixture";
 
 export const shotsDirectory = fileURLToPath(
-  new URL("../../../../.shots/preview-panel/", import.meta.url),
+  new URL("../../../../.shots/preview-chat/fixture/", import.meta.url),
 );
 export const scenarios = [
   "starting",
@@ -192,10 +192,37 @@ class BrowserSupport {
     );
   }
   async capture(page: Page, scenario: string, viewport: FrameManifest["viewport"], theme: string) {
-    const path = `${scenario}-${String(viewport.width)}-${theme}.png`;
+    const path = `isolated-${scenario}-${String(viewport.width)}-${theme}.png`;
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: `${shotsDirectory}${path}` });
     const data = await this.metrics(page);
+    await writeFile(
+      `${shotsDirectory}${path.replace(/\.png$/, ".json")}`,
+      JSON.stringify(
+        {
+          png: path,
+          state: scenario,
+          viewport,
+          theme,
+          checkpoint: "working-tree",
+          provenance: "fixture · handwritten authority",
+          reducedMotion: "reduce",
+          fontReady: await page.evaluate(() => document.fonts.status),
+          rectangles: await page.evaluate(() =>
+            Object.fromEntries(
+              [".conversation-panel", ".preview-panel", "iframe"].map((selector) => [
+                selector,
+                (document.querySelector(selector)?.getBoundingClientRect().toJSON() as unknown) ??
+                  "inapplicable",
+              ]),
+            ),
+          ),
+          ...data,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
     expect(data.pageErrors).toEqual([]);
     expect(data.overflow).toEqual({ page: 0, panel: 0 });
     return { path, scenario, viewport, theme, ...data } satisfies FrameManifest;

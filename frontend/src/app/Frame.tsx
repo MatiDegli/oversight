@@ -1,8 +1,10 @@
+import { PreviewPanel } from "./preview/PreviewPanel";
+import "./preview/previewChatLayout.css";
 import { PreviewActionsContext, type PreviewActions } from "../agents";
 // eslint-disable-next-line no-restricted-imports -- Shared event-backed admission projection.
 import { leadCapacity } from "../agents/chatLeadSelectors";
 import type { MergeMode, StartAgent, StartLead, StopLead } from "@contracts";
-import { lazy, Suspense, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
@@ -133,6 +135,21 @@ export function Frame(input: FrameProps) {
   // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
   const shell = useShell(panelOpen(view), onClosePanel, hiddenChatView === view);
   const open = shell.panelOpen;
+  const previewSlot = useMemo(
+    () =>
+      props.previewHost
+        ? {
+            subscribe: (listener: () => void) =>
+              props.previewHost?.subscribe(listener) ?? (() => {}),
+            snapshot: props.previewHost.snapshot,
+            content: <PreviewPanel controller={props.previewHost.controller} />,
+          }
+        : undefined,
+    [props.previewHost],
+  );
+  useEffect(() => {
+    void props.previewHost?.navigate();
+  }, [props.previewHost, view.activeTab, shell.layout, props.historySession]);
   useEscapeCloses(open, onClosePanel);
   const showNewLead = newLead && !open && shell.layout === "Chat";
   const chatReview = useChatReviewNavigation(state, view, shell, props.onTabAction);
@@ -142,11 +159,13 @@ export function Frame(input: FrameProps) {
     props.onStartAgent !== undefined && shell.layout === "Oversight",
   );
   const newTask = () => {
+    void props.previewHost?.navigate();
     setNewLead(false);
     setHiddenChatView(view);
     requestAnimationFrame(() => task.inputRef.current?.focus());
   };
   const openNewLead = () => {
+    void props.previewHost?.navigate();
     if (leadCapacity(state).atCap) return;
     setHiddenChatView(view);
     setNewLead(true);
@@ -202,6 +221,7 @@ export function Frame(input: FrameProps) {
       )}
       <PreviewActionsContext value={props.previewActions ?? null}>
         <ChatShell
+          previewSlot={previewSlot}
           state={props.chatState ?? state}
           readOnly={Boolean(props.historySession)}
           active={shell.layout === "Chat"}
