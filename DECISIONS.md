@@ -4398,7 +4398,6 @@ concurrent path-replacement races and inherited ACLs remain accepted residuals. 
 ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
 
-
 ## 2026-11-03 — Bounded native desktop preparation; executable deferred
 
 The maintainer approved a pre-freeze Tauri 2 spike conditionally after their other feature,
@@ -4411,7 +4410,7 @@ Native compilation, nested Jobs, console delivery, rendering and acceptance cann
 in this Linux session. See [desktop status](desktop/README.md) and the
 [prospective runbook](README.md#future-tauri-shell-runbook).
 
-Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed below, used unmodified.
+Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed in license-report.md, used unmodified.
 
 The granted crates present in `desktop/Cargo.lock`, grouped by license, are:
 
@@ -4451,6 +4450,7 @@ Rollback removes desktop/, the standalone target, ignore entry and Windows deskt
 filters/timeout/policy assertions, and records the rollback. Keep the existing browser/native
 backend route and this historical scope/license decision. Incomplete executable work defers;
 it does not displace the maintainer's preceding feature.
+
 2026-11-03 — Dormant views with references. Following maintainer OK of the exact diff, contracts 1.18.0 adds lead.view with highlight, files, behavior and moment. PR1 ships validated reference infrastructure, eligible status inventory and event readers; show_view remains absent from the advertised tool table and dispatch. Prompt bytes and prompt_version remain unchanged. This supersedes the no-new-events/contracts restriction for this feature only. No visible cards or paid calls are released by PR1.
 
 ## 2026-11-03 — Lead views stay a closed catalog of typed kinds

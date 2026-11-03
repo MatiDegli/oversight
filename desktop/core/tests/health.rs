@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::net::{SocketAddr, TcpListener};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -121,20 +121,29 @@ fn stalled_and_slow_response_share_an_absolute_deadline() {
 
 #[test]
 fn expired_deadline_foreign_addresses_and_oversized_responses_are_refused() {
-    assert!(probe("127.0.0.1:8710".parse().unwrap(), Instant::now()).is_err());
-    assert!(
+    assert_eq!(
+        probe("127.0.0.1:8710".parse().unwrap(), Instant::now())
+            .unwrap_err()
+            .kind(),
+        ErrorKind::TimedOut
+    );
+    assert_eq!(
         probe(
             "192.0.2.1:8710".parse().unwrap(),
             Instant::now() + Duration::from_secs(1)
         )
-        .is_err()
+        .unwrap_err()
+        .kind(),
+        ErrorKind::InvalidInput
     );
-    assert!(
+    assert_eq!(
         probe(
             "127.0.0.1:0".parse().unwrap(),
             Instant::now() + Duration::from_secs(1)
         )
-        .is_err()
+        .unwrap_err()
+        .kind(),
+        ErrorKind::InvalidInput
     );
     let (address, server) = server(|mut stream| {
         let _ = stream.write_all(&vec![b'X'; MAX_RESPONSE + 1]);
