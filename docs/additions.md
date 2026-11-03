@@ -702,6 +702,12 @@ Edit, post-dispatch plan tracking and partition completeness production remain i
 This is narrower than the
 earlier ambition to have the lead start agents for proof 2.
 
+K2b adds the event-derived operational header, per-lead observed-revision Stop pending through
+terminal publication, noninteractive ended composer, observed cut captions, published-cap guards
+and backend-default-only New lead. Its fake-only browser fixtures include stopped and six-lead
+scenes; lifecycle/freshness notices and timeline treatment remain K2c, grouping/hues remain K3,
+and plan tracking is still pending. No backend, contract or generated schema changes.
+
 Dormant views with references use contracts 1.18.0: four closed kinds, strict masked-caption
 validation, committed-prefix eligibility, ordered event readers and shared Python/TypeScript
 resolution fixtures. Status inventory is opt-in and off in production. Tool advertisement,

@@ -66,5 +66,8 @@ One line per day, in Argentina time (ART).
   labeled the synthetic wake attribution fixture with its generator provenance.
   Enabled validated native Windows own-repository COPY with staged-only reset and shared guarded test
   environments, retaining original preservation and pending two-machine native qualification.
-
+  Added the event-derived lead header, observed-revision Stop, ended composer, default-only
+  lead start, cap guards and compact lead rows with fake-only lifecycle and responsive capture proof.
+  Rechecked the layout and clarify references in full, fixed the 390px capped-action overflow,
+  and removed duplicate ended copy.
 - 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls.

@@ -1,6 +1,7 @@
 import type { LeadStatusEvent } from "@contracts";
 import type { State } from "../../state";
 import { selectPlanEvidence } from "../../review";
+import { leadProgress } from "./leadProgress";
 import { teamIdentities } from "../chatAgentSelectors";
 import type { LeadConversation, LeadEntry } from "./selectConversation";
 
@@ -42,12 +43,20 @@ export function selectLeadConversation(state: State, leadId: string): LeadConver
   if (!current || !identity) return undefined;
   entries.push(...messages.map((message) => ({ ...message, kind: "message" as const })));
   entries.push(
-    ...replies.map((event) => ({
-      kind: "lead-reply" as const,
-      seq: event.seq,
-      event,
-    })),
+    ...replies.map((event) => {
+      const status = entries.findLast(
+        (entry) => entry.kind === "lead-status" && entry.seq < event.seq,
+      );
+      return {
+        kind: "lead-reply" as const,
+        seq: event.seq,
+        event,
+        limits: status?.kind === "lead-status" ? status.status.limits : null,
+      };
+    }),
   );
+  const profile = state.run?.models.find((model) => model.id === current.payload.model);
+  const progress = leadProgress(statuses, replies);
   return {
     kind: "lead",
     header: {
@@ -56,9 +65,18 @@ export function selectLeadConversation(state: State, leadId: string): LeadConver
       letter: identity.letter,
       kind: "lead",
       agentId: leadId,
-      modelLabel:
-        state.run?.models.find((model) => model.id === current.payload.model)?.label ??
-        current.payload.model,
+      modelLabel: profile?.label ?? current.payload.model,
+      reasoning: profile?.reasoning ?? null,
+      turn: progress.turn,
+      turnCalls: current.payload.step - progress.start,
+      plans: new Set(
+        state.decisionEvents.flatMap((event) =>
+          event.type === "plan.updated" && event.payload.started_by === leadId
+            ? [event.payload.plan_id]
+            : [],
+        ),
+      ).size,
+      cost: state.leadCosts[leadId],
     },
     entries: entries.sort((a, b) => a.seq - b.seq),
   };

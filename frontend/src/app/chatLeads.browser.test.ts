@@ -1,3 +1,5 @@
+import type { LeadStatus } from "@contracts";
+import { compare } from "./chatLeadShots.support";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,6 +68,85 @@ async function startForm(page: Page) {
   await check(page.getByRole("textbox", { name: "First task" })).toBeFocused();
 }
 
+async function themeColor(page: Page, token: string) {
+  return page.evaluate((token) => {
+    const probe = document.createElement("span");
+    probe.style.color = `var(--${token})`;
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  }, token);
+}
+
+it("keeps the lead region and header through cold loading and chunk failure", async () => {
+  const page = await open("lead-new", 1280, "dark", true, false, true);
+  let failChunk!: () => void;
+  const heldChunk = new Promise<void>((resolve) => {
+    failChunk = resolve;
+  });
+  await page.route("**/src/agents/conversation/ConversationPanel.tsx*", async (route) => {
+    await heldChunk;
+    await route.abort("failed");
+  });
+  try {
+    await leadRow(page, "A").click();
+    const frame = page.getByRole("region", { name: "Lead A conversation", exact: true });
+    await check(frame).toBeVisible();
+    await check(frame.getByRole("heading")).toHaveText(
+      "Add input checks to the shop: reject negative prices and quantities, and zero or negative reserve quantities.",
+    );
+    await check(frame.getByRole("status")).toHaveText("Loading lead conversation…");
+    failChunk();
+    await check(frame.getByRole("alert")).toHaveText(
+      "This panel could not load. Reload the page to try again.",
+    );
+    await check(frame.getByRole("heading")).toBeVisible();
+    await check(frame.getByRole("status")).toHaveCount(0);
+    await check(page.locator('p p, [role="status"] [role="alert"]')).toHaveCount(0);
+  } finally {
+    failChunk();
+    await page.close();
+  }
+});
+
+it.each([1920, 1280, 390].flatMap((width) => ["dark", "day"].map((theme) => ({ width, theme }))))(
+  "styles lead-new actions at $width in $theme",
+  async ({ width, theme }) => {
+    const page = await open("lead-new", width, theme, true, false, true);
+    try {
+      await startForm(page);
+      await page.getByRole("textbox", { name: "First task" }).fill("Coordinate validation");
+      const start = page.getByRole("button", { name: "Start lead", exact: true });
+      const height = width === 390 ? "44px" : "40px";
+      await check(start).toHaveCSS("height", height);
+      await check(page.getByRole("button", { name: "Cancel", exact: true })).toHaveCSS(
+        "height",
+        height,
+      );
+      await check(start).toHaveCSS("background-color", await themeColor(page, "text"));
+      await check(start).toHaveCSS("color", await themeColor(page, "page"));
+      await start.hover();
+      await check(start).toHaveCSS("background-color", await themeColor(page, "text-hover"));
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+async function publishLead(page: Page, id: string, patch: Partial<LeadStatus>) {
+  await page.evaluate(
+    ({ id, patch }) => {
+      const event = window.chatLeadsTest
+        .events()
+        .findLast((e) => e.type === "lead.status" && e.payload.agent_id === id);
+      if (event?.type !== "lead.status") throw new Error("Missing lead fixture");
+      window.chatLeadsTest.deliver([{ ...event, payload: { ...event.payload, ...patch } }]);
+    },
+    { id, patch },
+  );
+}
+
 it("keeps direct work first and focuses only after New task or New lead", async () => {
   const page = await open("leads-two");
   try {
@@ -128,7 +209,9 @@ it("selects and messages the right lead in Chat and Oversight, with idle admissi
     await leadRow(page, "A").click();
     const composer = page.getByRole("textbox", { name: "Message Lead A", exact: true });
     await check(composer).toBeEditable();
-    await check(page.locator(".conversation-header h2")).toHaveText("Lead A");
+    await check(page.locator(".conversation-header h2")).toHaveText(
+      "Make the checkout safer: validate prices and quantities, and cover the edge cases.",
+    );
     await check(
       page.locator(".conversation-entries strong").filter({ hasText: /^Lead A$/ }),
     ).toBeVisible();
@@ -166,7 +249,7 @@ it("selects and messages the right lead in Chat and Oversight, with idle admissi
     await page.close();
   }
 });
-it("sends the shown model through App, retains refusals and never starts from Ctrl+Enter", async () => {
+it("uses the backend default through App, retains refusals and never starts from Ctrl+Enter", async () => {
   const page = await open("chat-start", 1280, "day", true, true);
   const calls: unknown[] = [];
   let refuse = true;
@@ -189,14 +272,13 @@ it("sends the shown model through App, retains refusals and never starts from Ct
       "aria-disabled",
       "true",
     );
-    await check(page.getByRole("combobox", { name: "Model" })).toHaveValue("muse-spark");
+    await check(page.getByRole("combobox", { name: "Model" })).toHaveCount(0);
     await check(page.locator(".new-lead-limits")).toHaveText(
       "Set before Oversight starts; every lead gets the same.",
     );
     await task.fill("Coordinate validation");
     await task.press("Control+Enter");
     expect(calls).toEqual([]);
-    await page.getByRole("combobox", { name: "Model" }).selectOption("muse-spark-open");
     await page.getByRole("button", { name: "Start lead", exact: true }).click();
     await check(page.locator(".new-lead").getByRole("alert")).toHaveText("No lead can start now.");
     await check(task).toHaveValue("Coordinate validation");
@@ -206,7 +288,6 @@ it("sends the shown model through App, retains refusals and never starts from Ct
     expect(calls).toEqual(
       Array.from({ length: 2 }, () => ({
         task: "Coordinate validation",
-        model: "muse-spark-open",
       })),
     );
     await check(page.locator(".chat-lead-row")).toHaveCount(0);
@@ -236,6 +317,14 @@ it("transfers only into an empty task, keeps limits factual and makes replay ine
     await page.evaluate(() => {
       window.chatLeadsTest.mount("leads-two", false);
     });
+    await check(page.getByRole("textbox", { name: "Message Lead A", exact: true })).toHaveAttribute(
+      "readonly",
+      "",
+    );
+    await check(page.getByRole("button", { name: "Stop lead", exact: true })).toHaveCount(0);
+    await check(
+      page.getByRole("button", { name: "Send message to lead", exact: true }),
+    ).toHaveCount(0);
     await startForm(page);
     await check(
       page.getByText("Replay: leads cannot be started here.", { exact: true }),
@@ -394,14 +483,14 @@ it.each([1920, 1280])(
           '.chat-agent-row[data-member="false"]',
         ].map((selector) => document.querySelector(selector)?.getBoundingClientRect().height),
       );
-      for (const [i, target] of (width === 1920 ? [136, 107, 139] : [111, 62, 115]).entries()) {
+      for (const [i, target] of (width === 1920 ? [98, 100, 139] : [88, 62, 115]).entries()) {
         expect(Math.abs((sizes[i] ?? 0) - target)).toBeLessThanOrEqual(4);
       }
       const member = await page
         .locator('.chat-agent-row[data-member="true"]')
         .first()
         .boundingBox();
-      expect(member?.y).toBe(width === 1920 ? 298 : 269);
+      expect(member?.y).toBe(width === 1920 ? 260 : 246.390625);
       await leadRow(page, "B").click();
       await check(page.getByRole("textbox", { name: "Message Lead B" })).toBeEditable();
     } finally {
@@ -418,12 +507,7 @@ it.each([1920, 1280].flatMap((width) => ["dark", "day"].map((theme) => ({ width,
       await check(page.locator(".chat-lead-draft")).toBeVisible();
       await check(page.locator(".chat-lead-draft")).toHaveAttribute("data-selected", "true");
       await check(page.getByRole("textbox", { name: "First task" })).toBeFocused();
-      const model = page.getByRole("combobox", { name: "Model" });
-      await check(model).toHaveValue("muse-spark");
-      await check(model.locator("option")).toHaveText([
-        "Muse Spark · low",
-        "Muse Spark Open · low",
-      ]);
+      await check(page.getByRole("combobox", { name: "Model" })).toHaveCount(0);
       await check(page.locator(".new-lead-limit-cards")).toContainText("2,000 characters a task");
       const explanation = page.locator(".new-lead-limit-heading p");
       await check(explanation).toHaveText("Set before Oversight starts; every lead gets the same.");
@@ -446,10 +530,294 @@ it.each([1920, 1280].flatMap((width) => ["dark", "day"].map((theme) => ({ width,
   },
 );
 
-const shots = fileURLToPath(new URL("../../../.shots/chat-leads/", import.meta.url));
-const captureStates = ["chat-start", "task-direct", "leads-two", "lead-switch", "lead-new"];
+it("stops the observed lead once, keeps 202 pending across switches and preserves member work", async () => {
+  const page = await open("leads-two", 1280, "dark", true, true);
+  const calls: { path: string; body: unknown }[] = [];
+  let admit = () => {};
+  const delayed = new Promise<void>((resolve) => {
+    admit = resolve;
+  });
+  await page.route("**/leads/*/stop", async (route) => {
+    calls.push({
+      path: new URL(route.request().url()).pathname,
+      body: route.request().postDataJSON(),
+    });
+    await delayed;
+    await route.fulfill({ status: 202 });
+  });
+  try {
+    await leadRow(page, "A").click();
+    const draft = page.getByRole("textbox", { name: "Message Lead A", exact: true });
+    await draft.fill("Keep this draft");
+    await page
+      .getByRole("button", { name: "Stop lead", exact: true })
+      .evaluate((button: HTMLButtonElement) => {
+        button.click();
+        button.click();
+      });
+    await check(page.getByRole("status").filter({ hasText: "Stopping lead…" })).toBeVisible();
+    expect(calls).toEqual([{ path: "/leads/agent-1/stop", body: { revision: 1 } }]);
+    await check(page.locator(".conversation-header")).toContainText("Idle");
+    await check(page.getByRole("button", { name: "Send message to lead" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    const preserved = await page.evaluate(() => window.chatLeadsTest.work());
+    await leadRow(page, "B").click();
+    await check(page.getByRole("button", { name: "Stop lead", exact: true })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+    await publishLead(page, "agent-1", { revision: 2, state: "working" });
+    admit();
+    await leadRow(page, "A").click();
+    await check(page.getByRole("button", { name: "Stop lead", exact: true })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    await check(draft).toHaveValue("Keep this draft");
+    await check(page.locator(".conversation-header")).toContainText("Working");
+    await leadRow(page, "B").focus();
+    await publishLead(page, "agent-1", {
+      revision: 3,
+      state: "stopped",
+      detail: "Stopped by the person.",
+    });
+    await check(leadRow(page, "B")).toBeFocused();
+    await check(leadRow(page, "A")).toHaveAttribute("aria-pressed", "true");
+    await check(page.locator(".conversation-composer")).toHaveText(
+      "Stopped by the person.Start a new lead to continue.",
+    );
+    await check(page.locator(".lead-header")).not.toContainText("Stopped by the person.");
+    await check(page.locator(".conversation-composer :is(button, textarea)")).toHaveCount(0);
+    expect(await page.evaluate(() => window.chatLeadsTest.work())).toEqual(preserved);
+    expect(calls).toHaveLength(1);
+  } finally {
+    admit();
+    await page.close();
+  }
+});
+it("does not retry a rejected Stop and uses the newly rendered revision only on another act", async () => {
+  const page = await open("leads-two", 1280, "day", true, true);
+  const calls: unknown[] = [];
+  await page.route("**/leads/*/stop", async (route) => {
+    calls.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 409,
+      json: {
+        error: { code: "wrong_state", message: "The lead changed. Check its state and try again." },
+      },
+    });
+  });
+  try {
+    await leadRow(page, "A").click();
+    await page
+      .getByRole("textbox", { name: "Message Lead A", exact: true })
+      .fill("Keep on refusal");
+    await page.getByRole("button", { name: "Stop lead", exact: true }).click();
+    await check(page.locator(".conversation-composer").getByRole("alert")).toContainText(
+      "The lead changed.",
+    );
+    await publishLead(page, "agent-1", { revision: 8, state: "working" });
+    expect(calls).toEqual([{ revision: 1 }]);
+    await check(page.getByRole("textbox", { name: "Message Lead A", exact: true })).toHaveValue(
+      "Keep on refusal",
+    );
+    await check(page.getByRole("button", { name: "Stop lead", exact: true })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+    await page.getByRole("button", { name: "Stop lead", exact: true }).click();
+    await check(page.locator(".conversation-composer").getByRole("alert")).toBeVisible();
+    expect(calls).toEqual([{ revision: 1 }, { revision: 8 }]);
+  } finally {
+    await page.close();
+  }
+});
+it.each([1280, 640, 390])("guards cap entry points and an open draft at %i", async (width) => {
+  const page = await open("lead-cap", width, "dark", true, false, true);
+  const starts: unknown[] = [];
+  await page.route("**/leads", async (route) => {
+    starts.push(route.request().postDataJSON());
+    await route.fulfill({ status: 201, json: { agent_id: "unexpected" } });
+  });
+  try {
+    const action = page
+      .locator(".chat-start-actions")
+      .getByRole("button", { name: "New lead · 2 of 2", exact: true });
+    await check(action).toHaveAttribute("aria-disabled", "true");
+    expect(
+      await action.evaluate((button) => {
+        const bounds = button.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(button);
+        return [...range.getClientRects()].every(
+          (r) =>
+            r.left >= bounds.left &&
+            r.right <= bounds.right &&
+            r.top >= bounds.top &&
+            r.bottom <= bounds.bottom,
+        );
+      }),
+    ).toBe(true);
+    if (width === 390) {
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toHaveText("1 plan needs you");
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toBeVisible();
+    }
+    if (process.env.CHAT_LEADS_SHOTS === "1" && width === 390) {
+      await check(page.locator(".lead-header")).toBeVisible();
+      await capture(page, "lead-cap", width, "dark");
+    }
+    await action.evaluate((button: HTMLButtonElement) => {
+      button.click();
+    });
+    await check(page.getByRole("textbox", { name: "First task" })).toHaveCount(0);
+    await newTask(page).click();
+    await check(page.locator(".chat-lead-option button")).toHaveText("New lead · 2 of 2");
+    await check(page.locator(".chat-lead-option button")).toHaveAttribute("aria-disabled", "true");
+    await publishLead(page, "agent-2", { revision: 2, state: "stopped" });
+    await startForm(page);
+    await page.getByRole("textbox", { name: "First task" }).fill("Keep capped draft");
+    await publishLead(page, "agent-1", { agent_id: "lead-new", revision: 1, state: "starting" });
+    await check(
+      page
+        .getByRole("status")
+        .filter({ hasText: "2 of 2 leads active. A lead must end before another can start." }),
+    ).toBeVisible();
+    await check(page.getByRole("button", { name: "Start lead", exact: true })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    const cappedStart = page.getByRole("button", { name: "Start lead", exact: true });
+    await cappedStart.hover();
+    await check(cappedStart).toHaveCSS("color", await themeColor(page, "faint"));
+    await check(cappedStart).toHaveCSS("background-color", await themeColor(page, "raised"));
+    await check(cappedStart).toHaveCSS("cursor", "not-allowed");
+    await check(page.getByRole("textbox", { name: "First task" })).toHaveValue("Keep capped draft");
+    await page
+      .getByRole("button", { name: "Start lead", exact: true })
+      .evaluate((button: HTMLButtonElement) => {
+        button.click();
+      });
+    expect(starts).toEqual([]);
+  } finally {
+    await page.close();
+  }
+});
+
+it.each(["dark", "day"])(
+  "hardens the 390 lead composer and terminal surface in %s",
+  async (theme) => {
+    const page = await open("leads-two", 390, theme, true, false, true);
+    try {
+      await check(page.getByRole("textbox", { name: "Message Lead A", exact: true })).toBeVisible();
+      await check(leadRow(page, "A").locator(".chat-lead-team")).toBeVisible();
+      await check(leadRow(page, "A").locator(".chat-lead-team")).toContainText("3 agents");
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toHaveText("1 plan needs you");
+      await check(leadRow(page, "B").locator(".chat-lead-team")).toBeVisible();
+      await page.locator(".conversation-composer").scrollIntoViewIfNeeded();
+      const stopIcon = page.getByRole("button", { name: "Stop lead", exact: true }).locator("svg");
+      await check(stopIcon).toHaveClass(/lucide-square/);
+      await check(stopIcon).toHaveAttribute("aria-hidden", "true");
+      await check(stopIcon).toBeVisible();
+      await check(stopIcon).toHaveCSS("width", "16px");
+      await check(stopIcon).toHaveCSS("height", "16px");
+      const measured = await page.evaluate(() => ({
+        sizes: [
+          ".chat-lead-row",
+          ".conversation-composer textarea",
+          ".lead-stop",
+          'button[aria-label="Send message to lead"]',
+          ".composer-actions .chat-merge-chip",
+        ].map((s) => {
+          const r = document.querySelector(s)?.getBoundingClientRect();
+          return r ? [r.width, r.height] : null;
+        }),
+        overflow: [
+          ...document.querySelectorAll(".chat-shell, .conversation-panel, .conversation-composer"),
+        ].some((el) => el.scrollWidth > el.clientWidth),
+      }));
+      expect(measured).toEqual({
+        sizes: [
+          [374, 59],
+          [362, 44],
+          [114, 44],
+          [67, 44],
+          [189, 44],
+        ],
+        overflow: false,
+      });
+      await check(newLead(page)).toHaveCSS("height", "44px");
+      if (process.env.CHAT_LEADS_SHOTS === "1")
+        await capture(page, "lead-working-phone", 390, theme);
+      await publishLead(page, "agent-1", {
+        revision: 2,
+        state: "halted",
+        detail: "Reached the limit of 50 turns.",
+      });
+      await check(page.locator(".conversation-composer")).toHaveText(
+        "Reached the limit of 50 turns.Start a new lead to continue.",
+      );
+      await check(page.locator(".lead-header")).not.toContainText("Reached the limit of 50 turns.");
+      await check(page.locator(".conversation-composer :is(button, textarea)")).toHaveCount(0);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+async function assertLifecycleScene(page: Page, name: string) {
+  const six = name === "leads-six";
+  await check(leadRow(page, six ? "D" : "A")).toHaveAttribute("aria-pressed", "true");
+  await check(page.locator(".lead-header h2")).toHaveText(
+    six
+      ? "Lowercase customer emails everywhere and reject bad addresses in every setter."
+      : "Add input checks to the shop: reject negative prices and quantities, and zero or negative reserve quantities.",
+  );
+  const states: Record<string, string> = six
+    ? { A: "Stopped", B: "Working", C: "Working", D: "Halted", E: "Idle", F: "Idle" }
+    : { A: "Stopped", B: "Working" };
+  for (const [letter, state] of Object.entries(states))
+    await check(leadRow(page, letter).locator(".chat-agent-pill")).toHaveText(state);
+  if (six) {
+    await check(leadRow(page, "F").locator(".chat-lead-team")).toHaveText("1 plan needs you");
+    await check(leadRow(page, "F").locator(".chat-lead-team")).toBeVisible();
+  }
+  await check(page.locator(".chat-agents > header")).toContainText("3 of 4 running");
+}
+
+it.each(["lead-stopped", "leads-six"])(
+  "verifies the selected lead and row states in %s",
+  async (name) => {
+    const page = await open(name, 390, "dark", true, false, true);
+    try {
+      await assertLifecycleScene(page, name);
+      const rows = await page.locator(".chat-lead-row").evaluateAll((rows) =>
+        rows.map((row) => {
+          const r = row.getBoundingClientRect();
+          return [r.width, r.height];
+        }),
+      );
+      expect(rows).toEqual(Array.from({ length: name === "leads-six" ? 6 : 2 }, () => [374, 59]));
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+const captureStates = [
+  "chat-start",
+  "task-direct",
+  "leads-two",
+  "lead-switch",
+  "lead-new",
+  "lead-stopped",
+  "leads-six",
+];
 for (const name of captureStates)
-  for (const width of [1920, 1280])
+  for (const width of name === "lead-stopped" || name === "leads-six"
+    ? [1920, 1280, 390]
+    : [1920, 1280])
     for (const theme of ["dark", "day"]) {
       it.skipIf(process.env.CHAT_LEADS_SHOTS !== "1")(
         `captures ${name}-${String(width)}-${theme}`,
@@ -466,6 +834,9 @@ for (const name of captureStates)
               await page
                 .getByRole("heading", { name: "What should the new lead work on?" })
                 .click();
+              const start = page.getByRole("button", { name: "Start lead", exact: true });
+              await check(start).toHaveCSS("height", "40px");
+              await check(start).toHaveCSS("background-color", await themeColor(page, "text"));
             }
             if (name === "task-direct") {
               await check(page.getByRole("textbox", { name: "Message Agent C" })).toBeVisible();
@@ -480,6 +851,20 @@ for (const name of captureStates)
                   name: `Message Lead ${name === "lead-switch" ? "B" : "A"}`,
                 }),
               ).toBeVisible();
+            if (name === "lead-stopped" || name === "leads-six") {
+              await check(
+                page.getByRole("region", { name: "Lead conversation", exact: true }),
+              ).toBeVisible();
+              await check(page.locator(".conversation-composer")).toContainText(
+                "Start a new lead to continue.",
+              );
+              await check(
+                page.locator(".conversation-entries [role=listitem]").last(),
+              ).toBeVisible();
+              await assertLifecycleScene(page, name);
+            }
+            if (width === 390)
+              await page.locator(".conversation-composer").scrollIntoViewIfNeeded();
             await capture(page, name, width, theme);
           } finally {
             await page.close();
@@ -496,6 +881,8 @@ for (const theme of ["dark", "day"])
       await page.close();
     }
   });
+
+const shots = fileURLToPath(new URL("../../../.shots/chat-leads/", import.meta.url));
 async function capture(page: Page, name: string, width: number, theme: string) {
   await mkdir(shots, { recursive: true });
   await page.evaluate(
@@ -527,6 +914,10 @@ async function capture(page: Page, name: string, width: number, theme: string) {
         ".new-lead-box",
         ".new-lead-box textarea",
         ".new-lead-limits",
+        ".conversation-composer",
+        ".conversation-composer textarea",
+        ".lead-stop",
+        '.composer-actions button[aria-label="Send message to lead"]',
         ".conversation-entries",
         ".conversation-header h2",
         ".shell-top-bar",
@@ -549,13 +940,26 @@ async function capture(page: Page, name: string, width: number, theme: string) {
     ),
   );
   const basename = `${name}-${String(width)}-${theme}`;
-  await page.screenshot({ path: `${shots}${basename}.png`, animations: "disabled" });
+  const screenshot = await page.screenshot({
+    path: `${shots}${basename}.png`,
+    animations: "disabled",
+  });
+  if (["lead-stopped", "leads-six"].includes(name) && width !== 390)
+    await compare(page, screenshot, basename, name, width, theme, measured);
   await writeFile(`${shots}${basename}.json`, JSON.stringify(measured, null, 2));
   await writeFile(
     `${shots}events-${name}.json`,
     JSON.stringify(
       await page.evaluate(
-        (name) => window.chatLeadsTest.prefix(name === "start-phone" ? "chat-start" : name, true),
+        (name) =>
+          window.chatLeadsTest.prefix(
+            name === "start-phone"
+              ? "chat-start"
+              : name === "lead-working-phone"
+                ? "leads-two"
+                : name,
+            true,
+          ),
         name,
       ),
     ),

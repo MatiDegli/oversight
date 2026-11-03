@@ -34,9 +34,10 @@ const LeadConversationFocus = lazy(() =>
       state,
       agentId,
       onMessageLead,
+      onStopLead,
       chat,
       onOpenSettings,
-    }: Pick<FrameProps, "state" | "onMessageLead" | "onOpenSettings"> & {
+    }: Pick<FrameProps, "state" | "onMessageLead" | "onStopLead" | "onOpenSettings"> & {
       agentId: string;
       chat?: boolean;
     }) => {
@@ -48,12 +49,41 @@ const LeadConversationFocus = lazy(() =>
           actionAccessory={
             chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
           }
+          onStopLead={onStopLead}
           onSend={onMessageLead ? (text) => onMessageLead(agentId, text) : undefined}
         />
       );
     },
   })),
 );
+
+function LeadConversationFrame({
+  lead,
+  children = (
+    <p role="status" className="px-[18px] py-4 text-muted">
+      Loading lead conversation…
+    </p>
+  ),
+}: {
+  lead: ReturnType<typeof selectChatLeads>[number];
+  children?: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={`Lead ${lead.letter} conversation`}
+      className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
+      style={agentSlotStyle(lead.hue)}
+    >
+      <header className="conversation-header flex items-center gap-3 px-[18px] py-4">
+        <span className="chat-lead-ring" aria-hidden="true">
+          {lead.letter}
+        </span>
+        <h2 className="min-w-0 text-[16px] font-semibold wrap-anywhere">{lead.status.task}</h2>
+      </header>
+      {children}
+    </section>
+  );
+}
 
 export function FocusPanel(
   props: FrameProps & {
@@ -239,6 +269,7 @@ function ConversationFocus({
   agentId,
   onMessageAgent,
   onMessageLead,
+  onStopLead,
   onPauseAgent,
   onResumeAgent,
   onStopAgent,
@@ -257,27 +288,12 @@ function ConversationFocus({
     const lead = selectChatLeads(state).find((row) => row.id === agentId);
     if (lead)
       return (
-        <LazyPanel
-          key={agentId}
-          frame={
-            <ConversationFrame
-              header={{
-                ...lead.status,
-                kind: "lead",
-                agentId,
-                hue: lead.hue,
-                letter: lead.letter,
-                modelLabel:
-                  state.run?.models.find((model) => model.id === lead.status.model)?.label ??
-                  lead.status.model,
-              }}
-            />
-          }
-        >
+        <LazyPanel key={agentId} frame={<LeadConversationFrame lead={lead} />}>
           <LeadConversationFocus
             state={state}
             agentId={agentId}
             onMessageLead={onMessageLead}
+            onStopLead={onStopLead}
             chat={chat}
             onOpenSettings={onOpenSettings}
           />

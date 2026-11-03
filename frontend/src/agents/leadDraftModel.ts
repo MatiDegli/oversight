@@ -1,15 +1,9 @@
 import type { StartLead } from "@contracts";
 import { createStore } from "zustand/vanilla";
-import type { State } from "../state";
+import { stateStore } from "../state";
+import { leadCapacity } from "./chatLeadSelectors";
 import { CommandError } from "../transport";
 import { taskBoxStore } from "./taskBoxModel";
-
-export function selectedLeadModel(state: State, choice: { runId?: string; id: string } | null) {
-  const models = state.run?.models ?? [];
-  const chosen = choice?.runId === state.run?.run_id ? choice?.id : undefined;
-  const id = chosen ?? state.run?.slots.find((slot) => slot.slot === "A")?.default_model;
-  return models.find((model) => model.id === id) ?? null;
-}
 
 /** Kept outside the form so Cancel, navigation and pending answers preserve the draft. */
 export function createLeadDraftStore() {
@@ -17,21 +11,15 @@ export function createLeadDraftStore() {
     draft: string;
     pending: boolean;
     failure: string | null;
-    choice: { runId?: string; id: string } | null;
     setDraft: (draft: string) => void;
-    choose: (id: string, runId?: string) => void;
     moveToTask: () => void;
-    start: (send: (body: StartLead) => Promise<unknown>, model: string) => Promise<boolean>;
+    start: (send: (body: StartLead) => Promise<unknown>) => Promise<boolean>;
   }>()((set, get) => ({
     draft: "",
     pending: false,
     failure: null,
-    choice: null,
     setDraft: (draft) => {
       if (!get().pending) set({ draft, failure: null });
-    },
-    choose: (id, runId) => {
-      if (!get().pending) set({ choice: { id, runId }, failure: null });
     },
     moveToTask: () => {
       const task = taskBoxStore.getState();
@@ -40,12 +28,12 @@ export function createLeadDraftStore() {
         set({ draft: "", failure: null });
       }
     },
-    start: async (send, model) => {
+    start: async (send) => {
       const task = get().draft.trim();
-      if (get().pending || !task || !model) return false;
+      if (get().pending || !task || leadCapacity(stateStore.getState().state).atCap) return false;
       set({ pending: true, failure: null });
       try {
-        await send({ task, model });
+        await send({ task });
         set({ draft: "", pending: false });
         return true;
       } catch (error) {
