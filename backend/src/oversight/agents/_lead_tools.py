@@ -13,6 +13,7 @@ from oversight.agents._lead_replies import reply_text
 from oversight.agents._lead_views import ViewRefusal, show_view
 from oversight.agents.client import ToolSchema
 from oversight.agents.tools import MAX_READ_CHARS, MAX_READ_LINES, _function
+from oversight.events import StatusInventoryTooLarge
 from oversight.workspace import FileTooLarge, InvalidPath, is_secret_path, secret_refusal
 from oversight_contracts.commands import FileContent, TreeResponse
 from oversight_contracts.events import LeadLimits
@@ -301,12 +302,16 @@ class LeadTools:
         try:
             seq, content = self.status()
             resolver = self.resolve_views(seq) if self.resolve_views is not None else None
-        except ValueError:
-            if self.status_without_views is None:
+        except StatusInventoryTooLarge:
+            try:
+                fallback = self.status_without_views() if self.status_without_views else None
+            except ValueError:
+                fallback = None
+            if fallback is None:
                 return LeadOutcome(
                     "Status eligibility exceeds the inventory limit; no views are eligible.", False
                 )
-            seq, content = self.status_without_views()
+            seq, content = fallback
             self.through_seq = max(self.through_seq or 0, seq)
             return LeadOutcome(
                 content + "No views are eligible: the status inventory is over its limit."

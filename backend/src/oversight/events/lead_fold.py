@@ -14,6 +14,10 @@ STATUS_CHARS = 20_000
 FIELD_CHARS = 200
 
 
+class StatusInventoryTooLarge(ValueError):
+    """The complete status eligibility inventory cannot fit within its character budget."""
+
+
 def _string(value: str, limit: int = FIELD_CHARS) -> str:
     # Escaping before bounding prevents newlines, controls, fences or markup from leaving data.
     def escaped(text: str) -> str:
@@ -69,7 +73,9 @@ def serialize_status(
     size = sum(map(len, parts))
     footer_space = len(f"Omitted whole entries: {len(ordinary)}.\n") if required else 100
     if size + footer_space > STATUS_CHARS:
-        raise ValueError("Status eligibility exceeds the inventory limit; no views are eligible.")
+        raise StatusInventoryTooLarge(
+            "Status eligibility exceeds the inventory limit; no views are eligible."
+        )
     omitted = 0
     for label, data in ordinary:
         entry = f"{label} data:\n```json\n{_data(data)}\n```\n"

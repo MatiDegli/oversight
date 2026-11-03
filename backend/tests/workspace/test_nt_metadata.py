@@ -35,6 +35,7 @@ def test_nt_token_ignores_name_derived_execute_bits(execute):
     [
         {"mode": stat.S_IFDIR | 0o666},
         {"mode": stat.S_IFREG | 0o444},
+        {"mode": stat.S_IFREG | 0o466},
         {"ino": 43},
         {"dev": 8},
         {"nlink": 2},
@@ -42,7 +43,17 @@ def test_nt_token_ignores_name_derived_execute_bits(execute):
         {"mtime_ns": 123456790},
         {"ctime_ns": 124},
     ],
-    ids=["type", "readonly", "inode", "device", "links", "size", "mtime-ns", "creation-ns"],
+    ids=[
+        "type",
+        "readonly",
+        "owner-write",
+        "inode",
+        "device",
+        "links",
+        "size",
+        "mtime-ns",
+        "creation-ns",
+    ],
 )
 def test_nt_token_keeps_other_identity_fields(changes):
     assert metadata.nt_token(token_stat()) != metadata.nt_token(token_stat(**changes))
