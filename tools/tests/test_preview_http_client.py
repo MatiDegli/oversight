@@ -36,6 +36,7 @@ AGENT = AgentStatus(
 class Wire:
     def __init__(self):
         self.calls = []
+        self.agent = AGENT
         self.status = STATUS
         self.url = "http://127.0.0.1:19900/"
         self.failed = False
@@ -47,7 +48,7 @@ class Wire:
         self.calls.append((request.method, request.url.path, body))
         headers = {"cache-control": "no-store"}
         if request.url.path == "/agents/agent-1":
-            return httpx.Response(200, json=AGENT.model_dump())
+            return httpx.Response(200, json=self.agent.model_dump())
         if self.failed:
             return httpx.Response(500, text="secret child output", headers=headers)
         if request.url.path == "/previews":
@@ -87,6 +88,33 @@ async def test_exact_requests_memory_only_tokens_and_verified_stop():
     ]
     assert TOKEN not in repr(previews)
     assert all(TOKEN not in path for _, path, _ in wire.calls)
+
+
+@pytest.mark.parametrize("state", ["ready_for_review", "halted"])
+async def test_unresolved_terminal_proposal_can_open_and_close(state):
+    wire = Wire()
+    wire.agent = AGENT.model_copy(update={"state": state})
+    async with httpx.AsyncClient(
+        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(wire), trust_env=False
+    ) as client:
+        previews = factory(client)
+        await previews.open(CANDIDATE)
+        assert await previews.ready(CANDIDATE) == wire.url
+        await previews.stop()
+    assert wire.calls[1] == ("POST", "/previews", CANDIDATE.opening())
+    assert wire.calls[-1] == ("POST", f"/previews/{ID}/stop", {"lease_token": TOKEN})
+
+
+@pytest.mark.parametrize("state", ["ready_for_review", "halted"])
+async def test_terminal_agent_with_wrong_proposal_never_starts_preview(state):
+    wire = Wire()
+    wire.agent = AGENT.model_copy(update={"state": state, "change_id": "change-2"})
+    async with httpx.AsyncClient(
+        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(wire), trust_env=False
+    ) as client:
+        with pytest.raises(ScenarioError, match="coding-agent identity differs"):
+            await factory(client).open(CANDIDATE)
+    assert all(method == "GET" for method, _, _ in wire.calls)
 
 
 async def test_stale_details_still_retain_receipt_for_authenticated_cleanup():

@@ -86,7 +86,7 @@ class PreviewHttpClient:
                     and status.change_id == candidate.change_id,
                     "Preview coding-agent identity differs",
                 )
-                if status.state == "ready_for_review":
+                if status.state in {"ready_for_review", "halted"}:
                     return
                 require(
                     status.state in {"working", "starting", "revising"},

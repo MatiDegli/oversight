@@ -493,7 +493,7 @@ Positive findings include bounded private failures, preserved ownership, a statu
 no focus stealing and no preview dependency in production. D's native form controls remain small
 touch targets (P2), preserved by the brief rather than restyled. The broader `make shots` detector
 also reports a pre-existing skipped heading in `agents/TaskBox.tsx`, outside this front's Touches;
-it is not a preview finding. Windows browser proof and C's earlier capture matrix remain missing.
+it is not a preview finding. Windows browser proof remains missing; C's earlier capture matrix was not inspected in this round.
 The new browser cases cover rapid admission, a refused request, offline quarantine and mixed-script
 observer text at 200% size. Viewports and forced colors are Chromium emulation, not a physical
 touch/Windows test. There is no custom drag gesture on this surface. Trust remains withheld.

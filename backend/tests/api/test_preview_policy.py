@@ -133,6 +133,14 @@ def test_documented_configuration_and_reason_inventory_are_exact():
     ).origins == (" http://127.0.0.1:8710",)
 
 
+def test_capture_inventory_distinguishes_uninspected_matrix_from_missing_windows_proof():
+    docs = (ROOT / "docs/isolation.md").read_text()
+    audit = docs.split("### Hardening and technical audit recheck", 1)[1]
+    assert "Windows browser proof remains missing" in audit
+    assert "C's earlier capture matrix was not inspected in this round" in audit
+    assert "Trust remains withheld" in audit
+
+
 @pytest.mark.parametrize(
     "key", ["PORTS", "HEARTBEAT_S", "LEASE_S", "LIFETIME_S", "READINESS_S", "MEMORY_LIMIT_BYTES"]
 )
