@@ -91,6 +91,8 @@ export interface State {
   eventFacts: Record<number, EventFact>;
   gap: boolean;
   graph: GraphSnapshot | null;
+  /** Accepted main observations in envelope order, including terminal gate history. */
+  mainHeads: { seq: number; commit: string }[];
   agents: Record<string, AgentStatus>;
   steps: Record<string, AgentStep[]>;
   modelWaits: Record<string, ModelWait>;
@@ -143,6 +145,7 @@ export function createInitialState(): State {
     eventFacts: {},
     gap: false,
     graph: null,
+    mainHeads: [],
     agents: {},
     steps: {},
     modelWaits: {},

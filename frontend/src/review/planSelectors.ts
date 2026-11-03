@@ -70,6 +70,7 @@ export function selectRetainedPlans(state: State) {
       ({ payload }) =>
         (payload.state === "proposed" || payload.state === "starting") && payload.queued_task_id,
     ),
+    running: requested.filter(({ payload }) => payload.state === "running"),
     failed: requested.filter(({ payload }) => payload.state === "failed"),
   };
 }
