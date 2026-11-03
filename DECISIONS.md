@@ -4420,9 +4420,10 @@ in this Linux session. See [desktop status](desktop/README.md) and the
 [prospective runbook](README.md#future-tauri-shell-runbook).
 
 Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed below, used unmodified.
-MPL-2.0: none.
-Unicode-3.0: unicode-ident
-Zlib: none.
+
+- MPL-2.0: cssparser, cssparser-macros, dtoa-short, option-ext, selectors.
+- Unicode-3.0: icu_collections, icu_locale_core, icu_normalizer, icu_normalizer_data, icu_properties, icu_properties_data, icu_provider, litemap, potential_utf, tinystr, unicode-ident, writeable, yoke, yoke-derive, zerofrom, zerofrom-derive, zerotrie, zerovec, zerovec-derive.
+- Zlib: foldhash, zlib-rs.
 
 The granted crates present in `desktop/Cargo.lock`, grouped by license, are:
 

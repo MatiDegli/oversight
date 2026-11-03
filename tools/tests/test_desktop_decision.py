@@ -14,11 +14,20 @@ def test_desktop_grant_preserves_approved_scope_separately_from_locked_inventory
     paragraphs = entry.split("\n\n")
     grant = (
         "Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell\u2019s "
-        "Rust crates listed in license-report.md, used unmodified."
+        "Rust crates listed below, used unmodified."
     )
     assert grant in paragraphs
+    approved = (
+        "- MPL-2.0: cssparser, cssparser-macros, dtoa-short, option-ext, selectors.\n"
+        "- Unicode-3.0: icu_collections, icu_locale_core, icu_normalizer, icu_normalizer_data, "
+        "icu_properties, icu_properties_data, icu_provider, litemap, potential_utf, tinystr, "
+        "unicode-ident, writeable, yoke, yoke-derive, zerofrom, zerofrom-derive, zerotrie, "
+        "zerovec, zerovec-derive.\n"
+        "- Zlib: foldhash, zlib-rs."
+    )
     inventory = "The granted crates present in `desktop/Cargo.lock`, grouped by license, are:"
-    assert paragraphs[paragraphs.index(grant) + 1] == inventory
+    assert paragraphs[paragraphs.index(grant) + 1] == approved
+    assert paragraphs[paragraphs.index(grant) + 2] == inventory
 
 
 @pytest.mark.parametrize("boundary", ["start", "end"])
