@@ -4477,3 +4477,10 @@ whole, so only its length may add an overrun. Queue reads keep the longest sourc
 whole entries whose JSON fits 20,000 characters, preserve run_id and seq, and state the exact count
 omitted outside the JSON. Prompts, contracts, authority and lifecycle stay unchanged.
 Reason: server cuts must be visible and must never hand the lead broken JSON.
+## 2026-11-02 — Live preview may open on finish when the person set it
+
+"Live preview may open on finish when the person set it" — the person's setting is the cause, so the
+panel still follows what the person does; focus and scroll never move; a review or a preview in use is never replaced.
+"Open preview when done" is off by default.
+
+Reason: the person's setting is the cause, so the panel still follows what the person does; focus and scroll never move; a review or a preview in use is never replaced. "Open preview when done" is off by default.
