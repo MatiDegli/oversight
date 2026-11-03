@@ -84,7 +84,7 @@ export function ChatAgents({
                 .join("; ")}
             >
               <span className={`chat-agent-badge ${agentLook[row.hue].tint}`} aria-hidden="true">
-                {row.letter}
+                {row.planContext?.shortLabel ?? row.letter}
                 <span className="chat-agent-lamp" />
               </span>
               <span className="chat-agent-content">

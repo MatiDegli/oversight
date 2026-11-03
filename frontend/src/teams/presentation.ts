@@ -10,6 +10,8 @@ export type AgentPresentation = Readonly<{
   kind: "lead" | "plan" | "agent";
   letter: string;
   label: string;
+  /** Compact badge text and visible plan caption when several plans reuse a subtask label. */
+  planContext?: Readonly<{ shortLabel: string; caption: string }>;
   planId: string | null;
   subtask: number | null;
   hue: PaletteKey;
@@ -145,6 +147,37 @@ function metadata(state: State) {
   return { plans, origins };
 }
 
+/** Qualify only collisions; plan order follows first observation, including ended plans. */
+function qualifyPlanLabels(
+  byAgent: Record<string, AgentPresentation>,
+  plans: Map<string, Plan>,
+): Record<string, AgentPresentation> {
+  const rows = Object.values(byAgent);
+  return Object.fromEntries(
+    rows.map((identity) => {
+      const peers = rows.filter(
+        (peer) => peer.team === identity.team && peer.label === identity.label && peer.planId,
+      );
+      if (identity.planId && new Set(peers.map((peer) => peer.planId)).size > 1) {
+        const ordinal =
+          [...plans.values()]
+            .filter((plan) => plan.started_by === identity.team)
+            .findIndex((plan) => plan.plan_id === identity.planId) + 1;
+        const caption = `plan ${String(ordinal)}`;
+        return [
+          identity.agentId,
+          Object.freeze({
+            ...identity,
+            label: `${identity.label} · ${caption}`,
+            planContext: Object.freeze({ shortLabel: identity.label, caption }),
+          }),
+        ];
+      }
+      return [identity.agentId, identity];
+    }),
+  );
+}
+
 function buildPresentation(state: State) {
   const identities = selectTeams(state);
   const teams = allocate(state, identities);
@@ -174,7 +207,10 @@ function buildPresentation(state: State) {
       order,
     });
   }
-  return Object.freeze({ byAgent: Object.freeze(byAgent), teamOrder: identities.teamOrder });
+  return Object.freeze({
+    byAgent: Object.freeze(qualifyPlanLabels(byAgent, plans)),
+    teamOrder: identities.teamOrder,
+  });
 }
 
 /** One immutable lookup for every surface. Unknown/usage-only actors have no coding identity. */

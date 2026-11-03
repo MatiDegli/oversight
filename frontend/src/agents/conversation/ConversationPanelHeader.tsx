@@ -16,7 +16,7 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
           title={header.presentation?.planId ?? undefined}
           className={`flex min-w-(--letter-badge-size) h-(--letter-badge-size) px-1.5 shrink-0 items-center justify-center rounded-label font-bold ${presentationLook(header.presentation).swatch}`}
         >
-          {header.presentation?.label ?? "unknown"}
+          {header.presentation?.planContext?.shortLabel ?? header.presentation?.label ?? "unknown"}
         </span>
         <h2 className="min-w-0 text-[16px]! leading-[1.3]! font-semibold wrap-anywhere text-text">
           Agent {header.presentation?.label ?? "unknown"}

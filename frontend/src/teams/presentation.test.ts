@@ -128,10 +128,44 @@ it("shares lead identity across plans and slots while retaining each plan's indi
     plan("q", "lead", ["three"]),
     agent("three", { plan_id: "q" }),
   );
-  expect(rows.one).toMatchObject({ team: "lead", label: "A·1", hue: "A", planId: "p" });
+  expect(rows.one).toMatchObject({ team: "lead", label: "A·1 · plan 1", hue: "A", planId: "p" });
   expect(rows.two).toMatchObject({ team: "lead", label: "A·2", hue: "A" });
-  expect(rows.three).toMatchObject({ label: "A·1", planId: "q" });
+  expect(rows.three).toMatchObject({ label: "A·1 · plan 2", planId: "q" });
   expect(rows.lead).toMatchObject({ kind: "lead", label: "A" });
+});
+it("qualifies colliding single-subtask labels by first-observed plan order within their lead", () => {
+  const prefix = [
+    plan("z-first", "lead", ["one"]),
+    agent("one", { plan_id: "z-first" }),
+    plan("unrelated", "other-lead", ["other"]),
+    agent("other", { plan_id: "unrelated" }),
+  ];
+  const past = fold(...prefix);
+  expect(selectPresentation(past).byAgent.one?.label).toBe("A·1");
+  const future = fold(
+    ...prefix,
+    resolve("one"),
+    plan("a-second", "lead", ["two"]),
+    agent("two", { plan_id: "a-second" }),
+    plan("z-first", "lead", ["one"]),
+  );
+  const { byAgent } = selectPresentation(future);
+  expect(byAgent.one).toMatchObject({
+    label: "A·1 · plan 1",
+    subtask: 1,
+    planContext: { shortLabel: "A·1", caption: "plan 1" },
+  });
+  expect(byAgent.two).toMatchObject({
+    label: "A·1 · plan 2",
+    subtask: 1,
+    planContext: { shortLabel: "A·1", caption: "plan 2" },
+  });
+  expect(byAgent.other?.label).toBe("B·1");
+  expect(byAgent.lead?.label).toBe("A");
+  expect(byAgent.one?.hue).toBe(byAgent.two?.hue);
+  expect(Object.isFrozen(byAgent.one?.planContext)).toBe(true);
+  expect(selectPresentation(past).byAgent.one?.label).toBe("A·1");
+  expect(selectPresentation(fold(...future.decisionEvents)).byAgent).toEqual(byAgent);
 });
 it("uses leadless plan indices, including above six, with waiting siblings", () => {
   const rows = identities(

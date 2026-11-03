@@ -116,12 +116,17 @@ export function AgentsRail({ state }: { state: State }) {
               data-agent-origin={agent.agent_id}
               className={`relative grid size-(--letter-avatar-size) place-items-center rounded-card border-(length:--agent-border-width) text-(length:--letter-avatar-font-size) font-bold ${look.border} ${look.tint}`}
             >
-              {identity?.label ?? "?"}
+              {identity?.planContext?.shortLabel ?? identity?.label ?? "?"}
               <span
                 aria-hidden="true"
                 className={`absolute -top-1 -right-1 size-(--status-lamp-size) rounded-full border-(length:--agent-border-width) ${look.border} ${lamp}`}
               />
             </span>
+            {identity?.planContext && (
+              <span className="text-(length:--caption-size) text-muted">
+                {identity.planContext.caption}
+              </span>
+            )}
             <span aria-hidden="true" className="text-(length:--caption-size) text-muted">
               {caption}
             </span>
