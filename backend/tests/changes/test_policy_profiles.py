@@ -1,15 +1,18 @@
-"""Hand-built producer evidence and exact profile authority, without I/O or models."""
+"""Profile authority from hand-built evidence and captured configuration diagnostics."""
 
 from dataclasses import replace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from changes_helpers import Harness
 
 from oversight.agents import FAKE_MODEL, FAKE_MODEL_B, MUSE_SPARK, MUSE_SPARK_OPEN
+from oversight.changes._configuration import PREFIX
 from oversight.changes._facts import (
     AddedTestsInventory,
     IntegrityStatus,
     added_tests_inventory,
+    capture_facts,
     integrity_status,
 )
 from oversight.changes._policy import PolicyInputs, SpendSnapshot, assess, merges_alone
@@ -458,21 +461,39 @@ def test_empty_integrity_requires_capture_witness(ready: PolicyInputs) -> None:
         "pkg/usercustomize.py",
     ],
 )
-@pytest.mark.parametrize("enabled", [False, True])
-def test_configuration_diagnostic_has_no_integrity_authority(
-    ready: PolicyInputs, path: str, enabled: bool
+@pytest.mark.anyio
+async def test_configuration_diagnostic_has_no_integrity_authority(
+    h: Harness, ready: PolicyInputs, path: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from oversight.changes._configuration import PREFIX, _note, is_configuration
-
-    before, after = {path: "# old\n"}, {path: "# new\n"}
-    status = integrity_status(before, after)
-    expected = result(replace(ready, integrity_status=status), "test_integrity")
-    if enabled:
-        note = _note("f" * 40, (path,) if is_configuration(path) else (), 5)
-        assert note.startswith(PREFIX)
-    assert integrity_status(before, after) == status
-    assert result(replace(ready, integrity_status=status), "test_integrity") == expected
-    assert expected.result == (
+    source = h.workspace.main.root / path
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text((source.read_text() if source.exists() else "") + "# old\n")
+    assert (await h.main_git("add", "--", path)).returncode == 0
+    assert (await h.main_git("commit", "-m", "Seed configuration baseline")).returncode == 0
+    await h.run_agent(1, (path, "# old\n", "# new\n"))
+    rec = h.manager._agents["agent-1"]
+    assert rec.head_commit is not None
+    async with h.workspace.locks(main=True, agent_id="agent-1"):
+        enabled = await capture_facts(h.manager._ctx, rec, head=rec.head_commit, revision=1)
+        without_note = AsyncMock(return_value="")
+        with monkeypatch.context() as disabled:
+            disabled.setattr("oversight.changes._facts.proposal_attribution", without_note)
+            baseline = await capture_facts(h.manager._ctx, rec, head=rec.head_commit, revision=1)
+        without_note.assert_awaited_once()
+    [note] = [p for p in enabled.problems if p.startswith(PREFIX)]
+    assert "configuration attribution unknown" not in note
+    assert not any(p.startswith(PREFIX) for p in baseline.problems)
+    assert enabled.integrity_status == baseline.integrity_status
+    assert enabled.integrity == baseline.integrity
+    assessments = [
+        result(
+            replace(ready, integrity=facts.integrity, integrity_status=facts.integrity_status),
+            "test_integrity",
+        )
+        for facts in (baseline, enabled)
+    ]
+    assert assessments[0] == assessments[1]
+    assert assessments[1].result == (
         "fail"
         if path in {"pytest.ini", "nested/conftest.py", "pyproject.toml", "tests/Conftest.py"}
         else "pass"

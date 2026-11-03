@@ -466,10 +466,17 @@ class AgentRun:
     @timed("tool_publication")
     async def _report(self, tool: str, outcome: ToolOutcome, duration_ms: int) -> ToolOutcome:
         agent_id = self._task.agent_id
+        cut_short: asyncio.CancelledError | None = None
         # The edit is on disk either way. A lost record only changes what the UI is told: the
         # model's result, the failure count and the stop rules still follow `outcome`.
         if outcome.suite_run is not None:
-            suite_note = await self._sink.tests_executed(agent_id, outcome.suite_run)
+            suite_note = None
+            try:
+                suite_note = await self._sink.tests_executed(agent_id, outcome.suite_run)
+            except asyncio.CancelledError as cancelled:
+                # The suite may already be recorded. Publish its step without the optional
+                # comparison note before propagating Stop or the deadline.
+                cut_short = cancelled
             if suite_note is not None:
                 outcome = replace(
                     outcome,
@@ -477,7 +484,6 @@ class AgentRun:
                     summary=outcome.summary + "\n" + suite_note,
                 )
         recorded = outcome.edited_path is None
-        cut_short: asyncio.CancelledError | None = None
         if outcome.edited_path is not None:
             try:
                 recorded = await self._record(outcome.edited_path)

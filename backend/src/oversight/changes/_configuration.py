@@ -138,8 +138,7 @@ async def attribution(
             )
             paths, blobs = _paths(output)
             for blob in blobs:
-                if await _git(ctx, tree, "cat-file", "-e", f"{blob}^{{blob}}"):
-                    raise _Unavailable("malformed object verification")
+                await _git(ctx, tree, "cat-file", "-e", f"{blob}^{{blob}}")
         return _note(base, paths, limit)
     except _Unavailable as error:
         return unknown(str(error))

@@ -236,7 +236,6 @@ async def test_stop_during_comparison_propagates_after_one_suite(
     h: Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     tree = await h.open(1)
-    run = await h.workspace.run_tests(tree, timeout_s=60)
     entered = asyncio.Event()
 
     async def hold(*args, **kwargs) -> str:
@@ -245,13 +244,37 @@ async def test_stop_during_comparison_propagates_after_one_suite(
         return "unreachable"
 
     monkeypatch.setattr(configuration, "attribution", hold)
-    task = asyncio.create_task(h.manager.tests_executed("agent-1", run))
+    model = ScriptedModel(
+        parse_script(
+            '{"task": "Do it.", "turns": '
+            '[{"tool_calls": [{"name": "run_tests", "arguments": {}}]}]}'
+        )
+    )
+    task = asyncio.create_task(
+        AgentRun(
+            h.task(1),
+            model=model,
+            workspace=h.workspace,
+            tree=tree,
+            sink=h.manager,
+            publish=h.publish,
+            ledger=UsageLedger(budget_usd=10),
+        ).run()
+    )
     async with asyncio.timeout(5):
         await entered.wait()
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    assert len(h.payloads(SuiteExecution)) == 1
+    [execution] = h.payloads(SuiteExecution)
+    [step] = h.payloads(AgentStep)
+    assert execution.phase == "agent" and execution.suite.cases_complete
+    assert (step.step, step.tool, step.result, step.error) == (1, "run_tests", "ok", None)
+    [run] = h.manager._agents["agent-1"].suite_runs.values()
+    assert step.tests == run.result
+    assert execution.tested_tree == run.tested_tree
+    assert configuration.PREFIX not in step.summary
+    assert h.types().index("tests.executed") < h.types().index("agent.step")
     assert not h.payloads(ErrorReport)
 
 

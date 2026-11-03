@@ -383,11 +383,10 @@ new candidate work waits for the maintainer’s order.
 
 ### 1. Facts and a summary from events
 
-Packet 1102a, first backend front (2026-11-03): configuration attribution compares captured Git
-trees with the current locked change base. Agent notes and frozen proposal problems are bounded
-and advisory; integrity authority is unchanged. Ignored/external inputs and whole-file relevance
-remain explicit limitations. Separate frontend rendering is pending; notes currently appear under
-“Incomplete:”.
+Configuration attribution compares captured Git trees with the current locked change base.
+Agent notes and frozen proposal problems are bounded and advisory; integrity authority is unchanged.
+Ignored/external inputs and whole-file relevance remain explicit limitations.
+The review shows each note as its own line, apart from “Incomplete:”.
 
 Give the person at most three lines covering the request, actual edits, tests added/run, other
 results changed and cost. Derive them from task/status, change, execution and usage events, never
