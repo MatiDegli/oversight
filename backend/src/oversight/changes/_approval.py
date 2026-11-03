@@ -33,6 +33,8 @@ async def approve_rules(ctx: ChangeContext, reservation: rules.RulesReservation)
             return
         rec.rules_phase = "preflight"
         async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+            await ctx.workspace.drain_previews(rec.tree)
+            await ctx.workspace.preview_evidence(rec.tree, rec.revision, rec.head_commit or "")
             if not rules.current(ctx, reservation):
                 return
             await _spend.ready(ctx)
@@ -94,6 +96,8 @@ async def rules_tree(
 async def approve(ctx: ChangeContext, rec: ChangeRecord, comment: str | None) -> None:
     await delivery.finish_pending(ctx)
     async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+        await ctx.workspace.drain_previews(rec.tree)
+        await ctx.workspace.preview_evidence(rec.tree, rec.revision, rec.head_commit or "")
         # A close-out publish left running by a cancel may still move `snapshot`, which this
         # merge's delta starts from, and must find its own delta still there: wait for it.
         await delivery.drain_pending(ctx)
