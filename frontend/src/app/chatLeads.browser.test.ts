@@ -716,6 +716,12 @@ it.each(["dark", "day"])(
       await check(leadRow(page, "B").locator(".chat-lead-team")).toHaveText("1 plan needs you");
       await check(leadRow(page, "B").locator(".chat-lead-team")).toBeVisible();
       await page.locator(".conversation-composer").scrollIntoViewIfNeeded();
+      const stopIcon = page.getByRole("button", { name: "Stop lead", exact: true }).locator("svg");
+      await check(stopIcon).toHaveClass(/lucide-square/);
+      await check(stopIcon).toHaveAttribute("aria-hidden", "true");
+      await check(stopIcon).toBeVisible();
+      await check(stopIcon).toHaveCSS("width", "16px");
+      await check(stopIcon).toHaveCSS("height", "16px");
       const measured = await page.evaluate(() => ({
         sizes: [
           ".chat-lead-row",

@@ -1,6 +1,6 @@
 import type { StopLead } from "@contracts";
 import { leadEnded, leadStopStore, requestLeadStop } from "./leadStop";
-import { TriangleAlert } from "lucide-react";
+import { Square, TriangleAlert } from "lucide-react";
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useStore } from "zustand";
 import { stateStore } from "../../state";
@@ -178,7 +178,7 @@ export function Composer({
                 void requestLeadStop(runId, header.agentId, header.revision, onStopLead);
             }}
           >
-            Stop lead
+            <Square aria-hidden="true" className="size-4 shrink-0" /> Stop lead
           </button>
         )}
         {actionAccessory}
