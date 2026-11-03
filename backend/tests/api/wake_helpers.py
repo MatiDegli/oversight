@@ -9,9 +9,13 @@ from typing import Any
 
 from backend.tests.api.lead_helpers import ThreadModels
 from backend.tests.events.test_lead_wake import plan, status, suite_execution
+from live_helpers import DEADLINE_S
 
 from oversight.agents import Message, ModelReply, ToolSchema
 from oversight.runtime_lead_wakes import WakeClock
+
+# Allow loaded runners to progress while bounding stuck barriers below the live-test deadline.
+BARRIER_TIMEOUT_S = DEADLINE_S / 2
 
 
 class ControlledClock(WakeClock):
@@ -66,7 +70,7 @@ class Models(ThreadModels):
 
 
 async def spin(predicate: Callable[[], bool]) -> None:
-    async with asyncio.timeout(5):
+    async with asyncio.timeout(BARRIER_TIMEOUT_S):
         while not predicate():  # noqa: ASYNC110 -- scheduler-only barrier, no elapsed-time sleep.
             await asyncio.sleep(0)
 
