@@ -180,12 +180,16 @@ def child_env(port: int, runtime_dir: Path) -> dict[str, str]:
         OVERSIGHT_PORT=str(port),
         OVERSIGHT_VITE_PORT="",
         OVERSIGHT_RUNTIME_DIR=str(runtime_dir),
+        META_API_KEY="",
+        BASETEN_API_KEY="",
         OVERSIGHT_AGENT_MODEL="fake",
+        OVERSIGHT_AGENT_MODEL_B="fake",
         OVERSIGHT_FAKE_SCRIPT=FAKE_SCRIPT,
+        OVERSIGHT_FAKE_SCRIPT_B=FAKE_SCRIPT,
+        OVERSIGHT_CROSS_REVIEW="false",
+        OVERSIGHT_WORKSPACE_SOURCE="",
     )
-    # No provider key reaches the child: it never calls a model API.
-    for key in ("META_API_KEY", "BASETEN_API_KEY"):
-        env.pop(key, None)
+    # Empty keys override .env too; fake A/B and the demo source override personal settings.
     return env
 
 
@@ -210,22 +214,22 @@ def run_smoke() -> None:
         )
         try:
             wait_for_health(base_url(port), START_DEADLINE, child)
-            seq = wait_for_graph(base_url(port), START_DEADLINE)
+            wait_for_graph(base_url(port), START_DEADLINE)
         finally:
             # Every exit path: success, failure and Ctrl+C (the finally runs on the way out).
             stop_child(child)
-    print(f"smoke: ok: /health and /graph on port {port}, seq {seq}")
 
 
 def main() -> int:
     try:
         run_smoke()
-    except SmokeError as error:
+    except (SmokeError, OSError, subprocess.SubprocessError) as error:
         print(f"smoke: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         print("smoke: interrupted", file=sys.stderr)
         return 130
+    print("smoke: ok")
     return 0
 
 
