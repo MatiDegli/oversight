@@ -145,6 +145,7 @@ stateStore.subscribe(({ state }) => { window.coldStartTrace.cursors.push(state.l
 }
 declare global {
   interface Window {
+    coldStartAlerts?: string[];
     coldStartFailures?: { message: string; stack?: string }[];
     coldStartInput?: string;
     coldStartPlayer?: ReplayPlayer;
@@ -168,6 +169,7 @@ class ChatSupport {
   streams = new Set<ServerResponse>();
   api?: string;
   deliveries: {
+    url: string;
     after: number;
     lastEventId: string | undefined;
     seqs: number[];
@@ -208,6 +210,7 @@ class ChatSupport {
           }
           if (this.api) {
             const delivery = {
+              url: request.url,
               after: Number(new URL(request.url, "http://fixture").searchParams.get("after")),
               lastEventId: request.headers["last-event-id"] as string | undefined,
               seqs: [] as number[],
@@ -260,6 +263,7 @@ class ChatSupport {
             .map((event) => `id: ${String(event.seq)}\ndata: ${JSON.stringify(event)}\n\n`)
             .join("");
           this.deliveries.push({
+            url: request.url,
             after,
             lastEventId: request.headers["last-event-id"] as string | undefined,
             seqs: events.map((event) => event.seq),
@@ -309,6 +313,22 @@ class ChatSupport {
     this.deliveries = [];
     const context = await this.browser.newContext({ viewport, reducedMotion: "reduce" });
     context.setDefaultTimeout(7_000);
+    if (input)
+      await context.addInitScript(() => {
+        window.coldStartAlerts = [];
+        new MutationObserver(() => {
+          for (const node of document.querySelectorAll(
+            '[role="alert"], [aria-label="Status line"]',
+          )) {
+            const text = node.textContent;
+            if (
+              /Maximum update depth|Connection lost|Transport failed/i.test(text) &&
+              !window.coldStartAlerts?.includes(text)
+            )
+              window.coldStartAlerts?.push(text);
+          }
+        }).observe(document, { childList: true, subtree: true, characterData: true });
+      });
     if (input)
       await context.addInitScript(
         (text) => {
@@ -480,6 +500,7 @@ class ChatSupport {
           panel: over(document.querySelector(".preview-panel")),
         },
         cursor: document.getElementById("root")?.dataset.seq,
+        applicationErrors: window.coldStartFailures ?? [],
         fontReady: document.fonts.status,
         reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
         renders: window.previewChatRenders,
@@ -598,7 +619,8 @@ export async function coldStartSources(): Promise<ColdStartSource[]> {
 export function coldStartStress(count: number): ServerEvent[] {
   const events = chatEvents();
   const at = events.findIndex((event) => event.type === "lead.view");
-  const status = events.find((event) => event.type === "agent.status");
+  // Repeat the final coding status so the stress prefix preserves preview eligibility.
+  const status = events.findLast((event) => event.type === "agent.status");
   if (!status) throw new Error("Missing stress status");
   return [
     ...events.slice(0, at),

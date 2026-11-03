@@ -311,8 +311,17 @@ it.each(measuredSources)(
       expect(trace.cursors).toEqual(source.events.map((event) => event.seq));
       expect(trace.state).toEqual(source.events.reduce(applyEvent, createInitialState()));
       expect(await session.page.evaluate(() => window.coldStartFailures ?? [])).toEqual([]);
+      expect(await session.page.evaluate(() => window.coldStartAlerts ?? [])).toEqual([]);
       expect(session.pageErrors).toEqual([]);
       expect(session.diagnostics.filter((item) => item.type === "error")).toEqual([]);
+      await check(session.page.getByRole("contentinfo", { name: "Status line" })).not.toContainText(
+        "Connection lost",
+      );
+      expect(support.deliveries.map((delivery) => delivery.after)).toEqual([0]);
+      await session.page.waitForTimeout(100);
+      const settled = await session.page.evaluate(() => ({ ...window.previewChatRenders }));
+      await session.page.waitForTimeout(250);
+      expect(await session.page.evaluate(() => window.previewChatRenders)).toEqual(settled);
       await check(
         session.page
           .getByRole("alert")
@@ -442,7 +451,7 @@ it("measures the first failing synthetic cold-start prefix without masking trans
     `${chatDirectory}../cold-start-depth/synthetic-minimum.json`,
     JSON.stringify({ smallestInserted: smallest, measurements }, null, 2) + "\n",
   );
-  expect(smallest).toBe(42); // Baseline measurement: 53 events; the final rendered cursor remains 52.
+  expect(smallest).toBeNull(); // Before the fix, 42 insertions failed at applied 53 / DOM 52.
 }, 180_000);
 
 it("measures real SSE Last-Event-ID precedence and the browser's after-based reconnect on a scripted-fake run", async () => {
@@ -577,3 +586,46 @@ it("measures real SSE Last-Event-ID precedence and the browser's after-based rec
     await api.close();
   }
 }, 60_000);
+
+it("applies all 80 cloned statuses before lead.view and settles without a depth or connection error", async () => {
+  const events = coldStartStress(80);
+  const session = await support.session(chatSizes[0], "dark", "measure=true", events);
+  const { page } = session;
+  try {
+    await check(page.locator("#root")).toHaveAttribute("data-seq", "91");
+    await page.locator(".chat-lead-row").click();
+    await check(page.getByRole("button", { name: "Preview app", exact: true })).toBeVisible();
+    await check(
+      page.getByText("The coupon change is ready to try. Check the shop, then review the change.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    const trace = await page.evaluate(() => window.coldStartTrace);
+    expect(trace.cursors).toEqual(events.map((event) => event.seq));
+    expect(trace.state).toEqual(events.reduce(applyEvent, createInitialState()));
+    expect(trace.state.leadViews["agent-900001"]?.[0]).toMatchObject({
+      seq: 89,
+      payload: { through_seq: 88 },
+    });
+    expect(trace.state.leadReplies["agent-900001"]?.[0]).toMatchObject({
+      seq: 90,
+      payload: { through_seq: 89 },
+    });
+    expect(support.deliveries.map((delivery) => delivery.after)).toEqual([0]);
+    expect(await page.evaluate(() => window.coldStartFailures ?? [])).toEqual([]);
+    expect(await page.evaluate(() => window.coldStartAlerts ?? [])).toEqual([]);
+    await check(page.getByRole("alert")).toHaveCount(0);
+    await check(page.getByRole("contentinfo", { name: "Status line" })).not.toContainText(
+      "Connection lost",
+    );
+    expect(session.pageErrors).toEqual([]);
+    expect(session.diagnostics.filter((item) => item.type === "error")).toEqual([]);
+    await page.waitForTimeout(100);
+    const settled = await page.evaluate(() => ({ ...window.previewChatRenders }));
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => window.previewChatRenders)).toEqual(settled);
+    expect(await page.locator("#root").getAttribute("data-seq")).toBe("91");
+  } finally {
+    await session.close();
+  }
+});

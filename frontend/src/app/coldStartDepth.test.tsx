@@ -1,6 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { expect, it, vi } from "vitest";
-import { applyEvent, createInitialState, createStateStore } from "../state";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { EffectCallback, SetStateAction } from "react";
+import type { FrameProps } from "./Frame";
+import { App } from "./App";
+import { applyEvent, createInitialState, createStateStore, stateStore } from "../state";
 // eslint-disable-next-line no-restricted-imports -- Measure the exact public player's production schedule.
 import { createReplayPlayer } from "../transport/replayPlayer";
 import { coldStartSources, coldStartStress } from "./preview/previewChat.browser.support";
@@ -123,4 +127,105 @@ it("keeps the removed synthetic prefix contiguous with translated through_seq", 
     lastSeq: 91,
     gap: false,
   });
+});
+
+// Isolate App's effect-to-setter edge. Keep hook values across prefix renders; Frame
+// is deliberately absent, so geometry, arrivals and transport cannot cause a write.
+const reconciliation = vi.hoisted(() => ({
+  slots: [] as unknown[],
+  index: 0,
+  effects: [] as EffectCallback[],
+  writes: [] as number[],
+  frame: null as FrameProps | null,
+}));
+vi.mock("react", async (original) => ({
+  ...(await original<typeof import("react")>()),
+  useState: <T,>(initial: T | (() => T)) => {
+    const index = reconciliation.index++;
+    if (!(index in reconciliation.slots))
+      reconciliation.slots[index] =
+        typeof initial === "function" ? (initial as () => T)() : initial;
+    return [
+      reconciliation.slots[index] as T,
+      (update: SetStateAction<T>) => {
+        reconciliation.writes.push(index);
+        reconciliation.slots[index] =
+          typeof update === "function"
+            ? (update as (value: T) => T)(reconciliation.slots[index] as T)
+            : update;
+      },
+    ];
+  },
+  useEffect: (effect: EffectCallback) => {
+    reconciliation.effects.push(effect);
+  },
+}));
+vi.mock("zustand", () => ({
+  useStore: (
+    store: typeof stateStore,
+    selector: (value: ReturnType<typeof stateStore.getState>) => unknown,
+  ) => selector(store.getState()),
+}));
+vi.mock("./Frame", () => ({
+  Frame: (props: FrameProps) => {
+    reconciliation.frame = props;
+    return null;
+  },
+}));
+vi.mock("./useViewHistory", () => ({ useViewHistory: () => ({ history: null, session: null }) }));
+vi.mock("./challenge/usePractice", () => ({ usePractice: () => undefined }));
+vi.mock("../editor/monaco", () => ({ monaco: { editor: {} } }));
+
+function reconcileAppPass() {
+  reconciliation.index = 0;
+  reconciliation.effects.length = 0;
+  renderToStaticMarkup(<App />);
+  const effect = reconciliation.effects[0];
+  if (!effect) throw new Error("Missing App reconciliation effect");
+  effect();
+  const frame = reconciliation.frame;
+  if (!frame) throw new Error("Missing App frame");
+  return frame;
+}
+it("requests no view update for unchanged cold prefixes or valid highlights, and settles one invalidation", () => {
+  const events = coldStartStress(80);
+  reconciliation.slots.length = 0;
+  reconciliation.writes.length = 0;
+  stateStore.setState({ state: createInitialState() });
+  try {
+    for (const event of events) {
+      stateStore.getState().applyEvents([event]);
+      reconcileAppPass();
+    }
+    expect(reconciliation.writes).toEqual([]);
+    const frame = reconcileAppPass();
+    frame.onViewHighlight?.(["n1"], "person-click");
+    expect(reconciliation.writes).toHaveLength(1);
+    reconciliation.writes.length = 0;
+    const highlighted = reconcileAppPass().view;
+    expect(highlighted.referenceHighlight?.nodeIds).toEqual(["n1"]);
+    const status = events.find((event) => event.type === "agent.status");
+    if (!status) throw new Error("Missing status");
+    for (let count = 0; count < 80; count++) {
+      stateStore.getState().applyEvents([{ ...status, seq: events.length + count + 1 }]);
+      reconcileAppPass();
+    }
+    expect(reconciliation.writes).toEqual([]);
+    expect(reconcileAppPass().view).toBe(highlighted);
+    const state = stateStore.getState().state;
+    if (!state.graph) throw new Error("Missing graph");
+    stateStore.setState({ state: { ...state, graph: { ...state.graph, nodes: [] } } });
+    reconcileAppPass();
+    expect(reconciliation.writes).toHaveLength(1);
+    const cleared = reconcileAppPass().view;
+    expect(cleared).toEqual({ ...highlighted, referenceHighlight: undefined });
+    for (let count = 0; count < 80; count++) {
+      stateStore.getState().applyEvents([{ ...status, seq: events.length + 80 + count + 1 }]);
+      reconcileAppPass();
+    }
+    expect(reconciliation.writes).toHaveLength(1);
+    expect(reconcileAppPass().view).toBe(cleared);
+  } finally {
+    stateStore.setState({ state: createInitialState() });
+  }
 });
