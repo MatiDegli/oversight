@@ -4479,8 +4479,14 @@ reference resolution (README, Next).
 
 Person-owned preview infrastructure uses Linux isolation C and an external trusted supervisor and
 adapter, without product-agent shell/tools, contract changes or new routes. The eight internal
-workspace facade names compile against current contracts 1.17.0. Production opening stays disabled,
-including when explicit trusted startup paths, ports, origins and limits are configured.
+workspace facade names compiled against contracts 1.17.0. Production opening initially stayed
+disabled, including when explicit trusted startup paths, ports, origins and limits were configured.
+
+Amended 2026-11-03 by the preview opening switch and its documentation review fix:
+`OVERSIGHT_PREVIEW_ENABLED` is a frozen startup opt-in, default false, accepting only literal
+`true` or `false`. Enabling it permits the mounted preview API only with the existing trusted-demo,
+exact absolute adapter, interpreter, ports/origins and Linux isolation C requirements satisfied.
+It grants no additional source or adapter trust, filesystem isolation or machine/browser qualification.
 
 Reason: endpoint guards cannot cover every server Git spawn or a ready Request changes without Git.
 The task-reentrant shared Git lease is the universal exclusion, with verified namespace death and
@@ -4646,3 +4652,54 @@ provider results and recordings retain their original versions, including
 
 Reason: the lead can ground a useful suggestion in this server's actual availability
 without acquiring execution authority or replacing the person's review decision.
+## 2026-11-03 — Configuration attribution stays advisory and uses the current change base
+
+The maintainer authorized advisory configuration attribution for demo/Boltons agent suites and
+proposal review. Compare immutable captured Git trees against
+`rec.base_commit` read under the agent lock, including after Request changes moves that base.
+Reuse the existing seven configuration basenames plus exact-case `conftest.py` at any depth;
+whole-file differences qualify without proving pytest relevance. The integrity predicate,
+inventory and veto remain unchanged. Ignored files are not compared and external inputs remain
+unknown. A failed or incomplete comparison produces a bounded unknown note, preserving suite
+evidence, cancellation and evidence-publication failures.
+
+The one cross-module exception is the atomic change to `agents.ChangeSink.tests_executed`, its
+`changes` implementation and the agent loop caller: return the server note, add it to content
+and summary before step publication, then retain that content in model history. Classification
+and Git comparison remain in `changes`; `agents` imports neither. Proposal notes are frozen in
+`FactsEvidence.problems`, never `SuiteRun.problems`, with prefix `configuration attribution: `.
+Display limits are five paths for steps and twenty for proposals, separately identified as
+display omissions. The current frontend renders each note as its own line, apart from
+“Incomplete:”, which still joins the other analysis limitations with "; ".
+## 2026-11-03 — Grouped Chat rail completes Q2/Q3 and folded scrolling
+
+K3r implements the existing Q2/Q3 authority in “Built map and Chat refinements” and the K3
+shared presentation rules, under the coordinator's scoped frontend dispatch. Chat wraps the
+landed lead/member rows by stable team ID and first-observed team order: plain summary, team
+ring, separate disclosure and solid 2px member rule. Leadless Q2 is “Plan B · 2 agents · 2 working”;
+lone C remains ungrouped. Counts exclude leads and reuse needs-you/proposed-plan evidence.
+Run-local collapse retains the selected actor, thread, draft, command and focus; only a new run
+resets it. Lead picking, per-lead threads, Stop, reference cards and Back retain their owners.
+
+Q3 keeps stacked collapsible groups above the thread at 390 and exposes observed-work chips
+through the existing file-navigation context, including full collision identity and accessible
+ranges, functions, modes and conflicts. Desktop columns remain. The folded Oversight rail
+scrolls with stable gutter, nonshrinking wrapping tiles and lamps contained inside avatars.
+Proof uses parsed handwritten envelopes and production applyEvent/Frame over the original
+Boltons d31d821 snapshot/layout, labeled handwritten; PNGs, comparisons and manifests stay
+under gitignored .shots/team-rail/. This records delivery under existing authority, not a new
+approval. The detailed dispatch governs Impeccable's discovery/delegation defaults; layout,
+polish, audit and critique run in this session without a sketch round or other agents.
+## 2026-11-03 — Remove the one-graph rule
+
+The maintainer removed AGENTS.md's "One graph" rule at 10:59 ART. The repository graph still
+stays visible in the Oversight view; other graph views, such as a compact workflow canvas of
+a lead's plan, may sit beside it and may use Cytoscape.js without a React wrapper. Every
+visual rule in AGENTS.md and DESIGN.md applies to them.
+
+In "A read-only plan flow before the freeze", "so it is not a second graph" no longer
+constrains later work; that view itself is unchanged.
+
+This entry only removes the rule: building another graph view needs its own approved plan.
+
+Reason: a compact node view of a plan is easier to understand and to manipulate than a verbose card.

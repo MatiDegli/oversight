@@ -29,6 +29,7 @@ document.body.replaceChildren(host);
 const root = createRoot(host);
 
 let view: View = initialView;
+let replay = false;
 const calls: StartAgent[] = [];
 let answer: { resolve: () => void; reject: (error: unknown) => void } | undefined;
 const start = (body: StartAgent) =>
@@ -53,7 +54,8 @@ function render() {
         canOpenChange={() => false}
         onOpenChange={() => undefined}
         onClosePanel={() => undefined}
-        onStartAgent={start}
+        onStartAgent={replay ? undefined : start}
+        replayOf={replay ? "hand-written demo fixture" : undefined}
       />,
     );
   });
@@ -67,6 +69,12 @@ export const taskBoxTest = {
     render();
   },
   calls: () => structuredClone(calls),
+  /** Actual empty Frame composition: the replay accessory and caption, with no start callback. */
+  emptyReplay() {
+    replay = true;
+    view = initialView;
+    stateStore.setState({ state: opening });
+  },
   /** Offer both profiles, optionally after the non-Meta tick carrying Meta's brake. */
   twoSlots(braked = false) {
     stateStore.setState({ state: twoSlotState(braked) });

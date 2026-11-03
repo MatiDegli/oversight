@@ -63,14 +63,19 @@ const mapStyles = `
   line-height: 1.2;
 }
 .map-count {
+  width: max-content;
+  margin-inline: auto;
   color: var(--muted);
 }
 /* Match the unlit surface; expanded hover labels retain their existing backing. */
 .map-count, .map-agent:not(.map-agent-full) {
-  background: var(--ground);
+  background: var(--map-rest-surface, var(--ground));
 }
-.map-panel ~ [data-map-module] :is(.map-count, .map-agent:not(.map-agent-full)) {
-  background: color-mix(in srgb, var(--card) 60%, var(--ground));
+[data-map-surface="panel"] {
+  --map-rest-surface: color-mix(in srgb, var(--card) 60%, var(--ground));
+}
+[data-map-surface="faded"] {
+  --map-rest-surface: color-mix(in srgb, var(--card) 30%, var(--ground));
 }
 .map-agent {
   font-weight: 600;
@@ -135,6 +140,13 @@ export function MapLayer({ frame }: { frame: MapFrame }) {
               <div
                 key={module.id}
                 data-map-module={module.id}
+                data-map-surface={
+                  group.panel
+                    ? group.modules.every((m) => m.inCone === false)
+                      ? "faded"
+                      : "panel"
+                    : "ground"
+                }
                 className="absolute text-center"
                 style={{
                   zIndex: 2,

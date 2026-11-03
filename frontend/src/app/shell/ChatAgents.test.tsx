@@ -1,8 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
+import { FilesProvider } from "../FilesContext";
+import { WhereTheyWork } from "./WhereTheyWork";
+import { event } from "../chatAgents.fixture";
+import { AgentsRail } from "./Agents";
 import { ChatAgents } from "./ChatAgents";
+import { ChatLeadRow } from "./ChatLeadRow";
+import { railState } from "../teamRail.fixture";
+import { chatTeamGroups } from "./chatTeamGroups";
 import { ChatAgentsFrame } from "./ChatShell";
-import { fold, scenario } from "../chatAgents.fixture";
+import { required, fold, scenario } from "../chatAgents.fixture";
 import { createInitialState } from "../../state";
 
 it.each([
@@ -58,4 +65,69 @@ it("shows truthful noninteractive replay rows if navigation is absent", () => {
   expect(html).not.toMatch(/<button|tabindex|aria-pressed/);
   expect(html).toContain("Merged by your rules");
   expect(html).not.toContain("Free");
+});
+
+it("retains full collision labels, lead targets and the New lead draft", () => {
+  const state = fold(scenario("working"));
+  const html = renderToStaticMarkup(
+    <ChatAgents state={state} leadDraft onOpenConversation={vi.fn()} />,
+  );
+  expect(html).toContain('data-agent-origin="agent-a"');
+  expect(html).toContain('data-agent-origin="agent-b"');
+  expect(html).toContain('aria-label="New lead draft"');
+});
+
+it("exposes phone work chips with explicit file targets and graph-independent observed ranges", () => {
+  const state = fold([
+    ...scenario("working"),
+    event("agent.focus", {
+      agent_id: "agent-a",
+      mode: "edit",
+      node_ids: [],
+      ranges: [{ path: "long/observed/path.py", start_line: 12, end_line: 24 }],
+    }),
+  ]);
+  const openFile = vi.fn();
+  const html = renderToStaticMarkup(
+    <FilesProvider state={state} openFile={openFile}>
+      <WhereTheyWork />
+    </FilesProvider>,
+  );
+  expect(html).toContain('aria-label="Open long/observed/path.py · Agent A · Editing"');
+  expect(html).toContain('aria-description="lines 12 to 24"');
+  expect(html).toContain('class="work-chip"');
+  expect(html).toContain('class="work-path"');
+  expect(openFile).not.toHaveBeenCalled();
+});
+
+it("keeps eleven folded origins and lamps inside nonshrinking tiles", () => {
+  const state = fold([
+    ...scenario("working"),
+    ...Array.from({ length: 9 }, (_, i) =>
+      event("agent.status", {
+        ...required(Object.values(fold(scenario("working")).agents)[0]),
+        agent_id: `extra-${String(i)}`,
+        change_id: `extra-${String(i)}`,
+      }),
+    ),
+  ]);
+  const html = renderToStaticMarkup(<AgentsRail state={state} />);
+  expect(html.match(/data-agent-origin=/g)).toHaveLength(11);
+  expect(html.match(/agents-rail-tile/g)).toHaveLength(11);
+  expect(html.match(/agents-rail-lamp absolute top-0 right-0/g)).toHaveLength(11);
+  expect(html).not.toContain("-top-1");
+});
+
+it("keeps grouped counts in the heading while the standalone lead retains its team line", () => {
+  const state = railState("chat-busy");
+  const group = required(chatTeamGroups(state)[0]);
+  const lead = required(group.lead);
+  const grouped = renderToStaticMarkup(<ChatAgents state={state} />);
+  expect(grouped).toContain(`<h3>${group.summary}</h3>`);
+  expect(grouped).not.toContain('class="chat-lead-team"');
+  const standalone = renderToStaticMarkup(<ChatLeadRow row={lead} />);
+  expect(standalone).toContain(`<span class="chat-lead-team">${lead.teamLine ?? ""}</span>`);
+  expect(renderToStaticMarkup(<ChatAgents state={railState("chat-leadless")} />)).toContain(
+    "Plan B · 2 agents · 2 working",
+  );
 });

@@ -176,6 +176,19 @@ may import OpenAI; only app and API may import FastAPI or Starlette.
 - [Workspace](backend/src/oversight/workspace/__init__.py) owns safe paths, hashes, async git
   and test subprocesses with timeouts, locks, worktrees and the demo test environment.
   These product worktrees are separate from worktrees used to develop Oversight.
+  For demo/Boltons, `run_tests` measures only contention acquiring main, the worktree and the
+  Git lease. Root verification and suite execution are excluded from this queue measurement;
+  immediate and task-reentrant acquisitions contribute zero. One call identifier and a lock
+  category (no paths) appear in backend waiting logs, limited to one line per 30 seconds across
+  lock transitions. The observer is a timer handle that never acquires a lock; it is cancelled
+  synchronously when each wait ends and on exit, with no cleanup await after the suite.
+  The optional synchronous `Workspace.run_tests(on_queue_wait=...)` callback reports cumulative
+  queue seconds, including zero, independently of suite results and before propagating interrupted
+  waits. Agents append queue time and the active deadline's remaining round budget only to the
+  completed or terminal interrupted `AgentStep.summary`, retaining any partial suite evidence.
+  Queueing consumes the enclosing round clock; the fixed suite execution timeout starts separately.
+  Own-repository diagnostics, timeout policies, no-progress checks, model content and live state
+  are unchanged; there is no live waiting state.
 - [Settings](backend/src/oversight/settings.py), [setup](backend/src/oversight/setup.py) and
   [app](backend/src/oversight/app.py) own configuration, readiness and composition.
   [The CLI](backend/src/oversight/__main__.py) owns serve, replay and ledger commands.

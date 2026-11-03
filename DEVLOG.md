@@ -71,14 +71,23 @@ One line per day, in Argentina time (ART).
   Rechecked the layout and clarify references in full, fixed the 390px capped-action overflow,
   and removed duplicate ended copy.
 
-- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls. Added event-derived reference cards, metadata-only moment facts, exact replay history/Back with retained Chat, click-owned graph framing and exact recorded-file diffs; synthetic responsive evidence, no paid calls or bundle replacement. Rechecked layout, language, typography and hardening: retained empty behavior titles, restored title weight, bounded speech measure, isolated caption direction and enlarged history/disclosure touch targets. Added the bounded desktop spike's portable Rust launch, health and lifecycle policy with offline tests, a standalone gate and native Windows core lane; recorded the scoped license grant and prospective runbook. Deferred the executable and native lifecycle/UI acceptance.
+- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls. Added event-derived reference cards, metadata-only moment facts, exact replay history/Back with retained Chat, click-owned graph framing and exact recorded-file diffs; synthetic responsive evidence, no paid calls or bundle replacement. Rechecked layout, language, typography and hardening: retained empty behavior titles, restored title weight, bounded speech measure, isolated caption direction and enlarged history/disclosure touch targets. Added the bounded desktop spike's portable Rust launch, health and lifecycle policy with offline tests, a standalone gate and native Windows core lane; recorded the scoped license grant and prospective runbook. Deferred the executable and native lifecycle/UI acceptance. Added the frozen, strict preview opening opt-in; retained demo/adapter trust, admission and execution rechecks, and verified shutdown ordering and failed-drain ownership with scripted fakes. Preserved raw preview opt-in values from .env so whitespace and quotes are rejected after environment precedence, with file-source regressions. Machine and Windows-browser qualification remain separate unresolved gates.
   K2b size rationale: chatLeads.browser.test.ts (1285 lines),
   chatLeads.browser.fixture.tsx (641 lines) and lifecycleScene (97 lines) remain together because
   the six-lead scene table and lifecycle proofs are inherently tabular. The fixture keeps valid
   event sequences beside their scene definitions; the browser suite keeps Stop, cap, density and capture assertions together
   so their shared lifecycle evidence can be reviewed in context. Added reference-card proofs stay
   beside the shared lifecycle and capture harness, while viewScenario (93 lines) keeps the graph,
-  measured behavior, long files and ordered Chat events in one auditable production-fold sequence; GraphView.tsx (526 lines) keeps the framing props added for reference highlights beside its camera lifecycle, and chatLeads.browser.test.ts (1294 lines) extends its 1285-line baseline with keyboard-return and framing assertions.
+  measured behavior, long files and ordered Chat events in one auditable production-fold sequence; GraphView.tsx (526 lines) keeps the framing props added for reference highlights beside its camera lifecycle, and chatLeads.browser.test.ts (1310 lines) extends its 1285-line baseline with keyboard-return, framing and grouped-row geometry assertions.
   Composer also exceeds 80 lines:
   its shared draft hooks and active/ended command surfaces stay together to preserve hook order
   and make the terminal early return auditable. These size exceptions remain for reviewer judgment.
+  Added configuration attribution as separate informational review paragraphs with exact-prefix
+  partitioning, attribution-only Details, unchanged HTML pins and synthetic replay captures at
+  1440/390 in dark/day; preserved contracts, recordings and integrity policy, with no paid calls.
+  Added demo/Boltons run_tests queue diagnostics: call-scoped lock contention, throttled path-free
+  backend logs, cancellation-safe elapsed callbacks and server-only completed/interrupted step
+  summaries, with deterministic queue clocks and fake-model HTTP Stop/deadline/no-progress proofs.
+  Added backend configuration attribution from captured Git objects and the current
+  locked record base, with bounded advisory notes in agent history/steps and frozen proposal facts;
+  kept the integrity veto unchanged and added fake-only moving-base, failure and sequencing proofs.

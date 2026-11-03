@@ -7,11 +7,81 @@ risking a deadlock. Two agents share only main, which they always take first.
 
 import asyncio
 import contextlib
+import logging
+from asyncio import get_running_loop
 from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
+from time import monotonic
 from typing import Any
+from uuid import uuid4
 
 from oversight.workspace.errors import LockOrderError
+
+
+class QueueWait:
+    """Call-scoped observation only: the caller still acquires every lock itself."""
+
+    def __init__(self, report: Callable[[float], None] | None, *, enabled: bool = True) -> None:
+        self._report = report if enabled else None
+        self._enabled = enabled
+        self._call = uuid4().hex
+        self._elapsed = 0.0
+        self._started: float | None = None
+        self._category: str | None = None
+        self._last_log: float | None = None
+        self._timer: asyncio.TimerHandle | None = None
+
+    async def __aenter__(self) -> "QueueWait":
+        if self._report is not None:
+            self._report(0.0)
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        # No await after the suite: preserve its result/error and cancellation ownership.
+        self._cancel_timer()
+
+    def _cancel_timer(self) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+
+    def begin(self, category: str) -> None:
+        if not self._enabled:
+            return
+        self._started = monotonic()
+        self._category = category
+        self._log_if_due()
+        self._schedule()
+
+    def end(self) -> None:
+        self._cancel_timer()
+        if self._started is None:
+            return
+        self._elapsed += monotonic() - self._started
+        self._started = None
+        self._category = None
+        if self._report is not None:
+            self._report(self._elapsed)
+
+    def _log_if_due(self) -> None:
+        now = monotonic()
+        if self._category is not None and (self._last_log is None or now - self._last_log >= 30):
+            logging.getLogger(__name__).warning(
+                "run_tests call=%s waiting for %s lock", self._call, self._category
+            )
+            self._last_log = now
+
+    def _schedule(self) -> None:
+        assert self._last_log is not None
+        self._timer = get_running_loop().call_later(
+            max(0.001, self._last_log + 30 - monotonic()), self._observe
+        )
+
+    def _observe(self) -> None:
+        self._timer = None
+        self._log_if_due()
+        if self._category is not None:
+            self._schedule()
 
 
 class _TaskLock:
@@ -21,14 +91,37 @@ class _TaskLock:
         self.owner: asyncio.Task[Any] | None = None
         self.depth = 0
         self._lock = asyncio.Lock()
+        self._pending: dict[asyncio.Task[Any], int] = {}
 
-    async def acquire(self, task: asyncio.Task[Any]) -> None:
+    async def acquire(
+        self, task: asyncio.Task[Any], queue: QueueWait | None = None, category: str = ""
+    ) -> None:
         if self.owner is task:
             self.depth += 1
             return
-        await self._lock.acquire()
-        self.owner = task
-        self.depth = 1
+        # A released lock can still have a live waiter entitled to its next acquisition.
+        # Cancelled waiters no longer contend, even before their finally blocks have run.
+        pending = any(waiter.cancelling() <= count for waiter, count in self._pending.items())
+        blocked = queue is not None and (self._lock.locked() or pending)
+        if blocked:
+            assert queue is not None
+            queue.begin(category)
+        self._pending[task] = task.cancelling()
+        try:
+            await self._lock.acquire()
+            self.owner = task
+            self.depth = 1
+        finally:
+            del self._pending[task]
+            if blocked:
+                assert queue is not None
+                try:
+                    queue.end()
+                except BaseException:
+                    # A reporting callback must not strand an acquisition the caller never got.
+                    if self.owner is task:
+                        self.release(task)
+                    raise
 
     def release(self, task: asyncio.Task[Any]) -> None:
         if self.owner is not task:
@@ -92,7 +185,7 @@ class Locks:
         finally:
             self._operations -= 1
 
-    async def _take(self, lock: _TaskLock) -> None:
+    async def _take(self, lock: _TaskLock, queue: QueueWait | None) -> None:
         task = _current_task()
         held = [other for other in self._all() if other.owner is task]
         if lock not in held:
@@ -102,10 +195,10 @@ class Locks:
                 raise LockOrderError(f"the main lock comes before {held[0].name}'s")
             if not lock.is_main and any(not other.is_main for other in held):
                 raise LockOrderError(f"one worktree lock at a time: {lock.name} while holding one")
-        await lock.acquire(task)
+        await lock.acquire(task, queue, "main" if lock.is_main else "worktree")
 
     @asynccontextmanager
-    async def git_lease(self) -> AsyncGenerator[None]:
+    async def git_lease(self, *, queue: QueueWait | None = None) -> AsyncGenerator[None]:
         """Serialize all server Git with suites, including cancellation cleanup.
 
         Order: main, worktree (or temporary), mode when applicable, then this lease.
@@ -114,7 +207,7 @@ class Locks:
         task = _current_task()
         if not any(lock.owner is task for lock in self._all()):
             raise LockOrderError("the Git lease requires a tree lock")
-        await self._git.acquire(task)
+        await self._git.acquire(task, queue, "Git lease")
         try:
             if self._git.depth == 1 and self._git_hook is not None:
                 await self._git_hook()
@@ -124,7 +217,7 @@ class Locks:
 
     @asynccontextmanager
     async def acquire(
-        self, *, main: bool = False, agent_id: str | None = None
+        self, *, main: bool = False, agent_id: str | None = None, queue: QueueWait | None = None
     ) -> AsyncGenerator[None]:
         """Take the main lock, then the agent's, in that order; release both on exit."""
         if not main and agent_id is None:
@@ -132,11 +225,11 @@ class Locks:
         taken: list[_TaskLock] = []
         try:
             if main:
-                await self._take(self._main)
+                await self._take(self._main, queue)
                 taken.append(self._main)
             if agent_id is not None:
                 agent_lock = self._agent(agent_id)
-                await self._take(agent_lock)
+                await self._take(agent_lock, queue)
                 taken.append(agent_lock)
             yield
         finally:

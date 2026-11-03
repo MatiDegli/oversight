@@ -218,7 +218,7 @@ export function TaskBox({
         <p className="text-sm text-muted">
           {`${replayOf === undefined ? "Replay" : `Replay of a ${replayOf}`}: agents cannot be started here.`}
         </p>
-        {actionAccessory}
+        {actionAccessory && <div className="w-max max-w-full self-start">{actionAccessory}</div>}
       </section>
     );
   }

@@ -11,7 +11,7 @@ import re
 import shutil
 import sys
 import time
-from collections.abc import AsyncGenerator, Mapping, Sequence
+from collections.abc import AsyncGenerator, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from functools import partial
@@ -74,7 +74,7 @@ from oversight.workspace.integrity import (
     veto_index,
 )
 from oversight.workspace.isolation import IsolatedRunner, IsolationUnavailable, refuse_orphans
-from oversight.workspace.locks import Locks, offload
+from oversight.workspace.locks import Locks, QueueWait, offload
 from oversight.workspace.measured_report import CallTarget
 from oversight.workspace.ranges import FileRange, read_range
 from oversight.workspace.runner import (
@@ -512,9 +512,9 @@ class Workspace:
             )
 
     @asynccontextmanager
-    async def git_lease(self) -> AsyncGenerator[None]:
+    async def git_lease(self, *, _queue: QueueWait | None = None) -> AsyncGenerator[None]:
         """Shared by server Git, suites and future Revert; acquire after all tree/mode locks."""
-        async with self._locks.git_lease():
+        async with self._locks.git_lease(queue=_queue):
             if sys.platform == "win32":
                 if self._lock_fd is None:
                     raise WorkspaceBusy("Git requires the runtime lock sentinel")
@@ -999,16 +999,20 @@ class Workspace:
         spawn: Spawn | None = None,
         isolation: IsolationPolicy = "best_effort",
         measured_targets: tuple[CallTarget, ...] | None = None,
+        on_queue_wait: Callable[[float], None] | None = None,
     ) -> SuiteRun:
         """Run fixed tests in the disposable `tree` under its lock and a timeout.
 
         Demo/profiles use the runtime demo venv; own sources use their validated original
         venv with imports mapped to this copy, without building or installing anything.
+        For demo/Boltons, `on_queue_wait` receives cumulative blocked lock seconds,
+        starting at zero, synchronously on acquisition or interruption (before cancellation).
         """
         async with (
-            self.locks(main=True, agent_id=tree.agent_id),
+            QueueWait(on_queue_wait, enabled=self._own_source is None) as queue,
+            self._locks.acquire(main=True, agent_id=tree.agent_id, queue=queue),
             tree.section(locked=False),
-            self.git_lease(),
+            self.git_lease(_queue=queue),
         ):
             await offload(lambda: self.tmp_dir.mkdir(mode=DIR_MODE, parents=True, exist_ok=True))
             if measured_targets is not None:

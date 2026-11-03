@@ -49,10 +49,12 @@ function fixture() {
   model.groups = model.groups.filter((g) => g.id !== "undrawn");
   let frame: MapFrame = { model, level: "map", zoom: 0.21, pan: { x: 30, y: 40 } };
   let owners = moduleOwners(full);
+  let enabled = true;
   const listeners = new Set<() => void>();
   const control = {
     getFrame: () => frame,
     level: () => frame.level,
+    enabled: () => enabled,
     moduleOwners: () => owners,
     subscribe: (listener: () => void) => {
       listeners.add(listener);
@@ -68,6 +70,10 @@ function fixture() {
     cards,
     source,
     listeners,
+    enable(value: boolean) {
+      enabled = value;
+      for (const listener of listeners) listener();
+    },
     publish(next: Partial<MapFrame>, elements?: readonly GraphElement[]) {
       if (elements) owners = moduleOwners(elements);
       frame = { ...frame, ...next };
@@ -194,6 +200,32 @@ it("follows published pan, zoom, layout and original parent updates, then restor
     f.source.attach(f.cy);
     expect(f.listeners.size).toBe(1);
     expect(f.source.boxes(["work:method"]).get("work:method")).toEqual(f.cell("pending"));
+  } finally {
+    f.dispose();
+  }
+});
+
+it("keeps the map-off guard local with a retained map frame, including detach and reattach", () => {
+  const f = fixture();
+  try {
+    f.cy.scratch("foldAliases", new Map([["work:method", "work"]]));
+    expect(f.source.level?.()).toBe("map");
+    expect(f.source.boxes(["work:method"]).get("work:method")).toEqual(f.cell("work"));
+    f.enable(false);
+    expect(f.source.level?.()).toBe("cards");
+    expect(f.source.boxes(["work:method"])).toEqual(f.cards.boxes(["work:method"]));
+    f.source.detach();
+    expect(f.source.level?.()).toBe("cards");
+    expect(f.source.boxes(["work:method"]).size).toBe(0);
+    f.source.attach(f.cy);
+    expect(f.source.level?.()).toBe("cards");
+    expect(f.source.boxes(["work:method"])).toEqual(f.cards.boxes(["work:method"]));
+    f.enable(true);
+    expect(f.source.level?.()).toBe("map");
+    expect(f.source.boxes(["work:method"]).get("work:method")).toEqual(f.cell("work"));
+    f.publish({ level: "cards" });
+    expect(f.source.level?.()).toBe("cards");
+    expect(f.source.boxes(["work:method"])).toEqual(f.cards.boxes(["work:method"]));
   } finally {
     f.dispose();
   }

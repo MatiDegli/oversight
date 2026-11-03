@@ -290,8 +290,11 @@ class FieldRuntime implements FieldController {
         this.masksDirty = false;
         this.maskSize = maskSize;
       }
-      // Frame headers move with the camera, so they are read on every draw; overlays only when dirty.
-      const masks = this.source.headers ? [...this.masks, ...this.source.headers()] : this.masks;
+      // Hidden cards do not mask map lamps. Overlays remain masked at every level.
+      const masks =
+        this.source.level?.() !== "map" && this.source.headers
+          ? [...this.masks, ...this.source.headers()]
+          : this.masks;
       this.drawnMasks = masks;
       const time = this.reducedMotion ? null : (this.frozen ?? now / 1000);
       const points = this.drawPulses(now, width, height);

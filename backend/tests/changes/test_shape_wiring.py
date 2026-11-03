@@ -61,7 +61,9 @@ async def test_clean_edit_checked_empty_with_only_existing_gaps(h: Harness) -> N
     )
     facts = published(h)
     assert facts.shape == [] and facts.shape_complete is True
-    assert set(facts.problems) == set(MISSING_PRODUCERS)
+    [note] = [p for p in facts.problems if p.startswith("configuration attribution: ")]
+    assert "no compared configuration differences" in note
+    assert set(facts.problems) == {*MISSING_PRODUCERS, note}
 
 
 async def test_long_function_names_candidate_tree_and_approval_still_merges(h: Harness) -> None:

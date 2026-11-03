@@ -94,6 +94,7 @@ class FakeProfile(PreviewProfile):
 
 def profile() -> PreviewProfile:
     return FakeProfile(
+        enabled=True,
         adapter=Path(__file__).resolve().parents[2] / "src/oversight/preview_adapter.py",
         interpreter=Path(sys.executable),
         ports=(19681, 19682, 19683, 19684),

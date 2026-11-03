@@ -1,11 +1,6 @@
 import { presentationFor } from "../teams/presentation";
 import type { State } from "../state";
-// eslint-disable-next-line no-restricted-imports -- Shared current-candidate evidence and target identity; the review index does not export them.
-import {
-  parameterEvidenceSelector,
-  parameterExtensions,
-  visitParameterEvidence,
-} from "../review/parameterExtensions";
+import { parameterEvidenceSelector, parameterExtensions, visitParameterEvidence } from "../review";
 import { selectGraphBehavior, selectGraphBehaviorNode } from "./behavior";
 
 export { parameterEvidenceSelector, visitParameterEvidence };

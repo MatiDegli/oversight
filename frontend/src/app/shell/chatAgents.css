@@ -148,3 +148,131 @@ button.chat-agent-row:hover {
     padding-block: 10px;
   }
 }
+
+.chat-team {
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.chat-team-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.chat-team-summary h3 {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.chat-team-ring {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 2px solid var(--slot-graphic);
+  border-radius: 50%;
+  color: var(--slot-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.chat-team-members {
+  margin-left: 12px;
+  border-left: 2px solid var(--slot-graphic);
+  padding-left: 4px;
+  list-style: none;
+}
+.chat-lone-agent {
+  list-style: none;
+}
+.chat-agent-list .chat-agent-badge {
+  width: 36px;
+  max-width: 100%;
+  min-width: 26px;
+  height: 36px;
+  min-height: 26px;
+  color: var(--slot-text);
+  border: 0;
+  background: var(--panel);
+}
+.chat-agent-badge > span:first-child {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  max-width: 100%;
+  min-width: 0;
+}
+.chat-agent-list .chat-team .chat-team-members .chat-agent-row,
+.chat-agent-list .chat-lone-agent .chat-agent-row {
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding-left: 8px;
+}
+.chat-agent-list .chat-agent-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.chat-team-summary[data-selected="true"] {
+  background: var(--raised);
+  border-color: var(--border);
+  box-shadow: var(--top-highlight);
+}
+.chat-team-disclosure {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  min-height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+}
+.chat-team-disclosure:hover {
+  background: var(--raised);
+  color: var(--text);
+}
+.chat-team-disclosure:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.chat-team-disclosure[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
+.chat-team-members[hidden] {
+  display: none;
+}
+.chat-agent-list .chat-team .chat-team-members .chat-agent-row[data-collision="true"] {
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.chat-agent-list:has(.chat-lead-row) .chat-agent-badge {
+  margin-left: 0;
+}
+.chat-agent-row[data-collision="true"] .chat-agent-badge {
+  width: 84px;
+}
+@media (width < 768px) {
+  .chat-team-disclosure {
+    width: 44px;
+  }
+  .chat-shell .chat-team .chat-agent-row:not(.chat-lead-row) {
+    min-height: 44px;
+    padding-block: 4px;
+  }
+  .chat-shell .chat-team .chat-agent-badge {
+    min-height: 24px;
+    height: 24px;
+  }
+  .chat-shell .chat-team .chat-agent-model,
+  .chat-shell .chat-team .chat-agent-activity,
+  .chat-shell .chat-team .chat-agent-facts {
+    display: none;
+  }
+  .chat-shell .chat-team .chat-agent-task {
+    margin-top: 3px;
+    font-size: 13px;
+    line-height: 1.3;
+    -webkit-line-clamp: 1;
+  }
+}
