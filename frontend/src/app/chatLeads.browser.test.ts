@@ -1000,12 +1000,17 @@ it("keeps the originating card and later reply, focus and Back through exact rep
     page.getByText("Later reply: all original cards remain in Chat.", { exact: true }),
   ).toBeVisible();
   expect(await page.evaluate(() => window.chatLeadsTest.viewReplaySnapshot().seq)).toBe(6);
-  await check(page.getByRole("textbox", { name: "Message to lead" })).toHaveCount(0);
+  const composer = page.getByRole("textbox", { name: "Message Lead B", exact: true });
+  await check(composer).toHaveAttribute("readonly", "");
+  await check(composer).toHaveAttribute("aria-disabled", "true");
   await check(page.getByRole("button", { name: "Stop lead", exact: true })).toHaveCount(0);
   await check(newLead(page)).toHaveAttribute("aria-disabled", "true");
   await check(newTask(page)).toBeDisabled();
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+  const back = page.getByRole("button", { name: "Back", exact: true });
+  await back.focus();
+  await back.press("Enter");
   await check(page.getByText("Viewing event 6", { exact: false })).toHaveCount(0);
+  await check(action).toBeFocused();
   const returned = await page.evaluate(() => window.chatLeadsTest.viewReplaySnapshot());
   expect(returned.seq).toBe(before.seq);
   expect(returned.snapshot?.position).toBe(before.snapshot?.position);
@@ -1090,7 +1095,8 @@ it.each([390, 1280])(
         expect((await samples.boundingBox())?.height).toBeGreaterThanOrEqual(44);
         await check(behavior.locator("h3")).toHaveCSS("font-weight", "700");
       }
-      await page.getByRole("button", { name: "View event 6", exact: true }).click();
+      const action = page.getByRole("button", { name: "View event 6", exact: true });
+      await action.click();
       const back = page.getByRole("button", { name: "Back", exact: true });
       await check(back).toBeVisible();
       expect((await back.boundingBox())?.width).toBeGreaterThanOrEqual(44);
@@ -1101,6 +1107,7 @@ it.each([390, 1280])(
       await check(back).toHaveCSS("outline-style", "solid");
       await back.press("Enter");
       await check(back).toHaveCount(0);
+      await check(action).toBeFocused();
       await check(page.getByRole("article", { name: "Run moment" })).toBeVisible();
     } finally {
       await page.close();
@@ -1227,6 +1234,7 @@ it("frames references on first mount without a panel and keeps the camera when a
             zoom: graph.zoom(),
             pan: graph.pan(),
             target: graph.renderedBox("n1"),
+            outside: graph.renderedBox("n4"),
             width: host.clientWidth,
             height: host.clientHeight,
           }
@@ -1235,6 +1243,7 @@ it("frames references on first mount without a panel and keeps the camera when a
   await expect.poll(probe).toMatchObject({ animating: false });
   const before = await probe();
   expect(before?.height).toBeGreaterThan(0);
+  expect(before?.outside?.x1).toBeGreaterThan(before?.width ?? 0);
   expect(before?.target).not.toBeNull();
   expect(before?.target?.x1).toBeGreaterThanOrEqual(0);
   expect(before?.target?.x2).toBeLessThanOrEqual(before?.width ?? 0);

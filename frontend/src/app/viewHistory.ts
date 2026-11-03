@@ -7,6 +7,7 @@ export interface ViewHistorySession {
   lastSeq: number;
   chat: State;
   revision: number;
+  returnFocus: HTMLElement | null;
 }
 
 /** Lives outside the reducer store that seeks replace. Ordinary playback cancels the override. */
@@ -45,6 +46,10 @@ export function createViewHistory(player: ReplayPlayer, getState: () => State) {
         position: player.getSnapshot().position,
         lastSeq: getState().lastSeq,
         chat: getState(),
+        returnFocus:
+          typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null,
       };
       const revision = player.getSnapshot().revision + 1;
       // Publish Chat before the reducer replacement: observers must never reconcile a prefix
@@ -54,11 +59,12 @@ export function createViewHistory(player: ReplayPlayer, getState: () => State) {
       if (player.getSnapshot().revision !== revision) publish(null);
     },
     back: () => {
-      if (!session) return;
+      if (!session) return null;
       const saved = session;
       publish({ ...saved, revision: player.getSnapshot().revision + 1 });
       player.seekSeq(saved.lastSeq, saved.position);
       publish(null);
+      return saved.returnFocus;
     },
     dispose: () => {
       unsubscribe?.();
