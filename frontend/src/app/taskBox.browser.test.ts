@@ -1,5 +1,6 @@
 import { openOversight } from "../workspaceView.browser.support";
 import { launchBrowser } from "../browserLaunch.support";
+import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { expect as browserExpect } from "@playwright/test";
@@ -11,6 +12,7 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { scenes } from "../../shots/scenes";
 import type { StartAnswer } from "./taskBox.browser.fixture";
 
+const replayErrors = new WeakMap<Page, { pageErrors: string[]; consoleErrors: string[] }>();
 let server: ViteDevServer | undefined;
 let browser: Browser | undefined;
 let url: string;
@@ -33,32 +35,47 @@ beforeAll(async () => {
   );
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
-  browser = await launchBrowser();
+  browser = await launchBrowser({ args: ["--disable-features=LocalNetworkAccessChecks"] });
 }, 60_000);
 afterAll(async () => {
   await browser?.close();
   await server?.close();
 });
 
-async function withPage(test: (page: Page) => Promise<void>) {
+async function withPage(
+  test: (page: Page) => Promise<void>,
+  options: { width?: number; theme?: string; chat?: boolean } = {},
+) {
   if (!browser) throw new Error("Browser was not started");
-  const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
+  const width = options.width ?? 1600;
+  const page = await browser.newPage({
+    viewport: { width, height: width === 1920 ? 1080 : width === 1280 ? 800 : 900 },
+    reducedMotion: "reduce",
+  });
   page.setDefaultTimeout(15_000);
   const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
+  const frameErrors = { pageErrors: [] as string[], consoleErrors: [] as string[] };
+  replayErrors.set(page, frameErrors);
+  page.on("pageerror", (error) => {
+    errors.push(error.message);
+    frameErrors.pageErrors.push(error.message);
+  });
   page.on("console", (message) => {
-    if (message.type() === "error" && !message.location().url.endsWith("/@vite/client"))
-      errors.push(message.text());
+    if (message.type() === "error") {
+      frameErrors.consoleErrors.push(message.text());
+      if (!message.location().url.endsWith("/@vite/client")) errors.push(message.text());
+    }
   });
   try {
     // Avoid starting the application's transport: only the frame is mounted.
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     await page.goto(url);
     await page.waitForFunction(() => "taskBoxTest" in window);
-    await page.evaluate(() => {
+    await page.evaluate((theme) => {
+      document.documentElement.dataset.theme = theme;
       window.taskBoxTest.mount();
-    });
-    await openOversight(page);
+    }, options.theme ?? "dark");
+    if (!options.chat) await openOversight(page);
     await page.locator("textarea").waitFor();
     await test(page);
     expect(errors).toEqual([]);
@@ -350,3 +367,101 @@ it(
     });
   },
 );
+
+for (const width of [1920, 1280])
+  for (const theme of ["dark", "day"])
+    it(`aligns empty replay accessory at ${String(width)} in ${theme}`, async () => {
+      await withPage(
+        async (page) => {
+          const chat = page
+            .getByRole("group", { name: "Workspace view" })
+            .getByRole("button", { name: "Chat", exact: true });
+          await chat.focus();
+          await page.evaluate(() => {
+            window.taskBoxTest.emptyReplay();
+          });
+          const caption = page.getByRole("region", { name: "New agent" }).locator("p");
+          await browserExpect(caption).toHaveText(
+            "Replay of a hand-written demo fixture: agents cannot be started here.",
+          );
+          await page.evaluate(async () => {
+            await document.fonts.ready;
+            await new Promise<void>((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+            );
+          });
+          const measurements = await page.evaluate(() => {
+            const caption = document.querySelector('.chat-empty [aria-label="New agent"] p');
+            const chip = document.querySelector(".chat-empty .chat-merge-chip");
+            if (!caption || !chip) throw new Error("Missing actual replay composition");
+            const a = caption.getBoundingClientRect(),
+              b = chip.getBoundingClientRect();
+            return {
+              caption: a.toJSON(),
+              chip: b.toJSON(),
+              alignment: Math.abs(a.left - b.left),
+              focus: document.activeElement?.textContent,
+              captionText: caption.textContent,
+              startButtons: [...document.querySelectorAll("button")].filter(
+                (el) => el.textContent === "Start agent",
+              ).length,
+              taskTextareas: document.querySelectorAll(
+                'textarea[aria-label="Task for the new agent"]',
+              ).length,
+              overflow: [
+                document.documentElement,
+                document.body,
+                ...document.querySelectorAll(".chat-empty"),
+              ].map((el) => ({
+                surface: el.className || el.tagName,
+                positive: Math.max(0, el.scrollWidth - el.clientWidth),
+              })),
+            };
+          });
+          if (process.env.TASK_BOX_SWEEP_PHASE) {
+            const phase = process.env.TASK_BOX_SWEEP_PHASE;
+            const directory = fileURLToPath(
+              new URL(`../../../.shots/nit-sweep-b11/TaskBox/${phase}/`, import.meta.url),
+            );
+            await mkdir(directory, { recursive: true });
+            const stem = `${directory}empty-replay-chat-${String(width)}-${theme}`;
+            await page.screenshot({ path: `${stem}.png` });
+            await writeFile(
+              `${stem}.json`,
+              JSON.stringify(
+                {
+                  png: `${stem}.png`,
+                  finding: "TaskBox",
+                  phase,
+                  checkpoint: process.env.MAP_SWEEP_CHECKPOINT ?? "working tree",
+                  uncommittedEdit: process.env.MAP_SWEEP_EDIT ?? "capture support only",
+                  provenance:
+                    "empty Frame replay of a hand-written demo fixture; actual ChatMergeChip accessory; no start callback",
+                  snapshot: "fixtures/events/handwritten-level1.jsonl through seq 2",
+                  layout: "Frame empty replay Chat",
+                  viewport: page.viewportSize(),
+                  theme,
+                  camera: null,
+                  publishedLevel: null,
+                  pointer: { x: 0, y: 0 },
+                  fieldClock: null,
+                  reducedMotion: true,
+                  ...measurements,
+                  ...replayErrors.get(page),
+                },
+                null,
+                2,
+              ),
+            );
+          }
+          expect(replayErrors.get(page)).toEqual({ pageErrors: [], consoleErrors: [] });
+          expect(measurements.alignment).toBeLessThanOrEqual(1);
+          for (const item of measurements.overflow) expect(item.positive).toBe(0);
+          await browserExpect(chat).toBeFocused();
+          await browserExpect(start(page)).toHaveCount(0);
+          await browserExpect(box(page)).toHaveCount(0);
+          expect(await calls(page)).toEqual([]);
+        },
+        { width, theme, chat: true },
+      );
+    });
