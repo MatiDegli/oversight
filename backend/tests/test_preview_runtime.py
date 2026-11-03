@@ -204,3 +204,46 @@ async def test_shutdown_starting_settles_tasks_before_store_close(tmp_path, monk
     assert closed == [True] and not run.workspace.runtime_owned
     assert [r.state for r in sink.records] == ["starting", "stopping", "stopped"]
     assert not run.previews.has_owner
+
+
+async def test_shutdown_restored_metadata_finalizes_before_store_close(tmp_path, monkeypatch):
+    from oversight.workspace.preview_types import FakeStatusSink, PreviewRestoredError
+
+    run, head, processes = await prepare_run(tmp_path)
+    sink, order = FakeStatusSink(), []
+
+    async def publish(record):
+        await sink(record)
+        order.append((record.state, record.reason))
+
+    run.previews.set_status_sink(publish)
+    created = await run.previews.start(
+        run_id="run-20261103-000000", agent_id="agent-1", revision=1, head_commit=head
+    )
+    await sink.wait("ready", created.preview_id)
+    config = run.workspace.main.git_identity.common / "config"
+    original = config.read_bytes()
+    config.write_bytes(original + b"\n[preview-tamper]\n marker = changed\n")
+
+    async def store_close():
+        order.append("store_close")
+
+    monkeypatch.setattr(run.store, "close", store_close)
+    try:
+        async with asyncio.timeout(5):
+            with pytest.raises(PreviewRestoredError):
+                await run.shutdown()
+        assert order.index(("failed", "worktree_changed")) < order.index("store_close")
+        assert config.read_bytes() == original and processes[0].dead
+        assert run.previews.registry.read() is None and not run.previews.has_owner
+        finalizer, watcher = run.previews.barrier.finalizer, run.previews._watcher
+        assert finalizer is not None and finalizer.done()
+        assert watcher is not None and watcher.done()
+        assert run.previews.barrier.owner is None and not run.workspace.runtime_owned
+        assert run.workspace.integrity.rules_suspended
+        assert not run.workspace.integrity.main_suspect and not run.workspace._cleanup_unverified
+    finally:
+        finalizer = run.previews.barrier.finalizer
+        if finalizer is not None:
+            async with asyncio.timeout(5):
+                await finalizer

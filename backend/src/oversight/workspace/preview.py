@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from oversight.workspace.integrity import IntegrityError
 from oversight.workspace.locks import offload
-from oversight.workspace.preview_barrier import PreviewBarrier, PreviewOwnership
+from oversight.workspace.preview_barrier import PreviewBarrier, PreviewOwnership, settle
 from oversight.workspace.preview_lifecycle import PreviewLifecycle, finish_supervision
 from oversight.workspace.preview_process import PreviewProcess, bind_listener, launch_configuration
 from oversight.workspace.preview_profile import PreviewProfile
@@ -394,6 +394,8 @@ class PreviewManager:
             self.workspace.refuse_unverified_cleanup(preview=True)
             raise PreviewError("Live preview cleanup is unverified; restart is required.") from None
         finally:
+            if self._closed and self.barrier.finalizer is not None:
+                await settle(self.barrier.finalizer)
             await finish_supervision(owner, watcher)
 
     async def disable_profile(self) -> None:

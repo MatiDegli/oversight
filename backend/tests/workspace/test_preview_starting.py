@@ -141,6 +141,32 @@ async def test_starting_renewal_is_deferred_until_handoff_and_clamped(workspace,
         await h.close()
 
 
+@pytest.mark.parametrize("operation", ["get", "renew"])
+async def test_unfinished_launch_is_not_a_confirmed_app_exit(workspace, operation):
+    h = await harness(workspace)
+    try:
+        created, process = await gated(h, "launch")
+        assert not await process.confirmed_live()
+        before = list(h.sink.records)
+        deadline = h.manager._deadline
+        h.clock.now += 5
+        status = (
+            await h.manager.get(created.preview_id)
+            if operation == "get"
+            else await h.manager.renew(created.preview_id, created.lease_token)
+        )
+        assert status.state == "starting" and status.reason is None
+        assert h.sink.records == before
+        assert h.manager.has_owner and h.manager.registry.read() is not None
+        assert not process.dead and process.sent == []
+        assert h.manager._deadline == deadline + (5 if operation == "renew" else 0)
+        process.launch_gate.set()
+        await h.sink.wait("ready", created.preview_id)
+        assert await process.confirmed_live()
+    finally:
+        await h.close()
+
+
 @pytest.mark.parametrize("phase", ["launch", "ready"])
 @pytest.mark.parametrize("operation", ["stop", "git", "disable", "shutdown"])
 async def test_drain_at_both_gates_cannot_resurrect_or_affect_replacement(

@@ -69,7 +69,7 @@ class FakeProcess(PreviewProcess):
         return self.ready_result
 
     async def confirmed_live(self) -> bool:
-        return self.live
+        return self.live and "execute" in self.order
 
     def send(self, message: bytes) -> None:
         assert "execute" in self.order, "renewal raced unfinished handoff"
