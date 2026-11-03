@@ -136,14 +136,18 @@ it("inserts membership without facts or comparison and never opens Details on ar
     await check(page.locator(".review-details > details")).not.toHaveAttribute("open");
   });
 });
-it("wraps escaped long node identities at phone width in day mode", async () => {
+it("wraps escaped multilingual identities at phone width and 200% scale in day mode", async () => {
   await mounted(390, async (page) => {
     await replace(page, "intersection");
     await page.evaluate(async () => {
       document.documentElement.dataset.theme = "day";
       await window.coneHarness.stress();
+      const section = document.querySelector<HTMLElement>(".cone-overlap");
+      if (!section) throw new Error("Missing cone section");
+      section.style.zoom = "2";
     });
     await check(page.locator(".cone-overlap code")).toContainText("<script>");
+    await check(page.locator(".cone-overlap code")).toContainText("函数_مرحبا_🧪_");
     expect(
       await page.evaluate(() => {
         const section = document.querySelector<HTMLElement>(".cone-overlap");

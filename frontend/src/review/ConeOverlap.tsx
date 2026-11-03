@@ -8,8 +8,9 @@ const limits: Record<ConeLimitation, string> = {
   "sequence-gap": "An event sequence or graph version gap limits the available graph.",
   "cone-omissions": "The cone's depth or node limit omits reachable nodes.",
   "missing-seeds":
-    "Some added or modified peer nodes are absent from the graph used for this cone.",
-  "removed-only": "This peer only removes nodes; removed nodes do not seed its current cone.",
+    "Some nodes added or modified by this pending change are absent from the graph used for this cone.",
+  "removed-only":
+    "This pending change only removes nodes; removed nodes do not seed its current cone.",
 };
 
 export function ConeOverlap({ state, changeId }: { state: State; changeId: string }) {

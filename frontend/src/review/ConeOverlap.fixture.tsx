@@ -216,7 +216,7 @@ export const coneHarness = {
   async stress() {
     const state = structuredClone(stateStore.getState().state);
     const node = state.graph?.nodes.find((node) => node.id === nodeId);
-    if (node) node.qualname = "<script>" + "Long_函数_".repeat(40);
+    if (node) node.qualname = "<script>" + "Long_函数_مرحبا_🧪_".repeat(40);
     const { flushSync } = await import("react-dom");
     flushSync(() => {
       stateStore.setState({ state });
