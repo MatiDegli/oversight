@@ -4357,3 +4357,59 @@ unchanged, including full working strength and the current 0.5 waiting weight.
 Map counts and resting agent labels use opaque plates matching the group panel resolved over
 ground (or ground without a panel) to keep text above 4.5:1 over stronger pools without adding
 a visible box to unlit cells; expanded agent labels retain their existing hover backing.
+
+## 2026-11-02 — Enable validated native Windows own-repository COPY
+
+The maintainer approved the AGENTS.md source/environment wording on November 2, 2026,
+at 11:15 ART (14:15Z): “Si, vamos con ese cambio”. The previous demo-only source and test
+environment wording becomes false when validated native Windows COPY is public. This entry
+supersedes the closed-selector status in the earlier internal-selection and private-composition
+entries without changing their historical delivery claims.
+
+Empty demo and the exact pinned Boltons profile retain precedence and behavior. Only native
+Windows accepts own-repository drive paths, through preparation before constructors, the runtime
+lock/server Job, prior-runtime protection and trust disclosure before source Git, and validated
+staging before reset. An own-selected Workspace refuses unstaged reset before destructive work.
+Product agents own disposable copies and worktrees under `.runtime/worktrees/`, never the
+selected original or this repository. Approval changes only the disposable copy; binary export,
+check and explicit manual apply, and exact-hash discard remain the recovery boundary.
+
+Own suites use the validated original `.venv` with imports mapped to each disposable tested
+tree. Shared readiness/suite environments require the trusted plugin and import guard, retain
+plugin autoload and exclude inherited credentials. Readiness keeps its separate deadline;
+suite preparation, probe and tests share the frozen person-owned startup timeout. The model
+cannot change it. Missing environments leave graph access available and never trigger a builder.
+
+Tests/plugins may write outside runtime; child interpreters can escape the import guard;
+concurrent path-replacement races and inherited ACLs remain accepted residuals. No isolation,
+ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
+Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
+
+2026-11-03 — Dormant views with references. Following maintainer OK of the exact diff, contracts 1.18.0 adds lead.view with highlight, files, behavior and moment. PR1 ships validated reference infrastructure, eligible status inventory and event readers; show_view remains absent from the advertised tool table and dispatch. Prompt bytes and prompt_version remain unchanged. This supersedes the no-new-events/contracts restriction for this feature only. No visible cards or paid calls are released by PR1.
+## 2026-11-03 — Dormant preview uses the shared Git lease and durable ownership
+
+Person-owned preview infrastructure uses Linux isolation C and an external trusted supervisor and
+adapter, without product-agent shell/tools, contract changes or new routes. The eight internal
+workspace facade names compile against current contracts 1.17.0. Production opening stays disabled,
+including when explicit trusted startup paths, ports, origins and limits are configured.
+
+Reason: endpoint guards cannot cover every server Git spawn or a ready Request changes without Git.
+The task-reentrant shared Git lease is the universal exclusion, with verified namespace death and
+existing metadata snapshot restitution before any waiting Git. It takes no additional tree lock
+beneath the lease; candidate comparison uses its proper lock afterwards and pending evidence cannot
+merge. Person, rules and standing-grant approval keep their final transaction guards and share the
+contamination refusal. A failed drain retains runtime ownership and blocks all Git/Approve until
+restart. Registered process births and namespace identities, persisted before execution release,
+permit narrow pidfd reclamation before normal orphan refusal and reset; unknown processes/listeners
+never authorize a kill. Changed recovered worktrees retain quarantine rather than being reset.
+
+Interruption cost: any agent's Git activity ends the preview with `mutation`, followed by metadata
+restitution and candidate comparison. One runtime has one owner; selecting another agent requires
+authenticated Stop and verified termination before a fresh Start. No tree/Git lock lasts for the
+application's lifetime. Lease renewal carries no lifecycle event. Shutdown keeps the committed event
+writer open through the terminal sink and drains immediately before manager close.
+
+Fake tests establish ordering and refusal only. Real host/browser GET/form POST through the inherited
+listener, fresh-connection refusal, setsid teardown and crash acceptance belong to Front F. C retains
+filesystem/secret/response risks, and the inherited address-space cap is per process rather than an
+aggregate fork cap. The dormant outcome grants neither arbitrary-code containment nor public opening.

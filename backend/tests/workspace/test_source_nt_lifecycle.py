@@ -316,13 +316,13 @@ async def test_staging_relist_rewrap_retains_runtime(workspace, monkeypatch, tmp
         monkeypatch.setattr(core, "inventory", AsyncMock(return_value=chosen.inventory))
         monkeypatch.setattr(core, "validate_selection", lambda _: chosen)
         monkeypatch.setattr(core, "executable", lambda _: r"C:\Git\git.exe")
+        monkeypatch.setattr(core, "run_process", relist)
         # Keep the real copy, relist and `from None` refusal boundary.
         monkeypatch.setattr(
             core,
             "stage_source",
             partial(
                 source_nt.stage_source,
-                spawn=relist,
                 ancestors=(),
                 sensitive=lambda _: False,
                 streams=unnamed,

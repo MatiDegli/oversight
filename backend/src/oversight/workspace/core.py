@@ -16,6 +16,10 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from oversight.workspace.preview import PreviewManager
 
 from oversight.limits import bounded_text
 from oversight.workspace._platform import (
@@ -99,7 +103,7 @@ from oversight.workspace.source_nt import (
     validate_selection,
     verify_stage,
 )
-from oversight.workspace.suite import SuiteRun, SuiteUnavailable
+from oversight.workspace.suite import SuiteRun, SuiteUnavailable, own_source_environment
 from oversight.workspace.suite import (
     _probe_environment as probe_environment,  # pyright: ignore[reportPrivateUsage]
 )
@@ -197,7 +201,7 @@ class Tree:
 
     @property
     def nt_source_bytes(self) -> bool:
-        """Internal own-source policy; selection stays closed until the later startup front."""
+        """Raw-byte policy for a staged disposable own-source copy."""
         return self._workspace.nt_source_bytes
 
     def verify_root(self) -> None:
@@ -235,7 +239,7 @@ class Tree:
     async def write_text(self, path: str, content: str, *, expected_hash: str | None) -> str:
         """Write under the tree's lock; return the new hash. `StaleFile` if the file is not the one
         `expected_hash` names (`None` requires that it not exist)."""
-        async with self.section(locked=True):
+        async with self.section(locked=True), self._workspace.mutation(self):
             tmp_dir = self._workspace.tmp_dir
             return await offload(
                 partial(write_file, self.root, tmp_dir, path, content, expected_hash)
@@ -322,6 +326,7 @@ class Workspace:
         self._reset_done = False
         self._reset_destructive = False
         self._cleanup_unverified = False
+        self.previews: PreviewManager | None = None
 
     # --- Accessors --------------------------------------------------------------------------
 
@@ -347,6 +352,33 @@ class Workspace:
         return self._root
 
     @property
+    def runtime_owned(self) -> bool:
+        return self._lock_fd is not None
+
+    @asynccontextmanager
+    async def mutation(self, tree: Tree) -> AsyncGenerator[None]:
+        """Hold the shared admission through a non-Git effect, under the caller's tree lock."""
+        if self._cleanup_unverified:
+            self.integrity.before_git()
+        if self.previews is None or not self.previews.has_owner:
+            yield
+            return
+        async with self.git_lease():
+            await self.previews.barrier.compare(tree)
+            yield
+
+    async def drain_previews(self, tree: Tree) -> None:
+        """Decision callers retain main's lock through their first effect after this guard."""
+        if self.previews is not None:
+            async with self.mutation(tree):
+                pass
+
+    async def preview_evidence(self, tree: Tree, revision: int, head: str) -> None:
+        if self.previews is not None:
+            async with self.git_lease():
+                await self.previews.barrier.evidence(tree, revision, head)
+
+    @property
     def tmp_dir(self) -> Path:
         return self._root / "tmp"
 
@@ -355,6 +387,16 @@ class Workspace:
             return self._trees[agent_id]
         except KeyError:
             raise WorkspaceError(f"{agent_id} has no worktree") from None
+
+    def recovered_preview_tree(self, agent_id: str, head: str) -> Tree:
+        """Reconstruct only registered preview identity before startup reset, without Git."""
+        if not self.runtime_owned or self._reset_done or not valid_agent_id(agent_id):
+            raise WorkspaceBusy("preview recovery requires the locked prior runtime")
+        root = self._root / "worktrees" / agent_id
+        tree = Tree(self, root, agent_id, agent_id, head)
+        tree.verify_root()
+        tree.git_identity.verify_registration()
+        return tree
 
     def locks(
         self, *, main: bool = False, agent_id: AgentId | None = None
@@ -518,6 +560,32 @@ class Workspace:
 
     # --- Startup ----------------------------------------------------------------------------
 
+    async def startup_git(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_s: float,
+        env: Mapping[str, str] | None = None,
+        output_cap: int = 262144,
+    ) -> ProcessResult:
+        """Server-only Spawn for source validation/inventory, including repeated staging scans.
+
+        Offline tools retain their injected/default Spawn. This does not redirect source Git
+        into the disposable main: it supplies the same universal lease and integrity check.
+        """
+        # Source Git precedes the disposable main's bootstrap/byte override. It uses the
+        # universal Locks lease hook, with the source's own policy and sentinel validation.
+        async with self.locks(main=True), self._locks.git_lease(), self.guard_nt_cleanup():
+            self.integrity.before_git()
+            if sys.platform == "win32":
+                if self._lock_fd is None:
+                    raise WorkspaceBusy("source Git requires the runtime lock sentinel")
+                await offload(partial(verify_sentinel, self._root / "server.lock", self._lock_fd))
+            return await run_process(
+                argv, cwd=cwd, timeout_s=timeout_s, env=env, output_cap=output_cap
+            )
+
     @asynccontextmanager
     async def guard_nt_cleanup(self) -> AsyncGenerator[None]:
         """Latch failed Job cleanup before a caller can release runtime ownership."""
@@ -528,10 +596,14 @@ class Workspace:
                 self.refuse_unverified_cleanup()
             raise
 
-    def refuse_unverified_cleanup(self) -> IntegrityError:
+    def refuse_unverified_cleanup(self, *, preview: bool = False) -> IntegrityError:
         self._cleanup_unverified = True
         error = IntegrityError(
-            "Windows Job cleanup is unverified; exit the server process",
+            (
+                "Live preview cleanup is unverified; exit the server process"
+                if preview
+                else "Windows Job cleanup is unverified; exit the server process"
+            ),
             ".git",
             code="main_suspect",
         )
@@ -549,9 +621,13 @@ class Workspace:
             raise WorkspaceBusy("own-source staging needs selection and runtime lock")
         binary = await offload(partial(executable, "git"))
         try:
-            listing = await inventory(self._own_source, git=binary, lock_fd=self._lock_fd)
+            listing = await inventory(
+                self._own_source, git=binary, lock_fd=self._lock_fd, spawn=self.startup_git
+            )
             selection = await offload(partial(validate_selection, listing))
-            return await stage_source(selection, git=binary, lock_fd=self._lock_fd)
+            return await stage_source(
+                selection, git=binary, lock_fd=self._lock_fd, spawn=self.startup_git
+            )
         except BaseException as error:
             if nt_cleanup_failed(error):
                 self.refuse_unverified_cleanup()
@@ -574,15 +650,7 @@ class Workspace:
                 own = await offload(
                     partial(self.prepare_own_environment, self._main.root, deadline)
                 )
-                env = {
-                    "HOME": str(self.tmp_dir / "home"),
-                    "PYTHONPATH": ";".join(map(str, (PLUGIN_DIR, self._main.root, *own.roots))),
-                    "PYTHONDONTWRITEBYTECODE": "1",
-                    "OVERSIGHT_TRUSTED_PLUGIN": str(PLUGIN_DIR / "oversight_report.py"),
-                }
-                if not own.guard:
-                    raise OSError("Own-source environment unavailable: missing import guard")
-                env["OVERSIGHT_IMPORT_GUARD"] = own.guard
+                env = own_source_environment(own, PLUGIN_DIR, self._root, self._main.root)
                 await probe_environment(
                     own.python, self._main.root, env, deadline, time.monotonic, runner
                 )
@@ -621,6 +689,8 @@ class Workspace:
                 if sys.platform == "win32":
                     await offload(ensure_lifetime_job)
                     await probe_job_support(self._root)
+                if self.previews is not None:
+                    await self.previews.recover()
                 await offload(partial(refuse_orphans, self._root))
             except BaseException as error:
                 if nt_cleanup_failed(error):
@@ -661,6 +731,8 @@ class Workspace:
         self.integrity.before_git()
         if self._lock_fd is None:
             raise WorkspaceBusy("reset needs the runtime lock: call acquire_runtime first")
+        if self._own_source is not None and _nt_stage is None:
+            raise WorkspaceError("own-source reset requires validated staging")
         if not self._locks.idle:
             raise WorkspaceBusy("an operation is in progress")
         if self._reset_done:
@@ -849,6 +921,7 @@ class Workspace:
     ) -> None:
         with self._locks.track():
             async with self._locks.acquire(main=True, agent_id=agent_id):
+                await self.drain_previews(self._trees.get(agent_id) or self._main)
                 # Every guard runs before git is invoked; a refusal keeps files, commits, branch.
                 guard = partial(registered_worktree, self._root, self._main.root, agent_id)
                 target = await offload(guard)
@@ -923,7 +996,11 @@ class Workspace:
         isolation: IsolationPolicy = "best_effort",
         measured_targets: tuple[CallTarget, ...] | None = None,
     ) -> SuiteRun:
-        """Run the source's fixed tests in `tree`, under its lock, in the demo venv."""
+        """Run fixed tests in the disposable `tree` under its lock and a timeout.
+
+        Demo/profiles use the runtime demo venv; own sources use their validated original
+        venv with imports mapped to this copy, without building or installing anything.
+        """
         async with (
             self.locks(main=True, agent_id=tree.agent_id),
             tree.section(locked=False),

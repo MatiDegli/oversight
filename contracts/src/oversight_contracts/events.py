@@ -41,6 +41,7 @@ from oversight_contracts.plans import Plan, PlanZone
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
 from oversight_contracts.queue import QueuedTask
 from oversight_contracts.review import ChangeFacts, CrossReview, ReviewCard
+from oversight_contracts.views import LeadView
 
 # run.started
 
@@ -785,6 +786,15 @@ class LeadStatusEvent(EventBase):
     """The complete event payload."""
 
 
+class LeadViewEvent(EventBase):
+    """Envelope for one committed lead view."""
+
+    type: Literal["lead.view"]
+    """Event discriminator."""
+    payload: LeadView
+    """Grounded reference request."""
+
+
 class LeadReplyEvent(EventBase):
     """The lead.reply envelope."""
 
@@ -822,6 +832,7 @@ type ServerEvent = Annotated[
     | RevertResolvedEvent
     | QueueUpdatedEvent
     | LeadStatusEvent
+    | LeadViewEvent
     | LeadReplyEvent
     | GrantCreatedEvent
     | GrantRevokedEvent,

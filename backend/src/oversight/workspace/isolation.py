@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import cast
 
 from oversight.workspace.errors import WorkspaceBusy
-from oversight.workspace.isolation_entry import FLAGS, HELPER, LAUNCHER, MARKER
+from oversight.workspace.isolation_entry import FLAGS, HELPER, LAUNCHER, MARKER, PREVIEW_HELPER
 from oversight.workspace.runner import (
     DEFAULT_OUTPUT_CAP,
     KILL_WAIT_S,
@@ -86,6 +86,26 @@ def _launch(binary: str, command: Sequence[str]) -> list[str]:
     return [sys.executable, "-I", "-S", "-c", LAUNCHER, str(os.getpid()), binary, *command]
 
 
+def preview_launch(
+    runtime: Path,
+    argv: Sequence[str],
+    *,
+    entry: int,
+    ack: int,
+    listener: int,
+    nonce: str,
+    refusal_port: int,
+) -> tuple[list[str], tuple[int, ...]]:
+    """Trusted supervisor→C handoff; the refusal listener is a separate host socket."""
+    if listener < 3 or len({entry, ack, listener}) != 3 or not refusal_port:
+        raise IsolationUnavailable("invalid preview descriptor handoff")
+    args = [str(entry), str(ack), nonce, str(os.getpid())]
+    args += [os.readlink(f"/proc/self/ns/{name}") for name in ("net", "pid", "mnt")]
+    args += [str(os.stat("/proc").st_dev), MARKER + str(runtime), str(refusal_port)]
+    command = [*FLAGS, sys.executable, "-I", "-S", "-c", PREVIEW_HELPER, *args, *argv]
+    return _launch(unshare_binary(), command), (entry, ack, listener)
+
+
 async def _read_entry(fd: int) -> bytes:
     reader = asyncio.StreamReader(limit=4096)
     protocol = asyncio.StreamReaderProtocol(reader)
@@ -95,6 +115,32 @@ async def _read_entry(fd: int) -> bytes:
         return await reader.readuntil(b"\n")
     finally:
         transport.close()
+
+
+async def read_preview_entry(fd: int) -> bytes:
+    """Reuse C's bounded entry protocol in the trusted external supervisor."""
+    return await _read_entry(fd)
+
+
+def confirm_preview_entry(
+    raw: bytes,
+    nonce: str,
+    unshare: int,
+    refusal_port: int,
+) -> tuple[dict[str, object], int]:
+    return _confirm(raw, nonce, unshare, refusal_port)
+
+
+async def cleanup_preview_namespace(
+    transport: asyncio.SubprocessTransport,
+    collector: ProcessCollector,
+    init: int | None,
+) -> None:
+    await _cleanup(transport, collector, init)
+
+
+async def verify_preview_namespace_death(pidfd: int) -> None:
+    await _namespace_gone(pidfd)
 
 
 def open_pidfd(pid: int) -> int:

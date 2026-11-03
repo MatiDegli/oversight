@@ -1,0 +1,962 @@
+{
+  "description": "Synthetic scripted references; no model execution or measured run claim.",
+  "moment_event_types": [
+    "change.proposed",
+    "change.resolved",
+    "change.reviewed",
+    "tests.executed",
+    "plan.updated",
+    "revert.resolved",
+    "lead.reply",
+    "error"
+  ],
+  "events": [
+    {
+      "seq": 1,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "run.started",
+      "payload": {
+        "run_id": "run-20261027-140312",
+        "contract_version": "1.0.0",
+        "prompt_version": "agent-v1:d6ccbbe891a9",
+        "workspace": "demo-repo",
+        "base_commit": "8cbf7534f0f7f390dd9d6e514081b6760d20423d",
+        "models": [
+          {
+            "id": "fake",
+            "label": "Scripted fake model",
+            "provider": "fake",
+            "model": "fake-scripted",
+            "reasoning": null
+          },
+          {
+            "id": "muse-spark-open",
+            "label": "Muse Spark Open",
+            "provider": "baseten",
+            "model": "meta-models/muse-spark-open-1026",
+            "reasoning": null
+          }
+        ],
+        "slots": [
+          {
+            "slot": "A",
+            "default_model": "muse-spark"
+          },
+          {
+            "slot": "B",
+            "default_model": "muse-spark-open"
+          }
+        ],
+        "limits": {
+          "max_steps": 30,
+          "max_output_tokens": 4096,
+          "max_wall_clock_s": 600,
+          "test_timeout_s": 60,
+          "cone_max_depth": 3,
+          "cone_max_nodes": 40
+        },
+        "budget": {
+          "budget_usd": 50.0,
+          "spent_usd": 0.0,
+          "warn_at": [
+            0.5,
+            0.8
+          ],
+          "block_at": 0.9
+        }
+      }
+    },
+    {
+      "seq": 2,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "graph.snapshot",
+      "payload": {
+        "version": "g1",
+        "commit": "base",
+        "nodes": [
+          {
+            "id": "n1",
+            "kind": "function",
+            "name": "n1",
+            "qualname": "n1",
+            "path": "a.py",
+            "start_line": 1,
+            "end_line": 1,
+            "parent_id": null,
+            "is_test": false
+          },
+          {
+            "id": "n2",
+            "kind": "function",
+            "name": "n2",
+            "qualname": "n2",
+            "path": "b.py",
+            "start_line": 1,
+            "end_line": 1,
+            "parent_id": null,
+            "is_test": false
+          }
+        ],
+        "edges": [],
+        "parse_errors": [],
+        "positions": {}
+      }
+    },
+    {
+      "seq": 3,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "agent.status",
+      "payload": {
+        "agent_id": "agent-1",
+        "slot": "A",
+        "change_id": "change-1",
+        "task": "Cap the combined discount at 30% in compute_price",
+        "model": "fake",
+        "state": "starting",
+        "step": 0,
+        "max_steps": 30,
+        "detail": null
+      }
+    },
+    {
+      "seq": 4,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.updated",
+      "payload": {
+        "change_id": "change-1",
+        "agent_id": "agent-1",
+        "author": "agent",
+        "file": {
+          "path": "a.py",
+          "status": "modified",
+          "original": "old",
+          "modified": "new",
+          "lines_added": 2,
+          "lines_removed": 0
+        },
+        "node_ids": [
+          "n1"
+        ],
+        "graph": {
+          "nodes_added": [
+            {
+              "id": "n3",
+              "kind": "function",
+              "name": "n3",
+              "qualname": "n3",
+              "path": "extra.py",
+              "start_line": 1,
+              "end_line": 1,
+              "parent_id": null,
+              "is_test": false
+            }
+          ],
+          "nodes_modified": [
+            "n1"
+          ],
+          "nodes_removed": [
+            "gone"
+          ],
+          "edges_added": [],
+          "edges_removed": []
+        },
+        "files_changed": 1,
+        "lines_added": 2,
+        "lines_removed": 0
+      }
+    },
+    {
+      "seq": 5,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "agent.focus",
+      "payload": {
+        "agent_id": "agent-1",
+        "mode": "read",
+        "ranges": [
+          {
+            "path": "shop/cart.py",
+            "start_line": 30,
+            "end_line": 30
+          },
+          {
+            "path": "shop/cart.py",
+            "start_line": 41,
+            "end_line": 41
+          },
+          {
+            "path": "shop/cart.py",
+            "start_line": 42,
+            "end_line": 42
+          },
+          {
+            "path": "shop/models.py",
+            "start_line": 27,
+            "end_line": 27
+          },
+          {
+            "path": "shop/models.py",
+            "start_line": 58,
+            "end_line": 58
+          },
+          {
+            "path": "shop/orders.py",
+            "start_line": 25,
+            "end_line": 25
+          }
+        ],
+        "node_ids": [
+          "n2",
+          "absent"
+        ]
+      }
+    },
+    {
+      "seq": 6,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.proposed",
+      "payload": {
+        "change_id": "change-1",
+        "agent_id": "agent-1",
+        "revision": 1,
+        "task": "Cap the combined discount at 30% in compute_price",
+        "summary": "compute_price now caps the bulk tier plus the extra percent at 30% before taking it off. All tests pass.",
+        "base_commit": "base",
+        "head_commit": "head",
+        "files": [
+          {
+            "path": "a.py",
+            "status": "modified",
+            "lines_added": 1,
+            "lines_removed": 1
+          },
+          {
+            "path": "extra.py",
+            "status": "added",
+            "lines_added": 0,
+            "lines_removed": 0
+          }
+        ],
+        "lines_added": 2,
+        "lines_removed": 0,
+        "graph": {
+          "nodes_added": [
+            {
+              "id": "n3",
+              "kind": "function",
+              "name": "n3",
+              "qualname": "n3",
+              "path": "extra.py",
+              "start_line": 1,
+              "end_line": 1,
+              "parent_id": null,
+              "is_test": false
+            }
+          ],
+          "nodes_modified": [
+            "n1"
+          ],
+          "nodes_removed": [
+            "gone"
+          ],
+          "edges_added": [],
+          "edges_removed": []
+        },
+        "tests": {
+          "outcome": "passed",
+          "passed": 28,
+          "failed": 0,
+          "skipped": 0,
+          "duration_ms": 380,
+          "failed_tests": []
+        },
+        "impact": {
+          "seeds": [
+            "n1"
+          ],
+          "entries": [],
+          "edges_followed": "exact",
+          "max_depth": 3,
+          "max_nodes": 40,
+          "omitted_by_depth": 0,
+          "omitted_by_limit": 0,
+          "tests_reaching": 12
+        }
+      }
+    },
+    {
+      "seq": 7,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.facts_recorded",
+      "payload": {
+        "change_id": "change-1",
+        "revision": 1,
+        "base_commit": "base",
+        "head_commit": "head",
+        "main_commit": "main",
+        "candidate_tree": "tree",
+        "declared": null,
+        "edited_paths": [
+          "a.py"
+        ],
+        "test_runs": [],
+        "integrity": [],
+        "added_tests": [],
+        "run_findings": [],
+        "zone": null,
+        "reach": null,
+        "complete": false,
+        "problems": [
+          "No reach evidence"
+        ],
+        "behavior_diff": [
+          {
+            "node_id": "n1",
+            "compared_count": 1,
+            "differing_count": 0,
+            "rows": [],
+            "not_probed": null
+          }
+        ]
+      }
+    },
+    {
+      "seq": 8,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.proposed",
+      "payload": {
+        "change_id": "change-1",
+        "agent_id": "agent-1",
+        "revision": 2,
+        "task": "Cap the combined discount at 30% in compute_price",
+        "summary": "compute_price now caps the bulk tier plus the extra percent at 30% before taking it off. All tests pass.",
+        "base_commit": "base",
+        "head_commit": "head2",
+        "files": [
+          {
+            "path": "a.py",
+            "status": "modified",
+            "lines_added": 1,
+            "lines_removed": 1
+          }
+        ],
+        "lines_added": 2,
+        "lines_removed": 0,
+        "graph": {
+          "nodes_added": [
+            {
+              "id": "n3",
+              "kind": "function",
+              "name": "n3",
+              "qualname": "n3",
+              "path": "extra.py",
+              "start_line": 1,
+              "end_line": 1,
+              "parent_id": null,
+              "is_test": false
+            }
+          ],
+          "nodes_modified": [
+            "n1"
+          ],
+          "nodes_removed": [
+            "gone"
+          ],
+          "edges_added": [],
+          "edges_removed": []
+        },
+        "tests": {
+          "outcome": "passed",
+          "passed": 28,
+          "failed": 0,
+          "skipped": 0,
+          "duration_ms": 380,
+          "failed_tests": []
+        },
+        "impact": {
+          "seeds": [
+            "n1"
+          ],
+          "entries": [],
+          "edges_followed": "exact",
+          "max_depth": 3,
+          "max_nodes": 40,
+          "omitted_by_depth": 0,
+          "omitted_by_limit": 0,
+          "tests_reaching": 12
+        }
+      }
+    },
+    {
+      "seq": 9,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.facts_recorded",
+      "payload": {
+        "change_id": "change-1",
+        "revision": 2,
+        "base_commit": "base",
+        "head_commit": "wrong",
+        "main_commit": "main",
+        "candidate_tree": "tree",
+        "declared": null,
+        "edited_paths": [
+          "a.py"
+        ],
+        "test_runs": [],
+        "integrity": [],
+        "added_tests": [],
+        "run_findings": [],
+        "zone": null,
+        "reach": null,
+        "complete": false,
+        "problems": [
+          "No reach evidence"
+        ],
+        "behavior_diff": [
+          {
+            "node_id": "n1",
+            "compared_count": 1,
+            "differing_count": 0,
+            "rows": [],
+            "not_probed": null
+          }
+        ]
+      }
+    },
+    {
+      "seq": 10,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.facts_recorded",
+      "payload": {
+        "change_id": "change-1",
+        "revision": 2,
+        "base_commit": "base",
+        "head_commit": "head2",
+        "main_commit": "main",
+        "candidate_tree": "tree",
+        "declared": null,
+        "edited_paths": [
+          "a.py"
+        ],
+        "test_runs": [],
+        "integrity": [],
+        "added_tests": [],
+        "run_findings": [],
+        "zone": null,
+        "reach": null,
+        "complete": false,
+        "problems": [
+          "No reach evidence"
+        ],
+        "behavior_diff": [
+          {
+            "node_id": "n1",
+            "compared_count": 1,
+            "differing_count": 0,
+            "rows": [],
+            "not_probed": null
+          }
+        ]
+      }
+    },
+    {
+      "seq": 11,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.facts_recorded",
+      "payload": {
+        "change_id": "change-1",
+        "revision": 2,
+        "base_commit": "base",
+        "head_commit": "head2",
+        "main_commit": "main",
+        "candidate_tree": "tree",
+        "declared": null,
+        "edited_paths": [
+          "a.py"
+        ],
+        "test_runs": [],
+        "integrity": [],
+        "added_tests": [],
+        "run_findings": [],
+        "zone": null,
+        "reach": null,
+        "complete": false,
+        "problems": [
+          "No reach evidence"
+        ],
+        "behavior_diff": null
+      }
+    },
+    {
+      "seq": 12,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.facts_recorded",
+      "payload": {
+        "change_id": "change-1",
+        "revision": 2,
+        "base_commit": "base",
+        "head_commit": "head2",
+        "main_commit": "main",
+        "candidate_tree": "tree",
+        "declared": null,
+        "edited_paths": [
+          "a.py"
+        ],
+        "test_runs": [],
+        "integrity": [],
+        "added_tests": [],
+        "run_findings": [],
+        "zone": null,
+        "reach": null,
+        "complete": false,
+        "problems": [
+          "No reach evidence"
+        ],
+        "behavior_diff": [
+          {
+            "node_id": "n1",
+            "compared_count": 1,
+            "differing_count": 0,
+            "rows": [],
+            "not_probed": null
+          }
+        ]
+      }
+    },
+    {
+      "seq": 13,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "change.resolved",
+      "payload": {
+        "change_id": "change-1",
+        "agent_id": "agent-1",
+        "revision": 1,
+        "decision": "approved",
+        "reason": null,
+        "comment": null,
+        "merge": "merged",
+        "merge_commit": "040a486eccfcd52a88a2514265d3637f5afcf146",
+        "conflict": null,
+        "head_commit": "head2"
+      }
+    },
+    {
+      "seq": 14,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "graph.snapshot",
+      "payload": {
+        "version": "g2",
+        "commit": "base",
+        "nodes": [],
+        "edges": [],
+        "parse_errors": [],
+        "positions": {}
+      }
+    },
+    {
+      "seq": 15,
+      "ts": "2026-11-03T00:00:00.000Z",
+      "type": "graph.snapshot",
+      "payload": {
+        "version": "g1",
+        "commit": "base",
+        "nodes": [
+          {
+            "id": "n1",
+            "kind": "function",
+            "name": "n1",
+            "qualname": "n1",
+            "path": "a.py",
+            "start_line": 1,
+            "end_line": 1,
+            "parent_id": null,
+            "is_test": false
+          },
+          {
+            "id": "n2",
+            "kind": "function",
+            "name": "n2",
+            "qualname": "n2",
+            "path": "b.py",
+            "start_line": 1,
+            "end_line": 1,
+            "parent_id": null,
+            "is_test": false
+          }
+        ],
+        "edges": [],
+        "parse_errors": [],
+        "positions": {}
+      }
+    }
+  ],
+  "cases": [
+    {
+      "name": "agent-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "highlight",
+          "references": [
+            {
+              "kind": "agent",
+              "agent_id": "agent-1"
+            }
+          ]
+        }
+      },
+      "expected": [
+        "n3",
+        "n1",
+        "n2"
+      ]
+    },
+    {
+      "name": "path-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "highlight",
+          "references": [
+            {
+              "kind": "path",
+              "path": "extra.py"
+            }
+          ]
+        }
+      },
+      "expected": [
+        "n3"
+      ]
+    },
+    {
+      "name": "file-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "files",
+          "references": [
+            {
+              "change_id": "change-1",
+              "path": "a.py"
+            }
+          ]
+        }
+      },
+      "expected": [
+        [
+          "change-1",
+          "a.py"
+        ]
+      ]
+    },
+    {
+      "name": "wrong-pair-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "files",
+          "references": [
+            {
+              "change_id": "change-2",
+              "path": "a.py"
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "proposal-only-file-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "files",
+          "references": [
+            {
+              "change_id": "change-1",
+              "path": "extra.py"
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "behavior-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "behavior-7",
+      "prefix": 7,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 7,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": [
+        "change-1"
+      ]
+    },
+    {
+      "name": "behavior-8",
+      "prefix": 8,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 8,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "behavior-9",
+      "prefix": 9,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 9,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "behavior-10",
+      "prefix": 10,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 10,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": [
+        "change-1"
+      ]
+    },
+    {
+      "name": "behavior-11",
+      "prefix": 11,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 11,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "behavior-12",
+      "prefix": 12,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 12,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": [
+        "change-1"
+      ]
+    },
+    {
+      "name": "moment-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "moment",
+          "event_seq": 6
+        }
+      },
+      "expected": [
+        6
+      ]
+    },
+    {
+      "name": "non-milestone-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "moment",
+          "event_seq": 4
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "future-6",
+      "prefix": 6,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 6,
+        "caption": null,
+        "view": {
+          "kind": "moment",
+          "event_seq": 8
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "moment-8",
+      "prefix": 8,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 5,
+        "caption": null,
+        "view": {
+          "kind": "moment",
+          "event_seq": 6
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "path-13",
+      "prefix": 13,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 13,
+        "caption": null,
+        "view": {
+          "kind": "highlight",
+          "references": [
+            {
+              "kind": "path",
+              "path": "extra.py"
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "agent-14",
+      "prefix": 14,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 14,
+        "caption": null,
+        "view": {
+          "kind": "highlight",
+          "references": [
+            {
+              "kind": "agent",
+              "agent_id": "agent-1"
+            }
+          ]
+        }
+      },
+      "expected": []
+    },
+    {
+      "name": "file-14",
+      "prefix": 14,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 14,
+        "caption": null,
+        "view": {
+          "kind": "files",
+          "references": [
+            {
+              "change_id": "change-1",
+              "path": "a.py"
+            }
+          ]
+        }
+      },
+      "expected": [
+        [
+          "change-1",
+          "a.py"
+        ]
+      ]
+    },
+    {
+      "name": "agent-15",
+      "prefix": 15,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 15,
+        "caption": null,
+        "view": {
+          "kind": "highlight",
+          "references": [
+            {
+              "kind": "agent",
+              "agent_id": "agent-1"
+            }
+          ]
+        }
+      },
+      "expected": [
+        "n1",
+        "n2"
+      ]
+    },
+    {
+      "name": "behavior-15",
+      "prefix": 15,
+      "request": {
+        "agent_id": "agent-9",
+        "through_seq": 15,
+        "caption": null,
+        "view": {
+          "kind": "behavior",
+          "change_id": "change-1"
+        }
+      },
+      "expected": [
+        "change-1"
+      ]
+    }
+  ]
+}

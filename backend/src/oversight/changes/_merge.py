@@ -35,6 +35,10 @@ async def merge(
     *,
     transaction: "Transaction | None" = None,
 ) -> None:
+    # Person, rules and standing grants share this effect boundary; final transaction
+    # guards below remain authoritative after combined tests and durable authorization.
+    await ctx.workspace.drain_previews(rec.tree)
+    await ctx.workspace.preview_evidence(rec.tree, rec.revision, rec.head_commit or "")
     main = ctx.workspace.main
     head = rec.head_commit or rec.base_commit
     if transaction is None:

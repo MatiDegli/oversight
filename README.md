@@ -125,9 +125,9 @@ static build requires the recording and its receipt; UI tests select their own f
   in its own directory that touches no product code: a Windows window showing the current UI,
   starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
   translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
-- Native Windows demo backend and private own-copy composition are implemented; native
-  qualification and public own-source enablement remain pending (see below).
-  Broader Windows and macOS backend ports remain after the Tauri shell.
+- The minimal native Windows backend and validated own-repository COPY startup are implemented;
+  native qualification remains pending (see below). Tauri, broader platform ports, macOS and
+  native Windows isolation remain later work.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
 
@@ -153,15 +153,16 @@ MIT. See [LICENSE](LICENSE).
 
 ## Native Windows advisory checks
 
-Startup/lifetime, native metadata/tree I/O, demo tools, private own-copy composition and guarded
-results are implemented. Public own-source paths still refuse; the final enabling change precedes
-own-source qualification. The separate `windows advisory` workflow is unrequired; failures still fail its job.
+Startup/lifetime, native metadata/tree I/O, demo tools and validated public native Windows
+own-repository COPY with guarded results are implemented. Native qualification remains pending.
+The separate `windows advisory` workflow is unrequired; failures still fail its job.
 Its logs distinguish injected tests, native tests and skipped proofs. Linux/WSL remains the
 verified development path. Windows runs open mode with OPEN_NOTICE: no network isolation,
 rules, Revert, behavior or measured evidence, and no memory cap (`memwatch` needs `/proc`).
 
-Use non-elevated PowerShell, Python 3.12, Git, uv, pnpm and Node 24, in a short, private,
-nonsynced local NTFS clone. Keep Defender enabled without exclusions. For the staged smoke:
+Use non-elevated PowerShell, Python 3.12, Git, uv, pnpm, Node 24 and gitleaks 8.30.1 on PATH,
+in a short, private, nonsynced local NTFS clone. Keep Defender enabled without exclusions.
+For the staged smoke:
 
 ```powershell
 git clone -c core.autocrlf=false <origin-url> "$HOME\src\oversight"
@@ -180,7 +181,7 @@ missing console or skipped native test is not acceptance. The candidate SIGBREAK
 `0xC000013A` must be confirmed by the console test; timeout or forced cleanup cannot pass its
 graceful verdict. There is no added Uvicorn handler (pinned 0.54.0).
 
-After **both W2a and W2b** land, use the live server for manual UI/health/graph/SSE proof:
+Use the live server for manual UI/health/graph/SSE proof:
 
 ```powershell
 $env:META_API_KEY=""; $env:BASETEN_API_KEY=""; $env:OVERSIGHT_CROSS_REVIEW="false"
@@ -205,8 +206,8 @@ tree/graph omit it, restart unlink it and outside hashes remain unchanged. Check
 separately with `uv run --frozen python -m oversight replay fixtures/events/handwritten-level1.jsonl
 --allow-fake-provider`; UI proof uses live serve. No model credits are used.
 
-No Windows make/bash/reload or native browser suite is supplied. Public own-repository paths
-still refuse. After public enablement, run the same driver on
+No Windows make/bash/reload or native browser suite is supplied. Validated native Windows
+own-repository paths are enabled; POSIX paths remain refused. Run the same driver on
 the maintainer's Windows machine and windows-latest:
 
 ```powershell

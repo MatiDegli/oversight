@@ -42,17 +42,19 @@ streaming/resumed `/events`, with its own runtime/cache. Defaults are checked fr
 without binding 8710/5710. CI invokes that target. Future terminal controls layer same-authority,
 authentication and IPv4 listener requirements on this policy; see approved guard decisions G1–G3.
 
-At live startup, the workspace takes a runtime lock, removes the previous workspace and
-worktrees, copies [demo-repo](demo-repo) and creates an initial git commit on `main`.
-Main lives at `.runtime/workspace/`; product agent worktrees live at
-`.runtime/worktrees/{agent_id}`, outside the parsed main tree. Run logs, the spend ledger
-and the separate demo test environment survive this reset.
+At live startup, the workspace takes a runtime lock and checks preservation state before resetting the disposable
+workspace and worktrees. It copies demo-repo/, a pinned profile or the selected own repository and creates an initial
+git commit on `main`. Native Windows own-source startup validates and stages the copy before destruction and refuses
+to discard changed prior own-source work without the person's exact-hash authorization.
+Main lives at `.runtime/workspace/`; product agent worktrees live at `.runtime/worktrees/{agent_id}`, outside the
+parsed main tree. Run logs, the spend ledger and the separate demo test environment survive this reset.
 
 The backend runs `git init` in the copied workspace. `.runtime/` is gitignored.
 The demo template is plain files with no git of its own: a Python project written here,
 with 4–6 modules, 20–40 functions and tests, and one central function with many callers.
-After the hackathon, `desktop/` will hold a Tauri shell with the backend inside WSL,
-before the native Windows and macOS backend ports. The demo runs in the browser.
+The browser demo remains supported. The minimal native Windows backend and validated own-repository
+COPY startup are implemented. Native qualification remains pending. The Tauri shell, broader
+platform ports and macOS remain later work.
 See [Opening the person's own repository](docs/own-repository.md) for its separate plan and rules.
 
 ## Data flow
@@ -72,9 +74,10 @@ See [Opening the person's own repository](docs/own-repository.md) for its separa
    during shutdown. Closed controls cannot restart a paused gate.
 4. The loop offers `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`.
    There is no shell tool. Paths stay within the worktree. Reads are bounded. An edit needs
-   a unique old-text match and the hash from the agent's last read. Tests use the demo's
-   own environment and a fixed command with a timeout. Status follows tool execution and
-   human run controls, never model text.
+   a unique old-text match and the hash from the agent's last read. Tests run in the disposable tested tree with a
+   fixed pytest command and a timeout. Demo and pinned profiles use the runtime's demo environment; selected own
+   repositories on native Windows use their validated original virtual environment with imports mapped to the copy.
+   Status follows tool execution and human run controls, never model text.
 5. Every completed tool call emits `agent.step`. Read focus precedes the step; `list_files`
    sends none, and `search` focuses only its first five matching nodes. Successful edits publish
    `change.updated`, edit focus and then the step. Updates carry full original and modified file
@@ -346,7 +349,7 @@ source. [generate.py](contracts/generate.py) generates JSON Schema and TypeScrip
 TypeScript and json-schema-to-typescript. `make check-contracts` compares both generated
 outputs byte for byte, including in CI.
 
-The 25 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
+The 26 event types include, for example, `run.started`, `graph.snapshot`, `graph.delta`,
 `agent.status`, `agent.step`, `agent.message`, `agent.focus`, `change.updated`, `change.proposed`,
 `change.resolved`, `lead.reply`, `usage.tick` and `error`.
 The complete `ServerEvent` union is in `contracts/src/oversight_contracts/events.py`.
@@ -364,15 +367,25 @@ every few hundred milliseconds and SQLite writes are batched.
 Events arrive only through SSE at `/events`; the data flow above specifies starting at seq 1,
 gap recovery and `GET /graph` reading the snapshot and its seq together.
 `agent.message` records accepted human text to a coding agent or lead, masked before storage.
-Contracts 1.17.0 defines `lead.reply {agent_id, answers_seq, woken_by, text, through_seq, cut}`,
+Contracts 1.18.0 defines `lead.reply {agent_id, answers_seq, woken_by, text, through_seq, cut}`,
 produced by the lead runtime. `woken_by` names committed catalog triggers consumed by an autonomous wake.
 `answers_seq` is null for the opening task or a wake, or names an earlier `agent.message` to the same lead.
 `through_seq` is null or a nonnegative horizon strictly below the reply's seq, with no target-type
 requirement. Non-null reply text is nonblank and at most 4,096 characters, masked before storage
 like messages. `cut` is `tool_calls`, `model_calls`, `time`, `spend_brake` or null. Null text requires
 a cut in ordinary/live validation; publication validation also accepts withheld text with null
-cut under the existing message-text receipt. Both event types withhold text by default on export;
-explicit inclusion authorization includes the stored masked text. No new wire receipt fields exist.
+cut under the existing message-text receipt. Both message event types withhold text and `lead.view` withholds captions by default
+on export;
+explicit inclusion authorization includes the stored masked text and captions. No new wire receipt fields exist.
+`lead.view` is a dormant reference-only event with highlight, files, behavior and moment kinds.
+The strict adapter masks captions and resolves all references against the successful status
+prefix before publication under the lead lock; stopping or closing refuses without events.
+The sink checks horizons and committed moment membership in constant work, excluding batch-local
+targets. `show_view` is absent from advertised tools and dispatch; prompt bytes and version stay
+unchanged. Readers retain ordered requests per lead and resolve identities against displayed state.
+Behavior requires measured evidence for the current revision/head; files require exact recorded
+change/path pairs. No visible cards or model calls are added.
+
 `LeadStatus.state` gains `idle` between turns; `done` remains accepted for historical logs.
 L1 accepts replies as no-ops: only envelope sequence/clock bookkeeping advances, with no messages,
 decisions, activity or accounting observations and no thread UI. L2 gives idle leads message admission and Stop; L3 supplies the thread UI.
@@ -454,6 +467,17 @@ observed this turn, or null.
 L3 owns Chat/composer, freshness/cut/withheld UI, plan links, graph/focus, fixture exclusion,
 approval keyboard protection, the 50-turn cost fixture and separate Playwright coverage.
 
+A keyword-only `include_views` flag on status builders defaults to false; production leaves it
+off, preserving the previous status bytes. When enabled, status orders header, inventory/usage,
+complete eligible agent/path, change/path, measured-behavior and moment rows, then ordinary rows.
+Reference strings pass through the escaping serializer with a 512-character cap. Noncanonical
+paths never become eligible or count toward overflow. The latest 32 committed milestones are
+`change.proposed`, `change.resolved`, `change.reviewed`, `tests.executed`, `plan.updated`,
+`revert.resolved`, `lead.reply` and `error`, in descending seq order. Header, usage, eligibility
+and footer must fit within 20,000 characters or eligibility fails closed. Ordinary rows retain
+exact whole-entry omission counts. Status eligibility resets each turn separately from wake
+horizons. Resolution is available through the `oversight.events` facade and EventStore methods.
+
 The installed coding-agent Message, Pause and Resume routes accept only human HTTP commands
 and answer an empty 202.
 The manager's public eligibility check admits only working changes; the drive also refuses
@@ -534,7 +558,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.17.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.18.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

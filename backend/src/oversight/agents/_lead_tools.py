@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from oversight.agents._lead_policy import LEAD_LIMITS
 from oversight.agents._lead_replies import reply_text
+from oversight.agents._lead_views import ViewRefusal, show_view
 from oversight.agents.client import ToolSchema
 from oversight.agents.tools import MAX_READ_CHARS, MAX_READ_LINES, _function
 from oversight.workspace import FileTooLarge, InvalidPath, is_secret_path, secret_refusal
@@ -18,6 +19,7 @@ from oversight_contracts.events import LeadLimits
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import PlanZone, SubtaskDraft, validate_dependencies
 from oversight_contracts.queue import QueueSnapshot
+from oversight_contracts.views import LeadView
 
 # The schema builder is shared inside agents, without widening its public facade.
 # pyright: reportPrivateUsage=false
@@ -135,6 +137,9 @@ class LeadTools:
         limits: LeadLimits | None = None,
         mask: Callable[[str], str] = str,
         status: Callable[[], tuple[int, str]] | None = None,
+        agent_id: str = "agent-1",
+        resolve_views: Callable[[int], Callable[[LeadView], bool]] | None = None,
+        publish_view: Callable[[LeadView], Awaitable[None]] | None = None,
     ) -> None:
         self.graph, self.tree, self.read, self.queue = graph, tree, read, queue
         self.zone, self.propose, self.slots = zone, propose, slots
@@ -143,6 +148,10 @@ class LeadTools:
         self.mask = mask
         self.status = status
         self.through_seq: int | None = None
+        self.agent_id, self.resolve_views, self.publish_view = agent_id, resolve_views, publish_view
+        self.status_seen = False
+        self.view_S: int | None = None
+        self._view_resolver: Callable[[LeadView], bool] | None = None
 
     async def call(self, name: str, arguments: str) -> LeadOutcome:
         models: dict[str, type[_Empty]] = {
@@ -178,11 +187,7 @@ class LeadTools:
         if isinstance(parsed, _Read):
             return await self._read_file(parsed)
         if name == "status":
-            if self.status is None:
-                return LeadOutcome("Committed status is unavailable.", False)
-            seq, content = self.status()
-            self.through_seq = max(self.through_seq or 0, seq)
-            return LeadOutcome(content)
+            return self._status()
         if name == "graph":
             # Local import avoids the prompt-set/schema import cycle.
             from oversight.agents._plan_call import graph_context
@@ -206,6 +211,45 @@ class LeadTools:
                 content = content[:20_000] + "\n(Queue truncated at 20,000 characters.)"
             return LeadOutcome(content)
         raise RuntimeError("Unknown lead tool outcome.")
+
+    def reset_views(self) -> None:
+        """Status eligibility is per turn, independently of the wake observation horizon."""
+        self.status_seen, self.view_S, self._view_resolver = False, None, None
+
+    def _status(self) -> LeadOutcome:
+        self.reset_views()
+        if self.status is None:
+            return LeadOutcome("Committed status is unavailable.", False)
+        try:
+            seq, content = self.status()
+            resolver = self.resolve_views(seq) if self.resolve_views is not None else None
+        except ValueError:
+            return LeadOutcome(
+                "Status eligibility exceeds the inventory limit; no views are eligible.", False
+            )
+        self.through_seq = max(self.through_seq or 0, seq)
+        self.status_seen, self.view_S, self._view_resolver = True, seq, resolver
+        return LeadOutcome(content)
+
+    async def show_view(self, arguments: str) -> LeadOutcome:
+        """Dormant callback only: deliberately absent from call() and the tool table."""
+        try:
+            content = await show_view(
+                arguments,
+                agent_id=self.agent_id,
+                seq=self.view_S if self.status_seen else None,
+                mask=self.mask,
+                resolve=self._view_resolver,
+                publish=self.publish_view,
+            )
+        except (ViewRefusal, LeadProposalError):
+            return LeadOutcome(
+                "View refused. Call status successfully, then use distinct, available references "
+                "with the exact fields and bounds for that kind; "
+                "use safe paths and a masked caption.",
+                False,
+            )
+        return LeadOutcome(content)
 
     async def _read_file(self, request: _Read) -> LeadOutcome:
         path = request.path

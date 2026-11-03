@@ -3,11 +3,12 @@
 import math
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Literal
 
 from oversight.limits import bounded_text
+from oversight.workspace import PreviewProfile
 from oversight_contracts.commands import SettingName
 from oversight_contracts.events import LeadLimits
 
@@ -55,8 +56,8 @@ class Settings:
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
     workspace_source: str = ""
-    """OVERSIGHT_WORKSPACE_SOURCE: raw selection; empty demo or pinned profile.
-    Own-copy composition is private; public repository paths still refuse."""
+    """OVERSIGHT_WORKSPACE_SOURCE: empty demo, pinned profile, or a native Windows drive path.
+    Own repositories require validated preparation and staged disposable COPY startup."""
     layout: Path = REPO_ROOT / "fixtures" / "layouts" / "demo-repo.json"
     """The preset layout, `{node_id: {x, y}}`; a missing or unusable file means the graph has no
     positions. OVERSIGHT_LAYOUT may be relative, and then starts at the repository root, not at the
@@ -150,6 +151,8 @@ class Settings:
     )
     """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
     demo_python: Path | None = None
+    preview_profile: PreviewProfile = field(default_factory=PreviewProfile)
+    """Explicit trusted preview startup configuration; production opening remains disabled."""
     """Tests only, no variable: an interpreter with pytest, used instead of building the demo
     venv."""
     frontend_dist: Path | None = None
@@ -158,6 +161,16 @@ class Settings:
 
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
+        object.__setattr__(
+            self,
+            "preview_profile",
+            replace(
+                self.preview_profile,
+                backend_port=self.port,
+                vite_port=self.vite_port,
+                trusted_demo=not self.workspace_source and self.preview_profile.trusted_demo,
+            ),
+        )
         if type(self.lead_wakes) is not int or self.lead_wakes < 0:
             raise ValueError("OVERSIGHT_LEAD_WAKES must be a nonnegative whole number")
         for name in LEAD_SETTING_DEFAULTS:
@@ -189,6 +202,7 @@ class Settings:
         merged = read_env_file(env_file) | dict(os.environ)
         port, vite_port = resolve_ports(merged)
         return cls(
+            preview_profile=resolve_preview_profile(merged, port, vite_port),
             host=merged.get("OVERSIGHT_HOST", cls.host),
             port=port,
             vite_port=vite_port,
@@ -266,6 +280,38 @@ class Settings:
 
 def _repo_path(value: str | None) -> Path | None:
     return REPO_ROOT / value if value else None
+
+
+def resolve_preview_profile(
+    values: Mapping[str, str], port: int, vite: int | None
+) -> PreviewProfile:
+    """No relative path expansion, port inference or generic-repository fallback."""
+
+    def duration(name: str, default: float) -> float:
+        return float(values.get("OVERSIGHT_PREVIEW_" + name, str(default)))
+
+    raw_ports = values.get("OVERSIGHT_PREVIEW_PORTS", "")
+    ports = tuple(int(item) for item in raw_ports.split(",")) if raw_ports else ()
+    return PreviewProfile(
+        adapter=Path(values["OVERSIGHT_PREVIEW_ADAPTER"])
+        if values.get("OVERSIGHT_PREVIEW_ADAPTER")
+        else None,
+        interpreter=Path(values["OVERSIGHT_PREVIEW_PYTHON"])
+        if values.get("OVERSIGHT_PREVIEW_PYTHON")
+        else None,
+        ports=ports,
+        origins=tuple(values.get("OVERSIGHT_PREVIEW_ORIGINS", "").split(","))
+        if values.get("OVERSIGHT_PREVIEW_ORIGINS")
+        else (),
+        backend_port=port,
+        vite_port=vite,
+        trusted_demo=not values.get("OVERSIGHT_WORKSPACE_SOURCE"),
+        heartbeat_s=duration("HEARTBEAT_S", 10),
+        lease_s=duration("LEASE_S", 30),
+        lifetime_s=duration("LIFETIME_S", 900),
+        readiness_s=duration("READINESS_S", 10),
+        memory_limit_bytes=int(values.get("OVERSIGHT_PREVIEW_MEMORY_LIMIT_BYTES", "536870912")),
+    )
 
 
 def positive_amount(value: str | None) -> float | None:

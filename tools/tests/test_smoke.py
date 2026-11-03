@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import http.server
 import json
@@ -12,11 +13,16 @@ from typing import Any
 
 import pytest
 
+from oversight.settings import Settings
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import smoke
 
 SMOKE_SCRIPT = Path(__file__).resolve().parents[1] / "smoke.py"
+# Native smoke also checks console shutdown, empty Jobs and the released runtime lock, with
+# 30 s startup/graph waits and 20 s supervision waits; it cannot share POSIX's 15 s speed bound.
+NT_SMOKE_TIMEOUT_S = 180
 
 # The smallest body GraphResponse accepts: an empty graph is still a graph.
 VALID_GRAPH_BODY = {
@@ -73,13 +79,43 @@ def test_a_free_port_can_be_bound() -> None:
         sock.bind((smoke.HOST, port))
 
 
-def test_the_backend_command_serves_live_on_the_fake_model(tmp_path: Path) -> None:
+@pytest.mark.parametrize("inherited", [False, True])
+def test_the_backend_settings_override_personal_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, inherited: bool
+) -> None:
     # The one place the command lives; the fake model's script is read from the repository root.
     assert smoke.BACKEND_ARGS == ("serve",)
+    personal = {
+        "META_API_KEY": "fake-meta-test-value",
+        "BASETEN_API_KEY": "fake-baseten-test-value",
+        "OVERSIGHT_AGENT_MODEL": "muse-spark",
+        "OVERSIGHT_AGENT_MODEL_B": "muse-spark-open",
+        "OVERSIGHT_FAKE_SCRIPT": "personal-a.json",
+        "OVERSIGHT_FAKE_SCRIPT_B": "personal-b.json",
+        "OVERSIGHT_CROSS_REVIEW": "true",
+        "OVERSIGHT_WORKSPACE_SOURCE": "C:/fake-personal-repository",
+    }
+    env_file = tmp_path / "personal.env"
+    env_file.write_text(
+        "".join(f"{key}={value}\n" for key, value in personal.items()), encoding="utf-8"
+    )
+    for key, value in personal.items():
+        if inherited:
+            monkeypatch.setenv(key, value)
+        else:
+            monkeypatch.delenv(key, raising=False)
     env = smoke.child_env(8000, tmp_path / ".runtime")
-    assert env["OVERSIGHT_AGENT_MODEL"] == "fake"
-    assert (smoke.REPO_ROOT / env["OVERSIGHT_FAKE_SCRIPT"]).is_file()
-    assert "META_API_KEY" not in env and "BASETEN_API_KEY" not in env
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    settings = Settings.load(env_file)
+    assert env["META_API_KEY"] == env["BASETEN_API_KEY"] == ""
+    assert settings.meta_api_key is None and settings.baseten_api_key is None
+    assert settings.agent_model == settings.agent_model_b == "fake"
+    assert settings.fake_script == settings.fake_script_b == smoke.REPO_ROOT / smoke.FAKE_SCRIPT
+    assert settings.fake_script is not None
+    assert settings.fake_script.is_file()
+    assert settings.cross_review is False
+    assert settings.workspace_source == ""
 
 
 def test_nothing_answering_fails_at_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -210,15 +246,33 @@ def test_a_graph_without_a_snapshot_keeps_trying_until_the_deadline() -> None:
         smoke.wait_for_graph(base, deadline_seconds=0.3)
 
 
+@pytest.mark.timeout(NT_SMOKE_TIMEOUT_S + 15)
 def test_the_real_smoke_passes_once_quickly() -> None:
+    timeout_s = NT_SMOKE_TIMEOUT_S if sys.platform == "win32" else 60
+    speed_bound_s = NT_SMOKE_TIMEOUT_S if sys.platform == "win32" else 15
+
+    async def run() -> tuple[int | None, str, str]:
+        # Inherit the console: the native driver's CTRL_BREAK proof needs console attachment.
+        child = await asyncio.create_subprocess_exec(
+            sys.executable,
+            str(SMOKE_SCRIPT),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(child.communicate(), timeout_s)
+        finally:
+            if child.returncode is None:
+                child.kill()
+                await asyncio.wait_for(child.wait(), 5)
+        return child.returncode, stdout.decode(errors="replace"), stderr.decode(errors="replace")
+
     started = time.monotonic()
-    result = subprocess.run(
-        [sys.executable, str(SMOKE_SCRIPT)], capture_output=True, text=True, timeout=60
-    )
+    code, stdout, stderr = asyncio.run(run())
     elapsed = time.monotonic() - started
-    assert result.returncode == 0, result.stderr
-    assert "smoke: ok" in result.stdout
-    assert elapsed < 15, f"the smoke run took {elapsed:.1f} s"
+    assert code == 0, stderr
+    assert stdout.splitlines().count("smoke: ok") == 1
+    assert elapsed < speed_bound_s, f"the smoke run took {elapsed:.1f} s"
 
 
 def test_a_backend_that_dies_is_reported(tmp_path: Path) -> None:
@@ -234,8 +288,11 @@ def test_a_backend_that_dies_is_reported(tmp_path: Path) -> None:
         smoke.stop_child(child)
 
 
-def test_nt_smoke_selects_shared_supervision_without_changing_posix_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("failure", [None, smoke.SmokeError, OSError, subprocess.SubprocessError])
+def test_nt_smoke_reports_success_only_after_shared_supervision_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: type[Exception] | None,
 ) -> None:
     import demo_check_nt as nt
 
@@ -243,13 +300,17 @@ def test_nt_smoke_selects_shared_supervision_without_changing_posix_environment(
 
     async def checks(runs: int, *, demo: bool) -> None:
         called.append((runs, demo))
+        if failure is not None:
+            raise failure("injected failure")
 
     monkeypatch.setattr(nt, "run_checks", checks)
     monkeypatch.setattr(smoke.sys, "platform", "win32")
-    smoke.run_smoke()
+    result = smoke.main()
     assert called == [(1, False)]
-    env = smoke.child_env(8000, tmp_path)
-    assert "META_API_KEY" not in env and "BASETEN_API_KEY" not in env
+    output = capsys.readouterr()
+    assert result == (1 if failure else 0)
+    assert output.out == ("" if failure else "smoke: ok\n")
+    assert output.err == ("smoke: injected failure\n" if failure else "")
 
 
 @pytest.mark.anyio

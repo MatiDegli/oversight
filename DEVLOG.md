@@ -64,3 +64,7 @@ One line per day, in Argentina time (ART).
   wake admission after integrating concurrent leads and their captured limits.
   Updated prompt-version goldens, bounded wake summaries, delivered notices as tool data, and
   labeled the synthetic wake attribution fixture with its generator provenance.
+  Enabled validated native Windows own-repository COPY with staged-only reset and shared guarded test
+  environments, retaining original preservation and pending two-machine native qualification.
+
+- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls.

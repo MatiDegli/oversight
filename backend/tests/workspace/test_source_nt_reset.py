@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from oversight.settings import Settings
-from oversight.workspace import Workspace, core, run_process
+from oversight.workspace import Workspace, WorkspaceError, core, run_process
 from oversight.workspace import source_nt as nt
 from oversight.workspace.files import remove_tree
 from oversight.workspace.integrity import BYTE_OVERRIDE
@@ -21,6 +21,38 @@ from oversight.workspace.locks import offload
 from .test_source_nt_copy import fixture, git, stage
 
 pytestmark = pytest.mark.anyio
+
+
+async def test_unstaged_own_reset_refuses_before_any_effect(tmp_path, monkeypatch):
+    root, runtime = tmp_path / "source", tmp_path / ".runtime"
+    root.mkdir()
+    original = root / "original.py"
+    original.write_bytes(b"original\r\n")
+    own = nt.NtSource(root, runtime, "C:/source", "C:/runtime")
+    workspace = Workspace(runtime, root, pytest_pin="9.1.1", own_source=own, _nt_source_bytes=True)
+    await workspace.acquire_runtime()
+    sentinels = [runtime / name / "preserve" for name in ("workspace", "worktrees", "tmp")]
+    for path in sentinels:
+        path.parent.mkdir(exist_ok=True)
+        path.write_bytes(b"prior runtime")
+    effects = []
+
+    def forbidden(*args, **kwargs):
+        effects.append("destructive/copy/Git")
+        raise AssertionError("unstaged own reset reached an effect")
+
+    monkeypatch.setattr(core, "remove_tree", forbidden)
+    monkeypatch.setattr(core, "copy_template", forbidden)
+    monkeypatch.setattr(workspace, "_populate", forbidden)
+    monkeypatch.setattr(workspace, "git_ok", forbidden)
+    try:
+        with pytest.raises(WorkspaceError, match="own-source reset requires validated staging"):
+            await workspace.reset()
+        assert effects == []
+        assert all(path.read_bytes() == b"prior runtime" for path in sentinels)
+        assert original.read_bytes() == b"original\r\n"
+    finally:
+        workspace.release_runtime()
 
 
 @pytest.mark.parametrize(
@@ -54,7 +86,9 @@ async def opened(tmp_path: Path) -> AsyncGenerator[tuple[Workspace, nt.NtSource,
     root.mkdir()
     source = nt.NtSource(root, runtime, "C:/source", "C:/runtime")
     files = await fixture(source)
-    workspace = Workspace(runtime, root, pytest_pin="9.1.1", _nt_source_bytes=True)
+    workspace = Workspace(
+        runtime, root, pytest_pin="9.1.1", _nt_source_bytes=True, own_source=source
+    )
     await workspace.acquire_runtime()
     try:
         assert workspace._lock_fd is not None
