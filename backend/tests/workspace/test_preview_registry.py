@@ -50,6 +50,8 @@ async def test_snapshot_survives_new_manager_and_restores_before_any_git(workspa
         "namespace",
         "symlink",
         "snapshot",
+        "boundary_pending",
+        "boundary",
     ],
 )
 async def test_ambiguous_registry_retains_quarantine_and_runtime_lock(workspace, fault):
@@ -74,6 +76,10 @@ async def test_ambiguous_registry_retains_quarantine_and_runtime_lock(workspace,
             data["worktree"] = "/unregistered/tree"
         elif fault == "identity":
             data["supervisor"] = {"pid": os.getpid(), "birth": "wrong", "boot": "wrong"}
+        elif fault == "boundary_pending":
+            data["boundary_pending"] = True
+        elif fault == "boundary":
+            data["boundary"] = {"processes": {}, "namespaces": {}}
         elif fault == "snapshot":
             data["snapshot"]["anchors"] = {}
         else:

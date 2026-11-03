@@ -139,7 +139,7 @@ async def test_explicit_projection_keeps_nulls_and_excludes_private_extras(state
         output="secret",
     )
 
-    async def get(_):
+    async def get(_, **kwargs):
         return record
 
     async with client_for(app_for(SimpleNamespace(get=get))) as client:
@@ -285,3 +285,21 @@ async def test_failed_stop_preserves_quarantine_and_no_false_repeat_success(prev
         assert h.manager.has_owner and h.workspace.integrity.main_suspect
         assert h.manager.registry.read() is not None
         assert not process.dead
+
+
+@pytest.mark.parametrize("parent,frame", [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")])
+async def test_reviewed_request_host_selects_opposite_frame(preview, parent, frame):
+    h = preview
+    async with client_for(app_for(h.manager)) as client:
+        authority = parent + ":8710"
+        response = await client.post("/previews", json=start_body(h), headers={"Host": authority})
+        assert response.status_code == 202
+        identifier = response.json()["preview_id"]
+        await h.sink.wait("ready", identifier)
+        details = await client.get("/previews/" + identifier, headers={"Host": authority})
+        assert details.json()["url"] == f"http://{frame}:{h.processes[0].port}/"
+        changed = await client.get("/previews/" + identifier, headers={"Host": frame + ":8710"})
+        error(changed, "forbidden")
+        for host in ("[::1]:8710", "localhost.evil:8710", "evil.test:8710"):
+            refused = await client.post("/previews", json=start_body(h), headers={"Host": host})
+            assert refused.status_code == 403

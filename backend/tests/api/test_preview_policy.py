@@ -79,6 +79,9 @@ async def test_static_html_and_spa_receive_pool_policy_without_changing_assets(t
         preview_profile=PreviewProfile(ports=(19681, 19682), origins=("http://127.0.0.1:8710",))
     )
     install_error_handlers(app)
+    from oversight.api.security import ApiGuard, AuthorityPolicy
+
+    app.add_middleware(ApiGuard, policy=AuthorityPolicy(8710))
     assert add_static(app, tmp_path)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:8710"
@@ -87,7 +90,7 @@ async def test_static_html_and_spa_receive_pool_policy_without_changing_assets(t
             response = await client.get(path)
             assert (
                 response.headers["content-security-policy"]
-                == "frame-src http://127.0.0.1:19681 http://127.0.0.1:19682"
+                == "frame-src http://localhost:19681 http://localhost:19682"
             )
             assert response.headers["cache-control"] == "no-cache"
             assert "8710" not in response.headers["content-security-policy"]
@@ -107,9 +110,9 @@ def test_documented_configuration_and_reason_inventory_are_exact():
         "PORTS": (),
         "ORIGINS": (),
         "HEARTBEAT_S": 10,
-        "LEASE_S": 30,
+        "LEASE_S": 600,
         "LIFETIME_S": 900,
-        "READINESS_S": 10,
+        "READINESS_S": 30,
         "MEMORY_LIMIT_BYTES": 536870912,
     }
     assert all(f"`OVERSIGHT_PREVIEW_{name}`" in docs for name in defaults)
@@ -128,7 +131,7 @@ def test_documented_configuration_and_reason_inventory_are_exact():
         profile.lifetime_s,
         profile.readiness_s,
         profile.memory_limit_bytes,
-    ) == (10, 30, 900, 10, 536870912)
+    ) == (10, 600, 900, 30, 536870912)
     assert not profile.production_open
     assert resolve_preview_profile(
         {"OVERSIGHT_PREVIEW_ORIGINS": " http://127.0.0.1:8710"}, 8710, None
@@ -274,3 +277,19 @@ async def test_disabled_invalid_pool_never_permits_framing_backend_or_vite(tmp_p
         transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:8710"
     ) as client:
         assert (await client.get("/")).headers["content-security-policy"] == "frame-src 'none'"
+
+
+@pytest.mark.parametrize("parent,frame", [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")])
+def test_reviewed_opposite_loopback_authorities(parent, frame):
+    from oversight.api.preview_policy import request_frame_policy
+
+    policy = frame_policy((19681, 19682), reserved=(8710, 5710))
+    scope = {"headers": [(b"host", f"{parent}:8710".encode())]}
+    result = request_frame_policy(policy, scope)
+    assert result == f"frame-src http://{frame}:19681 http://{frame}:19682"
+    assert f"http://{parent}:" not in result and "8710" not in result
+    for host in ("evil.test:8710", "[::1]:8710", "localhost.evil:8710"):
+        assert (
+            request_frame_policy(policy, {"headers": [(b"host", host.encode())]})
+            == "frame-src 'none'"
+        )
