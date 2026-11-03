@@ -1,5 +1,5 @@
 import type { AgentFamily } from "../../theme";
-import type { ImpactCone, Slot } from "@contracts";
+import type { ImpactCone } from "@contracts";
 
 /** The field's four modes: watch, the live diff, the file view and review. */
 export type FieldMode = "watch" | "live-diff" | "file" | "review";
@@ -15,6 +15,9 @@ export type FieldScope =
 export type LightSource = AgentFamily | "work-light";
 
 export interface FieldLight {
+  agentId?: string;
+  team?: string;
+  label?: string;
   /** R4 current focus, keyed by agent so its light travels instead of crossfading two pools. */
   marker?: string;
   /** Work rings do not modulate ambient light. Legacy scenes retain their old response. */
@@ -38,8 +41,9 @@ export interface FieldLight {
 export interface FieldMerge {
   /** One merge, stable across renders: the change and the event that resolved it. */
   key: string;
-  /** The agent's slot, to find its rail card. */
-  slot: Slot;
+  agentId: string;
+  team: string;
+  label: string;
   source: AgentFamily;
   /** The change's node: where the pulse arrives and its light stays. */
   id: string;
@@ -65,6 +69,9 @@ export function sameLights(a: readonly FieldLight[], b: readonly FieldLight[]): 
         other !== undefined &&
         light.id === other.id &&
         light.marker === other.marker &&
+        light.agentId === other.agentId &&
+        light.team === other.team &&
+        light.label === other.label &&
         light.steady === other.steady &&
         light.source === other.source &&
         light.weight === other.weight &&

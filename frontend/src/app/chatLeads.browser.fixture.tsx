@@ -44,7 +44,22 @@ function status(id: string, overrides: Partial<AgentStatus> = {}) {
   };
 }
 function plan(id: string, owner: string) {
-  return { ...oldPlan(id, owner), ts: timestamp };
+  const source = oldPlan(id, owner);
+  if (source.type !== "plan.updated") throw new Error("Missing plan");
+  return {
+    ...source,
+    ts: timestamp,
+    payload: {
+      ...source.payload,
+      subtasks: ["agent-3", "agent-4"].map((agent_id) => ({
+        task: "Subtask",
+        zone: { node_ids: [], paths: [] },
+        depends_on: [],
+        agent_id,
+        state: "running" as const,
+      })),
+    },
+  };
 }
 
 export function lead(id = "agent-1", overrides: Partial<LeadStatus> = {}) {

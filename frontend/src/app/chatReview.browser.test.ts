@@ -117,7 +117,7 @@ async function openAppReview(page: Page) {
     .click();
   await page
     .locator(".inbox-row")
-    .filter({ hasText: "Agent A" })
+    .filter({ has: page.getByLabel("Agent A", { exact: true }) })
     .getByRole("button", { name: /Review change/ })
     .click();
   await check(panel(page)).toBeVisible();

@@ -8,7 +8,16 @@ import { maskLamps } from "./mask";
 
 const pulse: Pulse = {
   key: "merge-a",
-  merge: { key: "merge-a", id: "node", slot: "A", source: "agent-a", pulse: true, age: 0 },
+  merge: {
+    key: "merge-a",
+    id: "node",
+    agentId: "agent-A",
+    team: "team-A",
+    label: "A",
+    source: "agent-a",
+    pulse: true,
+    age: 0,
+  },
   progress: 0.5,
   opacity: 1,
 };

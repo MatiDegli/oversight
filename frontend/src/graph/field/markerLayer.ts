@@ -1,5 +1,5 @@
-import { slotForFamily } from "../../theme";
 import { getActiveTheme } from "../../theme";
+import { textWidth } from "../textWidth";
 import { unmaskedPath } from "./mask";
 import { lightBoxKey } from "./marker";
 import type { FieldLight } from "./lights";
@@ -56,24 +56,37 @@ export class MarkerLayer {
       let group = this.items.get(light.marker);
       if (!group) {
         group = document.createElementNS(ns, "g");
-        group.append(document.createElementNS(ns, "circle"), document.createElementNS(ns, "text"));
+        group.append(document.createElementNS(ns, "rect"), document.createElementNS(ns, "text"));
         this.svg.append(group);
         this.items.set(light.marker, group);
       }
-      const circle = group.children[0];
+      const badge = group.children[0];
       const text = group.children[1];
-      if (!circle || !text) continue;
+      if (!badge || !text) continue;
       attr(group, "transform", `translate(${String(box.x1)} ${String((box.y1 + box.y2) / 2)})`);
       attr(group, "opacity", String(light.weight / theme["watch-editing-weight"]));
-      attr(circle, "r", String(Number.parseFloat(theme["letter-badge-size"]) / 2));
-      attr(circle, "fill", theme[light.source]);
+      const letter = light.label ?? "";
+      const size = Number.parseFloat(theme["letter-badge-size"]);
+      const width = Math.max(
+        size,
+        textWidth(
+          letter,
+          `${String(theme["badge-weight"])} ${theme["letter-badge-font-size"]} ${theme["text-font"]}`,
+          Number.parseFloat(theme["letter-badge-font-size"]),
+        ) + 12,
+      );
+      attr(badge, "x", String(-width / 2));
+      attr(badge, "y", String(-size / 2));
+      attr(badge, "width", String(width));
+      attr(badge, "height", String(size));
+      attr(badge, "rx", String(size / 2));
+      attr(badge, "fill", theme[light.source]);
       attr(text, "fill", theme["on-agent"]);
       attr(text, "font-family", theme["text-font"]);
       attr(text, "font-size", theme["letter-badge-font-size"]);
       attr(text, "font-weight", String(theme["badge-weight"]));
       attr(text, "text-anchor", "middle");
       attr(text, "dominant-baseline", "central");
-      const letter = light.source === "work-light" ? "" : slotForFamily(light.source);
       if (text.textContent !== letter) text.textContent = letter;
     }
     for (const [id, group] of this.items)

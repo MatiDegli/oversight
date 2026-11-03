@@ -4,7 +4,7 @@ import { ReviewHeader } from "./ReviewHeader";
 import { EditorDiff } from "../editor";
 import { grantReasons, grantScopeWords, selectLiveDiff } from "../state";
 import type { State } from "../state";
-import { agentSlotStyle } from "../theme";
+import { presentationFor, presentationStyle } from "../teams/presentation";
 import { AnswerChoices, cardAnswer } from "./AnswerChoices";
 import { candidateKey, useAnswers } from "./answers";
 import { useDecisions } from "./DecisionContext";
@@ -47,10 +47,10 @@ export function ChangeCard({
   const answers = useAnswers((s) => s.drafts[candidate]) ?? {};
   if (!card) return null;
   const { change, facts, kind } = card;
-  const slot = state.agents[change.agent_id]?.slot;
+  const identity = presentationFor(state, change.agent_id);
   const Decisions = reviewPanel ? PanelDecisions : CardDecisions;
   return (
-    <aside aria-label="Change card" className="decision-card" style={agentSlotStyle(slot)}>
+    <aside aria-label="Change card" className="decision-card" style={presentationStyle(identity)}>
       <ReviewHeader
         state={state}
         changeId={changeId}
@@ -145,7 +145,7 @@ export function CardEvidence({ state, changeId, card, panel }: CardContentProps)
   const candidate = candidateKey(state, changeId);
   const answers = useAnswers((s) => s.drafts[candidate]) ?? {};
   const { change, facts, kind } = card;
-  const slot = state.agents[change.agent_id]?.slot;
+  const identity = presentationFor(state, change.agent_id);
   const grantUses = change.resolution?.grants ?? [];
   return (
     <>
@@ -170,7 +170,7 @@ export function CardEvidence({ state, changeId, card, panel }: CardContentProps)
           onAnswer={(key, value) => {
             useAnswers.getState().answer(candidate, key, value);
           }}
-          slot={slot}
+          identity={identity}
           panelComparisons={panel ? (selectBehaviorEvidence(state, changeId) ?? []) : undefined}
         />
       ) : (

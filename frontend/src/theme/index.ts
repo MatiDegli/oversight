@@ -1,5 +1,5 @@
 export { agentLook, agentSlots, slotForFamily, agentSlotStyle } from "./agentLook.ts";
-export type { AgentFamily } from "./agentLook.ts";
+export type { AgentFamily, PaletteKey } from "./agentLook.ts";
 import { dayColors } from "./day.ts";
 
 // DESIGN.md dark tokens. Keep shared values in sync with index.css.

@@ -1,10 +1,11 @@
+import { presentationFor } from "../../../teams/presentation";
 import type { ChangeResolved, SuiteResult } from "@contracts";
 import type { State } from "../../../state";
 
 export const LOG_LIMIT = 300;
 
 export function agentLetter(state: State, agentId: string | null): string {
-  return agentId ? (state.agents[agentId]?.slot ?? "?") : "—";
+  return agentId ? (presentationFor(state, agentId)?.label ?? "?") : "—";
 }
 
 export interface TestRun {

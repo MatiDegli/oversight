@@ -6,7 +6,8 @@ import type { AgentFamily } from "../theme";
 // badge is), each with its own font embedded, since an image cannot see the page's @font-face.
 // Every color and size comes from the theme. Nothing here moves a node: the images sit inside boxes
 // the preset already reserved.
-import type { Slot } from "@contracts";
+import type { AgentMark } from "./agentMarks";
+import type { PaletteKey } from "../theme";
 import regular from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-400-normal.woff2?inline";
 import semibold from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-600-normal.woff2?inline";
 import bold from "@fontsource/atkinson-hyperlegible-next/files/atkinson-hyperlegible-next-latin-700-normal.woff2?inline";
@@ -20,9 +21,9 @@ export type Word = "editing" | "changed" | "new" | "read";
 export interface NodeMarks {
   /** The strongest state on the node and the agent whose it is: the word is in that agent's color. */
   word: Word;
-  slot: Slot;
+  owner: AgentMark;
   /** One letter badge per agent that touches the node, A first; filled unless the agent only read. */
-  badges: { slot: Slot; filled: boolean }[];
+  badges: AgentMark[];
 }
 
 /** The theme values the layers read; the full theme satisfies it. */
@@ -86,7 +87,7 @@ function fontFaces(theme: LayerTheme): string {
   return `<style>${face(400, regular)}${face(600, semibold)}${face(700, bold)}</style>`;
 }
 
-const slotColors = (theme: LayerTheme, slot: Slot) => ({
+const slotColors = (theme: LayerTheme, slot: PaletteKey) => ({
   color: theme[agentLook[slot].family],
   text: theme[agentLook[slot].text],
 });
@@ -108,8 +109,18 @@ export interface LeafSize {
 }
 
 /** The width the badges of one node take together, side by side. */
-const badgesWidth = (theme: LayerTheme, count: number) =>
-  count * px(theme["letter-badge-size"]) + Math.max(0, count - 1) * px(theme["spacing-xs"]);
+const badgeWidth = (theme: LayerTheme, label: string) =>
+  Math.max(
+    px(theme["letter-badge-size"]),
+    textWidth(
+      label,
+      `${String(theme["badge-weight"])} ${theme["letter-badge-font-size"]} ${theme["text-font"]}`,
+      px(theme["letter-badge-font-size"]),
+    ) + 12,
+  );
+const badgesWidth = (theme: LayerTheme, badges: NodeMarks["badges"]) =>
+  badges.reduce((sum, badge) => sum + badgeWidth(theme, badge.label), 0) +
+  Math.max(0, badges.length - 1) * px(theme["spacing-xs"]);
 
 /**
  * The letter badges of a node, right-aligned at `right` on the row centred at `centerY`. A badge is
@@ -118,24 +129,23 @@ const badgesWidth = (theme: LayerTheme, count: number) =>
  */
 function badgeShapes(theme: LayerTheme, marks: NodeMarks, right: number, centerY: number): string {
   const size = px(theme["letter-badge-size"]);
-  const gap = px(theme["spacing-xs"]);
   const stroke = px(theme["agent-border-width"]);
   return marks.badges
-    .map(({ slot, filled }, index) => {
-      const { color, text: ink } = slotColors(theme, slot);
+    .map(({ hue, label, filled }, index) => {
+      const { color, text: ink } = slotColors(theme, hue);
+      const width = badgeWidth(theme, label);
       // The last badge sits at the right edge; earlier ones step left of it.
-      const x =
-        right - size * (marks.badges.length - index) - gap * (marks.badges.length - 1 - index);
+      const x = right - badgesWidth(theme, marks.badges.slice(index));
       const square = filled
-        ? `<rect x="${String(x)}" y="${String(centerY - size / 2)}" width="${String(size)}" height="${String(size)}" rx="${theme["radius-node"]}" fill="${color}"/>`
-        : `<rect x="${String(x + stroke / 2)}" y="${String(centerY - size / 2 + stroke / 2)}" width="${String(size - stroke)}" height="${String(size - stroke)}" rx="${theme["radius-node"]}" fill="none" stroke="${color}" stroke-width="${String(stroke)}"/>`;
+        ? `<rect x="${String(x)}" y="${String(centerY - size / 2)}" width="${String(width)}" height="${String(size)}" rx="${theme["radius-node"]}" fill="${color}"/>`
+        : `<rect x="${String(x + stroke / 2)}" y="${String(centerY - size / 2 + stroke / 2)}" width="${String(width - stroke)}" height="${String(size - stroke)}" rx="${theme["radius-node"]}" fill="none" stroke="${color}" stroke-width="${String(stroke)}"/>`;
       const letter = text(
         theme,
-        `x="${String(x + size / 2)}" y="${String(centerY)}" dy=".35em" text-anchor="middle"`,
+        `x="${String(x + width / 2)}" y="${String(centerY)}" dy=".35em" text-anchor="middle"`,
         theme["letter-badge-font-size"],
         theme["badge-weight"],
         filled ? theme["on-agent"] : ink,
-        slot,
+        escape(label),
       );
       return square + letter;
     })
@@ -149,7 +159,7 @@ const wordText = (theme: LayerTheme, marks: NodeMarks, attributes: string) =>
     attributes,
     theme["node-word-size"],
     theme["label-weight"],
-    slotColors(theme, marks.slot).text,
+    slotColors(theme, marks.owner.hue).text,
     marks.word,
   );
 
@@ -163,7 +173,7 @@ export function marksClearance(theme: LayerTheme, marks: NodeMarks): number {
     `${String(theme["label-weight"])} ${theme["node-word-size"]} ${theme["text-font"]}`,
     px(theme["node-word-size"]),
   );
-  return word + px(theme["node-word-gap"]) + badgesWidth(theme, marks.badges.length);
+  return word + px(theme["node-word-gap"]) + badgesWidth(theme, marks.badges);
 }
 
 /**
@@ -174,7 +184,7 @@ export function marksLayer(theme: LayerTheme, marks: NodeMarks, leaf: LeafSize):
   // The image starts at the node's body, half a border inside its outer edge.
   const right = leaf.width - (px(theme["node-pad-right"]) - px(theme["border-width"]) / 2);
   const centerY = leaf.height / 2;
-  const badges = badgesWidth(theme, marks.badges.length);
+  const badges = badgesWidth(theme, marks.badges);
   const word = wordText(
     theme,
     marks,
@@ -342,7 +352,7 @@ export function headerLayers(
   });
   // Agent marks own this slot even when a hidden caller differs.
   if (marks) {
-    const badges = badgesWidth(theme, marks.badges.length);
+    const badges = badgesWidth(theme, marks.badges);
     const gap = px(theme["node-word-gap"]);
     const cluster = HEADER.wordWidth + gap + badges;
     const room = Math.max(0, Math.min(HEADER.titleWidth, size.width - 2 * inset - cluster - gap));

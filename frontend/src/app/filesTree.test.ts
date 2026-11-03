@@ -1,3 +1,4 @@
+import { presentationFor } from "../teams/presentation";
 import { expect, it } from "vitest";
 import type { ServerEvent } from "@contracts";
 import log from "../../../fixtures/events/handwritten-level1.jsonl?raw";
@@ -187,12 +188,19 @@ it("adapts the same agent/path/mode through focus, proposals, resolutions and re
     current = applyEvent(current, event);
     const before = structuredClone(current);
     const presence = selectWorkPresence(current);
-    const expected = new Map<string, { agentId: string; slot: string; mode: string }[]>();
+    const expected = new Map<
+      string,
+      { agentId: string; presentation: ReturnType<typeof presentationFor>; mode: string }[]
+    >();
     for (const group of [...presence.current, ...presence.pending])
       for (const file of group.files) {
         const marks = expected.get(file.path) ?? [];
         if (!marks.some((m) => m.agentId === group.agentId))
-          marks.push({ agentId: group.agentId, slot: group.slot, mode: group.mode });
+          marks.push({
+            agentId: group.agentId,
+            presentation: group.presentation,
+            mode: group.mode,
+          });
         expected.set(file.path, marks);
       }
     expect(fileMarks(current)).toEqual(expected);
@@ -242,7 +250,7 @@ it("keeps identities sharing a slot and gives current focus precedence over pend
     },
   };
   expect(fileMarks(shared).get(path)).toEqual([
-    { agentId: "first", slot: agent.slot, mode: "edit" },
-    { agentId: "second", slot: agent.slot, mode: "read" },
+    { agentId: "first", presentation: presentationFor(state, "first"), mode: "edit" },
+    { agentId: "second", presentation: presentationFor(state, "second"), mode: "read" },
   ]);
 });

@@ -35,7 +35,7 @@ async function openReviewWithSettings(page: Page) {
     .click();
   await page
     .locator(".inbox-row")
-    .filter({ hasText: "Agent A" })
+    .filter({ has: page.getByLabel("Agent A", { exact: true }) })
     .getByRole("button", { name: /Review change/ })
     .click();
   await check(page.getByRole("complementary", { name: "Review panel" })).toBeVisible();

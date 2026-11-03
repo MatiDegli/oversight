@@ -1,3 +1,4 @@
+import { agentEvidence } from "../../teams/evidence.testSupport";
 import { readFileSync } from "node:fs";
 import type { ServerEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
@@ -40,7 +41,10 @@ describe("R4 sources", () => {
       ranges: [],
       node_ids: ["current-b", "not-an-emitter"],
     };
-    const lights = selectSignalLights(state, { "agent-1": "last-a", "agent-2": "last-b" });
+    const lights = selectSignalLights(agentEvidence(state), {
+      "agent-1": "last-a",
+      "agent-2": "last-b",
+    });
     expect(lights.map(({ id, source, weight }) => [id, source, weight])).toEqual([
       ["shop.pricing:compute_price", "agent-a", 1],
       ["current-b", "agent-b", 1],
@@ -48,10 +52,10 @@ describe("R4 sources", () => {
       ["last-b", "agent-b", 0.4],
     ]);
     expect(
-      selectSignalLights(state, { "agent-1": "new-read" }).map((light) => light.id),
+      selectSignalLights(agentEvidence(state), { "agent-1": "new-read" }).map((light) => light.id),
     ).not.toContain("last-a");
     expect(
-      selectSignalLights(state, { "agent-1": "shop.pricing:compute_price" }).filter(
+      selectSignalLights(agentEvidence(state), { "agent-1": "shop.pricing:compute_price" }).filter(
         (light) => light.source === "agent-a",
       ),
     ).toHaveLength(1);
@@ -68,12 +72,14 @@ describe("R4 sources", () => {
     if (!agent || !focus || !change) throw new Error("Missing agent focus or change");
     state.agents["agent-2"] = { ...agent, agent_id: "agent-2", slot: "B", change_id: "change-2" };
     state.focus["agent-2"] = { ...focus, agent_id: "agent-2" };
-    expect(selectSignalLights(state).map(({ id, source }) => [id, source])).toEqual([
+    expect(selectSignalLights(agentEvidence(state)).map(({ id, source }) => [id, source])).toEqual([
       ["shop.pricing:compute_price", "agent-a"],
       ["shop.pricing:compute_price", "agent-b"],
     ]);
     change.status = "rejected";
-    expect(selectSignalLights(state).map((light) => light.source)).toEqual(["agent-b"]);
+    expect(selectSignalLights(agentEvidence(state)).map((light) => light.source)).toEqual([
+      "agent-b",
+    ]);
   });
 
   it("lights only an agent that is acting: a ring while it works or revises, nothing otherwise", () => {
@@ -93,7 +99,7 @@ describe("R4 sources", () => {
       state.agents["agent-1"] = { ...agent, state: status };
       const acting = status === "working" || status === "revising";
       expect(
-        selectSignalLights(state).map((light) => light.pulses),
+        selectSignalLights(agentEvidence(state)).map((light) => light.pulses),
         status,
       ).toEqual(acting ? [true] : []);
     }
@@ -102,10 +108,15 @@ describe("R4 sources", () => {
   it("holds one steady, dimmer light on the change's node while the change has an open inbox entry", () => {
     const state = awaiting();
     expect(selectDecisionInbox(state).map((entry) => entry.changeId)).toContain("change-1");
-    const lights = selectSignalLights(state, { "agent-1": "shop.pricing:price_breakdown" });
+    const lights = selectSignalLights(agentEvidence(state), {
+      "agent-1": "shop.pricing:price_breakdown",
+    });
     expect(lights).toEqual([
       {
         id: "shop.pricing:compute_price",
+        agentId: "agent-1",
+        team: "agent-1",
+        label: "A",
         source: "agent-a",
         weight: themes.dark["waiting-light-weight"],
         pulses: false,
@@ -155,7 +166,7 @@ describe("R4 sources", () => {
     // the very weight the waiting light had.
     const state = decided();
     expect(selectDecisionInbox(state)).toEqual([]);
-    expect(selectSignalLights(state)).toEqual([]);
+    expect(selectSignalLights(agentEvidence(state))).toEqual([]);
     const [merge] = selectMerges(state);
     if (!merge) throw new Error("The decision left no fade");
     const look = afterlightOf(themes.dark);
@@ -303,6 +314,7 @@ it("caps six agents at eight sources, current foci first, stable across insertio
   const original = state.agents["agent-1"];
   if (!original) throw new Error("Missing fixture agent");
   state.agents = {};
+  state.decisionEvents = [];
   state.focus = {};
   const reads: Record<string, string> = {};
   for (const slot of [...agentSlots].reverse()) {
@@ -311,7 +323,7 @@ it("caps six agents at eight sources, current foci first, stable across insertio
     state.focus[id] = { agent_id: id, node_ids: [`current-${slot}`], mode: "edit", ranges: [] };
     reads[id] = `read-${slot}`;
   }
-  const lights = selectSignalLights(state, reads);
+  const lights = selectSignalLights(agentEvidence(state), reads);
   expect(themes.dark["light-source-limit"]).toBe(8);
   expect(lights).toHaveLength(8);
   expect(lights.map((light) => light.id)).toEqual([
@@ -323,10 +335,11 @@ it("caps six agents at eight sources, current foci first, stable across insertio
     agentSlots.map((slot) => `agent-${slot.toLowerCase()}`),
   );
   state.agents = Object.fromEntries(Object.entries(state.agents).reverse());
-  expect(selectSignalLights(state, reads)).toEqual(lights);
+  expect(selectSignalLights(agentEvidence(state), reads)).toEqual(lights);
   expect(
-    selectSignalLights(state, reads, { ...themes.dark, "light-source-limit": 3 }).map(
-      (light) => light.id,
-    ),
+    selectSignalLights(agentEvidence(state), reads, {
+      ...themes.dark,
+      "light-source-limit": 3,
+    }).map((light) => light.id),
   ).toEqual(["current-A", "current-B", "current-C"]);
 });

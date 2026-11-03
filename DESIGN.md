@@ -309,7 +309,7 @@ Where Impeccable clashes with DESIGN.md or AGENTS.md, ours wins and DECISIONS.md
 
 Oversight has two surfaces with different jobs, and they never borrow each other's materials. The
 graph is the machines' surface: it shows what the agents are doing, with nodes that light up, a
-change in its agent's color, and rings and a field of dots that glow like an LED panel. It is the
+change in its agent's team hue, and rings and a field of dots that glow like an LED panel. It is the
 only place where light moves. The panels are the person's surface: the agents panel, review, live
 diff and file view are dark and plain. Their transitions report events. They hold text, decisions
 and code.
@@ -339,7 +339,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 
 **Key Characteristics:**
 
-- Near-black ground (#070707), warm white text, six agent colors (A–F) and two state colors, nothing else.
+- Near-black ground (#070707), warm white text, six team hues and two state colors, nothing else.
 - One family, Atkinson Hyperlegible, in sentence case.
 - Layered dark surfaces with hairline borders; light lives only on the graph.
 - Every state is told in words or signs as well as color.
@@ -359,11 +359,11 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Title weight of a frame | light, Mono | 600, Next | DESIGN.md, Typography: graph labels use Next; at 17px a light weight does not keep 4.5:1 |
 | Import edges | not drawn | in the data, not drawn | the sketch draws calls; imports say which files, not which functions |
 | Aggregate call counts | counts at rest | count on the hovered edge and the selected node's aggregates only | the maintainer approved removing resting label collisions on 2026-10-29; arrows and count data stay |
-| Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed node border means a pending change in the agent's color; DESIGN.md, Graph nodes and their states: added edges are dashed, possible calls never are |
+| Edges at a node an agent touches | in the agent's team hue | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's team hue, dashed | AGENTS.md: a dashed node border means a pending change in the agent's team hue; DESIGN.md, Graph nodes and their states: added edges are dashed, possible calls never are |
 | Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
 | First switch to Oversight | the whole demo in view | the whole graph when it fits at the legibility floor or above (the demo at 1920x1080: 83%); otherwise the floor on the module of the hub | names and state words stay at least 11 CSS px (**Opening a change**); a larger graph is a canvas to pan and zoom |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
-| Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
+| Read nodes in review | lit in the agent's team hue | dimmed unless in the cone | the agent's team hue stays on the change only (Components, impact cone) |
 | Code-dim (line numbers, comments) | `#6d6d68` | `#7d7d78`; v4 ratios below | quality floor: text at 4.5:1 |
 | Text-box placeholder | `#6d6d68` | faint `#85857f`; v4 ratios below | same |
 | Exact call edge | `#4a4a46`, 2.4:1 on black | edge; v4 ratios below | quality floor: meaningful graphics at 3:1 |
@@ -383,7 +383,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Cone card on a merged change (g) | drawn | no cone card or cone lights once a change is approved or rejected | the graph's lights go off once a change is decided (graphScope.ts:14–15, pinned by app/review.browser.test.ts:292–293); flagged to the maintainer |
 | Pressed rail button | varies in the earlier sketches | raised | one color for hover and pressed |
 | New-node fill for agent B | not drawn | `rgba(4, 8, 20, 0.95)` | derived from A's pair, so both agents follow one rule |
-| Letter in a rail avatar | the agent's color | agent-a-text, agent-b-text | use the text variants; tint contrasts are checked below |
+| Letter in a rail avatar | the agent's team hue | agent-a-text, agent-b-text | use the text variants; tint contrasts are checked below |
 | Live diff hint | "Pause to edit by hand" | read-only; editing happens in review | ARCHITECTURE.md, Pending changes, approval and conflicts: the new side is editable only in review while the agent is idle; docs/proposal.md, section 5: pause is level 3 |
 | Product name | "Graph IDE" | Oversight | the placeholder was replaced |
 | Approve fill in v4 review | blue | text fill, page label | neutral decision; blue belongs to agent B |
@@ -398,22 +398,11 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 
 ## Colors
 
-A black field with warm near-whites, where each agent hue identifies its slot A–F, and
-green and red only ever mean passed and failed.
+A black field with warm near-whites. Hue identifies a team; the label identifies an agent. Team letters continue beyond F while teams reuse the six existing hues. Green and red retain their state meanings.
 
 ### Primary
 
-- **Agent A orange** (agent-a): Agent A's node borders, letter badges, rings and light. As text (the
-  word on a node, a status pill, the letter in a rail avatar) it uses agent-a-text, lighter so
-  small text stays readable on near-black (darker in day mode, for the same reason).
-- **Agent B blue** (agent-b): the same roles for Agent B, with agent-b-text for text. Orange and
-  blue are the pair that people with the common forms of color blindness tell apart best.
-- **Agents C–F:** violet C, pink D, sky E and plum F use their own `agent-c` through
-  `agent-f` families for the same roles. The letter always carries identity, including for
-  color-blind viewers; six hues cannot stay far apart under every color-vision deficiency.
-- **Agent tints** (`agent-{a..f}-tint`): the fill behind a letter avatar or an agent's status
-  pill. **Agent node fills** (`agent-{a..f}-node` and the slightly darker `-node-new` family): the
-  fill of a node with that agent's pending change.
+**Team palette:** orange (`agent-a`), blue (`agent-b`), violet (`agent-c`), pink (`agent-d`), sky (`agent-e`) and plum (`agent-f`). These existing token names are palette families, not runtime seats. Borders, rings and light use the team’s graphic token; text uses its `-text` token. Tints and node fills use the same family. Every agent label remains visible when teams share a hue.
 
 C–F follow the A/B fill recipe: dark tints use graphic RGB at 14% alpha (A 14%, B 16%
 remain unchanged); dark node RGB scales the graphic channels so the maximum channel is 30,
@@ -426,7 +415,7 @@ day E text `#255ea1` keeps graphic `#3475c4`. These text variants meet 4.5:1 on
 raised surfaces and on the agent tints used by cards, rail avatars and review pills.
 F text reaches 5.14:1 on dark raised and 4.65:1 on its tint over card. Day D/E reach
 5.08:1 / 5.07:1 on raised and 4.63:1 / 4.65:1 on their tints over shell.
-All slots retain the same translucent tint recipe and original node fills. Tints are
+All palette families retain the same translucent tint recipe and original node fills. Tints are
 used over shell, card, card-end and matte-top; tint over raised is not an intended pair
 (D 4.42:1 and E 4.44:1). Approval changes text only, including on the existing node fills;
 graphics and filled-badge letters retain their values.
@@ -470,7 +459,7 @@ The neutral roles:
   comment boxes.
 - **Page** (page): the focus panel: review, live diff, file view and settings; Monaco's background.
 - **Card** (card, card-bottom): cards run from card at the top to card-bottom below; graph nodes
-  at rest use card at 94%. Agent and model-slot cards carry a 2px top line in their agent token.
+  at rest use card at 94%. Agent cards carry a 2px top line in their team graphic token; model choices use neutral controls.
 - **Raised** (raised): hover on a control or row; a pressed rail button; the decisions chip.
 - **Page raised** (page-raised): chips, facts and file rows inside the left panel.
 - **Text** (text): primary text everywhere; a slightly warm white, because pure white glares on
@@ -572,12 +561,9 @@ Contrast of the day set (WCAG ratio; text needs 4.5:1, graphics and controls 3:1
 
 ### Named Rules
 
-**The Agent or State Rule.** A color is an agent (A–F) or a state (green passed or
-added, red failed, removed or destructive). Nothing else gets a hue: no brand color, no accent, no
-decorative gradient. Counters across agents are neutral.
+**The Team or State Rule.** A hue identifies a team or a state (green passed or added, red failed, removed or destructive). Team = lead, else plan, else agent, through the shared team selector. Nothing else gets a hue: no brand color, accent or decorative gradient. Counters across teams are neutral.
 
-**The Never Alone Rule.** Every agent color comes with its letter; every state color comes with a
-word, a sign (`+`, `-`) or an icon. No state depends on color alone.
+**The Never Alone Rule.** Every team hue comes with a team letter or agent label. An agent label is letter·n, where n is its plan subtask index plus one; a person-started lone agent uses its letter alone. Append " · plan k" only when labels collide across plans of one lead, where k is the plan's first-observed order within its lead. Every state color comes with a word, sign (`+`, `-`) or icon.
 
 **The No Amber Rule.** There are no yellow or amber warnings. A warning is said in words with an
 icon, in neutral colors.
@@ -764,7 +750,7 @@ gradients belong to theme tokens; control boundaries use control-edge and focus 
   specified under "Phone, f and f-b" in Review panel with the matte header below.
 - Stack the top bar, one provenance strip, 168px graph context, scrolling evidence and decision
   dock at 390×844, with 16px gutters. Draw node cards and taxi calls on plain ground without WebGL;
-  pending changes keep agent-colored dashes and letters.
+  pending changes keep team-colored dashes and letters.
 - Lead with choices in f or the differing caller in f-b. Examples stack Before above After
   with a down arrow; values use Mono 15 with soft wraps. In f, the three answers stack at 44px.
 - "What was compared" and "Show diff" are separate 44px disclosure rows with one-line previews.
@@ -780,7 +766,7 @@ Depth comes from the approved dark surfaces: shell, panel, page, card and raised
 for inputs and terminal. Cards use a gentle vertical card-to-card-bottom gradient, a border token,
 a soft shadow (`0 8px 24px rgba(0, 0, 0, 0.22)` in card-shadow) and a top highlight
 (`inset 0 1px 0` in top-highlight).
-Agent and model-slot cards add their 2px agent-colored top line. Divider separates shell regions;
+Agent cards add their 2px team-colored top line; model choices stay neutral. Divider separates shell regions;
 border encloses cards and controls where decorative. Neither replaces control-edge or the focus
 ring when a boundary carries meaning.
 
@@ -819,9 +805,7 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   hover the fill moves to text-hover, away from the label's color: white in the dark set (page
   text ratios are in the contrast table), black in day mode (day-page text on day-text-hover
   19.59:1, 15.92:1 at rest). A day fill never goes to white, where its label would read 1.07:1.
-- **Review change (the ready agent card):** the agent's color as fill with on-agent text and an eye
-  icon, as in the sketches. It sits on that agent's own card, which already carries the color in
-  its lamp and pill.
+- **Agent-card actions:** Review change and Conversation use neutral controls. Their labels and icons carry the action; team hue remains on the agent’s identity and work signals.
 - **Secondary (Request changes, Message, Live diff):** transparent with an outline border.
 - **Destructive (Reject, Stop and discard):** failed-text label and icon, no fill.
 - **Focus:** every control shows a visible keyboard focus ring: 2px in text color, offset 2px,
@@ -841,7 +825,7 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 ### Cards / Containers
 
 - **Agent card:** card-to-card-bottom gradient, border, top highlight, soft shadow and card
-  radius, with the 2px agent-colored top line. First row: status lamp, agent name,
+  radius, with the 2px team-colored top line. First row: status lamp, agent name,
   model (its name as the run lists it, "Muse Spark"), and the status pill on the right. Then the task
   in one line, what the agent is doing now ("Editing restock in inventory.py"), a step progress bar
   with "Step 7 of 25" and the cost so far, and the last steps from `agent.step`, each with an icon,
@@ -859,19 +843,15 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 - **Status pill:** Starting, Working, Ready for review, Revising, Paused, Halted, Stopped or Done
   on the agent's tint in its text color. While working, the latest tool can label it Reading
   or Editing; a model retry labels it Waiting. It belongs to one agent, so it may carry that
-  agent's color.
-- **Status lamp:** a 10px circle in the agent's color, filled when the agent needs the person,
+  agent's team hue.
+- **Status lamp:** a 10px circle in the agent's team hue, filled when the agent needs the person,
   outlined otherwise.
 
 ### Inputs / Fields
 
 - **Style:** field fill, control-edge border, card radius, body text, faint placeholder.
 - **Focus:** the focus ring above.
-- **Task box slot choice:** show A and B with their model labels when both slots are offered.
-  The selected button has a text-token border (at least 3:1 on the panel and raised fill) and
-  a decorative Check icon (`aria-hidden`, no name); `aria-pressed` conveys the state. Keep
-  these marks visible when the automatic preselection changes. A held slot names its holder
-  and cannot be chosen.
+- **Task box model choice:** show the offered model labels in neutral controls, without runtime seat letters. Keep the visible selected mark, `aria-pressed`, disabled behavior and the holder’s agent label.
 - **The comment box** serves Approve and Request changes alike, so no key in it triggers a
   decision: Approve has no shortcut, not even Ctrl+Enter.
 
@@ -894,11 +874,7 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
 - **Left rail** (shell): Watch, Files and Changes icon buttons, with Keyboard shortcuts at the
   bottom; the current view's button on raised. The Dock toggle is in the status line.
   Target, not built yet: Agents and a terminal toggle in the rail; Changes queue and history.
-- **Agents rail** (whenever the focus panel is open): one letter avatar per agent: a 36px square
-  with card radius,
-  agent-tint fill, a 1.5px border in the agent's color and the letter in the agent's text color
-  (agent-a-text, agent-b-text) at 15px, weight 700. A status
-  lamp sits on its top-right corner and a one-word caption under it ("Ready", "Working").
+- **Agents rail:** one labeled tile per coding agent, using its team’s tint, border and text tokens, with a status lamp and state caption. The full agent label distinguishes siblings and teams sharing a hue. The flat Chat rail delivers independently of grouped rail work.
 
 ### Usage tab — built desktop view
 
@@ -980,8 +956,8 @@ keys, with a Saved line and the repository scope below. Section headings remain 
   settings without backing support.
 - **Protected areas:** rows name the path or function, its type and a remove action; an add field
   and Add button follow the list. The row states that an edit waits for the person.
-- **Models and keys:** one card per model slot with its letter and model selector. The card's top
-  line takes that slot's agent color. Below the slot cards, separate rows hold the cross-review
+- **Models and keys:** one neutral card per offered model, with its model selector. Below the model
+  cards, separate rows hold the cross-review
   selector and key-status pills. Selectors use actual offered models and review choices. Key
   pills report configured, missing or invalid from readiness; they never show a key value or
   imply a provider was contacted to verify it.
@@ -996,7 +972,7 @@ keys, with a Saved line and the repository scope below. Section headings remain 
 A node's look answers two questions, each on its own channel, and says its state in a word on the
 node ("read", "editing", "changed", "new"):
 
-1. **Is there a change here that is not in main yet?** The border: dashed in the agent's color, or
+1. **Is there a change here that is not in main yet?** The border: dashed in the agent's team hue, or
    not. This channel always wins.
 2. **What is the agent doing with it now?** The letter badge: outlined for read, filled for a
    change.
@@ -1006,17 +982,17 @@ node ("read", "editing", "changed", "new"):
   its name in module-label, its function count in faint. An exact call edge: 1.4px in edge, with a
   small filled arrowhead of the same color.
 - **Read:** the agent read the node in its current run, and the node has no pending change. Solid
-  1.5px border in the agent's color, an outlined letter badge, the word "read" in the agent's text
+  1.5px border in the agent's team hue, an outlined letter badge, the word "read" in the agent's text
   color. Fill unchanged.
 - **Editing:** the node is in the agent's current focus: the `node_ids` of its latest `agent.focus`
   event, when that event's mode is edit and the agent is working or revising. Only that latest
-  focus counts; when the agent moves on, the previous nodes become "changed". Dashed 1.5px border
-  in the agent's color, the agent's node fill, a filled letter badge, the word "editing". Rings
+  focus counts; when the agent moves on, the previous nodes become "changed" when a pending change remains. Editing alone does not authorize dashes: the node must carry a pending change. Otherwise the 1.5px border is solid,
+  in the agent's team hue, the agent's node fill, a filled letter badge, the word "editing". Rings
   spread from it.
 - **Pending (changed or new):** the node carries the agent's change and is not its current edit
-  focus. Dashed 1.5px border, dash 6px and gap 4px, in the agent's color; the agent's node fill
+  focus. Dashed 1.5px border, dash 6px and gap 4px, in the agent's team hue; the agent's node fill
   (`-new` for a node the agent added); a filled badge; the word "changed" or "new". An edge the
-  change adds is dashed in the agent's color, 2px, with an arrowhead in that color.
+  change adds is dashed in the agent's team hue, 2px, with an arrowhead in that color.
 - **Precedence:** editing over changed or new over read. A pending node the agent reads again stays
   dashed and keeps the word "changed".
 - **Selected:** the node whose diff or file the left panel shows gets a 2px ring in text.
@@ -1051,12 +1027,7 @@ introduces no animation. Folded cards and opaque graph text plates mask straight
 Open frames retain their translucent body fill and stay below their rows during edge hover;
 straight lines can show through that fill.
 
-**Letter badges.** Agents are a letter and a color, nothing more: no avatars, beads or mascots. On
-a node: a 26px rounded square at the right end of the row, on the name's line, with A–F in badge
-type. Filled for
-editing and pending: the agent's color with the letter in on-agent. Outlined for read: a 1.5px
-border in the agent's color, no fill, the letter in that color. On the agent card and in panel
-headings: a small square swatch in the agent's color followed by "Agent A" or "Agent B".
+**Agent labels.** Hue means team; label means agent. Use the same label on graph work chips and markers, cards, Conversation, inbox, file presence and rails. Use letter·n for plan subtasks and the letter alone for a person-started lone agent. Append " · plan k" only when labels collide across plans of one lead, where k is the plan's first-observed order within its lead. Compact tiles and map chips show the short label with a separate "plan k" caption; the map's first line retains the state word. Labels are never inferred from runtime seats or palette families. For example, a plan’s second subtask is "Agent A·2"; colliding first subtasks are "Agent A·1 · plan 1" and "Agent A·1 · plan 2"; a person-started lone agent is "Agent A". No avatars, beads or mascots.
 
 **Distance badges.** A 20px circle filled with text, the distance as a page-colored number, 12px,
 weight 700. Neutral: the cone is about the code, not an agent.
@@ -1079,7 +1050,7 @@ stay fixed across zoom. Counts remain available in review. No animation, new tok
 The cone is level 2. In review and in the live diff, the graph shows the change and its cone, and
 everything else steps back.
 
-- The change's nodes keep their agent's look; the agent's color stays on the change and nowhere
+- The change's nodes keep their agent's look; the agent's team hue stays on the change and nowhere
   else.
 - Nodes in the cone keep full opacity and show a distance badge: 1 for a direct caller, 2 for a
   caller of a caller, and so on.
@@ -1148,7 +1119,7 @@ The graph stays visible and keeps positions.
    agent-2 · base 4ca5596". Unknown cost is written as "cost unknown".
 2. **Lead:** 24px below the header, with a 16/700 title on 22px lines and a right-hand 13px
    muted caption on 18px lines, separated by 14px. The variants and exact copy follow below.
-3. **Agent note:** "Agent B says" (or A), 13px muted caption, then the agent's words at 15px
+3. **Agent note:** "Agent B says" (or Agent A), 13px muted caption, then the agent's words at 15px
    on 22px lines, 4px below. State a says "Reserve also rejects fractional and boolean quantities."
    Cross-review follows when present, 18px below: "Muse Spark Open reviewed this change",
    "Nothing blocking · 1 note", then "pricing.py:23 · no test covers an extra percent above 30
@@ -1263,7 +1234,7 @@ never its local color values. No new syntax color is chosen here.
 example Mono 13 on 19px lines, answer and Change at 14/600; 12px above and below, divider below.
 Open question 15/600 on 22px lines; input Mono 14 on 20px lines, 10px below its caption. The pair
 has equal cells with 10px radius and 14px padding, 8px gaps and a 24px arrow column. "Before · main"
-and "After · Agent B" (or A) are 13px; After takes the agent tint, text and 1px border. Values are
+and "After · Agent B" (or Agent A) are 13px; After takes the agent tint, text and 1px border. Values are
 Mono 15 on 21px lines with soft wraps. Below a 700px panel the pair stacks, with a down arrow;
 labels share their value's line, 12px gap, cells padded 9px by 12px. At 1280 the panel is 608px;
 the After cell may start below the first screen. The fixed prompt and three equal 34px answers
@@ -1381,7 +1352,7 @@ leaves plain ground behind the graph: no lamps, no contour lines.
   further out the dither leaves a regular pattern of single lamps, which is the LED character.
   Each light is first held back by its own smooth cut (off under `lamp-cut-low`, free from
   `lamp-cut-high`), so a glow ends on a lamp, not on scattered dust. The color follows the level, all
-  from tokens: the first level leans to the deep end of the agent's color (the weaker channels
+  from tokens: the first level leans to the deep end of the agent's team hue (the weaker channels
   scaled by `lamp-ramp-deep`, orange toward deep red, blue toward deep blue), the second is close
   to the agent's own, and the whole level moves `lamp-ramp-hot` of the way to the ink (lighter
   orange or blue on the dark ground, darker on paper). Only a lit lamp is drawn: its square, in the
@@ -1403,13 +1374,13 @@ leaves plain ground behind the graph: no lamps, no contour lines.
   over ground (or ground without a panel), preserving 4.5:1 over lit lamps with no box on unlit cells.
   A light always falls off softly on every side, however faint it has become.
 - **Sources:** only each agent's current node at full strength and its last read node at about
-  0.4 emit light, in that agent's token, and only while that agent is acting (see Agent light).
+  0.4 emit light, in that agent's team graphic token, and only while that agent is acting (see Agent light).
   A change waiting on an open inbox entry adds one steady, dimmer light on its node, and a decided
   change one fading light. The last read is one node, not an accumulating history; other changed
   nodes, selected neighbors and the impact cone are not additional emitters. The existing
   eight-source budget is unchanged: current foci first, then last reads, with stable
-  slot/agent-id order within each group; excess sources are dropped. A decided change's fading
-  light is one more source of its agent's color, counted in the same budget.
+  agent-id order within each group; excess sources are dropped. A decided change's fading
+  light is one more source of its agent's team hue, counted in the same budget.
   Milestone rings and travelling points feed the lamp accumulator directly, without emitter slots.
   This replaces the earlier Sources restriction “only each agent's current node ... and its last
   read node ... emit light” for finite events (milestone decision, Oct 30; clarified Oct 31).
@@ -1429,7 +1400,7 @@ leaves plain ground behind the graph: no lamps, no contour lines.
   (`agent-a-node`, `agent-b-node`: a near-black warm or cool wash in dark, a pale one in day), and
   a lit row's text stays at 4.5:1 or more over the brightest lamp beneath it, which a test checks
   in both themes.
-- **Working ring:** an expanding ring in the agent's color reports a working agent. It stops
+- **Working ring:** an expanding ring in the agent's team hue reports a working agent. It stops
   when the agent stops working. It is a work signal, not a second pool of ambient light.
 - **Milestone rings:** beside the working ring, Ready for review gives one quieter circular ring
   outward in 700ms. Its radius starts at half the rendered row width and travels 150px with
@@ -1490,7 +1461,7 @@ theme-independent token, so both token sets carry it.
   an agent color and never an accent; text keeps 4.5:1 and never sits on them;
 - the field's own mask hides them under overlays; they draw in every mode, behind everything.
 
-**Merge travel.** When a change is merged, a pulse in the agent's color leaves that agent's card,
+**Merge travel.** When a change is merged, a pulse in the agent's team hue leaves that agent's card,
 or that agent's letter when the agents panel is folded into the rail, as in review. Approving from
 the review panel starts this same travel. It runs along the graph's edges to the merged node
 with a short trail that fades behind it (about 100px: 28px bright, then 72px that fade with the
@@ -1597,8 +1568,8 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    seam is built; the caption "Groups by Oversight, from names and docstrings · Edit", editing
    and fetching remain targets. Placement is fixed and deterministic; the model never places
    anything. No L-shaped frames. A continuous frame needs each folder's modules placed together:
-   the built packing changes the preset layout and also moves card positions. Pack nine cells
-   per column, widest card plus 120px gutter (446px here), header plus 150px (220px here);
+   the built packing changes the preset layout and also moves card positions. Pack six cells
+   per column, widest card plus 120px gutter (446px here), at least 350px row pitch so full agent labels and their state fit at the 20% floor;
    order modules by box x, box y, then id. Order groups by count descending, then label, tests
    last; pack left to right or stack within the tallest group's band. Ground stays 340px sideways
    and 460px stacked: with one-line headers it is at least 48px at the drawn zooms and down to
@@ -1606,13 +1577,10 @@ The approved record is [Map, 2026-10-31](docs/sketches/map-r1/notes.md).
    without touching or overlap. Panels in a row share their top edge.
 4. **Group summary.** Name and module count are built in a wrapping header strip, with 8px/12px
    padding and a divider, on a quiet panel: card surface at 60%, node border, 12px radius and
-   top highlight. Solid 20px agent rings include pending changes and current read/edit focus,
-   in slot order. A neutral 22px chip counts ready or conflicting changes ("1 decision" or
+   top highlight. A group heading carries one lettered ring per team represented by agent work or a pending change inside it. Module work chips name the agent and state in the team hue; dashed rings mean only a pending change. Graph lines, hover and group-click behavior remain separate work. A neutral 22px chip counts ready or conflicting changes ("1 decision" or
    "N decisions"); "tested by N calls" counts exact calls from tests, hidden at zero and on
    the tests group. In a cone, "N of M in group" counts its entries instead. These are built.
-   A module's dashed agent ring is built only for that
-   agent's pending change, never a read; below its count, "Agent A · N changed" or
-   "Agent B · editing" names the state and agent.
+   Work rings are solid; pending rings are dashed. Chips say "A·2 editing" or "A·3 ready".
 5. **Lines.** Built: no call lines, counts or edge labels at rest. On hover, exact module
    pairs show incoming/outgoing arrows at the callee and ×N when N > 1; group hover includes
    only boundary pairs. Possible-only pairs are faint, without arrows or counts, only when
@@ -1669,7 +1637,7 @@ including module and class opening. Each motion says what changed:
 - **agent.status / change.proposed:** the agent card's status pill crossfades; the permanently
   mounted decisions chip updates its label and count. These events never open a panel or move
   keyboard focus.
-- **agent.focus:** the lettered marker in the agent's color glides between nodes, following the
+- **agent.focus:** the lettered marker in the agent's team hue glides between nodes, following the
   edge route when present, with its light following it. A working agent's status lamp may pulse
   (the existing 1.6s period) and its graph ring expands only while work continues.
 - **Module or class opens:** its rows slide into place, including an opening caused by an agent's
@@ -1819,11 +1787,9 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 
 ### Do:
 
-- **Do** keep every agent color next to its letter, and every state color next to a word, a sign
-  or an icon.
+- **Do** keep every team hue next to its team letter or agent label, and every state color next to a word, sign or icon.
 - **Do** keep the decisions chip and any count across agents neutral.
-- **Do** show a pending change with a dashed 1.5px border in its agent's color, changed and new
-  alike.
+- **Do** show a pending change with a dashed 1.5px border in its agent’s team hue, changed and new alike.
 - **Do** keep the current view when an agent finishes: only its card, its pill and the decisions
   chip report readiness.
 - **Do** take every color from a token under `data-theme`, Cytoscape, Monaco and the dot field
@@ -1835,7 +1801,7 @@ C–F letters on their dark graphic fills (`on-agent`): C 6.81:1, D 9.06:1, E 10
 
 - **Don't** use amber or yellow, for warnings or anything else.
 - **Don't** use color alone to say anything.
-- **Don't** give any hue a meaning other than agents A–F, passed or failed.
+- **Don't** give a hue a meaning other than a team or the approved state meanings.
 - **Don't** steal focus or open a tab when an agent finishes; motion follows only the causes above.
 - **Don't** dash anything but a pending change: not possible calls, selection, hover or empty
   states.

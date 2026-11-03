@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import cytoscape from "cytoscape";
-import type { ServerEvent } from "@contracts";
+import type { AgentStatus, ServerEvent } from "@contracts";
 import { expect, it, vi } from "vitest";
 import { applyEvent, createInitialState } from "../../state";
 import { themes } from "../../theme";
@@ -93,18 +93,24 @@ function signals() {
     .trim()
     .split("\n")
     .map((line) => JSON.parse(line) as ServerEvent);
-  const state = events.filter((e) => e.seq <= 20).reduce(applyEvent, createInitialState());
+  let state = events.filter((e) => e.seq <= 20).reduce(applyEvent, createInitialState());
   const a = state.agents["agent-1"],
     change = state.changes["change-1"];
   if (!a || !change) throw new Error("Missing waiting fixture");
   change.graph.nodes_modified = ["pending:change"];
-  state.agents["agent-B"] = {
+  const working: AgentStatus = {
     ...a,
     agent_id: "agent-B",
     slot: "B",
     state: "working",
     change_id: "change-B",
   };
+  state = applyEvent(state, {
+    type: "agent.status",
+    seq: state.lastSeq + 1,
+    ts: state.runStartedAt ?? "",
+    payload: working,
+  });
   state.changes["change-B"] = { ...change, change_id: "change-B", agent_id: "agent-B" };
   state.focus["agent-B"] = {
     agent_id: "agent-B",
@@ -123,7 +129,13 @@ it("projects current focus, waiting change, last read and fading light without r
       ["pending:change", 0.5],
       ["pending:read", 0.4],
     ]);
-    const fading = { id: "pending:change", source: "agent-a", weight: 0.2, pulses: false } as const;
+    const fading = {
+      id: "pending:change",
+      agentId: "agent-1",
+      source: "agent-a",
+      weight: 0.2,
+      pulses: false,
+    } as const;
     const all = [...lights, fading];
     const before = structuredClone(all);
     const boxes = f.source.boxes(all.map((l) => l.id));

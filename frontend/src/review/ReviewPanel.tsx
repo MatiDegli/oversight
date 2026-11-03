@@ -11,7 +11,7 @@ import type { DecisionAction, DecisionAttempt } from "./decisions";
 import { ReviewHeader } from "./ReviewHeader";
 import { selectReviewBody } from "./reviewBodyEvidence";
 import { candidateKey, useAnswers } from "./answers";
-import { agentSlotStyle } from "../theme";
+import { presentationFor, presentationStyle } from "../teams/presentation";
 
 import { ReviewDecisionBar } from "./ReviewDecisionBar";
 import { RevertControl } from "./RevertControl";
@@ -95,7 +95,7 @@ export function ReviewPanel({
     <aside
       aria-label="Review panel"
       className="review-panel flex w-[min(var(--review-panel-width),46vw)] min-h-0 min-w-0 shrink-0 flex-col bg-page"
-      style={agentSlotStyle(agent?.slot)}
+      style={presentationStyle(presentationFor(state, change?.agent_id))}
     >
       <ReviewHeader
         state={state}

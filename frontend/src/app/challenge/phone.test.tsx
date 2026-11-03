@@ -61,7 +61,7 @@ it.each([
   if (!entry) throw new Error("Missing case");
   const line = renderToStaticMarkup(<AgentLine state={fallback.cut} changeId={entry.changeId} />);
   const review = renderToStaticMarkup(
-    <PhoneReview state={fallback.cut} changeId={entry.changeId} title={entry.title} slot="B" />,
+    <PhoneReview state={fallback.cut} changeId={entry.changeId} title={entry.title} />,
   );
   expect(line).toContain("Agent B");
   expect(line).toContain(`<span>${label}</span>`);
@@ -72,9 +72,9 @@ it("keeps the explicit review slot when the agent model is unavailable", () => {
   const entry = practice.cases[0];
   if (!entry) throw new Error("Missing case");
   const state = { ...practice.cut, agents: {} };
-  const line = renderToStaticMarkup(<AgentLine state={state} changeId={entry.changeId} slot="B" />);
+  const line = renderToStaticMarkup(<AgentLine state={state} changeId={entry.changeId} />);
   const review = renderToStaticMarkup(
-    <PhoneReview state={state} changeId={entry.changeId} title={entry.title} slot="B" />,
+    <PhoneReview state={state} changeId={entry.changeId} title={entry.title} />,
   );
   expect(line).toContain("Agent B");
   expect(line).toContain("Model unavailable");

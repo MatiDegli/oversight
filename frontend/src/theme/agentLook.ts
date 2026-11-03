@@ -1,7 +1,8 @@
 import type { CSSProperties } from "react";
-import type { Slot } from "@contracts";
 
-export type AgentFamily = `agent-${Lowercase<Slot>}`;
+/** Palette keys are paint choices, independent of runtime capacity and team letters. */
+export type PaletteKey = "A" | "B" | "C" | "D" | "E" | "F";
+export type AgentFamily = `agent-${Lowercase<PaletteKey>}`;
 type SlotLook = {
   family: AgentFamily;
   text: `${AgentFamily}-text`;
@@ -12,7 +13,7 @@ type SlotLook = {
   textClass: string;
 };
 
-/** One exhaustive identity map for CSS utilities, graph paint and field emitters. */
+/** The six existing palette families, shared by CSS, graph paint and field emitters. */
 export const agentLook = {
   A: {
     family: "agent-a",
@@ -68,17 +69,17 @@ export const agentLook = {
     swatch: "bg-agent-f text-on-agent",
     textClass: "text-agent-f-text",
   },
-} as const satisfies Record<Slot, SlotLook>;
+} as const satisfies Record<PaletteKey, SlotLook>;
 
-export const agentSlots = Object.keys(agentLook) as Slot[];
-export function slotForFamily(family: AgentFamily): Slot {
+export const agentSlots = Object.keys(agentLook) as PaletteKey[];
+export function slotForFamily(family: AgentFamily): PaletteKey {
   const slot = agentSlots.find((slot) => agentLook[slot].family === family);
   if (!slot) throw new Error(`Missing slot family: ${family}`);
   return slot;
 }
 
 /** Shared CSS context for surfaces whose paint is owned by a stylesheet. */
-export function agentSlotStyle(slot: Slot | undefined): CSSProperties {
+export function agentSlotStyle(slot: PaletteKey | undefined): CSSProperties {
   return slot
     ? ({
         "--slot-graphic": `var(--${agentLook[slot].family})`,

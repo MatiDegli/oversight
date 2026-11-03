@@ -1,3 +1,4 @@
+import { presentationFor } from "../teams/presentation";
 import type { State } from "../state";
 // eslint-disable-next-line no-restricted-imports -- Shared current-candidate evidence and target identity; the review index does not export them.
 import {
@@ -32,7 +33,7 @@ export function selectNodeChips(state: State, litIds: readonly string[] | null) 
           other.compared > 0 &&
           (other.differing > 0 || other.unstable),
       ).length > 1
-        ? (state.agents[entry.agentId]?.slot ?? entry.agentId.slice(0, 1))
+        ? (presentationFor(state, entry.agentId)?.label ?? entry.agentId)
         : null;
     const shown = rows.filter((row) => !row.unstable).length;
     const proposal = state.changes[entry.changeId]?.proposal;

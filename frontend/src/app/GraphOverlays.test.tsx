@@ -25,14 +25,13 @@ describe("the graph heading", () => {
 });
 
 describe("the legend", () => {
-  it("lists an agent for each slot of the run and the looks the graph draws, each in words", () => {
+  it("lists observed teams independently of capacity and the looks the graph draws, each in words", () => {
     const markup = renderToStaticMarkup(<Legend state={through(4)} />);
     const words = [
-      "Agent A",
-      "Agent B",
+      "Team A",
       "Read",
-      "Editing or changed",
-      "Not in main yet",
+      "Dashed: a change waits for review.",
+      "Pending addition",
       "Possible call",
     ];
     for (const word of words) expect(markup).toContain(word);
@@ -40,7 +39,7 @@ describe("the legend", () => {
     const places = words.map((word) => markup.indexOf(word));
     expect(places).toEqual([...places].sort((x, y) => x - y));
     // Glyphs carry no meaning to a reader of the page: the words do.
-    expect(markup.match(/aria-hidden="true"/g)).toHaveLength(6);
+    expect(markup.match(/aria-hidden="true"/g)).toHaveLength(5);
   });
 
   it("draws editing or changed as a dashed, filled box and not-in-main as a dashed outline", () => {
@@ -48,10 +47,10 @@ describe("the legend", () => {
     const glyph = (words: string) =>
       new RegExp(`<span aria-hidden="true" class="([^"]*)"></span>${words}`).exec(markup)?.[1] ??
       "";
-    expect(glyph("Editing or changed")).toContain("border-dashed");
-    expect(glyph("Editing or changed")).toContain("bg-raised");
-    expect(glyph("Not in main yet")).toContain("border-dashed");
-    expect(glyph("Not in main yet")).not.toContain("bg-raised");
+    expect(glyph("Dashed: a change waits for review.")).toContain("border-dashed");
+    expect(glyph("Dashed: a change waits for review.")).toContain("bg-raised");
+    expect(glyph("Pending addition")).toContain("border-dashed");
+    expect(glyph("Pending addition")).not.toContain("bg-raised");
     // Read is the only solid one: a dashed border means a pending change and nothing else.
     expect(glyph("Read")).not.toContain("border-dashed");
     expect(glyph("Possible call")).not.toContain("border-dashed");

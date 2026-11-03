@@ -8,7 +8,8 @@ export interface FieldScene {
 }
 
 const mix = (a: number, b: number, t: number) => a + (b - a) * t;
-const key = (light: FieldLight) => `${light.source}\u0000${light.marker ?? light.id}`;
+const key = (light: FieldLight) =>
+  `${light.source}\u0000${light.marker ?? `${light.agentId ?? ""}:${light.id}`}`;
 const pulse = (light: FieldLight) => light.pulseWeight ?? Number(light.pulses);
 
 /** Evaluate the theme's CSS cubic-bezier at elapsed time (x), solving for its parameter first. */

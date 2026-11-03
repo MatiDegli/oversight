@@ -1,3 +1,4 @@
+import { agentEvidence } from "../teams/evidence.testSupport";
 import { readFileSync } from "node:fs";
 import type { ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
@@ -86,13 +87,13 @@ it("keeps two changes on one node in change-id order with neutral agent letters"
     changes: { "change-2": second, ...state.changes },
     changeFacts: { ...state.changeFacts, "change-2": [{ ...facts, change_id: "change-2" }] },
   };
-  expect(selectNodeChips(two, null).map((chip) => chip.text)).toEqual([
+  expect(selectNodeChips(agentEvidence(two), null).map((chip) => chip.text)).toEqual([
     "A 9 of 10 differ",
     "B 9 of 10 differ",
   ]);
   expect(selectNodeChips({ ...two, agents: {} }, null).map((chip) => chip.text)).toEqual([
-    "a 9 of 10 differ",
-    "a 9 of 10 differ",
+    "A 9 of 10 differ",
+    "agent-2 9 of 10 differ",
   ]);
 });
 

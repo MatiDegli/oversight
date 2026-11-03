@@ -21,7 +21,10 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 20px;
+  min-width: 20px;
+  width: max-content;
+  padding-inline: 4px;
+  white-space: nowrap;
   height: 20px;
   border-radius: 5px;
   background: var(--slot-graphic);

@@ -1,6 +1,6 @@
 import type { AgentState } from "@contracts";
 
-import { agentLook } from "../../theme";
+import { presentationFor } from "../../teams/presentation";
 import { selectDecisionInbox } from "../../state";
 import type { State } from "../../state";
 import { getActiveTheme } from "../../theme";
@@ -34,12 +34,15 @@ export function selectSignalLights(
 ): FieldLight[] {
   const lights: FieldLight[] = [];
   let waiting: ReadonlySet<string> | undefined;
-  for (const agent of Object.values(state.agents).sort(
-    (a, b) => a.slot.localeCompare(b.slot) || a.agent_id.localeCompare(b.agent_id),
+  for (const agent of Object.values(state.agents).sort((a, b) =>
+    a.agent_id.localeCompare(b.agent_id),
   )) {
     const change = state.changes[agent.change_id];
     if (change?.status === "approved" || change?.status === "rejected") continue;
-    const source = agentLook[agent.slot].family;
+    const identity = presentationFor(state, agent.agent_id);
+    if (!identity || (identity.kind === "lead" && identity.agentId === identity.team)) continue;
+    const source = identity.family;
+    const owner = { agentId: agent.agent_id, team: identity.team, label: identity.label };
     if (!isActing(agent.state)) {
       // The inbox is read once, and only when an idle agent might have a change waiting.
       waiting ??= new Set(selectDecisionInbox(state).flatMap((entry) => entry.changeId ?? []));
@@ -47,6 +50,7 @@ export function selectSignalLights(
       if (id !== undefined)
         lights.push({
           id,
+          ...owner,
           source,
           weight: theme["waiting-light-weight"],
           pulses: false,
@@ -58,6 +62,7 @@ export function selectSignalLights(
     if (!id) continue;
     lights.push({
       id,
+      ...owner,
       source,
       weight: theme["watch-editing-weight"],
       pulses: true,
@@ -68,6 +73,7 @@ export function selectSignalLights(
     if (read && read !== id)
       lights.push({
         id: read,
+        ...owner,
         source,
         weight: theme["live-diff-read-weight"],
         pulses: false,

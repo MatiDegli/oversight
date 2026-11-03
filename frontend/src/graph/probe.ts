@@ -1,3 +1,4 @@
+import type { NodeMarks } from "./layers";
 import type { Route } from "./routes";
 import type { Core } from "cytoscape";
 
@@ -19,7 +20,19 @@ export interface NodeBounds {
  */
 export interface GraphProbe {
   /** Centers of the nodes the selector matches, in pixels from the graph element's top left. */
-  nodeCenters(selector?: string): { id: string; x: number; y: number }[];
+  nodeCenters(selector?: string): {
+    id: string;
+    x: number;
+    y: number;
+    agents?: {
+      agentId: string;
+      team: string;
+      label: string;
+      hue: string;
+      word: string;
+      pending: boolean;
+    }[];
+  }[];
   /**
    * Model-space bounds for framing assertions: with labels and distance badges unless `labels` is
    * false, which gives the drawn box alone.
@@ -74,7 +87,21 @@ export type GraphProbeHost = HTMLElement & { oversightGraph?: GraphProbe };
 export function exposeProbe(host: GraphProbeHost, cy: Core): () => void {
   host.oversightGraph = {
     nodeCenters: (selector = "node") =>
-      cy.nodes(selector).map((node) => ({ id: node.id(), ...node.renderedPosition() })),
+      cy.nodes(selector).map((node) => ({
+        id: node.id(),
+        ...node.renderedPosition(),
+        agents:
+          (node.data("marks") as NodeMarks | undefined)?.badges.map(
+            ({ agentId, team, label, hue, word, pending }) => ({
+              agentId,
+              team,
+              label,
+              hue,
+              word,
+              pending,
+            }),
+          ) ?? [],
+      })),
     nodeBounds: (selector = "node", labels = true) =>
       cy.nodes(selector).map((node) => ({
         id: node.id(),

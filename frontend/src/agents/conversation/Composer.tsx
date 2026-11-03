@@ -129,13 +129,15 @@ export function Composer({
       {(onSend || lead) && (
         <textarea
           aria-label={
-            lead ? `Message Lead ${header.letter}` : `Message Agent ${header.letter ?? header.slot}`
+            lead
+              ? `Message Lead ${header.letter}`
+              : `Message Agent ${header.presentation?.label ?? "unknown"}`
           }
           aria-describedby={!active || replay || tooLong ? captionId : undefined}
           placeholder={
             lead
               ? `Message Lead ${header.letter}`
-              : `Message Agent ${header.letter ?? header.slot}. It reads it at its next step.`
+              : `Message Agent ${header.presentation?.label ?? "unknown"}. It reads it at its next step.`
           }
           aria-disabled={!active || replay || stopping}
           readOnly={pending || stopping || !active || replay}
@@ -154,7 +156,7 @@ export function Composer({
               : tooLong
                 ? "Use at most 4,096 characters."
                 : `The lead is ${header.state}. Messages are available only while idle.`
-            : `Agent ${header.letter ?? header.slot} is not running.`}
+            : `Agent ${header.presentation?.label ?? "unknown"} is not running.`}
         </p>
       )}
       <div className="composer-actions mt-[10px] flex flex-wrap items-start gap-2">

@@ -1,3 +1,5 @@
+import { mark } from "./marks.testSupport";
+import { combineMarks } from "./agentMarks";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it } from "vitest";
 import { themes } from "../theme";
@@ -67,15 +69,19 @@ it("keeps circles equal, counts functions, and shows pending marks per slot only
   const nodes = elements();
   const pending = nodes.find((n) => n.data.id === "lib.0:run");
   if (!pending) throw new Error("Missing fixture");
-  pending.classes += " pending-A pending-B focus-B-edit";
+  pending.data.marks = combineMarks([mark("A"), { ...mark("B", "editing"), pending: true }]);
   const read = nodes.find((n) => n.data.id === "misc.0:run");
-  if (read) read.classes += " focus-A-read";
+  if (read) read.data.marks = combineMarks([mark("A", "read")]);
   const model = mapModel(nodes, themes.dark);
-  expect(model.groups[0]?.modules[0]?.agents).toEqual([
-    { slot: "A", text: "Agent A · 1 changed" },
-    { slot: "B", text: "Agent B · editing" },
+  expect(model.groups[0]?.modules[0]?.agents.map(({ label, text }) => ({ label, text }))).toEqual([
+    { label: "A", text: "A ready" },
+    { label: "B", text: "B editing" },
   ]);
-  expect(model.groups[1]?.modules.every((m) => !m.agents.length)).toBe(true);
+  expect(model.groups[1]?.modules[0]?.agents[0]).toMatchObject({
+    label: "A",
+    pending: false,
+    text: "A reading",
+  });
   expect(model.groups.every((g) => g.modules.every((m) => m.functions === 1))).toBe(true);
   const markup = renderToStaticMarkup(
     MapLayer({ frame: { model, level: "map", zoom: 0.3, pan: { x: 0, y: 0 } } }),
@@ -139,8 +145,8 @@ it("takes the widest expanded card from the snapshot for the map's cells", () =>
 it("keeps one-line header ground above 48px and the wrapped floor at 26px", () => {
   const nodes: GraphElement[] = [
     ["library", 30],
-    ["helpers", 3],
-    ["utilities", 3],
+    ["helpers", 2],
+    ["utilities", 2],
   ].flatMap(([name, count]) =>
     Array.from({ length: Number(count) }, (_, i) => ({
       group: "nodes" as const,

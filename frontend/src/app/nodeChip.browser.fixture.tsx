@@ -53,7 +53,7 @@ export const nodeChipTest = {
     });
   },
   amend(mode: "long" | "empty" | "folded" | "gone" | "two") {
-    const state = structuredClone(stateStore.getState().state);
+    let state = structuredClone(stateStore.getState().state);
     const change = state.changes["change-1"],
       facts = state.changeFacts["change-1"]?.at(-1);
     const evidence = facts?.behavior_diff?.[0];
@@ -70,7 +70,12 @@ export const nodeChipTest = {
     if (mode === "folded") evidence.node_id = "shop.cart:Cart.total";
     if (mode === "gone") evidence.node_id = "removed.module:old_function";
     if (mode === "two") {
-      state.agents["agent-2"] = { ...agent, agent_id: "agent-2", slot: "B" };
+      state = applyEvent(state, {
+        seq: state.lastSeq + 1,
+        ts: state.clock ?? "2026-11-02T17:00:00Z",
+        type: "agent.status",
+        payload: { ...agent, agent_id: "agent-2", slot: "B" },
+      });
       state.changes["change-2"] = {
         ...change,
         change_id: "change-2",

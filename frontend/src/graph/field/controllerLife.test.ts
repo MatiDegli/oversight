@@ -149,7 +149,9 @@ describe("the rest ground", () => {
 describe("a merge's pulse and light", () => {
   const merge = {
     key: "change-1:21",
-    slot: "A" as const,
+    agentId: "agent-A",
+    team: "team-A",
+    label: "A",
     source: "agent-a" as const,
     id: "a",
     pulse: true,
@@ -162,6 +164,9 @@ describe("a merge's pulse and light", () => {
     lights: [
       {
         id: "a",
+        agentId: "agent-A",
+        team: "team-A",
+        label: "A",
         source: "agent-a",
         weight: themes.dark["waiting-light-weight"],
         pulses: false,
@@ -380,7 +385,16 @@ it("uses the shared merge acceptance when the local cap still includes ending ri
   Object.assign(canvas, { getBoundingClientRect: () => ({ left: 0, top: 0 }) });
   controller.update({ mode: "watch", lights: [] });
   const milestones: Milestone[] = (["agent-b", "agent-c", "agent-d", "agent-e"] as const).map(
-    (source, i) => ({ key: String(i), id: String(i), kind: "needs", source, slot: "B", age: 0 }),
+    (source, i) => ({
+      key: String(i),
+      id: String(i),
+      kind: "needs",
+      source,
+      agentId: `agent-${String(i)}`,
+      team: source,
+      label: String(i),
+      age: 0,
+    }),
   );
   controller.update({ mode: "watch", lights: [], milestones });
   now = 859; // Local rings have 1ms left; the shared clock already accepted the merge.
@@ -388,7 +402,9 @@ it("uses the shared merge acceptance when the local cap still includes ending ri
     key: "merge",
     id: "a",
     source: "agent-a" as const,
-    slot: "A" as const,
+    agentId: "agent-A",
+    team: "team-A",
+    label: "A",
     age: 0,
     pulse: true,
   };
@@ -421,6 +437,9 @@ it("dips the ring team's rendered lamps while the other team's lamps keep their 
   const controller = createFieldController(canvas, { ...source, boxes: () => boxes });
   const lights = (["agent-a", "agent-b"] as const).map((source, i) => ({
     id: i === 0 ? "a" : "b",
+    agentId: `agent-${i === 0 ? "A" : "B"}`,
+    team: `team-${i === 0 ? "A" : "B"}`,
+    label: i === 0 ? "A" : "B",
     source,
     weight: 0.8,
     pulses: false,
@@ -431,7 +450,18 @@ it("dips the ring team's rendered lamps while the other team's lamps keep their 
   controller.update({
     mode: "watch",
     lights,
-    milestones: [{ key: "ready", kind: "ready", id: "a", slot: "A", source: "agent-a", age: 0 }],
+    milestones: [
+      {
+        key: "ready",
+        kind: "ready",
+        id: "a",
+        agentId: "agent-A",
+        team: "team-A",
+        label: "A",
+        source: "agent-a",
+        age: 0,
+      },
+    ],
   });
   const after = [213.5, 773.5].map((x) => canvas.oversightField?.lamp(x, 164.5)?.level);
   expect(before[0]).toBeGreaterThan(0);

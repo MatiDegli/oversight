@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { KeyboardEvent, PointerEvent } from "react";
 import { Check, Pause, Play, RotateCcw, X } from "lucide-react";
 import { stateStore, type State } from "../../state";
-import { agentSlotStyle } from "../../theme";
+import { presentationStyle } from "../../teams/presentation";
 import type { ReplayPlayer } from "../../transport";
 import type { View } from "../view";
 import { reconcileReplayView, replayMarks, replayTime } from "./model";
@@ -147,7 +147,7 @@ export default function ReplayBar({
             key={item.id}
             className="replay-mark"
             data-kind={item.kind}
-            style={{ left: percent(item.offset), ...agentSlotStyle(item.slot) }}
+            style={{ left: percent(item.offset), ...presentationStyle(item.presentation) }}
             aria-label={`${item.title}, ${replayTime(item.offset)}`}
             aria-describedby={tooltip?.id === item.id ? "replay-tooltip" : undefined}
             onClick={() => {
@@ -206,7 +206,7 @@ export function ReplayTooltip({ mark: tooltip, percent }: { mark: ReplayMark; pe
       className="replay-tooltip"
       style={{
         left: `clamp(0px, calc(${percent} - 140px), max(0px, 100% - 330px))`,
-        ...agentSlotStyle(tooltip.slot),
+        ...presentationStyle(tooltip.presentation),
       }}
     >
       <div>

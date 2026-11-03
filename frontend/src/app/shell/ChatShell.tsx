@@ -40,11 +40,7 @@ export function ChatAgentsFrame({
     >
       <header>
         <h2>Agents</h2>
-        {count && (
-          <span>
-            {count.held} of {count.total} running
-          </span>
-        )}
+        {count && <span>{count.held} running</span>}
         <div className="chat-start-actions">
           <button type="button" className="chat-new-task" disabled={readOnly} onClick={onNewTask}>
             <Plus size={15} aria-hidden="true" />

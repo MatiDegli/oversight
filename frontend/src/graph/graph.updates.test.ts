@@ -32,7 +32,7 @@ describe("graph updates and log entry point", () => {
     ]);
     expect(
       graphElements(stateStore.getState().state).find((e) => e.data.id === "billing:fee")?.classes,
-    ).toContain("focus-A-edit");
+    ).toContain("focus-edit");
   });
 
   it("uses preset positions, then adds a graph.delta node without moving existing leaves or viewport", () => {

@@ -101,7 +101,7 @@ it.each(["passed", "failed", "error", "timeout"] as const)(
     for (const name of suite.failed_tests) expect(html).toContain(name);
     expect(html.match(/aria-label="Failed"/g)).toHaveLength(2);
     expect(html).toContain(`lucide-${outcome === "passed" ? "check" : "x"}`);
-    expect(html).toContain('data-slot="A"');
+    expect(html).toContain('data-agent-label="A"');
   },
 );
 

@@ -56,7 +56,7 @@ export function ConversationPanel({
       aria-label={
         header.kind === "lead"
           ? "Lead conversation"
-          : `Agent ${header.letter ?? header.slot} conversation`
+          : `Agent ${header.presentation?.label ?? "unknown"} conversation`
       }
       className="conversation-panel flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
     >
@@ -93,7 +93,7 @@ export function ConversationPanel({
                 {entry.kind === "activity" || entry.kind === "round" ? (
                   <ActivityBlock
                     entry={entry}
-                    slot={conversation.header.slot}
+                    presentation={conversation.header.presentation}
                     changeId={conversation.header.changeId}
                     onOpenDiff={onOpenDiff}
                     showHeader={entry === lastActivity}

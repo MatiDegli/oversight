@@ -17,7 +17,7 @@ it("fills agents while retaining the empty work extension slot", () => {
   expect(html).toContain('data-selected-agent="agent-1"');
   expect(html).toContain('aria-label="Where they work"');
   expect(html.match(/class="chat-side-body"><\/div>/g)).toHaveLength(1);
-  expect(html).toContain("No agents yet. Each task you start gets its own letter and color.");
+  expect(html).toContain("No agents yet. Team hue and agent labels follow each task.");
   expect(html).toContain("New task");
   expect(html).toContain("New lead");
   expect(html).not.toMatch(/Nobody|article|avatar/);

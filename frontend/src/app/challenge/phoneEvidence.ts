@@ -1,3 +1,4 @@
+import { presentationFor } from "../../teams/presentation";
 import type { Practice } from "./manifest";
 
 export type PracticeCase = Practice["cases"][number];
@@ -8,8 +9,8 @@ export type SourceRow = {
   line: number;
   text: string;
 };
-export const caseSlot = (practice: Practice, entry: PracticeCase) =>
-  practice.cut.agents[entry.proposal.agent_id]?.slot ?? "A";
+export const caseIdentity = (practice: Practice, entry: PracticeCase) =>
+  presentationFor(practice.cut, entry.proposal.agent_id);
 export function changedNode(practice: Practice, entry: PracticeCase) {
   return practice.cut.graph?.nodes.find(
     (node) => node.id === entry.proposal.graph.nodes_modified[0],

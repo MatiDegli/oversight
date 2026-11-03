@@ -1,4 +1,4 @@
-import { agentSlotStyle } from "../../../theme";
+import { presentationFor, presentationStyle } from "../../../teams/presentation";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { Check, CircleAlert } from "lucide-react";
 import type { State } from "../../../state";
@@ -46,10 +46,8 @@ export function Activity({ state }: { state: State }) {
               <li key={entry.id} className="dock-activity-row" data-entry={entry.id}>
                 <span
                   className="dock-letter"
-                  data-slot={letter}
-                  style={agentSlotStyle(
-                    entry.agentId ? state.agents[entry.agentId]?.slot : undefined,
-                  )}
+                  data-agent-label={letter}
+                  style={presentationStyle(presentationFor(state, entry.agentId))}
                   aria-label={entry.agentId ? `Agent ${letter}` : "Run"}
                 >
                   {letter}

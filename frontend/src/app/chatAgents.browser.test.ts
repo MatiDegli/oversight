@@ -48,6 +48,24 @@ async function open(name = "working", width = 1920, theme = "dark", commands = t
     await check(page.getByRole("list", { name: "Conversation timeline" })).toBeVisible();
   return page;
 }
+function assignedPlan(id: string, lead: string, agents: string[]) {
+  const source = plan(id, lead);
+  if (source.type !== "plan.updated") throw new Error("Missing plan");
+  return {
+    ...source,
+    payload: {
+      ...source.payload,
+      state: "running" as const,
+      subtasks: agents.map((agent_id) => ({
+        agent_id,
+        task: "Subtask",
+        zone: { node_ids: [], paths: [] },
+        depends_on: [],
+        state: "running" as const,
+      })),
+    },
+  };
+}
 const row = (page: Page, letter: string) =>
   page.locator(".chat-agent-row").filter({
     has: page.locator(".chat-agent-name", { hasText: new RegExp(`^Agent ${letter}$`) }),
@@ -58,14 +76,14 @@ it("updates the running header as work, review, conflict and merge events arrive
   const page = await open("empty");
   const count = page.locator(".chat-agents > header > span");
   try {
-    await check(count).toHaveText("0 of 2 running");
+    await check(count).toHaveText("0 running");
     await page.evaluate(
       (events) => {
         window.chatAgentsTest.deliver(events);
       },
       [status(), status("agent-b", { slot: "B" })],
     );
-    await check(count).toHaveText("2 of 2 running");
+    await check(count).toHaveText("2 running");
     await row(page, "A").click();
     await row(page, "B").focus();
     await page.evaluate(
@@ -78,7 +96,7 @@ it("updates the running header as work, review, conflict and merge events arrive
         status("agent-b", { slot: "B", state: "paused" }),
       ],
     );
-    await check(count).toHaveText("2 of 2 running");
+    await check(count).toHaveText("2 running");
     await page.evaluate(
       (events) => {
         window.chatAgentsTest.deliver(events);
@@ -89,63 +107,125 @@ it("updates the running header as work, review, conflict and merge events arrive
         resolved("agent-b", true),
       ],
     );
-    await check(count).toHaveText("2 of 2 running");
+    await check(count).toHaveText("2 running");
     await page.evaluate(
       (events) => {
         window.chatAgentsTest.deliver(events);
       },
       [resolved("agent-b")],
     );
-    await check(count).toHaveText("1 of 2 running");
+    await check(count).toHaveText("1 running");
     await check(row(page, "A")).toHaveAttribute("aria-pressed", "true");
     await check(row(page, "B")).toBeFocused();
   } finally {
     await page.close();
   }
 });
-it("preserves team members on slot reuse and resets rows and letters for a new run", async () => {
-  const page = await open("empty");
-  try {
-    await page.evaluate(
-      (events) => {
-        window.chatAgentsTest.deliver(events);
-      },
-      [plan("p", "lead"), status("first", { plan_id: "p", slot: "B" })],
-    );
-    await row(page, "A·1").click();
-    await page.evaluate(
-      (events) => {
-        window.chatAgentsTest.deliver(events);
-      },
-      [resolved("first"), plan("q", "lead"), status("second", { plan_id: "q", slot: "B" })],
-    );
-    await check(page.locator(".chat-agent-name")).toHaveText(["Agent A·1", "Agent A·2"]);
-    await check(row(page, "A·1")).toHaveAttribute("aria-pressed", "true");
-    await row(page, "A·2").click();
-    await check(page.getByLabel("Agent A·2 conversation", { exact: true })).toBeVisible();
-    const start = seed.find((e) => e.type === "run.started");
-    if (!start) throw new Error("Missing fixture run");
-    await page.evaluate(
-      (events) => {
-        window.chatAgentsTest.deliver(events);
-      },
-      [{ ...start, payload: { ...start.payload, run_id: "c2-new-run" } }],
-    );
-    await check(page.locator(".chat-agent-row")).toHaveCount(0);
-    await check(page.locator(".chat-agents > header > span")).toHaveText("0 of 2 running");
-    await page.evaluate(
-      (events) => {
-        window.chatAgentsTest.deliver(events);
-      },
-      [status("fresh")],
-    );
-    await check(page.locator(".chat-agent-name")).toHaveText(["Agent A"]);
-    await check(row(page, "A")).toHaveAttribute("aria-pressed", "false");
-    await check(page.locator(".chat-agents > header > span")).toHaveText("1 of 2 running");
-  } finally {
-    await page.close();
+async function capturePlanLabels(page: Page, surface: string, width: number, theme: string) {
+  if (process.env.CHAT_AGENTS_SHOTS !== "1") return;
+  const directory = new URL("../../../.shots/chat-agents/", import.meta.url);
+  await mkdir(fileURLToPath(directory), { recursive: true });
+  await page.screenshot({
+    path: fileURLToPath(new URL(`plan-labels-${surface}-${String(width)}-${theme}.png`, directory)),
+    animations: "disabled",
+  });
+}
+async function assertPlanSurfaces(page: Page, width: number, theme: string) {
+  await capturePlanLabels(page, "chat", width, theme);
+  await view(page, "Oversight").click();
+  for (const ordinal of [1, 2]) {
+    const label = `A·1 · plan ${String(ordinal)}`;
+    await check(
+      page.getByRole("tab", { name: new RegExp(`Agent ${label} · conversation$`) }),
+    ).toBeVisible();
+    const tile = page.getByRole("group", { name: `Agent ${label}: Working`, exact: true });
+    await check(tile).toBeVisible();
+    await check(tile).toContainText(`plan ${String(ordinal)}`);
+    expect(await tile.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   }
-});
+  await capturePlanLabels(page, "rail", width, theme);
+  for (const ordinal of [1, 2])
+    await page
+      .getByRole("button", {
+        name: `Close tab Agent A·1 · plan ${String(ordinal)} · conversation`,
+        exact: true,
+      })
+      .click();
+  for (const ordinal of [1, 2]) {
+    const card = page.getByRole("article", {
+      name: `Agent A·1 · plan ${String(ordinal)}`,
+      exact: true,
+    });
+    await check(card).toBeVisible();
+    await check(card.getByRole("heading")).toHaveText(`Agent A·1 · plan ${String(ordinal)}`);
+    expect(await card.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await capturePlanLabels(page, "cards", width, theme);
+  await view(page, "Chat").click();
+}
+it.each([
+  [1920, "dark"],
+  [1280, "dark"],
+  [1280, "day"],
+] as const)(
+  "preserves plan identities on slot reuse and resets for a new run at %i in %s",
+  async (width, theme) => {
+    const page = await open("empty", width, theme);
+    try {
+      await page.evaluate(
+        (events) => {
+          window.chatAgentsTest.deliver(events);
+        },
+        [assignedPlan("p", "lead", ["first"]), status("first", { plan_id: "p", slot: "B" })],
+      );
+      await row(page, "A·1").click();
+      await page.evaluate(
+        (events) => {
+          window.chatAgentsTest.deliver(events);
+        },
+        [
+          resolved("first"),
+          assignedPlan("q", "lead", ["second"]),
+          status("second", { plan_id: "q", slot: "B" }),
+        ],
+      );
+      await check(page.locator(".chat-agent-name")).toHaveText([
+        "Agent A·1 · plan 1",
+        "Agent A·1 · plan 2",
+      ]);
+      await check(page.locator('.chat-agent-row[data-agent-origin="first"]')).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await page.locator('.chat-agent-row[data-agent-origin="second"]').click();
+      await check(
+        page.getByLabel("Agent A·1 · plan 2 conversation", { exact: true }),
+      ).toBeVisible();
+      await assertPlanSurfaces(page, width, theme);
+      const start = seed.find((e) => e.type === "run.started");
+      if (!start) throw new Error("Missing fixture run");
+      await page.evaluate(
+        (events) => {
+          window.chatAgentsTest.deliver(events);
+        },
+        [{ ...start, payload: { ...start.payload, run_id: "c2-new-run" } }],
+      );
+      await check(page.locator(".chat-agent-row")).toHaveCount(0);
+      await check(page.locator(".chat-agents > header > span")).toHaveText("0 running");
+      await page.evaluate(
+        (events) => {
+          window.chatAgentsTest.deliver(events);
+        },
+        [status("fresh")],
+      );
+      await check(page.locator(".chat-agent-name")).toHaveText(["Agent A"]);
+      await check(row(page, "A")).toHaveAttribute("aria-pressed", "false");
+      await check(page.locator(".chat-agents > header > span")).toHaveText("1 running");
+    } finally {
+      await page.close();
+    }
+  },
+);
 async function identityContrast(page: Page, agent: Locator) {
   const samples = await agent.evaluate((el) =>
     [".chat-agent-badge", ".chat-agent-pill"].map((selector) => {
@@ -430,7 +510,7 @@ for (const name of ["empty", "working", "proposed", "review", "merged"])
           const page = await open(name, width, theme);
           try {
             await check(page.locator(".chat-agents > header")).toContainText(
-              `${name === "empty" ? "0" : name === "merged" ? "1" : "2"} of 2 running`,
+              `${name === "empty" ? "0" : name === "merged" ? "1" : "2"} running`,
             );
             if (name !== "empty")
               await check(row(page, name === "merged" ? "B" : "A")).toHaveAttribute(

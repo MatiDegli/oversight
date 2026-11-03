@@ -49,20 +49,18 @@ async function clickChangedNode(page: Page, panel: string): Promise<string> {
     const host = document.querySelector<GraphProbeHost>(selector);
     const node = host?.oversightGraph?.nodeCenters("node.pending")[0];
     if (!host || !node) return null;
-    const slot = ["A", "B"].find((slot) =>
-      host.oversightGraph?.nodeBounds(`node.pending-${slot}`).some((bound) => bound.id === node.id),
-    );
-    if (!slot) return null;
+    const agentId = node.agents?.find((agent) => agent.pending)?.agentId;
+    if (!agentId) return null;
     const box = host.getBoundingClientRect();
-    return { id: node.id, x: box.left + node.x, y: box.top + node.y, slot };
+    return { id: node.id, x: box.left + node.x, y: box.top + node.y, agentId };
   }, graph);
-  const { id, x, y, slot } = (await handle.jsonValue()) as {
+  const { id, x, y, agentId } = (await handle.jsonValue()) as {
     id: string;
     x: number;
     y: number;
-    slot: string;
+    agentId: string;
   };
-  const pending = `node.pending-${slot}`;
+  const pending = `node.pending[pendingAgents *= "|${agentId}|"]`;
   await page.mouse.click(x, y);
   await page.locator(`[aria-label="${panel}"] .line-insert`).first().waitFor();
   await page.waitForFunction((selector) => {

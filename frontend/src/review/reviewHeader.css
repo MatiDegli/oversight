@@ -27,7 +27,10 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: var(--letter-badge-size);
+  min-width: var(--letter-badge-size);
+  width: max-content;
+  padding-inline: 6px;
+  white-space: nowrap;
   height: var(--letter-badge-size);
   border: 1.5px solid var(--slot-graphic);
   border-radius: 7px;

@@ -56,7 +56,11 @@
 }
 .file-agent-mark {
   display: grid;
-  width: 18px;
+  min-width: 18px;
+  width: max-content;
+  padding-inline: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
   height: 18px;
   place-items: center;
   border: 1px solid currentColor;
@@ -114,7 +118,7 @@
   color: var(--text);
   background: var(--page);
 }
-.focus-tab.is-active[data-slot]:not([data-slot="file"]) {
+.focus-tab.is-active[data-agent-id] {
   border-top-color: var(--slot-graphic);
 }
 .focus-body {

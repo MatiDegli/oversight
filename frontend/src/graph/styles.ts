@@ -270,59 +270,42 @@ export function graphStyles(
       selector: "node.marked:childless",
       style: layered(leafOnce),
     },
-    ...(["read", "edit"] as const).flatMap((mode): StylesheetJson =>
-      agentSlots.map((slot) => {
-        const agent = agentLook[slot].family;
-        const fill = theme[`${agent}-node`];
-        return {
-          selector: `node.focus-${slot}-${mode}`,
-          style: {
-            "border-color": theme[agent],
-            "border-width": theme["agent-border-width"],
-            ...(mode === "edit"
-              ? {
-                  ...pendingBorder,
-                  "background-color": fill.color,
-                  "background-opacity": fill.alpha,
-                }
-              : {}),
-          },
-        };
-      }),
-    ),
-    { selector: "node.pending", style: pendingBorder },
-    ...agentSlots.flatMap((slot): StylesheetJson => {
-      const agent = agentLook[slot].family;
-      const fill = theme[`${agent}-node`];
-      const added = theme[`${agent}-node-new`];
+    ...agentSlots.flatMap((key): StylesheetJson => {
+      const family = agentLook[key].family;
+      const fill = theme[`${family}-node`];
+      const added = theme[`${family}-node-new`];
       return [
         {
-          selector: `node.pending-${slot}`,
+          selector: `node.focus-read[paint = "${key}"], node.focus-edit[paint = "${key}"]`,
           style: {
-            "border-color": theme[agent],
+            "border-color": theme[family],
+            "border-width": theme["agent-border-width"],
+            "border-style": "solid",
+          },
+        },
+        {
+          selector: `node.focus-edit[paint = "${key}"]`,
+          style: { "background-color": fill.color, "background-opacity": fill.alpha },
+        },
+        {
+          selector: `node.pending[paint = "${key}"]`,
+          style: {
+            ...pendingBorder,
+            "border-color": theme[family],
             "background-color": fill.color,
             "background-opacity": fill.alpha,
           },
         },
         {
-          selector: `node.pending-new-${slot}`,
+          selector: `node.pending-new[paint = "${key}"]`,
           style: { "background-color": added.color, "background-opacity": added.alpha },
         },
         {
-          selector: `node.pending-new-${slot}.focus-${slot}-edit`,
+          selector: `node.pending-new.focus-edit[paint = "${key}"]`,
           style: { "background-color": fill.color, "background-opacity": fill.alpha },
         },
       ];
     }),
-    {
-      // Cytoscape has one border color: A takes priority; the label names A+B.
-      selector: "node.pending-both",
-      style: {
-        "border-color": theme["agent-a"],
-        "background-color": theme["agent-a-node"].color,
-        "background-opacity": theme["agent-a-node"].alpha,
-      },
-    },
     {
       selector: "node:selected",
       style: { "outline-color": theme.text, "outline-width": theme["selected-ring-width"] },
@@ -381,7 +364,7 @@ export function graphStyles(
     },
     { selector: "edge.inherits", style: { "target-arrow-shape": "triangle-tee" } },
     ...agentSlots.map((slot) => ({
-      selector: `edge.pending-${slot}`,
+      selector: `edge.pending[paint = "${slot}"]`,
       style: {
         "line-style": "dashed" as const,
         "line-color": theme[agentLook[slot].family],

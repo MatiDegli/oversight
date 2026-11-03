@@ -2,7 +2,8 @@ import type { UsageView } from "@contracts";
 import { CircleCheck, CircleMinus, CircleX, Eye } from "lucide-react";
 import type { ReactNode } from "react";
 import type { State } from "../../state";
-import { agentLook } from "../../theme";
+import { presentationFor } from "../../teams/presentation";
+import { presentationLook } from "../../teams/badge";
 import type { Grouping, UsageRow } from "./model";
 
 export function Value({ text }: { text: string }) {
@@ -76,12 +77,10 @@ const modelLabel = (state: State, id: string | null) =>
     ? "Unknown model"
     : (state.run?.models.find((profile) => profile.id === id || profile.model === id)?.label ?? id);
 function Chip({ id, state, small = false }: { id: string; state: State; small?: boolean }) {
-  const slot = state.agents[id]?.slot;
+  const identity = presentationFor(state, id);
   return (
-    <span
-      className={`usage-chip ${small ? "is-small" : ""} ${slot ? agentLook[slot].swatch : "bg-raised text-text"}`}
-    >
-      {slot ?? "?"}
+    <span className={`usage-chip ${small ? "is-small" : ""} ${presentationLook(identity).swatch}`}>
+      {identity?.label ?? "?"}
     </span>
   );
 }
@@ -93,7 +92,7 @@ function TeamIdentity({ row, state }: { row: UsageRow; state: State }) {
           ? "Lead team"
           : row.kind === "plan"
             ? "Plan team"
-            : `Agent ${state.agents[row.id]?.slot ?? row.id}`}
+            : `Agent ${presentationFor(state, row.id)?.label ?? row.id}`}
       </strong>
       <small>
         {row.members.map((id) => (
@@ -124,7 +123,7 @@ export function Identity({ row, group, state }: { row: UsageRow; group: Grouping
         ? "Lead"
         : row.kind === "plan"
           ? "Planner"
-          : `Agent ${state.agents[row.id]?.slot ?? row.id}`;
+          : `Agent ${presentationFor(state, row.id)?.label ?? row.id}`;
   const order = ["agent", "review", "lead", "plan"];
   const roles = [...row.roles]
     .filter(([role]) => role !== null)

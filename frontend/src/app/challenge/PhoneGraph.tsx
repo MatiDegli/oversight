@@ -1,36 +1,33 @@
+import {
+  presentationFor,
+  presentationStyle,
+  type AgentPresentation,
+} from "../../teams/presentation";
 import { GitBranch } from "lucide-react";
 import type { State } from "../../state";
 import type { Practice } from "./manifest";
-import { calledHelper, caseSlot, countAt, nodeName } from "./phoneEvidence";
+import { calledHelper, caseIdentity, countAt, nodeName } from "./phoneEvidence";
 import type { PracticeCase } from "./phoneEvidence";
 
-export function AgentLetter({ slot }: { slot: string }) {
+export function AgentLetter({ identity }: { identity?: AgentPresentation }) {
   return (
-    <span className="pp-letter" data-slot={slot}>
-      {slot}
+    <span className="pp-letter" style={presentationStyle(identity)}>
+      {identity?.label ?? "?"}
     </span>
   );
 }
-export function AgentLine({
-  state,
-  changeId,
-  slot: explicitSlot,
-}: {
-  state: State;
-  changeId: string;
-  slot?: string;
-}) {
+export function AgentLine({ state, changeId }: { state: State; changeId: string }) {
   const change = state.changes[changeId];
   const agent = change ? state.agents[change.agent_id] : undefined;
-  const slot = explicitSlot ?? agent?.slot ?? "A";
+  const identity = presentationFor(state, change?.agent_id);
   const modelLabel =
     state.run?.models.find((model) => model.id === agent?.model)?.label ??
     agent?.model ??
     "Model unavailable";
   return (
-    <div className="pp-agent" data-slot={slot}>
-      <AgentLetter slot={slot} />
-      <strong>Agent {slot}</strong>
+    <div className="pp-agent" style={presentationStyle(identity)}>
+      <AgentLetter identity={identity} />
+      <strong>Agent {identity?.label ?? "?"}</strong>
       <span>{modelLabel}</span>
     </div>
   );
@@ -46,12 +43,12 @@ function Node({
   merged: boolean;
   compact: boolean;
 }) {
-  const slot = caseSlot(practice, entry);
+  const identity = caseIdentity(practice, entry);
   return (
-    <div className={`pp-node ${merged ? "is-merged" : ""}`} data-slot={slot}>
+    <div className={`pp-node ${merged ? "is-merged" : ""}`} style={presentationStyle(identity)}>
       <span>{nodeName(practice, entry)}</span>
       {!compact && <small>{merged ? "Merged" : "Changed"}</small>}
-      <AgentLetter slot={slot} />
+      <AgentLetter identity={identity} />
     </div>
   );
 }
@@ -94,7 +91,7 @@ function Piece({
   return (
     <div
       className={`pp-piece ${helper ? "pp-call" : "pp-cone"} ${compact ? "is-compact" : ""}`}
-      data-slot={caseSlot(practice, entry)}
+      style={presentationStyle(caseIdentity(practice, entry))}
     >
       <svg
         className={`pp-taxi ${helper && !merged ? "is-pending" : ""}`}
@@ -187,7 +184,7 @@ export function PhoneGraph({
           {pieces
             .map(
               (item) =>
-                `${caseSlot(practice, item)}: ${item.proposal.impact.entries.length ? `${String(item.proposal.impact.entries.length)} possibly affected` : "none"}`,
+                `${caseIdentity(practice, item)?.label ?? "?"}: ${item.proposal.impact.entries.length ? `${String(item.proposal.impact.entries.length)} possibly affected` : "none"}`,
             )
             .join(", ")}
         </p>

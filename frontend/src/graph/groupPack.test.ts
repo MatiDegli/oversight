@@ -31,18 +31,18 @@ function pack(counts: Record<string, number>) {
 }
 
 describe("group packing", () => {
-  it("uses 446 by 220 cells, nine to a column, with card tops at cell tops", () => {
+  it("uses 446 by 350 cells, six to a column for full labels, with card tops at cell tops", () => {
     const { positions, cellWidth, cellHeight } = pack({ lib: 10, misc: 2 });
-    expect([cellWidth, cellHeight]).toEqual([446, 220]);
+    expect([cellWidth, cellHeight]).toEqual([446, 350]);
     expect(positions.get("lib-00")).toEqual({ x: 223, y: 35 });
-    expect(positions.get("lib-08")).toEqual({ x: 223, y: 1795 });
-    expect(positions.get("lib-09")).toEqual({ x: 669, y: 35 });
+    expect(positions.get("lib-05")).toEqual({ x: 223, y: 1785 });
+    expect(positions.get("lib-06")).toEqual({ x: 669, y: 35 });
   });
   it("leaves 340 sideways and 460 stacked, sharing the first row's top", () => {
     const { boxes } = pack({ lib: 30, misc: 3, docs: 1 });
-    expect(boxes.get("lib")).toEqual({ x: 0, y: 0, width: 1784, height: 1980 });
-    expect(boxes.get("misc")).toEqual({ x: 2124, y: 0, width: 446, height: 660 });
-    expect(boxes.get("docs")).toEqual({ x: 2124, y: 1120, width: 446, height: 220 });
+    expect(boxes.get("lib")).toEqual({ x: 0, y: 0, width: 2230, height: 2100 });
+    expect(boxes.get("misc")).toEqual({ x: 2570, y: 0, width: 446, height: 1050 });
+    expect(boxes.get("docs")).toEqual({ x: 2570, y: 1510, width: 446, height: 350 });
   });
   it("sorts groups by count then label, with tests last", () => {
     expect([...pack({ tests: 32, zebra: 3, alpha: 3, lib: 30 }).boxes.keys()]).toEqual([
@@ -69,7 +69,7 @@ describe("group packing", () => {
     const packed = groupPack(roots, full, heights, themes.dark);
     expect(packed?.positions.get("lib-00")).toEqual({ x: 223, y: 285 });
     expect(packed?.positions.get("lib-01")).toEqual({ x: 223, y: 755 });
-    expect(packed?.positions.get("lib-09")).toEqual({ x: 669, y: 35 });
+    expect(packed?.positions.get("lib-06")).toEqual({ x: 669, y: 35 });
   });
   it("does not change the existing fold projection with fewer than two groups", () => {
     const { roots, full, heights } = input({ shop: 4 });
@@ -86,7 +86,7 @@ describe("group packing", () => {
     const { roots } = input({ lib: 10, docs: 2 });
     for (const expanded of [new Set<string>(), new Set(roots.map((r) => r.data.id))]) {
       const folded = new Set(roots.filter((r) => !expanded.has(r.data.id)).map((r) => r.data.id));
-      expect(foldPositions(roots, expanded, themes.dark, folded).positions.get("lib-09")).toEqual({
+      expect(foldPositions(roots, expanded, themes.dark, folded).positions.get("lib-06")).toEqual({
         x: 669,
         y: 35,
       });

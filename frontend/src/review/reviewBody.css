@@ -484,11 +484,11 @@
   line-height: 21px;
   margin-top: 4px;
 }
-.parameter-pair > div[data-agent-slot] {
+.parameter-pair > div[data-agent-id] {
   border-color: var(--slot-graphic);
   background: var(--slot-tint);
 }
-.parameter-pair > div[data-agent-slot] > span {
+.parameter-pair > div[data-agent-id] > span {
   color: var(--slot-text);
 }
 .parameter-retained {

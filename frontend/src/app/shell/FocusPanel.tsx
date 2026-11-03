@@ -1,9 +1,10 @@
+import { presentationFor, presentationStyle } from "../../teams/presentation";
 import { agentSlotStyle } from "../../theme";
 import { Maximize2, Minimize2, Settings, Timer, X } from "lucide-react";
 import { lazy, useLayoutEffect, useRef, type ReactNode } from "react";
 import { FileView } from "../../editor";
 // eslint-disable-next-line no-restricted-imports -- K2a shares the Chat team identity without extending the agents barrel.
-import { selectChatLeads, selectChatRows } from "../../agents/chatLeadSelectors";
+import { selectChatLeads } from "../../agents/chatLeadSelectors";
 import { selectConversation, loadConversationPanel } from "../../agents";
 import { InboxFrame, ConversationFrame, FileFrame, SettingsFrame } from "./PanelFallbacks";
 import { LazyPanel } from "./LazyPanel";
@@ -156,15 +157,7 @@ export function FocusPanel(
           {tabs.map((tab) => {
             const changeId = tab.review ?? tab.diff?.changeId;
             const change = changeId ? state.changes[changeId] : undefined;
-            const slot = tab.conversation
-              ? state.agents[tab.conversation]?.slot
-              : change
-                ? state.agents[change.agent_id]?.slot
-                : undefined;
-            const person = tab.conversation
-              ? selectChatRows(state).find((row) => row.id === tab.conversation)
-              : undefined;
-            const lead = person?.kind === "lead" ? person : undefined;
+            const identity = presentationFor(state, tab.conversation ?? change?.agent_id);
             const title =
               tab.id === "inbox"
                 ? "Decisions"
@@ -175,11 +168,9 @@ export function FocusPanel(
                     : tab.id === "practice"
                       ? "Two-change practice"
                       : tab.conversation
-                        ? lead
-                          ? `Lead ${lead.letter} · conversation`
-                          : slot
-                            ? `Agent ${person?.letter ?? slot} · conversation`
-                            : "Conversation"
+                        ? identity
+                          ? `${identity.kind === "lead" && !state.agents[identity.agentId] ? "Lead" : "Agent"} ${identity.label} · conversation`
+                          : "Conversation"
                         : tab.review
                           ? `Review · ${tab.review}`
                           : tab.diff
@@ -189,8 +180,8 @@ export function FocusPanel(
               <div
                 key={tab.id}
                 className={`focus-tab ${view.activeTab === tab.id ? "is-active" : ""}`}
-                data-slot={person?.hue ?? slot ?? "file"}
-                style={agentSlotStyle(person?.hue ?? slot)}
+                data-agent-id={identity?.agentId}
+                style={presentationStyle(identity)}
               >
                 <button
                   type="button"
@@ -200,7 +191,7 @@ export function FocusPanel(
                   onClick={() => onTabAction?.({ type: "activate", id: tab.id })}
                   className={`min-w-0 truncate px-3 py-2 ${focusRing}`}
                 >
-                  {slot && <span className="mr-2 font-bold">{person?.letter ?? slot}</span>}
+                  {identity && <span className="mr-2 font-bold">{identity.label}</span>}
                   {tab.id === "settings" && (
                     <Settings aria-hidden="true" className="mr-2 inline size-3.5" />
                   )}
@@ -269,6 +260,7 @@ export function FocusPanel(
           <FileView
             loadingFallback={
               <FileFrame
+                agentLabel={presentationFor(state, view.file.agentId)?.label}
                 target={view.file}
                 files={props.files}
                 commit={state.graph?.commit ?? ""}
@@ -276,6 +268,7 @@ export function FocusPanel(
                 startAgentAction={props.startAgentAction}
               />
             }
+            agentLabel={presentationFor(state, view.file.agentId)?.label}
             target={view.file}
             startAgentAction={props.startAgentAction}
             files={props.files}

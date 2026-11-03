@@ -24,7 +24,9 @@ describe("merges", () => {
     expect(others).toEqual([]);
     expect(merge).toMatchObject({
       key: "change-1:21",
-      slot: "A",
+      agentId: "agent-1",
+      team: "agent-1",
+      label: "A",
       source: "agent-a",
       id: "shop.pricing:compute_price",
       age: 0,
@@ -142,7 +144,15 @@ describe("modules", () => {
 it("selects ready and parsed Needs you events, omits missing nodes and computes event age", () => {
   const state = through(20);
   expect(selectMilestones(state)).toMatchObject([
-    { key: "change-1:20", kind: "ready", age: 0, slot: "A", id: "shop.pricing:compute_price" },
+    {
+      key: "change-1:20",
+      kind: "ready",
+      age: 0,
+      agentId: "agent-1",
+      team: "agent-1",
+      label: "A",
+      id: "shop.pricing:compute_price",
+    },
   ]);
   const needs: ServerEvent = {
     seq: 21,

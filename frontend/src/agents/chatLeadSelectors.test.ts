@@ -1,13 +1,7 @@
 import type { AgentStatus, LeadStatus, ServerEvent } from "@contracts";
 import { expect, it } from "vitest";
 // eslint-disable-next-line no-restricted-imports -- Shared event builders exercise the production reducer.
-import {
-  fold,
-  plan as oldPlan,
-  resolved as oldResolved,
-  seed,
-  status as oldStatus,
-} from "../app/chatAgents.fixture";
+import { fold, plan as oldPlan, seed, status as oldStatus } from "../app/chatAgents.fixture";
 import { selectChatLeads, selectChatRows, selectLeadLimits } from "./chatLeadSelectors";
 import { selectConversation } from "./conversation/selectConversation";
 import { holderReason } from "./taskBoxModel";
@@ -23,15 +17,23 @@ function status(id: string, overrides: Partial<AgentStatus> = {}) {
   return { ...oldStatus(id, { change_id: `change-${id.split("-")[1] ?? "1"}`, ...overrides }), ts };
 }
 function plan(id: string, owner: string, revision = 1) {
-  return { ...oldPlan(id, owner, revision), ts };
-}
-function resolved(id: string) {
-  const item = oldResolved(id);
-  if (item.type !== "change.resolved") throw new Error("Missing resolution");
+  const source = oldPlan(id, owner, revision);
+  if (source.type !== "plan.updated") throw new Error("Missing plan");
   return {
-    ...item,
+    ...source,
     ts,
-    payload: { ...item.payload, change_id: `change-${id.split("-")[1] ?? "1"}` },
+    payload: {
+      ...source.payload,
+      subtasks: [
+        {
+          task: "Subtask",
+          zone: { node_ids: [], paths: [] },
+          depends_on: [],
+          agent_id: "agent-4",
+          state: "running" as const,
+        },
+      ],
+    },
   };
 }
 function lead(id = "agent-1", overrides: Partial<LeadStatus> = {}) {
@@ -70,22 +72,8 @@ it("opens a lead team before its first member, interleaves direct work and retai
   if (!member) throw new Error("Missing member");
   expect(holderReason(state, member)).toBe("Agent A·1 is working.");
 });
-it.each(["starting", "working", "idle"] as const)(
-  "keeps the lead hue occupied while %s",
-  (state) => {
-    const prefix = [
-      ...seed,
-      lead("agent-1", { state }),
-      ...Array.from({ length: 5 }, (_, i) => status(`agent-${String(i + 2)}`)),
-      resolved("agent-2"),
-      status("agent-7"),
-    ];
-    expect(selectChatRows(fold(prefix)).at(-1)?.hue).toBe("B");
-  },
-);
 it("counts only team members, active coding work, review and latest proposed plans", () => {
   const proposed = plan("plan-1", "agent-1");
-  if (proposed.type !== "plan.updated") throw new Error("Missing plan");
   const planEvent = {
     ...proposed,
     payload: {
@@ -159,8 +147,9 @@ it("releases a hue when the first observed status is already terminal", () => {
     status("agent-3"),
   ]);
   expect(selectChatRows(state).map((row) => row.letter)).toEqual(["A", "B", "C"]);
+  expect(state.agents["agent-3"]?.slot).toBe("A");
   expect(selectConversation(state, "agent-3", [])?.header).toMatchObject({
-    slot: "A",
+    presentation: { label: "C", hue: "C" },
     letter: "C",
     hue: "C",
   });

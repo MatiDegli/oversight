@@ -87,7 +87,7 @@ describe("selectConversation", () => {
     expect(select(beforeUsage)?.header.cost).toBeUndefined();
     expect(select({ ...sketchState, agentCosts: { "agent-1": null } })?.header.cost).toBeNull();
     expect(select()?.header).toMatchObject({
-      slot: "A",
+      presentation: { label: "A", hue: "A" },
       state: "revising",
       modelLabel: "Muse Spark",
       reasoning: "low",

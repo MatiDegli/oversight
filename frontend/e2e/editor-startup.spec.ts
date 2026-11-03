@@ -5,7 +5,7 @@ import type { Locator } from "@playwright/test";
 import type { GraphProbeHost } from "../src/graph";
 import { themes } from "../src/theme";
 import { engaged, installHolds, release } from "./holds";
-import { holds } from "./level2-log";
+import { a, holds } from "./level2-log";
 import { interceptCommands, removeRoutes, tapNode } from "./level2-support";
 import {
   editorAssets,
@@ -96,7 +96,8 @@ for (const first of ["file", "live diff", "review"] as const) {
       await page.evaluate(() => document.fonts.check('15px "Atkinson Hyperlegible Next"')),
     ).toBe(true);
 
-    const card = page.getByRole("article", { name: "Agent A" });
+    // Follow the pricing author by ID: runtime slot A is team B in this recording.
+    const card = page.locator(`[data-agent-card="${a.agent_id}"]`);
     if (first === "file") await tapNode(page, "shop.pricing:compute_price");
     else if (first === "live diff") {
       await holdUnboundedIdleWork(page);

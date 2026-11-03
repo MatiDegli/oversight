@@ -3,7 +3,7 @@ import { useEffect, useRef, useTransition } from "react";
 import { ArrowRight, Check, Info, LockKeyhole, Play, X, ArrowLeftRight } from "lucide-react";
 import "./phoneGraph.css";
 import { AgentLetter, AgentLine, PhoneGraph } from "./PhoneGraph";
-import { caseSlot, nodeName } from "./phoneEvidence";
+import { caseIdentity, nodeName } from "./phoneEvidence";
 import { PhoneDecision } from "./PhoneDecision";
 import { preparePhoneReview } from "./PhoneReview";
 import { LazyPanel } from "../shell/LazyPanel";
@@ -29,7 +29,7 @@ function Introduction({ practice, onStart }: PanelProps) {
         <div className="pp-previews">
           {practice.cases.map((entry) => (
             <div className="pp-preview" key={entry.changeId}>
-              <AgentLetter slot={caseSlot(practice, entry)} />
+              <AgentLetter identity={caseIdentity(practice, entry)} />
               <div>
                 <h2>{entry.title}</h2>
                 <p>{nodeName(practice, entry)}</p>
@@ -162,7 +162,7 @@ function Finish({ practice, attempt, onRestart, onExit }: PanelProps) {
         <div className="pp-recap">
           {practice.cases.map((entry) => (
             <div key={entry.changeId}>
-              <AgentLetter slot={caseSlot(practice, entry)} />
+              <AgentLetter identity={caseIdentity(practice, entry)} />
               <span>{nodeName(practice, entry)}</span>
               <span>
                 {attempt.answers[entry.changeId] === entry.reference ? "Matched" : "Different"}

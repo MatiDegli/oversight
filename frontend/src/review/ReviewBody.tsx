@@ -1,3 +1,4 @@
+import { presentationFor } from "../teams/presentation";
 import { ChevronDown, CircleAlert } from "lucide-react";
 import { Fragment } from "react";
 import type { ReactNode } from "react";
@@ -40,7 +41,7 @@ export function ReviewBody({
   const change = state.changes[changeId];
   const extensions = parameterExtensions(state, changeId);
   const root = useRelocatedDetails();
-  const slot = change ? state.agents[change.agent_id]?.slot : undefined;
+  const identity = presentationFor(state, change?.agent_id);
   const answers = useAnswers((s) => s.drafts[candidateKey(state, changeId)]) ?? {};
   const questions = facts?.review_cards ?? [];
   const title =
@@ -148,7 +149,7 @@ export function ReviewBody({
                   <CircleAlert aria-hidden="true" size={16} />
                   <div>
                     {item.line}
-                    {item.example && <Example row={item.example} slot={slot} />}
+                    {item.example && <Example row={item.example} identity={identity} />}
                   </div>
                 </li>
               ))}
@@ -167,7 +168,7 @@ export function ReviewBody({
                       {e?.differing_count} of {e?.compared_count} recorded calls changed
                     </span>
                   </p>
-                  {example && <Example row={example} slot={slot} />}
+                  {example && <Example row={example} identity={identity} />}
                 </div>
               );
             })}
@@ -180,7 +181,7 @@ export function ReviewBody({
         </section>
       )}
       <section aria-label="Agent note" className="review-agent-note">
-        <p>Agent {slot ?? "?"} says</p>
+        <p>Agent {identity?.label ?? "unknown"} says</p>
         <p>{change?.proposal?.summary ?? "The agent left no note."}</p>
         {change && showCrossReview && (
           <CrossReviewNote
@@ -200,7 +201,7 @@ export function ReviewBody({
             ) : (
               <>
                 {comparison}
-                <NewParameterCalls entries={extensions} slot={slot} />
+                <NewParameterCalls entries={extensions} identity={identity} />
                 {((extensions.length > 0 && comparison) ||
                   (!comparison && hasReviewFindings(facts))) &&
                   change?.proposal && (

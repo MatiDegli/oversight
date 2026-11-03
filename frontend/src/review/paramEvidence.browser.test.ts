@@ -79,13 +79,14 @@ const chip = (page: Page) => page.locator("[data-chip-node] button");
 const section = (page: Page) => page.locator(".parameter-calls > section");
 const samples = (page: Page) => page.locator(".parameter-samples");
 it.each(["dark", "day"])(
-  "colors phone After evidence without ancestor slot styles in %s",
+  "colors phone After evidence from its author without ancestor styles in %s",
   async (theme) => {
     await mounted(390, theme, "mixed", async (page) => {
       await samples(page).locator("summary").click();
-      const after = page.locator(".parameter-pair > [data-agent-slot]");
+      const after = page.locator('.parameter-pair > [data-agent-id="agent-1"]');
       await check(after).toHaveCount(4);
       for (const cell of await after.all()) {
+        await check(cell.locator("span")).toHaveText("After · Agent A");
         const colors = await cell.evaluate((el) => {
           const reference = document.createElement("div");
           reference.style.cssText =

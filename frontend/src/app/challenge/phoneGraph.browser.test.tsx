@@ -1,3 +1,4 @@
+import { presentationFor } from "../../teams/presentation";
 import { launchBrowser } from "../../browserLaunch.support";
 import { readFileSync } from "node:fs";
 import { expect as check } from "@playwright/test";
@@ -8,7 +9,7 @@ import { manifest, validateManifest } from "./manifest";
 import { recording } from "./recording.fixture";
 
 it.each(["A", "B"] as const)(
-  "colors a new exact call and its arrow in the recorded agent %s color",
+  "keeps the recorded team hue and label when capacity changes to %s",
   async (slot) => {
     const practice = validateManifest(manifest, recording);
     const entry = practice.cases[0];
@@ -30,7 +31,8 @@ it.each(["A", "B"] as const)(
       const node = page.locator(".pp-node");
       const color = await node.evaluate((element) => getComputedStyle(element).borderTopColor);
       expect(color).not.toBe("rgba(0, 0, 0, 0)");
-      await check(node).toHaveAttribute("data-slot", slot);
+      await check(node).toContainText(presentationFor(practice.cut, agent.agent_id)?.label ?? "?");
+      await check(node).toHaveAttribute("style", /--slot-graphic:var\(--agent-b\)/);
       await check(page.locator(".pp-taxi.is-pending")).toHaveCSS("stroke", color);
       await check(page.locator(".pp-taxi.is-pending .pp-arrow")).toHaveCSS("fill", color);
     } finally {

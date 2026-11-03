@@ -1,3 +1,4 @@
+import { agentEvidence } from "../teams/evidence.testSupport";
 import { readFileSync } from "node:fs";
 import type { ServerEvent } from "@contracts";
 import { expect, it, vi } from "vitest";
@@ -24,14 +25,14 @@ it("holds changed and dashed pending marks until the shared 250 + 1450 ms arriva
     (node) => node.data.id === "shop.pricing:compute_price",
   );
   expect(row?.data.marks?.word).toBe("changed");
-  expect(row?.classes).toContain("pending-A");
+  expect(row?.classes).toContain("pending");
   const after = mergingChanges(starts, 2700, false);
   expect(after).toEqual([]);
   expect(
     graphElements(state, false, null, null, false, null, after).find(
       (node) => node.data.id === row?.data.id,
     )?.classes,
-  ).not.toContain("pending-A");
+  ).not.toContain("pending");
   expect(mergingChanges(starts, 1000, true)).toEqual([]);
   expect(mergingChanges(mergeArrivals(state, new Map(), 1000, true), 1000, false)).toEqual([]);
   expect(mergeArrivals(createInitialState(), starts, 3000).size).toBe(0);
@@ -96,6 +97,7 @@ it("shows an evicted merge as arrived instead of Merging without travel", () => 
       {
         ...agent,
         agent_id: slot,
+        state: "done" as const,
         slot,
         change_id: slot,
       },
@@ -115,7 +117,8 @@ it("shows an evicted merge as arrived instead of Merging without travel", () => 
         message: "Needs you — revision=1; head=abc; code=main_moved; reason=Main moved",
       },
     }));
-  const next = { ...state, changes, agents, decisionEvents };
+  const retained = agentEvidence({ ...state, changes, agents, decisionEvents: [] });
+  const next = { ...retained, decisionEvents: [...retained.decisionEvents, ...decisionEvents] };
   const before = clock.getSnapshot();
   const listener = vi.fn();
   clock.subscribe(listener);
@@ -148,8 +151,8 @@ it("keeps an added node new throughout Merging", () => {
     (entry) => entry.data.id === node.id,
   );
   expect(row?.data.marks?.word).toBe("new");
-  expect(row?.classes).toContain("pending-A");
+  expect(row?.classes).toContain("pending");
   const arrived = graphElements(changed).find((entry) => entry.data.id === node.id);
   expect(arrived?.data.marks?.word).not.toBe("new");
-  expect(arrived?.classes).not.toContain("pending-A");
+  expect(arrived?.classes).not.toContain("pending");
 });

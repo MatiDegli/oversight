@@ -112,7 +112,11 @@ export type ChatLead = ReturnType<typeof selectChatLeads>[number];
 
 export function selectChatRows(state: State) {
   return [
-    ...selectChatLeads(state).map((row) => ({ kind: "lead" as const, ...row })),
-    ...selectChatAgents(state).map((row) => ({ kind: "agent" as const, ...row })),
-  ].sort((a, b) => a.order - b.order || a.member - b.member);
+    ...selectChatLeads(state).map((row) => ({ ...row, kind: "lead" as const })),
+    ...selectChatAgents(state).map((row) => ({ ...row, kind: "agent" as const })),
+  ].sort(
+    (a, b) =>
+      a.order - b.order ||
+      (a.kind === "lead" ? -1 : (a.subtask ?? 0)) - (b.kind === "lead" ? -1 : (b.subtask ?? 0)),
+  );
 }

@@ -1,4 +1,4 @@
-import { agentSlotStyle } from "../../../theme";
+import { presentationFor, presentationStyle } from "../../../teams/presentation";
 import { Check, X } from "lucide-react";
 import type { State } from "../../../state";
 import { agentLetter, duration, selectTestRuns } from "./selectors";
@@ -19,10 +19,8 @@ export function Tests({ state }: { state: State }) {
                 <div className="dock-facts">
                   <span
                     className="dock-letter"
-                    data-slot={letter}
-                    style={agentSlotStyle(
-                      run.agentId ? state.agents[run.agentId]?.slot : undefined,
-                    )}
+                    data-agent-label={letter}
+                    style={presentationStyle(presentationFor(state, run.agentId))}
                     aria-label={`Agent ${letter}`}
                   >
                     {letter}
@@ -39,8 +37,8 @@ export function Tests({ state }: { state: State }) {
               <div className="dock-facts">
                 <span
                   className="dock-letter"
-                  data-slot={letter}
-                  style={agentSlotStyle(run.agentId ? state.agents[run.agentId]?.slot : undefined)}
+                  data-agent-label={letter}
+                  style={presentationStyle(presentationFor(state, run.agentId))}
                   aria-label={`Agent ${letter}`}
                 >
                   {letter}

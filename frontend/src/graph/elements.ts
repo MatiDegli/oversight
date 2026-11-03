@@ -1,11 +1,15 @@
-import type { GraphEdge, GraphNode, ImpactCone, Point, Slot } from "@contracts";
+import type { GraphEdge, GraphNode, ImpactCone, Point } from "@contracts";
 
-import { selectNodeMarks, selectPendingChanges } from "../state";
-import type { NodeMarks as Touch, State } from "../state";
+import { selectPendingChanges } from "../state";
+import type { State } from "../state";
 import { getActiveTheme } from "../theme";
 
 import { nodeGeometry, rowWidthAt } from "./geometry";
-import type { NodeMarks, Word } from "./layers";
+import type { NodeMarks } from "./layers";
+import type { AgentMark } from "./agentMarks";
+import { combineMarks, selectAgentMarks, marksPaint, identityOrder } from "./agentMarks";
+import type { PaletteKey } from "../theme";
+import { presentationFor } from "../teams/presentation";
 import { folderGroups } from "./groups";
 import { BUILTIN_NAMES } from "./builtinNames";
 
@@ -30,6 +34,8 @@ export interface GraphElement {
     h?: number;
     /** The state word and letter badges of a leaf an agent touches. */
     marks?: NodeMarks;
+    paint?: PaletteKey;
+    pendingAgents?: string;
     distance?: number;
     measured?: MeasuredWord;
     parent?: string;
@@ -38,47 +44,6 @@ export interface GraphElement {
   };
   classes: string;
   position?: Point;
-}
-
-const strength: Record<Word, number> = { editing: 3, changed: 2, new: 2, read: 1 };
-
-/**
- * What the node says about each agent that touches it: editing over changed or new over read, and
- * one word for the strongest (A's on a tie). Null when no known agent touches it.
- */
-function marksOf(
-  touch: Touch | undefined,
-  newFor: readonly Slot[],
-  lit: boolean,
-): NodeMarks | null {
-  if (!touch) return null;
-  const states: [Slot, Word][] = [];
-  for (const slot of ["A", "B"] as const) {
-    // Review's read history never colors the cone: only pending changes keep their marks there.
-    const mode = lit && !touch.pending ? undefined : touch.focus[slot];
-    const word: Word | null =
-      mode === "edit"
-        ? "editing"
-        : touch.pendingSlots.includes(slot)
-          ? newFor.includes(slot)
-            ? "new"
-            : "changed"
-          : mode === "read"
-            ? "read"
-            : null;
-    if (word) states.push([slot, word]);
-  }
-  const [first, ...rest] = states;
-  if (!first) return null;
-  const [slot, word] = rest.reduce(
-    (best, state) => (strength[state[1]] > strength[best[1]] ? state : best),
-    first,
-  );
-  return {
-    word,
-    slot,
-    badges: states.map(([who, said]) => ({ slot: who, filled: said !== "read" })),
-  };
 }
 
 const plural = (count: number, one: string, many: string) =>
@@ -111,44 +76,32 @@ export function graphElements(
 ): GraphElement[] {
   const nodes = new Map(state.graph?.nodes.map((node) => [node.id, node]));
   const edges = new Map(state.graph?.edges.map((edge) => [edge.id, edge]));
-  const nodeMarks = selectNodeMarks(state);
+  const nodeMarks = selectAgentMarks(state, merging);
   const addedNodeSlots = new Map<string, string[]>();
   for (const id of merging) {
     const change = state.changes[id];
-    const slot = change && state.agents[change.agent_id]?.slot;
-    if (!change || !slot || change.resolution?.merge !== "merged") continue;
+    if (!change || change.resolution?.merge !== "merged") continue;
     for (const node of change.graph.nodes_added) {
       if (!nodes.has(node.id)) nodes.set(node.id, node);
-      addedNodeSlots.set(node.id, [...(addedNodeSlots.get(node.id) ?? []), `pending-new-${slot}`]);
-    }
-    for (const nodeId of [
-      ...change.graph.nodes_modified,
-      ...change.graph.nodes_added.map((node) => node.id),
-    ]) {
-      const marks = nodeMarks[nodeId] ?? { focus: {}, pending: false, pendingSlots: [] };
-      nodeMarks[nodeId] = {
-        ...marks,
-        pending: true,
-        pendingSlots: [...new Set([...marks.pendingSlots, slot])],
-      };
+      addedNodeSlots.set(node.id, ["pending-new"]);
     }
   }
   const addedEdgeSlots = new Map<string, string[]>();
+  const edgeMarks = new Map<string, AgentMark[]>();
   for (const change of selectPendingChanges(state)) {
-    const slot = state.agents[change.agent_id]?.slot;
+    const identity = presentationFor(state, change.agent_id);
     for (const node of change.graph.nodes_added) {
-      if (!nodes.has(node.id)) {
-        nodes.set(node.id, node);
-        if (slot) addedNodeSlots.set(node.id, [`pending-new-${slot}`]);
-      }
+      if (!nodes.has(node.id)) nodes.set(node.id, node);
+      addedNodeSlots.set(node.id, ["pending-new"]);
     }
     for (const edge of change.graph.edges_added) {
       if (!edges.has(edge.id)) edges.set(edge.id, edge);
-      if (slot) {
-        const classes = addedEdgeSlots.get(edge.id) ?? [];
-        classes.push(`pending-${slot}`);
-        addedEdgeSlots.set(edge.id, classes);
-      }
+      addedEdgeSlots.set(edge.id, ["pending"]);
+      if (identity)
+        edgeMarks.set(edge.id, [
+          ...(edgeMarks.get(edge.id) ?? []),
+          { ...identity, word: "changed", pending: true, filled: true },
+        ]);
     }
   }
   const visible = new Map([...nodes].filter(([, node]) => showTests || !node.is_test));
@@ -209,21 +162,20 @@ export function graphElements(
     const distance = lit?.has(node.id) ? distances.get(node.id) : undefined;
     if (distance !== undefined) classes.push("cone");
     const word =
-      distance !== undefined && !cone?.seeds.includes(node.id) && !nodeMarks[node.id]?.pending
+      distance !== undefined &&
+      !cone?.seeds.includes(node.id) &&
+      !nodeMarks[node.id]?.some((mark) => mark.pending)
         ? measured?.get(node.id)
         : null;
     if (word) classes.push(`measured-${word === "not measured" ? "unmeasured" : word}`);
-    const touch = nodeMarks[node.id];
-    // Review's read history must not color the cone; only pending changes keep agent marks.
-    const focus = lit !== null && !preserveReads && !touch?.pending ? {} : (touch?.focus ?? {});
-    for (const [slot, mode] of Object.entries(focus)) classes.push(`focus-${slot}-${mode}`);
-    if (focus.A && focus.B) classes.push("focus-both");
-    if (touch?.pending) {
-      classes.push("pending", ...touch.pendingSlots.map((slot) => `pending-${slot}`));
-      if (touch.pendingSlots.length === 2) classes.push("pending-both");
-    }
-    const newFor = (addedNodeSlots.get(node.id) ?? []).map((cls) => cls.slice(-1) as Slot);
-    const marks = marksOf(touch, newFor, lit !== null && !preserveReads);
+    const touch = nodeMarks[node.id] ?? [];
+    const pending = touch.some((mark) => mark.pending);
+    // Review history cannot paint work outside a pending change.
+    const shown = lit !== null && !preserveReads && !pending ? [] : touch;
+    if (shown.some((mark) => mark.word === "read")) classes.push("focus-read");
+    if (shown.some((mark) => mark.word === "editing")) classes.push("focus-edit");
+    if (pending) classes.push("pending");
+    const marks = combineMarks(shown);
     if (marks) classes.push("marked");
     const frame = node.kind === "module" || node.kind === "class";
     const held = below.get(node.id) ?? { callables: 0, classes: 0, added: 0, children: 0 };
@@ -251,7 +203,7 @@ export function graphElements(
         ...(word ? { measured: word } : {}),
         label: node.name,
         ...size,
-        ...(marks ? { marks } : {}),
+        ...(marks ? { marks, ...marksPaint(marks) } : {}),
         ...(frame
           ? {
               title: node.kind === "module" ? (node.path.split("/").pop() ?? node.name) : node.name,
@@ -265,6 +217,7 @@ export function graphElements(
     });
   }
   for (const edge of edges.values()) {
+    const marks = combineMarks((edgeMarks.get(edge.id) ?? []).sort(identityOrder));
     if (!visible.has(edge.src) || !visible.has(edge.dst)) continue;
     elements.push({
       group: "edges",
@@ -273,6 +226,7 @@ export function graphElements(
         kind: edge.kind,
         source: edge.src,
         target: edge.dst,
+        ...(marks ? { marks, ...marksPaint(marks) } : {}),
         restPossible: !BUILTIN_NAMES.has(nodes.get(edge.dst)?.name ?? ""),
       },
       classes: [

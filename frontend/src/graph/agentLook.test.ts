@@ -1,18 +1,18 @@
+import { mark, marks as rendererMarks } from "./marks.testSupport";
 import { it, expect } from "vitest";
 import { agentLook, agentSlots, themes } from "../theme";
 import { graphStyles } from "./styles";
 import { marksLayer } from "./layers";
 
 it.each(Object.entries(themes))(
-  "paints every slot's borders, fill and letters from the %s palette",
+  "paints every palette family's borders, fill and letters from the %s palette",
   (_, theme) => {
     const styles = graphStyles(theme);
     for (const slot of agentSlots) {
       const { family, text } = agentLook[slot];
       for (const selector of [
-        `node.pending-${slot}`,
-        `node.focus-${slot}-read`,
-        `node.focus-${slot}-edit`,
+        `node.pending[paint = "${slot}"]`,
+        `node.focus-read[paint = "${slot}"], node.focus-edit[paint = "${slot}"]`,
       ]) {
         const entry = styles.find((entry) => entry.selector === selector);
         expect(
@@ -24,7 +24,7 @@ it.each(Object.entries(themes))(
       const svg = decodeURIComponent(
         marksLayer(
           theme,
-          { slot, word: "changed", badges: [{ slot, filled: true }] },
+          { ...rendererMarks(slot), badges: [mark(slot)] },
           { width: 282, height: 46 },
         ).image,
       );

@@ -1,3 +1,4 @@
+import { selectPresentation } from "../teams/presentation";
 import { agentLook } from "../theme";
 import type { RefObject } from "react";
 import { Maximize, Minus, Plus } from "lucide-react";
@@ -42,7 +43,11 @@ export function GraphHeading({ state, groups = 0 }: { state: State; groups?: num
  * draws editing solid; DESIGN.md's departures table has the dashed border.)
  */
 export function Legend({ state, map = false }: { state: State; map?: boolean }) {
-  const slots = state.run?.slots ?? [];
+  const teams = [
+    ...new Map(
+      Object.values(selectPresentation(state).byAgent).map((identity) => [identity.team, identity]),
+    ).values(),
+  ];
   if (!state.run) return null;
   if (map)
     return (
@@ -57,9 +62,16 @@ export function Legend({ state, map = false }: { state: State; map?: boolean }) 
         <li className="flex items-center gap-2">
           <span
             aria-hidden="true"
-            className="size-3.5 rounded-full border-2 border-dashed border-muted"
+            className="size-3.5 rounded-full border-2 border-solid border-muted"
           />
           A ring: an agent works inside
+        </li>
+        <li className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className="size-3.5 rounded-full border-2 border-dashed border-muted"
+          />
+          Dashed: a change waits for review.
         </li>
         <li className="map-legend-hint">Click a group to frame it, a module to open it at 100%</li>
       </ul>
@@ -69,10 +81,10 @@ export function Legend({ state, map = false }: { state: State; map?: boolean }) 
       aria-label="Legend"
       className={`flex flex-wrap items-center gap-x-4.5 gap-y-1.5 rounded-module px-3.5 py-2.5 text-sm text-muted ${surface}`}
     >
-      {slots.map(({ slot }) => (
-        <li key={slot} className="flex items-center gap-2">
-          <span aria-hidden="true" className={`size-3 rounded-label ${agentLook[slot].fill}`} />
-          Agent {slot}
+      {teams.map(({ team, hue, letter }) => (
+        <li key={team} className="flex items-center gap-2">
+          <span aria-hidden="true" className={`size-3 rounded-label ${agentLook[hue].fill}`} />
+          Team {letter}
         </li>
       ))}
       <li className="flex items-center gap-2">
@@ -87,14 +99,14 @@ export function Legend({ state, map = false }: { state: State; map?: boolean }) 
           aria-hidden="true"
           className="h-3.5 w-6 rounded-node border-(length:--agent-border-width) border-dashed border-muted bg-raised"
         />
-        Editing or changed
+        Dashed: a change waits for review.
       </li>
       <li className="flex items-center gap-2">
         <span
           aria-hidden="true"
           className="h-3.5 w-6 rounded-node border-(length:--agent-border-width) border-dashed border-muted"
         />
-        Not in main yet
+        Pending addition
       </li>
       <li className="flex items-center gap-2">
         <span aria-hidden="true" className="w-6 border-t border-edge-faint" />

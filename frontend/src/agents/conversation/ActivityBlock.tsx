@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronRight, LoaderCircle } from "lucide-react";
-import type { Slot } from "@contracts";
-import { agentLook } from "../../theme";
+import type { AgentPresentation } from "../../teams/presentation";
+import { presentationLook } from "../../teams/badge";
 import type { ConversationEntry } from "./selectConversation";
 import { focusRing, TimelineEntry } from "./rows";
 import { elapsed, toolTime } from "./progressWords";
@@ -37,16 +37,16 @@ function FoldToggle({
 
 function ActivityHeader({
   round,
-  slot,
+  presentation,
 }: {
   round: Extract<ConversationEntry, { kind: "activity" | "round" }>["round"];
-  slot: Slot;
+  presentation?: AgentPresentation;
 }) {
   return (
     <div className="mb-[9px] flex min-h-6 items-center gap-[10px] text-[14px] text-muted">
       <LoaderCircle
         aria-hidden="true"
-        className={`size-[14px] ${agentLook[slot].textClass} ${round.paused ? "" : "animate-spin motion-reduce:animate-none"}`}
+        className={`size-[14px] ${presentationLook(presentation).textClass} ${round.paused ? "" : "animate-spin motion-reduce:animate-none"}`}
       />
       <span>{round.paused ? "Paused" : "Working"}</span>
       <span className="font-mono text-[13px]">{elapsed(round.elapsedMs)}</span>
@@ -56,13 +56,13 @@ function ActivityHeader({
 
 export function ActivityBlock({
   entry,
-  slot,
+  presentation,
   changeId,
   onOpenDiff,
   showHeader = true,
 }: {
   entry: Extract<ConversationEntry, { kind: "activity" | "round" }>;
-  slot: Slot;
+  presentation?: AgentPresentation;
   changeId: string;
   onOpenDiff?: (id: string) => void;
   showHeader?: boolean;
@@ -75,7 +75,7 @@ export function ActivityBlock({
 
   return (
     <div className="my-[9px] mr-[22px] ml-[56px]">
-      {!ended && showHeader && <ActivityHeader round={round} slot={slot} />}
+      {!ended && showHeader && <ActivityHeader round={round} presentation={presentation} />}
       <div
         className={
           ended && !open

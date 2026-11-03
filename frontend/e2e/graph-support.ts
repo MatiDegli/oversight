@@ -108,10 +108,16 @@ export function installRecorder() {
           );
       }
       const lit: Record<string, string[]> = {};
-      for (const slot of ["A", "B"])
+      for (const label of ["A", "B"])
         for (const mode of ["read", "edit"])
-          lit[`${slot} ${mode}`] = probe
-            .nodeCenters(`node.focus-${slot}-${mode}`)
+          lit[`${label} ${mode}`] = probe
+            .nodeCenters()
+            .filter((node) =>
+              node.agents?.some(
+                (agent) =>
+                  agent.label === label && agent.word === (mode === "read" ? "read" : "editing"),
+              ),
+            )
             .map(({ id }) => id)
             .sort();
       const panels = ["Live diff panel", "Review panel"].filter(
@@ -128,14 +134,21 @@ export function installRecorder() {
         // border, where an agent's color is drawn.
         const halfWidth = (row.width / 2) * probe.zoom() + 4;
         const halfHeight = (row.height / 2) * probe.zoom() + 4;
-        for (const slot of ["A", "B"] as const)
+        for (const label of ["A", "B"] as const)
           for (const mode of ["read", "edit"])
-            for (const { id, x, y } of probe.nodeCenters(`node.focus-${slot}-${mode}`)) {
+            for (const { id, x, y } of probe
+              .nodeCenters()
+              .filter((node) =>
+                node.agents?.some(
+                  (agent) =>
+                    agent.label === label && agent.word === (mode === "read" ? "read" : "editing"),
+                ),
+              )) {
               // A graph wider than the legible start is panned: a node beyond its edge draws nothing here.
               if (x < 0 || y < 0 || x > host.clientWidth || y > host.clientHeight) continue;
               const found = count(host, x, y, halfWidth, halfHeight);
-              current.paint[id] = Math.max(current.paint[id] ?? 0, found[slot]);
-              current.stray = Math.max(current.stray, found[slot === "A" ? "B" : "A"]);
+              current.paint[id] = Math.max(current.paint[id] ?? 0, found[label]);
+              current.stray = Math.max(current.stray, found[label === "A" ? "B" : "A"]);
             }
       }
     }

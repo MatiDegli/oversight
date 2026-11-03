@@ -60,12 +60,15 @@ const afterDelta = [
 ];
 /** The wording review takes from the log's source (src/transport/index.ts). */
 const REPLAY_OF = "Replay of a hand-written demo fixture";
-const slot = payloads("agent.status")[0]?.slot;
-if (slot === undefined) throw new Error(`${LOG_NAME} has no agent status`);
+const firstStatus = events.find((event) => event.type === "agent.status");
+if (firstStatus?.type !== "agent.status") throw new Error(`${LOG_NAME} has no agent status`);
+// The first person-started lone agent in this fixture is team A.
+// This expectation is independent of the product reducer and its browser-only module graph.
+const identity = { label: "A", hue: "A" };
 // What the person sees light up, in order: each focus event names the nodes it lights.
 const lighting = payloads("agent.focus").map(
   ({ mode, node_ids }) =>
-    `${slot} ${mode}:${[...new Set(node_ids.map(representedBy))].sort().join(",")}`,
+    `${identity.label} ${mode}:${[...new Set(node_ids.map(representedBy))].sort().join(",")}`,
 );
 const changedNode = update.graph.nodes_modified[0];
 if (changedNode === undefined) throw new Error(`${LOG_NAME}: the edit names no node`);
@@ -233,7 +236,7 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
     await expect(newAgent).not.toContainText(/recorded run/i);
   });
 
-  const card = page.getByRole("article", { name: `Agent ${slot}` });
+  const card = page.locator(`[data-agent-card="${payloads("agent.status")[0]?.agent_id ?? ""}"]`);
   const stepList = card.getByRole("list", { name: /steps, newest first/ });
   await test.step("the agent's card shows its status and steps", async () => {
     const first = steps[0];
@@ -254,7 +257,9 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
           .map(([name, ids]) => `${name}:${ids.join(",")}`),
       );
     await expect.poll(lit).toEqual(lighting);
-    expect(await nodeIds(page, `node.focus-${slot}-edit`)).toEqual([changedNode]);
+    expect(await nodeIds(page, `node.focus-edit[paint = "${identity.hue}"]`)).toEqual([
+      changedNode,
+    ]);
     // The canvas drew it: around every lit node there is agent A's token color, and none of B's.
     // (Read lights are the only color on the graph while they last; a node's class alone is not.)
     const painted = async () => {
@@ -324,10 +329,12 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
     await expect(page.getByRole("complementary", { name: "Review panel" })).toHaveCount(0);
     // The change waits as dashed pending nodes, in the agent's color: the node it changed and the
     // one it added, which main does not have yet.
-    expect(await nodeIds(page, `node.pending-${slot}`)).toEqual(
+    expect(await nodeIds(page, `node.pending[pendingAgents *= "|${proposal.agent_id}|"]`)).toEqual(
       [...proposal.graph.nodes_modified, ...addedByChange].toSorted(),
     );
-    expect(await nodeIds(page, `node.pending-new-${slot}`)).toEqual(addedByChange.toSorted());
+    expect(
+      await nodeIds(page, `node.pending-new[pendingAgents *= "|${proposal.agent_id}|"]`),
+    ).toEqual(addedByChange.toSorted());
     expect(await nodeIds(page, "node")).toEqual(beforeMerge.toSorted());
   });
 
@@ -367,7 +374,9 @@ test("level 1 over replay: watch, live diff, ready pill, review, logged decision
     await expect.poll(() => nodeIds(page, "node")).toEqual(afterDelta.toSorted());
     // Decided: no pending node and no light is left, and the whole log is applied.
     await expect.poll(() => nodeIds(page, "node.pending")).toEqual([]);
-    expect(await nodeIds(page, `node.pending-new-${slot}`)).toEqual([]);
+    expect(
+      await nodeIds(page, `node.pending-new[pendingAgents *= "|${proposal.agent_id}|"]`),
+    ).toEqual([]);
     expect(afterDelta).toEqual(expect.arrayContaining(addedByChange));
     await expect(page.locator("#root")).toHaveAttribute("data-seq", String(events.length));
     await page.getByRole("button", { name: "Close review" }).click();

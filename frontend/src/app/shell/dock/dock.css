@@ -106,7 +106,7 @@ p.dock-note {
   color: var(--muted);
   font-weight: var(--badge-weight);
 }
-.dock-letter[data-slot] {
+.dock-letter[data-agent-label] {
   color: var(--slot-text, var(--muted));
 }
 .dock-failures {

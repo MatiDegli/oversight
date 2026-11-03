@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import type { State } from "../../state";
 import { costText } from "../../state";
-import { agentSlotStyle } from "../../theme";
+import { presentationFor, presentationStyle } from "../../teams/presentation";
 import { ChangeFactsRow } from "../../review";
 // eslint-disable-next-line no-restricted-imports -- Reuse the built timeline timestamp without another projection.
 import { EventTime } from "../../agents/conversation/rows";
@@ -64,12 +64,13 @@ export function ChatChangeCard({
   const card = selectChatChange(state, changeId, seq);
   if (!card) return null;
   const { proposal, callers } = card;
-  const slot = state.agents[proposal.agent_id]?.slot;
+  const identity = presentationFor(state, proposal.agent_id);
+  const label = identity?.label ?? "unknown";
   return (
-    <div className="chat-proposal" style={agentSlotStyle(slot)}>
+    <div className="chat-proposal" style={presentationStyle(identity)}>
       <div className="chat-proposal-note">
         <div>
-          <MessageSquare aria-hidden="true" size={14} /> Agent {slot ?? proposal.agent_id} says{" "}
+          <MessageSquare aria-hidden="true" size={14} /> Agent {label} says{" "}
           <EventTime ts={card.ts} />
         </div>
         <p>{proposal.summary ?? "No finish summary was recorded."}</p>
@@ -130,7 +131,7 @@ export function ChatChangeCard({
                         </div>
                         <ArrowRight aria-hidden="true" size={14} />
                         <div>
-                          <span>After · Agent {slot ?? proposal.agent_id}</span>
+                          <span>After · Agent {label}</span>
                           <code>{caller.example.after}</code>
                         </div>
                       </div>

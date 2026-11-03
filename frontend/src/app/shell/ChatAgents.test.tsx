@@ -14,7 +14,7 @@ it.each([
 ] as const)("renders the running header for %s without capture flags", (name, count) => {
   const html = renderToStaticMarkup(<ChatAgentsFrame state={fold(scenario(name))} />);
   expect(html).toContain(
-    `<header><h2>Agents</h2><span>${String(count)} of 2 running</span><div class="chat-start-actions">`,
+    `<header><h2>Agents</h2><span>${String(count)} running</span><div class="chat-start-actions">`,
   );
   const header = html.split("</header>")[0] ?? "";
   expect(header.match(/<button/g)).toHaveLength(2);
@@ -32,7 +32,7 @@ it("omits the numeric header before metadata and derives the denominator from th
       state={{ ...state, run: { ...state.run, slots: state.run.slots.slice(0, 1) } }}
     />,
   );
-  expect(html).toContain("<span>1 of 1 running</span>");
+  expect(html).toContain("<span>1 running</span>");
 });
 
 it("exposes full identities, selected state and facts in a native button list", () => {

@@ -6,7 +6,6 @@ import {
   approvalLocked,
   approvalLockedCaption,
 } from "../../review";
-import { caseSlot } from "./phoneEvidence";
 import { PhoneDiff } from "./PhoneDiff";
 import { PhoneReview } from "./PhoneReview";
 import type { PanelProps } from "./PracticePanel";
@@ -32,7 +31,6 @@ export function PhoneDecision({ practice, attempt, ...actions }: PanelProps) {
           state={practice.cut}
           changeId={entry.changeId}
           title={entry.title}
-          slot={caseSlot(practice, entry)}
           diff={<PhoneDiff practice={practice} entry={entry} />}
         />
       </main>

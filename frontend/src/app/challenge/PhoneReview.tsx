@@ -1,4 +1,4 @@
-import type { ChangeProposed, Slot } from "@contracts";
+import type { ChangeProposed } from "@contracts";
 import { ChevronDown } from "lucide-react";
 import { lazy, useState } from "react";
 import type { ReactNode } from "react";
@@ -26,13 +26,11 @@ export function PhoneReview({
   state,
   changeId,
   title,
-  slot,
   diff,
 }: {
   state: State;
   changeId: string;
   title: string;
-  slot: Slot;
   diff?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -43,7 +41,7 @@ export function PhoneReview({
   const Body = preparedBody ?? ReviewBody;
   return (
     <>
-      <AgentLine state={state} changeId={changeId} slot={slot} />
+      <AgentLine state={state} changeId={changeId} />
       <h1>{title}</h1>
       <ChangeFactsRow state={state} changeId={changeId} shortReach />
       <Body

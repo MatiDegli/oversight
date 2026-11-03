@@ -12,7 +12,7 @@ import { PhoneReview, preparePhoneReview } from "../app/challenge/PhoneReview";
 // eslint-disable-next-line no-restricted-imports -- Real chip overlay in a mounted phone graph.
 import { NodeChips } from "../graph/NodeChips";
 import { GraphView } from "../graph";
-import { stateStore } from "../state";
+import { applyEvent, stateStore } from "../state";
 import { approvalLocked, approvalLockedCaption, candidateKey, useAnswers } from "./answers";
 import { parameterState, nodeId } from "./NewParameterCalls.fixture";
 import { visitParameterEvidence } from "./parameterExtensions";
@@ -57,7 +57,7 @@ function Harness() {
           className="pp-main"
           style={{ overflowY: "auto", overflowAnchor: "none", flex: 1, minHeight: 0 }}
         >
-          <PhoneReview state={state} changeId="change-1" slot="A" title={proposal?.task ?? ""} />
+          <PhoneReview state={state} changeId="change-1" title={proposal?.task ?? ""} />
         </div>
         <footer className="pp-dock">
           {approvalLocked(state.changeFacts["change-1"]?.at(-1)?.review_cards ?? [], answers) && (
@@ -109,12 +109,17 @@ export const paramEvidence = {
   decisions: [] as string[],
   visit: visitParameterEvidence,
   neighbor() {
-    const state = structuredClone(stateStore.getState().state);
+    let state = structuredClone(stateStore.getState().state);
     const change = state.changes["change-1"],
       facts = state.changeFacts["change-1"]?.at(-1);
     const agent = state.agents["agent-1"];
-    if (!change?.proposal || !facts || !agent) throw new Error("Missing fixture");
-    state.agents["agent-2"] = { ...agent, agent_id: "agent-2", slot: "B" };
+    if (!change?.proposal || !facts || !agent || !state.clock) throw new Error("Missing fixture");
+    state = applyEvent(state, {
+      type: "agent.status",
+      seq: state.lastSeq + 1,
+      ts: state.clock,
+      payload: { ...agent, agent_id: "agent-2", change_id: "change-2", slot: "B" },
+    });
     state.changes["change-2"] = {
       ...change,
       change_id: "change-2",

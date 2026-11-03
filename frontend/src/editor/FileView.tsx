@@ -19,6 +19,7 @@ export interface FileViewProps {
   commit: string;
   onClose: () => void;
   startAgentAction?: ReactNode;
+  agentLabel?: string;
 }
 
 /** Attach first: disposing a model still attached to Monaco is an editor lifecycle error. */
@@ -44,7 +45,14 @@ export function showFile(
 }
 
 /** One locally bundled editor; opening and revealing a span never takes keyboard focus. */
-export function FileView({ target, files, commit, onClose, startAgentAction }: FileViewProps) {
+export function FileView({
+  target,
+  files,
+  commit,
+  onClose,
+  startAgentAction,
+  agentLabel,
+}: FileViewProps) {
   const host = useRef<HTMLDivElement>(null);
   const current = useRef<editor.IStandaloneCodeEditor | null>(null);
   const shown = useRef<FileDocument | null>(null);
@@ -187,6 +195,7 @@ export function FileView({ target, files, commit, onClose, startAgentAction }: F
     >
       <FileViewHeader
         target={target}
+        agentLabel={agentLabel}
         files={files}
         onClose={onClose}
         startAgentAction={startAgentAction}

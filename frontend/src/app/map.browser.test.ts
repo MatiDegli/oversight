@@ -533,8 +533,8 @@ describe.skipIf(!boltons)("approved map states and optional captures", () => {
               "opacity",
               "0",
             );
-            await check(page.locator(".map-layer")).toContainText("Agent A · 1 changed");
-            await check(page.locator(".map-layer")).toContainText("Agent B · editing");
+            await check(page.locator(".map-layer")).toContainText("A changed");
+            await check(page.locator(".map-layer")).toContainText("B editing");
             if (process.env.MAP_SHOTS === "1")
               await page.screenshot({ path: `${shots}map${suffix}` });
             await page.getByRole("button", { name: "Modules", exact: true }).click();

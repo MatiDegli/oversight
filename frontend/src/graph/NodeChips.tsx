@@ -17,6 +17,7 @@ function createChipSelector() {
       state.changeFacts,
       state.graph,
       state.agents,
+      state.decisionEvents,
       JSON.stringify(litIds),
     ];
     if (!next.every((value, index) => value === inputs[index])) {

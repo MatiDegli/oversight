@@ -1,4 +1,5 @@
-import type { Slot, TreeResponse } from "@contracts";
+import type { AgentPresentation } from "../teams/presentation";
+import type { TreeResponse } from "@contracts";
 import type { State } from "../state";
 import { selectWorkPresence } from "./workPresence";
 import { recordedRevision } from "./recordedFiles";
@@ -85,7 +86,7 @@ export function visibleTree(
 
 export interface FileMark {
   agentId: string;
-  slot: Slot;
+  presentation?: AgentPresentation;
   mode: "read" | "edit" | "pending";
 }
 
@@ -97,7 +98,7 @@ export function fileMarks(state: State): Map<string, FileMark[]> {
     for (const { path } of group.files) {
       const marks = result.get(path) ?? [];
       if (!marks.some((mark) => mark.agentId === group.agentId))
-        marks.push({ agentId: group.agentId, slot: group.slot, mode: group.mode });
+        marks.push({ agentId: group.agentId, presentation: group.presentation, mode: group.mode });
       result.set(path, marks);
     }
   }

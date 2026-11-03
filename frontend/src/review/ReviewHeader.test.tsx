@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { applyEvent, createInitialState } from "../state";
 import { parseEvent } from "../transport";
+import { presentationFor } from "../teams/presentation";
 import { ChangeFactsRow } from "./ChangeFactsRow";
 import { ReviewHeader } from "./ReviewHeader";
 import { headerCases, headerState } from "./ReviewHeader.fixture";
@@ -45,11 +46,13 @@ it("uses recorded model, cost, step, worktree and base in one caption, preservin
       ["2 files", "+28 −0", "32 passed", "9 possibly affected · up to distance 2"],
     ],
   ] as const) {
+    const identity = presentationFor(state, agent);
+    if (!identity) throw new Error("Missing recorded author identity");
     const html = renderToStaticMarkup(<ReviewHeader state={state} changeId={id} />);
     expect([...html.matchAll(/<li .*?<\/li>/g)].map(([li]) => words(li))).toEqual(copy);
     const caption = words(html.match(/<p .*?<\/p>/)?.[0] ?? "");
     expect(caption).toBe(
-      `Agent ${String(state.agents[agent]?.slot)} · ${agent === "agent-2" ? "Muse Spark Open · cost unknown" : "Muse Spark · &lt;US$0.01"} · step ${agent === "agent-2" ? "11" : "8"} of 30 · worktree ${agent} · base ${String(state.changes[id]?.proposal?.base_commit.slice(0, 7))}`,
+      `Agent ${identity.label} · ${agent === "agent-2" ? "Muse Spark Open · cost unknown" : "Muse Spark · &lt;US$0.01"} · step ${agent === "agent-2" ? "11" : "8"} of 30 · worktree ${agent} · base ${String(state.changes[id]?.proposal?.base_commit.slice(0, 7))}`,
     );
     expect(html).toContain('<code class="font-mono"');
   }

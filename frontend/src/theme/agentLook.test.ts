@@ -1,18 +1,17 @@
-import { readFileSync } from "node:fs";
-import type { Slot } from "@contracts";
 import { it, expect } from "vitest";
 import { themes, agentLook, agentSlots, slotForFamily } from "./index";
 
-// Read the contract schema as well as typing the map: a duplicated slot list cannot mask drift.
-it("covers every contract Slot with one family", () => {
-  const schema = JSON.parse(
-    readFileSync(
-      new URL("../../../contracts/generated/oversight.schema.json", import.meta.url),
-      "utf8",
-    ),
-  ) as { $defs: { Slot: { enum: Slot[] } } };
-  expect(agentSlots).toEqual(schema.$defs.Slot.enum);
-  for (const slot of agentSlots) expect(slotForFamily(agentLook[slot].family)).toBe(slot);
+it("covers exactly the six approved palette families independently of runtime admission", () => {
+  expect(agentSlots).toEqual(["A", "B", "C", "D", "E", "F"]);
+  expect(agentSlots.map((key) => agentLook[key].family)).toEqual([
+    "agent-a",
+    "agent-b",
+    "agent-c",
+    "agent-d",
+    "agent-e",
+    "agent-f",
+  ]);
+  for (const key of agentSlots) expect(slotForFamily(agentLook[key].family)).toBe(key);
 });
 
 it("preserves every approved A/B family value", () => {

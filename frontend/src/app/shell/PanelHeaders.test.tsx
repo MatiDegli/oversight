@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-restricted-imports -- Explicit renderer header fixture with independent paint and identity.
+import { mark } from "../../graph/marks.testSupport"; // Explicit renderer header input.
 import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 import { FileView } from "../../editor";
@@ -30,7 +32,7 @@ it.each(["working", "revising"] as const)(
       header: {
         agentId: "agent-1",
         changeId: "change-1",
-        slot: "A",
+        presentation: mark("A"),
         state: status,
         modelLabel: "Muse Spark",
         reasoning: null,
