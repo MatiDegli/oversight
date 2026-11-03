@@ -1173,6 +1173,17 @@ The graph stays visible and keeps positions.
    If that explicit action finds no mounted review, a persistent status region says "The review
    for these calls is not open." It clears when the matching evidence mounts; arrival does not
    navigate or move focus. The status region otherwise stays empty.
+   **Other pending changes** is a sibling informational section outside comparison and Details,
+   including when revision facts or comparison are unavailable. Use the New-parameter calls
+   divider, 14/600 heading and 15/22 prose; Mono is reserved for edited node identities.
+   Each peer uses the shared team badge and member label, retaining separate peers in one team.
+   Name only reviewed edits in that peer's current computed cone, including removed reviewed
+   edits. State nearby: "Based on the current graph and its limits; other intersections may be
+   missing." Missing graph or run limits names the peer that cannot be checked. Parse errors,
+   event/graph gaps, bounded omissions and absent peer seeds qualify retained matches and empty
+   results. Removed-only peers do not invent seeds. With usable data, an empty intersection says
+   only that no edited nodes appear in that peer's currently computed cone. No peers adds no DOM.
+   Membership is no behavior, test, conflict or safety finding and changes no approval condition.
    Evidence arrival opens nothing and preserves focus, scroll and user-opened disclosures.
 6. **Decision bar:** pinned, divider above, padding 12px top, 24px sides, 10px bottom. Comment
    box 64px, radius 10px, "Comment for the agent"; buttons 10px below, gap 10px, 40px high,

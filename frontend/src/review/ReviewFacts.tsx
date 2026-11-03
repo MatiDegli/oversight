@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { ConeOverlap } from "./ConeOverlap";
 import { ChevronRight } from "lucide-react";
 import type { AddedTestProbe, ChangeFacts, ChangeProposed, SuiteExecution } from "@contracts";
 
@@ -142,15 +144,21 @@ export function ReviewFacts({
   scrollable?: boolean;
   panel?: boolean;
 }) {
+  const withOverlap = (content: ReactNode) => (
+    <>
+      {!panel && <ConeOverlap state={state} changeId={proposal.change_id} />}
+      {content}
+    </>
+  );
   const facts = factsForRevision(state, proposal);
   if (!facts)
-    return (
+    return withOverlap(
       <section className="border-b border-page-border px-4.5 py-2.5">
         <p className="text-sm text-muted">
           Facts incomplete: facts for this revision are unavailable. {behaviorNotRecorded}
         </p>
         <MeasuredCallers state={state} changeId={proposal.change_id} detailsOnly={panel} />
-      </section>
+      </section>,
     );
   const executions = facts.test_runs
     .map((seq) => state.testExecutions[seq])
@@ -158,7 +166,7 @@ export function ReviewFacts({
       (e): e is SuiteExecution =>
         e !== undefined && e.change_id === proposal.change_id && e.agent_id === proposal.agent_id,
     );
-  return (
+  return withOverlap(
     <section
       aria-label={panel ? "Details" : "Review signals"}
       className={
@@ -233,6 +241,6 @@ export function ReviewFacts({
           </>
         </div>
       </details>
-    </section>
+    </section>,
   );
 }
