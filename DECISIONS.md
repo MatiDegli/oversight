@@ -4604,3 +4604,17 @@ default single-link requirement.
 
 Residual risk: a linked file can also change through its uv cache name. The token recheck after
 each read refuses a change observed during that read; it cannot prevent later cache writes.
+
+## 2026-11-03 — Remove the one-graph rule
+
+The maintainer removed AGENTS.md's "One graph" rule at 10:59 ART. The repository graph still
+stays visible in the Oversight view; other graph views, such as a compact workflow canvas of
+a lead's plan, may sit beside it and may use Cytoscape.js without a React wrapper. Every
+visual rule in AGENTS.md and DESIGN.md applies to them.
+
+In "A read-only plan flow before the freeze", "so it is not a second graph" no longer
+constrains later work; that view itself is unchanged.
+
+This entry only removes the rule: building another graph view needs its own approved plan.
+
+Reason: a compact node view of a plan is easier to understand and to manipulate than a verbose card.
