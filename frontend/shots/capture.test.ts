@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stdout } from "node:process";
 import { test } from "node:test";
 import { runInNewContext } from "node:vm";
 
-import type { Page } from "@playwright/test";
+import { chromium } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 
-import { writeFirstViewMetrics, writeSceneMetrics } from "./capture.ts";
+import { main, writeFirstViewMetrics, writeSceneMetrics } from "./capture.ts";
 import { planJobs } from "./plan.ts";
 import { scenes, themes } from "./scenes.ts";
 
@@ -36,6 +38,8 @@ function fakePage(
     },
   };
   const document = {
+    fonts: { ready: Promise.resolve() },
+    documentElement: { dataset: {} },
     querySelector: () => (withGraph ? { oversightGraph: { metrics: () => graphMetrics } } : null),
     createElement: () => ({
       getContext: (kind: string) =>
@@ -44,8 +48,14 @@ function fakePage(
   };
   // Run the browser callback in its own realm, as Playwright does, without requiring Chromium.
   const page = {
-    evaluate: async (callback: () => unknown) => {
-      const result: unknown = runInNewContext(`(${callback.toString()})()`, { document });
+    evaluate: async (callback: (argument: unknown) => unknown, argument: unknown) => {
+      const result: unknown = runInNewContext(`(${callback.toString()})(argument)`, {
+        document,
+        argument,
+        requestAnimationFrame: (done: () => void) => {
+          done();
+        },
+      });
       return await Promise.resolve(result);
     },
   } as unknown as Page;
@@ -118,4 +128,93 @@ void test("default PNGs and their JSON evidence fit the stager's 64-file cap", (
   const enabled = planJobs(scenes, themes).filter((job) => job.skip === null);
   assert.ok(enabled.length > 0);
   assert.ok(enabled.length <= 32, `${String(enabled.length)} PNGs exceed the 32-shot budget`);
+});
+
+function fakeCapturePage(firstView: boolean) {
+  const { page, released } = fakePage({ unmasked: null, plain: "WebGL GPU" }, !firstView);
+  const locator = {
+    first: () => locator,
+    waitFor: async () => {},
+    isVisible: () => Promise.resolve(true),
+    getAttribute: () => Promise.resolve("true"),
+    getByRole: () => locator,
+  };
+  Object.assign(page, {
+    locator: () => locator,
+    getByRole: (_role: string, options: { name: string }) => {
+      if (firstView) assert.equal(options.name, "Chat", "first view must stay in Chat");
+      else assert.equal(options.name, "Workspace view");
+      return locator;
+    },
+    getByLabel: () => ({ count: () => Promise.resolve(firstView ? 0 : 1) }),
+    on: () => {},
+    route: async () => {},
+    goto: async () => {},
+    waitForFunction: async () => {},
+    // Stub bytes are only for testing the dispatcher and evidence files, not real UI captures.
+    screenshot: async ({ path }: { path: string }) => writeFile(path, "stub screenshot"),
+  });
+  return { page, released };
+}
+
+void test("main writes same-stem evidence for first-view and graph captures", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "shot-dispatch-"));
+  const captureScenes = scenes.filter((scene) => scene.firstView || scene.name === "watch");
+  const jobs = planJobs(captureScenes, themes).filter((job) => job.skip === null);
+  const output: string[] = [];
+  const pages: ReturnType<typeof fakeCapturePage>[] = [];
+  const closeBrowser = t.mock.fn(async () => {});
+  const closeContext = t.mock.fn(async () => {});
+  const browser = {
+    newContext: ({ viewport }: { viewport: { width: number } }) => {
+      const page = fakeCapturePage(viewport.width !== 1920);
+      pages.push(page);
+      return Promise.resolve({
+        setDefaultTimeout: () => {},
+        newPage: () => Promise.resolve(page.page),
+        close: closeContext,
+      });
+    },
+    close: closeBrowser,
+  } as unknown as Browser;
+  t.mock.method(chromium, "launch", () => Promise.resolve(browser));
+  t.mock.method(stdout, "write", (chunk: string) => {
+    output.push(chunk);
+    return true;
+  });
+  try {
+    const log = join(directory, "source.events");
+    await writeFile(log, '{"seq":1,"type":"run.started","payload":{"slots":[{},{}]}}\n');
+    assert.equal(
+      await main(["--url", "http://127.0.0.1/", "--log", log, "--out", directory], captureScenes),
+      0,
+      output.join(""),
+    );
+    const pngs = (await readdir(directory)).filter((name) => name.endsWith(".png"));
+    assert.deepEqual(pngs.sort(), jobs.map((job) => job.file).sort());
+    assert.equal(pngs.filter((name) => name.startsWith("first-")).length, 4);
+    for (const png of pngs) {
+      const evidence = join(directory, png.replace(/\.png$/, ".json"));
+      assert.ok((await stat(evidence)).isFile());
+      const firstView = png.startsWith("first-");
+      assert.equal(
+        await readFile(evidence, "utf8"),
+        JSON.stringify(
+          { ...(firstView ? { firstView: true } : graphMetrics), webglRenderer: "WebGL GPU" },
+          null,
+          2,
+        ) + "\n",
+      );
+      assert.equal(
+        output.includes(`shots: ${png} label minimum 12.00 CSS px, bezier\n`),
+        !firstView,
+      );
+    }
+    assert.ok(pages.every(({ released }) => released() === 1));
+    assert.equal(closeContext.mock.callCount(), jobs.length);
+    assert.equal(closeBrowser.mock.callCount(), 1);
+  } finally {
+    t.mock.restoreAll();
+    await rm(directory, { recursive: true, force: true });
+  }
 });

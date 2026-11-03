@@ -98,8 +98,9 @@ export async function writeFirstViewMetrics(page: Page, path: string) {
   return metrics;
 }
 
-async function main(): Promise<number> {
+export async function main(args?: string[], captureScenes = scenes): Promise<number> {
   const { values } = parseArgs({
+    args,
     options: {
       url: { type: "string" },
       log: { type: "string" },
@@ -136,12 +137,12 @@ async function main(): Promise<number> {
   let failures = 0;
   try {
     browser = await chromium.launch();
-    for (const job of planJobs(scenes, themes)) {
+    for (const job of planJobs(captureScenes, themes)) {
       if (job.skip !== null) {
         stdout.write(`shots: skipped ${job.file} (${job.skip})\n`);
         continue;
       }
-      const scene = scenes.find((candidate) => candidate.name === job.scene);
+      const scene = captureScenes.find((candidate) => candidate.name === job.scene);
       const sceneSource = scene?.log?.endsWith(".jsonl")
         ? await readFile(new URL(`../../fixtures/events/${scene.log}`, import.meta.url), "utf8")
         : sourceLog;
