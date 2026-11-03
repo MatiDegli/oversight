@@ -75,7 +75,7 @@ async function drawn(page: Page) {
       !!document.querySelector<GraphProbeHost>('[aria-label="Repository graph"]')?.oversightGraph,
   );
 }
-it("keeps the default, selected tab, draft, commands, graph identity and camera", async () => {
+it("keeps the fixture-selected view, selected tab, draft, commands, graph identity and camera", async () => {
   const page = await open();
   try {
     await drawn(page);

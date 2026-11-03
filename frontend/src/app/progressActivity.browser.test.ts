@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Page } from "@playwright/test";
@@ -49,6 +50,7 @@ async function open(
     },
     { moment, theme },
   );
+  await openOversight(page);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(
     () =>

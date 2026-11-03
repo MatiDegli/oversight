@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
@@ -46,6 +47,7 @@ it.each(["dark", "day"])("lists three lead plans without stealing focus in %s", 
   try {
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     await page.goto(url);
+    await openOversight(page);
     await expect(page.getByRole("button", { name: /^Decisions: 0 pending/ })).toBeVisible();
     await page.evaluate((t) => {
       document.documentElement.dataset.theme = t;

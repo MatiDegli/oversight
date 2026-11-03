@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { launchBrowser } from "../browserLaunch.support";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -68,6 +69,7 @@ it.each([
         });
       });
       await page.goto(url);
+      await openOversight(page);
       await page.getByRole("button", { name: "Review change", exact: true }).click();
       const panel = page.getByRole("complementary", { name: "Review panel" });
       await panel.getByRole("textbox", { name: /Comment/ }).fill("Cover empty carts");

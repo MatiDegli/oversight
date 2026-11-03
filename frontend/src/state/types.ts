@@ -16,6 +16,7 @@ import type {
   MergeModeState,
   UsageTick,
   LeadReplyEvent,
+  LeadViewEvent,
 } from "@contracts";
 
 import type { DecisionEvent } from "./decisionProjection";
@@ -72,6 +73,12 @@ export interface AgentMessage {
   text: string | null;
 }
 
+export interface EventFact {
+  type: import("@contracts").ServerEvent["type"];
+  ts: string;
+  agentId: string | null;
+}
+
 export interface State {
   run: RunStarted | null;
   mergeMode: MergeModeState | null;
@@ -81,6 +88,7 @@ export interface State {
     { type: "grant.created" | "grant.revoked" }
   >[];
   lastSeq: number;
+  eventFacts: Record<number, EventFact>;
   gap: boolean;
   graph: GraphSnapshot | null;
   agents: Record<string, AgentStatus>;
@@ -88,6 +96,7 @@ export interface State {
   modelWaits: Record<string, ModelWait>;
   messages: Record<string, AgentMessage[]>;
   leadReplies: Record<string, LeadReplyEvent[]>;
+  leadViews: Record<string, LeadViewEvent[]>;
   /** When each step's event arrived, by agent then step number: the age the card shows. */
   stepTimes: Record<string, Record<number, string>>;
   stepSeqs: Record<string, Record<number, number>>;
@@ -113,6 +122,8 @@ export interface State {
    * has no entry.
    */
   agentCosts: Record<string, number | null>;
+  /** Only role=lead ticks, isolated from agent and reviewer usage with the same id. */
+  leadCosts: Record<string, number | null>;
   errors: ErrorReport[];
   /** Envelopes parallel to errors, including its needs-you deduplication. */
   errorEvents: EventPosition[];
@@ -129,6 +140,7 @@ export function createInitialState(): State {
     runStartedAt: null,
     grantEvents: [],
     lastSeq: 0,
+    eventFacts: {},
     gap: false,
     graph: null,
     agents: {},
@@ -136,6 +148,7 @@ export function createInitialState(): State {
     modelWaits: {},
     messages: {},
     leadReplies: {},
+    leadViews: {},
     stepTimes: {},
     stepSeqs: {},
     clock: null,
@@ -148,6 +161,7 @@ export function createInitialState(): State {
     budgetMarks: [],
     spendUnknown: false,
     agentCosts: {},
+    leadCosts: {},
     errors: [],
     errorEvents: [],
     testExecutions: {},

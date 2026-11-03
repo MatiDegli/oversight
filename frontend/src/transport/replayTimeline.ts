@@ -16,9 +16,10 @@ export function replayPrefix(
   events: readonly ServerEvent[],
   offsets: readonly number[],
   position: number,
+  throughSeq = Infinity,
 ) {
   return events.reduce((state, event, index) => {
-    if ((offsets[index] ?? Infinity) > position) return state;
+    if (event.seq > throughSeq || (offsets[index] ?? Infinity) > position) return state;
     const next = applyEvent(state, event);
     if (next.gap)
       throw new Error(`Replay sequence or graph version mismatch at ${String(event.seq)}`);

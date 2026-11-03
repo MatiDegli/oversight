@@ -226,6 +226,9 @@ describe("applyEvent", () => {
     const newRun = { ...run, run_id: "run-2" };
     expect(applyEvent({ ...dirty, gap: true }, event(1, "run.started", newRun))).toEqual({
       ...createInitialState(),
+      eventFacts: {
+        1: { type: "run.started", ts: event(1, "run.started", newRun).ts, agentId: null },
+      },
       run: newRun,
       runStartedAt: "2026-10-27T14:03:12.345Z",
       lastSeq: 1,

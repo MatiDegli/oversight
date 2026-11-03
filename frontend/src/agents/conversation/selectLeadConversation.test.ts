@@ -226,16 +226,54 @@ it.each(["starting", "working", "idle", "halted", "stopped", "done"] as const)(
     const html = renderToStaticMarkup(
       createElement(Composer, { header: conversation.header, onSend: () => Promise.resolve() }),
     );
-    expect(html).toContain('aria-label="Message Lead A"');
-    expect(html.includes('readOnly=""')).toBe(state !== "idle");
+    const ended = ["halted", "stopped", "done"].includes(state);
+    expect(html.includes('aria-label="Message Lead A"')).toBe(!ended);
+    if (ended) {
+      expect(html).toContain("Start a new lead to continue.");
+      expect(html).not.toContain("<button");
+    }
+    expect(html.includes('readOnly=""')).toBe(!ended && state !== "idle");
     expect(html).not.toContain("Pause");
     expect(html).not.toContain("Stop and discard");
     expect(
       renderToStaticMarkup(createElement(ConversationPanelHeader, { header: conversation.header })),
-    ).not.toContain(" of ");
+    ).toContain("Limits not recorded.");
     expect(
       renderToStaticMarkup(createElement(Composer, { header: conversation.header })),
-    ).toContain("Replay: lead messages and stop are off.");
+    ).toContain(
+      ended ? "Start a new lead to continue." : "Replay: lead messages and stop are off.",
+    );
+  },
+);
+
+it.each(["stopped", "halted", "done"] as const)(
+  "uses exact ended detail and the null fallback for %s",
+  (state) => {
+    for (const detail of [null, "Exact server explanation."]) {
+      const events = [
+        ...thread(1),
+        {
+          seq: 99,
+          ts,
+          type: "lead.status" as const,
+          payload: { ...base, revision: 99, state, detail },
+        },
+      ].map((e, i) => ({ ...e, seq: i + 1 }));
+      stateStore.setState({ state: fold(events) });
+      const html = renderToStaticMarkup(
+        createElement(Composer, {
+          header: project(events).header,
+          onSend: async () => {},
+          onStopLead: async () => {},
+          actionAccessory: createElement("button", {}, "Merge chip"),
+        }),
+      );
+      expect(html).toContain(
+        detail ?? (state === "done" ? "This lead has ended." : `This lead has ${state}.`),
+      );
+      expect(html).toContain("Start a new lead to continue.");
+      expect(html).not.toMatch(/<(button|textarea)/);
+    }
   },
 );
 

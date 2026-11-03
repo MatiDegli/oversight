@@ -26,7 +26,7 @@
   margin-left: -5px;
 }
 .chat-agent-row.chat-lead-row {
-  min-height: 136px;
+  min-height: 98px;
   row-gap: 0;
 }
 .chat-lead-row .chat-agent-content,
@@ -42,8 +42,12 @@
 .chat-lead-activity {
   grid-column: 1 / -1;
 }
-.chat-lead-row .chat-agent-task {
-  margin-top: 6px;
+.chat-agent-list .chat-lead-row .chat-agent-task {
+  margin-top: 4px;
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 .chat-lead-row .chat-agent-pill {
   display: inline-flex;
@@ -86,7 +90,7 @@
   color: var(--faint);
 }
 .chat-agent-row[data-member="true"] {
-  min-height: 107px;
+  min-height: 80px;
 }
 .chat-agent-row[data-member="true"] .chat-agent-heading {
   line-height: 18px;
@@ -156,7 +160,7 @@
 @media (height < 900px) {
   .chat-agent-list .chat-agent-row.chat-lead-row {
     padding-block: 8px;
-    min-height: 111px;
+    min-height: 88px;
   }
   .chat-lead-activity,
   .chat-agent-list:has(.chat-lead-row) .chat-agent-activity,
@@ -237,44 +241,21 @@
   gap: 8px;
   margin-top: 12px;
 }
-.new-lead-model {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11.5px;
-  color: var(--muted);
-}
-.new-lead-model select {
-  width: 220px;
-}
-.new-lead-model select,
-.new-lead-model-chip {
-  height: 34px;
-  max-width: 100%;
-  padding-inline: 10px;
-  border: 1px solid var(--control-edge);
-  border-radius: 7px;
-  background: var(--raised);
-  color: var(--text);
-  font-size: 14px;
-}
-.new-lead-model-chip {
+.new-lead-actions > button {
   display: inline-flex;
   align-items: center;
-}
-.new-lead-actions > button {
-  height: 34px;
-  padding-inline: 12px;
+  justify-content: center;
+  height: 40px;
+  padding: 0 16px;
   border-radius: 7px;
   font-size: 14px;
   font-weight: 600;
 }
 .new-lead-start {
-  min-width: 90px;
   background: var(--text);
   color: var(--page);
 }
-.new-lead-start:hover {
+.new-lead-start:hover:not([aria-disabled="true"]) {
   background: var(--text-hover);
 }
 .new-lead-start[aria-disabled="true"] {
@@ -349,9 +330,6 @@
   .new-lead-box textarea {
     height: 76px;
   }
-  .new-lead-model select {
-    width: 119px;
-  }
 }
 .new-lead-failure {
   display: flex;
@@ -368,4 +346,126 @@
   margin-top: 10px;
   color: var(--muted);
   font-size: 14px;
+}
+
+.chat-lead-row[data-ended="true"] .chat-agent-pill {
+  color: var(--muted);
+  background: var(--raised);
+}
+.lead-header-facts > span {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+.chat-shell .lead-header h2 {
+  display: block;
+  overflow: visible;
+}
+.chat-start-actions button[aria-disabled="true"],
+.chat-lead-option button[aria-disabled="true"] {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+@media (width < 768px) {
+  .chat-shell .chat-agents > header:has([aria-disabled="true"]) {
+    grid-template-columns: auto minmax(0, 1fr);
+    height: auto;
+    padding-block: 10px;
+  }
+  .chat-shell .chat-agents > header:has([aria-disabled="true"]) > span {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+  }
+  .chat-shell .chat-agents > header:has([aria-disabled="true"]) .chat-start-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .chat-shell .chat-start-actions:has([aria-disabled="true"]) button {
+    width: auto;
+    flex: 1 1 auto;
+    padding-inline: 8px;
+  }
+}
+@media (width <= 600px) {
+  .chat-agent-list .chat-agent-row.chat-lead-row {
+    min-height: 59px;
+    padding: 6px 10px;
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: center;
+  }
+  .chat-lead-row .chat-lead-ring {
+    grid-row: 1 / 3;
+  }
+  .chat-agent-list .chat-lead-row .chat-agent-task {
+    display: none;
+  }
+  .chat-lead-row .chat-lead-team {
+    grid-column: 2;
+    margin-top: 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .chat-lead-row .chat-lead-activity {
+    display: none;
+  }
+  .chat-shell .conversation-header,
+  .chat-shell .conversation-composer {
+    padding-inline: 14px;
+  }
+  .chat-shell .conversation-header {
+    padding-block: 12px;
+  }
+  .chat-shell .conversation-panel .conversation-composer textarea {
+    height: 44px;
+  }
+  .chat-shell .conversation-panel .composer-actions button,
+  .chat-shell .conversation-panel .composer-actions .chat-merge-chip {
+    height: 44px;
+    min-height: 44px;
+  }
+  .chat-shell .composer-actions .lead-stop {
+    min-width: 114px;
+  }
+  .chat-shell .composer-actions button[aria-label="Send message to lead"] {
+    min-width: 67px;
+  }
+  .chat-shell .composer-actions {
+    align-items: center;
+  }
+  .lead-header-facts > span {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .chat-shell .composer-actions .chat-merge-accessory {
+    order: 1;
+  }
+  .chat-shell .shell-center:has(.lead-header) {
+    min-height: 620px;
+  }
+  .new-lead-limit-heading {
+    flex-wrap: wrap;
+  }
+  .new-lead-limit-heading p {
+    margin-left: 0;
+  }
+  .new-lead-limit-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.chat-lead-row .chat-lead-activity {
+  display: none;
+}
+.chat-agent-row[data-member="true"] {
+  padding-block: 8px;
+}
+.chat-agent-row[data-member="true"] .chat-agent-task,
+.chat-agent-row[data-member="true"] .chat-agent-activity,
+.chat-agent-row[data-member="true"] .chat-agent-facts {
+  margin-top: 3px;
+  line-height: 1.3;
 }

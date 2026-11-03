@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 
@@ -64,6 +65,7 @@ export async function withPage(
       },
       { flag: recorded, cursor: seq },
     );
+    await openOversight(page);
     await page.waitForFunction(
       () =>
         (document

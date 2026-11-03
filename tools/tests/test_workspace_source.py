@@ -1,6 +1,7 @@
 """Explicit source preparation and graph export use fake Git, never the network."""
 
 import asyncio
+import os
 import shutil
 import threading
 from collections.abc import Mapping, Sequence
@@ -11,6 +12,8 @@ import pytest
 import workspace_source
 from oversight.workspace import BOLTONS, ProcessResult
 from oversight_contracts.graph import GraphSnapshot
+
+PINNED_GIT = ("git", "-c", "core.fsmonitor=false", "-c", f"core.hooksPath={os.devnull}")
 
 
 class FakeGit:
@@ -30,12 +33,30 @@ class FakeGit:
     ) -> ProcessResult:
         assert timeout_s > 0 and env is not None
         self.calls.append(tuple(argv))
-        operation = argv[1]
+        args = list(argv[1:])
+        while args[0] == "-c":
+            args = args[2:]
+        operation = args[0]
         if operation == "clone":
             (Path(argv[-1]) / ".git").mkdir(parents=True)
         if operation == self.fail:
             return ProcessResult(1, "", "fake failure", False, False, 1)
         return ProcessResult(0, self.head if operation == "rev-parse" else "", "", False, False, 1)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("operation", ["rev-parse", "status"])
+@pytest.mark.parametrize("fails", [False, True])
+async def test_fake_git_recognizes_queries_with_safety_options(
+    tmp_path: Path, operation: str, fails: bool
+) -> None:
+    fake = FakeGit(fail=operation if fails else "")
+    argv = (*PINNED_GIT, operation)
+    result = await fake(argv, cwd=tmp_path, timeout_s=10, env={})
+    assert fake.calls == [argv]
+    assert result.returncode == (1 if fails else 0)
+    assert result.stdout == (BOLTONS.commit if operation == "rev-parse" and not fails else "")
+    assert result.stderr == ("fake failure" if fails else "")
 
 
 @pytest.mark.anyio
@@ -56,12 +77,15 @@ async def test_prepare_first_and_verified_reuse(tmp_path: Path) -> None:
             str(BOLTONS.checkout(runtime)),
         ),
         ("git", "checkout", "--detach", BOLTONS.commit),
-        ("git", "rev-parse", "HEAD"),
-        ("git", "status", "--porcelain", "--untracked-files=all"),
+        (*PINNED_GIT, "rev-parse", "HEAD"),
+        (*PINNED_GIT, "status", "--porcelain", "--untracked-files=all"),
     ]
     fake.calls.clear()
     await workspace_source.fetch_source(BOLTONS, runtime, spawn=fake)
-    assert [call[1] for call in fake.calls] == ["rev-parse", "status"]
+    assert fake.calls == [
+        (*PINNED_GIT, "rev-parse", "HEAD"),
+        (*PINNED_GIT, "status", "--porcelain", "--untracked-files=all"),
+    ]
 
 
 @pytest.mark.anyio
@@ -73,7 +97,7 @@ async def test_prepare_wrong_pin_never_replaces_checkout(tmp_path: Path) -> None
     fake = FakeGit(head="0" * 40)
     with pytest.raises(ValueError, match="make workspace-fetch-boltons"):
         await workspace_source.fetch_source(BOLTONS, runtime, spawn=fake)
-    assert [call[1] for call in fake.calls] == ["rev-parse"]
+    assert fake.calls == [(*PINNED_GIT, "rev-parse", "HEAD")]
     assert (root / "keep").read_text() == "untouched"
 
 
@@ -118,7 +142,10 @@ async def test_export_bare_whole_tree_snapshot_without_layout(
     assert snapshot.edges
     assert not snapshot.positions
     assert not await asyncio.to_thread(lambda: list(tmp_path.rglob("*layout*")))
-    assert [call[1] for call in fake.calls] == ["rev-parse", "status"]
+    assert fake.calls == [
+        (*PINNED_GIT, "rev-parse", "HEAD"),
+        (*PINNED_GIT, "status", "--porcelain", "--untracked-files=all"),
+    ]
     output = capsys.readouterr().out
     assert BOLTONS.name in output and BOLTONS.commit in output
 

@@ -212,156 +212,87 @@ async def test_versioned_fixture_validates_input_and_normalized_schema(tmp_path:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+_APPROVED_ATTACHMENTS = {
+    "AgentMessageEvent",
+    "AgentMessageSent",
+    "MessageText",
+    "LeadLimits",
+    "LeadReply",
+    "LeadReplyEvent",
+    "LeadViewEvent",
+    "LeadView",
+    "LeadViewKind",
+    "HighlightView",
+    "FilesView",
+    "BehaviorView",
+    "MomentView",
+    "HighlightRef",
+    "AgentRef",
+    "PathRef",
+    "ChangeFileRef",
+    "ViewPath",
+    "ViewCaption",
+    "UsageCoverage",
+    "UsageCostRow",
+    "UsageCost",
+    "UsageActor",
+    "UsageHours",
+    "UsageTeam",
+    "UsageView",
+    "StageTime",
+    "SuitePhaseTime",
+    "ChangeStages",
+    "DecisionRef",
+    "ReviewCardDecisionRef",
+    "ChangeDecisionRef",
+    "LeadPlanDecisionRef",
+    "GrantReason",
+    "GrantScope",
+    "GrantRequest",
+    "GrantCreated",
+    "GrantRevoked",
+    "GrantAuthorization",
+    "GrantUse",
+    "GrantCreatedEvent",
+    "GrantRevokedEvent",
+    "ModelAttemptFailed",
+    "ModelAttemptFailedEvent",
+    "ParameterExtensionDiff",
+    "ConfirmExamples",
+    "PreviewView",
+    "PreviewId",
+    "PreviewLeaseToken",
+    "PreviewState",
+    "PreviewReason",
+    "StartPreview",
+    "PreviewCreated",
+    "PreviewTokenRequest",
+    "PreviewStatus",
+    "PreviewDetails",
+    "PreviewStatusEvent",
+}
+
+
 def test_schema_changes_only_approved_attachments() -> None:
     baseline = json.loads((ROOT / "contracts/baselines/1.5.0.schema.json").read_text())["$defs"]
     current = json.loads((ROOT / "contracts/generated/oversight.schema.json").read_text())["$defs"]
     assert current["NonEmptyText"] == {"minLength": 1, "type": "string"}
     assert current["MessageText"] == {"minLength": 1, "maxLength": 4096, "type": "string"}
-    assert set(current) - set(baseline) == {
-        "AgentMessageEvent",
-        "AgentMessageSent",
-        "MessageText",
-        "LeadLimits",
-        "LeadReply",
-        "LeadReplyEvent",
-        "UsageCoverage",
-        "UsageCostRow",
-        "UsageCost",
-        "UsageActor",
-        "UsageHours",
-        "UsageTeam",
-        "UsageView",
-        "StageTime",
-        "SuitePhaseTime",
-        "ChangeStages",
-        "DecisionRef",
-        "ReviewCardDecisionRef",
-        "ChangeDecisionRef",
-        "LeadPlanDecisionRef",
-        "GrantReason",
-        "GrantScope",
-        "GrantRequest",
-        "GrantCreated",
-        "GrantRevoked",
-        "GrantAuthorization",
-        "GrantUse",
-        "GrantCreatedEvent",
-        "GrantRevokedEvent",
-        "ModelAttemptFailed",
-        "ModelAttemptFailedEvent",
-        "ParameterExtensionDiff",
-        "ConfirmExamples",
-    }
+    assert set(current) - set(baseline) == _APPROVED_ATTACHMENTS
     assert not set(baseline) - set(current)
+    checks = (
+        _check_facts_definition,
+        _check_plans_definition,
+        _check_message_definition,
+        _check_limits_definition,
+        _check_change_view_definition,
+        _check_run_started_definition,
+        _check_lead_status_definition,
+        _check_agent_step_definition,
+        _check_behavior_definition,
+    )
     for name, definition in baseline.items():
-        if name == "ChangeFacts":
-            _check_parameter_extension_attachment(current[name], definition)
-            continue
-        plan_fields = {
-            "Plan": {"subtasks"},
-            "PlanSubtask": {"depends_on", "state"},
-            "SubtaskDraft": {"depends_on"},
-            "UpdatePlan": {"subtasks"},
-            "QueueSpec": {"plan_id"},
-            "EnqueueTask": {"plan_id"},
-            "QueuedTask": {"plan_id", "agent_ids"},
-        }
-        if name in plan_fields:
-            updated = deepcopy(current[name])
-            updated["description"] = definition["description"]
-            for field_name in plan_fields[name]:
-                if field_name == "state":
-                    assert updated["properties"].pop(field_name)["default"] is None
-                    updated["required"].remove(field_name)
-                else:
-                    updated["properties"][field_name] = definition["properties"][field_name]
-            assert updated == definition, name
-            continue
-        if name == "AgentMessage":
-            updated = deepcopy(current[name])
-            assert updated.pop("description") == (
-                "Human text for `POST /agents/{id}/message` or "
-                "`POST /leads/{agent_id}/message`.\n\n"
-                "The lead route is declared for L2: empty 202 on acceptance, 409 wrong_state "
-                "unless idle,\n"
-                "and 501 in replay. L2 publishes agent.message with the lead as recipient."
-            )
-            assert updated == {k: v for k, v in definition.items() if k != "description"}
-            continue
-        if name == "Limits":
-            updated = deepcopy(current[name])
-            assert updated.pop("description") == "The person's values, fixed for the run."
-            descriptions = {
-                "max_steps": (
-                    "Tool calls per round; Request changes starts a new round with the same budget."
-                ),
-                "max_wall_clock_s": "Per round; Request changes starts a new round.",
-            }
-            for field, description in descriptions.items():
-                assert updated["properties"][field]["description"] == description
-                updated["properties"][field]["description"] = definition["properties"][field][
-                    "description"
-                ]
-            assert updated == definition
-            continue
-        if name == "ChangeView":
-            updated = deepcopy(current[name])
-            field = updated["properties"].pop("stages")
-            assert field == {
-                "anyOf": [{"$ref": "#/$defs/ChangeStages"}, {"type": "null"}],
-                "default": None,
-                "description": "Raw time per stage through seq; null for incomplete history.",
-            }
-            updated["required"].remove("stages")
-            assert updated == definition
-            continue
-        if name == "RunStarted":
-            updated = deepcopy(current[name])
-            field = updated["properties"].pop("max_leads")
-            assert field["default"] is None
-            assert field["anyOf"] == [{"exclusiveMinimum": 0, "type": "integer"}, {"type": "null"}]
-            updated["required"].remove("max_leads")
-            assert updated == definition
-            continue
-        if name == "LeadStatus":
-            updated = deepcopy(current[name])
-            limits = updated["properties"].pop("limits")
-            assert limits["default"] is None
-            assert limits["anyOf"] == [{"$ref": "#/$defs/LeadLimits"}, {"type": "null"}]
-            updated["required"].remove("limits")
-            field = updated["properties"].pop("requested_plan_id")
-            assert field["default"] is None
-            assert field["anyOf"] == [{"$ref": "#/$defs/PlanId"}, {"type": "null"}]
-            state = updated["properties"]["state"]
-            assert state["enum"] == ["starting", "working", "idle", "halted", "stopped", "done"]
-            assert state["description"] == (
-                "Idle waits between turns; done is retained for historical log compatibility."
-            )
-            updated["properties"]["state"] = definition["properties"]["state"]
-            updated["required"].remove("requested_plan_id")
-            assert updated == definition
-            continue
-        if name == "AgentStep":
-            updated = deepcopy(current[name])
-            assert updated["properties"].pop("error_kind")["default"] is None
-            updated["required"].remove("error_kind")
-            assert updated == definition
-            continue
-        if name in {"NodeBehaviorDiff", "MeasuredCaller"}:
-            approved = (
-                "Inputs compared on both sides with equal typed inputs over shared parameters "
-                "when\n"
-                "omitted candidate-only parameters have literal or resolved constant defaults."
-            )
-            updated = deepcopy(current[name])
-            field = updated["properties"]["compared_count"]
-            assert (
-                field["description"]
-                == NodeBehaviorDiff.model_fields["compared_count"].description
-                == approved
-            )
-            field["description"] = definition["properties"]["compared_count"]["description"]
-            assert updated == definition, name
+        if any(check(name, current, definition) for check in checks):
             continue
         if name not in {
             "Slot",
@@ -408,3 +339,162 @@ def _check_parameter_extension_attachment(
     }
     updated["required"].remove("parameter_extensions")
     assert updated == baseline
+
+
+def _check_facts_definition(name: str, current: dict[str, Any], definition: dict[str, Any]) -> bool:
+    if name == "ChangeFacts":
+        _check_parameter_extension_attachment(current[name], definition)
+        return True
+    return False
+
+
+def _check_plans_definition(name: str, current: dict[str, Any], definition: dict[str, Any]) -> bool:
+    plan_fields = {
+        "Plan": {"subtasks"},
+        "PlanSubtask": {"depends_on", "state"},
+        "SubtaskDraft": {"depends_on"},
+        "UpdatePlan": {"subtasks"},
+        "QueueSpec": {"plan_id"},
+        "EnqueueTask": {"plan_id"},
+        "QueuedTask": {"plan_id", "agent_ids"},
+    }
+    if name in plan_fields:
+        updated = deepcopy(current[name])
+        updated["description"] = definition["description"]
+        for field_name in plan_fields[name]:
+            if field_name == "state":
+                assert updated["properties"].pop(field_name)["default"] is None
+                updated["required"].remove(field_name)
+            else:
+                updated["properties"][field_name] = definition["properties"][field_name]
+        assert updated == definition, name
+        return True
+    return False
+
+
+def _check_message_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    if name == "AgentMessage":
+        updated = deepcopy(current[name])
+        assert updated.pop("description") == (
+            "Human text for `POST /agents/{id}/message` or "
+            "`POST /leads/{agent_id}/message`.\n\n"
+            "The lead route is declared for L2: empty 202 on acceptance, 409 wrong_state "
+            "unless idle,\n"
+            "and 501 in replay. L2 publishes agent.message with the lead as recipient."
+        )
+        assert updated == {k: v for k, v in definition.items() if k != "description"}
+        return True
+    return False
+
+
+def _check_limits_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    if name == "Limits":
+        updated = deepcopy(current[name])
+        assert updated.pop("description") == "The person's values, fixed for the run."
+        descriptions = {
+            "max_steps": (
+                "Tool calls per round; Request changes starts a new round with the same budget."
+            ),
+            "max_wall_clock_s": "Per round; Request changes starts a new round.",
+        }
+        for field, description in descriptions.items():
+            assert updated["properties"][field]["description"] == description
+            updated["properties"][field]["description"] = definition["properties"][field][
+                "description"
+            ]
+        assert updated == definition
+        return True
+    return False
+
+
+def _check_change_view_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    if name == "ChangeView":
+        updated = deepcopy(current[name])
+        field = updated["properties"].pop("stages")
+        assert field == {
+            "anyOf": [{"$ref": "#/$defs/ChangeStages"}, {"type": "null"}],
+            "default": None,
+            "description": "Raw time per stage through seq; null for incomplete history.",
+        }
+        updated["required"].remove("stages")
+        assert updated == definition
+        return True
+    return False
+
+
+def _check_run_started_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    if name == "RunStarted":
+        updated = deepcopy(current[name])
+        field = updated["properties"].pop("max_leads")
+        assert field["default"] is None
+        assert field["anyOf"] == [{"exclusiveMinimum": 0, "type": "integer"}, {"type": "null"}]
+        updated["required"].remove("max_leads")
+        assert updated == definition
+        return True
+    return False
+
+
+def _check_lead_status_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    if name == "LeadStatus":
+        updated = deepcopy(current[name])
+        limits = updated["properties"].pop("limits")
+        assert limits["default"] is None
+        assert limits["anyOf"] == [{"$ref": "#/$defs/LeadLimits"}, {"type": "null"}]
+        updated["required"].remove("limits")
+        field = updated["properties"].pop("requested_plan_id")
+        assert field["default"] is None
+        assert field["anyOf"] == [{"$ref": "#/$defs/PlanId"}, {"type": "null"}]
+        state = updated["properties"]["state"]
+        assert state["enum"] == ["starting", "working", "idle", "halted", "stopped", "done"]
+        assert state["description"] == (
+            "Idle waits between turns; done is retained for historical log compatibility."
+        )
+        updated["properties"]["state"] = definition["properties"]["state"]
+        updated["required"].remove("requested_plan_id")
+        assert updated == definition
+        return True
+    return False
+
+
+def _check_agent_step_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    if name == "AgentStep":
+        updated = deepcopy(current[name])
+        assert updated["properties"].pop("error_kind")["default"] is None
+        updated["required"].remove("error_kind")
+        assert updated == definition
+        return True
+    return False
+
+
+def _check_behavior_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    if name in {"NodeBehaviorDiff", "MeasuredCaller"}:
+        approved = (
+            "Inputs compared on both sides with equal typed inputs over shared parameters "
+            "when\n"
+            "omitted candidate-only parameters have literal or resolved constant defaults."
+        )
+        updated = deepcopy(current[name])
+        field = updated["properties"]["compared_count"]
+        assert (
+            field["description"]
+            == NodeBehaviorDiff.model_fields["compared_count"].description
+            == approved
+        )
+        field["description"] = definition["properties"]["compared_count"]["description"]
+        assert updated == definition, name
+        return True
+    return False

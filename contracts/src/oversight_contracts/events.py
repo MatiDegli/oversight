@@ -39,8 +39,10 @@ from oversight_contracts.grants import GrantCreated, GrantRevoked, GrantUse, rul
 from oversight_contracts.graph import ChangeGraph, GraphDelta, GraphSnapshot, ImpactCone
 from oversight_contracts.plans import Plan, PlanZone
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
+from oversight_contracts.previews import PreviewStatus
 from oversight_contracts.queue import QueuedTask
 from oversight_contracts.review import ChangeFacts, CrossReview, ReviewCard
+from oversight_contracts.views import LeadView
 
 # run.started
 
@@ -785,6 +787,15 @@ class LeadStatusEvent(EventBase):
     """The complete event payload."""
 
 
+class LeadViewEvent(EventBase):
+    """Envelope for one committed lead view."""
+
+    type: Literal["lead.view"]
+    """Event discriminator."""
+    payload: LeadView
+    """Grounded reference request."""
+
+
 class LeadReplyEvent(EventBase):
     """The lead.reply envelope."""
 
@@ -797,6 +808,15 @@ class ModelAttemptFailedEvent(EventBase):
 
     type: Literal["model.attempt_failed"]
     payload: ModelAttemptFailed
+
+
+class PreviewStatusEvent(EventBase):
+    """Envelope for a public preview lifecycle transition."""
+
+    type: Literal["preview.status"]
+    """Event discriminator."""
+    payload: PreviewStatus
+    """Candidate identity and lifecycle facts, without URL, token or output."""
 
 
 type ServerEvent = Annotated[
@@ -822,9 +842,11 @@ type ServerEvent = Annotated[
     | RevertResolvedEvent
     | QueueUpdatedEvent
     | LeadStatusEvent
+    | LeadViewEvent
     | LeadReplyEvent
     | GrantCreatedEvent
-    | GrantRevokedEvent,
+    | GrantRevokedEvent
+    | PreviewStatusEvent,
     Field(discriminator="type"),
 ]
 """Every event the server sends; validate one with `TypeAdapter(ServerEvent)`."""

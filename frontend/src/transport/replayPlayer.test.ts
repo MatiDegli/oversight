@@ -175,3 +175,29 @@ describe("controlled replay", () => {
     }
   });
 });
+
+it("seeks an exact sequence at an equal timestamp and cancels captured playback", async () => {
+  const store = createStateStore();
+  const rows = log
+    .trim()
+    .split("\n")
+    .map((line) => ({ ...(JSON.parse(line) as { seq: number }), ts: "2026-11-03T00:00:00Z" }));
+  const control = createReplayPlayer({
+    store,
+    source: { text: rows.map((row) => JSON.stringify(row)).join("\n") },
+  });
+  await control.ready;
+  control.seekSeq(3);
+  expect(store.getState().state.lastSeq).toBe(3);
+  expect(control.getSnapshot().status).toBe("paused");
+  control.setSpeed(2);
+  expect(store.getState().state.lastSeq).toBe(3);
+  control.seekSeq(5, 0);
+  expect(store.getState().state.lastSeq).toBe(5);
+  const snapshot = control.getSnapshot();
+  control.seekSeq(99999);
+  expect(control.getSnapshot()).toBe(snapshot);
+  control.dispose();
+  control.seekSeq(2);
+  expect(store.getState().state.lastSeq).toBe(5);
+});

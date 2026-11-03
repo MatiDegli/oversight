@@ -58,6 +58,10 @@ the agents' lights, the diff) is where this happens, not the pitch.
 
 ## Capabilities and Constraints
 
+- Lead Chat shows four closed reference cards: graph highlights, exact changed files, measured
+  behavior and run moments. All facts follow the displayed run state. Clicks alone open a graph
+  scope, read-only diff or replay moment; Back returns to the saved paused position with Chat
+  retained. Live moments show event facts and explain that rewind is available in replay.
 - Watch mode: the graph and the agents panel, with live node highlighting and agent cards.
 - Review mode: an inline diff in Monaco beside the graph with the impact cone; decisions Approve,
   Reject and, from level 2, Request changes. Approve has no keyboard shortcut.
@@ -84,6 +88,13 @@ the agents' lights, the diff) is where this happens, not the pitch.
 - The real two-agent run (`fixtures/events/recorded-demo.jsonl` and its provenance sidecar) records
   Muse Spark and Muse Spark Open, with both changes approved and merged. The static replay build
   plays it without a backend, with the provenance-derived label `Recorded run · Oct 27, 2026`.
+- Reference-card implementation evidence is synthetic: production reducer events drive browser
+  fixtures for all four kinds, live facts, exact-sequence replay/Back, long paths and eight
+  references in dark/day at 1280/390. This does not demonstrate a real model choosing a view.
+  The existing Oct 27 public recording proves `change.*`; scripted-rules supplies
+  `tests.executed` evidence. `show_view` is advertised and dispatched with the moved prompt version
+  (DECISIONS, November 3). Remaining release gates are the separately authorized paid probe and
+  prompt validation, a real recording and bundle replacement.
 - No users, testimonials, benchmarks or metrics exist yet; none may be invented.
 
 ## Product Principles

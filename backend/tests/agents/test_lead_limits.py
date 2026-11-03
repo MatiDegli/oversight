@@ -237,14 +237,21 @@ async def test_thread_builds_derived_policy_once_and_passes_its_snapshot(monkeyp
 
 
 @pytest.mark.parametrize(
-    "pack,version",
-    [(False, "agent-v1-53ab6d25b16f"), (True, "agent-v1-83e8717606d6")],
+    "prune,versions",
+    [
+        (None, ("agent-v1-edff7c6b2e7f", "agent-v1-76ef6467e8cc")),
+        (8000, ("agent-v1-3f25128779fb", "agent-v1-ebb2ac5add8a")),
+        (9000, ("agent-v1-196443beb67f", "agent-v1-2946b3575e30")),
+    ],
 )
-def test_the_lead_prompt_builder_keeps_the_sent_and_hashed_text(pack: bool, version: str) -> None:
+@pytest.mark.parametrize("pack", [False, True])
+def test_the_lead_prompt_builder_keeps_the_sent_and_hashed_text(
+    pack: bool, prune: int | None, versions: tuple[str, str]
+) -> None:
     from oversight.agents import build_lead_prompt
 
     limits = LEAD_LIMITS.model_copy(update={"turns": 7})
-    assert _prompts.prompt_version(pack, lead_limits=limits) == version
+    assert _prompts.prompt_version(pack, prune, lead_limits=limits) == versions[int(pack)]
     assert (
         _prompts.lead_system_prompt(limits)
         == build_lead_prompt(limits) + "\n\n" + _prompts.SERVER_NOTICE_PROMPT

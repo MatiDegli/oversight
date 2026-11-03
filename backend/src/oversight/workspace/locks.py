@@ -7,7 +7,7 @@ risking a deadlock. Two agents share only main, which they always take first.
 
 import asyncio
 import contextlib
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
@@ -52,6 +52,13 @@ class Locks:
         self._agents: dict[str, _TaskLock] = {}
         self._git = _TaskLock("Git lease", is_main=False)
         self._operations = 0
+        self._git_hook: Callable[[], Awaitable[None]] | None = None
+
+    def set_git_hook(self, hook: Callable[[], Awaitable[None]]) -> None:
+        """One session hook, installed before admission; never replace a live barrier."""
+        if self._git_hook is not None:
+            raise LockOrderError("the Git admission hook is already installed")
+        self._git_hook = hook
 
     def _agent(self, agent_id: str) -> _TaskLock:
         if agent_id not in self._agents:
@@ -109,6 +116,8 @@ class Locks:
             raise LockOrderError("the Git lease requires a tree lock")
         await self._git.acquire(task)
         try:
+            if self._git.depth == 1 and self._git_hook is not None:
+                await self._git_hook()
             yield
         finally:
             self._git.release(task)

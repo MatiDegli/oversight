@@ -47,6 +47,7 @@ async def request_changes(ctx: ChangeContext, rec: ChangeRecord, comment: str) -
     if rec.fallback == "conflict":
         # Phase A, cancellable: a cancel before phase B leaves the change as it was.
         async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+            await ctx.workspace.drain_previews(rec.tree)
             if await refused_as_suspect(ctx, rec):
                 return None
             if not await preflight(ctx, rec):
@@ -65,6 +66,7 @@ async def request_changes(ctx: ChangeContext, rec: ChangeRecord, comment: str) -
     # lock until its revision is proposed, so the request names that revision and precedes
     # the revision run.
     async with ctx.workspace.locks(main=True, agent_id=rec.agent_id):
+        await ctx.workspace.drain_previews(rec.tree)
         if await refused_as_suspect(ctx, rec):
             return None
         if not await preflight(ctx, rec):

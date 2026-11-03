@@ -233,3 +233,132 @@ and retains the runtime lock until process exit. Repeated cancellation still set
 Report finalization preserves all artifacts without reading them while cleanup is unverified.
 Import guards and result admission are integrated with public native Windows COPY startup.
 Native Job/console/grandchild proof remains uncollected; accepted path/ACL residuals are unchanged.
+
+### Dormant person-owned preview supervision (2026-11-03)
+
+The backend infrastructure conforms to preview contracts 1.19.0; route wiring remains separate.
+`LiveRun.previews` owns one `PreviewManager`. Its workspace facade exports `PreviewManager`,
+`PreviewProfile`, `PreviewCandidate`, `PreviewCreatedResult`, `PreviewStatusRecord`,
+`PreviewDetailsResult`, `PreviewStatusSink` and `PreviewError`. The awaited status sink is supplied
+by the composition owning the committed event writer; without it, execution is refused.
+There are no preview routes or production opening switch here. `PreviewProfile.production_open`
+is always false. Infrastructure configuration alone does not open the dormant feature.
+
+Execution is eligible only for the trusted demo, with session C available. Native Windows and
+generic/pinned/own repositories cannot use preview. The fixed C refusal is:
+“Live preview unavailable: isolation C is unavailable for this session.” Configuration is frozen
+at startup. `OVERSIGHT_PREVIEW_ADAPTER` must name the trusted absolute
+`backend/src/oversight/preview_adapter.py`; `OVERSIGHT_PREVIEW_PYTHON` is an explicit absolute
+prepared demo interpreter, preserving its venv path. `OVERSIGHT_PREVIEW_PORTS` is a comma-separated
+pool excluding backend/Vite ports, and `OVERSIGHT_PREVIEW_ORIGINS` contains exact configured HTTP
+origins, separated by commas. Missing or partial configuration disables execution without fallback.
+Person-owned startup limits are `OVERSIGHT_PREVIEW_HEARTBEAT_S` (10), `LEASE_S` (30), `LIFETIME_S`
+(900), `READINESS_S` (10), and `MEMORY_LIMIT_BYTES` (536870912), all with the same
+`OVERSIGHT_PREVIEW_` prefix. Host memory admission runs before every launch.
+
+The trusted absolute supervisor never imports shop. It owns C's launcher, observes backend-only
+control EOF and monotonic lease/absolute deadlines, and verifies namespace-init death before
+reporting cleanup. Its child uses the existing parent-death launcher: supervisor death kills
+unshare, whose kill-child policy tears down the namespace, including setsid descendants.
+Neither control reader nor backend writer reaches unshare or application descendants. The backend
+binds/listens once on `127.0.0.1` using an available pool port; unknown listeners only reduce the
+pool. The preview-specific helper preserves this listener with entry/ack descriptors across both
+exec boundaries, leaving ordinary suites unchanged. A distinct, noninherited host listener proves
+fresh-connection refusal inside C; the inherited application listener never substitutes for it.
+Private scratch cwd/HOME/TMP/TEMP lie outside the candidate. Child environment construction is
+allowlisted, with no backend credentials or PYTHONPATH discovery.
+
+The adapter vector is the absolute interpreter, `-I -B`, absolute adapter, `--listener-fd`, `--port`,
+`--worktree`, `--memory-limit-bytes`, repeated `--oversight-origin`, and a supervisor-generated
+`--ready-nonce` containing 32 random bytes as lowercase hex. Helper argument positions, parent
+checks, isolation flags and acknowledgement remain intact. Durable launch intent and confirmed
+ownership precede application execution acknowledgement. Every host-side application listener copy
+closes after handoff or failure. Readiness requires bounded `GET /_oversight_ready`, exact JSON
+`{"nonce": N}`, and an independently live authenticated namespace, within the startup deadline.
+The adapter must silence stdout/stderr and install/verify inherited RLIMIT_AS before shop import.
+Only its private exit 74 means `memory_limit`; 70–73 mean `launch_failed`, with 73 disabling that
+profile/session. Other exits/signals remain `app_exited`. Trusted launcher diagnostics are bounded
+and reduced to allowlisted internal facts. No application output, token or URL enters status.
+
+IDs are `preview-` plus 32 lowercase UUID4 hex characters; lease tokens encode 32 random bytes as 43
+URL-safe base64 characters without padding. Tokens stay in backend memory and the initiating result,
+with constant-time comparison and no registry/argv/URL/log/event copy. Unexpired starting and ready
+leases renew without heartbeat events, clamped to the original absolute deadline; expiry never
+revives. Starting/ready transitions have null reasons; stopping and terminal transitions carry
+closed reason values. Details exposes a server-built URL only while ready. Unknown IDs refuse as
+`not_found`, known IDs with wrong tokens as `forbidden`, and malformed IDs/bodies as `invalid_request`.
+Disabled, missing or invalid profiles refuse as `not_configured` with `missing=[]`; occupied runtime,
+expiry, stale candidates and shutdown-closed admission refuse as `wrong_state`. Matching-token Stop
+retries are idempotent after verified termination; unverified cleanup retains quarantine and refuses
+as `wrong_state` with `failed/cleanup_unverified`.
+
+Universal server Git coverage is at `Locks.git_lease`, after exclusive acquisition and before yield.
+The hook rechecks integrity after drain; task-owned reentrancy and tree-before-lease ordering remain.
+Start reserves capacity synchronously before any preflight Git and validates/captures metadata under
+main→worktree→Git locks, so it never evicts an owner. After the awaited starting sink, admission
+returns `starting` while an owned task supervises launch/readiness under one startup deadline.
+Child tasks acquire their own admission locks; no Git lock lasts through readiness or application
+lifetime. Drain settles unfinished launch/readiness before namespace cleanup and prevents later ready
+publication for the drained owner.
+Another agent's Git activity interrupts preview with `mutation`.
+
+| Server path | Coverage |
+| --- | --- |
+| `Workspace.git` / `guarded_git` | `Workspace.git_lease` → `Locks.git_lease`, before verification/spawn |
+| `operations.git_lease` users, rules/grant approval | Same installed hook, including direct callers |
+| Integrity merge preparation, verification and abort | `Workspace.git_lease`, no cleanup-Git bypass |
+| Suite/test-tree direct capture | Suite's outer workspace lease precedes every capture spawn |
+| Behavior/probe/revert checkouts and cleanup | Outer lease and/or `Workspace.git` for every Git command |
+| Server profile source validation | Explicit `Workspace.startup_git` runner, main lock and shared lease |
+| Windows inventory/staging, including repeated inventory | Same supplied startup runner propagated through staging |
+| Shutdown main check and removal | Same lease, after preview drain and before store closure |
+
+At the lease boundary cleanup takes no additional tree lock: namespace death precedes the existing
+filesystem-only `finish_snapshot`, before any Git (even stop-time status). Metadata discrepancies
+restore once, suspend rules and refuse the triggering Git operation, including stop-time status.
+Verified restoration marks candidate evidence `worktree_changed` without setting `main_suspect` or
+the cleanup-uncertainty latch; uncertainty latches both. Candidate comparison then
+uses its own main→worktree locks, scheduled even when the triggering operation refuses. A later
+independently requested safe Git operation can proceed after verified restitution while comparison
+remains pending; previewed candidate reuse/merge cannot. Contamination compares clean
+launch status against stop `status --porcelain --untracked-files=all`, head and revision. Changed
+evidence records `worktree_changed` and blocks person, rules and standing-grant merges until a new
+revision/head establishes trustworthy evidence. Application-written working files are never silently
+staged, restored or deleted. Explicit guards also precede edits, Request changes (including ready
+without Git), Approve, Reject, Stop, worktree removal and profile disable. Final transaction guards
+remain in place. Repeated cancellation retains exclusion through death and metadata restitution.
+
+Unverified namespace death/restoration blocks **all server Git and Approve until restart**, retains
+runtime ownership and the registry/quarantine, and refuses the waiting mutation with `wrong_state`. It does not publish
+stopped or release the port. The generalized cleanup latch preserves the existing Windows message.
+Shutdown closes preview admission at entry and drains immediately before manager close, retaining the
+store through awaited terminal publication; remaining shutdown steps still run after failure.
+
+A recovery refusal keeps its registry across restarts; restarting alone cannot release quarantine.
+Exit the server first. Inspect `worktrees/<agent>` and preserve any application-written changes.
+Using the registered identities, verify that the owned processes have ended and Git metadata has
+been restored before releasing ownership; ambiguous identities never authorize killing by PID or
+port. After this manual recovery, remove `preview-owner/owner.json` and any leftover
+`preview-owner/owner.pending`, then restart. This explicitly releases the preserved preview and
+allows normal startup/reset to proceed; copy out wanted files before that reset. The same release
+applies to incomplete owned/entering phases, partial writes, changed profiles or boot/process
+identities, and changed worktrees. Keep quarantine when death or restitution remains unverified.
+
+`runtime/preview-owner/owner.json` is private, atomic and fsynced, outside reset-deleted directories.
+It records profile/runtime fingerprint, preview/candidate identity, port, boot/process births,
+supervisor/unshare/confirmed namespace identities, phase and recoverable metadata snapshot, never
+token or application output. Pending/partial writes, identity mismatch and ambiguity quarantine.
+Private file modes do not protect ownership files from arbitrary code running as the same user;
+C does not make the filesystem or a deliberately forged ownership record tamper-proof.
+Recovery under the runtime lock precedes ordinary `refuse_orphans`, source Git and reset. This is a
+narrow exception to the ordinary never-kill-orphans rule: only positively registered births pinned by
+pidfds can be signaled, with namespace identities checked and namespace death verified before snapshot
+restitution. Ordinary orphan detection remains unchanged. Names, ports and unknown processes never
+authorize killing. Recovery compares the old candidate after restitution; changed working files retain
+quarantine and block reset, preserving them for review instead of deleting them at startup.
+
+These are fake-process/protocol ordering proofs, not host/browser reachability or kernel acceptance.
+Front F must still establish host/browser GET and form POST through the inherited socket, refused
+fresh backend/external connections, setsid teardown and crash recovery on the real host. C does not
+contain the filesystem, secrets accessible to the user, or application responses. RLIMIT_AS is per
+process, not an aggregate fork limit. Production opening remains disabled pending joint acceptance.

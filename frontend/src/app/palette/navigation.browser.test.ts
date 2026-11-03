@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { launchBrowser } from "../../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
@@ -54,6 +55,7 @@ async function mount(page: Page, seq: number, recorded = false) {
     },
     { seq, recorded },
   );
+  await openOversight(page);
   await page.waitForFunction(
     () =>
       (document

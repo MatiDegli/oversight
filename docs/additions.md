@@ -72,8 +72,8 @@ Build Chat only from an approved sketch round.
 - Review, merge mode and approve rules are shared. Chat opens the same review panel and the
   same merge-mode setting; it shows impact as text plus "See on graph", which switches to
   Oversight with the cone framed.
-- Chat becomes the default only if its screenshots pass review by Mon Nov 2, 2026, 23:00 ART.
-  Otherwise Oversight stays the default and Chat sits behind the switch.
+- Chat is the default, chosen by the maintainer on 2026-11-03 after the Chat with leads
+  screens passed review. Oversight is one click away; the graph loads on that first switch.
 - Chat adds no events, contracts or endpoints. Presence in "Where they work" and marks in the
   Files tree read the existing `agent.focus` event and `change.proposed.files`.
 - Graph and map work comes after Chat and the lead; since 2026-11-01 it may start before the freeze when a slot is free (DECISIONS.md).
@@ -700,6 +700,23 @@ The inbox displays each requested plan (`bf9fb04`); Queue is wired to plan start
 Edit, post-dispatch plan tracking and partition completeness production remain item 11 work.
 This is narrower than the
 earlier ambition to have the lead start agents for proof 2.
+
+K2b adds the event-derived operational header, per-lead observed-revision Stop pending through
+terminal publication, noninteractive ended composer, observed cut captions, published-cap guards
+and backend-default-only New lead. Its fake-only browser fixtures include stopped and six-lead
+scenes; lifecycle/freshness notices and timeline treatment remain K2c, grouping/hues remain K3,
+and plan tracking is still pending. No backend, contract or generated schema changes.
+
+Reference views use the shipped contracts 1.18.0 and ordered readers: highlight, exact changed
+files, current measured behavior and moment cards now render in lead Chat. Successful-envelope
+metadata supports live moment facts; replay navigation keeps Chat outside the sought fold and
+Back restores the saved offset and sequence, paused. Synthetic browser evidence covers all four
+kinds, withheld captions, eight long-path references, cold graph framing, exact merged-file diff
+and history in dark/day at 1280/390. Exports retain the existing caption withholding and inclusion
+receipt behavior. `show_view` is advertised and dispatched with the moved prompt version
+(DECISIONS, November 3). Remaining release gates are the separately authorized paid probe and
+prompt validation, a real recording and bundle replacement. The verified Oct 27 public bundle
+stays in place. Merge rehearsal has its own one-page plan outside this slice.
 
 ### Saved agent flows
 

@@ -361,7 +361,7 @@ frame, the size the demo is recorded at. Panels scale with the window; type size
 | Aggregate call counts | counts at rest | count on the hovered edge and the selected node's aggregates only | the maintainer approved removing resting label collisions on 2026-10-29; arrows and count data stay |
 | Edges at a node an agent touches | in the agent's color | a quiet edge returns to full strength in edge; only an edge a change adds is in the agent's color, dashed | AGENTS.md: a dashed node border means a pending change in the agent's color; DESIGN.md, Graph nodes and their states: added edges are dashed, possible calls never are |
 | Skip-column edges | routed around the frames | visibility-grid routes outside frames, sharing one trunk per target | only short endpoint taps traverse their own containing frame; back calls use an outside detour |
-| First view | the whole demo in view | the whole graph when it fits at the legibility floor or above (the demo at 1920x1080: 83%); otherwise the floor on the module of the hub | names and state words stay at least 11 CSS px (**Opening a change**); a larger graph is a canvas to pan and zoom |
+| First switch to Oversight | the whole demo in view | the whole graph when it fits at the legibility floor or above (the demo at 1920x1080: 83%); otherwise the floor on the module of the hub | names and state words stay at least 11 CSS px (**Opening a change**); a larger graph is a canvas to pan and zoom |
 | State word and letter badge on a frame | on the name's row | right end of the header row, in the count's place (the count is left out while it shows) | a frame's header holds the title and the count; a touched frame says its state before its size |
 | Read nodes in review | lit in the agent's color | dimmed unless in the cone | the agent's color stays on the change only (Components, impact cone) |
 | Code-dim (line numbers, comments) | `#6d6d68` | `#7d7d78`; v4 ratios below | quality floor: text at 4.5:1 |
@@ -581,6 +581,34 @@ word, a sign (`+`, `-`) or an icon. No state depends on color alone.
 
 **The No Amber Rule.** There are no yellow or amber warnings. A warning is said in words with an
 icon, in neutral colors.
+
+## Lead reference cards
+
+Lead Chat places highlight, files, behavior and moment cards in envelope sequence order. Cards
+use a solid neutral border on page, the lead's team text token plus its letter, and the existing
+15px speech / 16px title / 13px supporting hierarchy. Caption is escaped plain speech with lead
+and event-time attribution; a null caption says “Caption omitted or withheld in this source.”
+Never use caption claims as facts. Long paths and eight references wrap within the card at 390px;
+file paths and node identities use Mono. Controls have visible text-token keyboard focus.
+
+Contents, labels and counts resolve from the displayed state on every fold. Missing references
+are omitted without removing the original request or caption. An all-missing card says
+“No referenced items are available at this point in the run.” The provenance line is
+“Requested through event N; references follow current state.” Only N changes.
+
+No arrival opens a panel, changes layout, seeks or takes focus. A highlight click switches to
+Oversight, lights the resolved nodes and frames once, including the first graph mount without
+an open panel. Navigation and a new run clear it; pruning missing IDs does not move the camera.
+A file click opens that exact change/path's read-only recorded diff, even after merge/rejection.
+Behavior reuses the measured Input/Before/After component and its current-candidate limitations.
+
+Moment facts show event type, time and agent, or “No agent”. Live moments say
+“Rewind available in replay.” and offer no rewind action. A replay click pauses first and saves
+Chat plus the exact position/sequence outside the fold. Historical graph/panels/evidence use the
+inclusive sought prefix; Chat keeps the originating card and later replies. The stable banner
+“Viewing event N · Back” stays outside the timeline. Back restores the saved position and sequence,
+paused. Historical mutation controls are disabled; ordinary replay navigation and source changes
+clear the Chat override. Unknown view kinds render nothing.
 
 ## Typography
 

@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
@@ -88,6 +89,7 @@ async function withPage(
       },
       { theme, measured },
     );
+    await openOversight(page);
     await page.evaluate(() => document.fonts.ready);
     await ready(page);
     await page.getByRole("button", { name: "Functions", exact: true }).click();

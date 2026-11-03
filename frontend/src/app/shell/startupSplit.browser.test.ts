@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser } from "@playwright/test";
@@ -58,6 +59,7 @@ it.each([1920, 1280, 390])(
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     try {
       await page.goto(url);
+      await openOversight(page);
       await page
         .getByRole("button", {
           name: width < 1280 ? "Try two-change practice" : "Two-change practice",
@@ -93,6 +95,7 @@ it("opens the phone introduction while review evidence is unavailable", async ()
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   try {
     await page.goto(url);
+    await openOversight(page);
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
     await check(page.getByRole("button", { name: "Start practice", exact: true })).toBeVisible();
     expect(requests).toEqual([]);
@@ -114,6 +117,7 @@ it("loads evidence before painting the first phone decision without a layout shi
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   try {
     await page.goto(url);
+    await openOversight(page);
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
     const start = page.getByRole("button", { name: "Start practice", exact: true });
     await check(start).toBeVisible();
@@ -182,6 +186,7 @@ it.each(["failed", "left"])("handles a pending phone decision when %s", async (o
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   try {
     await page.goto(url);
+    await openOversight(page);
     const open = page.getByRole("button", { name: "Try two-change practice", exact: true });
     await open.click();
     const requested = page.waitForRequest("**/ReviewBody.tsx*");
@@ -219,6 +224,7 @@ it("waits for evidence when resizing into an already started phone decision", as
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   try {
     await page.goto(url);
+    await openOversight(page);
     await page.getByRole("button", { name: "Two-change practice", exact: true }).click();
     await page.getByRole("button", { name: "Start practice", exact: true }).click();
     await check(page.getByRole("heading", { name: "Decision 1 of 2" })).toBeVisible();
@@ -265,6 +271,7 @@ it("keeps the phone fallback chrome out of keyboard focus", async () => {
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
   try {
     await page.goto(url);
+    await openOversight(page);
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
     const leave = page.getByRole("button", { name: "Leave practice", includeHidden: true });
     await check(leave).toBeVisible();
@@ -290,6 +297,7 @@ it.each([390, 1280, 1920])(
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     try {
       await page.goto(url);
+      await openOversight(page);
       await page.waitForFunction(() => !!window.startupPracticeFrame);
       await page.evaluate(() => document.fonts.ready);
       for (const attempt of [
@@ -356,6 +364,8 @@ it.each(
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
     try {
       await page.goto(url);
+      await openOversight(page);
+
       await check(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
       await page.evaluate(() => document.fonts.ready);
       if (tab === "review")
@@ -411,11 +421,13 @@ it.each(
         await check(panel.getByRole("alert")).toHaveText(
           "This panel could not load. Reload the page to try again.",
         );
+
         await check(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
         expect(await panel.boundingBox()).toEqual(before);
         expect(await heading.boundingBox()).toEqual(header);
         await page.getByRole("button", { name: "Watch", exact: true }).click();
         await check(panel).toHaveCount(0);
+
         await check(page.getByLabel("Repository graph", { exact: true })).toBeVisible();
         expect(errors).toEqual([]);
         return;

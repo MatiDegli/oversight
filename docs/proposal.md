@@ -52,6 +52,7 @@ oversight/
 │   │   ├── common.py         # ids, paths, timestamps, shared literals
 │   │   ├── graph.py          # GraphNode, GraphEdge, GraphSnapshot, GraphDelta, ChangeGraph, ImpactCone
 │   │   ├── events.py         # the envelope, payloads and current ServerEvent union
+│   │   ├── views.py          # dormant grounded lead view requests
 │   │   ├── commands.py       # request and response bodies, ErrorResponse
 │   │   ├── policy.py  plans.py  queue.py
 │   │   └── review.py  decisions.py  examples.py  grants.py
@@ -644,6 +645,10 @@ the single error format.
 | `PUT /files` | `SaveFile {path, content, base_hash, agent_id?}` | 200 `FileSaved {path, hash}` | `invalid_path`, `stale_file`, `wrong_state` |
 | `GET /events` | none | SSE, see 4.6 | |
 | `GET /health` | none | 200 `Health {ok, run_id, contract_version, mode, missing_settings}`; mode is `live` or `replay` | |
+| `POST /previews` | `StartPreview` | 202 `PreviewCreated` | Contracted, not installed; `not_found`, `invalid_request`, `forbidden`, `wrong_state`, `not_configured` |
+| `GET /previews/{id}` | none | 200 `PreviewDetails` | Contracted, not installed; `not_found`, `invalid_request` |
+| `POST /previews/{id}/lease` | `PreviewTokenRequest` | 200 `PreviewStatus` | Contracted, not installed; `not_found`, `invalid_request`, `forbidden`, `wrong_state` |
+| `POST /previews/{id}/stop` | `PreviewTokenRequest` | 200 `PreviewStatus`, after verified drain | Contracted, not installed; `not_found`, `invalid_request`, `forbidden`, `wrong_state` |
 
 - L2 installs lead-message admission and emits existing `agent.message` with the lead id as recipient,
   followed by `lead.reply` for completed/cut turns. The run-local thread waits idle between at most
@@ -651,6 +656,34 @@ the single error format.
   composer/navigation, freshness, withheld/cut notices, plan links, graph/focus and approval-key
   protections, fixture exclusion and the 50-turn decision-count cost fixture and Playwright coverage. There is no route manifest
   in the generated schema: routes are described by command docstrings and this table.
+- Contracts 1.19.0 records the four preview routes above and reserves `/previews`; the later
+  wiring front installs their handlers after the contract and supervisor land. No preview
+  handlers, lifecycle producer or replay refusal are installed by this contract delivery.
+  The following requirements are that front's interface:
+  - POST validates current run, coding agent, derived change, ready candidate, revision/head,
+    clean worktree, configured profile, isolation C with the Git-metadata guard, memory and
+    capacity under the start/mutation barrier. Concurrent starts refuse; they never replace
+    an owner. The token request is shared by lease and stop and contains no caller-selected
+    reason, command, URL, profile or replacement target.
+  - Unknown id uses `not_found`; malformed body/id uses `invalid_request`; bad token uses
+    `forbidden`; occupied runtime, expired lease or invalid candidate uses `wrong_state`.
+    An absent profile uses `not_configured` with `missing=[]`, a valid 503 response without
+    inventing a setting name. Omitting `missing` is invalid. Existing HTTP mappings stay fixed.
+  - Lease requires a matching token and an unexpired `starting` or `ready` preview; it never
+    revives a terminal preview or extends absolute lifetime. Stop requires a matching token,
+    including repeated calls. It is idempotent after verified termination; repeats return the
+    existing terminal status. Failed/unverified cleanup returns `wrong_state`, keeps quarantine
+    and publishes `failed / cleanup_unverified`.
+  - `starting` and `ready` have `reason=null`; `stopping`, `stopped` and `failed` require a
+    reason from the closed list. Stop/navigation/replacement requests use `closed`; server
+    barriers use their corresponding reasons. Reasons are fixed public codes, never application
+    output or exception text. Emit lifecycle transitions only, never heartbeat events.
+  - GET never returns a token, command, output or exception. `url` is non-null only for `ready`;
+    a ready response may still have `url=null`. Preview GET and command routes must return
+    replay's existing 501 refusal; replay never contacts historical localhost.
+  - POST response and all GET/lease/stop responses use `Cache-Control: no-store`; no request-body
+    or token logging. `preview.status` carries no URL, token or output; the wiring front owns
+    publishing and semantic run/agent/change membership validation.
 - Among installed routes in live mode, only the routes in `api/commands.py` NOT_BUILT (`POST /dictation` and
   `POST /changes/{id}/review`) are unbuilt and answer 501. Server replay also answers 501
   for the LIVE_ONLY routes, including `GET /tree` and the mutation commands. Event-backed

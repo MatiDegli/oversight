@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { Manifest } from "vite";
@@ -19,20 +20,26 @@ test("the real /oversight/ replay prefetches once and keeps every request under 
   page.on("pageerror", (error) => errors.push(error.message));
   await page.addInitScript(recordEditorStartup);
   await page.goto("/oversight/");
+  await openOversight(page);
   await expect
     .poll(() => requested.filter((url) => new URL(url).pathname === `/oversight/${entry}`).length)
     .toBe(1);
+  await expect
+    .poll(() => page.evaluate(() => window.editorStartup.firstGraphAt))
+    .toBeGreaterThan(0);
   const timing = await page.evaluate(() => {
-    const firstGraphAt = window.editorStartup.firstGraphAt;
+    const { firstGraphAt, firstShellAt } = window.editorStartup;
     return {
       firstGraphAt,
+      firstShellAt,
       firstEditor: performance
         .getEntriesByType("resource")
         .find((entry) => entry.name.includes("/implementation-"))?.startTime,
     };
   });
   expect(timing.firstGraphAt).toBeGreaterThan(0);
-  expect(timing.firstEditor).toBeGreaterThanOrEqual(timing.firstGraphAt);
+  expect(timing.firstShellAt).toBeGreaterThan(0);
+  expect(timing.firstEditor).toBeGreaterThanOrEqual(timing.firstShellAt);
   const origin = new URL(baseURL ?? "").origin;
   expect(
     requested
@@ -45,7 +52,7 @@ test("the real /oversight/ replay prefetches once and keeps every request under 
   expect(await page.evaluate(() => window.editorStartup)).toMatchObject({
     idleScheduled: 1,
     idleFired: 1,
-    idleAfterGraph: true,
+    idleAfterShell: true,
   });
   expect(errors).toEqual([]);
 });

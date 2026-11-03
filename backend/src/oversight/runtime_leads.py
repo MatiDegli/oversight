@@ -33,6 +33,7 @@ from oversight_contracts.commands import StopLead as StopLead
 from oversight_contracts.events import LeadLimits, LeadStatus, ModelProfile
 from oversight_contracts.graph import GraphSnapshot
 from oversight_contracts.plans import SubtaskDraft
+from oversight_contracts.views import LeadView
 
 if TYPE_CHECKING:
     from oversight.app import LiveRun
@@ -209,6 +210,12 @@ class LeadService:
                 raise LeadProposalError(error.message) from None
             return result.plan_id
 
+        async def publish_view(view: LeadView) -> None:
+            async with lead.lock:
+                if lead.stopping or self._closing or self.live._closing:
+                    raise LeadProposalError("The lead is no longer accepting views.")
+                await self.live._finish(self.live.store.publish(view))
+
         return LeadTools(
             graph=self._graph,
             tree=lambda: self.live.get_tree(None),
@@ -218,7 +225,11 @@ class LeadService:
             propose=propose,
             slots=len(self.live._slots),
             mask=self.live._redactor,
-            status=self.live.store.lead_status,
+            status=lambda: self.live.store.lead_status(include_views=True),
+            status_without_views=self.live.store.lead_status,
+            agent_id=lead.status.agent_id,
+            resolve_views=self.live.store.view_resolver,
+            publish_view=publish_view,
             limits=lead.limits,
         )
 

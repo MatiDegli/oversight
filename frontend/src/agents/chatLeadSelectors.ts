@@ -22,6 +22,21 @@ export function selectLeadStatuses(state: State) {
   return leads;
 }
 
+export function leadCapacity(state: State) {
+  const active = [...selectLeadStatuses(state).values()].filter((lead) =>
+    ["starting", "working", "idle"].includes(lead.state),
+  ).length;
+  const max = state.run?.max_leads ?? null;
+  return { active, max, atCap: max !== null && active >= max };
+}
+
+export function newLeadLabel(state: State) {
+  const { active, max, atCap } = leadCapacity(state);
+  return atCap && max !== null
+    ? `New lead · ${active.toLocaleString("en-US")} of ${max.toLocaleString("en-US")}`
+    : "New lead";
+}
+
 export function selectLeadLimits(state: State) {
   let limits: LeadStatus["limits"] = null;
   for (const event of state.decisionEvents) {

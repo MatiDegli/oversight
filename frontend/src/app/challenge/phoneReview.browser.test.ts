@@ -1,3 +1,4 @@
+import { openOversight } from "../../workspaceView.browser.support";
 import { mkdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { Browser, Page } from "@playwright/test";
@@ -42,6 +43,7 @@ it.each(["dark", "day"])("preserves agent and node sizes in %s", async (theme) =
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   try {
     await page.goto(url);
+    await openOversight(page);
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
     await page.getByRole("button", { name: "Start practice", exact: true }).click();
     await page.evaluate((theme) => {
@@ -72,6 +74,7 @@ it("preserves dock wrapping without a lock caption across practice screens", asy
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   try {
     await page.goto(url);
+    await openOversight(page);
     await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
     await check(page.locator(".pp-dock")).toHaveCSS("flex-wrap", "nowrap");
     await page.getByRole("button", { name: "Start practice", exact: true }).click();
@@ -97,6 +100,7 @@ it.each(["dark", "day"])(
     page.on("pageerror", (e) => errors.push(e.message));
     try {
       await page.goto(url);
+      await openOversight(page);
       await page.getByRole("button", { name: "Try two-change practice", exact: true }).click();
       await page.getByRole("button", { name: "Start practice", exact: true }).click();
       await page.evaluate((theme) => {

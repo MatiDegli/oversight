@@ -1,3 +1,4 @@
+import { openOversight } from "./graph-support";
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { ServerEvent } from "@contracts";
@@ -28,6 +29,7 @@ test("the static Files tree opens recorded source read-only without backend requ
   });
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/oversight/");
+  await openOversight(page);
   await expect(page.locator("#root")).toHaveAttribute("data-seq", String(events.at(-1)?.seq), {
     timeout: 60_000,
   });

@@ -49,6 +49,7 @@ export interface GraphViewProps extends MapOptions {
    * camera moves (to the nodes in `frameIds` on open, back to the saved watch camera on close).
    */
   panelOpen?: boolean;
+  referenceFrame?: boolean;
   /** Usage resizes the viewport while retaining the person's current camera. */
   preserveCamera?: boolean;
   /**
@@ -88,6 +89,7 @@ export function GraphView({
   selectedId = null,
   onNodeTap,
   panelOpen = false,
+  referenceFrame = false,
   preserveCamera = false,
   litIds = null,
   frameIds = null,
@@ -132,6 +134,7 @@ export function GraphView({
       selectedId,
       onNodeTap,
       panelOpen,
+      referenceFrame,
       preserveCamera,
       litIds,
       frameIds,
@@ -154,6 +157,7 @@ export function GraphView({
     selectedId,
     onNodeTap,
     panelOpen,
+    referenceFrame,
     preserveCamera,
     litIds,
     frameIds,
@@ -189,17 +193,17 @@ export function GraphView({
       }
       const { frameIds: framed, selectedId: selected } = latest.current;
       const focus = framed?.length ? framed : selected ? [selected] : [];
-      const framing = mapControl.frame(cy, panelOpen ? focus : [], {
+      const framing = mapControl.frame(cy, panelOpen || referenceFrame ? focus : [], {
         coneIds: panelOpen ? openingCone(latest.current) : undefined,
         ...(panelOpen && container.current ? panelGeometry(container.current, latest.current) : {}),
-        restoreCamera: panelOpen ? undefined : watchCamera.current,
+        restoreCamera: panelOpen || referenceFrame ? undefined : watchCamera.current,
       });
       targetFrame.current = framing;
       reportViewport.current?.();
       observeCard.current?.();
       if (!panelOpen) watchCamera.current = undefined;
     }
-  }, [panelOpen, frameKey, mapControl, preserveCamera]);
+  }, [panelOpen, referenceFrame, frameKey, mapControl, preserveCamera]);
   useEffect(() => {
     const host = container.current;
     if (!host) return;
@@ -376,7 +380,7 @@ export function GraphView({
               x2: area.right - box.left,
               y2: area.bottom - box.top,
             });
-            if (latest.current.panelOpen) frameInitialPanel();
+            if (latest.current.panelOpen || latest.current.referenceFrame) frameInitialPanel();
           });
         }
         showSelection(cy, latest.current.selectedId ?? null);
@@ -386,6 +390,7 @@ export function GraphView({
           existing.size > 0 &&
           !foldsChanged &&
           !latest.current.panelOpen &&
+          !latest.current.referenceFrame &&
           !interacting &&
           performance.now() >= quietUntil
         ) {
@@ -440,7 +445,8 @@ export function GraphView({
         sync();
       });
       sync();
-      if (latest.current.panelOpen && startFrame === undefined) frameInitialPanel();
+      if ((latest.current.panelOpen || latest.current.referenceFrame) && startFrame === undefined)
+        frameInitialPanel();
       const resize = new ResizeObserver(() => {
         cy.resize();
         reportSoon();

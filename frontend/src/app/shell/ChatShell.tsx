@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-restricted-imports -- Event-backed lead capacity is shared by both entry points.
+import { leadCapacity, newLeadLabel } from "../../agents/chatLeadSelectors";
 import { Plus, GitFork } from "lucide-react";
 import { TaskBox, slotUsage, type TaskBoxProps } from "../../agents";
 import type { State } from "../../state";
@@ -10,6 +12,7 @@ export interface ChatAgentSelection {
   onOpenConversation?: (agentId: string) => void;
 }
 export interface ChatStartActions {
+  readOnly?: boolean;
   leadDraft?: boolean;
   onNewTask?: () => void;
   onNewLead?: () => void;
@@ -25,6 +28,7 @@ export function ChatAgentsFrame({
   onNewTask,
   onNewLead,
   leadDraft,
+  readOnly,
   ...selection
 }: ChatAgentsFrameProps) {
   const count = slotUsage(state);
@@ -42,13 +46,19 @@ export function ChatAgentsFrame({
           </span>
         )}
         <div className="chat-start-actions">
-          <button type="button" className="chat-new-task" onClick={onNewTask}>
+          <button type="button" className="chat-new-task" disabled={readOnly} onClick={onNewTask}>
             <Plus size={15} aria-hidden="true" />
             New task
           </button>
-          <button type="button" onClick={onNewLead}>
+          <button
+            type="button"
+            aria-disabled={readOnly || leadCapacity(state).atCap}
+            onClick={() => {
+              if (!readOnly && !leadCapacity(state).atCap) onNewLead?.();
+            }}
+          >
             <GitFork size={15} aria-hidden="true" />
-            New lead
+            {newLeadLabel(state)}
           </button>
         </div>
       </header>
@@ -81,6 +91,7 @@ export function ChatShell({
   onNewTask,
   onNewLead,
   leadDraft,
+  readOnly,
   ...selection
 }: ChatAgentSelection &
   ChatStartActions & {
@@ -101,6 +112,7 @@ export function ChatShell({
           onNewTask={onNewTask}
           onNewLead={onNewLead}
           leadDraft={leadDraft}
+          readOnly={readOnly}
           {...selection}
         />
       )}
@@ -115,7 +127,8 @@ export function ChatShell({
   );
 }
 
-export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActions) {
+export function ChatEmpty({ onNewLead, readOnly, ...props }: TaskBoxProps & ChatStartActions) {
+  const { state } = props;
   return (
     <div className="chat-empty">
       <div>
@@ -128,9 +141,15 @@ export function ChatEmpty({ onNewLead, ...props }: TaskBoxProps & ChatStartActio
           <p>
             When work is worth splitting across several agents, a lead proposes plans you queue.
           </p>
-          <button type="button" onClick={onNewLead}>
+          <button
+            type="button"
+            aria-disabled={readOnly || leadCapacity(state).atCap}
+            onClick={() => {
+              if (!readOnly && !leadCapacity(state).atCap) onNewLead?.();
+            }}
+          >
             <GitFork size={15} aria-hidden="true" />
-            New lead
+            {newLeadLabel(state)}
           </button>
         </div>
       </div>

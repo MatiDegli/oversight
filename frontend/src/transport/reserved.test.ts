@@ -16,6 +16,14 @@ describe("reserved level 3 events", () => {
     const next = applyEvent(state, event);
     expect(next).toEqual({
       ...state,
+      eventFacts: {
+        ...state.eventFacts,
+        [event.seq]: {
+          type: event.type,
+          ts: event.ts,
+          agentId: "agent_id" in event.payload ? event.payload.agent_id : null,
+        },
+      },
       mergeMode: event.type === "merge_mode.changed" ? event.payload : state.mergeMode,
       lastSeq: event.seq,
       clock: event.ts,
@@ -44,6 +52,19 @@ describe("reserved level 3 events", () => {
     await replay.ready;
     expect(store.getState().state).toEqual({
       ...state,
+      eventFacts: {
+        ...state.eventFacts,
+        ...Object.fromEntries(
+          additions.map((event) => [
+            event.seq,
+            {
+              type: event.type,
+              ts: event.ts,
+              agentId: "agent_id" in event.payload ? event.payload.agent_id : null,
+            },
+          ]),
+        ),
+      },
       mergeMode: { mode: "merge_when_safe", revision: 1 },
       lastSeq: state.lastSeq + additions.length,
       clock: additions.at(-1)?.ts,

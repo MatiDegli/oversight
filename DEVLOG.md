@@ -66,6 +66,19 @@ One line per day, in Argentina time (ART).
   labeled the synthetic wake attribution fixture with its generator provenance.
   Enabled validated native Windows own-repository COPY with staged-only reset and shared guarded test
   environments, retaining original preservation and pending two-machine native qualification.
-- **2026-11-03:** Added the bounded desktop spike's portable Rust launch, health and lifecycle
-  policy with offline tests, a standalone gate and native Windows core lane; recorded the scoped
-  license grant and prospective runbook. Deferred the executable and native lifecycle/UI acceptance.
+  Added the event-derived lead header, observed-revision Stop, ended composer, default-only
+  lead start, cap guards and compact lead rows with fake-only lifecycle and responsive capture proof.
+  Rechecked the layout and clarify references in full, fixed the 390px capped-action overflow,
+  and removed duplicate ended copy.
+
+- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls. Added event-derived reference cards, metadata-only moment facts, exact replay history/Back with retained Chat, click-owned graph framing and exact recorded-file diffs; synthetic responsive evidence, no paid calls or bundle replacement. Rechecked layout, language, typography and hardening: retained empty behavior titles, restored title weight, bounded speech measure, isolated caption direction and enlarged history/disclosure touch targets. Added the bounded desktop spike's portable Rust launch, health and lifecycle policy with offline tests, a standalone gate and native Windows core lane; recorded the scoped license grant and prospective runbook. Deferred the executable and native lifecycle/UI acceptance.
+  K2b size rationale: chatLeads.browser.test.ts (1285 lines),
+  chatLeads.browser.fixture.tsx (626 lines) and lifecycleScene (97 lines) remain together because
+  the six-lead scene table and lifecycle proofs are inherently tabular. The fixture keeps valid
+  event sequences beside their scene definitions; the browser suite keeps Stop, cap, density and capture assertions together
+  so their shared lifecycle evidence can be reviewed in context. Added reference-card proofs stay
+  beside the shared lifecycle and capture harness, while viewScenario (93 lines) keeps the graph,
+  measured behavior, long files and ordered Chat events in one auditable production-fold sequence.
+  Composer also exceeds 80 lines:
+  its shared draft hooks and active/ended command surfaces stay together to preserve hook order
+  and make the terminal early return auditable. These size exceptions remain for reviewer judgment.

@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
@@ -47,6 +48,7 @@ async function withPage(width: number, height: number, test: (page: Page) => Pro
     await page.evaluate(() => {
       window.shellTest.mount();
     });
+    await openOversight(page);
     await page.locator("[data-graph-clear-area]").waitFor();
     await test(page);
     expect(errors).toEqual([]);

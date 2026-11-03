@@ -4,6 +4,7 @@ import type {
   CrossReview,
   LeadStatus,
   LeadReplyEvent,
+  LeadViewEvent,
 } from "@contracts";
 import { teamIdentities } from "../chatAgentSelectors";
 import { selectRounds, type Round, type RoundStep } from "./rounds";
@@ -57,10 +58,16 @@ export interface LeadHeader extends LeadStatus {
   kind: "lead";
   agentId: string;
   modelLabel: string;
+  reasoning: string | null;
+  turn: number;
+  plans: number;
+  turnCalls: number;
+  cost: number | null | undefined;
 }
 export type LeadEntry =
   | Extract<ConversationEntry, { kind: "task" | "message" }>
-  | { kind: "lead-reply"; seq: number; event: LeadReplyEvent }
+  | { kind: "lead-reply"; seq: number; event: LeadReplyEvent; limits: LeadStatus["limits"] }
+  | { kind: "lead-view"; seq: number; event: LeadViewEvent }
   | { kind: "lead-status"; seq: number; ts: string; status: LeadStatus }
   | { kind: "lead-plan"; seq: number; planId: string; answersSeq: number | null };
 export interface LeadConversation {

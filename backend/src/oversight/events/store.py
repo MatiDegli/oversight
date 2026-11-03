@@ -24,7 +24,9 @@ from oversight.events.clock import Clock, format_ts, system_clock
 from oversight.events.graph_fold import apply_delta
 from oversight.events.lead_fold import CommittedLeadPrefix, fold_lead_status
 from oversight.events.needs_you import TerminalClaim, TerminalClaims, terminal_key
+from oversight.events.references import EventRejected as EventRejected
 from oversight.events.references import validate_references
+from oversight.events.view_resolution import capture_view_resolver
 from oversight_contracts.events import (
     AgentFocus,
     AgentMessageSent,
@@ -47,8 +49,10 @@ from oversight_contracts.grants import GrantCreated, GrantRevoked
 from oversight_contracts.graph import GraphDelta, GraphSnapshot
 from oversight_contracts.plans import Plan
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
+from oversight_contracts.previews import PreviewStatus
 from oversight_contracts.queue import QueuedTask
 from oversight_contracts.review import ChangeFacts, CrossReview
+from oversight_contracts.views import LeadView
 
 # Initialize before any producers or the writer can share its validators.
 _SERVER_EVENT_ADAPTER = TypeAdapter(ServerEvent)
@@ -77,8 +81,10 @@ type EventPayload = (
     | QueuedTask
     | LeadStatus
     | LeadReply
+    | LeadView
     | GrantCreated
     | GrantRevoked
+    | PreviewStatus
 )
 
 EVENT_TYPES: dict[type[EventPayload], str] = {
@@ -105,8 +111,10 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     QueuedTask: "queue.updated",
     LeadStatus: "lead.status",
     LeadReply: "lead.reply",
+    LeadView: "lead.view",
     GrantCreated: "grant.created",
     GrantRevoked: "grant.revoked",
+    PreviewStatus: "preview.status",
 }
 """The event type each payload travels under; the store derives `type` from the payload."""
 
@@ -131,10 +139,6 @@ class StoredEvent:
     ts: str
     type: str
     envelope: str
-
-
-class EventRejected(ValueError):
-    """A semantic rejection of one event; retrying it cannot succeed."""
 
 
 class StoreClosedError(RuntimeError):
@@ -360,12 +364,22 @@ class EventStore:
     def last_seq(self) -> int:
         return len(self._events)
 
-    def lead_status(self) -> tuple[int, str]:
+    def lead_status(self, *, include_views: bool = False) -> tuple[int, str]:
         """Fold one committed prefix without copying or exposing the full event log."""
         through_seq = self.last_seq
         return fold_lead_status(
-            CommittedLeadPrefix(self._reference_events, through_seq), through_seq
+            CommittedLeadPrefix(self._reference_events, through_seq),
+            through_seq,
+            include_views=include_views,
         )
+
+    def committed_event(self, seq: int) -> ServerEvent | None:
+        """Borrow one committed envelope in O(1); callers must not mutate nested payloads."""
+        return self._reference_events.get(seq)
+
+    def view_resolver(self, through_seq: int) -> Callable[[LeadView], bool]:
+        """Capture reference eligibility at exactly the successful status horizon."""
+        return capture_view_resolver(self._reference_events, through_seq)
 
     def committed_events(self) -> tuple[ServerEvent, ...]:
         """Independent envelopes from this run, after SQL commit only; no disk IO."""
@@ -457,7 +471,7 @@ class EventStore:
                     context={"live": True} if self.mode == "live" else None,
                 )
                 self._validate_provider_mode(event)
-                validate_references(event, prior)
+                validate_references(event, prior, self._reference_events)
                 row = StoredEvent(seq, ts, pending.type, event.model_dump_json())
             except (ValueError, TypeError, KeyError) as error:
                 if not pending.done.done():

@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check } from "@playwright/test";
@@ -37,6 +38,7 @@ async function open(width = 1920, height = 1080, theme = "dark") {
     document.documentElement.dataset.theme = theme;
     window.overlapTest.mount();
   }, theme);
+  await openOversight(page);
   await page.evaluate(() => document.fonts.ready);
   await page.waitForFunction(
     () =>

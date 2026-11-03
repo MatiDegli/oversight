@@ -31,6 +31,8 @@ const eventTypes: Record<ServerEvent["type"], true> = {
   "queue.updated": true,
   "lead.status": true,
   "lead.reply": true,
+  "lead.view": true,
+  "preview.status": true,
   "usage.tick": true,
   "model.attempt_failed": true,
   error: true,

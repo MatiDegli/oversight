@@ -1,5 +1,7 @@
 import type { ServerEvent } from "@contracts";
 
+import { recordEventFact } from "./eventFacts";
+import { applyThreadEvent } from "./applyThreadEvent";
 import { applyAgentEvent } from "./applyAgentEvent";
 import { applyUpdate, applyProposal, applyResolution, applyReview } from "./applyChangeEvent";
 import { applyEvidenceEvent } from "./applyEvidenceEvent";
@@ -10,6 +12,11 @@ import type { State } from "./types";
 
 /** Apply validated events, identically for live streams and parsed replay logs. */
 export function applyEvent(state: State, event: ServerEvent): State {
+  const next = applyEnvelope(state, event);
+  return next.gap ? next : recordEventFact(next, event);
+}
+
+function applyEnvelope(state: State, event: ServerEvent): State {
   // Only run.started identifies a run on the wire. A new run restarts its sequence at 1.
   const newRun = event.type === "run.started" && event.payload.run_id !== state.run?.run_id;
   if (event.seq !== (newRun ? 1 : state.lastSeq + 1)) return { ...state, gap: true };
@@ -25,25 +32,12 @@ export function applyEvent(state: State, event: ServerEvent): State {
       : state.decisionEvents,
   };
   switch (event.type) {
+    case "preview.status":
+      return next;
+    case "lead.view":
     case "lead.reply":
-      return {
-        ...next,
-        leadReplies: {
-          ...state.leadReplies,
-          [event.payload.agent_id]: [...(state.leadReplies[event.payload.agent_id] ?? []), event],
-        },
-      };
     case "agent.message":
-      return {
-        ...next,
-        messages: {
-          ...state.messages,
-          [event.payload.agent_id]: [
-            ...(state.messages[event.payload.agent_id] ?? []),
-            { seq: event.seq, ts: event.ts, text: event.payload.text },
-          ],
-        },
-      };
+      return applyThreadEvent(state, next, event);
     case "grant.created":
     case "grant.revoked":
       return { ...next, grantEvents: [...state.grantEvents, event] };

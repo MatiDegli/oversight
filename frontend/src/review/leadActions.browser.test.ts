@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect } from "@playwright/test";
@@ -179,6 +180,7 @@ it.each([
           : route.fulfill({ status: 202 });
       });
       await page.goto(url);
+      await openOversight(page);
       const chip = page.getByRole("button", { name: /^Decisions:/ });
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
       await page.evaluate((t) => {
@@ -461,6 +463,7 @@ it("keeps plan pieces readable through App's replay path without mutation reques
   });
   try {
     await page.goto(replayUrl);
+    await openOversight(page);
     await page.getByRole("button", { name: /^Decisions:/ }).click();
     const inbox = page.getByRole("region", { name: "Decisions inbox" });
     await expect(inbox.getByText("Loading plan…")).toHaveCount(2);

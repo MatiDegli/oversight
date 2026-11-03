@@ -1,3 +1,4 @@
+import { openOversight } from "../workspaceView.browser.support";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { expect as check, type Browser, type Page } from "@playwright/test";
@@ -53,6 +54,7 @@ async function open(replay = false, width = 1920, height = 1080, theme = "dark")
   const page = await browser.newPage({ viewport: { width, height } });
   await page.route("**/", (r) => r.fulfill({ contentType: "text/html", body: entry.html }));
   await page.goto(entry.url);
+  await openOversight(page);
   await check(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible({
     timeout: 15_000,
   });

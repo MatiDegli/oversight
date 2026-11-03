@@ -34,26 +34,81 @@ const LeadConversationFocus = lazy(() =>
       state,
       agentId,
       onMessageLead,
+      onStopLead,
       chat,
       onOpenSettings,
-    }: Pick<FrameProps, "state" | "onMessageLead" | "onOpenSettings"> & {
+      chatState,
+      onViewMoment,
+      onViewHighlight,
+      onViewFile,
+      replay,
+    }: Pick<
+      FrameProps,
+      | "state"
+      | "onMessageLead"
+      | "onStopLead"
+      | "onOpenSettings"
+      | "chatState"
+      | "onViewMoment"
+      | "onViewHighlight"
+      | "onViewFile"
+      | "replay"
+    > & {
       agentId: string;
       chat?: boolean;
     }) => {
-      const conversation = module.selectLeadConversation(state, agentId);
+      const conversation = module.selectLeadConversation(chatState ?? state, agentId);
       if (!conversation) return null;
       return (
         <module.ConversationPanel
           conversation={conversation}
+          renderView={(entry) => (
+            <module.LeadViewCard
+              state={state}
+              event={entry.event}
+              header={conversation.header}
+              replay={Boolean(replay)}
+              actions={{ onMoment: onViewMoment, onHighlight: onViewHighlight, onFile: onViewFile }}
+            />
+          )}
           actionAccessory={
             chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
           }
+          onStopLead={onStopLead}
           onSend={onMessageLead ? (text) => onMessageLead(agentId, text) : undefined}
         />
       );
     },
   })),
 );
+
+function LeadConversationFrame({
+  lead,
+  children = (
+    <p role="status" className="px-[18px] py-4 text-muted">
+      Loading lead conversation…
+    </p>
+  ),
+}: {
+  lead: ReturnType<typeof selectChatLeads>[number];
+  children?: ReactNode;
+}) {
+  return (
+    <section
+      aria-label={`Lead ${lead.letter} conversation`}
+      className="flex h-full min-h-0 w-full min-w-0 flex-col bg-page text-text"
+      style={agentSlotStyle(lead.hue)}
+    >
+      <header className="conversation-header flex items-center gap-3 px-[18px] py-4">
+        <span className="chat-lead-ring" aria-hidden="true">
+          {lead.letter}
+        </span>
+        <h2 className="min-w-0 text-[16px] font-semibold wrap-anywhere">{lead.status.task}</h2>
+      </header>
+      {children}
+    </section>
+  );
+}
 
 export function FocusPanel(
   props: FrameProps & {
@@ -236,9 +291,15 @@ export function FocusPanel(
 /** The same adapter and mounted conversation serve both shell layouts. */
 function ConversationFocus({
   state,
+  chatState,
+  onViewMoment,
+  onViewHighlight,
+  onViewFile,
+  replay,
   agentId,
   onMessageAgent,
   onMessageLead,
+  onStopLead,
   onPauseAgent,
   onResumeAgent,
   onStopAgent,
@@ -252,32 +313,27 @@ function ConversationFocus({
   onReview,
   onGraph,
 }: FrameProps & { agentId: string; chat?: boolean; onGraph?: (id: string) => void }) {
-  const conversation = selectConversation(state, agentId, state.messages[agentId] ?? []);
+  const threadState = chatState ?? state;
+  const conversation = selectConversation(
+    threadState,
+    agentId,
+    threadState.messages[agentId] ?? [],
+  );
   if (!conversation) {
-    const lead = selectChatLeads(state).find((row) => row.id === agentId);
+    const lead = selectChatLeads(threadState).find((row) => row.id === agentId);
     if (lead)
       return (
-        <LazyPanel
-          key={agentId}
-          frame={
-            <ConversationFrame
-              header={{
-                ...lead.status,
-                kind: "lead",
-                agentId,
-                hue: lead.hue,
-                letter: lead.letter,
-                modelLabel:
-                  state.run?.models.find((model) => model.id === lead.status.model)?.label ??
-                  lead.status.model,
-              }}
-            />
-          }
-        >
+        <LazyPanel key={agentId} frame={<LeadConversationFrame lead={lead} />}>
           <LeadConversationFocus
             state={state}
+            chatState={chatState}
+            onViewMoment={onViewMoment}
+            onViewHighlight={onViewHighlight}
+            onViewFile={onViewFile}
+            replay={replay}
             agentId={agentId}
             onMessageLead={onMessageLead}
+            onStopLead={onStopLead}
             chat={chat}
             onOpenSettings={onOpenSettings}
           />

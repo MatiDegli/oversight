@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from math import fsum, isfinite
 from typing import Literal, assert_never
 
-from oversight_contracts.events import ServerEvent
+from oversight_contracts.events import ServerEvent, UsageTick
 from oversight_contracts.review import ChangeUsage, RoleUsage
 
 type _Role = Literal["agent", "review", "plan", "lead"]
@@ -139,16 +139,7 @@ def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
                     unknown += 1
                 calls += 1
                 if tick.change_id is None:
-                    unassigned.append(
-                        UnassignedUsage(
-                            event.seq,
-                            tick.agent_id,
-                            tick.role,
-                            tick.model,
-                            tick.plan_id,
-                            tick.cost_usd,
-                        )
-                    )
+                    unassigned.append(_unassigned(event.seq, tick))
                     continue
                 change_id = tick.change_id
                 rounds.setdefault(change_id, 0)
@@ -183,8 +174,10 @@ def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
                 | "queue.updated"
                 | "lead.status"
                 | "lead.reply"
+                | "lead.view"
                 | "grant.created"
                 | "grant.revoked"
+                | "preview.status"
             ):
                 pass  # These events consume seqs but provide no accounting observations.
             case _:
@@ -198,3 +191,7 @@ def fold_usage(events: Sequence[ServerEvent]) -> UsageFold:
         unassigned=tuple(unassigned),
         run=_run_usage(costs, unknown, calls, len(accepted)),
     )
+
+
+def _unassigned(seq: int, tick: UsageTick) -> UnassignedUsage:
+    return UnassignedUsage(seq, tick.agent_id, tick.role, tick.model, tick.plan_id, tick.cost_usd)
