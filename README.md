@@ -16,6 +16,7 @@ in view: reads and edits light up, and each change has a bounded impact cone of 
 possibly affected. Review shows the diff, event-derived facts, tests that fail before and pass
 after where proved, and optional behavior comparisons and measured caller evidence.
 Nothing reaches main without your approval or rules you explicitly set.
+The lead composes constrained generative UI in Chat with `show_view`: closed reference kinds, values from committed events; built, not released.
 
 ## Features
 
@@ -25,7 +26,7 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Feature | What it does | Meta models | Default |
 | --- | --- | --- | --- |
 | Lead Chat and plans | Discuss tasks; approve a proposed plan before the server queues its agents. | Muse Spark, Muse Spark Open | On |
-| Lead reference cards | Open graph highlights, exact changed files, measured behavior or recorded moments; real-run release validation remains. | Muse Spark, Muse Spark Open | Built, not released |
+| Constrained generative UI | The lead composes Chat reference views through `show_view`, from closed kinds; every value resolves from committed events. Release validation remains. | Muse Spark, Muse Spark Open | Built, not released |
 | Parallel coding agents | Four slots by default, up to six; each agent edits and tests in its own worktree with six fixed tools and no shell. | Muse Spark, Muse Spark Open | On |
 | Agent harness | Add syntax checks, bounded search feedback and a test-before-finish guard. | None | Opt-in (`OVERSIGHT_HARNESS_PACK`) |
 | Repository graph and impact cone | See reads, edits, shared work and bounded possible effects, with module, function and detail views. | None | On |
@@ -40,6 +41,9 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Live demo preview | Open one agent's demo shop proposal at a time; reviewed-app execution remains unavailable. | None | Opt-in (`OVERSIGHT_PREVIEW_ENABLED`) |
 | Replay and practice | Play the bundled real run without a backend and compare your decisions with the recorded ones. | None | On |
 | Sources and platforms | Start with the demo; select prepared pinned profiles, including Oversight's reviewed copy, or validated native Windows copies. Linux/WSL is the verified path. | None | On |
+
+- The static replay build plays `fixtures/events/recorded-demo.jsonl` by default; its
+  label comes from provenance: `Recorded run · Oct 27, 2026`.
 
 ## How Oversight uses Meta's models
 
@@ -57,6 +61,19 @@ Both use the official OpenAI SDK, with `low` reasoning set on every real call. T
 brake refuses new runs above 90%. Replies become whole-message events, never one event per token;
 SQLite writes are batched. Tests and `make check` use scripted fake models and spend no credits.
 The [Oct 30 detection results](tools/eval/detection/RESULTS.md) record a US$0.0513 run using both Meta models; every arm failed its declared criteria.
+
+## Design principles
+
+- **Closed tools.** Coding agents get `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`; paths stay inside their worktree ([tools](backend/src/oversight/agents/tools.py), [path checks](backend/src/oversight/workspace/files.py)).
+- **The lead proposes.** Its closed tools can request plans, never start agents or merge ([lead tools](backend/src/oversight/agents/_lead_tools.py)).
+- **Observed status.** Status follows tool calls and run controls; repeated failures or unchanged calls stop a run ([agent loop](backend/src/oversight/agents/loop.py)).
+- **Separate work.** Each coding agent gets a disposable git worktree ([workspace](backend/src/oversight/workspace/core.py)).
+- **Evidence over claims.** Check added tests before and after; behavior comparisons and measured callers are opt-in ([proposal evidence](backend/src/oversight/changes/_proposal.py)).
+- **Independent review.** Opt-in cross-review uses a different model profile and no author conversation, an Elephant-Goldfish idea ([reviewer selection](backend/src/oversight/review_config.py), [review call](backend/src/oversight/agents/reviewer.py)).
+- **Visible context cuts.** The lead is told how many exchanges and queue entries the server omitted ([history](backend/src/oversight/agents/_lead_history.py), [queue view](backend/src/oversight/agents/_lead_tools.py)).
+- **Optional harness.** Syntax checks, bounded search feedback and a test-before-finish reminder are built behind `OVERSIGHT_HARNESS_PACK` ([harness](backend/src/oversight/agents/_harness.py)).
+- **Bounded spending.** The 90% Meta spending brake refuses new runs; missing token usage stays unknown ([usage ledger](backend/src/oversight/agents/usage.py), [model client](backend/src/oversight/agents/client.py)).
+- **One event history.** Each run has an append-only log; live and replay use the same reducer ([event store](backend/src/oversight/events/store.py), [frontend state](frontend/src/state/store.ts)).
 
 ## Run it locally
 
@@ -91,13 +108,16 @@ profiles and every event against the contracts, and scans for secrets again befo
 Fake runs, unmarked fixtures, invalid events, secrets and absolute paths are refused. The public
 static build requires the recording and its receipt; UI tests select their own fixtures explicitly.
 
-## Prior work
+## Prior work and influences
 
 Testora (ICSE 2026) checks behavior differences in pull requests against their intent. DiffTestGen
 (2026) generates tests that expose them. Meta's just-in-time catching tests (FSE 2026) generate tests
 that catch a bug before a change lands. CONTRA (2026) asks only the clarifying questions whose
 answers change behavior, checked by running programs. Oversight brings these ideas to supervising
 agents while they work. Product measurements come from Oversight's own bench; build figures are separate.
+
+We studied DeepSeek's open [dsh-superagent-prototype](https://github.com/deepseek-ai/dsh-superagent-prototype) (MIT) read-only, for ideas only: the lead now sees what the server trimmed from its view (merge `e946c21c`), and source repositories whose Git config points outside them are refused (merge `72c44c4f`); no code or text was copied.
+Google's open-source [Elephant-Goldfish Model](https://github.com/google/elephant-goldfish-model) (Apache-2.0), where the author retains context and reviewers have no earlier conversation, informs the fresh-conversation cross-review above and the [planned fresh-context plan review](docs/additions.md#undecided-candidates); no code or text was copied.
 
 ## How it was built
 
@@ -127,17 +147,18 @@ Snapshot: Nov 3, 2026, 17:10 ART, on main `af6af017`.
 
 ## Next
 
-- Release the lead reference cards after the authorized real-model probe, prompt validation and a new
-  recording. After the hackathon: extend the closed catalog with typed views whose values resolve from events.
+- Release constrained generative UI: `show_view` is advertised and dispatched with the moved prompt version.
+  Remaining gates are the separately authorized paid probe, prompt validation, a real recording and bundle replacement.
+  After the hackathon: add typed views whose values resolve from events; model-written components stay out of Chat and Oversight.
 - Wire server-computed plan zones, Edit and post-dispatch tracking; add saved agent flows.
+  Still to build: a node-based workflow view of a lead's plan beside the repository graph, in the style of n8n.
 - Enable reviewed-app execution for the prepared self profile, then general startup declarations and
   detection. The demo preview is built; simultaneous per-agent previews and Linux own-source selection remain.
 - Qualify native Windows and its repository-copy path. The portable desktop core is built; the Windows
   executable, native lifecycle/UI proof, macOS and native platform isolation remain. See the [future runbook](#future-tauri-shell-runbook).
-- Run the bench on a real repository and extend hidden grading beyond the existing checks.
+- Run the bench on a real repository, extend hidden grading and add a canary-change workflow beyond seeded defects.
 - Add a counterexample agent and a specialist engine for checks needing a dedicated tool.
 - Try two independent attempts on one task and resolve model disagreement with an executable example.
-- Add a canary-change workflow beyond the bench's seeded defects.
 - Fork a run from a recorded step and answer a live review question from a phone; phone replay practice exists.
 - Attach text rules to repository areas.
 - Tell a later agent about an overlap in its next tool result; shared reads and edits already appear on the graph.
@@ -152,6 +173,7 @@ Snapshot: Nov 3, 2026, 17:10 ART, on main `af6af017`.
   JUnit output, and an approved sketch.
 - After the hackathon, plan write-only keys in a packaged app's Settings; this needs a secrets-rule change,
   contracts and security review.
+- Git at agent scale, measured first ([docs/additions.md](docs/additions.md#git-at-agent-scale)).
 
 ## Scale and depth
 
