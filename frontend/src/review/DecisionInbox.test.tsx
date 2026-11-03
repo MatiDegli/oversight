@@ -275,6 +275,25 @@ it("ships the inbox headline before any lazy plan and removes the obsolete hero 
   expect(lazy).not.toContain(".inbox-heading");
 });
 
+it("allows only CSS custom properties throughout inbox and plan markup", () => {
+  const event = leadEvents[7];
+  if (event?.type !== "plan.updated") throw new Error("Missing plan");
+  const markup = [
+    ...[state, leadState, kindsState].map((value) =>
+      renderToStaticMarkup(<DecisionInbox state={value} />),
+    ),
+    renderToStaticMarkup(<InboxHeading count={3} agents={1} steps={3} minutes={0} />),
+    renderToStaticMarkup(<PlanActions state={leadState} plan={event.payload} slots={null} />),
+  ];
+  expect(markup.join("")).toContain('style="--flow-gutter:');
+  for (const html of markup) {
+    expect(html).not.toContain("<style>");
+    for (const [, declarations] of html.matchAll(/\sstyle="([^"]*)"/g)) {
+      expect(declarations).toMatch(/^(?:--[\w-]+:[^;]+;?)+$/);
+    }
+  }
+});
+
 it("records the ratified eager stylesheet and separates the next decision entry", () => {
   const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
   const entry = decisions
