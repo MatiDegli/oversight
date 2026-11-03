@@ -333,12 +333,16 @@ new candidate work waits for the maintainer’s order.
   the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
   merge and tests still work. Needs a per-repository test command with JUnit output and an approved
   sketch first.
-- After the hackathon: a Tauri shell, starting with one bounded spike
-  in its own directory that touches no product code: a Windows window showing the current UI,
-  starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
-  translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
-- After the hackathon, after the Tauri shell: native backend ports for Windows and macOS, as their
-  own fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
+- Conditional pre-freeze Tauri spike, after the maintainer's other feature: the
+  [portable desktop core](../desktop/README.md) is implemented and tested on Linux with a standalone
+  offline target. The native Windows core lane exists but has not run yet.
+  The Windows executable, complete Tauri lock/license
+  reconciliation, nested Jobs/console lifecycle, WebView2/UI proof and duration/size are deferred.
+  The [future runbook](../README.md#future-tauri-shell-runbook) wraps the advanced native backend;
+  no WSL bridge or native picker. Cut: November 3, 17:00 ART; freeze: 20:00 ART.
+- The minimal native Windows backend and public own-repository COPY are implemented;
+  their native qualification remains pending. Broader platform ports and macOS follow as
+  separate fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
   process-tree cleanup, file locks, no-follow file opens), then a test-isolation design for each OS.
   A minimal Windows port, the per-OS layer in the mode without isolation, is item 20 below; on
   2026-11-01 the maintainer ranked it immediately after the conversational lead and Chat, ahead

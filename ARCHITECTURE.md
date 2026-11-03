@@ -53,8 +53,11 @@ The backend runs `git init` in the copied workspace. `.runtime/` is gitignored.
 The demo template is plain files with no git of its own: a Python project written here,
 with 4–6 modules, 20–40 functions and tests, and one central function with many callers.
 The browser demo remains supported. The minimal native Windows backend and validated own-repository
-COPY startup are implemented. Native qualification remains pending. The Tauri shell, broader
-platform ports and macOS remain later work.
+COPY startup are implemented. Native qualification remains pending. The conditional pre-freeze
+Tauri spike delivers only [portable launch/readiness/cleanup policy](desktop/README.md), with no
+GUI dependency or process adapter. The Windows shell/executable and native acceptance are deferred;
+its future window wraps this native backend, with no WSL bridge or picker. Broader platform ports
+and macOS remain later work. The standalone `check-desktop` stays outside the shared gates.
 See [Opening the person's own repository](docs/own-repository.md) for its separate plan and rules.
 
 ## Data flow

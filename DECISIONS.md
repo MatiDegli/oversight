@@ -4398,6 +4398,59 @@ concurrent path-replacement races and inherited ACLs remain accepted residuals. 
 ACL hardening or preparation-budget change is granted. Native qualification on the maintainer's
 Windows machine and windows-latest remains pending; Linux injections and skips are not acceptance.
 
+## 2026-11-03 — Bounded native desktop preparation; executable deferred
+
+The maintainer approved a pre-freeze Tauri 2 spike conditionally after their other feature,
+retaining the advanced native Windows backend. This supersedes the older after-hackathon
+WSL bridge/picker scope; it does not undo native own-repository COPY enablement. Cut is
+November 3, 17:00 ART; freeze is 20:00 ART. The smallest landable slice applies: only the
+portable Rust core that compiles and is tested, plus the future runbook, is delivered here.
+No shell crate, executable, GUI dependency, installer or bundled Python/WebView2 is delivered.
+Native compilation, nested Jobs, console delivery, rendering and acceptance cannot be proven
+in this Linux session. See [desktop status](desktop/README.md) and the
+[prospective runbook](README.md#future-tauri-shell-runbook).
+
+Maintainer approved MPL-2.0, Unicode-3.0 and Zlib only for the desktop shell’s Rust crates listed in license-report.md, used unmodified.
+
+The granted crates present in `desktop/Cargo.lock`, grouped by license, are:
+
+- MPL-2.0: none.
+- Unicode-3.0: unicode-ident 1.0.27.
+- Zlib: none.
+
+The grant does not widen policy for other dependencies or licenses.
+The delivered Windows-target metadata resolves five external crates, each with an MIT option.
+All eleven external lockfile entries were also checked against registry manifests: only the
+inactive unicode-ident entry needs the recorded Unicode-3.0 grant. There are no unapproved
+licenses, and no MPL/Zlib crate in this slice. The deferred Tauri graph must be reconciled
+again from exact versions/features and its lockfile before it is added; required notices must
+accompany any eventual binary. Python/frontend notice generation remains unchanged.
+
+The portable core constructs separate Python argv/cwd and authoritative launch/smoke overrides,
+validates native clone prerequisites, refuses busy ports, bounds live health requests, and models
+startup/cleanup. Ownership and OS actions remain obligations of the deferred Windows adapter.
+The shell must register single instance before spawn, assign the suspended child to a noninherited
+kill-on-close Job before resume, verify listener membership, share the console and signal only
+the owned group. Close/startup failure/app exit share cleanup, with five seconds before forced
+owned Job termination and handle reap. Forced cleanup cannot supply graceful acceptance.
+The future source selector stays demo/exact pinned profile only; no picker or path translation.
+OPEN_NOTICE and all native capability restrictions are preserved. No product code or contract changes.
+
+`check-desktop` is a standalone target, deliberately outside GATES. `make check`, `make check-ci`,
+ci.yml, verify.yml and offline verification lanes remain unchanged: their ephemeral runners have
+no Cargo store. Only windows.yml prepares Rust 1.98 via preinstalled rustup (no new action),
+fetches online with the locked manifest, then runs offline locked formatting/core tests with
+CARGO_NET_OFFLINE=true. No fallback download or passing skip. Its timeout rises from 30 to 75
+minutes to reserve the accepted cold-build margin; this slice defers release build/headless
+lifecycle checks, actual added native duration and executable size. Advisory status stays globally
+unchanged; native shell job success plus headed lifecycle/UI acceptance and independent review
+are still required before executable delivery. No local toolchain or Windows-side changes.
+
+Rollback removes desktop/, the standalone target, ignore entry and Windows desktop steps/path
+filters/timeout/policy assertions, and records the rollback. Keep the existing browser/native
+backend route and this historical scope/license decision. Incomplete executable work defers;
+it does not displace the maintainer's preceding feature.
+
 2026-11-03 — Dormant views with references. Following maintainer OK of the exact diff, contracts 1.18.0 adds lead.view with highlight, files, behavior and moment. PR1 ships validated reference infrastructure, eligible status inventory and event readers; show_view remains absent from the advertised tool table and dispatch. Prompt bytes and prompt_version remain unchanged. This supersedes the no-new-events/contracts restriction for this feature only. No visible cards or paid calls are released by PR1.
 
 ## 2026-11-03 — Lead views stay a closed catalog of typed kinds

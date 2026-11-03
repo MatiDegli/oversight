@@ -136,12 +136,12 @@ static build requires the recording and its receipt; UI tests select their own f
   the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
   merge and tests still work. Needs a per-repository test command with JUnit output and an approved
   sketch first.
-- After the hackathon: a Tauri shell, starting with one bounded spike
-  in its own directory that touches no product code: a Windows window showing the current UI,
-  starting the backend inside WSL, and passing a folder chosen with the native dialog (Windows path
-  translated to WSL). Dependency licenses are reported first (MIT, Apache-2.0, BSD or ISC only).
+- A bounded pre-freeze Tauri spike follows the maintainer's other feature conditionally.
+  The [portable desktop core](desktop/README.md) is implemented; the Windows executable
+  and native acceptance are deferred. It will wrap the advanced native backend and
+  existing UI, with no WSL bridge or native picker. See the [future runbook](#future-tauri-shell-runbook).
 - The minimal native Windows backend and validated own-repository COPY startup are implemented;
-  native qualification remains pending (see below). Tauri, broader platform ports, macOS and
+  native qualification remains pending (see below). Broader platform ports, macOS and
   native Windows isolation remain later work.
 - After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
   local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
@@ -244,4 +244,58 @@ Demo/Boltons retain 60 seconds and log
 when a different value was configured.
 Before making Windows required, measure complete installs/build/tests/six runs, use
 `ceil(1.5 × slowest green duration)` for the timeout and remove PR path filters so even a
-documentation-only PR produces a successful check. The initial advisory bound is 30 minutes.
+documentation-only PR produces a successful check. The advisory bound is 75 minutes, reserving the desktop cold-build margin;
+the current desktop lane checks only the portable core. Native duration/size remain unmeasured.
+
+
+### Future Tauri shell runbook
+
+**Prospective: no desktop executable is delivered by this slice.** The portable core and
+standalone `make check-desktop` are available; `desktop/shell/`, release build and native
+lifecycle/UI proof remain pending. The spike follows the maintainer's other pre-freeze feature;
+unfinished executable work defers at November 3, 17:00 ART, before the 20:00 ART freeze.
+The advanced native backend and browser route above remain available.
+
+For the future shell, add Rust/cargo **1.98**, rustfmt, MSVC C++ build tools, the Windows SDK
+and WebView2 to the native prerequisites above. Use a non-elevated PowerShell in the validated
+native clone, without WSL path translation. Prepare the synced environment and built UI:
+
+```powershell
+uv sync --frozen
+pnpm -C frontend install --frozen-lockfile
+pnpm -C frontend build
+# Explicit online preparation, also usable now for the portable core:
+cargo fetch --locked --manifest-path desktop/Cargo.toml
+$env:CARGO_NET_OFFLINE = 'true'
+cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check
+cargo --offline test --locked --manifest-path desktop/Cargo.toml -p oversight-desktop-core
+# FUTURE ONLY: requires the deferred shell crate and its reconciled lockfile:
+cargo --offline build --locked --release --manifest-path desktop/Cargo.toml -p oversight-desktop
+.\desktop\target\release\oversight-desktop.exe --smoke
+# While the first instance is open, repeat to prove focus without a second backend:
+.\desktop\target\release\oversight-desktop.exe --smoke
+```
+
+Bundling stays inactive; Python and WebView2 are prerequisites, not bundled payloads.
+The future window owns `.venv\Scripts\python.exe -m oversight serve` in the clone root,
+without reload. Host/port/Vite overrides are `127.0.0.1`, `8710` and empty, taking precedence
+over `.env`. Only verified child/Job listener ownership plus bounded live `/health` admits
+`http://127.0.0.1:8710/`. Keep same-origin HTTP/SSE and existing authority checks.
+`--smoke` forces fake A/B scripts, blank provider keys, cross-review off and demo source.
+Starting real agents outside smoke retains the backend's existing credit rules.
+
+Accept only one window/backend. Verify graph/WebGL, local Monaco/fonts, focus, SSE and
+OPEN_NOTICE, then graceful close and immediate restart, three clean starts. Preserve the
+existing native capability restrictions: no Windows isolation, rules, Revert, behavior or
+measured evidence. No native folder picker: the shell accepts demo or the exact pinned
+profile only; native pinned-profile qualification is still pending.
+
+Exercise busy 8710 (refuse without attaching/killing its owner), missing dist, failed startup,
+close during startup, shell crash and spaced/Unicode clone roots. Verify nested Jobs, shared
+console group-only signaling, at most five seconds before owned Job termination, handle reap
+and no owned descendants/listener. Forced cleanup never passes graceful acceptance. Retain
+sanitized logs, versions, actual added duration and exe size; never print `.env`, credentials
+or environment dumps. Both native lifecycle/UI acceptance and independent review are required
+before executable delivery; advisory CI alone cannot supply headed acceptance. Rollback removes
+desktop code, its standalone target and Windows workflow additions while preserving the browser
+and advanced native backend.

@@ -2,10 +2,10 @@ name: windows advisory
 
 on:
   pull_request:
-    paths: [backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
+    paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
   push:
     branches: [main]
-    paths: [backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
+    paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
   workflow_dispatch:
 
 permissions: {}
@@ -14,7 +14,7 @@ jobs:
   windows:
     name: windows advisory
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
     permissions:
       contents: read
     defaults:
@@ -99,6 +99,29 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $probe = Get-Content -Raw nt-evidence/isolation-probe.json | ConvertFrom-Json
           if ($probe.status -ne 'unavailable' -or $probe.reason -ne 'network isolation C is Linux-only') { throw 'Unexpected NT isolation verdict' }
+      - name: Desktop Rust toolchain
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default 1.98.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Seed desktop Cargo store
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
+        run: |
+          cargo fetch --locked --manifest-path desktop/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Portable desktop checks
+        if: ${{ !cancelled() && steps.frontend_build.outcome == 'success' }}
+        run: |
+          $env:CARGO_NET_OFFLINE = 'true'
+          $timer = [System.Diagnostics.Stopwatch]::StartNew()
+          cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo --offline test --locked --manifest-path desktop/Cargo.toml -p oversight-desktop-core
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $timer.Stop()
+          "Portable desktop checks: $($timer.Elapsed.TotalSeconds) seconds; executable/size/native shell acceptance deferred." | Set-Content nt-evidence/desktop.txt
       - name: Runtime version evidence
         if: always()
         run: |
