@@ -75,3 +75,14 @@ assert os.read(ack, 1) == b'1'
 os.close(ack)
 os.execv(sys.argv[11], sys.argv[11:])
 """
+
+# Preview alone inherits a host listener. Helper positions and entry/ack remain unchanged;
+# execv preserves inheritable descriptors at both boundaries. Suites keep HELPER verbatim.
+PREVIEW_HELPER = HELPER.replace(
+    "os.execv(sys.argv[11], sys.argv[11:])",
+    "listener = int(sys.argv[sys.argv.index('--listener-fd', 11) + 1])\n"
+    "assert listener >= 3 and listener not in (fd, ack)\n"
+    "os.fstat(listener)\n"
+    "os.set_inheritable(listener, True)\n"
+    "os.execv(sys.argv[11], sys.argv[11:])",
+)
