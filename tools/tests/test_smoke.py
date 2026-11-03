@@ -94,6 +94,10 @@ def test_the_backend_settings_override_personal_configuration(
         "OVERSIGHT_FAKE_SCRIPT_B": "personal-b.json",
         "OVERSIGHT_CROSS_REVIEW": "true",
         "OVERSIGHT_WORKSPACE_SOURCE": "C:/fake-personal-repository",
+        "OVERSIGHT_PREVIEW_ADAPTER": "/fake-personal/preview_adapter.py",
+        "OVERSIGHT_PREVIEW_PYTHON": "/fake-personal/bin/python",
+        "OVERSIGHT_PREVIEW_PORTS": "9180,9181",
+        "OVERSIGHT_PREVIEW_ORIGINS": "http://127.0.0.1:8000",
     }
     env_file = tmp_path / "personal.env"
     env_file.write_text(
@@ -116,6 +120,12 @@ def test_the_backend_settings_override_personal_configuration(
     assert settings.fake_script.is_file()
     assert settings.cross_review is False
     assert settings.workspace_source == ""
+    assert settings.preview_profile.configured is False
+    assert settings.preview_profile.adapter is None
+    assert settings.preview_profile.interpreter is None
+    assert settings.preview_profile.ports == ()
+    assert settings.preview_profile.origins == ()
+    assert settings.preview_profile.trusted_demo is True
 
 
 def test_nothing_answering_fails_at_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
