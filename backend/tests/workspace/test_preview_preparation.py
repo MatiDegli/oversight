@@ -6,6 +6,7 @@ import os
 import shutil
 import struct
 import sys
+from asyncio import CancelledError
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
 
@@ -298,6 +299,63 @@ async def test_import_mappings_refuse_unsupported_hooks_and_links(inputs, attack
     inputs = replace(inputs, inventories=(updated, *inputs.inventories[1:]))
     with pytest.raises((ValueError, OSError)):
         await prepare_preview(inputs, spawn=never_spawn)
+
+
+@pytest.mark.parametrize("witness", ["regular", "link-in-T", "link-outside", "directory", "fifo"])
+async def test_package_import_witness_must_be_a_regular_file_in_T(inputs, witness):
+    source = inputs.tree / "backend/src"
+    (source / "backend_fixture.py").unlink()
+    package = source / "backend_fixture"
+    package.mkdir()
+    initializer = package / "__init__.py"
+    if witness == "regular":
+        initializer.write_text("VALUE = 'from T'\n")
+        await prepare_preview(inputs, spawn=never_spawn)
+        return
+    if witness.startswith("link"):
+        target = (source if witness == "link-in-T" else inputs.excluded_roots[0]) / "outside.py"
+        target.write_text("VALUE = 'linked'\n")
+        initializer.symlink_to(target)
+    elif witness == "directory":
+        initializer.mkdir()
+    else:
+        os.mkfifo(initializer)
+    with pytest.raises(ValueError, match="project import witness"):
+        await prepare_preview(inputs, spawn=never_spawn)
+    assert not list(inputs.preparation_storage.glob("preview-*"))
+
+
+@pytest.mark.parametrize("failure", ["mountpoint", "reserved-mountpoint", "manifest", "cancel"])
+async def test_post_layout_failure_removes_only_fresh_copies(inputs, monkeypatch, failure):
+    previous = await prepare_preview(inputs, spawn=never_spawn)
+    unrelated = inputs.preparation_storage / "unrelated"
+    unrelated.mkdir()
+    (unrelated / "keep").write_text("keep")
+    before = {p: p.read_bytes() for p in inputs.preparation_storage.rglob("*") if p.is_file()}
+    destinations = set(inputs.preparation_storage.iterdir())
+    directory = preparation._directory
+    manifest = preparation._effective_manifest
+    error = CancelledError if failure == "cancel" else OSError
+
+    def fail_directory(path, *, create=False):
+        target = "tmp" if failure == "reserved-mountpoint" else "deps/backend"
+        if path == previous.root / target:
+            raise error("post-layout failure")
+        return directory(path, create=create)
+
+    def fail_manifest(inventory, source):
+        manifest(inventory, source)
+        raise error("post-layout failure")
+
+    if failure in {"mountpoint", "reserved-mountpoint"}:
+        monkeypatch.setattr(preparation, "_directory", fail_directory)
+    else:
+        monkeypatch.setattr(preparation, "_effective_manifest", fail_manifest)
+    with pytest.raises(error, match="post-layout failure"):
+        await prepare_preview(inputs, spawn=never_spawn)
+    assert set(inputs.preparation_storage.iterdir()) == destinations
+    assert all(path.read_bytes() == data for path, data in before.items())
+    assert all(mapping.source.exists() for mapping in previous.root_mappings)
 
 
 async def test_reuse_revalidates_and_evicts_only_owned_storage(inputs, tmp_path):

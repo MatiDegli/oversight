@@ -13,7 +13,8 @@ import shutil
 import stat
 import struct
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -555,8 +556,9 @@ def _sanitize_site(site: Path, imports: Sequence[ProjectImport]) -> None:
         bytecode.unlink()
 
 
-def _layout(inputs: PreparationInputs) -> tuple[RootMapping, ...]:
-    """Copy import environments privately; input inventories are always left untouched."""
+@contextmanager
+def _layout(inputs: PreparationInputs) -> Generator[tuple[RootMapping, ...]]:
+    """Retain private copies only after preparation succeeds; never change input inventories."""
     _directory(inputs.preparation_storage)
     output = Path(tempfile.mkdtemp(prefix="preview-", dir=inputs.preparation_storage))
     mappings: list[RootMapping] = []
@@ -590,7 +592,7 @@ def _layout(inputs: PreparationInputs) -> tuple[RootMapping, ...]:
                     [g for g in groups if g.site == site],
                 )
             mappings.append(RootMapping(destination, mapping.target))
-        return tuple(mappings)
+        yield tuple(mappings)
     except BaseException:
         shutil.rmtree(output)
         raise
@@ -686,11 +688,14 @@ def _validate_imports(inputs: PreparationInputs, search: Sequence[Path]) -> None
                 raise ValueError("unsupported project package")
             root = _host(group.replacement / relative, inputs.root_mappings)
             _directory(root)
-            if (root / package).is_symlink() or (root / (package + ".py")).is_symlink():
-                raise ValueError("project import witness is a link")
-            if not (
-                (root / (package + ".py")).is_file() or (root / package / "__init__.py").is_file()
+            initializer = root / package / "__init__.py"
+            if (
+                (root / package).is_symlink()
+                or (root / (package + ".py")).is_symlink()
+                or initializer.is_symlink()
             ):
+                raise ValueError("project import witness is a link")
+            if not ((root / (package + ".py")).is_file() or initializer.is_file()):
                 raise ValueError("missing project import witness in T")
     environment = _host(inputs.project_environment, inputs.root_mappings)
     _directory(environment)
@@ -728,45 +733,48 @@ async def prepare_preview(
         "root",
     ):
         _directory(inputs.preview_directory / part, create=True)
-    mappings = (
-        *_layout(inputs),
-        RootMapping(inputs.preview_directory / "state", Path("/state"), False),
-    )
-    root = inputs.preview_directory / "root"
-    for mapping in mappings:
-        _directory(root / mapping.target.relative_to("/"), create=True)
-    for part in ("tmp", "proc", "dev"):
-        _directory(root / part, create=True)
-    manifests = tuple(
-        _effective_manifest(
-            i,
-            next(
-                m.source
-                for m in mappings
-                if m.target
-                == next(old.target for old in inputs.root_mappings if old.source == i.root)
-            ),
+    with _layout(inputs) as copies:
+        mappings = (
+            *copies,
+            RootMapping(inputs.preview_directory / "state", Path("/state"), False),
         )
-        for i in inputs.inventories
-    )
-    return PreparedPreview(
-        root,
-        inputs.tree,
-        inputs.preview_directory / "state",
-        mappings,
-        manifests,
-        inputs.tools,
-        tuple(
-            dict.fromkeys(
-                p for i in inputs.imports for p in (i.replacement / i.import_subdirectory, i.site)
+        root = inputs.preview_directory / "root"
+        for mapping in mappings:
+            _directory(root / mapping.target.relative_to("/"), create=True)
+        for part in ("tmp", "proc", "dev"):
+            _directory(root / part, create=True)
+        manifests = tuple(
+            _effective_manifest(
+                i,
+                next(
+                    m.source
+                    for m in mappings
+                    if m.target
+                    == next(old.target for old in inputs.root_mappings if old.source == i.root)
+                ),
             )
-        ),
-        search,
-        inputs.project_environment,
-        inputs.demo_python,
-        inputs.resources,
-        inputs.preview_directory / "logs/build.log",
-    )
+            for i in inputs.inventories
+        )
+        return PreparedPreview(
+            root,
+            inputs.tree,
+            inputs.preview_directory / "state",
+            mappings,
+            manifests,
+            inputs.tools,
+            tuple(
+                dict.fromkeys(
+                    p
+                    for i in inputs.imports
+                    for p in (i.replacement / i.import_subdirectory, i.site)
+                )
+            ),
+            search,
+            inputs.project_environment,
+            inputs.demo_python,
+            inputs.resources,
+            inputs.preview_directory / "logs/build.log",
+        )
 
 
 def scrub_preview_env(env: Mapping[str, str], prepared: PreparedPreview) -> dict[str, str]:
