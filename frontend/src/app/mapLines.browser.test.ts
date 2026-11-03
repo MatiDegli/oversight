@@ -195,6 +195,7 @@ it.each(["dark", "day"])("reveals the full pointed agent label at 1280 in %s", a
     await unobstructedNames(page);
     await pointAt(page, await groupPoint(page, "library"));
     await fullAgentLabel(page, id);
+    await unobstructedNames(page);
     await clearPointer(page);
     await check(agent).toHaveCSS("max-width", "100%");
     await check(agent).toHaveCSS("text-overflow", "ellipsis");
@@ -1211,6 +1212,7 @@ for (const width of [1920, 1280])
         const measured = await measureEvidence(page);
         await pointAt(page, await groupPoint(page, group));
         await fullAgentLabel(page, boltons ? "boltons.strutils" : "library.module_01");
+        await unobstructedNames(page);
         await capture("map-hover-group");
         const click = await groupPoint(page, group);
         await page.mouse.click(click.x, click.y);
