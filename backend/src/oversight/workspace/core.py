@@ -89,6 +89,8 @@ from oversight.workspace.runner import (
 from oversight.workspace.snapshot import IntegrityState
 from oversight.workspace.source import remember_trust
 from oversight.workspace.source_nt import (
+    HARDLINKED_ENVIRONMENT_NOTICE,
+    HardlinkedEnvironmentError,
     NtSource,
     OwnEnvironment,
     StagedSource,
@@ -657,6 +659,8 @@ class Workspace:
         except NtCleanupError:
             self.refuse_unverified_cleanup()
             raise
+        except HardlinkedEnvironmentError:
+            return HARDLINKED_ENVIRONMENT_NOTICE
         except OSError:
             # No arbitrary interpreter/path/plugin output reaches a startup notice.
             return (

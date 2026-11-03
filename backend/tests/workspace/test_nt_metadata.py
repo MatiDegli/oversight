@@ -11,6 +11,7 @@ import pytest
 from oversight.workspace import IntegrityError
 from oversight.workspace import metadata_io as metadata
 from oversight.workspace.metadata_io import Budget, Entry
+from oversight.workspace.source_nt import HardlinkedEnvironmentError
 
 
 def token_stat(
@@ -90,9 +91,12 @@ def test_environment_check_refuses_unsafe_handle(tmp_path, monkeypatch, changes,
     with pytest.raises(OSError, match="^Windows source refused: " + reason) as refused:
         io.check(path, directory=False)
     if changes["st_nlink"] == 2:
+        assert type(refused.value) is HardlinkedEnvironmentError
         assert "--link-mode copy" in str(refused.value)
         assert "UV_LINK_MODE=copy" in str(refused.value)
         assert str(path) not in str(refused.value)
+    else:
+        assert type(refused.value) is OSError
 
 
 @pytest.mark.parametrize("kind", ["Git metadata", "working file"])

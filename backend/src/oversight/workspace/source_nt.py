@@ -63,6 +63,15 @@ from oversight.workspace.source_config import check_source_config
 MAX_GIT = 8 * 1024 * 1024
 PHASE_SECONDS = 10
 REMEDY = "Use short private local NTFS nonsynced folders; use a separate clone for overlap."
+HARDLINKED_ENVIRONMENT_NOTICE = (
+    "Own-source environment unavailable: the original venv is hard-linked "
+    "(uv's default on Windows); recreate it with `uv sync --reinstall --link-mode copy` "
+    "(or set UV_LINK_MODE=copy)."
+)
+
+
+class HardlinkedEnvironmentError(OSError):
+    """The original environment contains a file with more than one hard link."""
 
 
 def refuse(reason: str) -> OSError:
@@ -1078,8 +1087,9 @@ class EnvironmentIO:
             with open_nt(path) as handle:
                 opened = os.fstat(handle.fileno())
                 if opened.st_nlink != 1:
-                    raise refuse(
-                        "environment file is hard-linked (uv's default on Windows); "
+                    raise HardlinkedEnvironmentError(
+                        "Windows source refused: environment file is hard-linked "
+                        "(uv's default on Windows); "
                         "recreate the environment with uv sync --reinstall --link-mode copy "
                         "(or UV_LINK_MODE=copy)"
                     )
@@ -1137,6 +1147,8 @@ def prepare_environment(
             )
         )
         return OwnEnvironment(python, roots, guard)
+    except HardlinkedEnvironmentError:
+        raise HardlinkedEnvironmentError(HARDLINKED_ENVIRONMENT_NOTICE) from None
     except (
         OSError,
         ValueError,

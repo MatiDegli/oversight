@@ -200,7 +200,10 @@ def test_environment_nt_boundaries(tmp_path, monkeypatch, fault):
             }[fault]
         )
     before = config.read_bytes()
-    with pytest.raises(OSError, match="missing or unsafe original venv"):
+    reason = (
+        "original venv is hard-linked" if fault == "hardlink" else "missing or unsafe original venv"
+    )
+    with pytest.raises(OSError, match=reason):
         nt.prepare_environment(source, tree, io.deadline, io=io)
     assert config.read_bytes() == before
 
