@@ -175,7 +175,8 @@ def _validate(config: BoundaryConfig, roots: RootInputs) -> None:
         _overlap(a, b) for a, b in ((tree, state), (tree, scratch), (state, scratch))
     ):
         raise BoundaryUnavailable("boundary roots overlap")
-    excluded = (*roots.exclusions, REPO_ROOT, Path("/mnt"), Path("/run"))
+    excluded = tuple(_canonical(p) for p in roots.exclusions)
+    excluded += (REPO_ROOT, Path("/mnt"), Path("/run"))
     targets: set[str] = set()
     roles: set[str] = set()
     for item in roots.readonly:

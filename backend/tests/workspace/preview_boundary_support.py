@@ -122,6 +122,106 @@ def execute(argv):
     return os.waitstatus_to_exitcode(os.waitpid(child, 0)[1])
 """
 
+# Actual x86-64 io_uring socket/connect requests, with a linked connection timeout.
+# When the inherited filter works, the attempt stops at io_uring_setup with EPERM.
+IO_URING_VSOCK = r"""
+import ctypes, errno, mmap, os, socket, struct
+
+def uring_vsock():
+    libc = ctypes.CDLL(None, use_errno=True)
+    params = ctypes.create_string_buffer(120)
+    ring = libc.syscall(425, 2, ctypes.byref(params))
+    if ring < 0:
+        return dict(setup=ctypes.get_errno())
+    sq_entries, cq_entries = struct.unpack_from('II', params)
+    sq_head, sq_tail, sq_mask, _, _, _, sq_array = struct.unpack_from('7I', params, 40)
+    cq_head, cq_tail, cq_mask, _, _, cq_cqes = struct.unpack_from('6I', params, 80)
+    with mmap.mmap(ring, sq_array + sq_entries * 4, offset=0) as sq, \
+         mmap.mmap(ring, cq_cqes + cq_entries * 16, offset=0x8000000) as cq, \
+         mmap.mmap(ring, sq_entries * 64, offset=0x10000000) as sqes:
+        def word(memory, offset):
+            return struct.unpack_from('I', memory, offset)[0]
+
+        def submit(*requests):
+            tail = word(sq, sq_tail)
+            for index, request in enumerate(requests):
+                slot = (tail + index) & word(sq, sq_mask)
+                sqes[slot * 64:(slot + 1) * 64] = request
+                struct.pack_into('I', sq, sq_array + slot * 4, slot)
+            struct.pack_into('I', sq, sq_tail, tail + len(requests))
+            rc = libc.syscall(426, ring, len(requests), len(requests), 1, 0, 0)
+            assert rc == len(requests), (rc, ctypes.get_errno())
+            head = word(cq, cq_head)
+            assert word(cq, cq_tail) - head == len(requests)
+            results = {}
+            for index in range(len(requests)):
+                slot = (head + index) & word(cq, cq_mask)
+                token, value = struct.unpack_from('Qi', cq, cq_cqes + slot * 16)
+                results[token] = value
+            struct.pack_into('I', cq, cq_head, head + len(requests))
+            return results[1]
+
+        def request(opcode, fd, off=0, addr=0, length=0, flags=0, token=1):
+            sqe = bytearray(64)
+            struct.pack_into('BBHiQQIIQ', sqe, 0,
+                opcode, flags, 0, fd, off, addr, length, 0, token)
+            return sqe
+
+        # IORING_OP_SOCKET takes domain in fd, type in off and protocol in len.
+        fd = submit(request(45, socket.AF_VSOCK, socket.SOCK_STREAM | socket.SOCK_NONBLOCK))
+        results = dict(setup=0, socket=fd)
+        if fd >= 0:
+            try:
+                address = ctypes.create_string_buffer(struct.pack('HHIII', 40, 0, 1234, 2, 0))
+                deadline = (ctypes.c_int64 * 2)(0, 250_000_000)
+                results['connect'] = submit(
+                    request(16, fd, ctypes.sizeof(address) - 1,
+                        ctypes.addressof(address), flags=4),
+                    request(15, -1, addr=ctypes.addressof(deadline), length=1, token=2))
+            finally:
+                os.close(fd)
+    os.close(ring)
+    return results
+"""
+
+
+def errno_tagged_entry(path: Path, trusted: Path) -> Path:
+    """Tag emitted ERRNO actions so an ambient EPERM cannot mask a missing deny rule.
+
+    Linux uses the newest filter's data for equal-priority ERRNO actions. Only the
+    errno changes: the production BPF predicates and actual kernel calls stay intact.
+    """
+    path.write_text(
+        """
+import ctypes, errno
+from pathlib import Path
+namespace = {'__name__': 'trusted_entry'}
+"""
+        + f"trusted = Path({str(trusted)!r})\n"
+        + "exec(compile(trusted.read_text(), str(trusted), 'exec'), namespace)\n"
+        + """
+libc = namespace['LIBC']
+original = libc.prctl
+class Filter(ctypes.Structure):
+    _fields_ = [('code', ctypes.c_ushort), ('jt', ctypes.c_ubyte),
+               ('jf', ctypes.c_ubyte), ('k', ctypes.c_uint)]
+class Program(ctypes.Structure):
+    _fields_ = [('length', ctypes.c_ushort), ('filters', ctypes.POINTER(Filter))]
+def tagged_prctl(option, *args):
+    if option == 22:
+        program = ctypes.cast(args[1], ctypes.POINTER(Program)).contents
+        for index in range(program.length):
+            instruction = program.filters[index]
+            if instruction.code == 0x06 and instruction.k & 0xffff0000 == 0x50000:
+                instruction.k = 0x50000 | errno.ENOTRECOVERABLE
+    return original(option, *args)
+libc.prctl = tagged_prctl
+namespace['main']()
+"""
+    )
+    return path
+
+
 NESTED = r"""
 import ctypes, errno, json, os, pathlib, socket
 libc = ctypes.CDLL(None, use_errno=True)

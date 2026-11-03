@@ -325,10 +325,12 @@ def approved_link(path: Path) -> None:
 
 
 def deny_vsock() -> None:
-    """Deny native and x32/foreign ABI vsock; preserve real nested user unshare."""
+    """Deny direct/io_uring vsock and foreign ABIs; preserve nested user unshare."""
     if platform.machine() != "x86_64":
         raise OSError(errno.ENOTSUP, "unsupported seccomp architecture")
     checked(LIBC.prctl(38, 1, 0, 0, 0), "PR_SET_NO_NEW_PRIVS")
+    # Seccomp cannot inspect io_uring SQEs, whose socket/connect operations bypass
+    # socket(2)'s domain check. Deny setup/enter/register before any descendant exists.
     # BPF: architecture, syscall number, then socket/socketpair domain argument.
     instructions = [
         (0x20, 0, 0, 4),
@@ -336,6 +338,12 @@ def deny_vsock() -> None:
         (0x06, 0, 0, 0x80000000),
         (0x20, 0, 0, 0),
         (0x45, 0, 1, 0x40000000),
+        (0x06, 0, 0, 0x50000 | errno.EPERM),
+        (0x15, 0, 1, 425),  # io_uring_setup
+        (0x06, 0, 0, 0x50000 | errno.EPERM),
+        (0x15, 0, 1, 426),  # io_uring_enter
+        (0x06, 0, 0, 0x50000 | errno.EPERM),
+        (0x15, 0, 1, 427),  # io_uring_register
         (0x06, 0, 0, 0x50000 | errno.EPERM),
         (0x15, 2, 0, 41),
         (0x15, 1, 0, 53),

@@ -246,6 +246,53 @@ print(json.dumps(results))
     print("real connection results", data)
 
 
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("tagged", [False, True])
+async def test_boundary_io_uring_vsock_refused(
+    roots: Inputs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool, tagged: bool
+) -> None:
+    from .preview_boundary_support import FORK_EXEC, IO_URING_VSOCK, errno_tagged_entry
+
+    if tagged:
+        monkeypatch.setattr(
+            boundary, "ENTRY", errno_tagged_entry(tmp_path / "entry.py", boundary.ENTRY)
+        )
+    payload = (
+        IO_URING_VSOCK
+        + r"""
+import json
+# Ordinary socket creation and nested unshare must remain available.
+with socket.socket(socket.AF_INET): pass
+results = uring_vsock()
+libc = ctypes.CDLL(None, use_errno=True)
+for name, number in (('enter', 426), ('register', 427)):
+    assert libc.syscall(number, -1, 0, 0, 0, 0, 0) == -1
+    results[name] = ctypes.get_errno()
+print(json.dumps(results), flush=True)
+"""
+    )
+    if nested:
+        payload = (
+            "import os\n"
+            + FORK_EXEC
+            + f"code = execute(['/usr/bin/unshare', '--user', '--map-root-user', "
+            f"'/opt/python/bin/python', '-I', '-S', '-c', {payload!r}])\n"
+            "assert code == 0, code\n"
+        )
+    data = await result(await boundary.launch_boundary(config(payload), roots))
+    denied = errno.ENOTRECOVERABLE if tagged else errno.EPERM
+    assert data == dict(setup=denied, enter=denied, register=denied)
+
+
+async def test_boundary_exclusion_alias_refused(roots: Inputs, tmp_path: Path) -> None:
+    alias = tmp_path / "excluded-source-alias"
+    alias.symlink_to(roots.readonly[0].source, target_is_directory=True)
+    modified = dataclasses.replace(roots, exclusions=(alias,))
+    with pytest.raises(boundary.BoundaryUnavailable, match="noncanonical boundary input"):
+        handle = await boundary.launch_boundary(config("pass"), modified)
+        await handle.stop_verified()
+
+
 async def test_boundary_wsl_host_channels_refused(
     roots: Inputs, monkeypatch: pytest.MonkeyPatch
 ) -> None:
