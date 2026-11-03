@@ -12,6 +12,25 @@ from oversight.workspace.runner import NtCleanupError, NtCleanupRunner, ProcessR
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize("count", [0, 3, 12])
+def test_own_readiness_failure_reports_at_most_ten_venv_relative_hardlinks(tmp_path, count):
+    from .test_source_nt_windows import venv_link_diagnostics
+
+    source = tmp_path / "source"
+    site = source / ".venv/Lib/site-packages"
+    site.mkdir(parents=True)
+    (site / "unlinked.py").write_bytes(b"fixture")
+    cache = tmp_path / "cached.py"
+    cache.write_bytes(b"cached")
+    linked = {f"Lib/site-packages/linked{number}.py" for number in range(count)}
+    for relative in linked:
+        (source / ".venv" / relative).hardlink_to(cache)
+    (source / "outside-venv.py").hardlink_to(cache)
+    paths = venv_link_diagnostics(source / ".venv")
+    assert len(paths) == len(set(paths)) == min(count, 10)
+    assert set(paths) <= linked
+
+
 @pytest.mark.parametrize("mode", ["normal", "cancel"])
 async def test_cleanup_diagnostic_survives_nt_signal_and_cancellation(tmp_path, monkeypatch, mode):
     entered, finish = asyncio.Event(), asyncio.Event()

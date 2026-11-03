@@ -4,6 +4,7 @@ import importlib
 import sys
 import tempfile
 from functools import wraps
+from itertools import islice
 from pathlib import Path
 
 import pytest
@@ -27,6 +28,20 @@ pytestmark = [
 def long_temp_dir() -> Path:
     """Keep paths short while expanding Windows 8.3 aliases before native validation."""
     return Path(tempfile.mkdtemp(prefix="ov-")).resolve()
+
+
+def venv_link_diagnostics(venv: Path) -> list[str]:
+    """Bound readiness diagnostics to ten venv-relative non-directory paths."""
+    return list(
+        islice(
+            (
+                path.relative_to(venv).as_posix()
+                for path in venv.rglob("*")
+                if path.is_file() and path.stat().st_nlink != 1
+            ),
+            10,
+        )
+    )
 
 
 @pytest.fixture
@@ -112,10 +127,13 @@ async def test_original_venv_each_copy_and_guard_admission(tmp_path, layout, rea
     )  # injected demo_python must never be used
     try:
         await live.startup()
-        assert live._environment_unavailable is None, [
-            f"{call}: {type(error).__name__}: {error} (context: {error.__context__!r})"
-            for call, error in readiness_errors
-        ]
+        assert live._environment_unavailable is None, {
+            "readiness_errors": [
+                f"{call}: {type(error).__name__}: {error} (context: {error.__context__!r})"
+                for call, error in readiness_errors
+            ],
+            "venv_files_with_st_nlink_ne_1": venv_link_diagnostics(fixture.source / ".venv"),
+        }
         assert not any(tmp_path.rglob("FILTER_SENTINEL"))
         assert (live.workspace.main.root / "crlf.py").read_bytes() == b"line = 1\r\n"
         (live.workspace.main.root / "crlf.py").write_bytes(b"line = 1\r\n")
