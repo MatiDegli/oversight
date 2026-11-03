@@ -1,9 +1,6 @@
-"""The append-only event store of one run: a SQLite file, one writer task, and live subscribers.
+"""Append-only SQLite log: one writer assigns gapless seqs and batches concurrent publications.
 
-Producers call `publish` from any task. Only the writer task assigns `seq` and `ts`, so `seq` goes
-1, 2, 3 with no gaps even when two agents publish at once. It drains whatever is queued into one
-transaction, so a burst of events costs one commit. An event reaches subscribers only after its
-transaction commits, so what a client sees is always in the file.
+Subscribers observe events only after their transaction commits.
 """
 
 import asyncio
@@ -24,7 +21,9 @@ from oversight.events.clock import Clock, format_ts, system_clock
 from oversight.events.graph_fold import apply_delta
 from oversight.events.lead_fold import CommittedLeadPrefix, fold_lead_status
 from oversight.events.needs_you import TerminalClaim, TerminalClaims, terminal_key
+from oversight.events.references import EventRejected as EventRejected
 from oversight.events.references import validate_references
+from oversight.events.view_resolution import capture_view_resolver
 from oversight_contracts.events import (
     AgentFocus,
     AgentMessageSent,
@@ -49,6 +48,7 @@ from oversight_contracts.plans import Plan
 from oversight_contracts.policy import ChangeAssessment, MergeModeState
 from oversight_contracts.queue import QueuedTask
 from oversight_contracts.review import ChangeFacts, CrossReview
+from oversight_contracts.views import LeadView
 
 # Initialize before any producers or the writer can share its validators.
 _SERVER_EVENT_ADAPTER = TypeAdapter(ServerEvent)
@@ -77,6 +77,7 @@ type EventPayload = (
     | QueuedTask
     | LeadStatus
     | LeadReply
+    | LeadView
     | GrantCreated
     | GrantRevoked
 )
@@ -105,6 +106,7 @@ EVENT_TYPES: dict[type[EventPayload], str] = {
     QueuedTask: "queue.updated",
     LeadStatus: "lead.status",
     LeadReply: "lead.reply",
+    LeadView: "lead.view",
     GrantCreated: "grant.created",
     GrantRevoked: "grant.revoked",
 }
@@ -131,10 +133,6 @@ class StoredEvent:
     ts: str
     type: str
     envelope: str
-
-
-class EventRejected(ValueError):
-    """A semantic rejection of one event; retrying it cannot succeed."""
 
 
 class StoreClosedError(RuntimeError):
@@ -189,10 +187,7 @@ def read_store(path: Path) -> list[StoredEvent]:
 
 
 class EventStore:
-    """The log of one run, kept in `path` (`.runtime/runs/{run_id}.sqlite`) and in memory.
-
-    A run's log is small, so subscribers read from the in-memory copy of what was committed.
-    """
+    """One run's durable log and in-memory committed subscriber index."""
 
     def __init__(
         self,
@@ -277,10 +272,7 @@ class EventStore:
         await self.close()
 
     async def publish(self, payload: EventPayload, *, ts: str | None = None) -> StoredEvent:
-        """Append one event and return it once committed, with its `seq` and `ts`.
-
-        `ts` defaults to the clock at commit time; the replay player passes the recorded one.
-        """
+        """Return the committed receipt; replay may supply its recorded timestamp."""
         if self._closing or self._writer is None:
             raise StoreClosedError("the event store is not accepting events")
         try:
@@ -360,12 +352,22 @@ class EventStore:
     def last_seq(self) -> int:
         return len(self._events)
 
-    def lead_status(self) -> tuple[int, str]:
+    def lead_status(self, *, include_views: bool = False) -> tuple[int, str]:
         """Fold one committed prefix without copying or exposing the full event log."""
         through_seq = self.last_seq
         return fold_lead_status(
-            CommittedLeadPrefix(self._reference_events, through_seq), through_seq
+            CommittedLeadPrefix(self._reference_events, through_seq),
+            through_seq,
+            include_views=include_views,
         )
+
+    def committed_event(self, seq: int) -> ServerEvent | None:
+        """Borrow one committed envelope in O(1); callers must not mutate nested payloads."""
+        return self._reference_events.get(seq)
+
+    def view_resolver(self, through_seq: int) -> Callable[[LeadView], bool]:
+        """Capture reference eligibility at exactly the successful status horizon."""
+        return capture_view_resolver(self._reference_events, through_seq)
 
     def committed_events(self) -> tuple[ServerEvent, ...]:
         """Independent envelopes from this run, after SQL commit only; no disk IO."""
@@ -457,7 +459,7 @@ class EventStore:
                     context={"live": True} if self.mode == "live" else None,
                 )
                 self._validate_provider_mode(event)
-                validate_references(event, prior)
+                validate_references(event, prior, self._reference_events)
                 row = StoredEvent(seq, ts, pending.type, event.model_dump_json())
             except (ValueError, TypeError, KeyError) as error:
                 if not pending.done.done():
