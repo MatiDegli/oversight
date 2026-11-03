@@ -199,7 +199,7 @@ it("keeps card spreads on a small zoom without a published map level", () => {
 it("omits only card header masks at map level and restores them on returning to cards", () => {
   media.matches = true;
   let level: "map" | "cards" = "cards";
-  let notify = () => undefined as void;
+  let notify: () => void = () => undefined;
   const header = { x1: 10, y1: 20, x2: 30, y2: 40 };
   const overlay = { x1: 0, y1: 0, x2: 8, y2: 8 };
   const element = {
@@ -227,7 +227,7 @@ it("omits only card header masks at map level and restores them on returning to 
     },
   });
   controller.update(light);
-  const masks = () => renderer.draw.mock.calls.at(-1)?.[2];
+  const masks = (): unknown => renderer.draw.mock.calls.at(-1)?.[2];
   expect(masks()).toEqual([overlay, header]);
   expect(last()[0].profile.near).toBeCloseTo(26 * 0.3, 10);
   level = "map";

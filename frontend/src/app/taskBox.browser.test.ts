@@ -387,18 +387,26 @@ for (const width of [1920, 1280])
           await page.evaluate(async () => {
             await document.fonts.ready;
             await new Promise<void>((resolve) =>
-              requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  resolve();
+                });
+              }),
             );
           });
           const measurements = await page.evaluate(() => {
             const caption = document.querySelector('.chat-empty [aria-label="New agent"] p');
             const chip = document.querySelector(".chat-empty .chat-merge-chip");
             if (!caption || !chip) throw new Error("Missing actual replay composition");
-            const a = caption.getBoundingClientRect(),
-              b = chip.getBoundingClientRect();
+            const rect = (el: Element) => {
+              const { x, y, width, height, top, right, bottom, left } = el.getBoundingClientRect();
+              return { x, y, width, height, top, right, bottom, left };
+            };
+            const a = rect(caption),
+              b = rect(chip);
             return {
-              caption: a.toJSON(),
-              chip: b.toJSON(),
+              caption: a,
+              chip: b,
               alignment: Math.abs(a.left - b.left),
               focus: document.activeElement?.textContent,
               captionText: caption.textContent,

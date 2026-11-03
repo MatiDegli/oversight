@@ -23,3 +23,8 @@ export { selectPlanEvidence, selectPlanQueue } from "./planSelectors";
 export { ReviewHeader } from "./ReviewHeader";
 export { InboxHeading, InboxViews } from "./InboxHeader";
 export { selectInboxSummary, selectChangeCard } from "./inboxSelectors";
+export {
+  parameterExtensions,
+  parameterEvidenceSelector,
+  visitParameterEvidence,
+} from "./parameterExtensions";

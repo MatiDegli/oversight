@@ -156,7 +156,14 @@ async function unobstructedNames(page: Page) {
       return labels.flatMap((label) => {
         const b = label.getBoundingClientRect();
         return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
-          ? [{ agent: agent.textContent, label: label.textContent, a: a.toJSON(), b: b.toJSON() }]
+          ? [
+              {
+                agent: agent.textContent,
+                label: label.textContent,
+                a: { left: a.left, right: a.right, top: a.top, bottom: a.bottom },
+                b: { left: b.left, right: b.right, top: b.top, bottom: b.bottom },
+              },
+            ]
           : [];
       });
     });
@@ -711,9 +718,6 @@ async function mapTextContrast(page: Page, id: string, theme: string) {
         if (!pixel) throw new Error("Missing GPU pixel");
         return {
           text: el.textContent,
-          hook: el.className,
-          visible: style.visibility,
-          panelOpacity: panelStyle.opacity,
           lamp: hottest,
           unmasked: contrast(foreground, over(panel, hottest.color)),
           actual: contrast(
@@ -1049,14 +1053,13 @@ async function measureEvidence(page: Page) {
   expect(measured.line).toBe("1.4px");
   return measured;
 }
-/** Per-frame evidence is persisted before its gates can fail. */
-async function captureSweep(page: Page, name: string, width: number, theme: string) {
-  if (!sweep) return;
-  const directory = `${sweepRoot}/${sweep}/${phase}`;
-  await mkdir(directory, { recursive: true });
-  const stem = `${directory}/${name}-${String(width)}-${theme}`;
-  const measurements = await page.evaluate(() => {
-    const rect = (el: Element) => el.getBoundingClientRect().toJSON();
+/** Geometry and masks from the same frame as the PNG, with serializable typed rectangles. */
+async function sweepMeasurements(page: Page) {
+  return page.evaluate(() => {
+    const rect = (el: Element) => {
+      const { x, y, width, height, top, right, bottom, left } = el.getBoundingClientRect();
+      return { x, y, width, height, top, right, bottom, left };
+    };
     const graph = document.querySelector<GraphProbeHost>(
       '[aria-label="Repository graph"]',
     )?.oversightGraph;
@@ -1098,6 +1101,14 @@ async function captureSweep(page: Page, name: string, width: number, theme: stri
       ].map(overflow),
     };
   });
+}
+/** Per-frame evidence is persisted before its gates can fail. */
+async function captureSweep(page: Page, name: string, width: number, theme: string) {
+  if (!sweep) return;
+  const directory = `${sweepRoot}/${sweep}/${phase}`;
+  await mkdir(directory, { recursive: true });
+  const stem = `${directory}/${name}-${String(width)}-${theme}`;
+  const measurements = await sweepMeasurements(page);
   const pool =
     name === "group"
       ? null
