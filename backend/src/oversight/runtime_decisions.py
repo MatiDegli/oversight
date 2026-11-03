@@ -43,6 +43,7 @@ class RuntimeDecisions:
         self, input: DecisionInput, *, deadline: float
     ) -> DecisionOutcome:
         """Include waiting for other candidates in the caller's total monotonic deadline."""
+        self.live.require_role("decision")
         task = asyncio.current_task()
         assert task is not None
         self._tasks.add(task)

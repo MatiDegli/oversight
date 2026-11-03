@@ -54,6 +54,8 @@ def facts_ready(
     *,
     author: Literal["agent", "user"],
 ) -> None:
+    if live.nested_policy is not None:
+        return
     if not live._settings.cross_review or live._closing or author != "agent":
         return
     # No task yet: finish still owns the run, and may end halted after proposing.
@@ -61,6 +63,9 @@ def facts_ready(
 
 
 def run_ended(live: LiveRun, agent_id: str, end: RunEnd | None) -> None:
+    if live.nested_policy is not None:
+        live._review_pending.pop(agent_id, None)
+        return
     pending = live._review_pending.pop(agent_id, None)
     manager = live._manager
     if pending is None or live._closing or manager is None or end is None or agent_id in live._runs:
@@ -140,6 +145,7 @@ async def review(
     finished: bool,
     ready_time: float,
 ) -> None:
+    live.require_role("review")
     accounting: ReviewAccounting | None = None
     try:
         if not finished:
