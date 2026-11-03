@@ -14,6 +14,7 @@ def compose(
     resolve_candidate: Callable[[str, str, int, str], Awaitable[PreviewCandidate]],
     memory_hold: Callable[[], str | None],
 ) -> PreviewManager:
+    """Freeze the demo trust clamp without widening the startup opening flag."""
     frozen = replace(profile, trusted_demo=trusted_demo and profile.trusted_demo)
     return PreviewManager(
         workspace, frozen, resolve_candidate=resolve_candidate, memory_hold=memory_hold

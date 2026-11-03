@@ -242,18 +242,20 @@ uses the run-owned manager and committed events.
 `PreviewProfile`, `PreviewCandidate`, `PreviewCreatedResult`, `PreviewStatusRecord`,
 `PreviewDetailsResult`, `PreviewStatusSink` and `PreviewError`. The awaited status sink is supplied
 during `create_router` construction, using that run's committed `EventStore`, before startup.
-Without it, execution is refused. There is no production opening switch. `PreviewProfile.production_open`
-is always false. Infrastructure configuration alone does not open the dormant feature.
+Without it, execution is refused. `PreviewProfile.production_open` returns the frozen `enabled` flag.
+`OVERSIGHT_PREVIEW_ENABLED` is an explicit opt-in, defaulting to false; enabling it permits
+`POST /previews` only when every trusted-demo, configuration and isolation C check also passes.
 
 Execution is eligible only for the trusted demo, with session C available. Native Windows and
 generic/pinned/own repositories cannot use preview. The fixed C refusal is:
 “Live preview unavailable: isolation C is unavailable for this session.” Configuration is frozen
 at startup; `Settings(...)` acceptance fixtures never load `.env` or credentials. All four groups
 (adapter, interpreter, ports and origins) are required. Empty `OVERSIGHT_WORKSPACE_SOURCE` alone
-allows trusted-demo eligibility. No enable flag, inferred configuration or unisolated fallback exists.
+allows trusted-demo eligibility. No inferred enablement or unisolated fallback exists.
 
 | Setting | Default | Parser / source |
 | --- | --- | --- |
+| `OVERSIGHT_PREVIEW_ENABLED` | `false` | Only literal `true` or `false`; other values, including empty, raise |
 | `OVERSIGHT_PREVIEW_ADAPTER` | `None` | Nonempty `Path`, otherwise `None` |
 | `OVERSIGHT_PREVIEW_PYTHON` | `None` | Nonempty `Path`, otherwise `None` |
 | `OVERSIGHT_PREVIEW_PORTS` | `()` | Comma-separated integers; empty/unset gives `()` |
@@ -264,8 +266,9 @@ allows trusted-demo eligibility. No enable flag, inferred configuration or uniso
 | `OVERSIGHT_PREVIEW_READINESS_S` | `10` | Float seconds |
 | `OVERSIGHT_PREVIEW_MEMORY_LIMIT_BYTES` | `536870912` | Integer bytes; per-process `RLIMIT_AS` |
 
-Malformed numeric settings raise. The adapter must be the exact absolute
-`backend/src/oversight/preview_adapter.py`, without symlink substitution. The prepared interpreter
+Whitespace, mixed case and numbers are invalid enable values. Malformed numeric settings raise.
+The adapter must be the exact absolute `backend/src/oversight/preview_adapter.py`, without symlink
+substitution. The prepared interpreter
 must be absolute, present and executable; its virtual-environment path remains its identity. App
 ports must be unique and exclude backend/Vite ports. Origins are exact loopback HTTP **embedding
 backend/Vite origins**, never frame URLs. Deadlines must be finite and positive, heartbeat below
@@ -375,7 +378,8 @@ authorize killing. Recovery compares the old candidate after restitution; change
 quarantine and block reset, preserving them for review instead of deleting them at startup.
 
 C does not contain the filesystem, secrets accessible to the user, or application responses.
-`RLIMIT_AS` is per process, not an aggregate fork limit. Production opening remains disabled;
+The filesystem is not isolated, including when the opening flag is true.
+`RLIMIT_AS` is per process, not an aggregate fork limit. Production opening defaults to disabled;
 recordings and their provenance are unchanged. The separate coupon story uses a scripted fake
 model and never becomes a historical recording or a paid probe.
 
@@ -428,7 +432,7 @@ the lead. The committed prefix supplies its current unresolved proposal/revision
 non-coding, resolved, stale, inconsistent or malformed targets append nothing. Existing horizon,
 caption masking and four view kinds retain their behavior. Launch independently revalidates
 membership and the current candidate under admission locks. The advertised enum, prompt/version
-and model-facing inventory stay unchanged; no model suggestions, cards or production mounting
+and model-facing inventory stay unchanged; no model suggestions, cards or frontend production mounting
 are released.
 
 Only the initiating tab keeps the token, in memory. An observer sees “Preview in use in another
@@ -459,16 +463,16 @@ comparisons under `.shots/preview-acceptance/`, with UTC/viewport/theme/error/ov
 It did not collect WSL-to-Windows browser proof: the bounded Windows attempt exposed no CDP
 endpoint. C's 132 state frames and 18 references are available read-only at the coordinator's
 `preview-panel-loop/shots-approved/` path; the full matrix was not visually inspected in this round
-or recaptured. Missing Windows proof withholds trust and production opening; the conditional trust
-and deferred adapter-provenance decisions remain unappended. Full gates and independent review
-remain the coordinator's responsibility.
+or recaptured. Missing Windows proof withholds qualification; the opening flag supplies no evidence.
+The conditional trust and deferred adapter-provenance decisions remain unappended. Full gates and
+independent review remain the coordinator's responsibility.
 
 ### Hardening and technical audit recheck
 
 Impeccable 4.5.2's `harden.md` and `audit.md` were read in full for this recheck;
 DESIGN.md retains precedence. The isolated fixture reuses C's panel and controller.
 The scoped implementation-integrity verdict is pass: generated contracts, existing validators,
-explicit fake provenance and no production mount. The scoped source detector returned no findings.
+explicit fake provenance and no frontend production mount. The scoped source detector returned no findings.
 
 | Audit dimension | Score / 4 | Evidence / limit |
 | --- | --- | --- |
