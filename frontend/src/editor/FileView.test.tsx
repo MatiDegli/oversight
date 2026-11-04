@@ -105,7 +105,7 @@ describe("file view document with a doubled Monaco model", () => {
       expect(commands.saveFile).not.toHaveBeenCalled();
       model.setValue(normalized + "edited");
       expect(doc.state.dirty).toBe(true);
-      doc.discard();
+      await doc.discard();
       expect(doc.state).toMatchObject({ phase: "clean", dirty: false, canSave: false });
       expect(files.drafts.size).toBe(0);
       doc.dispose();
@@ -320,7 +320,7 @@ describe("file view document with a doubled Monaco model", () => {
     await doc.load();
     expect(doc.state).toMatchObject({ phase: "stale", message: staleMessage });
     expect(model.getValue()).toBe("draft");
-    doc.discard();
+    await doc.discard();
     expect(model.getValue()).toBe("moved");
     expect(doc.state.phase).toBe("clean");
     expect(files.drafts.has(target.path)).toBe(false);
@@ -339,7 +339,7 @@ describe("file view document with a doubled Monaco model", () => {
     expect(model.getValue()).toBe("typing");
     expect(files.drafts.get(target.path)).toEqual({ content: "typing", baseHash: "h0" });
     expect(doc.state.phase).toBe("stale");
-    doc.discard();
+    await doc.discard();
     expect(model.getValue()).toBe("server");
   });
 

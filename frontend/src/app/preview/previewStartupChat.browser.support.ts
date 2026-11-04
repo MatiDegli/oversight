@@ -49,7 +49,7 @@ export class StartupChatBrowser {
         host: "127.0.0.1",
         port: 0,
         strictPort: false,
-        headers: { "Content-Security-Policy": "frame-src http://127.0.0.1:19800" },
+        headers: { "Content-Security-Policy": "frame-src http://localhost:19800" },
       },
     });
     this.server = server;
@@ -138,10 +138,10 @@ export class StartupChatBrowser {
       else
         await route.fulfill({
           headers: { "Cache-Control": "no-store" },
-          json: { status, url: status?.state === "ready" ? "http://127.0.0.1:19800/" : null },
+          json: { status, url: status?.state === "ready" ? "http://localhost:19800/" : null },
         });
     });
-    await context.route("http://127.0.0.1:19800/**", (route) =>
+    await context.route("http://localhost:19800/**", (route) =>
       route.fulfill({
         contentType: "text/html",
         body: "<html><body><h1>Fixture candidate shop</h1></body></html>",

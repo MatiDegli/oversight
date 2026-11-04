@@ -171,6 +171,80 @@ print(json.dumps(dict(pid=os.getpid(), fds=fds,
     print("authenticated witnesses", witnessed, "payload descriptors", data["fds"])
 
 
+async def test_boundary_p0_proc_anchor_and_descriptor_closure(
+    roots: Inputs, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import fcntl
+
+    original = boundary._Handle.authenticate
+    witnessed = False
+
+    def observe(self: Any, raw: bytes, nonce: str) -> None:
+        nonlocal witnessed
+        original(self, raw, nonce)
+        assert set(self.processes) == {"outer", "setup", "init"}
+        outer, setup, init = (self.processes[k].pid for k in ("outer", "setup", "init"))
+        status = Path(f"/proc/{init}/status").read_text().splitlines()
+        pids = next(r.split()[1:] for r in status if r.startswith("NSpid:"))
+        assert len(pids) == 3 and pids[0] == str(init) and pids[2] == "1"
+        assert int(pids[1]) > 1
+        anchor = Path(f"/proc/{outer}/root/proc")
+        assert (anchor / "1/status").read_text().split("NSpid:")[1].splitlines()[0].split() == ["1"]
+        assert os.readlink(anchor / "1/ns/pid") == os.readlink(f"/proc/{setup}/ns/pid")
+        assert os.readlink(anchor / f"{pids[1]}/ns/pid") == f"pid:[{self.pid.inode}]"
+        fd = fcntl.ioctl(self.namespace_fds["p0"], 0xB701)
+        try:
+            assert boundary._ns(fd) == self.u0
+        finally:
+            os.close(fd)
+        anchor_dev = os.stat(anchor).st_dev
+        inner_dev = os.stat(f"/proc/{init}/root/proc").st_dev
+        host_dev = os.stat("/proc").st_dev
+        assert len({anchor_dev, inner_dev, host_dev}) == 3
+        rows = [r.split() for r in Path(f"/proc/{init}/mountinfo").read_text().splitlines()]
+        procs = [r for r in rows if r[r.index("-") + 1] == "proc"]
+        assert len(procs) == 2
+        assert {r[2] for r in procs} == {
+            f"{os.major(dev)}:{os.minor(dev)}" for dev in (anchor_dev, inner_dev)
+        }
+        assert all(r[3:5] == ["/", "/proc"] for r in procs)
+        assert all({"nosuid", "nodev", "noexec"} <= set(r[5].split(",")) for r in procs)
+        for pid in (outer, setup, init):
+            assert all(os.stat(fd).st_dev != host_dev for fd in Path(f"/proc/{pid}/fd").iterdir())
+        witnessed = True
+
+    monkeypatch.setattr(boundary._Handle, "authenticate", observe)
+    handle = await boundary.launch_boundary(config("pass"), roots)
+    await handle.wait()
+    assert handle.returncode == 0 and witnessed
+
+
+async def test_boundary_anchor_mount_failure_refuses_before_payload(
+    roots: Inputs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    modified = tmp_path / "entry.py"
+    modified.write_text(
+        "from pathlib import Path\n"
+        "namespace = {'__name__': 'trusted_entry'}\n"
+        f"exec(compile(Path({str(boundary.ENTRY)!r}).read_text(), 'entry', 'exec'), namespace)\n"
+        "original = namespace['mount']\n"
+        "def mount(source, target, kind, flags, data=''):\n"
+        "    if kind == 'proc' and target != '/proc':\n"
+        "        raise PermissionError(1, 'anchor mount denied')\n"
+        "    return original(source, target, kind, flags, data)\n"
+        "namespace['mount'] = mount\n"
+        "namespace['main']()\n"
+    )
+    monkeypatch.setattr(boundary, "ENTRY", modified)
+    marker = roots.state / "anchor-must-not-execute"
+    with pytest.raises(boundary.BoundaryUnavailable, match="anchor mount denied"):
+        await boundary.launch_boundary(
+            config("from pathlib import Path; Path('/state/anchor-must-not-execute').touch()"),
+            roots,
+        )
+    assert not marker.exists()
+
+
 async def test_boundary_exclusions_aliases_and_canary(roots: Inputs, tmp_path: Path) -> None:
     import os
 
@@ -421,7 +495,7 @@ print(pathlib.Path('/state/nested.json').read_text())
 
 
 @pytest.mark.parametrize(
-    "mode", ["stop", "deadline", "owner_eof", "outer_death", "normal", "nonzero"]
+    "mode", ["stop", "deadline", "owner_eof", "outer_death", "p0_death", "normal", "nonzero"]
 )
 async def test_boundary_stop_verified_kills_all_descendants(roots: Inputs, mode: str) -> None:
     import os
@@ -462,6 +536,8 @@ async def test_boundary_stop_verified_kills_all_descendants(roots: Inputs, mode:
             owned_handle.owner = -1
         elif mode == "outer_death":
             os.kill(handle.processes["outer"].pid, signal.SIGKILL)
+        elif mode == "p0_death":
+            os.kill(handle.processes["setup"].pid, signal.SIGKILL)
         await handle.wait()
         assert handle.verified_dead
         for fd in independent:
@@ -520,6 +596,93 @@ async def test_invalid_evidence_refuses_before_payload(
             roots,
         )
     assert not await asyncio.to_thread(marker.exists)
+
+
+@pytest.mark.parametrize(
+    "tamper,reason",
+    [
+        ("p0_owner", "incorrect namespace owner"),
+        ("pid_parent", "incorrect namespace parent"),
+        ("u1_parent", "incorrect namespace parent"),
+        ("pid_depth", "unsafe boundary process state"),
+        ("setup_pid", "unsafe boundary process state"),
+        ("anchor_missing", "missing or unsafe boundary proc mounts"),
+        ("anchor_host", "invalid boundary proc anchor"),
+        ("anchor_pid", "invalid boundary proc anchor"),
+        ("anchor_flags", "missing or unsafe boundary proc mounts"),
+    ],
+)
+async def test_invalid_anchor_evidence_refuses_before_payload(
+    roots: Inputs, monkeypatch: pytest.MonkeyPatch, tamper: str, reason: str
+) -> None:
+    import fcntl
+
+    original = boundary._Handle.authenticate
+    ioctl, read_text, readlink, stat = fcntl.ioctl, Path.read_text, os.readlink, os.stat
+    marker = roots.state / "anchor-evidence-must-not-execute"
+
+    def forged(self: Any, raw: bytes, nonce: str) -> None:
+        outer = self.transport.get_pid()
+        setup = boundary._child(outer)
+        init = boundary._child(setup)
+        anchor = Path(f"/proc/{outer}/root/proc")
+
+        def wrong_ioctl(fd: int, request: int) -> int:
+            key, operation, replacement = {
+                "p0_owner": ("p0", 0xB701, "u1"),
+                "pid_parent": ("pid", 0xB702, "pid"),
+                "u1_parent": ("u1", 0xB702, "u1"),
+            }.get(tamper, ("", 0, ""))
+            if request == operation and fd == self.namespace_fds.get(key):
+                return os.dup(self.namespace_fds[replacement])
+            return ioctl(fd, request)
+
+        def wrong_text(path: Path, *args: Any, **kwargs: Any) -> str:
+            text = read_text(path, *args, **kwargs)
+            if (tamper == "pid_depth" and path == Path(f"/proc/{init}/status")) or (
+                tamper == "setup_pid" and path == Path(f"/proc/{setup}/status")
+            ):
+                text = "\n".join(
+                    "NSpid:\t" + (f"{init}\t1" if tamper == "pid_depth" else f"{setup}\t2")
+                    if row.startswith("NSpid:")
+                    else row
+                    for row in text.splitlines()
+                )
+            if path == Path(f"/proc/{init}/mountinfo"):
+                rows = text.splitlines()
+                if tamper == "anchor_missing":
+                    rows.remove(next(r for r in rows if " - proc " in r))
+                elif tamper == "anchor_flags":
+                    rows = [r.replace("nosuid,nodev,noexec", "nodev,noexec") for r in rows]
+                text = "\n".join(rows)
+            return text
+
+        def wrong_link(path: Any, *args: Any, **kwargs: Any) -> str:
+            if tamper == "anchor_pid" and Path(path) == anchor / "1/ns/pid":
+                return readlink("/proc/self/ns/pid")
+            return readlink(path, *args, **kwargs)
+
+        def wrong_stat(path: Any, *args: Any, **kwargs: Any) -> Any:
+            if tamper == "anchor_host" and Path(path) == anchor:
+                return stat("/proc")
+            return stat(path, *args, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(fcntl, "ioctl", wrong_ioctl)
+            patch.setattr(Path, "read_text", wrong_text)
+            patch.setattr(os, "readlink", wrong_link)
+            patch.setattr(os, "stat", wrong_stat)
+            original(self, raw, nonce)
+
+    monkeypatch.setattr(boundary._Handle, "authenticate", forged)
+    with pytest.raises(boundary.BoundaryUnavailable, match=reason):
+        await boundary.launch_boundary(
+            config(
+                "from pathlib import Path; Path('/state/anchor-evidence-must-not-execute').touch()"
+            ),
+            roots,
+        )
+    assert not marker.exists()
 
 
 @pytest.mark.parametrize("mode", ["failure", "timeout", "cancel", "cancel_spawn"])

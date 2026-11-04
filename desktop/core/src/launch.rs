@@ -12,9 +12,9 @@ use crate::{HOST, PORT};
 pub struct Launch {
     pub cwd: PathBuf,
     pub program: PathBuf,
-    pub args: [OsString; 3],
+    pub args: Vec<OsString>,
     pub env: BTreeMap<&'static str, String>,
-    pub remove_env: [&'static str; 7],
+    pub remove_env: [&'static str; 9],
 }
 
 impl Launch {
@@ -29,6 +29,17 @@ impl Launch {
             ));
         }
         validate_root(root)?;
+        Ok(Self::for_program(
+            root,
+            // Push each component so Windows inserts native separators; a
+            // slash-delimited suffix would retain mixed separators verbatim.
+            root.join(".venv").join("Scripts").join("python.exe"),
+            smoke,
+            source,
+        ))
+    }
+
+    pub(crate) fn for_program(root: &Path, program: PathBuf, smoke: bool, source: &str) -> Self {
         let mut env = BTreeMap::from([
             ("OVERSIGHT_HOST", HOST.to_owned()),
             ("OVERSIGHT_PORT", PORT.to_string()),
@@ -54,12 +65,12 @@ impl Launch {
                 ),
             ]);
         }
-        Ok(Self {
+        Self {
             // Validation already excludes traversal and links. Canonicalizing on
             // Windows would replace these native drive paths with device paths.
             cwd: root.to_path_buf(),
-            program: root.join(".venv").join("Scripts").join("python.exe"),
-            args: ["-m".into(), "oversight".into(), "serve".into()],
+            program,
+            args: vec!["-m".into(), "oversight".into(), "serve".into()],
             env,
             remove_env: [
                 "GIT_DIR",
@@ -69,8 +80,10 @@ impl Launch {
                 "GIT_COMMON_DIR",
                 "GIT_PREFIX",
                 "PYTHONPATH",
+                "OVERSIGHT_APP_ROOT",
+                "OVERSIGHT_ENV_FILE",
             ],
-        })
+        }
     }
 }
 
@@ -105,11 +118,11 @@ fn reserved_name(part: &str) -> bool {
         })
 }
 
-fn invalid(message: &'static str) -> io::Error {
+pub(crate) fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)
 }
 
-fn plain(path: &Path) -> io::Result<fs::Metadata> {
+pub(crate) fn plain(path: &Path) -> io::Result<fs::Metadata> {
     let metadata = fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() || is_reparse(&metadata) {
         return Err(invalid("clone prerequisites must not traverse links"));
@@ -128,7 +141,7 @@ fn is_reparse(_: &fs::Metadata) -> bool {
     false
 }
 
-pub fn validate_root(root: &Path) -> io::Result<()> {
+pub(crate) fn validate_directory(root: &Path) -> io::Result<()> {
     if !root.is_absolute() || root.components().any(|part| part == Component::ParentDir) {
         return Err(invalid("provide an absolute native clone root"));
     }
@@ -148,6 +161,11 @@ pub fn validate_root(root: &Path) -> io::Result<()> {
             return Err(invalid("clone root must be a directory"));
         }
     }
+    Ok(())
+}
+
+pub fn validate_root(root: &Path) -> io::Result<()> {
+    validate_directory(root)?;
     // Require a clone, not a product worktree. A synced environment is prepared
     // by uv, never by this library. Existence cannot prove its frozen contents.
     for relative in [

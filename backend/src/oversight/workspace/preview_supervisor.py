@@ -8,6 +8,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import secrets
 import socket
 import sys
@@ -256,7 +257,7 @@ async def supervise(runtime: Path, control: int, output: int, listener: int) -> 
             os.close(output)
 
 
-def launcher_diagnostic(collector: ProcessCollector) -> str:
+def launcher_diagnostic(collector: ProcessCollector, error: Exception | None = None) -> str:
     """Bounded allowlisted diagnostic facts, never arbitrary stdout/stderr fragments."""
     text = collector.stderr.text()
     for signature in (
@@ -268,7 +269,75 @@ def launcher_diagnostic(collector: ProcessCollector) -> str:
     ):
         if signature in text:
             return signature
+    if error is not None:
+        # Exception messages may contain host paths, environment values or child output.
+        # Only fixed facts cross the private report channel, just as for launcher stderr.
+        prefix = ""
+        if str(error).startswith("boundary entry refused:") and isinstance(
+            error.__cause__, Exception
+        ):
+            prefix, error = "boundary entry refused: ", error.__cause__
+        if isinstance(error, TimeoutError):
+            return prefix + "launch deadline expired"
+        if isinstance(error, OSError) and type(error.errno) is int and 0 < error.errno < 4096:
+            return prefix + f"launch OS error (errno {error.errno})"
+        for signature in (
+            "reviewed build failed",
+            "reviewed readiness expired",
+            "private backend is unavailable",
+            "boundary entry refused",
+            "boundary exit is unknown",
+            "boundary did not enter",
+            "namespace evidence mismatch",
+            "incorrect namespace parent",
+            "incorrect namespace owner",
+            "invalid boundary topology",
+            "stale nested health",
+            "empty nested index",
+            "missing nested resource",
+            "stale nested API",
+            "stale nested SSE",
+            "readiness resource unavailable",
+            "complete readiness resources required",
+            "service died during readiness",
+        ):
+            if str(error) == signature or str(error).startswith(signature + ":"):
+                return prefix + signature
+        return prefix + "launch exception"
     return "launcher exited" if text else ""
+
+
+def preview_output_tail(text: str, secrets: tuple[str, ...]) -> str:
+    """Reuse build-log redaction; withhold path/assignment lines before taking the tail."""
+    # Deliberately share the existing sanitizer without changing its public storage API.
+    from oversight.workspace.preview_build_log import (
+        _inert,  # pyright: ignore[reportPrivateUsage]
+        _redact,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    values = tuple(sorted({s for s in secrets if s}, key=len, reverse=True))
+    text = _inert(_redact(text, values))
+    values = tuple(sorted(set(values) | {_inert(s) for s in values} - {""}, key=len, reverse=True))
+    text = _redact(text, values)
+    lines: list[str] = []
+    for line in text.splitlines():
+        # Whole lines also cover quoted paths and values containing spaces.
+        if "/" in line or "\\" in line:
+            line = "[path-bearing output omitted]"
+        elif re.search(r"\b\w+=", line):
+            line = "[environment assignment omitted]"
+        lines.append(line)
+    tail = "\n".join(lines).encode("utf-8")[-768:].decode("utf-8", errors="ignore")
+    # Two streams plus metadata must fit the private channel's 4096-byte JSON line.
+    kept: list[str] = []
+    size = 0
+    for char in reversed(tail):
+        width = len(json.dumps(char)) - 2
+        if size + width > 1024:
+            break
+        kept.append(char)
+        size += width
+    return _redact("".join(reversed(kept)), values) or "[empty]"
 
 
 async def watch(

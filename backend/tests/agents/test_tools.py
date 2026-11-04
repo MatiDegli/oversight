@@ -23,7 +23,7 @@ Opened = tuple[Workspace, Tree]
 
 async def toolbox(opened: Opened) -> Toolbox:
     workspace, tree = opened
-    tools = Toolbox(workspace, tree, test_timeout_s=60)
+    tools = Toolbox(workspace, tree, test_timeout_s=60, harness_pack=False)
     await tools.refresh_graph()
     return tools
 
@@ -224,7 +224,7 @@ async def test_a_cancelled_scan_keeps_the_lock_until_its_thread_ends(
     small_tree: Opened, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     workspace, tree = small_tree
-    tools = Toolbox(workspace, tree, test_timeout_s=60)
+    tools = Toolbox(workspace, tree, test_timeout_s=60, harness_pack=False)
     entered, release, ended = threading.Event(), threading.Event(), threading.Event()
     real_scan = WorkspaceGraph.scan
 

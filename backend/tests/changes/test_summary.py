@@ -224,7 +224,7 @@ async def test_fake_model_known_usage_reaches_summary(tmp_path: Path, monkeypatc
     for turn in turns:
         turn["usage"] = {"input_tokens": 1000, "output_tokens": 100, "cached_tokens": 0}
     scripts = Scripts([script_json("Reorder multiplication.", turns)])
-    async with live_server(live_settings(tmp_path), scripts) as server:
+    async with live_server(live_settings(tmp_path, harness_pack=False), scripts) as server:
         response = await server.client.post("/agents", json={"task": "Reorder multiplication."})
         assert response.status_code == 201
         await server.until(is_type("agent.status", state="ready_for_review"))

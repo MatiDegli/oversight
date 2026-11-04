@@ -8,6 +8,9 @@ from oversight.changes import ShortcutKind, detect_shortcuts
 from oversight.changes._shortcuts_common import Source
 from oversight.changes._shortcuts_helpers import _imported_calls, _imported_target, _module_index
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 OLD = "def check():\n    assert f() == 3\ndef test_f():\n    check()\n"
 
 
@@ -25,7 +28,10 @@ def test_defined_helper_does_not_make_unrelated_import_unknown(
         f"{statement}\ndef {name}():\n    assert f() == 3\n"
         f"def test_f():\n    {name}()\n    {call}\n"
     )
-    result = detect_shortcuts([("tests/test_calc.py", old, old + "def test_g():\n    pass\n")])
+    result = detect_shortcuts(
+        [("tests/test_calc.py", old, old + "def test_g():\n    pass\n")],
+        timeout=DETECTION_TIMEOUT_S,
+    )
     assert result.status == "no_facts" and not result
 
 
@@ -36,7 +42,8 @@ def test_package_without_the_function_is_not_an_import_candidate(init: str) -> N
             ("tests/test_calc.py", OLD, "from .helpers import check\ndef test_f():\n    check()\n"),
             ("tests/helpers.py", None, "def check():\n    assert f() == 3\n"),
             ("tests/__init__.py", "", init),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert result.status == "no_facts" and not result
 
@@ -59,7 +66,10 @@ def test_visible_reexport_is_unknown_instead_of_call_removed() -> None:
 )
 def test_validation_alone_is_not_an_asserting_helper(validation: str, new: str) -> None:
     old = f"def event():\n    Event.{validation}(RAW)\ndef test_f():\n    event()\n"
-    result = detect_shortcuts([("tests/test_calc.py", old, new.replace("VALIDATE", validation))])
+    result = detect_shortcuts(
+        [("tests/test_calc.py", old, new.replace("VALIDATE", validation))],
+        timeout=DETECTION_TIMEOUT_S,
+    )
     assert result.status == "no_facts" and not result
 
 
@@ -68,7 +78,8 @@ def test_validation_does_not_replace_an_unrelated_asserting_helper() -> None:
         [
             ("tests/test_calc.py", OLD, "from helpers import check\ndef test_f():\n    check()\n"),
             ("tests/helpers.py", None, "def check():\n    Event.model_validate(RAW)\n"),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert result.status == "findings"
     assert {f.kind for f in result} == {ShortcutKind.ASSERTION_LOOSENED}
@@ -125,7 +136,8 @@ def test_module_index_is_built_once_per_analysis(monkeypatch: pytest.MonkeyPatch
                 "def test_g():\n    check()\n",
             ),
             ("tests/helpers.py", None, "def check():\n    assert f() == 3\n"),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert builds == 1
     assert result.status == "no_facts"

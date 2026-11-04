@@ -39,7 +39,7 @@ function loopback(value: string): URL {
   const url = new URL(value);
   if (
     url.protocol !== "http:" ||
-    url.hostname !== "127.0.0.1" ||
+    (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") ||
     !url.port ||
     url.pathname !== "/" ||
     url.search ||
@@ -105,8 +105,11 @@ class LivePreviewPort {
   }
   async details(id: string, signal: AbortSignal): Promise<PreviewDetails> {
     const result = this.validators.details(await this.call(path(id), signal));
-    if (result.url !== null && loopback(result.url).port === this.origin.port)
-      throw new Error("Preview shares backend port");
+    if (result.url !== null) {
+      const url = loopback(result.url);
+      if (url.port === this.origin.port) throw new Error("Preview shares backend port");
+      if (url.hostname === this.origin.hostname) throw new Error("Preview shares backend hostname");
+    }
     return result;
   }
   async renew(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus> {
