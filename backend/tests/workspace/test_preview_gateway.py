@@ -328,9 +328,9 @@ async def test_gateway_fresh_readiness_and_nonce_authorization(tmp_path):
         evidence = await probe(gateway)
         nonce = gateway.authorize_ready(evidence, expected_run=RUN)
         assert len(nonce) == 64
-        assert json.loads((await request(port, authority, "/_oversight_ready"))[2]) == {
-            "nonce": nonce
-        }
+        _, headers, body = await request(port, authority, "/_oversight_ready")
+        assert headers["Content-Type"] == "application/json"
+        assert json.loads(body) == {"nonce": nonce}
         backend.alive = False
         assert not gateway.alive()
         with pytest.raises(ValueError):

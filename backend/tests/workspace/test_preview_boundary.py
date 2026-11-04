@@ -776,3 +776,50 @@ async def test_boundary_interface_is_frozen_and_structural(roots: Inputs) -> Non
     handle: boundary.BoundaryHandle = await boundary.launch_boundary(settings, roots)
     await handle.wait()
     assert handle.verified_dead
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "/opt/deps/../escape",
+        "/opt/deps/./python",
+        "/opt/deps//python",
+        "/opt/deps/",
+        "opt/deps/python",
+        "/opt/dependency/python",
+        "/T/deps",
+    ],
+)
+def test_dependency_mount_refuses_invalid_target(roots: Inputs, target: str) -> None:
+    mounts = tuple(
+        dataclasses.replace(m, target=target) if m.role == "dependencies" else m
+        for m in roots.readonly
+    )
+    with pytest.raises(boundary.BoundaryUnavailable, match="unapproved tool manifest"):
+        boundary._validate(config("pass"), dataclasses.replace(roots, readonly=mounts))
+
+
+@pytest.mark.parametrize("target", ["/opt/deps", "/opt/deps/nested"])
+def test_dependency_mount_refuses_duplicate_or_nested_target(roots: Inputs, target: str) -> None:
+    dependency = next(m for m in roots.readonly if m.role == "dependencies")
+    mounts = (*roots.readonly, dataclasses.replace(dependency, target=target))
+    with pytest.raises(boundary.BoundaryUnavailable, match=r"duplicate|incomplete"):
+        boundary._validate(config("pass"), dataclasses.replace(roots, readonly=mounts))
+
+
+@pytest.mark.parametrize("cap", [-1, True, 1.5, "1024", None])
+def test_boundary_refuses_invalid_output_cap(roots: Inputs, cap: Any) -> None:
+    with pytest.raises(boundary.BoundaryUnavailable, match="invalid boundary limits"):
+        boundary._validate(config("pass", output_cap=cap), roots)
+
+
+def test_boundary_accepts_separate_dependencies_and_raised_output_budget(roots: Inputs) -> None:
+    dependency = next(m for m in roots.readonly if m.role == "dependencies")
+    mounts = (
+        *(m for m in roots.readonly if m is not dependency),
+        dataclasses.replace(dependency, target="/opt/deps/python"),
+        dataclasses.replace(dependency, target="/opt/deps/node"),
+    )
+    boundary._validate(
+        config("pass", output_cap=2 * 1024**2), dataclasses.replace(roots, readonly=mounts)
+    )

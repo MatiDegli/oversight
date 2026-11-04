@@ -120,8 +120,8 @@ async def test_cross_agent_git_waits_through_death_restoration_and_cancellation(
     await h.close()
 
 
-@pytest.mark.parametrize("operation", ["git", "lease", "startup", "edit", "remove"])
-async def test_failed_drain_blocks_all_git_and_non_git_effects(workspace, operation):
+@pytest.mark.parametrize("operation", ["git", "lease", "startup", "edit", "remove", "shutdown"])
+async def test_reviewed_failed_drain_blocks_mutation(workspace, operation):
     h = await harness(workspace)
     other = await workspace.create_worktree("agent-2")
     created = await h.start()
@@ -137,6 +137,8 @@ async def test_failed_drain_blocks_all_git_and_non_git_effects(workspace, operat
             await workspace.startup_git(["git", "status"], cwd=other.root, timeout_s=2)
         elif operation == "edit":
             await other.write_text("shop/mod.py", "changed", expected_hash=None)
+        elif operation == "shutdown":
+            await h.manager.drain("shutdown")
         else:
             await workspace.discard_worktree("agent-2", delete_branch=True)
     assert (other.root / "shop/mod.py").read_text() == before
