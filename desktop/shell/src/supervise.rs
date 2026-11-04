@@ -5,7 +5,7 @@ use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use oversight_desktop_core::health;
-use oversight_desktop_core::lifecycle::{Readiness, Startup};
+use oversight_desktop_core::lifecycle::{Failure, Readiness, Startup};
 
 use crate::{child::Child, listener};
 
@@ -40,7 +40,12 @@ pub fn ready(child: &Child, stop: &AtomicBool) -> io::Result<()> {
                 return Ok(());
             }
             Readiness::Failed(reason) => {
-                return Err(io::Error::other(format!("backend startup: {reason:?}")));
+                let kind = match reason {
+                    Failure::ChildExited => io::ErrorKind::BrokenPipe,
+                    Failure::ForeignListener => io::ErrorKind::AddrInUse,
+                    Failure::Deadline => io::ErrorKind::TimedOut,
+                };
+                return Err(io::Error::new(kind, "backend startup failed"));
             }
             Readiness::Waiting => sleep(Duration::from_millis(100)),
         }

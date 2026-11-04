@@ -175,3 +175,29 @@ def test_installer_notices_ship_colorama_license_and_text(tmp_path, monkeypatch)
     text = (app / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
     assert "### demo-python: colorama 0.4.6 — BSD-3-Clause" in text
     assert (HERE / "licenses/colorama-0.4.6.txt").read_text(encoding="utf-8") in text
+
+
+def test_installed_smoke_prints_diagnostics_before_unchanged_failure_gates():
+    script = (HERE / "installed-smoke.ps1").read_text()
+    assert "'.runtime\\desktop-session.log'" in script
+    assert "Get-Content -LiteralPath $log -Tail 32" in script
+    assert "if (!$started.WaitForExit(140000))" in script
+    assert "$started.Kill()" in script
+    assert (
+        "Write-SmokeDiagnostic\n            throw 'Installed smoke exceeded health/close deadline'"
+        in script
+    )
+    assert (
+        'Write-SmokeDiagnostic\n            throw "Smoke $attempt failed: $($started.ExitCode)"'
+        in script
+    )
+    for gate in (
+        "foreach ($attempt in 1..2)",
+        "if ($survivors.Count -ne 0)",
+        "if ($listeners.Count -ne 0)",
+        "if (!(Test-Path (Join-Path $data '.env')))",
+        "if (!$uninstalled.WaitForExit(60000) -or $uninstalled.ExitCode -ne 0)",
+        "if (Test-Path $exe) { throw 'Installed executable survived uninstall' }",
+        "if (!(Test-Path $marker) -or !(Test-Path (Join-Path $data '.env')))",
+    ):
+        assert gate in script

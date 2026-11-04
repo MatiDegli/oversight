@@ -1,6 +1,16 @@
 $ErrorActionPreference = 'Stop'
 $install = Join-Path $env:LOCALAPPDATA 'Programs\Oversight'
 $data = Join-Path $env:LOCALAPPDATA 'Oversight'
+function Write-SmokeDiagnostic {
+    $log = Join-Path $data '.runtime\desktop-session.log'
+    if (Test-Path -LiteralPath $log -PathType Leaf) {
+        Write-Output 'Installed session diagnostic (sanitized, last 32 lines):'
+        try { Get-Content -LiteralPath $log -Tail 32 -ErrorAction Stop }
+        catch { Write-Output 'Installed session diagnostic could not be read.' }
+    } else {
+        Write-Output 'Installed session diagnostic unavailable: failed before log creation.'
+    }
+}
 $installer = @(Get-ChildItem desktop/target/release/bundle/nsis/*-setup.exe)
 if ($installer.Count -ne 1) { throw 'Expected exactly one NSIS installer' }
 $templates = @(Get-ChildItem desktop/target -Recurse -Filter installer.nsi)
@@ -26,10 +36,14 @@ try {
         if (!$started.WaitForExit(140000)) {
             $started.Kill()
             $started.WaitForExit(10000) | Out-Null
+            Write-SmokeDiagnostic
             throw 'Installed smoke exceeded health/close deadline'
         }
         $started.Refresh()
-        if ($started.ExitCode -ne 0) { throw "Smoke $attempt failed: $($started.ExitCode)" }
+        if ($started.ExitCode -ne 0) {
+            Write-SmokeDiagnostic
+            throw "Smoke $attempt failed: $($started.ExitCode)"
+        }
         # Snapshot by executable ownership, not process names; the Job must drain descendants.
         $survivors = @(Get-CimInstance Win32_Process | Where-Object {
             $_.ExecutablePath -and $_.ExecutablePath.StartsWith($install, [System.StringComparison]::OrdinalIgnoreCase)

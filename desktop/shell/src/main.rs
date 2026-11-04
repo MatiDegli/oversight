@@ -3,9 +3,13 @@ mod child;
 #[cfg(windows)]
 mod console;
 #[cfg(windows)]
+mod diagnostics;
+#[cfg(windows)]
 mod listener;
 #[cfg(windows)]
 mod native;
+#[cfg(windows)]
+mod output;
 #[cfg(windows)]
 mod supervise;
 
@@ -17,8 +21,7 @@ fn main() {
 
 #[cfg(windows)]
 fn main() {
-    if let Err(error) = native::run() {
-        eprintln!("Oversight desktop: {error}");
+    if native::run().is_err() {
         std::process::exit(1);
     }
 }

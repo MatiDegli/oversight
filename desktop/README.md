@@ -29,7 +29,8 @@ survive upgrades and uninstall.
 ## Ownership and shutdown
 
 Single-instance registration precedes backend creation. Later launches focus the existing
-window. Python starts suspended with no inherited handles, is assigned to a noninherited
+window. Python starts suspended with only an allowlisted output pipe and NUL input inherited,
+is assigned to a noninherited
 kill-on-close Job, and resumes only after successful assignment. Both IPv4 and IPv6 listeners
 on 8710 are checked before launch. Ownership is checked again after spawn and after health.
 One 120-second monotonic deadline covers readiness. The backend's own lifetime Job nests
@@ -47,6 +48,14 @@ scripts, blank provider keys, two agent slots and cross-review off through child
 then it waits for live health and exits 0 only after verified graceful cleanup. The runner
 installs silently, performs this twice with Python/uv/Node removed from PATH, checks for owned
 survivors and a listener on 8710, uninstalls, and checks retained configuration/state.
+
+Failed launches show an error dialog outside smoke. The current session diagnostic is
+`%LOCALAPPDATA%\Oversight\.runtime\desktop-session.log`; it is replaced on each admitted
+launch and contains only the startup phase, error kind/system code, backend exit code and a
+bounded sanitized traceback tail. The tail retains known exception classes and known backend
+module/line identifiers only, never exception messages, source lines, environment values or
+host paths. Smoke prints this same log before reporting a failed exit or deadline. If the
+data directory cannot be validated or written, the dialog reports that no log could be saved.
 
 ## Build and check
 

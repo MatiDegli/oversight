@@ -1,12 +1,14 @@
-//! Only owned handles and a console group; no shell, inherited handles or breakaway.
+//! Only owned handles and a console group; no shell or breakaway.
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::mem::{size_of, zeroed};
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use std::ptr::{null, null_mut};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use oversight_desktop_core::diagnostics::OutputTail;
 use oversight_desktop_core::launch::Launch;
 use oversight_desktop_core::lifecycle::{Cleanup, CleanupAction};
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
@@ -84,10 +86,11 @@ pub struct Child {
     pub process: Handle,
     pub job: Handle,
     pub pid: u32,
+    output: std::thread::JoinHandle<()>,
 }
 
 impl Child {
-    pub fn spawn(launch: &Launch) -> io::Result<Self> {
+    pub fn spawn(launch: &Launch, tail: Arc<Mutex<OutputTail>>) -> io::Result<Self> {
         unsafe {
             let job = Handle(CreateJobObjectW(null(), null()));
             if job.0.is_null() {
@@ -111,19 +114,21 @@ impl Child {
             }
             command.push(0);
             let env = environment(launch);
-            let mut startup: STARTUPINFOW = zeroed();
-            startup.cb = size_of::<STARTUPINFOW>() as u32;
+            let mut redirect = crate::output::Redirect::new(tail)?;
             let mut info: PROCESS_INFORMATION = zeroed();
             if CreateProcessW(
                 wide(launch.program.as_os_str()).as_ptr(),
                 command.as_mut_ptr(),
                 null(),
                 null(),
-                0,
-                CREATE_SUSPENDED | CREATE_NEW_PROCESS_GROUP | CREATE_UNICODE_ENVIRONMENT,
+                1,
+                CREATE_SUSPENDED
+                    | CREATE_NEW_PROCESS_GROUP
+                    | CREATE_UNICODE_ENVIRONMENT
+                    | EXTENDED_STARTUPINFO_PRESENT,
                 env.as_ptr() as _,
                 wide(launch.cwd.as_os_str()).as_ptr(),
-                &startup,
+                &redirect.startup.StartupInfo,
                 &mut info,
             ) == 0
             {
@@ -145,12 +150,30 @@ impl Child {
                 process,
                 job,
                 pid: info.dwProcessId,
+                output: redirect.reader.take().unwrap(),
             })
         }
     }
 
     pub fn alive(&self) -> bool {
         unsafe { WaitForSingleObject(self.process.0, 0) == WAIT_TIMEOUT }
+    }
+
+    pub fn exit_code(&self) -> Option<u32> {
+        let mut code = 0;
+        if self.alive() || unsafe { GetExitCodeProcess(self.process.0, &mut code) } == 0 {
+            None
+        } else {
+            Some(code)
+        }
+    }
+
+    pub fn drain_output(&self) {
+        // Cleanup has reaped the child. Bound the final pipe drain even if a writer misbehaves.
+        let deadline = Instant::now() + Duration::from_millis(250);
+        while !self.output.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
     }
 
     fn active(&self) -> io::Result<bool> {
