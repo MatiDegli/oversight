@@ -543,11 +543,39 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         await asyncio.gather(task, return_exceptions=True)
 
 
+@pytest.mark.parametrize("prefix", ["/", "/usr", "/usr/local"])
+@pytest.mark.parametrize("alias", [False, True])
+def test_real_prepared_inputs_skip_system_prefix_before_copy(tmp_path, monkeypatch, prefix, alias):
+    import shutil
+    import sys
+
+    root = Path(prefix)
+    if alias:
+        root = tmp_path / "python-alias"
+        root.symlink_to(prefix, target_is_directory=True)
+    monkeypatch.setattr(sys, "executable", str(root / "fixture-bin/python"))
+
+    def refuse_copy(*args, **kwargs):
+        pytest.fail("system prefix guard must run before any copy")
+
+    monkeypatch.setattr(shutil, "copy2", refuse_copy)
+    monkeypatch.setattr(shutil, "copytree", refuse_copy)
+    directory = tmp_path / "unprepared"
+    with pytest.raises(pytest.skip.Exception, match="self-contained Python install"):
+        real_prepared_inputs(directory, ["pyproject.toml"])
+    assert not directory.exists()
+
+
 def real_prepared_inputs(directory, tracked):
     """External static fixture preparer: record private tool/dependency copies before reuse."""
     import hashlib
     import shutil
     import sys
+
+    python_prefix = Path(sys.executable).resolve().parents[1]
+    # The boundary fixture copies a private install, never a shared system directory.
+    if python_prefix in {Path("/"), Path("/usr"), Path("/usr/local")}:
+        pytest.skip("real boundary tests require a self-contained Python install (uv-managed)")
 
     from oversight.workspace.preview_boundary_entry import SYSTEM_DIRECTORIES, SYSTEM_FILES
     from oversight.workspace.preview_preparation import ProjectImport, RootMapping, ToolIdentity
@@ -571,7 +599,7 @@ def real_prepared_inputs(directory, tracked):
         inventories.append(replace(record(source, name, owned=True), role=role))
 
     python = storage / "python"
-    shutil.copytree(Path(sys.executable).resolve().parents[1], python, symlinks=True)
+    shutil.copytree(python_prefix, python, symlinks=True)
     for path in python.rglob("*"):
         if path.is_file() and not path.is_symlink() and path.name not in {"python3.12", "python"}:
             path.chmod(path.stat().st_mode & ~0o111)
