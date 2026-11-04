@@ -26,8 +26,6 @@ const sameCandidate = (status: PreviewStatus, candidate: PreviewCandidate) =>
   status.revision === candidate.revision &&
   status.head_commit === candidate.head_commit;
 const rank = { starting: 0, ready: 1, stopping: 2, stopped: 3, failed: 3 };
-const candidateKey = (candidate: PreviewCandidate) =>
-  JSON.stringify([candidate.run_id, candidate.agent_id, candidate.revision, candidate.head_commit]);
 
 /** Injected controller. Browser storage is optional and stays behind a private port. */
 export function createPreviewController(
@@ -48,7 +46,6 @@ class Controller implements PreviewController {
   #recoveryChecked = false;
   #recovered = false;
   #resume = false;
-  #observedCandidates = new Set<string>();
   #token: string | null = null;
   #id: string | null = null;
   #candidate: PreviewCandidate | null = null;
@@ -147,8 +144,6 @@ class Controller implements PreviewController {
     this.#saved = null;
   }
   #discardRecovery(status?: PreviewStatus) {
-    const candidate = this.#saved?.candidate ?? this.#candidate;
-    if (candidate) this.#observedCandidates.add(candidateKey(candidate));
     this.#clearSaved();
     this.#cancelRenewal();
     this.#token = null;
@@ -216,10 +211,7 @@ class Controller implements PreviewController {
       await this.#renew();
       if (this.#current(epoch)) {
         if (!sameOwnershipCandidate(record.candidate, getCandidate())) this.#discardRecovery();
-        else {
-          if (this.#token) this.#observedCandidates.delete(candidateKey(record.candidate));
-          this.#publish({});
-        }
+        else this.#publish({});
       }
     } catch {
       if (this.#current(epoch)) this.#discardRecovery(this.#view.status ?? undefined);
@@ -271,11 +263,6 @@ class Controller implements PreviewController {
     if (this.#token) {
       if (this.#matches(status)) this.#accept(status);
     } else if (!this.#flight && status.run_id === this.#identity.run) {
-      const previous = this.#view.status;
-      // A late duplicate after this owner's verified release is still that release.
-      // First terminal arrivals and failed recovery already retain observer refusal.
-      if (previous?.preview_id !== status.preview_id || !confirmed(previous))
-        this.#observedCandidates.add(candidateKey(status));
       // After the start deadline, the run's single slot can also prove that a
       // different preview holds it, or that the run's preview has ended.
       if (
@@ -416,10 +403,6 @@ class Controller implements PreviewController {
       !candidate.head_commit.trim()
     ) {
       this.#publish({ pending: false });
-      return;
-    }
-    if (this.#observedCandidates.has(candidateKey(candidate))) {
-      this.#publish({ pending: false, visible: true, frameUrl: null });
       return;
     }
     const observed = {
@@ -595,7 +578,6 @@ class Controller implements PreviewController {
     this.#recoveryChecked = false;
     await this.close();
     if (!this.#token && runChanged) {
-      this.#observedCandidates.clear();
       this.#startDeadlineOff?.();
       this.#quarantined = false;
       this.#candidate = null;

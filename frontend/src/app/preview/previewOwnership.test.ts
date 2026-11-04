@@ -282,6 +282,30 @@ it("clears a delivered unload on the next load without renewal or another start"
   expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
   expect(stop).toHaveBeenCalledTimes(1);
 });
+it.each(["close", "unload"])(
+  "a reload replaying verified %s permits a new ID only after explicit activation",
+  async (action) => {
+    const { controller, fake, clock, store } = setup();
+    const first = controller();
+    await first.see(() => candidate);
+    if (action === "close") await first.close();
+    first.dispose();
+    const next = controller();
+    next.observe(fakeStatus("stopped", "closed"));
+    await next.recover(() => candidate);
+    next.observe(fakeStatus("stopped", "closed"));
+    clock.advance(30_000);
+    expect(store.load(identity)).toBeNull();
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+    expect(fake.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
+    expect(next.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+    await next.see(() => candidate);
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+    expect(next.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+    expect(next.snapshot().status?.preview_id).not.toBe(record.preview_id);
+    next.dispose();
+  },
+);
 it("does not renew stale ready details after a terminal arrival during recovery", async () => {
   const { controller, port, fake, store } = setup();
   const first = controller();
@@ -340,46 +364,55 @@ it("keeps independent-store observers read-only across dismissal, arrivals, reco
   await owner.close();
   expect(store.load(identity)).toBeNull();
 });
-it.each(["closed", "lease_expired", "launch_failed"] as const)(
-  "an observer cannot reopen the same candidate after public %s, but a new candidate remains eligible",
+it.each(["closed", "lease_expired", "lifetime_expired", "launch_failed"] as const)(
+  "an observer can explicitly start a new preview for the same candidate after public %s",
   async (reason) => {
     const { controller, port, fake, clock } = setup();
     const owner = controller();
     await owner.see(() => candidate);
-    fake.expire();
     const observer = createPreviewController(
       port,
       clock,
       identity,
       createPreviewOwnershipStore(origin, () => storage()),
     );
+    observer.observe(fakeStatus("ready"));
+    await observer.see(() => candidate);
+    expect(observer.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+    fake.expire();
     observer.observe(fakeStatus(reason === "launch_failed" ? "failed" : "stopped", reason));
     await observer.close();
+    await observer.recover(() => candidate);
+    clock.advance(30_000);
     const starts = fake.calls.filter((call) => call.kind === "start").length;
+    expect(starts).toBe(1);
+    expect(fake.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
     await observer.see(() => candidate);
-    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(starts);
-    expect(observer.snapshot()).toMatchObject({ owned: false, frameUrl: null });
-    await observer.see(() => ({ ...candidate, revision: 2, head_commit: "new-head" }));
-    expect(observer.snapshot()).toMatchObject({ owned: true, status: { revision: 2 } });
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(starts + 1);
+    expect(observer.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+    expect(observer.snapshot().status?.preview_id).not.toBe(record.preview_id);
     observer.dispose();
   },
 );
-it("terminal recovery cannot be revived by activation or repeated public ready arrivals", async () => {
+it("terminal recovery and stale ready arrivals start nothing until explicit activation", async () => {
   const { controller, port, fake, clock } = setup();
   await controller().see(() => candidate);
   fake.expire();
   const recovered = controller();
   await recovered.recover(() => candidate);
   recovered.observe(fakeStatus("ready"));
-  await recovered.see(() => candidate);
   await recovered.close();
   clock.advance(10_000);
   expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
   expect(fake.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
   expect(recovered.snapshot()).toMatchObject({ owned: false, frameUrl: null });
   const stop = vi.spyOn(port, "stop");
-  recovered.dispose();
   expect(stop).not.toHaveBeenCalled();
+  await recovered.see(() => candidate);
+  expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+  expect(recovered.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+  expect(recovered.snapshot().status?.preview_id).not.toBe(record.preview_id);
+  recovered.dispose();
 });
 
 it("a recovered mounted owner retains normal verified-Close and explicit new-start behavior", async () => {
@@ -424,7 +457,7 @@ it("hidden recovered ownership cannot obtain frame details through a direct refr
   await owner.close();
 });
 it.each(["stopped", "failed"] as const)(
-  "a hidden owner receiving %s after recovery cannot revive its candidate",
+  "a hidden owner receiving %s starts a new preview only on explicit activation",
   async (state) => {
     const { controller, fake, clock } = setup();
     const first = controller();
@@ -435,10 +468,14 @@ it.each(["stopped", "failed"] as const)(
     await owner.recover(() => candidate);
     fake.expire();
     owner.observe(fakeStatus(state, state === "failed" ? "launch_failed" : "closed"));
-    await owner.see(() => candidate);
     clock.advance(10_000);
     expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
     expect(owner.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+    await owner.see(() => candidate);
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+    expect(owner.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+    expect(owner.snapshot().status?.preview_id).not.toBe(record.preview_id);
+    owner.dispose();
   },
 );
 it("clears a valid stored record with different whitespace and property order", () => {

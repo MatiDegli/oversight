@@ -121,20 +121,35 @@ it.each(matrix)(
       await support.lead(page);
       await check.poll(() => support.state()).toBe("stopped");
       await check.poll(() => ownershipPresent(page)).toBe(false);
-      await option(session).click();
-      await check(page.locator("iframe")).toHaveCount(0);
+      await check(page.locator(".chat-preview-slot, iframe")).toHaveCount(0);
       await evidence(session, "stopped-after-reload");
-      await page.locator(".preview-panel button").click();
       const mutations = support.mutationCount();
       await page.clock.fastForward(30_001);
-      await option(session).click();
-      await check(page.locator("iframe")).toHaveCount(0);
-      await page.locator(".preview-panel button").click();
       support.arrive();
-      await option(session).click();
+      await check(page.locator("#root")).toHaveAttribute("data-seq", String(support.sequence()));
+      await check(page.locator(".chat-preview-slot, iframe")).toHaveCount(0);
       expect(support.previewId()).toBe(stoppedId);
       expect(support.count("start")).toBe(2);
       expect(support.mutationCount()).toBe(mutations);
+      await option(session).click();
+      await check.poll(() => support.count("start")).toBe(3);
+      await support.ready();
+      await frame(session);
+      expect(support.previewId()).not.toBe(stoppedId);
+      expect(support.count("start")).toBe(3);
+      const closedId = support.previewId();
+      await page.locator(".preview-panel button").click();
+      await check(page.locator(".chat-preview-slot, iframe")).toHaveCount(0);
+      await page.reload();
+      await support.lead(page);
+      expect(await ownershipPresent(page)).toBe(false);
+      expect(support.count("start")).toBe(3);
+      await option(session).click();
+      await check.poll(() => support.count("start")).toBe(4);
+      await support.ready();
+      await frame(session);
+      expect(support.previewId()).not.toBe(closedId);
+      expect(support.count("start")).toBe(4);
       expect(support.unloadDispatches()).toMatchObject([
         { keepalive: true, aborted: false },
         { keepalive: true, aborted: false },
