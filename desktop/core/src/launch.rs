@@ -31,7 +31,9 @@ impl Launch {
         validate_root(root)?;
         Ok(Self::for_program(
             root,
-            root.join(".venv/Scripts/python.exe"),
+            // Push each component so Windows inserts native separators; a
+            // slash-delimited suffix would retain mixed separators verbatim.
+            root.join(".venv").join("Scripts").join("python.exe"),
             smoke,
             source,
         ))
