@@ -315,7 +315,7 @@ fn load_inert(ui: &Ui, quit: &AtomicBool, state: &mut Switch, began: Instant) ->
                 if state.phase() == Phase::Ready {
                     window.backend()?;
                 }
-                ui.message("The switch could not start", "The switching page did not finish loading within five seconds. The current session is still running. Try Open again.")?;
+                ui.message("The switch could not start", "The switching page did not finish loading within five seconds. The current session is still running. Try again.")?;
                 ui.enable(true)?;
                 return Ok(false);
             }

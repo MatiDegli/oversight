@@ -26,8 +26,11 @@ blank-key template only when this file is absent. The shell never reads its valu
 overwrites it. On that first launch, a native message explains how to configure it. Choose
 **File > Edit settings…** to open it in Windows Notepad, add `META_API_KEY` and the existing
 budget/pricing settings, and save. Then choose **File > Reload settings** and confirm the restart.
-The current session stops, including working agents, and the same repository or demo restarts
-with the saved settings. Cancel leaves the session running. Editing remains available during
+The current session stops, including working agents. The same repository or demo starts again
+with the saved settings, subject to the repository reopen guard. Pending changes are discarded.
+If an opened repository's session approved changes, the restart is refused even if you already
+exported them, and the folder holding them is named. Follow the recovery steps below to open it
+fresh. Cancel leaves the session running. Editing remains available during
 startup, switching and after a failed start; Reload follows the same busy gate as Open demo.
 If the file is missing, Edit settings recreates the blank template before opening it.
 Starting the server spends no model credits; starting an agent is a deliberate action.

@@ -42,7 +42,7 @@ impl Refusal {
                     runtime.display(), label, folder.display()
                 )
             }
-            Self::Other => "Oversight could not open this session. Check that the repository and retained state are accessible, close other Oversight sessions, then try again. Preserve earlier work before removing any state.".into(),
+            Self::Other => "Oversight could not open this session. Check that the repository and retained state are accessible. Check the settings saved with File > Edit settings…, close other Oversight sessions, then try again. Preserve earlier work before removing any state.".into(),
         }
     }
 }

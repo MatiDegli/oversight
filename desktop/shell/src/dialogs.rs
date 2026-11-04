@@ -25,7 +25,7 @@ pub fn confirm_reload(window: &WebviewWindow) -> bool {
     task(
         window,
         "Restart Oversight with the saved settings? The current session stops, including any working agents.",
-        "",
+        "Pending changes are discarded. When reloading an opened repository, if this session approved changes, the restart is refused even if you already exported them, and the folder holding them is named.",
         Some("Restart"),
     )
 }
