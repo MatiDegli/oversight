@@ -38,7 +38,7 @@ export type ConversationEntry = { seq: number } & (
 export interface ConversationHeader {
   kind?: "agent";
   letter?: string;
-  hue?: AgentStatus["slot"];
+  hue?: AgentPresentation["hue"];
   agentId: string;
   changeId: string;
   presentation?: AgentPresentation;
@@ -55,7 +55,7 @@ export interface ConversationHeader {
 
 export interface LeadHeader extends LeadStatus {
   letter: string;
-  hue: AgentStatus["slot"];
+  hue: AgentPresentation["hue"];
   kind: "lead";
   agentId: string;
   modelLabel: string;
