@@ -333,15 +333,15 @@ new candidate work waits for the maintainer’s order.
   the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
   merge and tests still work. Needs a per-repository test command with JUnit output and an approved
   sketch first.
-- Windows desktop installer scope approved November 4: per-user NSIS/zlib, embedded CPython,
-  external Git for Windows and retained per-user configuration/data. Implementation stopped at
-  dependency preflight before the shell adapter: `target-lexicon 0.12.16` has an unapproved
-  `Apache-2.0 WITH LLVM-exception` expression in the candidate all-platform lock, although it is
-  inactive for Windows. The [complete audit](../desktop/packaging/crate-license-audit.md) records
-  all 443 external entries; candidate shell/lock changes were withdrawn. The
-  [portable desktop core](../desktop/README.md) remains the only delivered desktop code.
-  Installed-layout/backend adaptations, staging, packaging CI, installer notices and native
-  acceptance remain pending. No WSL bridge or native picker. See the November 4 DECISIONS entry.
+- Windows desktop packaging implementation is present: Tauri 2 shell with owned nested-Job
+  lifecycle, installed launch/data layout, prepared demo Python, pinned runtime staging,
+  NSIS/currentUser/zlib and a separate Windows install/smoke/uninstall/artifact job. The
+  [runbook](../desktop/README.md) distinguishes implementation from pending native evidence.
+  All 443 external crates reconcile under the scoped grants, including the exact inactive
+  target-lexicon exception; [audit](../desktop/packaging/crate-license-audit.md). One installer
+  notice generator inventories crate, Python, CPython/component, frontend and NSIS terms.
+  Native runner results, failure-path/headed rendering acceptance and independent review remain
+  pending; no WSL bridge or native picker. See the November 4 DECISIONS entry.
 - The minimal native Windows backend and public own-repository COPY are implemented;
   their native qualification remains pending. Broader platform ports and macOS follow as
   separate fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,

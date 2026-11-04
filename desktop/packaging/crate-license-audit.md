@@ -1,6 +1,6 @@
-# Windows shell dependency preflight — 2026-11-04
+# Locked Windows shell dependency audit — 2026-11-04
 
-Status: **preflight approved, 2026-11-04 amendment**. The candidate graph below has 443
+Status: **reconciled, including the 2026-11-04 exact exception**. The locked graph has 443
 external lock entries; 243 are active in Windows-target metadata. Every manifest was inspected,
 including inactive platform and optional entries. All entries now have an approved license choice.
 
@@ -16,12 +16,12 @@ published in the [versioned manifest](https://docs.rs/crate/target-lexicon/0.12.
 Legacy Cargo `/` separators mean `OR`; every `AND` obligation must pass. An independent
 approved `OR` alternative suffices. No third-party crate source is modified.
 
-## Candidate configuration and verification
+## Locked configuration and verification
 
 Rust/cargo 1.98.0, edition 2024, resolver 2. Workspace members: the existing
-`oversight-desktop-core` and a temporary `oversight-desktop` shell. The shell's sole ordinary
-dependency was the path dependency `../core`. All following external dependencies
-were under `target.'cfg(windows)'`:
+`oversight-desktop-core` and the `oversight-desktop` shell. The shell's sole ordinary
+dependency is the path dependency `../core`. All following external dependencies
+are under `target.'cfg(windows)'`:
 
 - `tauri = "=2.12.0"`, defaults off, features `wry`, `common-controls-v6`.
 - `tauri-plugin-single-instance = "=2.5.5"`, defaults off.
@@ -30,15 +30,17 @@ were under `target.'cfg(windows)'`:
   `Win32_System_Console`, `Win32_System_JobObjects`, `Win32_System_Threading`.
 - Build dependency `tauri-build = "=2.7.0"`, defaults off, feature `config-json`.
 
+The shell defaults to `custom-protocol = ["tauri/custom-protocol"]`.
 The core retains `serde_json = "=1.0.151"`, defaults off, feature `std`.
-Candidate lock SHA-256: `8d4378cb58adc31903913bc63f750716aeaa33c5636e32fb57d93c83da40f601`.
-The candidate workspace was resolved offline, fetched once with `cargo fetch --locked`,
-then inspected with offline locked metadata for `x86_64-pc-windows-msvc` and inverse trees
-for that target and `--target all`. Each command exited 0. The original policy audit found the subsequently approved
-exception below. The candidate manifests and active lock changes were withdrawn at that gate.
-Native build, Python staging, NSIS and installer notices remain pending. This is audit evidence.
+Lock SHA-256: `8d4378cb58adc31903913bc63f750716aeaa33c5636e32fb57d93c83da40f601`.
+Resolution and fetch are locked; subsequent metadata/checks run offline. Full metadata supplies
+all packages; Windows-filtered metadata supplies inclusion. Every lock entry passes the exact
+policy and scoped grants. `desktop/packaging/licenses.py` repeats this reconciliation during
+staging and emits complete required texts in the installed notices. Missing notice texts in
+selectors and the WebView2 binding crates are supplemented from pinned upstream sources.
+Native build/install/smoke evidence is supplied by the Windows runner, separately from this audit.
 
-## Complete candidate inventory
+## Complete locked inventory
 
 `Windows` marks active Windows-target metadata; `Other` means locked but inactive.
 `Pass` includes scoped grants; `Grant` means the exact approved LLVM exception. Checksums identify crate archives.

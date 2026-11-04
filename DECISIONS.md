@@ -4817,3 +4817,32 @@ Amendment, 2026-11-04: the maintainer approved exactly `target-lexicon 0.12.16` 
 Linux branch and is not shipped. The notices policy accepts only that Rust crate, version
 and complete expression; no general WITH acceptance is added. This resolves the dependency
 preflight blocker above and authorizes resuming the installer implementation.
+
+
+Implementation amendment, 2026-11-04: `desktop/shell` now owns Windows process/console/Job
+operations through the portable launch, health and lifecycle policies. GUI dependencies are
+Windows-only. Installed startup resolves `app` beside the executable, creates configuration
+only when absent, keeps retained data outside the installer tree, and passes the prepared demo
+interpreter as a serve argument. Process-only app-root selection also reaches the Linux preview
+boundary's exclusion: a wheel's source-parent computation no longer identifies the payload.
+The boundary keeps this computation local to avoid importing settings through the workspace
+facade; module-relative entry/adapter paths correctly stay module-relative in a wheel.
+
+The staging manifest fixes CPython 3.12.12, install_only, release 20251014, Windows x86_64 MSVC,
+and its archive checksum. Separate relocatable interpreters receive hashed locked runtime or
+pytest dependencies and non-editable project wheels; no build-machine venv is distributed.
+The failed prepared-interpreter probe refuses without uv. The new least-privilege Windows
+package job builds NSIS/currentUser/zlib, installs, smoke-checks twice without Python/uv/Node
+on PATH, checks owned survivors/listeners, uninstalls while preserving data, and uploads the
+candidate installer, hashes and notices. Full gates/native execution remain separate acceptance.
+
+All 443 external crate lock entries reconcile, including the exact inactive target-lexicon grant.
+The installer notice generator retains pinned license texts, source availability for unmodified
+MPL crates, Python/frontend notices, CPython and incorporated terms, WebView2 loader and NSIS.
+Following decision 2's required disclosure, its component inventory explicitly identifies the
+licenses outside the named set: bzip2, public-domain SQLite/liblzma, CPython historical/incorporated
+terms and Microsoft Distributable Code in CPython. The WebView2 SDK loader notice is
+BSD-3-Clause. No component is described as covered solely by CPython's PSF grant. This is not a general dependency
+policy exception. Upstream license bytes are preserved across Windows/Linux checkout for hashes.
+Native runner success, remaining failure-path evidence, headed UI acceptance and independent
+review remain necessary; local cross-target compilation is not native execution evidence.
