@@ -1,6 +1,6 @@
 import type { ServerEvent } from "@contracts";
 import "../theme/index.css";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { useStore } from "zustand";
@@ -9,9 +9,18 @@ import { DecisionContext, selectPlanEvidence } from "../review";
 import { startLive, startReplay, type EventStream, type Transport } from "../transport";
 import { Frame } from "./Frame";
 import { InitialShellLayout, type ShellLayout } from "./shell/useShell";
-import { conversationTab, openReview, surfaceTab, tabbedView, viewReducer } from "./view";
+import { reconcileReplayView } from "./replay/model";
+import {
+  clickNode,
+  conversationTab,
+  navigateView,
+  openReview,
+  surfaceTab,
+  tabbedView,
+  viewReducer,
+} from "./view";
 import { flowEvents, flowPlan, type FlowScene } from "./planFlow.browser.fixture";
-import { resolved } from "./chatAgents.fixture";
+import { event, proposal, resolved } from "./chatAgents.fixture";
 
 export type WorkflowOptions = {
   layout?: ShellLayout;
@@ -19,6 +28,7 @@ export type WorkflowOptions = {
   scene?: FlowScene;
   mode?: "live" | "replay";
   prefix?: number;
+  inactiveReview?: boolean;
 };
 let root: Root | undefined;
 let transport: Transport | undefined;
@@ -30,17 +40,34 @@ export const navigation: string[] = [];
 function Harness() {
   const state = useStore(stateStore, (store) => store.state);
   const [view, setView] = useState(() =>
-    viewReducer(tabbedView, {
-      type: "open",
-      tab: options.inbox
-        ? surfaceTab(tabbedView, "inbox")
-        : conversationTab(tabbedView, state, "lead-flow"),
-    }),
+    viewReducer(
+      options.inactiveReview
+        ? navigateView(
+            tabbedView,
+            openReview(state, tabbedView, "change-flow-2") ?? tabbedView,
+            state,
+          )
+        : tabbedView,
+      {
+        type: "open",
+        tab: options.inbox
+          ? surfaceTab(tabbedView, "inbox")
+          : conversationTab(tabbedView, state, "lead-flow"),
+      },
+    ),
   );
   const review = (id: string) => {
     navigation.push(id);
-    setView((current) => openReview(state, current, id) ?? current);
+    setView((current) => navigateView(current, openReview(state, current, id) ?? current, state));
   };
+  useEffect(() => {
+    // Match App's replay reconciliation: evidence folds may recreate the tab objects.
+    return stateStore.subscribe(() => {
+      queueMicrotask(() => {
+        setView((current) => reconcileReplayView(current, stateStore.getState().state));
+      });
+    });
+  }, []);
   return (
     <InitialShellLayout value={options.layout ?? "Chat"}>
       <DecisionContext value={{ replayOf: "synthetic workflow events" }}>
@@ -51,7 +78,11 @@ function Harness() {
           onOpenChange={review}
           canReview={() => true}
           canOpenChange={() => true}
-          onNodeTap={() => undefined}
+          onNodeTap={(id) => {
+            navigation.push(`node:${id}`);
+            const latest = stateStore.getState().state;
+            setView((current) => navigateView(current, clickNode(latest, current, id), latest));
+          }}
           onClosePanel={() => {
             setView(tabbedView);
           }}
@@ -177,6 +208,36 @@ export function removeSelected() {
 }
 export const prefixLength = () => source.length;
 export const currentSeq = () => stateStore.getState().state.lastSeq;
+
+export function seekBeforeReview() {
+  return replayThrough(source.findIndex((event) => event.type === "change.proposed"));
+}
+
+export function prepareGraphNavigation() {
+  const evidence = proposal("flow-2");
+  if (evidence.type !== "change.proposed") throw new Error("Missing synthetic proposal");
+  const change = evidence.payload;
+  append(
+    event("change.updated", {
+      change_id: change.change_id,
+      agent_id: change.agent_id,
+      author: "agent",
+      file: {
+        path: "shop/pricing.py",
+        status: "modified",
+        original: "def compute_price(): return 1\n",
+        modified: "def compute_price(): return 2\n",
+        lines_added: 1,
+        lines_removed: 1,
+      },
+      node_ids: ["shop.pricing:compute_price"],
+      graph: change.graph,
+      files_changed: 1,
+      lines_added: 1,
+      lines_removed: 1,
+    }),
+  );
+}
 
 export function settleReview() {
   append(resolved("flow-2"));

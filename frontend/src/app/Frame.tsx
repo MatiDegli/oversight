@@ -37,6 +37,7 @@ import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
 import { WorkflowPanel, workflowOrigin, restoreWorkflowOrigin } from "./workflow/WorkflowPanel";
+import { workflowNavigation } from "./workflow/workflowNavigation";
 const OversightStage = lazy(() =>
   import("./shell/OversightStage").then(async (module) => {
     await module.fieldReady;
@@ -102,7 +103,12 @@ export interface FrameProps {
 
 /** Fixed zones compose around one persistent graph instance. */
 export function Frame(input: FrameProps) {
-  const props: FrameProps = input.historySession
+  const [workflow, setWorkflow] = useState<{
+    planId: string;
+    origin: ReturnType<typeof workflowOrigin>;
+    runId: string | undefined;
+  } | null>(null);
+  const available: FrameProps = input.historySession
     ? {
         ...input,
         onStartAgent: undefined,
@@ -118,6 +124,9 @@ export function Frame(input: FrameProps) {
         onDecide: undefined,
       }
     : input;
+  const props = workflowNavigation(available, () => {
+    setWorkflow(null);
+  });
   const { state, onClosePanel } = props;
   const arrival = useMergeArrival(state);
   const phone = usePhonePractice(props.practice?.active ?? false);
@@ -134,11 +143,6 @@ export function Frame(input: FrameProps) {
       : props.view;
   const [newLead, setNewLead] = useState(false);
   const [hiddenChatView, setHiddenChatView] = useState<View | null>(null);
-  const [workflow, setWorkflow] = useState<{
-    planId: string;
-    origin: ReturnType<typeof workflowOrigin>;
-    runId: string | undefined;
-  } | null>(null);
   if (workflow && workflow.runId !== state.run?.run_id) setWorkflow(null);
   const workflowOpen = workflow !== null && workflow.runId === state.run?.run_id;
   const closeWorkflow = () => {
@@ -187,6 +191,7 @@ export function Frame(input: FrameProps) {
     props.onStartAgent !== undefined && shell.layout === "Oversight",
   );
   const newTask = () => {
+    setWorkflow(null);
     void props.previewHost?.navigate();
     setNewLead(false);
     setHiddenChatView(view);
@@ -195,6 +200,7 @@ export function Frame(input: FrameProps) {
   const openNewLead = () => {
     void props.previewHost?.navigate();
     if (leadCapacity(state).atCap) return;
+    setWorkflow(null);
     setHiddenChatView(view);
     setNewLead(true);
     requestAnimationFrame(() => {

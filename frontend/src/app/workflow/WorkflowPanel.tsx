@@ -51,9 +51,9 @@ export function WorkflowPanel({
 }) {
   const plan = selectPlanEvidence(state).plans.get(planId)?.payload;
   const rows = useMemo(() => (plan ? projectPlanFlow(state, plan) : []), [state, plan]);
-  const { selection, selected, setSelection, close } = useStepSelection(rows);
-  const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false) && chat;
   const host = useRef<HTMLElement>(null);
+  const { selection, selected, setSelection, close } = useStepSelection(rows, host);
+  const phone = useSyncExternalStore(subscribePhone, phoneSnapshot, () => false) && chat;
   const detailId = useId();
   usePhoneBoundary(phone, host, close);
   const Icon = phone ? ArrowLeft : X;
@@ -101,26 +101,40 @@ export function WorkflowPanel({
   );
 }
 
-function useStepSelection(rows: PlanFlowRow[]) {
+function useStepSelection(rows: PlanFlowRow[], host: RefObject<HTMLElement | null>) {
   const [selection, setSelection] = useState<number | null>(null);
   const selected = rows.find((row) => row.index === selection);
   const close = useRef<HTMLButtonElement>(null);
   const previousSelection = useRef<number | null>(null);
+  const focused = useRef<Element | null>(null);
   // Clear removed local indices before committing the new evidence. The layout effect
   // still observes the removal and returns keyboard focus after that commit.
   if (selection !== null && !selected) setSelection(null);
   useLayoutEffect(() => {
+    const rememberFocus = () => {
+      focused.current = host.current?.contains(document.activeElement)
+        ? document.activeElement
+        : null;
+    };
+    document.addEventListener("focusin", rememberFocus);
     close.current?.focus({ preventScroll: true });
-  }, []);
+    return () => {
+      document.removeEventListener("focusin", rememberFocus);
+    };
+  }, [host]);
   useLayoutEffect(() => {
     if (
       previousSelection.current !== null &&
-      !rows.some((row) => row.index === previousSelection.current)
+      !rows.some((row) => row.index === previousSelection.current) &&
+      (host.current?.contains(document.activeElement) ||
+        (document.activeElement === document.body &&
+          focused.current !== null &&
+          !focused.current.isConnected))
     ) {
       close.current?.focus({ preventScroll: true });
     }
     previousSelection.current = selection;
-  }, [selection, rows]);
+  }, [selection, rows, host]);
   return { selection, selected, setSelection, close };
 }
 

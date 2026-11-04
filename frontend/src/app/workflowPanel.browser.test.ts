@@ -60,6 +60,114 @@ const panel = (page: Page) => page.getByLabel("Workflow", { exact: true });
 const steps = (page: Page) =>
   panel(page).getByRole("list", { name: "Workflow steps" }).getByRole("button");
 
+it.each([false, true])(
+  "reveals Decisions navigation from inbox=%s and leaves Watch without a stranded workflow",
+  async (inbox) => {
+    const page = await open({ layout: "Oversight", inbox });
+    try {
+      await page.getByRole("button", { name: "Open workflow", exact: true }).click();
+      await page.getByRole("button", { name: /Decisions:.*Open decisions inbox/ }).click();
+      await check(panel(page)).toHaveCount(0);
+      await check(page.getByRole("region", { name: "Decisions inbox" })).toBeVisible();
+      await page.getByRole("button", { name: "Open workflow", exact: true }).first().click();
+      const watch = page.getByRole("button", { name: "Watch", exact: true });
+      await watch.click();
+      await check(panel(page)).toHaveCount(0);
+      await check(watch).toBeFocused();
+      await check(page.locator(".focus-panel")).toHaveCount(0);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it("reveals the focus tab opened by a repository graph tap", async () => {
+  const page = await open({ layout: "Oversight" });
+  try {
+    await page.evaluate(() => {
+      window.workflowTest.prepareGraphNavigation();
+    });
+    await page.getByRole("button", { name: "Open workflow", exact: true }).click();
+    const graph = page.getByLabel("Repository graph", { exact: true });
+    await check
+      .poll(() =>
+        graph.evaluate((node: GraphProbeHost) =>
+          Boolean(node.oversightGraph && !node.oversightGraph.animating()),
+        ),
+      )
+      .toBe(true);
+    const point = await graph.evaluate((node: GraphProbeHost) =>
+      node.oversightGraph
+        ?.nodeCenters("node:childless")
+        .find(
+          (point) =>
+            node.oversightGraph?.renderedBox(point.id) &&
+            point.agents?.some((agent) => agent.agentId === "flow-2"),
+        ),
+    );
+    const bounds = await graph.boundingBox();
+    if (!point || !bounds) throw new Error("Missing assigned graph node");
+    await page.mouse.click(bounds.x + point.x, bounds.y + point.y);
+    expect(await page.evaluate(() => window.workflowTest.navigation)).toEqual([`node:${point.id}`]);
+    await check(panel(page)).toHaveCount(0);
+    await check(page.locator(".focus-panel")).toBeVisible();
+    await check(page.getByRole("tab", { selected: true })).toContainText("Review");
+  } finally {
+    await page.close();
+  }
+});
+
+it.each(["composer", "slider"])(
+  "preserves external %s focus when the selected step disappears",
+  async (control) => {
+    const page = await open({ scene: "large" });
+    try {
+      await page.getByRole("button", { name: "Open workflow", exact: true }).click();
+      await steps(page).nth(3).click();
+      if (control === "slider")
+        await page.evaluate(() => {
+          // A sibling range control exercises the desktop replay slider's focus boundary.
+          const input = document.createElement("input");
+          input.type = "range";
+          input.setAttribute("aria-label", "External slider");
+          document.querySelector(".shell-center")?.append(input);
+        });
+      const external =
+        control === "composer"
+          ? page.getByRole("textbox", { name: /Message Lead/ })
+          : page.getByLabel("External slider");
+      await external.focus();
+      await page.evaluate(() => {
+        window.workflowTest.removeSelected();
+      });
+      await check(panel(page).getByText("Select a step to see its evidence.")).toBeVisible();
+      await check(external).toBeFocused();
+      await external.press("Space");
+      await check(panel(page)).toBeVisible();
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it("keeps the workflow when replay prunes an inactive focus tab", async () => {
+  const page = await open({ inactiveReview: true, layout: "Oversight" });
+  try {
+    await check(page.getByRole("tab")).toHaveCount(2);
+    await page.getByRole("button", { name: "Open workflow", exact: true }).click();
+    await steps(page).nth(3).click();
+    await page.evaluate(() => window.workflowTest.seekBeforeReview());
+    await check(panel(page)).toBeVisible();
+    await check(steps(page).nth(3)).toHaveAttribute("aria-pressed", "true");
+    await check(steps(page).nth(3)).toBeFocused();
+    await panel(page).getByRole("button", { name: "Close", exact: true }).click();
+    await check(page.getByRole("tab")).toHaveCount(1);
+    await check(page.getByRole("button", { name: "Open workflow", exact: true })).toBeFocused();
+  } finally {
+    await page.close();
+  }
+});
+
 it.each([
   { layout: "Chat" },
   { layout: "Oversight" },

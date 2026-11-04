@@ -976,7 +976,10 @@ progress, notes and agent. Team hue sits beside the shared team label in detail 
 always carries its word. Role, model and mode say Not known. Review change uses the card's existing
 proposal/status eligibility and navigation, with no mutation controls. Keyboard order is Close,
 numbered steps, then detail actions. Enter/Space select; Escape or Close restores launcher focus.
-Updates preserve focus; a disappearing selected step clears selection and focuses Close.
+Person navigation to a focus tab or Watch closes the workflow and reveals that destination.
+Updates preserve focus; a disappearing selected step clears selection. It focuses Close only when
+focus is inside the workflow, or has fallen to the document body because its focused control was
+removed. Focus in the conversation, replay controls or any other surface stays there.
 A focused Review change that loses eligibility stays inert until focus leaves, then disappears.
 
 At phone width, Chat's Open workflow explicitly maximizes the same one-column list. Back
