@@ -20,7 +20,11 @@ export function slideRows(
       (node.position("x") !== p.x || node.position("y") !== p.y)
     );
   });
-  if (!moving.length) return;
+  if (!moving.length) {
+    // The fold controller may already have placed a newly collapsed frame at its final position.
+    settle(cy);
+    return;
+  }
   if (reduced || typeof requestAnimationFrame === "undefined") {
     cy.batch(() => {
       for (const [id, position] of moving) cy.getElementById(id).position(position);
