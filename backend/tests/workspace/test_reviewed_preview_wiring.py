@@ -14,6 +14,7 @@ from oversight.workspace.preview_preparation import PreparationInputs, prepare_p
 from .test_preview_preparation import inputs as inputs
 
 ROOT = Path(__file__).resolve().parents[3]
+CONTROLLED_READINESS_S = 60
 
 pytestmark = pytest.mark.anyio
 
@@ -277,7 +278,7 @@ asyncio.run(main())
     )
     policy = asdict(PreviewProfile())
     config = dict(
-        readiness_s=5,
+        readiness_s=CONTROLLED_READINESS_S,
         lease_deadline=time.monotonic() + 60,
         absolute_deadline=time.monotonic() + 60,
         reviewed=dict(
@@ -296,7 +297,7 @@ asyncio.run(main())
         ),
     )
     reader = asyncio.StreamReader()
-    reports = asyncio.Queue()
+    reports = ReportQueue()
 
     def report(**fields):
         reports.put_nowait(fields)
@@ -305,8 +306,18 @@ asyncio.run(main())
     return execution, reader, reports, registry, roots
 
 
+class ReportQueue(asyncio.Queue):
+    def __init__(self):
+        super().__init__()
+        self.received = []
+
+    def put_nowait(self, item):
+        self.received.append(item.copy())
+        super().put_nowait(item)
+
+
 async def next_report(reports, expected=None):
-    async with asyncio.timeout(20):
+    async with asyncio.timeout(CONTROLLED_READINESS_S):
         report = await reports.get()
         while report["kind"] == "probing":
             assert "nonce" not in report
@@ -492,8 +503,7 @@ async def test_reviewed_teardown_before_execute(tmp_path, monkeypatch, inputs, t
     execution, reader, reports, registry, roots = await controlled_execution(
         tmp_path, monkeypatch, inputs
     )
-    # The normal launch deadline must exceed the backend stop bound.
-    execution.config["readiness_s"] = 30
+    # The normal launch deadline exceeds the backend stop bound.
     task = asyncio.create_task(execution.run())
     try:
         await next_report(reports, "confirmed")
@@ -532,7 +542,8 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         inputs,
         health_run="stale-run" if fault == "stale" else "fresh-run",
     )
-    limit_readiness(execution, monkeypatch, 2)
+    if not fault.endswith("dead"):
+        limit_readiness(execution, monkeypatch, 2)
     original = PreviewGateway.probe
     original_get = PreviewGateway._probe_get
     probing = asyncio.Event()
@@ -567,9 +578,7 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         await next_report(reports, "confirmed")
         reader.feed_data(b"execute\n")
         await next_report(reports, "executing")
-        async with asyncio.timeout(20):
-            assert (report := await reports.get())["kind"] == "probing", report
-            await probing.wait()
+        await wait_for_probe(reports, probing, execution)
         assert execution.handle is not None and execution.gateway is not None
         if fault == "backend_dead":
             kill_pinned(execution.handle.pidfds["init"])
@@ -589,6 +598,65 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         proceed.set()
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+
+
+async def wait_for_probe(reports, probing, execution):
+    try:
+        async with asyncio.timeout(20):
+            assert (await reports.get())["kind"] == "probing", reports.received
+            await probing.wait()
+    except TimeoutError:
+        pytest.fail(
+            f"probe did not reach its witness; reports={reports.received!r}; "
+            f"phase={execution.phase}; stage={execution.stage}; "
+            f"diagnostic={execution.timeout_diagnostic()}"
+        )
+
+
+async def test_probe_wait_timeout_shows_received_reports(monkeypatch):
+    from types import SimpleNamespace
+
+    reports = ReportQueue()
+    for kind in ("confirmed", "executing", "dead"):
+        reports.put_nowait({"kind": kind})
+
+    async def expire():
+        raise TimeoutError
+
+    monkeypatch.setattr(reports, "get", expire)
+    execution = SimpleNamespace(
+        phase="readiness", stage="readiness-probe", timeout_diagnostic=lambda: "safe diagnostic"
+    )
+    with pytest.raises(pytest.fail.Exception, match=r"confirmed.*executing.*dead") as caught:
+        await wait_for_probe(reports, asyncio.Event(), execution)
+    assert "phase=readiness; stage=readiness-probe; diagnostic=safe diagnostic" in str(caught.value)
+
+
+@pytest.mark.parametrize("glyph", ["界", "😀", '\n"'])
+async def test_timeout_diagnostic_bounds_both_streams_and_gateway_failure(glyph):
+    import json
+    from types import SimpleNamespace
+
+    from oversight.workspace._reviewed_preview import ReviewedExecution
+
+    execution = SimpleNamespace(
+        diagnostic="launch deadline expired",
+        phase="readiness",
+        stage="readiness-probe",
+        probe_error=ValueError("stale nested health: /host/private secret-value"),
+        handle=SimpleNamespace(
+            stdout=glyph * 1000 + "\nstdout tail", stderr=glyph * 1000 + "\nstderr tail"
+        ),
+        log_secrets=("secret-value",),
+    )
+    report = ReviewedExecution.timeout_diagnostic(cast(ReviewedExecution, execution))
+    assert len(report.encode()) <= 2048
+    assert len(json.dumps(dict(kind="dead", reason="readiness_timeout", diagnostic=report))) < 4096
+    assert "gateway=stale nested health" in report
+    assert "stdout tail" in report and report.endswith("stderr tail")
+    assert "/host/private" not in report and "secret-value" not in report
+    execution.diagnostic = report
+    assert ReviewedExecution.timeout_diagnostic(cast(ReviewedExecution, execution)) == report
 
 
 @pytest.mark.parametrize("prefix", ["/", "/usr", "/usr/local"])
@@ -808,7 +876,8 @@ def real_prepared_inputs(directory, tracked):
     )
 
 
-@pytest.mark.timeout(180)
+# Inventories, four boundary commands and deployed ownership all share this outer guard.
+@pytest.mark.timeout(6 * CONTROLLED_READINESS_S)
 async def test_reviewed_offline_build_and_imports(tmp_path):
     import json
     from dataclasses import asdict
@@ -1329,11 +1398,19 @@ async def launched_after_output(launch, *args, **kwargs):
     pytest.fail("controlled command did not emit its diagnostic before timeout")
 
 
-def limit_readiness(execution, monkeypatch, seconds):
+def limit_readiness(execution, monkeypatch, seconds, *, output_marker=None):
     # Short probe deadlines must not also shorten authenticated build/service entry.
     attach = execution.attach_gateway
 
     async def limited():
+        if output_marker is not None:
+            async with asyncio.timeout(CONTROLLED_READINESS_S):
+                for _ in range(100 * CONTROLLED_READINESS_S):
+                    if output_marker in execution.handle.stdout:
+                        break
+                    await asyncio.sleep(0.01)
+                else:
+                    pytest.fail("controlled backend did not emit its startup trace")
         execution.config["readiness_s"] = seconds
         await attach()
 
@@ -1358,7 +1435,10 @@ def configure_reviewed_failure(execution, failure, secrets, monkeypatch):
     elif failure != "readiness":
         execution.spec["commands"][0] = command
     else:
-        limit_readiness(execution, monkeypatch, 0.2)
+        limit_readiness(execution, monkeypatch, 0.2, output_marker="startup trace")
+        backend = execution.spec["commands"][-1]
+        trace = "startup trace\x1b[31m " + " ".join(secrets) + "\n/host/private\nHOST_VALUE=private"
+        backend["argv"][-1] = f"print({trace!r}, flush=True);" + backend["argv"][-1]
 
     if failure == "timeout":
         monkeypatch.setattr(
@@ -1399,7 +1479,8 @@ async def test_reviewed_failure_reason_and_sanitized_log(
     h.manager.lifecycle.profile = cast(
         PreviewProfile,
         SimpleNamespace(
-            readiness_s=30, reviewed_app=SimpleNamespace(launch=SimpleNamespace(build=()))
+            readiness_s=CONTROLLED_READINESS_S,
+            reviewed_app=SimpleNamespace(launch=SimpleNamespace(build=())),
         ),
     )
     task = asyncio.create_task(execution.run())
@@ -1411,11 +1492,18 @@ async def test_reviewed_failure_reason_and_sanitized_log(
         dead = await next_report(reports)
         await asyncio.wait_for(task, 15)
         assert dead["kind"] == "dead" and dead["reason"] == expected, dead
-        assert dead["diagnostic"] == (
-            "launch deadline expired"
-            if failure in {"timeout", "readiness"}
-            else "reviewed build failed"
-        )
+        if failure == "readiness":
+            assert dead["diagnostic"].startswith("launch deadline expired; phase=readiness;")
+            assert "stage=readiness-probe" in dead["diagnostic"]
+            assert "backend stdout tail=startup trace" in dead["diagnostic"]
+            assert (
+                "/host/private" not in dead["diagnostic"] and "HOST_VALUE" not in dead["diagnostic"]
+            )
+            assert len(dead["diagnostic"].encode()) <= 2048
+        else:
+            assert dead["diagnostic"] == (
+                "launch deadline expired" if failure == "timeout" else "reviewed build failed"
+            )
         log = execution.inputs.preview_directory / "logs/build.log"
         assert log == registry.runtime / "previews/example/logs/build.log"
         assert log.is_file()

@@ -284,6 +284,26 @@ async def test_boundary_entry_diagnostic_retains_safe_cause():
     )
 
 
+def test_preview_output_tail_redacts_before_truncating():
+    secrets = ("secret-value", "a\x00bc", "joined")
+    raw = "old " * 1000 + "\n"
+    raw += "\x1b[31mstartup trace secret-value abc joi\x00ned\x1b[0m\n"
+    raw += 'failure at "/host/private directory/file"\n'
+    raw += "C:\\host\\private\nHOST_VALUE='private environment value'\n"
+    raw += "界" * 300 + "\nfinal safe trace"
+    tail = supervisor.preview_output_tail(raw, secrets)
+    assert len(tail.encode()) <= 768 and tail.endswith("final safe trace")
+    assert all(value not in tail for value in (*secrets, "abc", "joined", "private", "\x1b"))
+    short = supervisor.preview_output_tail("startup trace secret-value\nfinal safe trace", secrets)
+    assert short == "startup trace \nfinal safe trace"
+    assert supervisor.preview_output_tail("/host/path with spaces", ()) == (
+        "[path-bearing output omitted]"
+    )
+    assert supervisor.preview_output_tail("HOST_VALUE='private environment value'", ()) == (
+        "[environment assignment omitted]"
+    )
+
+
 @pytest.mark.parametrize(
     "code,reason",
     [

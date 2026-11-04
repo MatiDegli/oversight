@@ -8,6 +8,7 @@ import asyncio
 import contextlib
 import json
 import os
+import re
 import secrets
 import socket
 import sys
@@ -291,11 +292,52 @@ def launcher_diagnostic(collector: ProcessCollector, error: Exception | None = N
             "incorrect namespace parent",
             "incorrect namespace owner",
             "invalid boundary topology",
+            "stale nested health",
+            "empty nested index",
+            "missing nested resource",
+            "stale nested API",
+            "stale nested SSE",
+            "readiness resource unavailable",
+            "complete readiness resources required",
+            "service died during readiness",
         ):
             if str(error) == signature or str(error).startswith(signature + ":"):
                 return prefix + signature
         return prefix + "launch exception"
     return "launcher exited" if text else ""
+
+
+def preview_output_tail(text: str, secrets: tuple[str, ...]) -> str:
+    """Reuse build-log redaction; withhold path/assignment lines before taking the tail."""
+    # Deliberately share the existing sanitizer without changing its public storage API.
+    from oversight.workspace.preview_build_log import (
+        _inert,  # pyright: ignore[reportPrivateUsage]
+        _redact,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    values = tuple(sorted({s for s in secrets if s}, key=len, reverse=True))
+    text = _inert(_redact(text, values))
+    values = tuple(sorted(set(values) | {_inert(s) for s in values} - {""}, key=len, reverse=True))
+    text = _redact(text, values)
+    lines: list[str] = []
+    for line in text.splitlines():
+        # Whole lines also cover quoted paths and values containing spaces.
+        if "/" in line or "\\" in line:
+            line = "[path-bearing output omitted]"
+        elif re.search(r"\b\w+=", line):
+            line = "[environment assignment omitted]"
+        lines.append(line)
+    tail = "\n".join(lines).encode("utf-8")[-768:].decode("utf-8", errors="ignore")
+    # Two streams plus metadata must fit the private channel's 4096-byte JSON line.
+    kept: list[str] = []
+    size = 0
+    for char in reversed(tail):
+        width = len(json.dumps(char)) - 2
+        if size + width > 1024:
+            break
+        kept.append(char)
+        size += width
+    return _redact("".join(reversed(kept)), values) or "[empty]"
 
 
 async def watch(
