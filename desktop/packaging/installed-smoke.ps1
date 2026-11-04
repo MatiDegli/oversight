@@ -65,6 +65,11 @@ try {
 } finally {
     $env:PATH = $originalPath
 }
+# PATH has been restored; this ignored test needs the installed payload and build tools.
+$env:CARGO_NET_OFFLINE = 'true'
+cargo --offline test --locked --manifest-path desktop/Cargo.toml -p oversight-desktop --test open_repository installed_open_repository -- --ignored --exact --nocapture
+if ($LASTEXITCODE -ne 0) { throw "Installed repository switching failed: $LASTEXITCODE" }
+'Installed repository switching: exit 0.' | Add-Content package-evidence/smoke.txt
 if (!(Test-Path (Join-Path $data '.env'))) { throw 'First-launch configuration missing' }
 $marker = Join-Path $data '.runtime\installer-retention-test.txt'
 'Preserve retained state on uninstall.' | Set-Content $marker

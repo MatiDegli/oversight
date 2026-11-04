@@ -339,11 +339,17 @@ new candidate work waits for the maintainer’s order.
   lifecycle, installed launch/data layout, prepared demo Python, pinned runtime staging,
   NSIS/currentUser/zlib and a separate Windows install/smoke/uninstall/artifact job. The
   [runbook](../desktop/README.md) distinguishes implementation from pending native evidence.
-  All 443 external crates reconcile under the scoped grants, including the exact inactive
+  All 444 external crates reconcile under the scoped grants, including the exact inactive
   target-lexicon exception; [audit](../desktop/packaging/crate-license-audit.md). One installer
   notice generator inventories crate, Python, CPython/component, frontend and NSIS terms.
   Native runner results, failure-path/headed rendering acceptance and independent review remain
-  pending; no WSL bridge or native picker. See the November 4 DECISIONS entry.
+  pending; no WSL bridge. Native File > Open repository… and Open demo, disposable per-source
+  state and shared locked spending history are implemented conditionally. The installed harness
+  runs after PATH restoration and before uninstall; Windows CI, two independent reviews and
+  headed acceptance must pass before November 4, 18:00 ART (21:00 UTC), or this front stays
+  unmerged and opening a repository remains next. Remembering the last repository, --clone-root
+  own sources, Linux and macOS, non-Python repositories and in-app discard remain out of scope.
+  See the November 4 repository-opening DECISIONS entry.
 - The minimal native Windows backend and public own-repository COPY are implemented;
   their native qualification remains pending. Broader platform ports and macOS follow as
   separate fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,

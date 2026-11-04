@@ -223,7 +223,7 @@ jobs:
           $timer.Stop()
           "Installer build seconds: $($timer.Elapsed.TotalSeconds)" | Set-Content package-evidence/build.txt
       - name: Install smoke twice and preserve data on uninstall
-        timeout-minutes: 8
+        timeout-minutes: 25
         run: ./desktop/packaging/installed-smoke.ps1
       - name: Upload desktop installer
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

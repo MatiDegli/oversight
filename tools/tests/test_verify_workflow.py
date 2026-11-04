@@ -728,7 +728,7 @@ def assert_package_policy(job: dict[str, str]) -> None:
     }
     assert items[11] == {
         "name": "Install smoke twice and preserve data on uninstall",
-        "timeout-minutes": "8",
+        "timeout-minutes": "25",
         "run": "./desktop/packaging/installed-smoke.ps1",
     }
     assert items[12] == {
@@ -800,3 +800,34 @@ def test_package_rejects_missing_late_or_nonblocking_secret_scan(regression: str
         text = text.replace(marker, scan + marker, 1)
     with pytest.raises(AssertionError):
         assert_windows_policy(text)
+
+
+def test_installed_repository_harness_runs_after_path_restore_before_uninstall():
+    script = (WORKFLOWS.parents[1] / "desktop/packaging/installed-smoke.ps1").read_text()
+    command = (
+        "cargo --offline test --locked --manifest-path desktop/Cargo.toml "
+        "-p oversight-desktop --test open_repository installed_open_repository "
+        "-- --ignored --exact --nocapture"
+    )
+    assert script.count(command) == 1
+    assert script.index("$env:PATH = $originalPath") < script.index(command)
+    assert script.index(command) < script.index("$uninstalled = Start-Process")
+    assert command + "\nif ($LASTEXITCODE -ne 0) { throw " in script
+    assert "$env:CARGO_NET_OFFLINE = 'true'\n" + command in script
+    harness = (WORKFLOWS.parents[1] / "desktop/shell/tests/open_repository.rs").read_text()
+    assert "#![cfg(windows)]" in harness
+    assert '#[ignore = "requires the current-user installed payload' in harness
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("timeout-minutes: 25", "timeout-minutes: 8"),
+        ("timeout-minutes: 25", "timeout-minutes: 90"),
+    ],
+)
+def test_package_rejects_changed_repository_harness_deadline(old, new):
+    text = (WORKFLOWS / "windows.yml").read_text()
+    assert old in text
+    with pytest.raises(AssertionError):
+        assert_windows_policy(text.replace(old, new))

@@ -4975,3 +4975,49 @@ BSD-3-Clause. No component is described as covered solely by CPython's PSF grant
 policy exception. Upstream license bytes are preserved across Windows/Linux checkout for hashes.
 Native runner success, remaining failure-path evidence, headed UI acceptance and independent
 review remain necessary; local cross-target compilation is not native execution evidence.
+
+
+## Open a repository from the Windows app (2026-11-04)
+
+The maintainer approved native repository opening as one conditional Windows front. File >
+Open repository… uses a pinned native folder picker and a parented TaskDialog on the UI thread.
+Its main instruction is “Open this repository in Oversight?”; Open/Cancel defaults to Cancel.
+The disclosure states disposable-copy/manual-export behavior, same-user test/plugin execution
+with network and unrestricted writes, provider disclosure, the prepared `.venv` prerequisite,
+current-session shutdown and the distinction between discarded pending work and protected
+approved changes. Cancel leaves the current session unchanged. File > Open demo uses the same
+confirmation. No source-selection CLI, environment, forwarded argument, HTTP route or IPC is
+added; smoke remains demo-only and capabilities remain empty.
+
+A single session initializes the native shell once and repeats backend supervision. Each switch
+first waits at most five seconds for Finished on exactly the bundled inert switching.html URL;
+only that extra URL and the backend origin pass navigation. A timeout stops nothing. Relaunch
+requires graceful owned-Job close and reap; failure retains both outcomes and exits. Quit is
+sticky during selection, navigation and readiness. Only one selection can remain pending.
+
+Demo state stays in the existing data/.runtime; own state uses data/sources/<16-hex SHA-256 of
+case-normalized path>/.runtime. Configuration remains shared. OVERSIGHT_LEDGER_DIR defaults to
+the runtime directory for existing callers; native launches set it to data/.runtime for every
+source. Both ledgers, unknowns, the decision recovery marker and manual settlement use it.
+Every server holds ledger.lock there until pending writes drain; settlement also takes that lock
+in addition to server.lock, including when ledger and runtime directories coincide. Native
+launches explicitly overwrite source, runtime and ledger directories and clear discard authority.
+
+Startup emits one closed-category refusal line. The native message uses fixed recovery text
+rather than raw output. A moved disposable main refuses reopening and names the per-source
+folder: workspace/main holds approved changes; copy them out with Git before deleting that
+source's state to open fresh. Pending/unapproved changes are discarded on reopen. The backend
+retains admission authority, and an invalid environment leaves tests unavailable rather than
+installing anything or preventing graph access.
+
+The only new crate is unmodified rfd 0.15.4, MIT, Windows-only with defaults disabled.
+Portable hashing reuses locked sha2 0.10.9 (MIT OR Apache-2.0). All 444 external lock entries,
+244 active for Windows, reconcile under existing scoped grants; no new license exception.
+Win32_UI_Controls supplies TaskDialogIndirect. An ignored installed Windows harness runs
+explicitly in the package job after PATH restoration and before uninstall; headless page
+completion does not certify native dialogs or rendering.
+
+Out of scope: remembering the last repository, --clone-root own sources, Linux and macOS,
+non-Python repositories and in-app discard. Landing requires green Windows CI, two independent
+reviews and the maintainer's headed Windows acceptance before November 4, 18:00 ART (21:00 UTC).
+Without that acceptance this front stays unmerged; repository opening remains the next step.
