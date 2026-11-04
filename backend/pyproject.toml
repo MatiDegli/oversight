@@ -5,8 +5,10 @@ description = "Oversight's backend: the graph core, the agent runtime, the event
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi==0.143.0",
+    "jedi==0.20.1",
     "openai==3.29.0",
     "oversight-contracts",
+    "parso==0.8.7",
     "ruff==0.17.0",
     "uvicorn==0.54.0",
 ]

@@ -188,10 +188,10 @@ def test_preview_decision_follows_existing_record_without_rewriting_entry() -> N
 @pytest.mark.parametrize(
     "history_prune_tokens,versions",
     [
-        (None, ("agent-v1-9d084b21af2c", "agent-v1-3dc7d749888a")),
-        (8000, ("agent-v1-20ca92a1ea0d", "agent-v1-56a26c30d4ae")),
-        (9000, ("agent-v1-0def3a212e1a", "agent-v1-6735b0f2df2d")),
-        (64000, ("agent-v1-2e780e372af4", "agent-v1-80a055d05910")),
+        (None, ("agent-v1-9d084b21af2c", "agent-v1-49ee5e3b962f")),
+        (8000, ("agent-v1-20ca92a1ea0d", "agent-v1-c94297afab7c")),
+        (9000, ("agent-v1-0def3a212e1a", "agent-v1-2bbac3f312d0")),
+        (64000, ("agent-v1-2e780e372af4", "agent-v1-78ca67b00cfe")),
     ],
 )
 async def test_startup_exports_the_selected_prompt_version(

@@ -1,4 +1,4 @@
-"""The six agent tools: list_files, read_file, search, edit_file, run_tests and finish.
+"""Agent tools, with read-only Python navigation in the harness pack.
 
 Every path goes through the agent's `Tree`, which refuses anything outside its worktree. What a
 tool returns to the model is plain text with no extra metadata; the rest of `ToolOutcome` (the
@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from oversight.agents._diagnostics import new_diagnostics
 from oversight.agents._harness import HarnessState, ToolError, search_rows
 from oversight.agents._observations import test_observation
+from oversight.agents._symbols import find_symbol
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import (
     FileRead,
@@ -106,6 +107,22 @@ TOOL_SCHEMAS: list[dict[str, object]] = [
 ]
 
 
+_SYMBOL_SCHEMA = _function(
+    "find_symbol",
+    "Find Python definitions and references by identifier or dotted name, optionally under a path.",
+    {"name": {"type": "string"}, "path": _PATH},
+    ["name"],
+)
+
+
+def tool_names(harness_pack: bool) -> tuple[str, ...]:
+    return (*TOOL_NAMES, "find_symbol") if harness_pack else TOOL_NAMES
+
+
+def tool_schemas(harness_pack: bool) -> list[dict[str, object]]:
+    return [*TOOL_SCHEMAS, _SYMBOL_SCHEMA] if harness_pack else TOOL_SCHEMAS
+
+
 @dataclass(frozen=True)
 class ToolOutcome:
     content: str
@@ -150,7 +167,7 @@ def _line(arguments: dict[str, object], key: str) -> int | None:
 
 
 def _validate(name: str, arguments: dict[str, object]) -> None:
-    for tool in TOOL_SCHEMAS:
+    for tool in tool_schemas(True):
         function = cast(dict[str, object], tool["function"])
         if function["name"] != name:
             continue
@@ -265,6 +282,10 @@ class Toolbox:
             if not isinstance(parsed, dict):
                 raise _InvalidArguments("arguments must be a JSON object")
             arguments = cast(dict[str, object], parsed)
+            if name not in tool_names(self._harness.enabled):
+                error_kind = "unknown_tool"
+                active = ", ".join(tool_names(self._harness.enabled))
+                raise ToolError(f"unknown tool {name!r}; the tools are {active}")
             _validate(name, arguments)
             match name:
                 case "list_files":
@@ -273,6 +294,8 @@ class Toolbox:
                     return await self._read_file(arguments)
                 case "search":
                     return await self._search(arguments)
+                case "find_symbol":
+                    return await self._find_symbol(arguments)
                 case "edit_file":
                     return await self._edit_file(arguments)
                 case "run_tests":
@@ -280,8 +303,8 @@ class Toolbox:
                 case "finish":
                     return self._finish(arguments)
                 case _:
-                    error_kind = "unknown_tool"
-                    raise ToolError(f"unknown tool {name!r}; the tools are {', '.join(TOOL_NAMES)}")
+                    raise ToolError("tool is not implemented")
+
         except json.JSONDecodeError:
             message = "arguments are not valid JSON"
             error_kind = "invalid_json"
@@ -405,6 +428,21 @@ class Toolbox:
             for number, text in enumerate(content.splitlines(), start=1):
                 if query in text:
                     matches.append((path, number, text))
+        ranges, nodes = self._search_focus(matches)
+        rows = search_rows(matches, MAX_SEARCH_MATCHES, MAX_SEARCH_LINE, self._harness.enabled)
+        in_files = len({p for p, _, _ in matches})
+        return ToolOutcome(
+            content="\n".join(rows) if rows else "No matches.",
+            ok=True,
+            summary=f"Searched for {query[:40]!r}: {len(matches)} matches in {in_files} files",
+            focus="read" if ranges else None,
+            ranges=ranges,
+            node_ids=nodes,
+        )
+
+    def _search_focus(
+        self, matches: list[tuple[str, int, str]]
+    ) -> tuple[list[FocusRange], list[str]]:
         ranges: list[FocusRange] = []
         nodes: list[str] = []
         seen: set[str] = set()
@@ -419,12 +457,28 @@ class Toolbox:
             ranges.append(FocusRange(path=path, start_line=number, end_line=number))
             if node is not None:
                 nodes.append(node)
-        rows = search_rows(matches, MAX_SEARCH_MATCHES, MAX_SEARCH_LINE, self._harness.enabled)
-        in_files = len({p for p, _, _ in matches})
+        return ranges, nodes
+
+    async def _find_symbol(self, arguments: dict[str, object]) -> ToolOutcome:
+        name = cast(str, _string(arguments, "name"))
+        under = _string(arguments, "path", required=False)
+        result = await find_symbol(self._tree, name, under, MAX_SEARCH_MATCHES)
+        matches = [(row.path, row.line, row.text) for row in result.matches]
+        ranges, nodes = self._search_focus(matches)
+        rows = [
+            f"{row.path}:{row.line}: {row.kind}: {row.text.strip()}"[:MAX_SEARCH_LINE]
+            for row in result.matches
+        ]
+        rows.extend(f"External definition: {module}"[:MAX_SEARCH_LINE] for module in result.modules)
+        total = result.definitions + result.references
+        rows = rows[:MAX_SEARCH_MATCHES]
+        if total > len(rows):
+            rows.append(f"[{total - len(rows)} more matches; narrow the name or path]")
         return ToolOutcome(
             content="\n".join(rows) if rows else "No matches.",
             ok=True,
-            summary=f"Searched for {query[:40]!r}: {len(matches)} matches in {in_files} files",
+            summary=f"Found {name[:40]}: {result.definitions} definitions, "
+            f"{result.references} references",
             focus="read" if ranges else None,
             ranges=ranges,
             node_ids=nodes,
@@ -559,9 +613,15 @@ def _failed(name: str, raw_arguments: str) -> str:
     except json.JSONDecodeError:
         parsed = None
     path = cast(dict[str, object], parsed).get("path") if isinstance(parsed, dict) else None
-    labels = {"read_file": "read", "edit_file": "edit", "search": "search", "list_files": "list"}
+    labels = {
+        "read_file": "read",
+        "edit_file": "edit",
+        "search": "search",
+        "list_files": "list",
+        "find_symbol": "find symbol",
+    }
     verb = labels.get(name, name.replace("_", " "))
-    if name not in TOOL_NAMES:
+    if name not in tool_names(True):
         return f"Called an unknown tool, {name[:40]!r}"
     if isinstance(path, str) and path:
         return f"Could not {verb} {_name(path)[:60]}"

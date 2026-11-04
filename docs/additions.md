@@ -435,7 +435,7 @@ proves no equivalence. Empty output reads “no difference measured on these inp
 
 ### 3. Agent harness pack
 
-Reduce avoidable failures without changing the six tools. Under one setting: reject a Python edit
+Reduce avoidable failures under one setting: reject a Python edit
 that breaks previously valid syntax, return the error line and preserve old bytes; summarize broad
 searches with per-file match counts and a narrowing hint; retain a bounded whole failure block
 with test/assertion/relevant frame; remind `finish` once to run tests if edits followed the last
@@ -443,11 +443,14 @@ run; prompt for one evidence-led path and a stopping point.
 
 The pack is on by default (maintainer ruling, 2026-11-04); explicit false retains the six-tool
 comparison arm. Successful Python edits append only new isolated ruff diagnostics without
-reverting the edit; unavailable diagnostics log a warning. Read-only Python symbol navigation
-is the next delivery in the same pack. The original pack is on main (`42976ee`), including hash/uniqueness checks and bounded observations
+reverting the edit; unavailable diagnostics log a warning. Read-only Python `find_symbol` is
+available only with the pack on: bounded definitions,
+references and focus from an isolated Jedi/parso subprocess, with secret/link checks and
+external definitions shown only as module names. The original pack is on main (`42976ee`),
+including hash/uniqueness checks and bounded observations
 (`backend/src/oversight/agents/tools.py`, `backend/src/oversight/agents/_observations.py`).
 Runner failure retention is wired too (`b4446cc`, `backend/src/oversight/workspace/suite_guard.py`).
-Preserve failures before the runner discards text. No contract addition or tool is needed. One
+Preserve failures before the runner discards text. No contract addition is needed. One
 setting lets the bench compare both arms with the same model, reasoning and limits. This does
 not replace independent server proposal tests.
 
