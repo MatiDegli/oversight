@@ -225,6 +225,7 @@ export function previewLifecycleSupport() {
   const authority = new FixtureAuthority();
   const dispatches: Dispatch[] = [];
   const byPage = new Map<Page, Dispatch[]>();
+  const pagehides = new Map<Page, number>();
   const actualRequests: { kind: Kind; method: string }[] = [];
   const instrument = async (page: Page) => {
     const pageDispatches: Dispatch[] = [];
@@ -233,6 +234,9 @@ export function previewLifecycleSupport() {
     await page.exposeBinding("previewLifecycleDispatch", (_source, value: Dispatch) => {
       dispatches.push(value);
       pageDispatches.push(value);
+    });
+    await page.exposeBinding("previewLifecyclePagehides", (_source, count: number) => {
+      pagehides.set(page, count);
     });
     page.on("request", (request) => {
       const path = new URL(request.url()).pathname;
@@ -254,7 +258,12 @@ export function previewLifecycleSupport() {
         value: Dispatch,
       ) => Promise<void>;
       const key = "fixture.lifecycle.unload-dispatch";
+      const hidesKey = "fixture.lifecycle.pagehides";
+      const reportHides = Reflect.get(window, "previewLifecyclePagehides") as (
+        count: number,
+      ) => Promise<void>;
       try {
+        void reportHides(Number(sessionStorage.getItem(hidesKey) ?? 0)).catch(() => {});
         const prior = sessionStorage.getItem(key);
         if (prior) {
           sessionStorage.removeItem(key);
@@ -268,6 +277,14 @@ export function previewLifecycleSupport() {
         "pagehide",
         () => {
           unload = true;
+          try {
+            sessionStorage.setItem(
+              hidesKey,
+              String(Number(sessionStorage.getItem(hidesKey) ?? 0) + 1),
+            );
+          } catch {
+            /* Fixture proof must not affect disposal. */
+          }
         },
         { capture: true },
       );
@@ -324,11 +341,24 @@ export function previewLifecycleSupport() {
     open: (viewport: { width: number; height: number }, theme: string) =>
       chat.session(viewport, theme),
     lead,
-    async observer(owner: LifecyclePage): Promise<LifecyclePage> {
+    async observer(owner: LifecyclePage, duplicate = false): Promise<LifecyclePage> {
       const page = await owner.context.newPage();
       const pageErrors: string[] = [];
       page.on("pageerror", (error) => pageErrors.push(error.message));
       await instrument(page);
+      if (duplicate) {
+        const records = await owner.page.evaluate(() =>
+          Object.keys(sessionStorage)
+            .filter((key) => key.startsWith("oversight.preview.owner:"))
+            .map((key) => [key, sessionStorage.getItem(key) ?? ""] as const),
+        );
+        await page.addInitScript((copied) => {
+          const seeded = "fixture.lifecycle.duplicate-seeded";
+          if (sessionStorage.getItem(seeded)) return;
+          for (const [key, value] of copied) sessionStorage.setItem(key, value);
+          sessionStorage.setItem(seeded, "true");
+        }, records);
+      }
       await page.goto(owner.page.url());
       await lead(page);
       return { ...owner, page, pageErrors };
@@ -342,6 +372,8 @@ export function previewLifecycleSupport() {
     state: () => authority.status()?.state,
     count: (kind: Kind) => authority.calls.filter((call) => call.kind === kind).length,
     mutationCount: () => authority.calls.filter((call) => call.kind !== "details").length,
+    pagehideCount: (page: Page) => pagehides.get(page) ?? 0,
+    sourceDispatches: (page: Page) => byPage.get(page) ?? [],
     sourceMutations: (page: Page) =>
       (byPage.get(page) ?? []).filter((call) => call.kind !== "details"),
     stops: () => authority.calls.filter((call) => call.kind === "stop"),
