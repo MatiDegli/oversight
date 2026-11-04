@@ -121,6 +121,7 @@ it("uses exact isolation and observer copy, never gives observers an iframe", ()
     frameUrl: "https://frame.invalid",
   });
   expect(html).toContain("Preview in use in another tab");
+  expect(html).toContain("Dismissing this panel only hides it here.");
   expect(html).not.toContain("iframe");
   expect(html.match(/<button/g)).toHaveLength(1);
 });

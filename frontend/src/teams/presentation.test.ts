@@ -94,15 +94,15 @@ const fold = (...tail: ServerEvent[]) =>
   );
 const identities = (...tail: ServerEvent[]) => selectPresentation(fold(...tail)).byAgent;
 
-it("orders presentation by team, plan, numeric subtask and agent ID with unknowns last", () => {
+it("orders presentation by team, numeric ordinal and agent ID with unknowns last", () => {
   const identity = identities(agent("known")).known;
   if (!identity) throw new Error("Missing identity");
   const rows = [
     { ...identity, agentId: "later-team", order: 1, planId: null },
-    { ...identity, agentId: "later-plan", planId: "q", subtask: 1 },
-    { ...identity, agentId: "later-subtask", planId: "p", subtask: 10 },
-    { ...identity, agentId: "b", planId: "p", subtask: 2 },
-    { ...identity, agentId: "a", planId: "p", subtask: 2 },
+    { ...identity, agentId: "later-plan", planId: "a", subtask: 1, ordinal: 11 },
+    { ...identity, agentId: "later-subtask", planId: "p", subtask: 10, ordinal: 10 },
+    { ...identity, agentId: "b", planId: "p", subtask: 2, ordinal: 2 },
+    { ...identity, agentId: "a", planId: "z", subtask: 2, ordinal: 2 },
     { ...identity, agentId: "no-plan", planId: null, subtask: null },
   ];
   const before = structuredClone(rows);
@@ -128,12 +128,12 @@ it("shares lead identity across plans and slots while retaining each plan's indi
     plan("q", "lead", ["three"]),
     agent("three", { plan_id: "q" }),
   );
-  expect(rows.one).toMatchObject({ team: "lead", label: "A·1 · plan 1", hue: "A", planId: "p" });
+  expect(rows.one).toMatchObject({ team: "lead", label: "A·1", hue: "A", planId: "p" });
   expect(rows.two).toMatchObject({ team: "lead", label: "A·2", hue: "A" });
-  expect(rows.three).toMatchObject({ label: "A·1 · plan 2", planId: "q" });
+  expect(rows.three).toMatchObject({ label: "A·3", planId: "q" });
   expect(rows.lead).toMatchObject({ kind: "lead", label: "A" });
 });
-it("qualifies colliding single-subtask labels by first-observed plan order within their lead", () => {
+it("numbers single-subtask plans in first-observed order across their lead", () => {
   const prefix = [
     plan("z-first", "lead", ["one"]),
     agent("one", { plan_id: "z-first" }),
@@ -151,19 +151,17 @@ it("qualifies colliding single-subtask labels by first-observed plan order withi
   );
   const { byAgent } = selectPresentation(future);
   expect(byAgent.one).toMatchObject({
-    label: "A·1 · plan 1",
+    label: "A·1",
     subtask: 1,
-    planContext: { shortLabel: "A·1", caption: "plan 1" },
   });
   expect(byAgent.two).toMatchObject({
-    label: "A·1 · plan 2",
+    label: "A·2",
     subtask: 1,
-    planContext: { shortLabel: "A·1", caption: "plan 2" },
   });
   expect(byAgent.other?.label).toBe("B·1");
   expect(byAgent.lead?.label).toBe("A");
   expect(byAgent.one?.hue).toBe(byAgent.two?.hue);
-  expect(Object.isFrozen(byAgent.one?.planContext)).toBe(true);
+  expect(byAgent.one?.planContext).toBeUndefined();
   expect(selectPresentation(past).byAgent.one?.label).toBe("A·1");
   expect(selectPresentation(fold(...future.decisionEvents)).byAgent).toEqual(byAgent);
 });
@@ -315,4 +313,62 @@ it("introduces a lead before its children and breaks equal idle times by first o
   expect(rows.new).toMatchObject({ label: "G", hue: "A" });
   // A stale idle revision cannot reserve the terminal lead's hue again.
   expect(identities(...prefix, lead("first", { state: "idle" }), agent("new")).new?.hue).toBe("A");
+});
+
+it("reserves team-wide ordinals for waiting siblings across revisions, delayed assignment and reused seats", () => {
+  const first = plan("p", "lead", ["one", null]);
+  const second = plan("q", "lead", ["three"]);
+  const revised = plan("p", "lead", ["one", "two"]);
+  if (revised.type !== "plan.updated") throw new Error("Missing plan");
+  const state = fold(
+    first,
+    agent("one", { plan_id: "p", slot: "A" }),
+    second,
+    agent("three", { plan_id: "q", slot: "B" }),
+    resolve("one"),
+    { ...revised, payload: { ...revised.payload, revision: 2 } },
+    agent("two", { plan_id: "p", slot: "A" }),
+    first,
+  );
+  const { byAgent } = selectPresentation(state);
+  expect(byAgent.one).toMatchObject({ label: "A·1", subtask: 1 });
+  expect(byAgent.two).toMatchObject({ label: "A·2", subtask: 2 });
+  expect(byAgent.three).toMatchObject({ label: "A·3", subtask: 1 });
+});
+
+it("keeps historical agent identities when a later plan revision withholds assignments", () => {
+  const assigned = plan("p", "lead", ["one", "two"]);
+  const withheld = plan("p", "lead", [null, null]);
+  if (withheld.type !== "plan.updated") throw new Error("Missing plan");
+  const rows = identities(
+    assigned,
+    agent("one", { plan_id: "p" }),
+    agent("two", { plan_id: "p" }),
+    { ...withheld, payload: { ...withheld.payload, revision: 2 } },
+  );
+  expect(rows.one).toMatchObject({ label: "A·1", subtask: 1 });
+  expect(rows.two).toMatchObject({ label: "A·2", subtask: 2 });
+});
+
+it("sorts team members by reserved ordinal across reversed plan IDs and delayed assignments", () => {
+  const first = plan("z-first", "lead", ["one", null]);
+  const assigned = plan("z-first", "lead", ["one", "two"]);
+  if (assigned.type !== "plan.updated") throw new Error("Missing plan");
+  const state = fold(
+    lead("lead"),
+    first,
+    agent("one", { plan_id: "z-first" }),
+    plan("a-second", "lead", ["three", "four"]),
+    agent("four", { plan_id: "a-second", slot: "F" }),
+    agent("three", { plan_id: "a-second", slot: "B" }),
+    { ...assigned, payload: { ...assigned.payload, revision: 2 } },
+    agent("two", { plan_id: "z-first", slot: "A" }),
+  );
+  const { byAgent } = selectPresentation(state);
+  expect(
+    Object.values(byAgent)
+      .sort(compareAgentPresentation)
+      .map((item) => item.label),
+  ).toEqual(["A", "A·1", "A·2", "A·3", "A·4"]);
+  expect([byAgent.two?.subtask, byAgent.three?.subtask]).toEqual([2, 1]);
 });

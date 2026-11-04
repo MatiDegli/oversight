@@ -32,16 +32,26 @@ export default function LeadThreadRows({
   conversation,
   onReady,
   renderView,
+  renderPlan,
 }: {
   conversation: LeadConversation;
   onReady?: () => void;
+  renderPlan?: (planId: string) => ReactNode;
   renderView?: (
     entry: Extract<LeadConversation["entries"][number], { kind: "lead-view" }>,
   ) => ReactNode;
 }) {
   useLayoutEffect(() => onReady?.(), [onReady]);
   return conversation.entries.map((entry) => {
-    if (entry.kind === "lead-status" || entry.kind === "lead-plan") return null;
+    if (entry.kind === "lead-status") return null;
+    if (entry.kind === "lead-plan") {
+      if (!renderPlan) return null;
+      return (
+        <div role="listitem" key={`plan:${entry.planId}`}>
+          {renderPlan(entry.planId)}
+        </div>
+      );
+    }
     if (entry.kind === "lead-view") {
       if (viewCardTitle(entry.event.payload.view) === null) return null;
       return (

@@ -121,6 +121,7 @@ async def real_preview(
             return PreviewCandidate("run-20261103-000000", "agent-1", "change-1", 1, head, tree)
 
         profile = PreviewProfile(
+            enabled=True,
             adapter=REPO_ROOT / "backend/src/oversight/preview_adapter.py",
             interpreter=Path(sys.executable),
             ports=(free_port(), free_port()),

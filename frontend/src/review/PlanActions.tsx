@@ -3,26 +3,30 @@ import { Clock, X } from "lucide-react";
 import type { Plan, QueuedTask } from "@contracts";
 import type { State } from "../state";
 import { replayDecisionWords, useDecisions } from "./DecisionContext";
-import {
-  dependencyWords,
-  firstWaveSize,
-  planAttemptPending,
-  planFits,
-  selectPlanQueue,
-} from "./planSelectors";
+import { firstWaveSize, planAttemptPending, planFits, selectPlanQueue } from "./planSelectors";
+import { PlanFlow } from "./PlanFlow";
 import "./planActions.css";
 
 export default function PlanActions({
   state,
   plan,
   slots,
+  onReview,
 }: {
   state: State;
   plan: Plan;
   slots: { held: number; total: number } | null;
+  onReview?: (id: string) => void;
 }) {
   const { planActions, replayOf } = useDecisions();
   const queue = selectPlanQueue(state, plan)?.payload;
+  const undispatched =
+    plan.state === "proposed" &&
+    (!plan.queued_task_id || queue?.state === "queued" || queue?.state === "blocked");
+  const dispatched =
+    ["starting", "running", "completed"].includes(plan.state) ||
+    !!plan.subtasks?.some((task) => task.agent_id !== null) ||
+    !!(queue && ["starting", "running", "completed"].includes(queue.state));
   const wave = firstWaveSize(plan);
   const waiting =
     queue?.detail ??
@@ -35,9 +39,11 @@ export default function PlanActions({
       : queue?.state === "queued"
         ? "Waiting for slot evidence."
         : null);
-  const explanation = plan.queued_task_id
-    ? waiting
-    : `${String(wave)} ${wave === 1 ? "subtask starts" : "subtasks start"} first${wave < (plan.subtasks?.length ?? 0) ? "; the rest start after a prerequisite merges" : ""}.`;
+  const explanation = !undispatched
+    ? null
+    : plan.queued_task_id
+      ? waiting
+      : `${String(wave)} ${wave === 1 ? "subtask starts" : "subtasks start"} first${wave < (plan.subtasks?.length ?? 0) ? "; the rest start after a prerequisite merges" : ""}.`;
   return (
     <div className="plan-content">
       {plan.queued_task_id && (
@@ -53,27 +59,7 @@ export default function PlanActions({
         </p>
       )}
       {plan.subtasks && (
-        <div className="plan-piece">
-          <header>
-            <strong>Plan</strong>
-            <span>Drafted by the lead</span>
-            <span className="plan-count">{plan.subtasks.length} subtasks</span>
-          </header>
-          <ol>
-            {plan.subtasks.map((task, index) => (
-              <li key={index}>
-                <span className="plan-circle" aria-hidden="true" />
-                <div>
-                  <p>
-                    <span className="plan-number">{index + 1}</span>
-                    {task.task}
-                  </p>
-                  <p className="plan-condition">{dependencyWords(task)}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </div>
+        <PlanFlow state={state} plan={plan} dispatched={dispatched} onReview={onReview} />
       )}
       {plan.state === "failed" ? (
         <blockquote>
@@ -90,11 +76,12 @@ export default function PlanActions({
               {explanation}
             </p>
           )}
-          {planActions ? (
-            <PlanControls state={state} plan={plan} queue={queue} />
-          ) : (
-            <p className="plan-explanation">{replayDecisionWords(replayOf)}</p>
-          )}
+          {undispatched &&
+            (planActions ? (
+              <PlanControls state={state} plan={plan} queue={queue} />
+            ) : (
+              <p className="plan-explanation">{replayDecisionWords(replayOf)}</p>
+            ))}
         </>
       )}
     </div>

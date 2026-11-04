@@ -11,18 +11,15 @@ import { themes } from "../theme";
 import design from "../../../DESIGN.md?raw";
 import decisions from "../../../DECISIONS.md?raw";
 
-it("documents the collision qualifier in both label rules and this front's decision", () => {
+it("documents stable team-wide ordinals in both label rules and the superseding decision", () => {
   const rules = [
     design.split("**The Never Alone Rule.**")[1]?.split("\n\n")[0],
     design.split("**Agent labels.**")[1]?.split("\n\n")[0],
-    decisions
-      .split("## 2026-11-02 — Team hue and agent label, packet b-1102f")[1]
-      ?.split("\n## ")[0],
+    decisions.split("## 2026-11-03 — Team-wide agent ordinals and read-only plan progress")[1],
   ];
   for (const rule of rules) {
-    expect(rule).toContain(" · plan k");
-    expect(rule).toContain("first-observed order within its lead");
-    expect(rule).toContain("only when labels collide");
+    expect(rule).toContain("team-wide");
+    expect(rule).toContain("first-observed");
   }
 });
 
@@ -69,7 +66,7 @@ it.each(["dark", "day"] as const)(
       ["one", 1],
       ["two", 2],
     ] as const) {
-      const label = `A·1 · plan ${String(ordinal)}`;
+      const label = `A·${String(ordinal)}`;
       const card = selectAgentCard(state, id);
       const conversation = selectConversation(state, id, []);
       if (!card || !conversation) throw new Error("Missing agent");
@@ -77,14 +74,12 @@ it.each(["dark", "day"] as const)(
       expect(cardHtml).toContain(`aria-label="Agent ${label}"`);
       expect(cardHtml).toMatch(new RegExp(`<h3[^>]*>Agent ${label}</h3>`));
       expect(rail).toContain(`aria-label="Agent ${label}: Working"`);
-      expect(rail).toContain(`>plan ${String(ordinal)}</span>`);
+      expect(rail).not.toContain("rail-plan-caption");
       expect(chat).toContain(`>Agent ${label}</span>`);
       expect(chat).toContain(`aria-label="Agent ${label}: Same subtask.`);
       const header = renderToStaticMarkup(<ConversationPanelHeader header={conversation.header} />);
       expect(header).toMatch(new RegExp(`<h2[^>]*>Agent ${label}</h2>`));
-      expect(map).toContain(
-        `A·1 editing<span class="map-agent-caption">plan ${String(ordinal)}</span></div>`,
-      );
+      expect(map).toContain(`${label} editing</div>`);
     }
   },
 );

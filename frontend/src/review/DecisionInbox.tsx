@@ -17,7 +17,7 @@ import { selectPlanEvidence, selectRetainedPlans } from "./planSelectors";
 import "./inbox.css";
 
 const PlanActions = lazy(() => import("./PlanActions"));
-const planPiece = (state: State, plan: Plan) => (
+const planPiece = (state: State, plan: Plan, onReview?: (id: string) => void) => (
   <Suspense
     fallback={
       <div className="plan-content">
@@ -30,6 +30,7 @@ const planPiece = (state: State, plan: Plan) => (
       state={state}
       plan={plan}
       slots={slotUsage(state)}
+      onReview={onReview}
     />
   </Suspense>
 );
@@ -95,7 +96,7 @@ function InboxRow({
           ))}
         </ul>
       )}
-      {plan?.subtasks && planPiece(state, plan)}
+      {plan?.subtasks && planPiece(state, plan, onReview)}
       {example && <Example row={example} identity={identity} />}
       <InboxAnswer state={state} entry={entry} />
       {change && onReview && (
@@ -203,7 +204,9 @@ export function DecisionInbox({
                   />
                 );
               })
-            ) : retained.queued.length || retained.failed.length ? null : (
+            ) : retained.queued.length ||
+              retained.running.length ||
+              retained.failed.length ? null : (
               <div className="inbox-empty">
                 <Inbox aria-hidden="true" size={28} />
                 <h3>You can keep watching</h3>
@@ -213,18 +216,26 @@ export function DecisionInbox({
                 </p>
               </div>
             )}
-            {(["queued", "failed"] as const).map(
+            {(["queued", "running", "failed"] as const).map(
               (group) =>
                 retained[group].length > 0 && (
                   <section
                     className="plan-group"
                     aria-label={
-                      group === "queued" ? "Queued, waiting for slots" : "Ended without running"
+                      group === "queued"
+                        ? "Queued, waiting for slots"
+                        : group === "running"
+                          ? "Running plans"
+                          : "Ended without running"
                     }
                     key={group}
                   >
                     <h3 className="group-label">
-                      {group === "queued" ? "Queued, waiting for slots" : "Ended without running"}
+                      {group === "queued"
+                        ? "Queued, waiting for slots"
+                        : group === "running"
+                          ? "Running plans"
+                          : "Ended without running"}
                     </h3>
                     {retained[group].map(({ payload: plan, firstTs }) => (
                       <article className="inbox-row" key={plan.plan_id}>
@@ -237,7 +248,7 @@ export function DecisionInbox({
                         {group === "queued" && plan.detail && plan.detail !== plan.task && (
                           <p>{plan.detail}</p>
                         )}
-                        {planPiece(state, plan)}
+                        {planPiece(state, plan, onReview)}
                       </article>
                     ))}
                   </section>

@@ -231,6 +231,7 @@ describe("applyEvent", () => {
       },
       run: newRun,
       stageEvents: [event(1, "run.started", newRun)],
+      mainHeads: [{ seq: 1, commit: newRun.base_commit }],
       runStartedAt: "2026-10-27T14:03:12.345Z",
       lastSeq: 1,
       // The new run's first event is its "now"; nothing of the old run's times survives.

@@ -115,6 +115,7 @@ def wire_real_preview(harness, monkeypatch, pins):
         landed,
         "profile",
         lambda: PreviewProfile(
+            enabled=True,
             adapter=REPO_ROOT / "backend/src/oversight/preview_adapter.py",
             interpreter=Path(sys.executable),
             ports=(free_port(), free_port()),
