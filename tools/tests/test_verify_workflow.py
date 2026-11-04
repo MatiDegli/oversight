@@ -222,6 +222,19 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
         assert_ci_triggers(ci.replace("on:\n", "on:\n  pull_request:\n", 1))
 
 
+@pytest.mark.parametrize(
+    "filename,job_id",
+    [
+        ("ci.yml", "browser"),
+        ("verify-frontend.yml", "browser-1"),
+        ("verify-frontend.yml", "browser-2"),
+    ],
+)
+def test_browser_jobs_use_supported_host(filename: str, job_id: str) -> None:
+    jobs = mapping(mapping((WORKFLOWS / filename).read_text())["jobs"])
+    assert mapping(jobs[job_id])["runs-on"] == "ubuntu-24.04"
+
+
 WINDOWS_PATHS = (
     "desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, "
     "docs/**, "
