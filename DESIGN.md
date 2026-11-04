@@ -1002,19 +1002,25 @@ Settings the available panel height; fields stack and the Settings opener remain
 - **Models and keys:** separate Meta and Baseten key rows show neutral text pills: Configured,
   Missing or Invalid, from the saved file's parsed state. They never show a key value or imply a
   provider was contacted. Each password field loads empty, labeled by provider, with Replace key
-  as its placeholder; Clear key explicitly queues an empty value. The cross-review switch
-  shares this section's Save button.
+  as its placeholder. Deleting a typed replacement sends nothing. Only Clear key queues an
+  empty value, shows `Key will be cleared when you save`, and offers Undo until saved. The
+  cross-review switch shares this section's Save button.
 - **Limits and budget:** numeric inputs show Meta and Baseten budgets in USD, four input/output
-  prices in USD per million tokens, and the positive whole-number agent cap in agents. Only
+  prices in USD per million tokens, Brake at as a whole-number share of the budget (1–100%),
+  and the positive whole-number agent cap in agents. Emptying the brake or agent cap removes
+  its file declaration, restoring 90% or 4 agents; each field explains its default. Only
   changed fields in this section are sent by its Save button. Other limits and protected-area
-  editing remain absent until supported. The spending brake still refuses new runs above 90%.
+  editing remain absent until supported. The brake refuses new runs above the configured share,
+  90% by default.
 - **Save and apply:** Keys stay in .env. Both sections save to the same startup file atomically.
   Saved appears only after a supported save succeeds, as `Saved.` beside that section's Save.
-  A persistent restart line says `Restart to apply: File > Reload settings.` for an installed
-  desktop launch or `Restart the server to apply.` for a browser server. The desktop menu is
+  The section that was saved keeps a persistent restart line beside its Save status. It says
+  `Restart to apply: File > Reload settings.` for an installed desktop launch, or
+  `Restart the server to apply.` for a browser server. The desktop menu is
   delivered separately; saving does not change the running configuration. Refusals keep typed
-  values and display the server's message in an alert. An environment override makes the row
-  read-only with `Set by the environment`. Replay sections are read-only and make no file request.
+  values and display the server's names-and-reasons message beside that section's Save status.
+  An environment override makes the row read-only with `Set by the environment`.
+  Replay sections are read-only and make no file request.
   Loading, saving and errors never move focus. All fields follow Inputs / Fields above.
 
 ### Graph nodes and their states (signature component)

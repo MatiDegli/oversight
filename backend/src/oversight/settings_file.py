@@ -23,25 +23,47 @@ DEFAULTED: set[EditableSettingName] = {"OVERSIGHT_MAX_AGENTS", "OVERSIGHT_SPEND_
 SECRETS = {"META_API_KEY", "BASETEN_API_KEY"}
 
 
-def _invalid(name: EditableSettingName, value: str) -> bool:
+type SettingProblem = Literal[
+    "contains a control character",
+    "contains spaces",
+    "must be a positive whole number",
+    "must be a whole number from 1 to 100",
+    "must be a positive amount",
+]
+
+
+class SettingsRejected(Exception):
+    """Only allowlisted names and fixed reasons may describe a refused patch."""
+
+    def __init__(self, problems: dict[EditableSettingName, SettingProblem]) -> None:
+        super().__init__(
+            "Invalid settings: "
+            + "; ".join(f"{name}: {problems[name]}" for name in sorted(problems))
+            + "."
+        )
+
+
+def _problem(name: EditableSettingName, value: str) -> SettingProblem | None:
     if any(unicodedata.category(char) in {"Cc", "Cf", "Cs", "Zl", "Zp"} for char in value):
-        return True
+        return "contains a control character"
     if name in SECRETS:
-        return any(char.isspace() for char in value)
+        return "contains spaces" if any(char.isspace() for char in value) else None
     if name == "OVERSIGHT_SPEND_BRAKE_PERCENT":
-        return resolve_spend_brake_percent({name: value}) is None
+        return (
+            "must be a whole number from 1 to 100"
+            if resolve_spend_brake_percent({name: value}) is None
+            else None
+        )
     if name == "OVERSIGHT_MAX_AGENTS":
         try:
             resolve_max_agents({name: value})
         except ValueError:
-            return True
-        return False
-    if not value:
-        return False
-    if name == "OVERSIGHT_CROSS_REVIEW":
-        # Startup treats every string other than case-insensitive true as false.
-        return False
-    return positive_amount(value) is None
+            return "must be a positive whole number"
+        return None
+    # Startup treats every string other than case-insensitive true as false.
+    if not value or name == "OVERSIGHT_CROSS_REVIEW":
+        return None
+    return "must be a positive amount" if positive_amount(value) is None else None
 
 
 def _editable(values: dict[str, str]) -> dict[str, str]:
@@ -126,7 +148,7 @@ class SettingsFile:
                     state="missing"
                     if name not in values
                     else "invalid"
-                    if _invalid(name, value)
+                    if _problem(name, value)
                     else "set"
                     if value
                     else "missing",
@@ -146,24 +168,18 @@ class SettingsFile:
 
     def _save(self, values: dict[EditableSettingName, str]) -> SettingsView:
         path = self._path()
-        bad = {
-            name
-            for name, value in values.items()
-            if not (name in DEFAULTED and value == "") and _invalid(name, value)
-        }
-        # Each editable parser is independent. Unsent file values and process overrides
-        # cannot block this patch or be blamed for it.
+        # Shared startup parsers validate each sent name independently. Unsent file
+        # values and process overrides cannot block this patch or be blamed for it.
+        problems: dict[EditableSettingName, SettingProblem] = {}
         for name, value in values.items():
-            candidate = {} if name in DEFAULTED and value == "" else {name: value}
-            try:
-                parsed = Settings.from_values(candidate)
-            except ValueError:
-                bad.add(name)
-            else:
-                if name in parsed.setting_problems:
-                    bad.add(name)
-        if bad:
-            raise ValueError("Invalid settings: " + ", ".join(sorted(bad)) + ".")
+            if name in DEFAULTED and value == "":
+                continue
+            if reason := _problem(name, value):
+                problems[name] = reason
+        if problems:
+            raise SettingsRejected(problems)
+        # Check readability and the shared byte bound before creating a replacement.
+        read_env_file(path)
         # Raw file reads retain line endings, comments, ordering and unrelated declarations.
         text = path.read_bytes().decode("utf-8") if path.exists() else ""
         if values:

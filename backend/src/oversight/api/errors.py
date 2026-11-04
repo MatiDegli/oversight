@@ -38,6 +38,25 @@ def error_response(
     return JSONResponse(body.model_dump(mode="json"), status_code=ERROR_STATUS[code])
 
 
+def _settings_validation_message(error: RequestValidationError) -> str:
+    names = set(get_args(EditableSettingName.__value__))
+    reasons = {
+        "string_too_long": "must be at most 512 characters",
+        "string_type": "must be text",
+    }
+    invalid = sorted(
+        {
+            (str(part), reasons.get(problem["type"], "must use a supported text value"))
+            for problem in error.errors()
+            for part in problem["loc"]
+            if part in names
+        }
+    )
+    if not invalid:
+        return "Invalid settings request."
+    return "Invalid settings: " + "; ".join(f"{name}: {reason}" for name, reason in invalid) + "."
+
+
 def install_error_handlers(app: FastAPI) -> None:
     def private(request: Request, response: JSONResponse) -> JSONResponse:
         if is_preview(request.scope):
@@ -55,17 +74,7 @@ def install_error_handlers(app: FastAPI) -> None:
                 request, error_response("invalid_request", "Live preview request is invalid.")
             )
         if request.url.path == "/settings":
-            names = set(get_args(EditableSettingName.__value__))
-            invalid = sorted(
-                {
-                    str(part)
-                    for problem in error.errors()
-                    for part in problem["loc"]
-                    if part in names
-                }
-            )
-            message = "Invalid settings" + (": " + ", ".join(invalid) if invalid else " request")
-            return error_response("invalid_request", message + ".")
+            return error_response("invalid_request", _settings_validation_message(error))
         body: object = error.body
         problems: list[str] = []
         for problem in error.errors():

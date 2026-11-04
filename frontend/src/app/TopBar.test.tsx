@@ -26,7 +26,7 @@ describe("the top bar", () => {
     expect(button).not.toContain("rounded-full");
     expect(button).not.toContain("disabled");
     expect(markup).toContain("Decisions ·");
-    expect(markup).toContain('class="font-mono tabular-nums">1</span>');
+    expect(markup).toContain('class="decisions-chip-count font-mono tabular-nums">1</span>');
     expect(markup).toContain('aria-label="Decisions: 1 pending. Open decisions inbox"');
     expect(render(14)).toContain("Nothing needs you");
     expect(render(14)).toContain("text-muted");
@@ -36,7 +36,8 @@ describe("the top bar", () => {
 
   it("keeps the decisions chip label in one inline run with a single space before the count", () => {
     expect(render(20, vi.fn())).toContain(
-      '<span>Decisions · <span class="font-mono tabular-nums">1</span></span>',
+      '<span><span class="decisions-chip-label">Decisions · </span>' +
+        '<span class="decisions-chip-count font-mono tabular-nums">1</span></span>',
     );
     expect(render(14, vi.fn())).toContain("<span>Nothing needs you</span>");
   });

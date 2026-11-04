@@ -10,6 +10,7 @@ import pytest
 from live_helpers import Scripts
 
 from oversight.app import ReplayConfig, create_app
+from oversight.limits import SizeLimitError
 from oversight.settings import REPO_ROOT, Settings
 from oversight_contracts.commands import SettingsView
 
@@ -298,7 +299,9 @@ async def test_bad_brake_is_rejected_without_writing(settings_file: Path, value:
         )
         assert response.status_code == 422
         assert "OVERSIGHT_SPEND_BRAKE_PERCENT" in response.json()["error"]["message"]
-        assert value not in response.text
+        assert response.json()["error"]["message"] == (
+            "Invalid settings: OVERSIGHT_SPEND_BRAKE_PERCENT: must be a whole number from 1 to 100."
+        )
     assert await asyncio.to_thread(settings_file.read_bytes) == before
 
 
@@ -364,3 +367,91 @@ async def test_rejection_names_only_invalid_sent_settings(settings_file: Path) -
         assert "OVERSIGHT_MAX_AGENTS" not in response.text
         assert "bad-sent" not in response.text and "bad-unsent" not in response.text
         assert await asyncio.to_thread(settings_file.read_bytes) == before
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ValueError("synthetic-read-detail"),
+        UnicodeDecodeError("utf-8", b"synthetic-raw-byte-\xff", 19, 20, "synthetic-decode-detail"),
+        SizeLimitError("synthetic-private-filename"),
+        OSError("synthetic-private-path"),
+        RuntimeError("synthetic-internal-detail"),
+    ],
+)
+async def test_unexpected_file_read_errors_have_one_fixed_response(
+    settings_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    before = await asyncio.to_thread(settings_file.read_bytes)
+    async with client_for(settings_file) as client:
+
+        def fail_read(_path: Path) -> dict[str, str]:
+            raise error
+
+        monkeypatch.setattr("oversight.settings_file.read_env_file", fail_read)
+        for response in (
+            await client.get("/settings"),
+            await client.put("/settings", json={"values": {"META_API_KEY": "replacement"}}),
+        ):
+            assert response.status_code == 422
+            assert response.json()["error"]["message"] == "Cannot read or save the settings file."
+            assert "synthetic" not in response.text
+
+    assert await asyncio.to_thread(settings_file.read_bytes) == before
+
+
+@pytest.mark.parametrize("error", [ValueError(SECRET), OSError(SECRET), RuntimeError(SECRET)])
+async def test_unexpected_file_write_errors_have_one_fixed_response(
+    settings_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    before = await asyncio.to_thread(settings_file.read_bytes)
+
+    def fail_write(_path: Path, _content: str) -> None:
+        raise error
+
+    monkeypatch.setattr("oversight.settings_file._atomic_write", fail_write)
+    async with client_for(settings_file) as client:
+        response = await client.put("/settings", json={"values": {"META_API_KEY": "replacement"}})
+        assert response.status_code == 422
+        assert response.json()["error"]["message"] == "Cannot read or save the settings file."
+        assert SECRET not in response.text
+    assert await asyncio.to_thread(settings_file.read_bytes) == before
+
+
+async def test_rejections_give_a_safe_reason_for_each_bad_sent_name(settings_file: Path) -> None:
+    values = {
+        "META_API_KEY": "synthetic key",
+        "BASETEN_API_KEY": "synthetic\nkey",
+        "OVERSIGHT_BUDGET_USD": "bad-amount",
+        "OVERSIGHT_MAX_AGENTS": "bad-count",
+        "OVERSIGHT_SPEND_BRAKE_PERCENT": "bad-share",
+    }
+    before = await asyncio.to_thread(settings_file.read_bytes)
+    async with client_for(settings_file) as client:
+        response = await client.put("/settings", json={"values": values})
+    assert response.status_code == 422
+    message = response.json()["error"]["message"]
+    for name, reason in {
+        "META_API_KEY": "contains spaces",
+        "BASETEN_API_KEY": "contains a control character",
+        "OVERSIGHT_BUDGET_USD": "must be a positive amount",
+        "OVERSIGHT_MAX_AGENTS": "must be a positive whole number",
+        "OVERSIGHT_SPEND_BRAKE_PERCENT": "must be a whole number from 1 to 100",
+    }.items():
+        assert f"{name}: {reason}" in message
+    for value in values.values():
+        assert value not in response.text
+    assert await asyncio.to_thread(settings_file.read_bytes) == before
+
+
+async def test_request_validation_gives_safe_length_reason(settings_file: Path) -> None:
+    value = "synthetic" * 100
+    async with client_for(settings_file) as client:
+        response = await client.put("/settings", json={"values": {"META_API_KEY": value}})
+    assert response.status_code == 422
+    assert "META_API_KEY: must be at most 512 characters" in response.json()["error"]["message"]
+    assert value not in response.text

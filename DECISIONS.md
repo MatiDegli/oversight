@@ -5152,3 +5152,25 @@ share. The brake still refuses only above the share, so equality remains admitte
 Published warning marks at 50% and 80% are dropped when at or above the brake;
 the ledger's warning states stay unchanged. `Budget.block_at` already carries
 the share to the UI. There is no contract change.
+
+
+## 2026-11-04 — Settings review: explicit clears and local save feedback
+
+The maintainer approved the eleventh editable name, OVERSIGHT_SPEND_BRAKE_PERCENT, after its
+startup parser landed on main. Contract version remains 1.22.0; Settings uses the shared whole
+number 1–100 parser and labels the field Brake at (% of budget). Empty cap or brake values remove
+all declarations for that name, restoring defaults of four agents and 90 percent. This supersedes
+the earlier empty-cap refusal and ten-name scope. The key-name guard withholds values regardless
+of an accidentally incorrect kind, as well as for every row whose kind is secret.
+
+Typing then deleting a key replacement removes the draft. Only Clear key queues an empty key;
+a visible “Key will be cleared when you save” line and Undo expose that intent until saved.
+Validation checks only sent names using startup parsers, independent of unsent invalid values or
+environment overrides. A dedicated SettingsRejected exception carries allowlisted names and fixed
+reasons, without values. Every other file read/save error uses “Cannot read or save the settings
+file.” Request-validation errors likewise use fixed reasons, never raw validator messages.
+
+Refusals and the persistent restart instruction sit beside the affected section's Save status,
+visible after either section's save at 1280×800. On phones the decisions chip retains its number
+beside the Settings gear, omitting the word Decisions visually while retaining its accessible
+label. Scripted API, state and browser regressions cover these cases; no paid call is needed.
