@@ -5,6 +5,7 @@ each block at its own indentation so a later job cannot satisfy an earlier job's
 """
 
 import asyncio
+import json
 import os
 import re
 import sys
@@ -31,22 +32,136 @@ STANDALONE_PNPM = {
     "name": "Use standalone pnpm executable",
     "run": r"""|
 python3 - <<'PY'
+import json
 import os
+import re
 from pathlib import Path
 
-root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+version_pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
+try:
+    declaration = json.loads(Path("frontend/package.json").read_text())["packageManager"]
+    match = re.fullmatch(r"pnpm@(" + version_pattern + r")", declaration)
+    if match is None or len(match[1]) > 80:
+        raise ValueError
+    version = match[1]
+    root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+except (OSError, RuntimeError, KeyError, TypeError, ValueError):
+    raise SystemExit("Require packageManager pnpm@<exact-version> and an existing setup root")
+
+
+def inspect(candidate):
+    try:
+        resolved = candidate.resolve(strict=True)
+        if not resolved.is_relative_to(root):
+            return None, "outside setup root"
+        if not resolved.is_file():
+            return None, "not a file"
+        with resolved.open("rb") as stream:
+            if stream.read(4) != b"\x7fELF":
+                return None, "not an ELF"
+        if not os.access(resolved, os.X_OK):
+            return None, "not executable"
+        metadata_path = (resolved.parent / "package.json").resolve(strict=True)
+        if not metadata_path.is_relative_to(root):
+            return None, "package metadata outside setup root"
+        metadata = json.loads(metadata_path.read_text())
+        found = metadata.get("version")
+        if (
+            not isinstance(found, str)
+            or len(found) > 80
+            or re.fullmatch(version_pattern, found) is None
+        ):
+            return None, "invalid package version"
+        if metadata.get("name") != "@pnpm/exe.linux-x64":
+            return None, f"version {found}: wrong package name"
+        if found != version:
+            return None, f"version {found}: expected {version}"
+        return resolved, f"version {found}: eligible"
+    except (OSError, RuntimeError, ValueError, AttributeError):
+        return None, "unreadable file or package metadata"
+
+
 executables = set()
-for candidate in root.glob("**/@pnpm/exe.linux-x64/pnpm"):
-    candidate = candidate.resolve(strict=True)
-    if not candidate.is_relative_to(root) or not candidate.is_file():
-        continue
-    with candidate.open("rb") as stream:
-        if stream.read(4) == b"\x7fELF" and os.access(candidate, os.X_OK):
-            executables.add(candidate)
+listing = []
+candidates = sorted(root.glob("**/@pnpm/exe.linux-x64/pnpm"))
+for candidate in candidates:
+    resolved, reason = inspect(candidate)
+    if resolved is not None:
+        executables.add(resolved)
+    if len(listing) < 10:
+        relative = json.dumps(str(candidate.relative_to(root))[:200], ensure_ascii=True)
+        listing.append(f"  {relative}: {reason}")
 if len(executables) != 1:
-    raise SystemExit("Expected exactly one executable standalone pnpm ELF in setup destination")
+    detail = "\n".join(listing) or "  no candidates found"
+    raise SystemExit(
+        f"Expected exactly one executable standalone pnpm ELF at {version}; "
+        f"matched {len(executables)} of {len(candidates)} candidates (first 10):\n{detail}"
+    )
+selected = executables.pop()
 with open(os.environ["GITHUB_PATH"], "a") as path:
-    path.write(str(executables.pop().parent) + "\n")
+    path.write(str(selected.parent) + "\n")
+print(f"Selected pnpm {version}: {json.dumps(str(selected.relative_to(root))[:200])}")
+PY""",
+}
+
+VERIFIED_PNPM = {
+    "name": "Verify standalone pnpm on PATH",
+    "run": r"""|
+pnpm_executable=$(command -v pnpm) || { echo "pnpm not found on PATH"; exit 1; }
+python3 - "$pnpm_executable" <<'PY'
+import asyncio
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
+try:
+    declaration = json.loads(Path("frontend/package.json").read_text())["packageManager"]
+    match = re.fullmatch(r"pnpm@(" + pattern + r")", declaration)
+    if match is None or len(match[1]) > 80:
+        raise ValueError
+    version = match[1]
+    root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+    executable = Path(sys.argv[1]).resolve(strict=True)
+    if not executable.is_relative_to(root):
+        raise SystemExit("PATH pnpm is outside setup root")
+    location = json.dumps(str(executable.relative_to(root))[:200], ensure_ascii=True)
+    if not executable.is_file() or not os.access(executable, os.X_OK):
+        raise SystemExit(f"PATH pnpm {location}: not an executable file")
+    with executable.open("rb") as stream:
+        if stream.read(4) != b"\x7fELF":
+            raise SystemExit(f"PATH pnpm {location}: not an ELF (expected {version})")
+except (OSError, RuntimeError, KeyError, TypeError, ValueError):
+    raise SystemExit("Cannot validate PATH pnpm or pinned packageManager")
+
+
+async def verify():
+    try:
+        process = await asyncio.create_subprocess_exec(
+            str(executable), "--version", stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+        except TimeoutError:
+            process.kill()
+            await process.wait()
+            raise SystemExit(f"PATH pnpm {location}: --version timed out")
+    except OSError:
+        raise SystemExit(f"PATH pnpm {location}: --version could not execute")
+    found = stdout.decode("ascii", errors="replace").strip()
+    observed = found if re.fullmatch(pattern, found) and len(found) <= 80 else "<invalid output>"
+    if process.returncode != 0 or found != version:
+        raise SystemExit(
+            f"PATH pnpm {location}: ELF version {observed}, exit {process.returncode}; "
+            f"expected {version}"
+        )
+    print(f"Verified PATH pnpm {location}: ELF version {found}")
+
+
+asyncio.run(verify())
 PY""",
 }
 
@@ -146,6 +261,10 @@ def assert_verify_policy(verify: str, ci: str) -> None:
 
     check = parsed_steps["check"]
     ci_check = steps(mapping(ci_jobs["check"])["steps"])
+    assert len(check) == 13
+    assert len(ci_check) == 12
+    assert check[5] == ci_check[5] == VERIFIED_PNPM
+    check, ci_check = check[:5] + check[6:], ci_check[:5] + ci_check[6:]
     assert len(check) == 12
     assert len(ci_check) == 11
     assert check[3] == ci_check[3] == STANDALONE_PNPM
@@ -187,50 +306,209 @@ def test_verify_has_only_the_manual_backend_jobs_and_required_gates() -> None:
     assert_verify_policy((WORKFLOWS / "verify.yml").read_text(), (WORKFLOWS / "ci.yml").read_text())
 
 
-@pytest.mark.parametrize(
-    "layout", ["flat", "nested", "missing", "script", "mode", "escape", "many"]
-)
-def test_standalone_pnpm_selection_requires_a_unique_executable_elf(tmp_path, layout):
+def pnpm_fixture(tmp_path: Path, declaration: str = "pnpm@12.5.1") -> tuple[Path, Path]:
     root = tmp_path / "setup/node_modules"
     home = root / ".bin"
     home.mkdir(parents=True)
     (home / "pnpm").write_text("#!/bin/sh\nexec node ../pnpm/bin/pnpm.cjs\n")
-    target = root / "@pnpm/exe.linux-x64/pnpm"
-    if layout == "nested":
-        target = root / ".pnpm/exe/node_modules/@pnpm/exe.linux-x64/pnpm"
-    if layout != "missing":
-        target.parent.mkdir(parents=True)
-        target.write_bytes(b"#!/bin/sh\n" if layout == "script" else b"\x7fELFfixture")
-        target.chmod(0o644 if layout == "mode" else 0o755)
-    if layout == "escape":
-        outside = tmp_path / "outside"
-        target.rename(outside)
-        target.symlink_to(outside)
-    if layout == "many":
-        other = root / ".pnpm/other/node_modules/@pnpm/exe.linux-x64/pnpm"
-        other.parent.mkdir(parents=True)
-        other.write_bytes(b"\x7fELFother")
-        other.chmod(0o755)
+    frontend = tmp_path / "frontend"
+    frontend.mkdir()
+    (frontend / "package.json").write_text(json.dumps({"packageManager": declaration}))
     output = tmp_path / "github-path"
     output.write_text("existing\n")
+    return root, output
+
+
+def pnpm_candidate(root: Path, prefix: str = "", version: str = "12.5.1") -> Path:
+    target = root / prefix / "@pnpm/exe.linux-x64/pnpm"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"\x7fELFfixture")
+    target.chmod(0o755)
+    (target.parent / "package.json").write_text(
+        json.dumps({"name": "@pnpm/exe.linux-x64", "version": version})
+    )
+    return target
+
+
+def select_pnpm(tmp_path: Path, root: Path, output: Path):
     script = STANDALONE_PNPM["run"].removeprefix("|\npython3 - <<'PY'\n").removesuffix("PY")
     result = asyncio.run(
         run_process(
             [sys.executable, "-I", "-c", script],
             cwd=tmp_path,
             timeout_s=20,
-            env={"PNPM_HOME": str(home), "GITHUB_PATH": str(output)},
+            env={"PNPM_HOME": str(root / ".bin"), "GITHUB_PATH": str(output)},
         )
     )
     assert not result.timed_out
+    return result
+
+
+@pytest.mark.parametrize(
+    ("layout", "reason"),
+    [
+        ("flat", ""),
+        ("nested", ""),
+        ("runner_versions", ""),
+        ("alias", ""),
+        ("missing", "matched 0 of 0 candidates"),
+        ("script", "not an ELF"),
+        ("mode", "not executable"),
+        ("escape", "outside setup root"),
+        ("directory", "not a file"),
+        ("many", "matched 2 of 2 candidates"),
+        ("runner_same_version", "matched 2 of 2 candidates"),
+    ],
+)
+def test_standalone_pnpm_selection_requires_a_unique_executable_elf(tmp_path, layout, reason):
+    root, output = pnpm_fixture(tmp_path)
+    prefix = ".pnpm/exe/node_modules" if layout == "nested" else ""
+    target = root / prefix / "@pnpm/exe.linux-x64/pnpm"
+    if layout != "missing":
+        target = pnpm_candidate(root, prefix)
+    if layout in {"runner_versions", "runner_same_version"}:
+        metadata = target.parent / "package.json"
+        if layout == "runner_versions":
+            metadata.write_text(json.dumps({"name": "@pnpm/exe.linux-x64", "version": "12.3.4"}))
+        target = pnpm_candidate(root, ".bin/global/v11/hash/node_modules/.pnpm/exe/node_modules")
+    if layout == "script":
+        target.write_bytes(b"#!/bin/sh\n")
+    if layout == "mode":
+        target.chmod(0o644)
+    if layout in {"escape", "directory"}:
+        target.rename(tmp_path / "outside")
+        if layout == "escape":
+            target.symlink_to(tmp_path / "outside")
+        else:
+            target.mkdir()
+    if layout == "many":
+        pnpm_candidate(root, ".pnpm/other/node_modules")
+    if layout == "alias":
+        alias = root / ".pnpm/alias/node_modules/@pnpm/exe.linux-x64/pnpm"
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to(target)
+    result = select_pnpm(tmp_path, root, output)
     # Windows does not expose POSIX execute bits; this selector runs on Linux check jobs.
-    if layout in {"flat", "nested"} or (layout == "mode" and os.name == "nt"):
+    if not reason or (layout == "mode" and os.name == "nt"):
         assert result.returncode == 0, result.stderr
         assert output.read_text() == f"existing\n{target.parent}\n"
+        assert "Selected pnpm 12.5.1:" in result.stdout
     else:
         assert result.returncode != 0
         assert "Expected exactly one executable standalone pnpm ELF" in result.stderr
+        assert reason in result.stderr
+        assert str(tmp_path) not in result.stderr
+        if layout == "runner_same_version":
+            assert result.stderr.count("version 12.5.1: eligible") == 2
+            assert '"@pnpm/exe.linux-x64/pnpm"' in result.stderr
+            assert '".bin/global/v11/hash/' in result.stderr
         assert output.read_text() == "existing\n"
+
+
+@pytest.mark.parametrize(
+    ("metadata", "reason"),
+    [
+        ({"name": "pnpm", "version": "12.5.1"}, "version 12.5.1: wrong package name"),
+        ({"name": "@pnpm/exe.linux-x64", "version": "12.3.4"}, "version 12.3.4: expected 12.5.1"),
+        ({"name": "@pnpm/exe.linux-x64", "version": "private-value"}, "invalid package version"),
+        ({"name": "@pnpm/exe.linux-x64", "version": 1251}, "invalid package version"),
+        ([], "unreadable file or package metadata"),
+        (None, "unreadable file or package metadata"),
+    ],
+)
+def test_standalone_pnpm_requires_adjacent_matching_metadata(tmp_path, metadata, reason):
+    root, output = pnpm_fixture(tmp_path)
+    target = pnpm_candidate(root)
+    package = target.parent / "package.json"
+    if metadata is None:
+        package.unlink()
+    else:
+        package.write_text(json.dumps(metadata))
+    result = select_pnpm(tmp_path, root, output)
+    assert result.returncode != 0
+    assert reason in result.stderr
+    assert "private-value" not in result.stderr
+    assert output.read_text() == "existing\n"
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    ["npm@12.5.1", "pnpm@^12.5.1", "pnpm@12.5.1+anything", "pnpm@12.5.1\n", "pnpm@12.5.1@other"],
+)
+def test_standalone_pnpm_refuses_nonexact_package_manager(tmp_path, declaration):
+    root, output = pnpm_fixture(tmp_path, declaration)
+    pnpm_candidate(root)
+    result = select_pnpm(tmp_path, root, output)
+    assert result.returncode != 0
+    assert "Require packageManager pnpm@<exact-version>" in result.stderr
+    assert output.read_text() == "existing\n"
+
+
+def test_standalone_pnpm_failure_listing_is_bounded_and_relative(tmp_path):
+    root, output = pnpm_fixture(tmp_path)
+    for index in range(12):
+        pnpm_candidate(root, f".pnpm/{index:02}/node_modules", "12.3.4")
+    result = select_pnpm(tmp_path, root, output)
+    assert result.returncode != 0
+    assert "matched 0 of 12 candidates (first 10):" in result.stderr
+    assert result.stderr.count("version 12.3.4: expected 12.5.1") == 10
+    assert '".pnpm/00/node_modules/@pnpm/exe.linux-x64/pnpm"' in result.stderr
+    assert ".pnpm/10/" not in result.stderr
+    assert str(tmp_path) not in result.stderr
+    assert output.read_text() == "existing\n"
+
+
+@pytest.mark.parametrize(
+    ("kind", "reported", "exit_code", "expected"),
+    [
+        ("elf", "12.5.1\n", 0, "Verified PATH pnpm"),
+        ("elf", "12.3.4\n", 0, "ELF version 12.3.4, exit 0; expected 12.5.1"),
+        ("elf", "12.5.1\n", 1, "ELF version 12.5.1, exit 1; expected 12.5.1"),
+        ("elf", "private-value\n", 0, "ELF version <invalid output>"),
+        ("script", "12.5.1\n", 0, "not an ELF"),
+        ("outside", "12.5.1\n", 0, "outside setup root"),
+    ],
+)
+def test_standalone_pnpm_path_proof_checks_format_and_version(
+    tmp_path, kind, reported, exit_code, expected
+):
+    root, _ = pnpm_fixture(tmp_path)
+    target = pnpm_candidate(root)
+    if kind == "script":
+        target.write_bytes(b"#!/bin/sh\n")
+    if kind == "outside":
+        target.rename(tmp_path / "outside")
+        target = tmp_path / "outside"
+    script = VERIFIED_PNPM["run"].split("<<'PY'\n", 1)[1].removesuffix("PY")
+    # Intercept only process execution: validate the exact version command and its result.
+    harness = f"""
+import asyncio
+import sys
+sys.argv = ["-", {str(target)!r}]
+class Process:
+    returncode = {exit_code}
+    async def communicate(self):
+        return {reported.encode()!r}, None
+async def start(*args, **kwargs):
+    assert args == ({str(target)!r}, "--version")
+    assert kwargs == {{"stdout": asyncio.subprocess.PIPE, "stderr": asyncio.subprocess.DEVNULL}}
+    return Process()
+asyncio.create_subprocess_exec = start
+exec({script!r})
+"""
+    result = asyncio.run(
+        run_process(
+            [sys.executable, "-I", "-c", harness],
+            cwd=tmp_path,
+            timeout_s=20,
+            env={"PNPM_HOME": str(root / ".bin")},
+        )
+    )
+    assert not result.timed_out
+    assert (result.returncode == 0) == (expected == "Verified PATH pnpm")
+    assert expected in result.stdout + result.stderr
+    assert "private-value" not in result.stdout + result.stderr
+    assert str(tmp_path) not in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(
@@ -259,6 +537,15 @@ def test_standalone_pnpm_selection_requires_a_unique_executable_elf(tmp_path, la
         ("          standalone: true\n", ""),
         ("standalone: true", "standalone: false"),
         ("node-version: 24", "node-version: 22"),
+        (
+            "      - name: Use standalone pnpm executable\n",
+            "      - name: Use standalone pnpm executable\n        if: false\n",
+        ),
+        (
+            "      - name: Verify standalone pnpm on PATH\n",
+            "      - name: Verify standalone pnpm on PATH\n        if: false\n",
+        ),
+        ("command -v pnpm", "command -v node"),
         ("      - name: Set up uv\n", "      - name: Set up uv\n        if: false\n"),
         (
             "      - name: Install dependencies\n",
@@ -405,6 +692,8 @@ def assert_windows_policy(text: str) -> None:
 def assert_windows_steps(items: list[dict[str, str]]) -> None:
     ci = mapping(mapping((WORKFLOWS / "ci.yml").read_text())["jobs"])
     setup = steps(mapping(ci["check"])["steps"])
+    assert setup[5] == VERIFIED_PNPM
+    setup = setup[:5] + setup[6:]
     assert setup[3] == STANDALONE_PNPM
     setup = (setup[:3] + setup[4:])[:4]
     assert mapping(setup[2]["with"]) == {

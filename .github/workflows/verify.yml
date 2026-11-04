@@ -31,27 +31,138 @@ jobs:
       - name: Use standalone pnpm executable
         run: |
           python3 - <<'PY'
+          import json
           import os
+          import re
           from pathlib import Path
 
-          root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+          version_pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
+          try:
+              declaration = json.loads(Path("frontend/package.json").read_text())["packageManager"]
+              match = re.fullmatch(r"pnpm@(" + version_pattern + r")", declaration)
+              if match is None or len(match[1]) > 80:
+                  raise ValueError
+              version = match[1]
+              root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+          except (OSError, RuntimeError, KeyError, TypeError, ValueError):
+              raise SystemExit("Require packageManager pnpm@<exact-version> and an existing setup root")
+
+
+          def inspect(candidate):
+              try:
+                  resolved = candidate.resolve(strict=True)
+                  if not resolved.is_relative_to(root):
+                      return None, "outside setup root"
+                  if not resolved.is_file():
+                      return None, "not a file"
+                  with resolved.open("rb") as stream:
+                      if stream.read(4) != b"\x7fELF":
+                          return None, "not an ELF"
+                  if not os.access(resolved, os.X_OK):
+                      return None, "not executable"
+                  metadata_path = (resolved.parent / "package.json").resolve(strict=True)
+                  if not metadata_path.is_relative_to(root):
+                      return None, "package metadata outside setup root"
+                  metadata = json.loads(metadata_path.read_text())
+                  found = metadata.get("version")
+                  if (
+                      not isinstance(found, str)
+                      or len(found) > 80
+                      or re.fullmatch(version_pattern, found) is None
+                  ):
+                      return None, "invalid package version"
+                  if metadata.get("name") != "@pnpm/exe.linux-x64":
+                      return None, f"version {found}: wrong package name"
+                  if found != version:
+                      return None, f"version {found}: expected {version}"
+                  return resolved, f"version {found}: eligible"
+              except (OSError, RuntimeError, ValueError, AttributeError):
+                  return None, "unreadable file or package metadata"
+
+
           executables = set()
-          for candidate in root.glob("**/@pnpm/exe.linux-x64/pnpm"):
-              candidate = candidate.resolve(strict=True)
-              if not candidate.is_relative_to(root) or not candidate.is_file():
-                  continue
-              with candidate.open("rb") as stream:
-                  if stream.read(4) == b"\x7fELF" and os.access(candidate, os.X_OK):
-                      executables.add(candidate)
+          listing = []
+          candidates = sorted(root.glob("**/@pnpm/exe.linux-x64/pnpm"))
+          for candidate in candidates:
+              resolved, reason = inspect(candidate)
+              if resolved is not None:
+                  executables.add(resolved)
+              if len(listing) < 10:
+                  relative = json.dumps(str(candidate.relative_to(root))[:200], ensure_ascii=True)
+                  listing.append(f"  {relative}: {reason}")
           if len(executables) != 1:
-              raise SystemExit("Expected exactly one executable standalone pnpm ELF in setup destination")
+              detail = "\n".join(listing) or "  no candidates found"
+              raise SystemExit(
+                  f"Expected exactly one executable standalone pnpm ELF at {version}; "
+                  f"matched {len(executables)} of {len(candidates)} candidates (first 10):\n{detail}"
+              )
+          selected = executables.pop()
           with open(os.environ["GITHUB_PATH"], "a") as path:
-              path.write(str(executables.pop().parent) + "\n")
+              path.write(str(selected.parent) + "\n")
+          print(f"Selected pnpm {version}: {json.dumps(str(selected.relative_to(root))[:200])}")
           PY
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+      - name: Verify standalone pnpm on PATH
+        run: |
+          pnpm_executable=$(command -v pnpm) || { echo "pnpm not found on PATH"; exit 1; }
+          python3 - "$pnpm_executable" <<'PY'
+          import asyncio
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
+          try:
+              declaration = json.loads(Path("frontend/package.json").read_text())["packageManager"]
+              match = re.fullmatch(r"pnpm@(" + pattern + r")", declaration)
+              if match is None or len(match[1]) > 80:
+                  raise ValueError
+              version = match[1]
+              root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+              executable = Path(sys.argv[1]).resolve(strict=True)
+              if not executable.is_relative_to(root):
+                  raise SystemExit("PATH pnpm is outside setup root")
+              location = json.dumps(str(executable.relative_to(root))[:200], ensure_ascii=True)
+              if not executable.is_file() or not os.access(executable, os.X_OK):
+                  raise SystemExit(f"PATH pnpm {location}: not an executable file")
+              with executable.open("rb") as stream:
+                  if stream.read(4) != b"\x7fELF":
+                      raise SystemExit(f"PATH pnpm {location}: not an ELF (expected {version})")
+          except (OSError, RuntimeError, KeyError, TypeError, ValueError):
+              raise SystemExit("Cannot validate PATH pnpm or pinned packageManager")
+
+
+          async def verify():
+              try:
+                  process = await asyncio.create_subprocess_exec(
+                      str(executable), "--version", stdout=asyncio.subprocess.PIPE,
+                      stderr=asyncio.subprocess.DEVNULL,
+                  )
+                  try:
+                      stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+                  except TimeoutError:
+                      process.kill()
+                      await process.wait()
+                      raise SystemExit(f"PATH pnpm {location}: --version timed out")
+              except OSError:
+                  raise SystemExit(f"PATH pnpm {location}: --version could not execute")
+              found = stdout.decode("ascii", errors="replace").strip()
+              observed = found if re.fullmatch(pattern, found) and len(found) <= 80 else "<invalid output>"
+              if process.returncode != 0 or found != version:
+                  raise SystemExit(
+                      f"PATH pnpm {location}: ELF version {observed}, exit {process.returncode}; "
+                      f"expected {version}"
+                  )
+              print(f"Verified PATH pnpm {location}: ELF version {found}")
+
+
+          asyncio.run(verify())
+          PY
       - name: Install dependencies
         run: make install
       - name: Set up gitleaks
