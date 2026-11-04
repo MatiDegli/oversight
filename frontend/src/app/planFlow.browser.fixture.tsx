@@ -146,26 +146,29 @@ export function flowEvents(scene: FlowScene): ServerEvent[] {
     start("flow-3", "A", 5, "synthetic-merged-1"),
   );
   if (scene !== "failed") return events;
-  events.push(
+  return [...events, ...failedEvents()];
+}
+
+function failedEvents(): ServerEvent[] {
+  const conflict = resolved("flow-3", true);
+  if (conflict.type !== "change.resolved") throw new Error("Missing conflict");
+  return [
     testEvent("flow-3", "proposal"),
     proposal("flow-3"),
     testEvent("flow-3", "combined", true),
-  );
-  const conflict = resolved("flow-3", true);
-  if (conflict.type !== "change.resolved") throw new Error("Missing conflict");
-  events.push({
-    ...conflict,
-    payload: {
-      ...conflict.payload,
-      decided_by: "person",
-      conflict: {
-        kind: "tests",
-        paths: [],
-        tests: testEvent("flow-3", "combined", true).payload.suite,
+    {
+      ...conflict,
+      payload: {
+        ...conflict.payload,
+        decided_by: "person",
+        conflict: {
+          kind: "tests",
+          paths: [],
+          tests: testEvent("flow-3", "combined", true).payload.suite,
+        },
       },
     },
-  });
-  return events;
+  ];
 }
 
 const Inbox = lazy(() => loadDecisionInbox().then((module) => ({ default: module.DecisionInbox })));

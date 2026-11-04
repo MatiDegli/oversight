@@ -94,15 +94,15 @@ const fold = (...tail: ServerEvent[]) =>
   );
 const identities = (...tail: ServerEvent[]) => selectPresentation(fold(...tail)).byAgent;
 
-it("orders presentation by team, plan, numeric subtask and agent ID with unknowns last", () => {
+it("orders presentation by team, numeric ordinal and agent ID with unknowns last", () => {
   const identity = identities(agent("known")).known;
   if (!identity) throw new Error("Missing identity");
   const rows = [
     { ...identity, agentId: "later-team", order: 1, planId: null },
-    { ...identity, agentId: "later-plan", planId: "q", subtask: 1 },
-    { ...identity, agentId: "later-subtask", planId: "p", subtask: 10 },
-    { ...identity, agentId: "b", planId: "p", subtask: 2 },
-    { ...identity, agentId: "a", planId: "p", subtask: 2 },
+    { ...identity, agentId: "later-plan", planId: "a", subtask: 1, ordinal: 11 },
+    { ...identity, agentId: "later-subtask", planId: "p", subtask: 10, ordinal: 10 },
+    { ...identity, agentId: "b", planId: "p", subtask: 2, ordinal: 2 },
+    { ...identity, agentId: "a", planId: "z", subtask: 2, ordinal: 2 },
     { ...identity, agentId: "no-plan", planId: null, subtask: null },
   ];
   const before = structuredClone(rows);
@@ -348,4 +348,27 @@ it("keeps historical agent identities when a later plan revision withholds assig
   );
   expect(rows.one).toMatchObject({ label: "A·1", subtask: 1 });
   expect(rows.two).toMatchObject({ label: "A·2", subtask: 2 });
+});
+
+it("sorts team members by reserved ordinal across reversed plan IDs and delayed assignments", () => {
+  const first = plan("z-first", "lead", ["one", null]);
+  const assigned = plan("z-first", "lead", ["one", "two"]);
+  if (assigned.type !== "plan.updated") throw new Error("Missing plan");
+  const state = fold(
+    lead("lead"),
+    first,
+    agent("one", { plan_id: "z-first" }),
+    plan("a-second", "lead", ["three", "four"]),
+    agent("four", { plan_id: "a-second", slot: "F" }),
+    agent("three", { plan_id: "a-second", slot: "B" }),
+    { ...assigned, payload: { ...assigned.payload, revision: 2 } },
+    agent("two", { plan_id: "z-first", slot: "A" }),
+  );
+  const { byAgent } = selectPresentation(state);
+  expect(
+    Object.values(byAgent)
+      .sort(compareAgentPresentation)
+      .map((item) => item.label),
+  ).toEqual(["A", "A·1", "A·2", "A·3", "A·4"]);
+  expect([byAgent.two?.subtask, byAgent.three?.subtask]).toEqual([2, 1]);
 });

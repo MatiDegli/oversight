@@ -95,30 +95,55 @@ function mainMovement(
   return !base || !head ? "not known" : base === head ? "unchanged" : "moved";
 }
 
-function projectRow(state: State, task: PlanSubtask, index: number, wave: number): PlanFlowRow {
-  const agent = task.agent_id ? state.agents[task.agent_id] : undefined;
-  const change = rowChange(state, task.agent_id);
+function rowEvidence(
+  state: State,
+  task: PlanSubtask,
+  change: ChangeState | undefined,
+  base: string | null,
+): RowEvidence {
   const proposal = change?.proposal;
   const resolution =
     change?.resolution && (!proposal || change.resolution.revision === proposal.revision)
       ? change.resolution
       : null;
-  const merged = resolution?.merge === "merged" && !!resolution.merge_commit;
-  const terminal =
-    task.state === "rejected" ||
-    task.state === "cancelled" ||
-    resolution?.decision === "rejected" ||
-    resolution?.merge === "conflict";
-  const main = mainMovement(
-    state,
+  return {
     resolution,
-    resolution ? change?.resolutionEvent : undefined,
-    agent?.base_commit ?? null,
-  );
+    merged: resolution?.merge === "merged" && !!resolution.merge_commit,
+    terminal:
+      task.state === "rejected" ||
+      task.state === "cancelled" ||
+      resolution?.decision === "rejected" ||
+      resolution?.merge === "conflict",
+    main: mainMovement(state, resolution, resolution ? change?.resolutionEvent : undefined, base),
+    combined: execution(state, change, "combined"),
+    waiting: !!proposal && !resolution,
+  };
+}
+
+function combinedTestStep(
+  combined: SuiteExecution | undefined,
+  main: PlanFlowRow["main"],
+): FlowStep {
+  return combined
+    ? suiteStep(combined.suite)
+    : main === "unchanged"
+      ? step("not needed", "Main is unchanged from the agent’s base")
+      : step(
+          "not known",
+          main === "moved"
+            ? "Main moved; no combined execution recorded"
+            : "Main movement is not known",
+        );
+}
+
+function projectRow(state: State, task: PlanSubtask, index: number, wave: number): PlanFlowRow {
+  const agent = task.agent_id ? state.agents[task.agent_id] : undefined;
+  const change = rowChange(state, task.agent_id);
+  const proposal = change?.proposal;
+  const evidence = rowEvidence(state, task, change, agent?.base_commit ?? null);
+  const { resolution, merged, terminal, main, combined, waiting } = evidence;
   const proposalTest = execution(state, change, "proposal");
-  const combined = execution(state, change, "combined");
   const working = !!agent && ["starting", "working", "revising"].includes(agent.state);
-  const waiting = !!proposal && !resolution;
   const workStep = proposal
     ? step("passed", "Agent submitted the change")
     : working
@@ -136,16 +161,7 @@ function projectRow(state: State, task: PlanSubtask, index: number, wave: number
     : waiting
       ? step("waiting", "Waiting for your decision")
       : step("not known", "No decision recorded");
-  const combinedStep = combined
-    ? suiteStep(combined.suite)
-    : main === "unchanged"
-      ? step("not needed", "Main is unchanged from the agent’s base")
-      : step(
-          "not known",
-          main === "moved"
-            ? "Main moved; no combined execution recorded"
-            : "Main movement is not known",
-        );
+  const combinedStep = combinedTestStep(combined, main);
   const failed = combinedStep.mark === "failed" || terminal;
   const word = merged
     ? "Merged"
@@ -176,13 +192,13 @@ function projectRow(state: State, task: PlanSubtask, index: number, wave: number
       approval,
       combinedStep,
       merged
-        ? step("merged", `Merged into ${resolution.merge_commit ?? ""}`)
+        ? step("merged", `Merged into ${resolution?.merge_commit ?? ""}`)
         : step(
             resolution?.conflict?.kind === "merge" ? "failed" : "not known",
             failed ? "Not merged" : "No merge recorded",
           ),
     ],
-    note: rowNote(task, { resolution, combined, terminal, merged, waiting, main }),
+    note: rowNote(task, evidence),
   };
 }
 

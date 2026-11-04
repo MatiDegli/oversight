@@ -14,6 +14,8 @@ export type AgentPresentation = Readonly<{
   planContext?: Readonly<{ shortLabel: string; caption: string }>;
   planId: string | null;
   subtask: number | null;
+  /** Team-wide display position; subtask remains local to its plan. */
+  ordinal?: number;
   hue: PaletteKey;
   family: AgentFamily;
   order: number;
@@ -27,8 +29,8 @@ export function compareAgentPresentation(
   if (!a || !b) return a ? -1 : b ? 1 : 0;
   return (
     a.order - b.order ||
-    (a.planId ?? "").localeCompare(b.planId ?? "") ||
-    (a.subtask ?? 0) - (b.subtask ?? 0) ||
+    Number(a.kind !== "lead") - Number(b.kind !== "lead") ||
+    (a.ordinal ?? a.subtask ?? 0) - (b.ordinal ?? b.subtask ?? 0) ||
     a.agentId.localeCompare(b.agentId)
   );
 }
@@ -212,6 +214,7 @@ function buildPresentation(state: State) {
           : `${letter}·${String(ordinals.assigned.get(agentId) ?? subtask)}`,
       planId,
       subtask,
+      ordinal: ordinals.assigned.get(agentId) ?? subtask ?? 0,
       hue,
       family: agentLook[hue].family,
       order,

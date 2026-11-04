@@ -1,5 +1,6 @@
 import type { LeadStatus, Plan } from "@contracts";
 import type { State } from "../state";
+import { compareAgentPresentation } from "../teams/presentation";
 import { selectChatAgents, teamIdentities } from "./chatAgentSelectors";
 
 export const leadLabels: Record<LeadStatus["state"], string> = {
@@ -114,9 +115,5 @@ export function selectChatRows(state: State) {
   return [
     ...selectChatLeads(state).map((row) => ({ ...row, kind: "lead" as const })),
     ...selectChatAgents(state).map((row) => ({ ...row, kind: "agent" as const })),
-  ].sort(
-    (a, b) =>
-      a.order - b.order ||
-      (a.kind === "lead" ? -1 : (a.subtask ?? 0)) - (b.kind === "lead" ? -1 : (b.subtask ?? 0)),
-  );
+  ].sort(compareAgentPresentation);
 }
