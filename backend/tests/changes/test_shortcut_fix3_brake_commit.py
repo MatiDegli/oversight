@@ -2,6 +2,9 @@
 
 from oversight.changes import detect_shortcuts
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 OLD = (
     '"""The spending brake: configured or closed, the ledger across restarts,'
     ' warnings, settling."""\n\nimport asyncio\nimport json\nimport os\nfrom pathl'
@@ -217,4 +220,9 @@ NEW = (
 
 
 def test_commit_4b2ebac_tightening_is_clean() -> None:
-    assert detect_shortcuts([("backend/tests/api/test_brake.py", OLD, NEW)]) == []
+    assert (
+        detect_shortcuts(
+            [("backend/tests/api/test_brake.py", OLD, NEW)], timeout=DETECTION_TIMEOUT_S
+        )
+        == []
+    )

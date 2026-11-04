@@ -50,6 +50,8 @@ async def test_snapshot_survives_new_manager_and_restores_before_any_git(workspa
         "namespace",
         "symlink",
         "snapshot",
+        "boundary_pending",
+        "boundary",
     ],
 )
 async def test_ambiguous_registry_retains_quarantine_and_runtime_lock(workspace, fault):
@@ -74,6 +76,10 @@ async def test_ambiguous_registry_retains_quarantine_and_runtime_lock(workspace,
             data["worktree"] = "/unregistered/tree"
         elif fault == "identity":
             data["supervisor"] = {"pid": os.getpid(), "birth": "wrong", "boot": "wrong"}
+        elif fault == "boundary_pending":
+            data["boundary_pending"] = True
+        elif fault == "boundary":
+            data["boundary"] = {"processes": {}, "namespaces": {}}
         elif fault == "snapshot":
             data["snapshot"]["anchors"] = {}
         else:
@@ -339,3 +345,38 @@ async def test_valid_wire_owner_recovers_without_any_durable_token(workspace):
     await h.manager.recover()
     assert h.manager.registry.read() is None and not workspace.integrity.main_suspect
     await h.close()
+
+
+@pytest.mark.parametrize("phase", ["building", "between_commands"])
+async def test_build_transition_ownership_retains_recovery_witnesses(workspace, phase):
+    h = await harness(workspace)
+    try:
+        await h.start()
+        data = h.manager.registry.read()
+        assert data is not None
+        identity = registries.identity_data(os.getpid())
+        supervisor, outer, setup, init, guardian = (
+            identity | {"pid": pid} for pid in range(1001, 1006)
+        )
+        data.update(
+            phase=phase,
+            supervisor=supervisor,
+            unshare=outer,
+            namespace=init,
+            guardian=guardian,
+            namespaces=dict.fromkeys(("net", "pid", "mnt"), "private"),
+            boundary=dict(
+                processes=dict(outer=outer, setup=setup, init=init),
+                namespaces=dict.fromkeys(("u0", "n0", "u1", "pid", "mount"), (1, 2)),
+            ),
+        )
+        registries.validate_ownership(
+            data, h.manager.registry.runtime, h.manager.profile.fingerprint
+        )
+        data["boundary_pending"] = True
+        with pytest.raises(ValueError, match="incomplete authenticated boundary ownership"):
+            registries.validate_ownership(
+                data, h.manager.registry.runtime, h.manager.profile.fingerprint
+            )
+    finally:
+        await h.close()

@@ -299,3 +299,16 @@ or environment dumps. Both native lifecycle/UI acceptance and independent review
 before executable delivery; advisory CI alone cannot supply headed acceptance. Rollback removes
 desktop code, its standalone target and Windows workflow additions while preserving the browser
 and advanced native backend.
+
+### Reviewed preview qualification
+
+Private reviewed-preview wiring joins verified preparation, an authenticated Linux allowlisted root,
+read-only dependencies, a pidfd namespace connector and a supervisor-owned publication/HTTP gateway.
+Controlled fixtures exercise this path; the reviewed self application remains refused until its
+explicit no-key entry, distinct ports, source re-pin and final story/browser acceptance are complete.
+Default readiness is 30 seconds and owner-loss grace is 600 seconds, with immediate authenticated
+Close. All limits are person-owned. Without delegated cgroups, per-process limits only; aggregate
+usage is not enforced. Tests and the shop retain their filesystem residual; native Windows remains
+trusted same-user execution without a no-key/no-paid-call guarantee. See [isolation](docs/isolation.md)
+for exact limits, qualification and reading sanitized logs from Windows/WSL. Desktop log viewing is
+not delivered; the existing HTML startup disclosure remains the bounded fallback.

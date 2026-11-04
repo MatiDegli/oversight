@@ -42,10 +42,22 @@ class Package:
     url: str
     parents: set[str] = field(default_factory=set[str])
     texts: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
+    lockfile: str = ""
 
 
-def allowed_license(expression: str, name: str = "") -> bool:
+def allowed_license(
+    expression: str, name: str = "", *, version: str = "", ecosystem: str = "", lockfile: str = ""
+) -> bool:
     """Parse SPDX AND/OR/parentheses, failing closed on unknown IDs or WITH clauses."""
+    # Desktop-only grant: inactive Linux dependency in desktop/Cargo.lock, never shipped.
+    if (lockfile, ecosystem, name, version, expression) == (
+        "desktop/Cargo.lock",
+        "Rust",
+        "target-lexicon",
+        "0.12.16",
+        "Apache-2.0 WITH LLVM-exception",
+    ):
+        return True
     if (name, expression) in LICENSE_EXCEPTIONS:
         return True
     tokens = re.findall(r"\(|\)|[^\s()]+", expression)
@@ -306,7 +318,9 @@ def policy_errors(packages: list[Package]) -> list[str]:
     return [
         f"{p.name}@{p.version}: {p.license}; required by {', '.join(sorted(p.parents))}"
         for p in sorted(packages, key=lambda p: (p.name, p.version))
-        if not allowed_license(p.license, p.name)
+        if not allowed_license(
+            p.license, p.name, version=p.version, ecosystem=p.ecosystem, lockfile=p.lockfile
+        )
     ]
 
 

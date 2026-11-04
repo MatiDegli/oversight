@@ -12,6 +12,18 @@ import { ChatAgentsFrame } from "./ChatShell";
 import { required, fold, scenario } from "../chatAgents.fixture";
 import { createInitialState } from "../../state";
 
+const disclosure = vi.hoisted(() => ({ closed: new Set<string>() }));
+vi.mock("react", async (original) => {
+  const react = await original<typeof import("react")>();
+  return {
+    ...react,
+    useState: <T,>(initial: T) =>
+      disclosure.closed.size
+        ? [{ ...initial, closed: disclosure.closed }, vi.fn()]
+        : react.useState(initial),
+  };
+});
+
 it.each([
   ["empty", 0],
   ["working", 2],
@@ -155,4 +167,27 @@ it.each([0, 1, 2])("retains grouped counts accessibly with %i needs-you facts", 
   expect(renderToStaticMarkup(<ChatAgents state={railState("chat-leadless")} />)).toContain(
     "Plan B · 2 agents · 2 working",
   );
+});
+
+it("retains scripted member labels when a team is folded", () => {
+  const state = railState("chat-collapsed-selected");
+  if (!state.run) throw new Error("Missing run");
+  state.run.models = state.run.models.map((profile) => ({ ...profile, provider: "fake" }));
+  const group = required(
+    chatTeamGroups(state).find((group) => group.members.some((row) => row.id === "a1")),
+  );
+  disclosure.closed.add(group.id);
+  try {
+    const html = renderToStaticMarkup(<ChatAgents state={state} selectedAgentId="a1" />);
+    expect(html).toMatch(/class="chat-team-members"[^>]*hidden=""/);
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toMatch(/hidden=""[\s\S]*Scripted demo agents/);
+    expect(html).toMatch(
+      /class="chat-agent-model">[^<]*<\/span><span class="scripted-agent-label">Scripted demo agents<\/span>/,
+    );
+    expect(html).toContain('data-agent-origin="a1" data-selected="true"');
+    expect(html).toContain("A·1");
+  } finally {
+    disclosure.closed.clear();
+  }
 });
