@@ -566,6 +566,9 @@ def test_windows_rejects_native_condition_on_setup(index: int) -> None:
 
 
 PACKAGE_COMMANDS = {
+    "Scan checkout with gitleaks": [
+        "gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .",
+    ],
     "Prepare exact Rust toolchain and Cargo store": [
         "rustup toolchain install 1.98.0 --profile minimal --component rustfmt",
         "rustup default 1.98.0",
@@ -621,7 +624,7 @@ def assert_package_policy(job: dict[str, str]) -> None:
         "PYTHONDONTWRITEBYTECODE": '"1"',
     }
     items = steps(job["steps"])
-    assert len(items) == 13
+    assert len(items) == 14
     assert items[0] == {
         "name": "Set desktop Cargo home",
         "run": '|\n"CARGO_HOME=$env:RUNNER_TEMP\\oversight-tauri-cargo" '
@@ -635,16 +638,16 @@ def assert_package_policy(job: dict[str, str]) -> None:
         {"uses": ACTIONS["actions/setup-node"], "with": 'node-version: "24.11.0"'},
         {"uses": GITLEAKS},
     ]
-    for item, (name, commands) in zip(items[5:9], PACKAGE_COMMANDS.items(), strict=True):
+    for item, (name, commands) in zip(items[5:10], PACKAGE_COMMANDS.items(), strict=True):
         assert set(item) == {"name", "run"} and item["name"] == name
         script = item["run"].removeprefix("|\n").splitlines()
         expected = []
         for command in commands:
             expected.append(command)
-            if command.startswith(("cargo ", "uv ", "pnpm ", "rustup ")):
+            if command.startswith(("cargo ", "uv ", "pnpm ", "rustup ", "gitleaks ")):
                 expected.append("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }")
         assert script == expected
-    assert items[9] == {
+    assert items[10] == {
         "name": "Build locked NSIS installer",
         "run": "|\n$env:CARGO_NET_OFFLINE = 'true'\n"
         "$timer = [System.Diagnostics.Stopwatch]::StartNew()\nPush-Location desktop/shell\n"
@@ -654,12 +657,12 @@ def assert_package_policy(job: dict[str, str]) -> None:
         '"Installer build seconds: $($timer.Elapsed.TotalSeconds)" '
         "| Set-Content package-evidence/build.txt",
     }
-    assert items[10] == {
+    assert items[11] == {
         "name": "Install smoke twice and preserve data on uninstall",
         "timeout-minutes": "8",
         "run": "./desktop/packaging/installed-smoke.ps1",
     }
-    assert items[11] == {
+    assert items[12] == {
         "name": "Upload desktop installer",
         "uses": UPLOAD,
         "with": "name: oversight-windows-installer\npath: |\n"
@@ -685,3 +688,46 @@ def test_package_rejects_weakened_build_or_acceptance(old, new):
     assert old in text
     with pytest.raises(AssertionError):
         assert_windows_policy(text.replace(old, new))
+
+
+@pytest.mark.parametrize(
+    "regression",
+    [
+        "missing",
+        "late",
+        "version-only",
+        "zero-exit",
+        "ignored-failure",
+        "allowed-failure",
+        "conditional",
+    ],
+)
+def test_package_rejects_missing_late_or_nonblocking_secret_scan(regression: str) -> None:
+    text = (WORKFLOWS / "windows.yml").read_text()
+    scan = (
+        "      - name: Scan checkout with gitleaks\n"
+        "        run: |\n"
+        "          gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .\n"
+        "          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+    )
+    assert scan in text
+    replacements = {
+        "missing": "",
+        "late": "",
+        "version-only": scan.replace(
+            "gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .",
+            "gitleaks version",
+        ),
+        "zero-exit": scan.replace("--redact", "--exit-code 0 --redact"),
+        "ignored-failure": scan.replace("exit $LASTEXITCODE", "Write-Output ignored"),
+        "allowed-failure": scan.replace(
+            "        run:", "        continue-on-error: true\n        run:"
+        ),
+        "conditional": scan.replace("        run:", "        if: false\n        run:"),
+    }
+    text = text.replace(scan, replacements[regression], 1)
+    if regression == "late":
+        marker = "      - name: Stage verified embedded runtimes and notices\n"
+        text = text.replace(marker, scan + marker, 1)
+    with pytest.raises(AssertionError):
+        assert_windows_policy(text)

@@ -171,6 +171,10 @@ jobs:
         with:
           node-version: "24.11.0"
       - uses: ./.github/actions/setup-gitleaks
+      - name: Scan checkout with gitleaks
+        run: |
+          gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Prepare exact Rust toolchain and Cargo store
         run: |
           rustup toolchain install 1.98.0 --profile minimal --component rustfmt
