@@ -5,6 +5,7 @@ import { selectSpend } from "../state";
 import type { State } from "../state";
 import { teamIdentities } from "./chatAgentSelectors";
 import { CommandError } from "../transport";
+import { setupFailure } from "./setupFailure";
 
 /** What an agent that still holds its slot is doing, in the words of the one-line reason. */
 const holding: Record<AgentStatus["state"], string> = {
@@ -110,6 +111,7 @@ export function startBlock(state: State, slot?: Slot | null): string | null {
 /** What the person reads under the box when a start fails. */
 export function startFailure(error: unknown): string {
   if (error instanceof CommandError) {
+    if (error.code === "not_configured") return setupFailure(error);
     // A 4xx names its own cause (spend_brake, slot_busy, invalid_request); so does a 500.
     return error.status >= 500
       ? `The server failed to start the agent: ${error.message}`

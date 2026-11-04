@@ -8,6 +8,7 @@ import type {
   GraphResponse,
   Health,
   MergeModeState,
+  MissingSetting,
   SetMergeMode,
   SettingsView,
   UpdateSettings,
@@ -47,6 +48,7 @@ export class CommandError extends Error {
     public readonly status: number,
     public readonly code: ErrorCode | undefined,
     message: string,
+    public readonly missing?: { name: string; problem: MissingSetting["problem"] }[],
   ) {
     super(message);
     this.name = "CommandError";
@@ -72,6 +74,7 @@ export function createCommandClient(request: typeof fetch = fetch) {
     });
     if (!response.ok) {
       let code: ErrorCode | undefined;
+      let missing: CommandError["missing"];
       let message = `HTTP ${String(response.status)} ${response.statusText}`.trim();
       try {
         const body: unknown = await response.json();
@@ -92,12 +95,26 @@ export function createCommandClient(request: typeof fetch = fetch) {
               Object.hasOwn(errorCodes, error.code)
             )
               code = error.code as ErrorCode;
+            if ("missing" in error && Array.isArray(error.missing)) {
+              missing = error.missing.flatMap((item: unknown) => {
+                if (
+                  typeof item === "object" &&
+                  item !== null &&
+                  "name" in item &&
+                  typeof item.name === "string" &&
+                  "problem" in item &&
+                  (item.problem === "missing" || item.problem === "invalid")
+                )
+                  return [{ name: item.name, problem: item.problem }];
+                return [];
+              });
+            }
           }
         }
       } catch {
         // Proxies and servers may answer with HTML, plain text, or an empty body.
       }
-      throw new CommandError(response.status, code, message);
+      throw new CommandError(response.status, code, message, missing);
     }
     // Accepted commands have no result body; their results arrive through SSE.
     if (response.status === 202 || response.status === 204) return undefined as T;
