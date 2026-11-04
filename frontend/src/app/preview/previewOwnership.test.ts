@@ -238,7 +238,7 @@ it.each(["dispose", "identity", "candidate"])(
     if (action === "dispose") recovered.dispose();
     if (action === "identity") await recovered.setIdentity({ run: "other", source: "live" });
     if (action === "candidate") current = { ...candidate, revision: 2 };
-    pending.resolve({ status: fakeStatus("ready"), url: "http://127.0.0.1:19800/" });
+    pending.resolve({ status: fakeStatus("ready"), url: "http://localhost:19800/" });
     await recovery;
     expect(renew).not.toHaveBeenCalled();
     expect(stop).not.toHaveBeenCalled();

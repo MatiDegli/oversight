@@ -138,7 +138,7 @@ class FixtureAuthority {
         this.calls.push(call);
         this.#reply(response, {
           status: this.#status,
-          url: this.#status.state === "ready" ? "http://127.0.0.1:19800/" : null,
+          url: this.#status.state === "ready" ? "http://localhost:19800/" : null,
         });
         return;
       }
