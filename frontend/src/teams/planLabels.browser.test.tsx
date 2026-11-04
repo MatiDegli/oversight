@@ -59,7 +59,7 @@ function twoPlans() {
 
 for (const width of [1280, 1920])
   it.each(["dark", "day"] as const)(
-    `fits colliding plan labels on separate lines at zoom 0.2 and ${String(width)} in %s`,
+    `fits team-wide labels at zoom 0.2 and ${String(width)} in %s`,
     async (theme) => {
       const model = mapModel(graphElements(twoPlans()), themes[theme]);
       const frame = { model, zoom: 0.2, pan: { x: 100, y: 100 }, level: "map" as const };
@@ -85,18 +85,12 @@ for (const width of [1280, 1920])
           for (const module of group.modules) {
             if (!module.agents.length) continue;
             const agent = module.agents[0];
-            if (!agent?.planContext) throw new Error("Missing colliding plan context");
+            if (!agent) throw new Error("Missing agent");
             const chip = page.locator(`[data-map-module="${module.id}"] .map-agent`);
             // Measure first: the old qualified single line overflows at the map floor.
             expect(await chip.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-            const caption = chip.locator(".map-agent-caption");
-            await check(caption).toHaveText(agent.planContext.caption);
-            expect(await chip.evaluate((el) => el.firstChild?.textContent)).toBe("A·1 editing");
-            expect(await caption.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-            const bounds = await chip.boundingBox(),
-              line = await caption.boundingBox();
-            if (!bounds || !line) throw new Error("Missing chip bounds");
-            expect(line.y).toBeGreaterThan(bounds.y);
+            await check(chip.locator(".map-agent-caption")).toHaveCount(0);
+            expect(await chip.textContent()).toBe(`${agent.label} editing`);
             // The model's hit/line geometry must reserve the caption's rendered height too.
             const layout = moduleLayout(module, model, frame.zoom, frame.pan);
             const cell = await page.locator(`[data-map-module="${module.id}"]`).boundingBox();

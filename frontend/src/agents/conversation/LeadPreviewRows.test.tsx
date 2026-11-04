@@ -1,10 +1,41 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import fixture from "../../../../fixtures/views/reference-cases.json";
+import plansSource from "../../../../fixtures/events/handwritten-lead-plans.jsonl?raw";
 import type { ServerEvent } from "@contracts";
 import { applyEvent, createInitialState } from "../../state";
+import { parseEvent } from "../../transport";
 import { selectLeadConversation } from "./selectLeadConversation";
 import LeadPreviewRows from "./LeadPreviewRows";
+
+it("forwards the plan renderer to every retained lead plan entry", () => {
+  const state = plansSource
+    .trim()
+    .split("\n")
+    .map(parseEvent)
+    .reduce(applyEvent, createInitialState());
+  const conversation = selectLeadConversation(state, "agent-1");
+  if (!conversation) throw new Error("Missing lead conversation");
+  const ids = conversation.entries.flatMap((entry) =>
+    entry.kind === "lead-plan" ? [entry.planId] : [],
+  );
+  expect(ids).toEqual(["plan-1", "plan-2", "plan-3"]);
+  const renderPlan = vi.fn((id: string) => (
+    <article aria-label={`Plan ${id}`}>Plan for {id}</article>
+  ));
+  const html = renderToStaticMarkup(
+    <LeadPreviewRows conversation={conversation} renderPlan={renderPlan} />,
+  );
+  expect(renderPlan.mock.calls).toEqual(ids.map((id) => [id]));
+  for (const id of ids)
+    expect(html).toContain(`<article aria-label="Plan ${id}">Plan for ${id}</article>`);
+  expect(html.indexOf('aria-label="Plan plan-1"')).toBeLessThan(
+    html.indexOf('aria-label="Plan plan-2"'),
+  );
+  expect(html.indexOf('aria-label="Plan plan-2"')).toBeLessThan(
+    html.indexOf('aria-label="Plan plan-3"'),
+  );
+});
 
 it("reuses held rows and renders the fallback once when no reply exists", () => {
   const state = (fixture.events as ServerEvent[]).reduce(applyEvent, createInitialState());

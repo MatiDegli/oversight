@@ -117,6 +117,14 @@ describe("live transport", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
+      mainHeads: [
+        ...before.mainHeads,
+        ...unwired.flatMap((event, index) =>
+          event.type === "revert.resolved"
+            ? [{ seq: before.lastSeq + index + 1, commit: event.payload.main_commit }]
+            : [],
+        ),
+      ],
       eventFacts: {
         ...before.eventFacts,
         ...Object.fromEntries(
@@ -169,6 +177,14 @@ describe("live transport", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
+      mainHeads: [
+        ...before.mainHeads,
+        ...delivered.flatMap((event) =>
+          event.type === "revert.resolved"
+            ? [{ seq: event.seq, commit: event.payload.main_commit }]
+            : [],
+        ),
+      ],
       eventFacts: {
         ...before.eventFacts,
         ...Object.fromEntries(
@@ -436,6 +452,7 @@ describe("live transport", () => {
     expect(store.getState().state).toEqual({
       ...createInitialState(),
       run: newRun.payload,
+      mainHeads: [{ seq: 1, commit: newRun.payload.base_commit }],
       runStartedAt: newRun.ts,
       eventFacts: { 1: { type: "run.started", ts: newRun.ts, agentId: null } },
       lastSeq: 1,

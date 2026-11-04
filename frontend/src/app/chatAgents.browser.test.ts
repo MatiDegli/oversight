@@ -134,30 +134,30 @@ async function assertPlanSurfaces(page: Page, width: number, theme: string) {
   await capturePlanLabels(page, "chat", width, theme);
   await view(page, "Oversight").click();
   for (const ordinal of [1, 2]) {
-    const label = `A·1 · plan ${String(ordinal)}`;
+    const label = `A·${String(ordinal)}`;
     await check(
       page.getByRole("tab", { name: new RegExp(`Agent ${label} · conversation$`) }),
     ).toBeVisible();
     const tile = page.getByRole("group", { name: `Agent ${label}: Working`, exact: true });
     await check(tile).toBeVisible();
-    await check(tile).toContainText(`plan ${String(ordinal)}`);
+    await check(tile).toContainText(label);
     expect(await tile.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   }
   await capturePlanLabels(page, "rail", width, theme);
   for (const ordinal of [1, 2])
     await page
       .getByRole("button", {
-        name: `Close tab Agent A·1 · plan ${String(ordinal)} · conversation`,
+        name: `Close tab Agent A·${String(ordinal)} · conversation`,
         exact: true,
       })
       .click();
   for (const ordinal of [1, 2]) {
     const card = page.getByRole("article", {
-      name: `Agent A·1 · plan ${String(ordinal)}`,
+      name: `Agent A·${String(ordinal)}`,
       exact: true,
     });
     await check(card).toBeVisible();
-    await check(card.getByRole("heading")).toHaveText(`Agent A·1 · plan ${String(ordinal)}`);
+    await check(card.getByRole("heading")).toHaveText(`Agent A·${String(ordinal)}`);
     expect(await card.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   }
   await capturePlanLabels(page, "cards", width, theme);
@@ -189,18 +189,13 @@ it.each([
           status("second", { plan_id: "q", slot: "B" }),
         ],
       );
-      await check(page.locator(".chat-agent-name")).toHaveText([
-        "Agent A·1 · plan 1",
-        "Agent A·1 · plan 2",
-      ]);
+      await check(page.locator(".chat-agent-name")).toHaveText(["Agent A·1", "Agent A·2"]);
       await check(page.locator('.chat-agent-row[data-agent-origin="first"]')).toHaveAttribute(
         "aria-pressed",
         "true",
       );
       await page.locator('.chat-agent-row[data-agent-origin="second"]').click();
-      await check(
-        page.getByLabel("Agent A·1 · plan 2 conversation", { exact: true }),
-      ).toBeVisible();
+      await check(page.getByLabel("Agent A·2 conversation", { exact: true })).toBeVisible();
       await assertPlanSurfaces(page, width, theme);
       const start = seed.find((e) => e.type === "run.started");
       if (!start) throw new Error("Missing fixture run");

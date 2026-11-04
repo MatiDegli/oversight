@@ -168,3 +168,13 @@ it("orders retained plans by their first joined evidence, even when requests arr
   ]);
   expect(result.queued.map((event) => event.firstTs)).toEqual([lead.ts, lead.ts]);
 });
+
+it("retains running requests without decisions, preserves first times and drops terminal revisions", () => {
+  const running = planUpdate({ revision: 3, state: "running" });
+  const result = retained([running, planUpdate({ revision: 2 })]);
+  expect(result.running.map((e) => e.payload.revision)).toEqual([3]);
+  expect(result.running[0]?.firstTs).toBe(proposal.ts);
+  expect(result.queued).toEqual([]);
+  expect(retained([running, planUpdate({ revision: 4, state: "completed" })]).running).toEqual([]);
+  expect(retained([running, planUpdate({ revision: 4, state: "failed" })]).running).toEqual([]);
+});
