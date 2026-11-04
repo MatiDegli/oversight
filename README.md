@@ -183,7 +183,7 @@ Snapshot: Nov 3, 2026, 17:10 ART, on main `af6af017`.
 - Attach text rules to repository areas.
 - Tell a later agent about an overlap in its next tool result; shared reads and edits already appear on the graph.
 - Select tests from the graph inside the agent loop and record per-test coverage beyond outcomes.
-- Measure cost and correctness before making the built, opt-in read-history pruning a default;
+- Measure cost and correctness of the built, default-on read-history pruning (`OVERSIGHT_HISTORY_PRUNE_TOKENS=0` disables it);
   broader history bounds and a visible handoff remain.
 - Generate inputs for behavior the bounded probes did not reach.
 - Add filesystem isolation for tests and probes. They and the demo shop currently isolate network and

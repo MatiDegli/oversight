@@ -14,6 +14,16 @@ it.each(["| Parallel coding agents |", "- **Closed tools.**"])(
   },
 );
 
+it("documents read-history pruning as default-on with an explicit opt-out", () => {
+  const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
+  const next = readme.split("## Next\n")[1]?.split("\n## ")[0];
+  const pruning = next?.split("\n- ").find((item) => item.includes("read-history pruning"));
+  expect(pruning).toBeDefined();
+  expect(pruning).toContain("Measure cost and correctness of the built, default-on");
+  expect(pruning).toContain("`OVERSIGHT_HISTORY_PRUNE_TOKENS=0` disables it");
+  expect(pruning).toContain("broader history bounds and a visible handoff remain");
+});
+
 it("lists lead reference cards as an unreleased capability with its release gates", () => {
   const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
   const capabilities = readme.split("## Features")[1]?.split("\n## ")[0];
