@@ -30,21 +30,23 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Feature | What it does | Meta models | Default |
 | --- | --- | --- | --- |
 | Lead Chat and plans | Discuss tasks; approve a proposed plan before the server queues its agents. | Muse Spark, Muse Spark Open | On |
-| Constrained generative UI | Lead Chat composes closed highlight, changed-file, behavior and moment reference views from committed events through `show_view`, advertised and dispatched. Synthetic proofs exist; release awaits the paid probe, prompt validation and real recording. | Muse Spark, Muse Spark Open | Built, not released |
-| Parallel coding agents | Four slots by default, up to six; each agent edits and tests in its own worktree with six fixed tools, plus read-only `find_symbol` while the harness is on (the default), and no shell. | Muse Spark, Muse Spark Open | On |
+| Constrained generative UI | Lead Chat composes closed highlight, changed-file, behavior and moment reference views from committed events through `show_view`, advertised and dispatched; a fifth `preview` kind requires server admission through `preview_available()`. Synthetic proofs exist; release awaits the paid probe, prompt validation and real recording. | Muse Spark, Muse Spark Open | Built, not released |
+| Plan flow and workflow | Follow a read-only plan flow in the lead thread and inbox, including post-dispatch progress. Open a read-only workflow beside the repository graph in Oversight. | None | On |
+| Parallel coding agents | Four slots by default; `OVERSIGHT_MAX_AGENTS` accepts any positive whole number, with no product maximum; capacity must fit the event line limit. Each agent edits and tests in its own worktree with six fixed tools, plus read-only `find_symbol` while the harness is on (the default), and no shell. | Muse Spark, Muse Spark Open | On |
 | Agent harness | Syntax checks, edit diagnostics, bounded search feedback, a test-before-finish guard and read-only Python symbol lookup (`find_symbol`); turn off with `OVERSIGHT_HARNESS_PACK=false`. | None | On |
 | Repository graph and impact cone | See reads, edits, shared work and bounded possible effects, with module, function and detail views. | None | On |
-| Diff and facts | Review the diff, an event-derived summary, tests and recorded steps. | None | On |
+| Diff and facts | Review the diff, an event-derived summary, tests and recorded steps. Change cards show recorded stage times for agent work, automatic checks, waiting for your decision and test runs. | None | On |
 | Fails before, passes after | Check changed tests against both versions; missing evidence stays unknown. | None | On |
-| Independent cross-review | Review with a different model profile and allow one automatic Request changes round. | Muse Spark, Muse Spark Open | Opt-in (`OVERSIGHT_CROSS_REVIEW`) |
+| Independent cross-review | Review with a different model profile and allow one automatic Request changes round. It can re-ask once for a formatting correction, within the original time and spending limits. | Muse Spark, Muse Spark Open | Opt-in (`OVERSIGHT_CROSS_REVIEW`) |
 | Behavior comparisons | Run old and new functions on the same bounded inputs; show differences and unprobed cases. | None | Opt-in (`OVERSIGHT_BEHAVIOR_DIFF`) |
 | Difference questions | Classify measured differences as asked for, not asked for or unclear; requires a separate Baseten budget. | Muse Spark Open | Opt-in (`OVERSIGHT_BEHAVIOR_DIFF` or `OVERSIGHT_MEASURED_CONE`) |
 | Measured callers | Compare caller results under tests, within the static impact cone. | None | Opt-in (`OVERSIGHT_MEASURED_CONE`) |
 | Merge decisions and rules | Approve, reject or request changes; explicitly select guarded rules, standing grants and Revert. | None | On |
-| Cost and usage | Track spend, unknown usage and archived totals; refuse new Meta runs above the person's configured share of the budget, 90% by default. | None | On |
-| Live demo preview | Open one agent's demo shop proposal at a time; reviewed-app execution remains unavailable. | None | Opt-in (`OVERSIGHT_PREVIEW_ENABLED`) |
+| Cost and usage | Track spend, unknown usage and archived totals; refuse new Meta runs above the person's configured share of the budget (`OVERSIGHT_SPEND_BRAKE_PERCENT`, default 90). | None | On |
+| Settings | Edit keys, budgets, prices, the agent cap, spending brake and cross-review setting; save to `.env`. Keys are never shown back; restart to apply. The installed desktop File menu offers Edit settings… in Notepad and Reload settings with restart confirmation. | None | On in live sessions; read-only in replay |
+| Live demo preview | Open one agent's demo shop proposal at a time; one page owns it and other tabs show read-only status. Reviewed-app execution remains unavailable. | None | Opt-in (`OVERSIGHT_PREVIEW_ENABLED`) |
 | Replay and practice | Play the bundled real run without a backend and compare your decisions with the recorded ones. | None | On |
-| Sources and platforms | Start with the demo; select prepared pinned profiles, including Oversight's reviewed copy, or validated native Windows copies. Linux/WSL is the verified path. | None | On |
+| Sources and platforms | Start with the demo; select prepared pinned profiles, including Oversight's reviewed copy, or validated native Windows copies. The installed Windows app implements File > Open repository… with a native folder picker for trusted repositories. Agents edit disposable copies; only a manual export changes the original. Native build/install/smoke and headed acceptance remain pending. Linux/WSL is the verified path. | None | On |
 
 ![Review showing a failed test, a loosened assertion and a later pass beside the impact cone](docs/readme/review.png)
 
@@ -57,7 +59,7 @@ Current UI with hand-written example data showing a test failure, an assertion e
 
 **Muse Spark** uses the Meta Model API at `https://api.meta.ai/v1`, in Contributor mode (`muse-spark-1.3-contributor`). It is the default author, lead and standalone planner.
 Coding slots can switch to Muse Spark Open with `OVERSIGHT_AGENT_MODEL` and per-slot
-`OVERSIGHT_AGENT_MODEL_B` through `OVERSIGHT_AGENT_MODEL_F`; leads accept either model.
+`OVERSIGHT_AGENT_MODEL_<slot>` overrides from B onward; leads accept either model.
 
 **Muse Spark Open** uses Baseten at `https://inference.baseten.co/v1`
 (`meta-models/muse-spark-open-1026`). It is the default opt-in cross-reviewer and the only
@@ -161,7 +163,7 @@ Snapshot: Nov 3, 2026, 17:10 ART, on main `af6af017`.
 - Before the kickoff there were planning notes and UI sketches, and no code. What the project takes
   from them is written again here, under `docs/`.
 - No code comes from other projects. Dependencies keep their own licenses: MIT, Apache-2.0, BSD, or
-  ISC, and SIL OFL 1.1 for fonts. GPL projects were read for ideas only.
+  ISC, and SIL OFL 1.1 for fonts, plus [scoped desktop exceptions](desktop/README.md#licenses-and-acceptance-still-required). GPL projects were read for ideas only.
 - Agents inside the product use only Meta models: Muse Spark through the Meta Model API, and Muse
   Spark Open through partner inference.
 
@@ -170,12 +172,12 @@ Snapshot: Nov 3, 2026, 17:10 ART, on main `af6af017`.
 - Release constrained generative UI: `show_view` is advertised and dispatched with the moved prompt version.
   Remaining gates are the separately authorized paid probe, prompt validation, a real recording and bundle replacement.
   After the hackathon: add typed views whose values resolve from events; model-written components stay out of Chat and Oversight.
-- Wire server-computed plan zones, Edit and post-dispatch tracking; add saved agent flows.
-  Still to build: a node-based workflow view of a lead's plan beside the repository graph, in the style of n8n.
+- Wire server-computed plan zones and Edit; add saved agent flows.
+  Read-only post-dispatch tracking and a workflow view beside the repository graph are built.
 - Enable reviewed-app execution for the prepared self profile, then general startup declarations and
   detection. The demo preview is built; simultaneous per-agent previews and Linux own-source selection remain.
-- Qualify native Windows and its repository-copy path. The portable desktop core is built; the Windows
-  executable, native lifecycle/UI proof, macOS and native platform isolation remain. See the [future runbook](#future-tauri-shell-runbook).
+- Qualify native Windows and its repository-copy path. The desktop shell and installer packaging are built;
+  native build/install/smoke and lifecycle/UI proof, macOS and native platform isolation remain. See the [runbook](#future-tauri-shell-runbook).
 - Run the bench on a real repository, extend hidden grading and add a canary-change workflow beyond seeded defects.
 - Add a counterexample agent and a specialist engine for checks needing a dedicated tool.
 - Try two independent attempts on one task and resolve model disagreement with an executable example.
@@ -191,8 +193,6 @@ Snapshot: Nov 3, 2026, 17:10 ART, on main `af6af017`.
 - After the hackathon, plan running repository hooks as proposal evidence, with formatter edits in the diff.
 - After the hackathon, plan non-Python repositories with Files and presence, a fixed test command with
   JUnit output, and an approved sketch.
-- After the hackathon, plan write-only keys in a packaged app's Settings; this needs a secrets-rule change,
-  contracts and security review.
 - Git at agent scale, measured first ([docs/additions.md](docs/additions.md#git-at-agent-scale)).
 
 ## Scale and depth
@@ -204,7 +204,7 @@ are built. See [Scale and depth in DESIGN.md](DESIGN.md#scale-and-depth) for the
 
 MIT. See [LICENSE](LICENSE).
 
-Advanced: native Windows and the prospective desktop shell
+Advanced: native Windows and desktop acceptance
 
 ## Native Windows advisory checks
 
@@ -285,18 +285,18 @@ when a different value was configured.
 Before making Windows required, measure complete installs/build/tests/six runs, use
 `ceil(1.5 × slowest green duration)` for the timeout and remove PR path filters so even a
 documentation-only PR produces a successful check. The advisory bound is 75 minutes, reserving the desktop cold-build margin;
-the current desktop lane checks only the portable core. Native duration/size remain unmeasured.
+the advisory desktop lane checks the portable core, and a separate package job builds, installs and smoke-tests the installer. Native duration/size evidence remains pending.
 
 
 ### Future Tauri shell runbook
 
-**Prospective: no desktop executable is delivered by this slice.** The portable core and
-standalone `make check-desktop` are available; `desktop/shell/`, release build and native
-lifecycle/UI proof remain pending. The spike follows the maintainer's other pre-freeze feature;
-unfinished executable work defers at November 3, 17:00 ART, before the 20:00 ART freeze.
+**Implemented; native acceptance pending.** The portable core, `desktop/shell/`, Windows
+executable code and installer packaging are present. The standalone `make check-desktop`
+checks the core; native build/install/smoke results and lifecycle/UI proof remain pending.
+See [desktop build and acceptance](desktop/README.md) for staging and packaging.
 The advanced native backend and browser route above remain available.
 
-For the future shell, add Rust/cargo **1.98**, rustfmt, MSVC C++ build tools, the Windows SDK
+For the shell, add Rust/cargo **1.98**, rustfmt, MSVC C++ build tools, the Windows SDK
 and WebView2 to the native prerequisites above. Use a non-elevated PowerShell in the validated
 native clone, without WSL path translation. Prepare the synced environment and built UI:
 
@@ -309,15 +309,15 @@ cargo fetch --locked --manifest-path desktop/Cargo.toml
 $env:CARGO_NET_OFFLINE = 'true'
 cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check
 cargo --offline test --locked --manifest-path desktop/Cargo.toml -p oversight-desktop-core
-# FUTURE ONLY: requires the deferred shell crate and its reconciled lockfile:
+# Stage the payload first, following desktop/README.md:
 cargo --offline build --locked --release --manifest-path desktop/Cargo.toml -p oversight-desktop
-.\desktop\target\release\oversight-desktop.exe --smoke
-# While the first instance is open, repeat to prove focus without a second backend:
-.\desktop\target\release\oversight-desktop.exe --smoke
+.\desktop\target\release\oversight-desktop.exe --clone-root (Get-Location).Path --smoke
+# Headed launch; while its window is open, repeat to check single instance:
+.\desktop\target\release\oversight-desktop.exe --clone-root (Get-Location).Path
 ```
 
-Bundling stays inactive; Python and WebView2 are prerequisites, not bundled payloads.
-The future window owns `.venv\Scripts\python.exe -m oversight serve` in the clone root,
+NSIS packaging bundles Python; Git remains external and WebView2 is installed if absent.
+With `--clone-root`, the window owns `.venv\Scripts\python.exe -m oversight serve` in the clone root,
 without reload. Host/port/Vite overrides are `127.0.0.1`, `8710` and empty, taking precedence
 over `.env`. Only verified child/Job listener ownership plus bounded live `/health` admits
 `http://127.0.0.1:8710/`. Keep same-origin HTTP/SSE and existing authority checks.
@@ -327,7 +327,7 @@ Starting real agents outside smoke retains the backend's existing credit rules.
 Accept only one window/backend. Verify graph/WebGL, local Monaco/fonts, focus, SSE and
 OPEN_NOTICE, then graceful close and immediate restart, three clean starts. Preserve the
 existing native capability restrictions: no Windows isolation, rules, Revert, behavior or
-measured evidence. No native folder picker: the shell accepts demo or the exact pinned
+measured evidence. Clone-root mode accepts demo or the exact pinned
 profile only; native pinned-profile qualification is still pending.
 
 Exercise busy 8710 (refuse without attaching/killing its owner), missing dist, failed startup,

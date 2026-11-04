@@ -2,8 +2,8 @@
 
 > Status: partly built. Frozen manifest/checks merged in `65199d9`/`40a6e8d`, reliability
 > producers in `06c34a5`, agent-hours/prices in `95e40e5`/`56b5f18`, lead runtime in `6818b3b`.
-> Lead-plan inbox display followed in `bf9fb04`; Queue/Reject/Keep are built; Edit and post-dispatch plan tracking remain.
-> Checked against main `8b9b589`; this status does not claim a completed proof 2 run.
+> Lead-plan inbox display followed in `bf9fb04`; Queue/Reject/Keep and read-only post-dispatch plan tracking (`cadf3110`, merged in `48f7e5e1`) are built; Edit remains.
+> Checked against submission build `f261989c`; this status does not claim a completed proof 2 run.
 
 ## Status
 
