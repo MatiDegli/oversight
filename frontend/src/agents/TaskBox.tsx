@@ -27,6 +27,7 @@ const modifier =
   typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent) ? "Cmd" : "Ctrl";
 
 export interface TaskBoxViewProps {
+  onOpenSettings?: () => void;
   actionAccessory?: ReactNode;
   inputRef?: Ref<HTMLTextAreaElement>;
   draft: string;
@@ -64,6 +65,7 @@ export function TaskBoxView({
   model,
   maxSteps,
   actionAccessory,
+  onOpenSettings,
 }: TaskBoxViewProps) {
   const id = useId();
   const canStart = !pending && draft.trim() !== "" && block === null;
@@ -167,11 +169,21 @@ export function TaskBoxView({
           <X aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> {failure}
         </p>
       )}
+      {failure !== null && onOpenSettings && (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className={`self-start min-h-10 text-sm text-text underline underline-offset-4 ${focusRing}`}
+        >
+          Open settings
+        </button>
+      )}
     </section>
   );
 }
 
 export interface TaskBoxProps {
+  onOpenSettings?: () => void;
   actionAccessory?: ReactNode;
   /** Only an explicit action requests focus through this ref. */
   inputRef?: Ref<HTMLTextAreaElement>;
@@ -192,10 +204,12 @@ export function TaskBox({
   inputRef,
   store = taskBoxStore,
   actionAccessory,
+  onOpenSettings,
 }: TaskBoxProps) {
   const draft = useStore(store, (model) => model.draft);
   const pending = useStore(store, (model) => model.pending);
   const failure = useStore(store, (model) => model.failure);
+  const failureCode = useStore(store, (model) => model.failureCode);
   const choice = useStore(store, (model) => model.choice);
   const selected = selectedSlot(state, choice);
   const slots = (state.run?.slots ?? []).map((info) => {
@@ -229,6 +243,7 @@ export function TaskBox({
       draft={draft}
       pending={pending}
       failure={failure}
+      onOpenSettings={failureCode === "not_configured" ? onOpenSettings : undefined}
       block={startBlock(state, selected)}
       model={!modelChoice ? slots[0]?.label : undefined}
       maxSteps={state.run?.limits.max_steps}

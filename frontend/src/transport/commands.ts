@@ -9,6 +9,8 @@ import type {
   Health,
   MergeModeState,
   SetMergeMode,
+  SettingsView,
+  UpdateSettings,
   ImpactCone,
   RejectChange,
   PlanRevision,
@@ -116,6 +118,8 @@ export function createCommandClient(request: typeof fetch = fetch) {
       send<undefined>(`/plans/${encodeURIComponent(id)}/reject`, "POST", body),
     cancelQueue: (id: string, body: QueueRevision) =>
       send<undefined>(`/queue/${encodeURIComponent(id)}/cancel`, "POST", body),
+    getSettings: () => send<SettingsView>("/settings"),
+    updateSettings: (body: UpdateSettings) => send<SettingsView>("/settings", "PUT", body),
     setMergeMode: (body: SetMergeMode) => send<MergeModeState>("/merge-mode", "PUT", body),
     startAgent: (body: StartAgent) => send<AgentCreated>("/agents", "POST", body),
     stopAgent: (id: string) => send<undefined>(agent(id, "stop"), "POST"),

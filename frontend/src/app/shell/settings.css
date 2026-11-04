@@ -1,0 +1,33 @@
+@media (width < 768px) {
+  .shell-frame[data-settings-open] .chat-shell {
+    overflow: hidden;
+  }
+  .shell-frame[data-settings-open] .chat-shell > .chat-agents,
+  .shell-frame[data-settings-open] .chat-shell > .chat-work,
+  .shell-frame[data-settings-open] .chat-shell > .chat-preview-slot {
+    display: none;
+  }
+  .shell-frame[data-settings-open] .chat-shell .shell-center,
+  .shell-frame[data-settings-open] .chat-shell .shell-stage {
+    min-height: 0;
+    flex: 1;
+  }
+  .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Settings"] {
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Review queue"] {
+    min-width: 0;
+    flex-shrink: 1;
+  }
+  .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Review queue"] button {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Review queue"] button > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

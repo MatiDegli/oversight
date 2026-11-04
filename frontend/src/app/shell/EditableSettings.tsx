@@ -1,0 +1,279 @@
+import type { EditableSetting, EditableSettingName } from "@contracts";
+import { useEffect, useId, useState } from "react";
+import { useStore } from "zustand";
+import { focusRing } from "./shared";
+import { createSettingsEditor, sectionFor, type SettingsSection } from "./settingsEditor";
+
+const fields: readonly [EditableSettingName, string, EditableSetting["kind"]][] = [
+  ["META_API_KEY", "Meta API key", "secret"],
+  ["BASETEN_API_KEY", "Baseten API key", "secret"],
+  ["OVERSIGHT_CROSS_REVIEW", "Cross-review", "boolean"],
+  ["OVERSIGHT_BUDGET_USD", "Meta budget (USD)", "number"],
+  ["OVERSIGHT_BASETEN_BUDGET_USD", "Baseten budget (USD)", "number"],
+  ["MUSE_SPARK_INPUT_USD_PER_M", "Muse Spark input (USD / 1M tokens)", "number"],
+  ["MUSE_SPARK_OUTPUT_USD_PER_M", "Muse Spark output (USD / 1M tokens)", "number"],
+  ["BASETEN_INPUT_USD_PER_M", "Baseten input (USD / 1M tokens)", "number"],
+  ["BASETEN_OUTPUT_USD_PER_M", "Baseten output (USD / 1M tokens)", "number"],
+  ["OVERSIGHT_MAX_AGENTS", "Agent cap (agents)", "number"],
+];
+const states = { set: "Configured", missing: "Missing", invalid: "Invalid" };
+const fieldClass = `mt-2 block min-h-10 w-full min-w-0 rounded-card border border-control-edge bg-field px-3 py-2 text-base text-text placeholder:text-faint read-only:text-muted ${focusRing}`;
+const buttonClass = `min-h-10 rounded-control border border-control-edge px-4 py-2 text-sm font-semibold text-text aria-disabled:cursor-default aria-disabled:text-faint not-aria-disabled:hover:bg-page-raised ${focusRing}`;
+
+type EditorStore = ReturnType<typeof createSettingsEditor>;
+export function EditableSettings({
+  live,
+  store: supplied,
+}: {
+  live: boolean;
+  store?: EditorStore;
+}) {
+  const [local] = useState(createSettingsEditor);
+  const store = supplied ?? local;
+  const editor = useStore(store);
+  useEffect(() => {
+    if (live) void store.getState().load();
+  }, [live, store]);
+  const readOnly = !live || !editor.view || editor.pending !== null;
+  return (
+    <div className="mt-8 min-w-0 space-y-8">
+      {!live && <p className="text-sm text-muted">Settings are read-only in a replay.</p>}
+      {live && editor.loading && <p role="status">Loading settings…</p>}
+      {editor.failure && (
+        <div role="alert" className="space-y-2 text-sm wrap-anywhere text-text">
+          <p>{editor.failure}</p>
+          {!editor.view && (
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() => {
+                void editor.load();
+              }}
+            >
+              Try again
+            </button>
+          )}
+        </div>
+      )}
+      {(["models", "limits"] as const).map((section) => (
+        <SettingsSectionForm
+          key={section}
+          section={section}
+          editor={editor}
+          readOnly={readOnly}
+          live={live}
+        />
+      ))}
+      {editor.view?.restart_required && (
+        <p role="status" className="text-sm text-text">
+          {editor.view.apply === "desktop_reload"
+            ? "Restart to apply: File > Reload settings."
+            : "Restart the server to apply."}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SettingsSectionForm({
+  section,
+  editor,
+  readOnly,
+  live,
+}: {
+  section: SettingsSection;
+  editor: ReturnType<EditorStore["getState"]>;
+  readOnly: boolean;
+  live: boolean;
+}) {
+  const id = useId();
+  return (
+    <section aria-labelledby={`${id}-${section}`}>
+      <h2 id={`${id}-${section}`} className="text-(length:--title-size) font-bold">
+        {section === "models" ? "Models and keys" : "Limits and budget"}
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        {section === "models"
+          ? "Keys stay in .env and are never returned. Changes apply on the next start."
+          : "Spending limits and token prices in US dollars. Changes apply on the next start."}
+      </p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!readOnly) void editor.save(section);
+        }}
+      >
+        <div className="mt-4 grid min-w-0 gap-4 @sm:grid-cols-2">
+          {fields
+            .filter(([name]) => sectionFor(name) === section)
+            .map(([name, label, kind]) => {
+              const row = editor.view?.settings.find((setting) => setting.name === name);
+              return (
+                <SettingField
+                  key={name}
+                  name={name}
+                  label={label}
+                  kind={kind}
+                  row={row}
+                  value={editor.drafts[name] ?? (kind === "secret" ? "" : (row?.value ?? ""))}
+                  readOnly={readOnly || row?.overridden === true}
+                  live={live}
+                  onEdit={(value) => {
+                    editor.edit(name, value);
+                  }}
+                />
+              );
+            })}
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            className={buttonClass}
+            aria-disabled={readOnly || !hasChanges(editor.drafts, section)}
+          >
+            {editor.pending === section ? "Saving…" : "Save"}
+          </button>
+          <span role="status" className="text-sm text-muted">
+            {editor.saved[section] && "Saved."}
+          </span>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function hasChanges(
+  drafts: Partial<Record<EditableSettingName, string>>,
+  section: SettingsSection,
+) {
+  return (Object.keys(drafts) as EditableSettingName[]).some(
+    (name) => sectionFor(name) === section,
+  );
+}
+
+function SettingField({
+  name,
+  label,
+  kind,
+  row,
+  value,
+  readOnly,
+  live,
+  onEdit,
+}: {
+  name: EditableSettingName;
+  label: string;
+  kind: EditableSetting["kind"];
+  row: EditableSetting | undefined;
+  value: string;
+  readOnly: boolean;
+  live: boolean;
+  onEdit: (value: string) => void;
+}) {
+  const id = useId();
+  return (
+    <div className={`min-w-0 ${kind === "number" ? "" : "@sm:col-span-2"}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor={id} className="text-sm font-semibold">
+          {label}
+        </label>
+        {kind === "secret" && (
+          <span className="rounded-control border border-border px-2 py-0.5 text-sm text-muted">
+            {row ? states[row.state] : live ? "Loading…" : "Unavailable in replay"}
+          </span>
+        )}
+      </div>
+      {row?.overridden && (
+        <p id={`${id}-environment`} className="mt-1 text-sm text-muted">
+          Set by the environment
+        </p>
+      )}
+      <SettingControl
+        id={id}
+        name={name}
+        kind={kind}
+        row={row}
+        value={value}
+        readOnly={readOnly}
+        onEdit={onEdit}
+      />
+      {kind === "secret" && row && row.state !== "missing" && live && (
+        <button
+          type="button"
+          aria-disabled={readOnly}
+          className={`mt-2 min-h-10 text-sm text-muted underline underline-offset-4 ${focusRing}`}
+          onClick={() => {
+            if (!readOnly) onEdit("");
+          }}
+        >
+          Clear key
+        </button>
+      )}
+      {row?.state === "invalid" && kind === "number" && (
+        <p className="mt-1 text-sm text-muted">
+          Invalid value. Enter a positive{" "}
+          {name === "OVERSIGHT_MAX_AGENTS" ? "whole number" : "amount"}.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SettingControl({
+  id,
+  name,
+  kind,
+  row,
+  value,
+  readOnly,
+  onEdit,
+}: {
+  id: string;
+  name: EditableSettingName;
+  kind: EditableSetting["kind"];
+  row: EditableSetting | undefined;
+  value: string;
+  readOnly: boolean;
+  onEdit: (value: string) => void;
+}) {
+  return kind === "boolean" ? (
+    <button
+      id={id}
+      type="button"
+      role="switch"
+      aria-checked={value.toLowerCase() === "true"}
+      aria-disabled={readOnly}
+      aria-describedby={row?.overridden ? `${id}-environment` : undefined}
+      className={`mt-2 ${buttonClass}`}
+      onClick={() => {
+        if (!readOnly) onEdit(value.toLowerCase() === "true" ? "false" : "true");
+      }}
+    >
+      {value.toLowerCase() === "true" ? "On" : "Off"}
+    </button>
+  ) : (
+    <input
+      id={id}
+      name={name}
+      type={kind === "secret" ? "password" : "number"}
+      value={value}
+      readOnly={readOnly}
+      autoComplete={kind === "secret" ? "new-password" : "off"}
+      aria-describedby={row?.overridden ? `${id}-environment` : undefined}
+      min={kind === "number" ? (name === "OVERSIGHT_MAX_AGENTS" ? "1" : "0") : undefined}
+      step={name === "OVERSIGHT_MAX_AGENTS" ? "1" : "any"}
+      maxLength={512}
+      placeholder={
+        kind === "secret"
+          ? "Replace key"
+          : name === "OVERSIGHT_MAX_AGENTS"
+            ? "4 (default)"
+            : "Not set"
+      }
+      onChange={(event) => {
+        if (!readOnly) onEdit(event.target.value);
+      }}
+      className={fieldClass}
+    />
+  );
+}
