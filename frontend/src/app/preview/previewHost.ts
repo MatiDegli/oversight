@@ -89,8 +89,16 @@ export function createPreviewHost(
       return null;
     };
     // An earlier preview can arrive before this record's suggestion or revision.
-    // Leave recovery unchecked until its candidate is present in the applied prefix.
-    if (!sameOwnershipCandidate(record.candidate, getCandidate())) return Promise.resolve();
+    const candidate = getCandidate();
+    if (!candidate || candidate.revision < record.candidate.revision) return Promise.resolve();
+    if (!sameOwnershipCandidate(record.candidate, candidate)) {
+      try {
+        ownership?.clear(record);
+      } catch {
+        /* Storage refusal never grants recovery authority. */
+      }
+      return Promise.resolve();
+    }
     return controller.recover(getCandidate);
   };
   const publish = (next: boolean) => {

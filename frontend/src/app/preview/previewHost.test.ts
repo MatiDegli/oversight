@@ -536,3 +536,61 @@ it("bootstrap and Chat selection navigation leave a hidden recovered owner renew
   expect(recovered.snapshot()).toBe(false);
   recovered.dispose();
 });
+
+it.each(["revision", "change", "head", "absent", "older"] as const)(
+  "%s applied candidate clears superseded ownership or keeps waiting without slot intent or I/O",
+  async (mode) => {
+    const { prefix, complete, port, candidate, oldCandidate } = backlogPreviews("revision");
+    const identity = { run: candidate.run_id, source: "live" };
+    const stored = {
+      ...oldCandidate,
+      ...(mode === "change" && { change_id: "superseded-change" }),
+      ...(mode === "head" && { head_commit: "superseded-head" }),
+    };
+    const record: PreviewOwnership = {
+      identity,
+      candidate: mode === "older" ? candidate : stored,
+      preview_id: `preview-${"a".repeat(32)}`,
+      lease_token: "private-token",
+    };
+    let saved: PreviewOwnership | null = record;
+    const store: PreviewOwnershipStore = {
+      load: () => saved,
+      save: vi.fn(),
+      clear: vi.fn(() => {
+        saved = null;
+      }),
+    };
+    const state = mode === "revision" ? complete : prefix;
+    if (mode === "absent")
+      state.leadViews = {
+        lead: (state.leadViews.lead ?? []).map((event) => ({
+          ...event,
+          payload: { ...event.payload, view: { kind: "preview", agent_id: "absent-agent" } },
+        })),
+      };
+    const recovered = createPreviewHost(
+      port,
+      previewClock,
+      identity,
+      () => state,
+      () => true,
+      undefined,
+      store,
+    );
+    const publish = vi.fn();
+    recovered.subscribe(publish);
+    await recovered.setIdentity(identity);
+    await recovered.setIdentity(identity);
+    const waiting = mode === "absent" || mode === "older";
+    expect(saved).toEqual(waiting ? record : null);
+    expect(store.clear).toHaveBeenCalledTimes(waiting ? 0 : 1);
+    if (!waiting) expect(store.clear).toHaveBeenCalledWith(record);
+    expect(recovered.snapshot()).toBe(false);
+    expect(recovered.controller.snapshot()).toMatchObject({ owned: false, visible: false });
+    expect(publish).not.toHaveBeenCalled();
+    recovered.dispose();
+    expect(port.calls).toEqual([]);
+    expect(store.save).not.toHaveBeenCalled();
+  },
+);
