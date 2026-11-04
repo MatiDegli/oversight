@@ -971,9 +971,9 @@ class LiveRun:
                 "Meta's console and settle it (uv run python -m oversight ledger settle)"
             )
         if settings.setting_problems.get("OVERSIGHT_BUDGET_USD") == "invalid":
-            return "OVERSIGHT_BUDGET_USD is not configured"
+            return "OVERSIGHT_BUDGET_USD must be a positive amount, or empty for no budget"
         if self._pricing is None:
-            return "Muse Spark input and output prices are not configured"
+            return "Muse Spark prices must be positive amounts, or empty for the defaults"
         block_at = settings.spend_brake_percent / 100
         ledger = UsageLedger(
             settings.budget_usd, state.spent_usd, warn_at=WARN_AT, block_at=block_at

@@ -124,3 +124,24 @@ def test_no_budget_disables_only_the_numeric_brake(tmp_path: Path) -> None:
     live = LiveRun(Settings(runtime_dir=tmp_path / ".runtime"))
     live.ledger.state = LedgerState(999)
     assert live.brake_reason() is None
+
+
+@pytest.mark.parametrize(
+    ("name", "reason"),
+    [
+        (
+            "OVERSIGHT_BUDGET_USD",
+            "OVERSIGHT_BUDGET_USD must be a positive amount, or empty for no budget",
+        ),
+        (
+            "MUSE_SPARK_INPUT_USD_PER_M",
+            "Muse Spark prices must be positive amounts, or empty for the defaults",
+        ),
+    ],
+)
+def test_invalid_amounts_explain_the_brake(tmp_path: Path, name: str, reason: str) -> None:
+    live = LiveRun(
+        replace(Settings.from_values({name: "garbage"}), runtime_dir=tmp_path / ".runtime")
+    )
+    live.ledger.state = LedgerState(0)
+    assert live.brake_reason() == reason
