@@ -6,7 +6,7 @@ No replacement preview schema, event or lifecycle implementation lives here. The
 binding owns wire validation, private lease-token storage and verified-stop waits.
 
 Example once that approved binding exists:
-  uv run --frozen python tools/preview_scenario.py --backend http://127.0.0.1:8710 \
+  uv run --frozen python tools/preview_scenario.py --backend http://localhost:8710 \
     --preview-client approved_module:factory --dedicated-fake-c
 This is an integration prerequisite, not evidence of C/browser acceptance.
 """
@@ -45,11 +45,12 @@ def require(condition: object, message: str) -> None:
 
 
 def loopback_url(url: str, *, root: bool = False) -> str:
+    """Validate the localhost backend parent (root=True) or its numeric frame URL."""
     try:
         parts = urlsplit(url)
         require(
             parts.scheme == "http"
-            and parts.hostname == "127.0.0.1"
+            and parts.hostname == ("localhost" if root else "127.0.0.1")
             and parts.port is not None
             and 1 <= parts.port <= 65535
             and parts.username is None
@@ -58,8 +59,12 @@ def loopback_url(url: str, *, root: bool = False) -> str:
             and not parts.fragment,
             "Expected explicit loopback HTTP URL",
         )
-        if root:
-            require(parts.path in ("", "/"), "Expected backend origin without a path")
+        require(
+            parts.path in ("", "/"),
+            "Expected backend origin without a path"
+            if root
+            else "Expected candidate document root",
+        )
         return url.rstrip("/") if root else url
     except ValueError:
         raise ScenarioError("Invalid loopback URL") from None
@@ -197,18 +202,35 @@ class Document(HTMLParser):
             self.total = int(value)
 
 
-def document(response: httpx.Response, origin: str) -> Document:
+def document(
+    response: httpx.Response, origin: str, *, expected_origins: tuple[str, ...] | None = None
+) -> Document:
     require(response.status_code == 200, "Candidate request failed")
-    prefix = "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors "
-    csp = response.headers.get("content-security-policy", "")
-    ancestors = csp.removeprefix(prefix).split(" ")
+    # HTTP launches declare only their actual parent; direct launches may declare a fixed list.
+    ancestors = (origin,) if expected_origins is None else expected_origins
     require(
-        csp.startswith(prefix)
-        and origin in ancestors
+        origin in ancestors
         and all(
             re.fullmatch(r"http://(?:localhost|127\.0\.0\.1|\[::1\])(?::[1-9][0-9]{0,4})?", value)
             for value in ancestors
         ),
+        "Candidate CSP configuration differs",
+    )
+    expected = {
+        "default-src": ("'none'",),
+        "form-action": ("'self'",),
+        "base-uri": ("'none'",),
+        "frame-ancestors": ancestors,
+        "sandbox": ("allow-forms",),
+    }
+    directives = [
+        part.split() for part in response.headers.get("content-security-policy", "").split(";")
+    ]
+    require(
+        len(directives) == len(expected)
+        and all(directives)
+        and len({words[0] for words in directives}) == len(expected)
+        and {words[0]: tuple(words[1:]) for words in directives} == expected,
         "Candidate CSP differs",
     )
     require(

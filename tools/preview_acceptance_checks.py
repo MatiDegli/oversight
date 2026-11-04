@@ -43,10 +43,11 @@ def settings(
         demo_python=Path(sys.executable),
         memory_hold_percent=100,
         preview_profile=PreviewProfile(
+            enabled=True,
             adapter=REPO_ROOT / "backend/src/oversight/preview_adapter.py",
             interpreter=Path(sys.executable),
             ports=pool or tuple({free_port() for _ in range(8)} - {port, vite})[:4],
-            origins=(f"http://127.0.0.1:{port}",) + ((f"http://127.0.0.1:{vite}",) if vite else ()),
+            origins=(f"http://localhost:{port}",) + ((f"http://localhost:{vite}",) if vite else ()),
             trusted_demo=True,
             heartbeat_s=1,
             lease_s=30,
@@ -140,7 +141,7 @@ async def server(config: Settings) -> AsyncGenerator[AcceptanceServer]:
         )
     )
     task = asyncio.create_task(service.serve(sockets=[listener]))
-    origin = f"http://127.0.0.1:{config.port}"
+    origin = f"http://localhost:{config.port}"
     try:
         async with httpx.AsyncClient(
             base_url=origin, timeout=5, trust_env=False, follow_redirects=False

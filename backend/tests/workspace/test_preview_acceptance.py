@@ -42,6 +42,31 @@ def external_address():
         return connection.getsockname()[0]
 
 
+async def test_explicit_numeric_shop_parent_refuses_before_ownership_or_launch(
+    tmp_path, monkeypatch
+):
+    async with real_preview(tmp_path) as h:
+
+        def forbidden(*args, **kwargs):
+            raise AssertionError("parent refusal must precede resolution and process creation")
+
+        monkeypatch.setattr(h.manager, "resolve_candidate", forbidden)
+        monkeypatch.setattr(h.manager, "process_factory", forbidden)
+        with pytest.raises(
+            PreviewError, match="Shop preview requires a localhost parent"
+        ) as caught:
+            await h.manager.start(
+                run_id="run-20261103-000000",
+                agent_id="agent-1",
+                revision=1,
+                head_commit=h.head,
+                parent_authority="127.0.0.1:8710",
+            )
+        assert caught.value.code == "not_configured"
+        assert not h.manager.has_owner and h.manager.barrier.owner is None
+        assert h.manager.registry.read() is None and not h.sink.records
+
+
 async def test_namespace_pin_retains_identity_through_death_and_closes_descriptor(tmp_path):
     async with real_preview(tmp_path) as h:
         receipt, data = await h.start()
