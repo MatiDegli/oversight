@@ -195,7 +195,7 @@ class Backend:
             text=text,
             headers={
                 "Content-Security-Policy": "default-src 'none'; form-action 'self'; "
-                "base-uri 'none'; frame-ancestors " + ORIGIN,
+                "base-uri 'none'; frame-ancestors " + ORIGIN + "; sandbox allow-forms",
                 "Cache-Control": "no-store",
                 "Referrer-Policy": "no-referrer",
             },
@@ -264,33 +264,145 @@ async def test_two_totals_stop_before_revision_and_final_rejection():
 
 
 @pytest.mark.parametrize(
-    "ancestors,accepted",
+    "ancestors,expected_origins,accepted",
     [
-        (ORIGIN + " http://localhost:5710 http://127.0.0.1:5710", True),
-        ("http://localhost:5710 " + ORIGIN, True),
-        ("http://localhost:5710", False),
-        (ORIGIN + " *", False),
-        (ORIGIN + " http://*.example.com", False),
-        (ORIGIN + "; script-src 'unsafe-inline'", False),
+        (
+            ORIGIN + " http://localhost:5710 http://127.0.0.1:5710",
+            (ORIGIN, "http://localhost:5710", "http://127.0.0.1:5710"),
+            True,
+        ),
+        ("http://localhost:5710 " + ORIGIN, ("http://localhost:5710", ORIGIN), True),
+        ("http://localhost:5710", None, False),
+        (ORIGIN + " *", None, False),
+        (ORIGIN + " http://*.example.com", None, False),
+        (ORIGIN + "; script-src 'unsafe-inline'", None, False),
+        (ORIGIN, None, True),
+        (ORIGIN + " http://localhost:5710", None, False),
+        ("http://127.0.0.1:8710", None, False),
+        (ORIGIN + " " + ORIGIN, None, False),
+        (ORIGIN, (ORIGIN, "http://localhost:5710"), False),
     ],
 )
-async def test_document_accepts_backend_among_explicit_csp_origins(ancestors, accepted):
+async def test_document_requires_exact_declared_csp_origins(ancestors, expected_origins, accepted):
     response = httpx.Response(
         200,
         text='<form action="/cart" method="post"><input type="hidden" name="nonce" '
         f'value="{"a" * 64}"></form><output data-total-cents="1500"></output>',
         headers={
             "Content-Security-Policy": "default-src 'none'; form-action 'self'; "
-            "base-uri 'none'; frame-ancestors " + ancestors,
+            "base-uri 'none'; frame-ancestors " + ancestors + "; sandbox allow-forms",
             "Referrer-Policy": "no-referrer",
             "Cache-Control": "no-store",
         },
     )
     if accepted:
-        assert story.document(response, ORIGIN).total == 1500
+        assert story.document(response, ORIGIN, expected_origins=expected_origins).total == 1500
     else:
         with pytest.raises(story.ScenarioError, match="CSP"):
-            story.document(response, ORIGIN)
+            story.document(response, ORIGIN, expected_origins=expected_origins)
+
+
+async def test_direct_document_uses_explicit_numeric_multiple_origin_configuration():
+    backend = Backend()
+    backend.owned = True
+    response = await backend.shop(httpx.Request("GET", "http://127.0.0.1:19999/"))
+    configured = ("http://127.0.0.1:8710", "http://127.0.0.1:5710")
+    response.headers["content-security-policy"] = response.headers[
+        "content-security-policy"
+    ].replace(ORIGIN, " ".join(configured))
+    assert story.document(response, configured[0], expected_origins=configured).total == 1500
+    with pytest.raises(story.ScenarioError, match="CSP"):
+        story.document(response, configured[0])
+
+
+@pytest.mark.parametrize(
+    "sandbox",
+    [
+        "",
+        "; sandbox",
+        "; sandbox allow-scripts",
+        "; sandbox allow-forms allow-scripts",
+        "; sandbox allow-forms allow-same-origin",
+        "; sandbox allow-forms allow-popups",
+    ],
+)
+async def test_document_refuses_missing_or_widened_sandbox(sandbox):
+    backend = Backend()
+    backend.owned = True
+    response = await backend.shop(httpx.Request("GET", "http://127.0.0.1:19999/"))
+    response.headers["content-security-policy"] = response.headers[
+        "content-security-policy"
+    ].replace("; sandbox allow-forms", sandbox)
+    with pytest.raises(story.ScenarioError, match="CSP"):
+        story.document(response, ORIGIN)
+
+
+@pytest.mark.parametrize(
+    "directive",
+    [
+        "script-src 'unsafe-inline'",
+        "connect-src *",
+        "default-src *",
+        "sandbox allow-forms",
+        "frame-ancestors " + ORIGIN,
+    ],
+)
+async def test_document_refuses_extra_or_duplicate_directives(directive):
+    backend = Backend()
+    backend.owned = True
+    response = await backend.shop(httpx.Request("GET", "http://127.0.0.1:19999/"))
+    response.headers["content-security-policy"] += "; " + directive
+    with pytest.raises(story.ScenarioError, match="CSP"):
+        story.document(response, ORIGIN)
+
+
+@pytest.mark.parametrize(
+    "header,value",
+    [
+        ("referrer-policy", None),
+        ("referrer-policy", "unsafe-url"),
+        ("cache-control", None),
+        ("cache-control", "public"),
+        ("set-cookie", "session=untrusted"),
+        ("location", "/elsewhere"),
+        ("access-control-allow-origin", "*"),
+        ("access-control-allow-credentials", "true"),
+    ],
+)
+async def test_document_preserves_independent_response_security_checks(header, value):
+    backend = Backend()
+    backend.owned = True
+    response = await backend.shop(httpx.Request("GET", "http://127.0.0.1:19999/"))
+    if value is None:
+        del response.headers[header]
+    else:
+        response.headers[header] = value
+    with pytest.raises(story.ScenarioError):
+        story.document(response, ORIGIN)
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ('action="/cart"', 'action="https://external.invalid/cart"'),
+        ('method="post"', 'method="get"'),
+        ('type="hidden"', 'type="text"'),
+        ("a" * 64, "invalid-nonce"),
+        ("</form>", '</form><form action="/cart" method="post"></form>'),
+        ("</form>", '<input type="hidden" name="nonce" value="' + "a" * 64 + '"></form>'),
+        ("<form", '<form onsubmit="unsafe()"'),
+        ("</form>", '</form><script src="/active.js"></script>'),
+        ("</form>", "</form><style>body{display:none}</style>"),
+        ("</form>", '</form><iframe src="/active"></iframe>'),
+    ],
+)
+async def test_document_preserves_form_nonce_and_inactive_content_checks(old, new):
+    backend = Backend()
+    backend.owned = True
+    original = await backend.shop(httpx.Request("GET", "http://127.0.0.1:19999/"))
+    response = httpx.Response(200, headers=original.headers, text=original.text.replace(old, new))
+    with pytest.raises(story.ScenarioError):
+        story.document(response, ORIGIN)
 
 
 @pytest.mark.parametrize("failure", ["shop", "open"])

@@ -202,18 +202,35 @@ class Document(HTMLParser):
             self.total = int(value)
 
 
-def document(response: httpx.Response, origin: str) -> Document:
+def document(
+    response: httpx.Response, origin: str, *, expected_origins: tuple[str, ...] | None = None
+) -> Document:
     require(response.status_code == 200, "Candidate request failed")
-    prefix = "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors "
-    csp = response.headers.get("content-security-policy", "")
-    ancestors = csp.removeprefix(prefix).split(" ")
+    # HTTP launches declare only their actual parent; direct launches may declare a fixed list.
+    ancestors = (origin,) if expected_origins is None else expected_origins
     require(
-        csp.startswith(prefix)
-        and origin in ancestors
+        origin in ancestors
         and all(
             re.fullmatch(r"http://(?:localhost|127\.0\.0\.1|\[::1\])(?::[1-9][0-9]{0,4})?", value)
             for value in ancestors
         ),
+        "Candidate CSP configuration differs",
+    )
+    expected = {
+        "default-src": ("'none'",),
+        "form-action": ("'self'",),
+        "base-uri": ("'none'",),
+        "frame-ancestors": ancestors,
+        "sandbox": ("allow-forms",),
+    }
+    directives = [
+        part.split() for part in response.headers.get("content-security-policy", "").split(";")
+    ]
+    require(
+        len(directives) == len(expected)
+        and all(directives)
+        and len({words[0] for words in directives}) == len(expected)
+        and {words[0]: tuple(words[1:]) for words in directives} == expected,
         "Candidate CSP differs",
     )
     require(
