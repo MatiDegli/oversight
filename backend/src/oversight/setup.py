@@ -7,7 +7,7 @@ from pathlib import Path
 
 from oversight.settings import REPO_ROOT, Settings
 from oversight.slots import resolve_profile as resolve_profile
-from oversight.slots import resolve_slots
+from oversight.slots import resolve_slots, slot_position
 from oversight_contracts.commands import MissingSetting, SettingName
 from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile
@@ -44,7 +44,7 @@ def missing_settings(
     for name, value in values.items():
         slots: list[Slot] = [
             slot
-            for slot, profile in sorted(profiles.items())
+            for slot, profile in sorted(profiles.items(), key=lambda entry: slot_position(entry[0]))
             if any(
                 (p.provider == "meta" and name != "BASETEN_API_KEY")
                 or (p.provider == "baseten" and name == "BASETEN_API_KEY")

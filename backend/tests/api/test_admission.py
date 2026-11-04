@@ -1,6 +1,7 @@
-"""Admission for one through six slots retains atomic reservations and per-slot scripts."""
+"""Admission for person-configured seats retains atomic reservations and per-slot scripts."""
 
 import asyncio
+import string
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
@@ -29,12 +30,13 @@ from oversight_contracts.commands import AgentCreated, StartAgent
 from oversight_contracts.common import Slot
 
 pytestmark = pytest.mark.anyio
-LETTERS: tuple[Slot, ...] = ("A", "B", "C", "D", "E", "F")
+LETTERS: tuple[Slot, ...] = (*string.ascii_uppercase, "AA", "AB")
 
 
 def fake_settings(tmp_path: Path, maximum: int) -> Settings:
     """Each offered slot has a distinct script, edit and finish summary; fixtures stay intact."""
     paths: dict[str, Path] = {}
+    scripts: dict[Slot, Path] = {}
     for slot in LETTERS[:maximum]:
         path = tmp_path / f"{slot}.json"
         old = "def apply_coupon(total: int, code: str) -> int:\n"
@@ -63,11 +65,20 @@ def fake_settings(tmp_path: Path, maximum: int) -> Settings:
                 ],
             )
         )
-        paths["fake_script" + (f"_{slot.lower()}" if slot != "A" else "")] = path
+        if slot == "A":
+            paths["fake_script"] = path
+        elif slot in "BCDEF":
+            paths[f"fake_script_{slot.lower()}"] = path
+        else:
+            scripts[slot] = path
+    if scripts:
+        return live_settings(
+            tmp_path, harness_pack=False, max_agents=maximum, fake_scripts=scripts, **paths
+        )
     return live_settings(tmp_path, harness_pack=False, max_agents=maximum, **paths)
 
 
-@pytest.mark.parametrize("maximum", [4, 6])
+@pytest.mark.parametrize("maximum", [4, 6, 11])
 async def test_first_free_order_own_scripts_and_run_started(tmp_path: Path, maximum: int) -> None:
     async with asyncio.timeout(DEADLINE_S), live_server(fake_settings(tmp_path, maximum)) as s:
         assert s.store.allow_fake_provider
@@ -94,7 +105,7 @@ async def test_first_free_order_own_scripts_and_run_started(tmp_path: Path, maxi
         assert busy.json()["error"]["message"] == f"all {maximum} slots are taken ({holders})"
 
 
-@pytest.mark.parametrize("maximum", [4, 6])
+@pytest.mark.parametrize("maximum", [4, 6, 11])
 async def test_named_c_is_not_rerouted_when_busy(tmp_path: Path, maximum: int) -> None:
     clients = BySlot(lambda profile, _slot: GatedModel(profile=profile))
     async with (
@@ -117,7 +128,7 @@ async def test_a_slot_beyond_capacity_is_invalid(tmp_path: Path, maximum: int) -
         assert refused.json()["error"]["message"] == f"slot {LETTERS[maximum]} is not offered"
 
 
-@pytest.mark.parametrize("maximum", [4, 6])
+@pytest.mark.parametrize("maximum", [4, 6, 11])
 async def test_race_for_n_minus_one_free_slots_then_reject_and_reuse(
     tmp_path: Path, maximum: int
 ) -> None:
@@ -245,3 +256,60 @@ async def test_fake_reviewer_rules_include_every_offered_author(tmp_path: Path) 
     assert (await client.complete([], [])).text == "VERDICT: accept"
     with pytest.raises(ReviewerUnavailable, match="all-fake profiles"):
         configured_reviewer(replace(settings, agent_model_f="muse-spark"), "C", FAKE_MODEL)
+
+
+async def test_two_leads_run_five_and_six_children_and_twelfth_waits(tmp_path: Path) -> None:
+    from oversight_contracts.plans import PlanZone, SubtaskDraft
+
+    clients = BySlot(lambda profile, _slot: GatedModel(profile=profile))
+    settings = replace(fake_settings(tmp_path, 11), lead_max_subtasks=12)
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, clients) as s:
+        plans = []
+        for count in (5, 6):
+            lead = await s.client.post("/leads", json={"task": f"Coordinate {count} agents"})
+            assert lead.status_code == 201
+            drafts = [
+                SubtaskDraft(
+                    task=f"Task {i}", zone=PlanZone(node_ids=[], paths=["shop/pricing.py"])
+                )
+                for i in range(count)
+            ]
+            created = await s.live.plans.create_and_propose(
+                "Coordinate", drafts, started_by=lead.json()["agent_id"]
+            )
+            plan = s.live.plans.get(created.plan_id)
+            response = await s.client.post(
+                f"/plans/{plan.plan_id}/start", json={"revision": plan.revision}
+            )
+            assert response.status_code == 202, response.text
+            await s.until(
+                lambda event, plan=plan, count=count: (
+                    is_type("plan.updated", plan_id=plan.plan_id)(event)
+                    and sum(t.agent_id is not None for t in event.payload.subtasks or []) == count
+                )
+            )
+            plans.append(s.live.plans.get(plan.plan_id))
+        children = [t for plan in plans for t in plan.subtasks or []]
+        assert len(children) == len({t.agent_id for t in children}) == 11
+        assert all(t.state == "running" for t in children)
+        assert len([value for value in s.live._slots.values() if value]) == 11  # pyright: ignore[reportPrivateUsage]
+        # First-wave validation continues to compare against the run's actual seat count.
+        with pytest.raises(ApiError, match=r"OVERSIGHT_MAX_AGENTS=11"):
+            s.live.plans.check_first_wave([drafts[0]] * 12)
+        response = await s.client.post(
+            "/queue",
+            json={"agent": {"task": "Twelfth child", "slot": None, "model": None, "zone": None}},
+        )
+        assert response.status_code == 201, response.text
+        identifier = response.json()["queued_task_id"]
+        await s.until(is_type("queue.updated", queued_task_id=identifier, state="queued"))
+        item = s.live.dispatcher.items[identifier]
+        assert not item.agent_ids
+        first = children[0].agent_id
+        assert first is not None
+        assert (await s.client.post(f"/agents/{first}/stop")).status_code == 202
+        await s.until(is_type("queue.updated", queued_task_id=identifier, state="running"))
+        item = s.live.dispatcher.items[identifier]
+        assert len(item.agent_ids) == 1 and item.agent_ids[0] not in {t.agent_id for t in children}
+        assert s.live._slots["A"] == item.agent_ids[0]  # pyright: ignore[reportPrivateUsage]
+        assert all(s.live.plans.get(plan.plan_id).started_by == plan.started_by for plan in plans)
