@@ -9,6 +9,14 @@
         "output_tokens": 20,
         "cached_tokens": 0
       }
+    },
+    {
+      "text": "The review evidence is still unavailable.",
+      "usage": {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "cached_tokens": 0
+      }
     }
   ]
 }

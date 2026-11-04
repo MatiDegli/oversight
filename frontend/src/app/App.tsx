@@ -90,6 +90,10 @@ export function App() {
             field === "lastSeq" ||
             field === "clock" ||
             field === "gap" ||
+            // Preview timestamps only advance open horizons, displayed as "running".
+            // Keep the full inventory in the store without redrawing the working UI.
+            ((field === "stageEvents" || field === "changeStages") &&
+              next.stageEvents.at(-1)?.type === "preview.status") ||
             next[field] === previous?.[field]
           );
         })

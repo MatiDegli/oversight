@@ -90,6 +90,16 @@
   width: 100%;
   border-right: 0;
 }
+.chat-shell .has-workflow > .focus-panel {
+  flex: 1;
+  width: 0;
+}
+.chat-shell .workflow-panel {
+  width: 40%;
+  min-width: 300px;
+  border-inline-start: 1px solid var(--divider);
+  border-inline-end: 0;
+}
 .chat-shell > .shell-sidebar {
   position: absolute;
   inset: 0 auto 0 var(--left-rail-width);

@@ -297,7 +297,7 @@ spend and each agent's cost from these events.
 
 The app records Meta costs before publishing their ticks. The durable ledger survives resets.
 Unknown costs block further Meta starts and revisions until settled. A ledger write failure
-halts the affected run and blocks Meta starts. Warnings begin at 50% and 80%; spend above 90%
+halts the affected run and blocks Meta starts. Warnings at 50% and 80% apply only below the brake; spend above the person's configured share of the credits, 90% by default,
 refuses new Meta runs and revisions. It does not cancel other runs already working.
 Baseten and fake calls do not debit Meta's credit ledger.
 

@@ -4,6 +4,7 @@ import { costText } from "../state";
 import type { ChangeState, State } from "../state";
 import { presentationFor, presentationStyle } from "../teams/presentation";
 import { ChangeFactsRow } from "./ChangeFactsRow";
+import { ChangeTiming } from "./StageTimes";
 import "./reviewHeader.css";
 
 const statusWords: Record<ChangeState["status"], string> = {
@@ -78,6 +79,12 @@ export function ReviewHeader({
           {base?.slice(0, 7) ?? "unknown"}
         </code>
       </p>
+      {change && (
+        <ChangeTiming
+          stages={state.changeStages[changeId] ?? null}
+          rounds={change.revisionRounds}
+        />
+      )}
       <div className="mt-3">
         <ChangeFactsRow state={state} changeId={changeId} />
       </div>

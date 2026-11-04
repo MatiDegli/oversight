@@ -127,6 +127,7 @@ async def test_unmetered_revision_ignores_missing_meta_setup(
         baseten_api_key="test-baseten",
         meta_api_key=None,
         budget_usd=None,
+        spend_brake_percent=None,
         input_usd_per_m=None,
         output_usd_per_m=None,
     )
@@ -167,11 +168,52 @@ async def test_rules_merged_revision_names_revert_without_kept_run(tmp_path: Pat
         assert live.store.last_seq == before
 
 
-@pytest.mark.parametrize("attribute", ["budget_usd", "input_usd_per_m", "output_usd_per_m"])
+@pytest.mark.parametrize(
+    "attribute", ["budget_usd", "input_usd_per_m", "output_usd_per_m", "spend_brake_percent"]
+)
 def test_brake_itself_fails_closed_without_budget_or_prices(tmp_path: Path, attribute: str) -> None:
     live = LiveRun(meta_settings(tmp_path, **{attribute: None}))
     live.ledger.state = LedgerState(0.0, ())
     assert live.brake_reason() is not None
+
+
+@pytest.mark.parametrize("value", ["0", "101", "abc", "9.5", "-5", "\uff11\uff10", "1000"])
+async def test_invalid_spend_brake_refuses_meta_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    name = "OVERSIGHT_SPEND_BRAKE_PERCENT"
+    monkeypatch.setenv(name, value)
+    loaded = Settings.load(tmp_path / "no-config")
+    settings = meta_settings(
+        tmp_path,
+        spend_brake_percent=loaded.spend_brake_percent,
+        setting_problems=loaded.setting_problems,
+    )
+    clients = Scripts()
+    expected = {
+        "code": "spend_brake",
+        "message": f"{name} must be a whole number from 1 to 100",
+    }
+    async with asyncio.timeout(DEADLINE_S), client_for(settings, clients) as client:
+        response = await start(client, slot="B")
+        assert response.status_code == 403, response.text
+        error = ErrorResponse.model_validate(response.json()).error
+        assert error.code == "spend_brake"
+        assert response.json()["error"] == expected
+        health = Health.model_validate((await client.get("/health")).json())
+        assert health.missing_settings == []
+    async with asyncio.timeout(DEADLINE_S), proposed_run(settings, MUSE_SPARK) as (client, live):
+        before = live.store.last_seq
+        response = await client.post(
+            "/changes/change-1/request-changes",
+            json={"comment": "Revise, please.", "revision": 1, "head_commit": "seeded-head"},
+        )
+        assert response.status_code == 403, response.text
+        assert response.json()["error"] == expected
+        manager = cast(Mock, live._manager)  # pyright: ignore[reportPrivateUsage]
+        manager.request_changes.assert_not_called()
+        assert live.store.last_seq == before
+    assert clients.calls == 0
 
 
 @pytest.mark.parametrize(

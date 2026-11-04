@@ -88,3 +88,41 @@ it("keeps the live diff's complete facts and existing copy", () => {
     expect(text).toContain(copy);
   expect(html).toContain("lucide-circle-help");
 });
+
+it("shows recorded stage times and confirmed revision rounds beside the provenance", () => {
+  const state = readFileSync(
+    new URL("../../../fixtures/events/stage-clocks.jsonl", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map(parseEvent)
+    .reduce(applyEvent, createInitialState());
+  const html = renderToStaticMarkup(<ReviewHeader state={state} changeId="change-1" />);
+  expect(html).toContain("1 revision round");
+  expect(html).toContain('aria-label="Stage times"');
+  expect(html).toContain('aria-label="Agent work, 2 minutes 30 seconds"');
+  expect(html).toContain('aria-label="Automatic checks, 30 seconds"');
+  expect(html).toContain('aria-label="Waiting for your decision, 1 minute 30 seconds"');
+  expect(html).toContain('aria-label="Test runs, 1 minute"');
+  expect([...html.matchAll(/<li .*?<\/li>/g)]).toHaveLength(4);
+});
+
+it("shows only known agent work from the bundled recording, omitting unknown waits", () => {
+  const state = readFileSync(
+    new URL("../../../fixtures/events/recorded-demo.jsonl", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map(parseEvent)
+    .reduce(applyEvent, createInitialState());
+  for (const [changeId, seconds] of [
+    ["change-1", 21],
+    ["change-2", 11],
+  ] as const) {
+    const html = renderToStaticMarkup(<ReviewHeader state={state} changeId={changeId} />);
+    expect(html).toContain(`aria-label="Agent work, ${String(seconds)} seconds"`);
+    expect(html).not.toMatch(/Automatic checks|Waiting for your decision|Test runs/);
+  }
+});

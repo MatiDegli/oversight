@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import replace
+from types import SimpleNamespace
 from typing import Any
 
 import openai
@@ -15,9 +16,12 @@ from oversight.agents import (
     ModelReply,
     OpenAIClient,
     Usage,
+    reviewer,
     run_review_call,
 )
+from oversight.agents._crossreview import build_correction_message
 from oversight.agents.client import CALL_SCOPE, CallScope
+from oversight.agents.reviewer import MIN_REASK_SECONDS
 
 from .test_attempt_events import ValidatingRecorder
 from .test_client import COMPLETION
@@ -32,7 +36,7 @@ def client() -> OpenAIClient:
     )
 
 
-def completion(*, empty: bool = False) -> ChatCompletion:
+def completion(*, empty: bool = False, text: str = "VERDICT: accept") -> ChatCompletion:
     return ChatCompletion.model_validate(
         COMPLETION
         | {
@@ -42,7 +46,7 @@ def completion(*, empty: bool = False) -> ChatCompletion:
                 {
                     "index": 0,
                     "finish_reason": "stop",
-                    "message": {"role": "assistant", "content": "VERDICT: accept"},
+                    "message": {"role": "assistant", "content": text},
                 }
             ]
         }
@@ -57,6 +61,7 @@ async def call(model: OpenAIClient, record: Any, **kwargs: Any) -> Any:
         author=FAKE_MODEL,
         ready_time=kwargs.pop("ready_time", asyncio.get_running_loop().time()),
         record=record,
+        check_spending=kwargs.pop("check_spending", lambda: None),
         **kwargs,
     )
 
@@ -122,6 +127,156 @@ async def test_response_records_once_including_empty_choices(empty: bool) -> Non
     result = await call(model, record)
     assert len(ticks) == 1 and ticks[0].usage == Usage(700, 100, 600)
     assert result.review.verdict == ("unknown" if empty else "clean")
+    assert CALL_SCOPE.get() is None
+
+
+@pytest.mark.parametrize("remaining", [19.999, 20.0, 20.001])
+async def test_reask_minimum_uses_original_deadline_after_accounting(
+    monkeypatch: pytest.MonkeyPatch, remaining: float
+) -> None:
+    ready = asyncio.get_running_loop().time()
+    ticks: list[ModelReply] = []
+    checks: list[int] = []
+    scopes: list[CallScope | None] = []
+
+    async def record(reply: ModelReply) -> None:
+        ticks.append(reply)
+        monkeypatch.setattr(
+            reviewer,
+            "asyncio",
+            SimpleNamespace(
+                get_running_loop=lambda: SimpleNamespace(time=lambda: ready + 90 - remaining)
+            ),
+        )
+
+    async def create(**params: Any) -> ChatCompletion:
+        scopes.append(CALL_SCOPE.get())
+        return completion(text="bad" if len(scopes) == 1 else "VERDICT: accept")
+
+    model = client()
+    model._create = create
+    result = await call(
+        model, record, ready_time=ready, check_spending=lambda: checks.append(len(ticks))
+    )
+    assert MIN_REASK_SECONDS == 20
+    enough = remaining >= MIN_REASK_SECONDS
+    assert len(scopes) == len(ticks) == (2 if enough else 1)
+    assert checks == ([1] if enough else [])
+    assert result.review.verdict == ("clean" if enough else "unknown")
+    if enough:
+        assert scopes[0] is scopes[1]
+    else:
+        assert result.review.problems == [
+            "review_invalid: invalid reviewer output",
+            "last non-empty line must be an exact verdict",
+            "line 1: expected an uppercase severity and path:positive-line: defect and fix",
+            "There was not enough time left to ask the reviewer again.",
+        ]
+        assert result.decision.reasons == ("Invalid model review.", *result.review.problems)
+    assert CALL_SCOPE.get() is None
+
+
+async def test_spending_refusal_after_recording_first_reply_propagates() -> None:
+    ticks: list[ModelReply] = []
+    requests = 0
+
+    async def record(reply: ModelReply) -> None:
+        ticks.append(reply)
+
+    async def create(**params: Any) -> ChatCompletion:
+        nonlocal requests
+        requests += 1
+        return completion(text="bad")
+
+    def refuse() -> None:
+        assert len(ticks) == requests == 1
+        raise RuntimeError("scripted admission refusal")
+
+    model = client()
+    model._create = create
+    with pytest.raises(RuntimeError, match="scripted admission refusal"):
+        await call(model, record, check_spending=refuse)
+    assert len(ticks) == requests == 1 and ticks[0].usage == Usage(700, 100, 600)
+    assert CALL_SCOPE.get() is None
+
+
+async def test_correction_preparation_counts_toward_minimum_remaining_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ready = asyncio.get_running_loop().time()
+    ticks: list[ModelReply] = []
+    checks: list[bool] = []
+
+    def correction(text: str, problems: Any) -> str:
+        message = build_correction_message(text, problems)
+        monkeypatch.setattr(
+            reviewer,
+            "asyncio",
+            SimpleNamespace(get_running_loop=lambda: SimpleNamespace(time=lambda: ready + 71)),
+        )
+        return message
+
+    async def record(reply: ModelReply) -> None:
+        ticks.append(reply)
+
+    async def create(**params: Any) -> ChatCompletion:
+        return completion(text="bad")
+
+    monkeypatch.setattr(reviewer, "build_correction_message", correction)
+    model = client()
+    model._create = create
+    result = await call(model, record, ready_time=ready, check_spending=lambda: checks.append(True))
+    assert len(ticks) == 1 and not checks
+    assert result.review.problems[-1] == "There was not enough time left to ask the reviewer again."
+    assert result.decision.reasons == ("Invalid model review.", *result.review.problems)
+
+
+@pytest.mark.parametrize("kind", ["terminal", "deadline", "connection", "empty"])
+async def test_reask_transport_failure_retains_accounting_and_attempt_diagnostics(
+    kind: str,
+) -> None:
+    import httpx2 as httpx
+
+    from .test_client import FakeApi, ok, status
+    from .test_client import client as http_client
+
+    failure = {
+        "terminal": status(400),
+        "deadline": status(429, {"retry-after": "100"}),
+        "connection": openai.APIConnectionError(
+            request=httpx.Request("POST", "https://review.test")
+        ),
+        "empty": ok(completion(empty=True).model_dump()),
+    }[kind]
+    api = FakeApi(ok(completion(text="bad").model_dump()), failure, status(400))
+    ticks: list[ModelReply] = []
+    recorder = ValidatingRecorder()
+
+    async def record(reply: ModelReply) -> None:
+        ticks.append(reply)
+
+    model = http_client(api, [])
+    try:
+        result = await call(model, record, agent_id="agent-7", publish=recorder.publish)
+    finally:
+        await model.aclose()
+    assert result.review.verdict == "unknown" and result.decision.action == "needs_you"
+    if kind == "empty":
+        assert result.reply is not None
+        assert "review_empty: the API returned no choices" in result.review.problems
+    else:
+        assert "last non-empty line" not in " ".join(result.review.problems)
+        assert result.reply is None
+        assert result.review.problems[0].startswith("review_api_failed:")
+    assert len(ticks) == (2 if kind in {"connection", "empty"} else 1)
+    if kind == "connection":
+        assert ticks[-1].usage == Usage() and ticks[-1].model == MUSE_SPARK.model
+    failures = recorder.failures()
+    assert len(failures) == (0 if kind == "empty" else 2 if kind == "connection" else 1)
+    assert len(api.bodies) == (3 if kind == "connection" else 2)
+    assert all(f.role == "review" and f.agent_id == "agent-7" for f in failures)
+    if kind == "deadline":
+        assert failures[0].final == "deadline"
     assert CALL_SCOPE.get() is None
 
 

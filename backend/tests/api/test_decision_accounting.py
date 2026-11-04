@@ -93,6 +93,7 @@ async def test_known_cost_is_persistent_attributed_and_separate(
     [
         ({"baseten_budget_usd": None}, "budget_unconfigured"),
         ({"baseten_budget_usd": float("nan")}, "budget_unconfigured"),
+        ({"spend_brake_percent": None}, "budget_unconfigured"),
         ({"baseten_input_usd_per_m": None}, "pricing_unconfigured"),
         ({"baseten_output_usd_per_m": None}, "pricing_unconfigured"),
     ],
@@ -177,6 +178,37 @@ async def test_spend_brake_uses_only_baseten_balance_and_persists_across_instanc
     async with runtime(tmp_path, monkeypatch, api, baseten_budget_usd=0.00008) as restarted:
         assert (await decide(restarted)).unavailable == "budget_blocked"
         assert not ticks(restarted) and len(api.bodies) == 1
+
+
+@pytest.mark.parametrize(
+    "percent,spent,blocked",
+    [(70, 7.5, True), (70, 6.5, False), (70, 7, False), (100, 9.9, False), (100, 10.1, True)],
+)
+async def test_decision_admission_uses_configured_brake(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, percent: int, spent: float, blocked: bool
+) -> None:
+    api = FakeApi(ok(body()))
+    async with runtime(tmp_path, monkeypatch, api, spend_brake_percent=percent) as live:
+        live.difference_decisions.accounting.ledger.write(LedgerState(spent))
+        outcome = await decide(live)
+        if blocked:
+            assert outcome.unavailable == "budget_blocked" and not api.bodies and not ticks(live)
+        else:
+            assert outcome.choice == "asked_for" and len(api.bodies) == 1
+
+
+async def test_decision_receipt_uses_configured_brake(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = FakeApi(ok(body()))
+    async with runtime(
+        tmp_path, monkeypatch, api, spend_brake_percent=70, baseten_budget_usd=0.0001
+    ) as live:
+        assert (await decide(live)).choice == "asked_for"
+        [tick] = ticks(live)
+        assert tick.spent_usd == pytest.approx(0.00008) and tick.brake == "blocked"
+        assert (await decide(live)).unavailable == "budget_blocked"
+        assert len(api.bodies) == 1
 
 
 async def test_receipt_survives_repeated_cancellation_and_keeps_identity(

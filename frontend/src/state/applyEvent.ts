@@ -9,12 +9,36 @@ import { applyGraphEvent } from "./applyGraphEvent";
 import { isDecisionEvent } from "./decisionProjection";
 import { createInitialState } from "./types";
 import type { State } from "./types";
+import { foldStages } from "./stageFold";
 
 /** Apply validated events, identically for live streams and parsed replay logs. */
 export function applyEvent(state: State, event: ServerEvent): State {
   const next = applyEnvelope(state, event);
   if (next.gap) return next;
-  const observed = observeMain(next, event);
+  const stageEvents = [...(event.type === "run.started" ? [] : state.stageEvents), event];
+  let changes = next.changes;
+  let changeStages = next.changeStages;
+  for (const [id, change] of Object.entries(next.changes)) {
+    const stages = foldStages(stageEvents, id);
+    const revisionRounds =
+      change.revisionRounds +
+      Number(
+        event.type === "change.resolved" &&
+          event.payload.change_id === id &&
+          event.payload.decision === "changes_requested",
+      );
+    // Open horizons can advance on any envelope without invalidating graph evidence.
+    // Equal readings also keep the stage map itself stable on unrelated events.
+    if (JSON.stringify(stages) !== JSON.stringify(changeStages[id])) {
+      if (changeStages === next.changeStages) changeStages = { ...next.changeStages };
+      changeStages[id] = stages;
+    }
+    if (revisionRounds !== change.revisionRounds) {
+      if (changes === next.changes) changes = { ...next.changes };
+      changes[id] = { ...change, revisionRounds };
+    }
+  }
+  const observed = observeMain({ ...next, stageEvents, changeStages, changes }, event);
   return recordEventFact(observed, event);
 }
 

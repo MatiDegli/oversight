@@ -67,6 +67,7 @@ it("retains envelopes and globally orders all kinds identically in live batches 
       ...createInitialState(),
       eventFacts: { 1: { type: "run.started", ts: start.ts, agentId: null } },
       run: { ...start.payload, run_id: "another" },
+      stageEvents: [{ ...start, payload: { ...start.payload, run_id: "another" } }],
       mainHeads: [{ seq: 1, commit: start.payload.base_commit }],
       runStartedAt: start.ts,
       lastSeq: 1,

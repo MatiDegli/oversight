@@ -39,7 +39,7 @@ DESIGN.md (every visual rule), DECISIONS.md (each decision with its reason; it w
 - One lock for git operations on main and one per worktree. Approve merges into main; when main moved since the
   agent's base, the tests run on the combined result first.
 - Model calls: retries with exponential backoff and jitter on 429 and 5xx; the reasoning mode is set on every call;
-  missing token usage is unknown, never zero; the spending brake refuses new runs above 90% of the credits.
+  missing token usage is unknown, never zero; the spending brake refuses new runs above the person's configured share of the credits, 90% by default.
 - Frontend: Cytoscape.js and fcose without a React wrapper; Monaco from the local package, never a CDN; one pure event
   reducer shared by live runs and replay. The static build plays a bundled recorded run, always labeled as real.
 - Product agents use disposable worktrees under .runtime/worktrees/; nested agents use .runtime/previews/<id>/state/worktrees/. Sources are demo-repo, a pinned profile or the person’s selected repository. Agents never work in development worktrees of the running Oversight or in the selected original.

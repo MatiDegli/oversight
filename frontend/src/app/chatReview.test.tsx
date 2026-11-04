@@ -19,6 +19,31 @@ import { selectConversation } from "../agents/conversation/selectConversation";
 import { openReview, tabbedView, type View } from "./view";
 import { resolvedReviewAction } from "./shell/ChatMerge";
 
+it.each([false, true])("shares recorded stage text in Chat, reviewing=%s", (reviewing) => {
+  const state = readFileSync(
+    new URL("../../../fixtures/events/stage-clocks.jsonl", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as ServerEvent)
+    .reduce(applyEvent, createInitialState());
+  const output = html(
+    <ChatChangeCard state={state} changeId="change-1" seq={11} reviewing={reviewing} />,
+  );
+  expect(output).toContain("1 revision round");
+  for (const label of [
+    "Agent work, 2 minutes 30 seconds",
+    "Automatic checks, 30 seconds",
+    "Waiting for your decision, 1 minute 30 seconds",
+    "Test runs, 1 minute",
+  ]) {
+    expect(output).toContain(`aria-label="${label}"`);
+  }
+  expect(output).toContain("Cost Unknown");
+  expect([...output.matchAll(/<li aria-label=/g)]).toHaveLength(reviewing ? 0 : 4);
+});
+
 it("keeps the C4 integration decision discoverable", () => {
   const decisions = readFileSync(new URL("../../../DECISIONS.md", import.meta.url), "utf8");
   expect(decisions).toMatch(/^## .* — C4 integration proof and the released cold editor gate$/m);

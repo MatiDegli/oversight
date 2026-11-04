@@ -12,11 +12,13 @@ export default function PlanActions({
   plan,
   slots,
   onReview,
+  onOpenWorkflow,
 }: {
   state: State;
   plan: Plan;
   slots: { held: number; total: number } | null;
   onReview?: (id: string) => void;
+  onOpenWorkflow?: (id: string, launcher: HTMLButtonElement) => void;
 }) {
   const { planActions, replayOf } = useDecisions();
   const queue = selectPlanQueue(state, plan)?.payload;
@@ -59,7 +61,13 @@ export default function PlanActions({
         </p>
       )}
       {plan.subtasks && (
-        <PlanFlow state={state} plan={plan} dispatched={dispatched} onReview={onReview} />
+        <PlanFlow
+          state={state}
+          plan={plan}
+          dispatched={dispatched}
+          onReview={onReview}
+          onOpenWorkflow={onOpenWorkflow}
+        />
       )}
       {plan.state === "failed" ? (
         <blockquote>
