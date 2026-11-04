@@ -6,6 +6,7 @@
 import asyncio
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from backend.tests.agents.lead_helpers import call, plan, turn
@@ -149,13 +150,42 @@ async def test_raised_tool_model_and_plan_budgets_reach_live_execution(tmp_path:
     "limit,cut",
     [("tool_calls", "tool_calls"), ("model_calls", "model_calls"), ("wall_clock_s", "time")],
 )
-async def test_live_turn_cuts_enforce_lower_limits(tmp_path: Path, limit: str, cut: str) -> None:
+async def test_live_turn_cuts_enforce_lower_limits(
+    tmp_path: Path, limit: str, cut: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from backend.tests.api.test_lead_concurrency import HeldScript
 
+    from oversight.agents import _lead
+
     scripts = ThreadModels([[turn(call("status")), {"text": "next call"}]])
+    models: list[HeldScript] = []
+    deadline: asyncio.Timeout | None = None
+    calls = 0
+
+    def turn_timeout(seconds: float) -> asyncio.Timeout:
+        nonlocal deadline
+        assert seconds == 1
+        deadline = asyncio.timeout(None)
+        return deadline
+
+    class TimedScript(HeldScript):
+        async def complete(self, messages, tools):
+            nonlocal calls
+            calls += 1
+            assert deadline is not None
+            deadline.reschedule(asyncio.get_running_loop().time() + 1)
+            return await super().complete(messages, tools)
+
+    if cut == "time":
+        # Freeze only this turn's clock during startup; arm its real one-second
+        # timeout on entry to the held call. Other server/test clocks keep running.
+        monkeypatch.setattr(
+            _lead, "asyncio", SimpleNamespace(**(vars(asyncio) | {"timeout": turn_timeout}))
+        )
 
     def factory(profile, slot):
-        model = HeldScript(scripts(profile, slot))
+        model = (TimedScript if cut == "time" else HeldScript)(scripts(profile, slot))
+        models.append(model)
         if cut != "time":
             model.release.set()
         return model
@@ -167,3 +197,7 @@ async def test_live_turn_cuts_enforce_lower_limits(tmp_path: Path, limit: str, c
         await start_idle(s)
         assert replies(s)[0].payload.cut == cut
         assert len(scripts.built) == 1
+        if cut == "time":
+            assert deadline is not None and deadline.expired()
+            assert calls == 1 and models[0].entered.is_set()
+            assert not models[0].release.is_set() and models[0].closed
