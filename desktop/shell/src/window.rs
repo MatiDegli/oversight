@@ -24,6 +24,7 @@ impl Window {
         let native =
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("switching.html".into()))
                 .title("Oversight")
+                .theme(Some(tauri::Theme::Dark))
                 .inner_size(1280.0, 820.0)
                 .on_navigation(|url| {
                     url.origin().ascii_serialization() == "http://127.0.0.1:8710"

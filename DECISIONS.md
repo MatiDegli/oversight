@@ -5285,3 +5285,9 @@ style block permits styling. Recompute that hash whenever the style changes.
 The font stack is "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif. No font file
 is added: this page appears for seconds, so the installed Windows fallback avoids extra payload
 and keeps font notices unchanged.
+## 2026-11-04 — A dark title bar and menu bar for the Windows app
+
+The maintainer found the white native title and File menu bar foreign next to Oversight's night
+ground. The desktop window is created with the dark window theme, which Tauri 2.12 also applies
+to the native menu bar on Windows. The webview then reports a dark preferred color scheme, so
+the startup page shows its night tokens; the in-app day palette stays a separate front.
