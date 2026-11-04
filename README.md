@@ -31,7 +31,7 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | --- | --- | --- | --- |
 | Lead Chat and plans | Discuss tasks; approve a proposed plan before the server queues its agents. | Muse Spark, Muse Spark Open | On |
 | Constrained generative UI | Lead Chat composes closed highlight, changed-file, behavior and moment reference views from committed events through `show_view`, advertised and dispatched. Synthetic proofs exist; release awaits the paid probe, prompt validation and real recording. | Muse Spark, Muse Spark Open | Built, not released |
-| Parallel coding agents | Four slots by default, up to six; each agent edits and tests in its own worktree with six fixed tools and no shell. | Muse Spark, Muse Spark Open | On |
+| Parallel coding agents | Four slots by default, up to six; each agent edits and tests in its own worktree with six fixed tools, plus read-only `find_symbol` while the harness is on (the default), and no shell. | Muse Spark, Muse Spark Open | On |
 | Agent harness | Syntax checks, edit diagnostics, bounded search feedback, a test-before-finish guard and read-only Python symbol lookup (`find_symbol`); turn off with `OVERSIGHT_HARNESS_PACK=false`. | None | On |
 | Repository graph and impact cone | See reads, edits, shared work and bounded possible effects, with module, function and detail views. | None | On |
 | Diff and facts | Review the diff, an event-derived summary, tests and recorded steps. | None | On |
@@ -84,7 +84,7 @@ flowchart TD
 
 ## Design principles
 
-- **Closed tools.** Coding agents get `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`; paths stay inside their worktree ([tools](backend/src/oversight/agents/tools.py), [path checks](backend/src/oversight/workspace/files.py)).
+- **Closed tools.** Coding agents get six fixed tools: `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`, plus read-only `find_symbol` while the harness is on (the default), and no shell; paths stay inside their worktree ([tools](backend/src/oversight/agents/tools.py), [path checks](backend/src/oversight/workspace/files.py)).
 - **The lead proposes.** Its closed tools can request plans, never start agents or merge ([lead tools](backend/src/oversight/agents/_lead_tools.py)).
 - **Observed status.** Status follows tool calls and run controls; repeated failures or unchanged calls stop a run ([agent loop](backend/src/oversight/agents/loop.py)).
 - **Separate work.** Each coding agent gets a disposable git worktree ([workspace](backend/src/oversight/workspace/core.py)).

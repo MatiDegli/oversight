@@ -1,6 +1,19 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 
+it.each(["| Parallel coding agents |", "- **Closed tools.**"])(
+  "documents the default harness tool in %s",
+  (prefix) => {
+    const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
+    const claim = readme.split("\n").find((line) => line.startsWith(prefix));
+    expect(claim).toBeDefined();
+    expect(claim).toContain("six fixed tools");
+    expect(claim).toContain(
+      "plus read-only `find_symbol` while the harness is on (the default), and no shell",
+    );
+  },
+);
+
 it("lists lead reference cards as an unreleased capability with its release gates", () => {
   const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
   const capabilities = readme.split("## Features")[1]?.split("\n## ")[0];
