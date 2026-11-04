@@ -5309,3 +5309,15 @@ braked by a zero denominator. A paid eval bench run still requires a budget. JSO
 TypeScript are regenerated from Pydantic; older recorded runs remain valid. The UI shows spent
 dollars and “No budget: spending is not capped”, omits percentages and ticks, and reports
 “no spending cap” in the status line. Settings explains empty budgets and the default prices.
+
+## 2026-11-04 — No console window for the Windows app
+
+The installed app opened a terminal window titled Oversight, and closing it stopped the app: the shell
+was a console program, so Windows gave it a console, and the console close became a quit. The shell
+is now a windowed program (`windows_subsystem = "windows"`) and never allocates a console. When it has
+none, the backend starts with `CREATE_NO_WINDOW`, so the backend and its git, test and preview
+descendants share one console with no window, and cleanup joins that console only to send
+`CTRL_BREAK` to the backend's group, then leaves it. The five-second wait, Job termination and reap are
+unchanged, and forced cleanup still fails the smoke. A process that already has a console, such as the
+repository-switching test harness, keeps sharing it and keeps its close and Ctrl+C handler, so both
+paths stay covered: the installed smoke runs the windowed path and the switching test the console one.

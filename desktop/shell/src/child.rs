@@ -12,7 +12,9 @@ use oversight_desktop_core::diagnostics::OutputTail;
 use oversight_desktop_core::launch::Launch;
 use oversight_desktop_core::lifecycle::{Cleanup, CleanupAction};
 use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0, WAIT_TIMEOUT};
-use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, GenerateConsoleCtrlEvent};
+use windows_sys::Win32::System::Console::{
+    AttachConsole, CTRL_BREAK_EVENT, FreeConsole, GenerateConsoleCtrlEvent, SetConsoleCtrlHandler,
+};
 use windows_sys::Win32::System::JobObjects::*;
 use windows_sys::Win32::System::Threading::*;
 
@@ -86,6 +88,8 @@ pub struct Child {
     pub process: Handle,
     pub job: Handle,
     pub pid: u32,
+    /// The child got its own hidden console, because this process has none to share.
+    hidden: bool,
     output: std::thread::JoinHandle<()>,
 }
 
@@ -115,6 +119,9 @@ impl Child {
             command.push(0);
             let env = environment(launch);
             let mut redirect = crate::output::Redirect::new(tail)?;
+            // The backend and its git, test and preview descendants share one console: this
+            // process's, or a new one with no window when this process has none.
+            let hidden = !crate::console::attached();
             let mut info: PROCESS_INFORMATION = zeroed();
             if CreateProcessW(
                 wide(launch.program.as_os_str()).as_ptr(),
@@ -125,7 +132,8 @@ impl Child {
                 CREATE_SUSPENDED
                     | CREATE_NEW_PROCESS_GROUP
                     | CREATE_UNICODE_ENVIRONMENT
-                    | EXTENDED_STARTUPINFO_PRESENT,
+                    | EXTENDED_STARTUPINFO_PRESENT
+                    | if hidden { CREATE_NO_WINDOW } else { 0 },
                 env.as_ptr() as _,
                 wide(launch.cwd.as_os_str()).as_ptr(),
                 &redirect.startup.StartupInfo,
@@ -150,6 +158,7 @@ impl Child {
                 process,
                 job,
                 pid: info.dwProcessId,
+                hidden,
                 output: redirect.reader.take().unwrap(),
             })
         }
@@ -193,16 +202,40 @@ impl Child {
         }
     }
 
+    /// CTRL_BREAK to the child's console group. A hidden console is joined only to send it.
+    fn signal(&self) -> io::Result<()> {
+        unsafe {
+            if !self.hidden {
+                if GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, self.pid) == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                return Ok(());
+            }
+            if AttachConsole(self.pid) == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // This process is outside the child's group; ignore Ctrl events all the same.
+            SetConsoleCtrlHandler(None, 1);
+            let sent = GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, self.pid);
+            let error = io::Error::last_os_error();
+            FreeConsole();
+            if sent == 0 {
+                return Err(error);
+            }
+        }
+        Ok(())
+    }
+
     pub fn close(&self) -> io::Result<bool> {
         let began = Instant::now();
         let mut policy = Cleanup::default();
         loop {
             match policy.poll(began.elapsed(), self.active()?) {
-                CleanupAction::SignalOwnedGroup => unsafe {
-                    if self.alive() && GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, self.pid) == 0 {
-                        return Err(io::Error::last_os_error());
+                CleanupAction::SignalOwnedGroup => {
+                    if self.alive() {
+                        self.signal()?;
                     }
-                },
+                }
                 CleanupAction::Wait => std::thread::sleep(Duration::from_millis(25)),
                 CleanupAction::TerminateOwnedJob => unsafe {
                     if TerminateJobObject(self.job.0, 1) == 0 {

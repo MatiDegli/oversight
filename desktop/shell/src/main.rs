@@ -1,3 +1,5 @@
+// A windowed program: Windows gives it no console window to close by mistake.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 #[cfg(windows)]
 mod child;
 #[cfg(windows)]

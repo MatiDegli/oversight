@@ -92,9 +92,12 @@ on 8710 are checked before launch. Ownership is checked again after spawn and af
 One 120-second monotonic deadline covers readiness. The backend's own lifetime Job nests
 inside the shell's Job; no breakaway flag is enabled.
 
-Window close, console controls, startup failure and backend death request the same cleanup:
-signal the living owned child's console group, wait up to five seconds, terminate any remaining
-owned Job processes, reap, and close handles. Shell death closes its Job. Forced cleanup is a
+The shell is a windowed program with no console window. The backend and its descendants
+share one console with no window; a shell started with a console, such as a test harness,
+shares its own instead and handles its close and Ctrl+C. Window close, those console controls,
+startup failure and backend death request the same cleanup: signal the living owned child's
+console group (joining its hidden console only to send CTRL_BREAK), wait up to five seconds,
+terminate any remaining owned Job processes, reap, and close handles. Shell death closes its Job. Forced cleanup is a
 failure, including in smoke; it never supplies graceful acceptance. The live window continues
 to monitor backend death and listener ownership. Native Windows keeps OPEN_NOTICE and its
 existing capability restrictions; packaging adds no isolation guarantee.
