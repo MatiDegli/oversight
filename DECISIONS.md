@@ -5267,3 +5267,21 @@ restart_required compares only restart-only editable values against the startup 
 apply retains its existing desktop_reload or server_restart meaning. Replay remains read-only.
 The success line for a live-only limits save says “Saved. Applies to the next run.” Contracts
 remain unchanged: SettingsView.restart_required and apply already express this distinction.
+## 2026-11-04 — A quiet first launch for the Windows app
+
+The maintainer decided to remove the blocking first-launch configuration dialog. The app
+still creates the blank settings file from its template when absent, then starts on the demo
+without waiting for OK. Starting an agent without a key is refused with a way to open Settings.
+This supersedes the first-launch instruction sentence in "Installed settings menu (2026-11-04)";
+the other dialogs and settings-file behavior stay unchanged.
+
+The inert page says "Starting Oversight…" for startup, Open repository…, Open demo and Reload
+settings, each of which starts a backend. It centers Oversight's 700/20px/1.3 headline and muted
+status on the night ground, using the corresponding day tokens under prefers-color-scheme: light.
+There is no animation, script or external resource. Its CSP retains default-src 'none',
+base-uri 'none' and form-action 'none'; only style-src with the SHA-256 hash of the exact inline
+style block permits styling. Recompute that hash whenever the style changes.
+
+The font stack is "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif. No font file
+is added: this page appears for seconds, so the installed Windows fallback avoids extra payload
+and keeps font notices unchanged.

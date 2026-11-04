@@ -23,7 +23,7 @@ installed Windows menu can open a repository; there is no WSL bridge.
 
 Writable configuration is `%LOCALAPPDATA%\Oversight\.env`. First launch copies a committed
 blank-key template only when this file is absent. The shell never reads its values and never
-overwrites it. On that first launch, a native message explains how to configure it. Choose
+overwrites it. The app starts on the demo; starting an agent without a key is refused with a way to open Settings. Choose
 **File > Edit settings…** to open it in Windows Notepad, add `META_API_KEY` and the existing
 budget/pricing settings, and save. Then choose **File > Reload settings** and confirm the restart.
 The current session stops, including working agents. The same repository or demo starts again
