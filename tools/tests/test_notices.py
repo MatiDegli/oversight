@@ -231,3 +231,23 @@ def test_ambiguous_python_classifier_is_not_guessed() -> None:
     assert notices.python_license(cast(metadata.PackageMetadata, info)) == "UNKNOWN"
     info["License-Expression"] = "BSD-3-Clause"
     assert notices.python_license(cast(metadata.PackageMetadata, info)) == "BSD-3-Clause"
+
+
+@pytest.mark.parametrize(
+    ("ecosystem", "name", "version", "expression", "expected"),
+    [
+        ("Rust", "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception", True),
+        ("Python", "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception", False),
+        ("Rust", "another-crate", "0.12.16", "Apache-2.0 WITH LLVM-exception", False),
+        ("Rust", "target-lexicon", "0.12.17", "Apache-2.0 WITH LLVM-exception", False),
+        ("Rust", "target-lexicon", "0.12.16", "MIT WITH LLVM-exception", False),
+        ("Rust", "target-lexicon", "0.12.16", "Apache-2.0 WITH other-exception", False),
+        ("Rust", "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception OR GPL-3.0", False),
+    ],
+)
+def test_desktop_exception_is_exact(ecosystem, name, version, expression, expected):
+    package = notices.Package(ecosystem, name, version, expression, "https://example.org")
+    assert (
+        notices.allowed_license(expression, name, version=version, ecosystem=ecosystem) is expected
+    )
+    assert bool(notices.policy_errors([package])) is not expected

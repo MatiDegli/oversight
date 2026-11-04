@@ -4810,3 +4810,10 @@ LLVM-exception, and the installer brief requires every locked entry to pass. See
 features, checksums and dependency path. The candidate shell/lock changes were withdrawn.
 No executable, Python payload, installer or native acceptance is claimed. Resume requires
 resolving that exact policy mismatch and rerunning reconciliation before implementing the shell.
+
+
+Amendment, 2026-11-04: the maintainer approved exactly `target-lexicon 0.12.16` with
+`Apache-2.0 WITH LLVM-exception` in `desktop/Cargo.lock`. It belongs to Tauri's inactive
+Linux branch and is not shipped. The notices policy accepts only that Rust crate, version
+and complete expression; no general WITH acceptance is added. This resolves the dependency
+preflight blocker above and authorizes resuming the installer implementation.

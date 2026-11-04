@@ -1,30 +1,20 @@
 # Windows shell dependency preflight — 2026-11-04
 
-Status: **blocked before shell implementation**. No candidate executable, runtime or installer
-is distributed. The active workspace and lockfile remain the portable core.
+Status: **preflight approved, 2026-11-04 amendment**. The candidate graph below has 443
+external lock entries; 243 are active in Windows-target metadata. Every manifest was inspected,
+including inactive platform and optional entries. All entries now have an approved license choice.
 
-The candidate graph has 443 external lock entries; 243 are active in Windows-target metadata.
-All manifests were inspected, including inactive platform and optional entries. Exactly one
-entry has no approved license choice: **target-lexicon 0.12.16**, whose expression is
-`Apache-2.0 WITH LLVM-exception`. It is absent from the Windows active graph. It enters the
-all-platform lock through `tauri -> gtk -> gtk-sys -> system-deps 6.2.2 -> cfg-expr 0.15.8
--> target-lexicon 0.12.16`. Target-conditional direct dependencies prevent compilation on
-Linux; Cargo still locks their other platform dependencies.
+The maintainer approved exactly `target-lexicon 0.12.16`, `Apache-2.0 WITH LLVM-exception`,
+only in `desktop/Cargo.lock`. It enters through Tauri's inactive Linux branch, via
+`tauri -> gtk -> gtk-sys -> system-deps -> cfg-expr -> target-lexicon`, and is not shipped.
+`tools/notices.py` accepts only that Rust crate, version and full expression. Other WITH
+expressions remain refused. The existing MPL-2.0, Unicode-3.0 and Zlib grants remain scoped
+to the named unmodified desktop crates (DECISIONS.md).
 
-The existing fail-closed SPDX policy (`tools/notices.py`, `allowed_license`) refuses `WITH`
-expressions. The named desktop grants cover only specified MPL-2.0, Unicode-3.0 and Zlib
-crates. They do not authorize LLVM-exception. The package brief requires reconciliation of
-**every locked crate** and a stop for any unapproved crate, including this inactive entry.
-This records policy application, not a new interpretation of the upstream license.
-
-Sources: the registry package manifests and bundled license texts, verified against Cargo's
-registry checksums. The blocker is published at
-[target-lexicon 0.12.16](https://crates.io/crates/target-lexicon/0.12.16) and its
-[versioned manifest](https://docs.rs/crate/target-lexicon/0.12.16/source/Cargo.toml).
-Legacy Cargo license separators `/` are treated as `OR`. Every `AND` obligation must be
-approved; for `OR`, an approved alternative suffices. A `WITH` branch is refused while an
-independent approved `OR` alternative can still pass. Unicode-ident's Unicode-3.0 obligation
-is included even though it also offers MIT/Apache-2.0. No crate source was modified.
+Sources: Cargo registry manifests and archive checksums. The previously blocking expression is
+published in the [versioned manifest](https://docs.rs/crate/target-lexicon/0.12.16/source/Cargo.toml).
+Legacy Cargo `/` separators mean `OR`; every `AND` obligation must pass. An independent
+approved `OR` alternative suffices. No third-party crate source is modified.
 
 ## Candidate configuration and verification
 
@@ -44,14 +34,14 @@ The core retains `serde_json = "=1.0.151"`, defaults off, feature `std`.
 Candidate lock SHA-256: `8d4378cb58adc31903913bc63f750716aeaa33c5636e32fb57d93c83da40f601`.
 The candidate workspace was resolved offline, fetched once with `cargo fetch --locked`,
 then inspected with offline locked metadata for `x86_64-pc-windows-msvc` and inverse trees
-for that target and `--target all`. Each command exited 0. The policy audit found the one
-blocker below. The candidate manifests and active lock changes were withdrawn at that gate.
+for that target and `--target all`. Each command exited 0. The original policy audit found the subsequently approved
+exception below. The candidate manifests and active lock changes were withdrawn at that gate.
 Native build, Python staging, NSIS and installer notices remain pending. This is audit evidence.
 
 ## Complete candidate inventory
 
 `Windows` marks active Windows-target metadata; `Other` means locked but inactive.
-`Pass` includes scoped grants; `STOP` means unapproved. Checksums identify crate archives.
+`Pass` includes scoped grants; `Grant` means the exact approved LLVM exception. Checksums identify crate archives.
 
 | Crate | Version | Declared license | Graph | Policy | Registry SHA-256 |
 | --- | --- | --- | --- | --- | --- |
@@ -366,7 +356,7 @@ Native build, Python staging, NSIS and installer notices remain pending. This is
 | system-deps | 6.2.2 | MIT OR Apache-2.0 | Other | Pass | a3e535eb8dded36d55ec13eddacd30dec501792ff23a0b1682c38601b8cf2349 |
 | tao | 0.37.2 | Apache-2.0 | Windows | Pass | d5777b06fe6435126ae8d816eba269e050e1e10d302cf5461e9c49eccabc3548 |
 | tao-macros | 0.1.4 | MIT OR Apache-2.0 | Other | Pass | 5f7eeb6d99155545da6150a1795945f16ac9c178deb2a5f2e74d776107bd5849 |
-| target-lexicon | 0.12.16 | Apache-2.0 WITH LLVM-exception | Other | STOP | 61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1 |
+| target-lexicon | 0.12.16 | Apache-2.0 WITH LLVM-exception | Other | Grant | 61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1 |
 | tauri | 2.12.0 | Apache-2.0 OR MIT | Windows | Pass | cb20ef8e6f97d6fe03039666cd82861f09a38b56291fa2f0f9fe140023f61c1a |
 | tauri-build | 2.7.0 | Apache-2.0 OR MIT | Windows | Pass | 5b5ae674f48836f5dd2eeaf9e221c095bd3e78a8d0439c77ca93b48740a1b644 |
 | tauri-codegen | 2.7.4 | Apache-2.0 OR MIT | Windows | Pass | fb37631cf71dab5e8ab55e1bdd701e18a52653d90b78e71d0e5598b1e0a61316 |
