@@ -229,18 +229,20 @@ it("keeps App's displayed state stable while preview envelopes advance open stag
     }
     const agent = source.events.find((event) => event.type === "agent.status");
     if (!agent) throw new Error("Missing agent status");
-    stateStore.getState().applyEvents([
-      { ...agent, seq: stateStore.getState().state.lastSeq + 1, ts: "2026-11-03T00:00:04.000Z" },
-    ]);
+    stateStore
+      .getState()
+      .applyEvents([
+        { ...agent, seq: stateStore.getState().state.lastSeq + 1, ts: "2026-11-03T00:00:04.000Z" },
+      ]);
     expect(reconcileAppPass().state).toBe(stateStore.getState().state);
     expect(reconcileAppPass().state.stageEvents).toHaveLength(source.events.length + 4);
     stateStore.getState().applyEvents([{ ...agent, seq: stateStore.getState().state.lastSeq + 2 }]);
     expect(reconcileAppPass().state.gap).toBe(true);
     const start = source.events[0];
     if (start?.type !== "run.started") throw new Error("Missing run start");
-    stateStore.getState().applyEvents([
-      { ...start, payload: { ...start.payload, run_id: "new-preview-run" } },
-    ]);
+    stateStore
+      .getState()
+      .applyEvents([{ ...start, payload: { ...start.payload, run_id: "new-preview-run" } }]);
     expect(reconcileAppPass().state).toBe(stateStore.getState().state);
     expect(reconcileAppPass().state.changeStages).toEqual({});
   } finally {
