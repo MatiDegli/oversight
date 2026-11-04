@@ -12,6 +12,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from backend.tests.workspace.workspace_helpers import fixture_git
 
 from oversight.workspace import source_posix as posix
 from oversight.workspace.locks import offload
@@ -22,19 +23,14 @@ GIT = shutil.which("git") or "/usr/bin/git"
 
 async def git(root: Path, *args: str) -> str:
     result = await run_process(
-        [
-            GIT,
+        fixture_git(
             "-c",
             "user.name=Fixture",
             "-c",
             "user.email=f@example.invalid",
-            # Await our own maintenance before inventory; external locks still refuse.
-            "-c",
-            "maintenance.autoDetach=false",
-            "-c",
-            "gc.autoDetach=false",
             *args,
-        ],
+            executable=GIT,
+        ),
         cwd=root,
         timeout_s=10,
         env={"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull},

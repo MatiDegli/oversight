@@ -228,11 +228,59 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
         ("ci.yml", "browser"),
         ("verify-frontend.yml", "browser-1"),
         ("verify-frontend.yml", "browser-2"),
+        ("verify-frontend.yml", "browser-3"),
+        ("verify-frontend.yml", "browser-4"),
     ],
 )
 def test_browser_jobs_use_supported_host(filename: str, job_id: str) -> None:
     jobs = mapping(mapping((WORKFLOWS / filename).read_text())["jobs"])
     assert mapping(jobs[job_id])["runs-on"] == "ubuntu-24.04"
+
+
+def test_browser_workflows_keep_four_matching_bounded_shards() -> None:
+    ci = mapping(mapping((WORKFLOWS / "ci.yml").read_text())["jobs"])
+    browser = mapping(ci["browser"])
+    assert browser["name"] == "browser tests (${{ matrix.shard }}/4)"
+    assert mapping(browser["strategy"]) == {
+        "fail-fast": "false",
+        "matrix": "shard: [1, 2, 3, 4]",
+    }
+    ci_steps = steps(re.sub(r"(?m)^#.*\n", "", browser["steps"]))
+    cache = next(
+        step for step in ci_steps if step.get("name") == "Cache browser fixture dependencies"
+    )
+    cache_values = mapping(cache["with"])
+    prefix = "browser-vite-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-of-4-"
+    assert cache_values == {
+        "path": ".shots/*-vite-cache",
+        "key": prefix + "${{ hashFiles('frontend/pnpm-lock.yaml', 'frontend/vite.config.ts', "
+        "'frontend/**/*.support.ts') }}",
+        "restore-keys": "|\n" + prefix,
+    }
+    assert {
+        "name": "Monaco and graph tests in Chromium",
+        "run": "make test-browser BROWSER_SHARD=${{ matrix.shard }}/4",
+    } in ci_steps
+    upload = next(
+        step for step in ci_steps if step.get("name") == "Upload browser failure evidence"
+    )
+    assert mapping(upload["with"])["name"] == "browser-failure-evidence-${{ matrix.shard }}-of-4"
+    verify = mapping(mapping((WORKFLOWS / "verify-frontend.yml").read_text())["jobs"])
+    assert {name for name in verify if name.startswith("browser-")} == {
+        f"browser-{shard}" for shard in range(1, 5)
+    }
+    template = verify["browser-2"]
+    for shard in range(1, 5):
+        name = f"browser-{shard}"
+        assert verify[name] == template.replace("browser-2", name).replace("2/4", f"{shard}/4")
+        job = mapping(verify[name])
+        assert {
+            "name": f"Run {name}",
+            "run": f"make test-browser BROWSER_SHARD={shard}/4",
+        } in steps(job["steps"])
+        for bounded_job in (browser, job):
+            assert bounded_job["timeout-minutes"] == "25"
+            assert mapping(bounded_job["permissions"]) == {"contents": "read"}
 
 
 WINDOWS_PATHS = (

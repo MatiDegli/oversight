@@ -6,6 +6,9 @@ import pytest
 
 from oversight.changes import ShortcutKind, detect_shortcuts
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 
 @pytest.mark.parametrize(
     "stub", ["pass", "...", "raise NotImplementedError", "# TODO: later\n    return 1"]
@@ -13,13 +16,13 @@ from oversight.changes import ShortcutKind, detect_shortcuts
 def test_existing_stub_is_not_introduced(stub: str) -> None:
     old = f"def f():\n    {stub}\n"
     new = old.replace("def f():", "def f():\n    value = 2")
-    assert detect_shortcuts([("calc.py", old, new)]) == []
+    assert detect_shortcuts([("calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_pass_todo_is_one_stub_per_line() -> None:
     old = "def f():\n    return 1\n"
     new = "def f():\n    pass  # TODO: implement\n"
-    findings = detect_shortcuts([("calc.py", old, new)])
+    findings = detect_shortcuts([("calc.py", old, new)], timeout=DETECTION_TIMEOUT_S)
     assert [(f.kind, f.line) for f in findings] == [(ShortcutKind.STUB_LEFT, 2)]
 
 
@@ -36,7 +39,7 @@ def test_pass_todo_is_one_stub_per_line() -> None:
     ],
 )
 def test_interface_stubs_are_clean(source: str) -> None:
-    assert detect_shortcuts([("api.py", None, source)]) == []
+    assert detect_shortcuts([("api.py", None, source)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 @pytest.mark.parametrize(
@@ -54,7 +57,7 @@ def test_interface_stubs_are_clean(source: str) -> None:
 def test_approx_effective_tolerance_not_wider(before: str, after: str) -> None:
     old = f"import pytest\ndef test_f():\n    assert f() == pytest.approx({before})\n"
     new = old.replace(f"approx({before})", f"approx({after})")
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
+    assert detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 @pytest.mark.parametrize(
@@ -70,16 +73,20 @@ def test_approx_effective_tolerance_not_wider(before: str, after: str) -> None:
 def test_approx_effective_tolerance_wider(before: str, after: str) -> None:
     old = f"import pytest\ndef test_f():\n    assert f() == pytest.approx({before})\n"
     new = old.replace(f"approx({before})", f"approx({after})")
-    assert [f.kind for f in detect_shortcuts([("test_calc.py", old, new)])] == [
-        ShortcutKind.ASSERTION_LOOSENED
-    ]
+    assert [
+        f.kind for f in detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.ASSERTION_LOOSENED]
 
 
 def test_test_move_with_import_module_change_is_clean() -> None:
     old = "from before.calc import add as op\ndef test_add():\n    assert op(1, 2) == 3\n"
     new = old.replace("before.calc", "after.math")
     assert (
-        detect_shortcuts([("tests/test_old.py", old, None), ("tests/test_new.py", None, new)]) == []
+        detect_shortcuts(
+            [("tests/test_old.py", old, None), ("tests/test_new.py", None, new)],
+            timeout=DETECTION_TIMEOUT_S,
+        )
+        == []
     )
 
 
@@ -89,7 +96,8 @@ def test_move_does_not_hide_changed_imported_function() -> None:
     assert [
         f.kind
         for f in detect_shortcuts(
-            [("tests/test_old.py", old, None), ("tests/test_new.py", None, new)]
+            [("tests/test_old.py", old, None), ("tests/test_new.py", None, new)],
+            timeout=DETECTION_TIMEOUT_S,
         )
     ] == [ShortcutKind.TEST_REMOVED]
 
@@ -105,26 +113,26 @@ def test_unittest_diagnostic_message_is_clean(method: str, message: str) -> None
         f"    def test_f(self):\n        self.{method}({args})\n"
     )
     new = old.replace(f"({args})", f"({args}{message})")
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
+    assert detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_extracted_call_used_once_in_assertion_is_clean() -> None:
     old = "def test_f():\n    assert f(1) == 3\n"
     new = "def test_f():\n    result = f(1)\n    assert result == 3\n"
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
-    assert detect_shortcuts([("test_calc.py", new, old)]) == []
+    assert detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
+    assert detect_shortcuts([("test_calc.py", new, old)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_extraction_with_intervening_setup_is_clean() -> None:
     old = "def test_f():\n    label = 'case'\n    assert f(1) == 3, label\n"
     new = "def test_f():\n    result = f(1)\n    label = 'case'\n    assert result == 3, label\n"
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
+    assert detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_whitespace_edit_does_not_introduce_existing_except_pass() -> None:
     old = "def f():\n    try:\n        g()\n    except ValueError:\n        pass\n"
     new = old.replace("g()", "g(  )")
-    assert detect_shortcuts([("calc.py", old, new)]) == []
+    assert detect_shortcuts([("calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -132,15 +140,15 @@ def test_splitting_conjunction_is_clean(reverse: bool) -> None:
     joined = "def test_f():\n    assert a and b and c\n"
     split = "def test_f():\n    assert a\n    assert b\n    assert c\n"
     old, new = (split, joined) if reverse else (joined, split)
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
+    assert detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_split_conjunction_still_detects_lost_operand() -> None:
     old = "def test_f():\n    assert a and b\n"
     new = "def test_f():\n    assert a\n"
-    assert [f.kind for f in detect_shortcuts([("test_calc.py", old, new)])] == [
-        ShortcutKind.ASSERTION_LOOSENED
-    ]
+    assert [
+        f.kind for f in detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.ASSERTION_LOOSENED]
 
 
 @pytest.mark.parametrize("mark", ["skip", "xfail", "skip(reason='slow')"])
@@ -150,10 +158,10 @@ def test_param_skip_marker_added(mark: str) -> None:
         "def test_f(x):\n    assert f(x) == 3\n"
     )
     new = old.replace("pytest.param(2)", f"pytest.param(2, marks=pytest.mark.{mark})")
-    assert [f.kind for f in detect_shortcuts([("test_calc.py", old, new)])] == [
-        ShortcutKind.SKIP_ADDED
-    ]
-    assert detect_shortcuts([("test_calc.py", new, new)]) == []
+    assert [
+        f.kind for f in detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.SKIP_ADDED]
+    assert detect_shortcuts([("test_calc.py", new, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_no_collectable_test_helpers_in_detector_source() -> None:
@@ -175,7 +183,7 @@ def test_no_collectable_test_helpers_in_detector_source() -> None:
 def test_assertion_uses_scoped_import_resolver(prefix: str, old_check: str, new_check: str) -> None:
     old = f"{prefix}def test_f():\n    assert f() == {old_check}\n"
     new = old.replace(old_check, new_check)
-    findings = detect_shortcuts([("test_calc.py", old, new)])
+    findings = detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S)
     assert [f.kind for f in findings] == [ShortcutKind.ASSERTION_LOOSENED]
     assert "tolerance was widened" in findings[0].message
 
@@ -183,7 +191,7 @@ def test_assertion_uses_scoped_import_resolver(prefix: str, old_check: str, new_
 def test_shadowed_not_implemented_error_is_clean() -> None:
     old = "def f(NotImplementedError):\n    return 1\n"
     new = old.replace("return 1", "raise NotImplementedError('domain error')")
-    assert detect_shortcuts([("calc.py", old, new)]) == []
+    assert detect_shortcuts([("calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_unittest_class_rename_preserves_receiver_identity() -> None:
@@ -192,7 +200,7 @@ def test_unittest_class_rename_preserves_receiver_identity() -> None:
         "    def test_f(self):\n        self.assertEqual(f(), 3)\n"
     )
     new = old.replace("TestCalc", "TestMath")
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
+    assert detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 @pytest.mark.parametrize("prefix", ["", "from .calc import add as op\n"])
@@ -205,7 +213,8 @@ def test_move_preserves_distinct_receivers_and_relative_imports(prefix: str) -> 
         else old.replace("import add", "import sub")
     )
     findings = detect_shortcuts(
-        [("tests/test_old.py", old, None), ("tests/test_new.py", None, new)]
+        [("tests/test_old.py", old, None), ("tests/test_new.py", None, new)],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert [f.kind for f in findings] == [ShortcutKind.TEST_REMOVED]
 
@@ -213,14 +222,14 @@ def test_move_preserves_distinct_receivers_and_relative_imports(prefix: str) -> 
 def test_skip_in_local_parameter_case_is_detected() -> None:
     old = "import pytest\ndef test_f():\n    case = pytest.param(2)\n    assert case\n"
     new = old.replace("pytest.param(2)", "pytest.param(2, marks=pytest.mark.skip)")
-    assert [f.kind for f in detect_shortcuts([("test_calc.py", old, new)])] == [
-        ShortcutKind.SKIP_ADDED
-    ]
+    assert [
+        f.kind for f in detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.SKIP_ADDED]
 
 
 def test_extraction_does_not_hide_a_changed_call() -> None:
     old = "def test_f():\n    assert f(1) == 3\n"
     new = "def test_f():\n    result = g(1)\n    assert result == 3\n"
-    assert [f.kind for f in detect_shortcuts([("test_calc.py", old, new)])] == [
-        ShortcutKind.ASSERTION_LOOSENED
-    ]
+    assert [
+        f.kind for f in detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.ASSERTION_LOOSENED]

@@ -89,6 +89,7 @@ describe("selectConversation", () => {
     expect(select()?.header).toMatchObject({
       presentation: { label: "A", hue: "A" },
       state: "revising",
+      scripted: false,
       modelLabel: "Muse Spark",
       reasoning: "low",
       step: 8,
@@ -139,4 +140,15 @@ describe("selectConversation", () => {
     expect(expected.length).toBeGreaterThan(0);
     expect(steps).toEqual(expected);
   });
+});
+
+it("carries scripted provenance without changing the identity or model label", () => {
+  const state = structuredClone(sketchState);
+  if (!state.run) throw new Error("Missing run");
+  state.run.models = state.run.models.map((profile) => ({ ...profile, provider: "fake" }));
+  const before = select();
+  const after = select(state);
+  expect(after?.header.scripted).toBe(true);
+  expect(after?.header.presentation).toEqual(before?.header.presentation);
+  expect(after?.header.modelLabel).toBe(before?.header.modelLabel);
 });

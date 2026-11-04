@@ -4,6 +4,9 @@ from oversight.changes import detect_shortcuts
 
 from ._shortcut_fix3_move_before import OLD
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 NEW = (
     '"""Before/after fixtures for the shortcut detector (one per detection)."'
     '""\n\nfrom oversight.changes import Finding, ShortcutKind, detect_shortcut'
@@ -316,7 +319,8 @@ def test_commit_8b11349_test_move_is_clean() -> None:
             [
                 ("backend/tests/review/test_shortcut_detector.py", OLD, None),
                 ("backend/tests/changes/test_shortcut_detector.py", None, NEW),
-            ]
+            ],
+            timeout=DETECTION_TIMEOUT_S,
         )
         == []
     )
