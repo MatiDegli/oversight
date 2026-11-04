@@ -288,6 +288,9 @@ fresh-connection refusal inside C; the inherited application listener never subs
 Private scratch cwd/HOME/TMP/TEMP lie outside the candidate. Child environment construction is
 allowlisted, with no backend credentials or PYTHONPATH discovery.
 
+The reviewed-app Linux boundary preserves each source mount's locked read-only, nosuid, nodev,
+noexec and atime settings on bind remounts, retaining every restriction added by the boundary.
+
 The adapter vector is the absolute interpreter, `-I -B`, absolute adapter, `--listener-fd`, `--port`,
 `--worktree`, `--memory-limit-bytes`, repeated `--oversight-origin`, and a supervisor-generated
 `--ready-nonce` containing 32 random bytes as lowercase hex. Helper argument positions, parent
