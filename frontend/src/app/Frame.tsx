@@ -39,6 +39,8 @@ import "./shell/life.css";
 import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
+import { WorkflowPanel, workflowOrigin, restoreWorkflowOrigin } from "./workflow/WorkflowPanel";
+import { workflowNavigation } from "./workflow/workflowNavigation";
 const OversightStage = lazy(() =>
   import("./shell/OversightStage").then(async (module) => {
     await module.fieldReady;
@@ -104,7 +106,12 @@ export interface FrameProps {
 
 /** Fixed zones compose around one persistent graph instance. */
 export function Frame(input: FrameProps) {
-  const props: FrameProps = input.historySession
+  const [workflow, setWorkflow] = useState<{
+    planId: string;
+    origin: ReturnType<typeof workflowOrigin>;
+    runId: string | undefined;
+  } | null>(null);
+  const available: FrameProps = input.historySession
     ? {
         ...input,
         onStartAgent: undefined,
@@ -120,6 +127,9 @@ export function Frame(input: FrameProps) {
         onDecide: undefined,
       }
     : input;
+  const props = workflowNavigation(available, () => {
+    setWorkflow(null);
+  });
   const startup = previewStartup();
   const startupId = useId();
   const composerDisclosure =
@@ -144,6 +154,14 @@ export function Frame(input: FrameProps) {
       : props.view;
   const [newLead, setNewLead] = useState(false);
   const [hiddenChatView, setHiddenChatView] = useState<View | null>(null);
+  if (workflow && workflow.runId !== state.run?.run_id) setWorkflow(null);
+  const workflowOpen = workflow !== null && workflow.runId === state.run?.run_id;
+  const closeWorkflow = () => {
+    setWorkflow(null);
+    requestAnimationFrame(() => {
+      restoreWorkflowOrigin(workflow?.origin);
+    });
+  };
   const leadInput = useRef<HTMLTextAreaElement>(null);
   // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
   const shell = useShell(panelOpen(view), onClosePanel, hiddenChatView === view);
@@ -185,7 +203,7 @@ export function Frame(input: FrameProps) {
   useEffect(() => {
     void props.previewHost?.navigate();
   }, [props.previewHost, view.activeTab, shell.layout, props.historySession]);
-  useEscapeCloses(open, onClosePanel);
+  useEscapeCloses(open || workflowOpen, workflowOpen ? closeWorkflow : onClosePanel);
   const showNewLead = newLead && !open && shell.layout === "Chat";
   const chatReview = useChatReviewNavigation(state, view, shell, props.onTabAction);
   const task = useFunctionTask(
@@ -194,6 +212,7 @@ export function Frame(input: FrameProps) {
     props.onStartAgent !== undefined && shell.layout === "Oversight",
   );
   const newTask = () => {
+    setWorkflow(null);
     void props.previewHost?.navigate();
     setNewLead(false);
     setHiddenChatView(view);
@@ -202,6 +221,7 @@ export function Frame(input: FrameProps) {
   const openNewLead = () => {
     void props.previewHost?.navigate();
     if (leadCapacity(state).atCap) return;
+    setWorkflow(null);
     setHiddenChatView(view);
     setNewLead(true);
     requestAnimationFrame(() => {
@@ -306,8 +326,10 @@ export function Frame(input: FrameProps) {
             )
           }
         >
-          <div className={`shell-center ${shell.maximized && open ? "is-maximized" : ""}`}>
-            <div className="shell-stage">
+          <div
+            className={`shell-center ${shell.maximized && open && !workflowOpen ? "is-maximized" : ""}`}
+          >
+            <div className={`shell-stage ${workflowOpen ? "has-workflow" : ""}`}>
               {open && (
                 <FocusPanel
                   {...props}
@@ -323,6 +345,14 @@ export function Frame(input: FrameProps) {
                   startAgentAction={task.action}
                   maximized={shell.maximized}
                   onMaximize={shell.toggleMaximize}
+                  workflowCovered={workflowOpen && shell.layout === "Oversight"}
+                  onOpenWorkflow={(planId, launcher) => {
+                    setWorkflow({
+                      planId,
+                      origin: workflowOrigin(launcher),
+                      runId: state.run?.run_id,
+                    });
+                  }}
                 />
               )}
               {showNewLead && (
@@ -352,6 +382,23 @@ export function Frame(input: FrameProps) {
                   onStart={props.onStartAgent}
                   replayOf={props.replayOf}
                   inputRef={task.inputRef}
+                />
+              )}
+              {workflowOpen && (
+                <WorkflowPanel
+                  key={`${workflow.runId ?? ""}:${workflow.planId}`}
+                  state={state}
+                  planId={workflow.planId}
+                  chat={shell.layout === "Chat"}
+                  onClose={closeWorkflow}
+                  onReview={
+                    props.onReview
+                      ? (id) => {
+                          setWorkflow(null);
+                          props.onReview?.(id);
+                        }
+                      : undefined
+                  }
                 />
               )}
               <div

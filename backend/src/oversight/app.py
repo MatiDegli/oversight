@@ -169,7 +169,6 @@ LIMITS = Limits(
 )
 GIT_TIMEOUT_S = 30
 WARN_AT = (0.5, 0.8)
-BLOCK_AT = 0.9
 PROVIDER_URLS = {"meta": META_BASE_URL, "baseten": BASETEN_BASE_URL}
 """The Chat Completions endpoint of each provider that has one; the key is `{provider}_api_key`."""
 MAIN_SUSPECT = "main's state is unknown: reject the change and restart the server"
@@ -555,12 +554,15 @@ class LiveRun:
             ledger_error = str(error)
         spent = self.ledger.state.spent_usd if self.ledger.state is not None else 0.0
         budget = settings.budget_usd or 0.0
+        block_at = (
+            settings.spend_brake_percent / 100 if settings.spend_brake_percent is not None else 0.0
+        )
         profiles = list(self._slot_profiles.values())
         self._usage = UsageLedger(
             budget,
             spent,
             warn_at=WARN_AT,
-            block_at=BLOCK_AT,
+            block_at=block_at,
             braked=any(_metered(profile) for profile in profiles),
         )
         payload = RunStarted(
@@ -582,7 +584,10 @@ class LiveRun:
             ],
             limits=self._limits,
             budget=Budget(
-                budget_usd=budget, spent_usd=spent, warn_at=list(WARN_AT), block_at=BLOCK_AT
+                budget_usd=budget,
+                spent_usd=spent,
+                warn_at=[mark for mark in WARN_AT if mark < block_at],
+                block_at=block_at,
             ),
         )
         # Measure the actual UTF-8 envelope (excluding LF, as the JSONL reader does).
@@ -943,6 +948,8 @@ class LiveRun:
     def brake_reason(self) -> str | None:
         """Why a metered start or revision is refused now, or `None`. Fails closed."""
         settings = self._settings
+        if settings.spend_brake_percent is None:
+            return "OVERSIGHT_SPEND_BRAKE_PERCENT must be a whole number from 1 to 100"
         if self._ledger_lost:
             return f"a model call could not be recorded in the ledger: {SETTLE} ({SETTLE_HOW})"
         state = self.ledger.state
@@ -957,13 +964,14 @@ class LiveRun:
             return "OVERSIGHT_BUDGET_USD is not configured"
         if self._pricing is None:
             return "Muse Spark input and output prices are not configured"
+        block_at = settings.spend_brake_percent / 100
         ledger = UsageLedger(
-            settings.budget_usd, state.spent_usd, warn_at=WARN_AT, block_at=BLOCK_AT
+            settings.budget_usd, state.spent_usd, warn_at=WARN_AT, block_at=block_at
         )
         if ledger.brake == "blocked":
             return (
                 f"US${state.spent_usd:.2f} of the US${settings.budget_usd:.2f} budget is spent, "
-                f"above {BLOCK_AT:.0%}: no new runs"
+                f"above {block_at:.0%}: no new runs"
             )
         return None
 

@@ -962,6 +962,34 @@ pending counts. Queued, waiting for slots and Ended without running remain separ
 terminal plans leave Running plans. The shell retains its graph, tabs and scroll ownership.
 Plan editing, locks, optional gates and the reserved Plan focus tab remain unimplemented.
 
+Open workflow on the shared plan card opens a separate read-only HTML panel. In Oversight
+it occupies the reading area beside the repository graph, retaining the mounted thread or
+inbox underneath. In desktop Chat it sits beside the conversation without loading or revealing
+the repository graph. The docks retain their owners. Only a person opens or replaces a workflow;
+arrivals refresh its winning plan revision at the displayed event prefix without scrolling,
+changing selection or taking focus.
+
+The panel lists solid neutral step buttons: local number, task capped at 48 characters including
+ellipsis, and the projected state word. Whole words are retained when possible. Selection shows
+the full task and projected evidence: condition, wave, exact merge dependencies, gate progression,
+progress, notes and agent. Team hue sits beside the shared team label in detail only; state color
+always carries its word. Role, model and mode say Not known. Review change uses the card's existing
+proposal/status eligibility and navigation, with no mutation controls. Keyboard order is Close,
+numbered steps, then detail actions. Enter/Space select; Escape or Close restores launcher focus.
+Person navigation to a focus tab or Watch closes the workflow and reveals that destination.
+Updates preserve focus; a disappearing selected step clears selection. It focuses Close only when
+focus is inside the workflow, or has fallen to the document body because its focused control was
+removed. Focus in the conversation, replay controls or any other surface stays there.
+A focused Review change that loses eligibility stays inert until focus leaves, then disappears.
+
+At phone width, Chat's Open workflow explicitly maximizes the same one-column list. Back
+replaces Close and returns to the retained Chat view, its reading position and launcher focus;
+Escape does the same. The full-screen panel keeps background controls inert and keyboard
+traversal inside it. The fixed header and 44px controls remain available above scrolling evidence,
+with 16px side gutters and no sideways scroll. Oversight retains its widen-window notice.
+The Open workflow launcher appears from 1280 px and in Chat's phone layout; from 768 to
+1279 px, the shared plan card is the entry point.
+
 ### Settings tab
 
 Settings opens in the focus panel. The tab names it once: there is no second Settings title in

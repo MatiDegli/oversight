@@ -33,6 +33,23 @@ it("reports the actual percentage at every brake level in neutral words", () => 
   expect(selectBudgetLine(createInitialState())).toBeNull();
 });
 
+it("reports the configured brake share rounded to a whole percent", () => {
+  const state = through(18);
+  if (!state.run) throw new Error("Missing fixture");
+  for (const blockAt of [0.7, 0.704]) {
+    expect(
+      selectBudgetLine({
+        ...state,
+        usage: null,
+        run: {
+          ...state.run,
+          budget: { ...state.run.budget, spent_usd: 65, budget_usd: 100, block_at: blockAt },
+        },
+      }),
+    ).toBe("Budget 65% · brake at 70%");
+  }
+});
+
 it("shows live or the supplied named replay once, the neutral budget and connection recovery", () => {
   const props = {
     state: through(18),

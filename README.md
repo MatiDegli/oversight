@@ -41,7 +41,7 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Difference questions | Classify measured differences as asked for, not asked for or unclear; requires a separate Baseten budget. | Muse Spark Open | Opt-in (`OVERSIGHT_BEHAVIOR_DIFF` or `OVERSIGHT_MEASURED_CONE`) |
 | Measured callers | Compare caller results under tests, within the static impact cone. | None | Opt-in (`OVERSIGHT_MEASURED_CONE`) |
 | Merge decisions and rules | Approve, reject or request changes; explicitly select guarded rules, standing grants and Revert. | None | On |
-| Cost and usage | Track spend, unknown usage and archived totals; refuse new Meta runs above 90% of the budget. | None | On |
+| Cost and usage | Track spend, unknown usage and archived totals; refuse new Meta runs above the person's configured share of the budget, 90% by default. | None | On |
 | Live demo preview | Open one agent's demo shop proposal at a time; reviewed-app execution remains unavailable. | None | Opt-in (`OVERSIGHT_PREVIEW_ENABLED`) |
 | Replay and practice | Play the bundled real run without a backend and compare your decisions with the recorded ones. | None | On |
 | Sources and platforms | Start with the demo; select prepared pinned profiles, including Oversight's reviewed copy, or validated native Windows copies. Linux/WSL is the verified path. | None | On |
@@ -66,7 +66,7 @@ the author. The split gives review a distinct profile and behavior classificatio
 
 Both use the official OpenAI SDK, with `low` reasoning set on every real call. The client retries
 429 and 5xx with exponential backoff and jitter; missing token usage stays unknown. Meta's spending
-brake refuses new runs above 90%. Replies become whole-message events, never one event per token;
+brake refuses new runs above the person's configured share of the credits, 90% by default. Replies become whole-message events, never one event per token;
 SQLite writes are batched. Tests and `make check` use scripted fake models and spend no credits.
 The [Oct 30 detection results](tools/eval/detection/RESULTS.md) record a US$0.0513 run using both Meta models; every arm failed its declared criteria.
 
@@ -92,7 +92,7 @@ flowchart TD
 - **Independent review.** Opt-in cross-review uses a different model profile and no author conversation, an Elephant-Goldfish idea ([reviewer selection](backend/src/oversight/review_config.py), [review call](backend/src/oversight/agents/reviewer.py)).
 - **Visible context cuts.** The lead is told how many exchanges and queue entries the server omitted ([history](backend/src/oversight/agents/_lead_history.py), [queue view](backend/src/oversight/agents/_lead_tools.py)).
 - **Agent harness.** On by default: syntax checks, edit diagnostics, bounded search feedback, a test-before-finish guard and read-only Python symbol lookup (`find_symbol`). Turn it off with `OVERSIGHT_HARNESS_PACK=false` ([harness](backend/src/oversight/agents/_harness.py), [symbols](backend/src/oversight/agents/_symbols.py)).
-- **Bounded spending.** The 90% Meta spending brake refuses new runs; missing token usage stays unknown ([usage ledger](backend/src/oversight/agents/usage.py), [model client](backend/src/oversight/agents/client.py)).
+- **Bounded spending.** The Meta spending brake refuses new runs above the person's configured share of the credits, 90% by default; missing token usage stays unknown ([usage ledger](backend/src/oversight/agents/usage.py), [model client](backend/src/oversight/agents/client.py)).
 - **One event history.** Each run has an append-only log; live and replay use the same reducer ([event store](backend/src/oversight/events/store.py), [frontend state](frontend/src/state/store.ts)).
 
 ## Run it locally
