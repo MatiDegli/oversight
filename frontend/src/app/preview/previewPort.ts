@@ -52,6 +52,8 @@ export interface PreviewController {
   see: (candidate: () => PreviewCandidate | null) => Promise<void>;
   observe: (status: PreviewStatus) => void;
   refresh: () => Promise<void>;
+  /** Validated tab recovery grants authority, never slot intent. */
+  recover?: (candidate: () => PreviewCandidate | null) => Promise<void>;
   close: () => Promise<void>;
   navigate: () => Promise<void>;
   setIdentity: (identity: PreviewIdentity) => Promise<void>;

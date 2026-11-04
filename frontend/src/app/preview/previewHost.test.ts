@@ -1,7 +1,8 @@
+import type { PreviewOwnership, PreviewOwnershipStore } from "./previewOwnership";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { LeadView, PreviewStatusEvent, ServerEvent } from "@contracts";
 import fixture from "../../../../fixtures/views/reference-cases.json";
-import { applyEvent, createInitialState } from "../../state";
+import { resolvePreviewReference, applyEvent, createInitialState } from "../../state";
 import { createPreviewHost, previewClock } from "./previewHost";
 import { PreviewFake, deferred } from "./previewFake";
 import { previewStartup } from "./previewStartup";
@@ -222,5 +223,97 @@ it("rechecks startup after authenticated drainage before resolving the deferred 
   await replacing;
   expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(1);
   expect(host.controller.snapshot()).toMatchObject({ pending: false, frameUrl: null });
+  host.dispose();
+});
+
+it("recovers after bootstrap without granting slot intent and activation reuses that preview", async () => {
+  const { host, port, state, request } = setup();
+  await host.activate(request);
+  const candidate = resolvePreviewReference(state, request).candidate;
+  if (!candidate) throw new Error("Missing candidate");
+  let saved: PreviewOwnership | null = {
+    identity: { run: candidate.run_id, source: "live" },
+    candidate,
+    preview_id: port.publicStatus()?.preview_id ?? "",
+    lease_token: "fake-private-1",
+  };
+  const store: PreviewOwnershipStore = {
+    load: () => saved,
+    save: (record) => {
+      saved = record;
+    },
+    clear: () => {
+      saved = null;
+    },
+  };
+  const identity = { run: "", source: "live" };
+  const recovered = createPreviewHost(
+    port,
+    previewClock,
+    identity,
+    () => state,
+    () => true,
+    undefined,
+    store,
+  );
+  const publish = vi.fn();
+  recovered.subscribe(publish);
+  await recovered.setIdentity({ ...identity, run: candidate.run_id });
+  expect(recovered.controller.snapshot()).toMatchObject({
+    owned: true,
+    visible: false,
+    frameUrl: null,
+  });
+  expect(recovered.snapshot()).toBe(false);
+  expect(publish).not.toHaveBeenCalled();
+  await recovered.activate(request);
+  expect(recovered.controller.snapshot().frameUrl).toBe(port.frameUrl);
+  expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+  await recovered.close();
+  expect(saved).toBeNull();
+  recovered.dispose();
+});
+it.each(["history", "invalid", "gap"])(
+  "does not recover through a %s permission fence",
+  async (mode) => {
+    const { port, state } = setup();
+    const store: PreviewOwnershipStore = { load: vi.fn(() => null), save: vi.fn(), clear: vi.fn() };
+    if (mode === "invalid") vi.mocked(previewStartup).mockReturnValue({ kind: "invalid" });
+    if (mode === "gap") state.gap = { expected: 1, received: 3 } as never;
+    const host = createPreviewHost(
+      port,
+      previewClock,
+      { run: state.run?.run_id ?? "", source: "live" },
+      () => state,
+      () => mode !== "history",
+      undefined,
+      store,
+    );
+    await host.setIdentity({ run: state.run?.run_id ?? "", source: "live" });
+    expect(port.calls).toEqual([]);
+    expect(host.snapshot()).toBe(false);
+    host.dispose();
+  },
+);
+
+it("does not consume a persisted owner before bootstrap supplies preview references", async () => {
+  const { state, port } = setup();
+  const views = state.leadViews;
+  state.leadViews = {};
+  const store: PreviewOwnershipStore = { load: vi.fn(() => null), save: vi.fn(), clear: vi.fn() };
+  const host = createPreviewHost(
+    port,
+    previewClock,
+    { run: "", source: "live" },
+    () => state,
+    () => true,
+    undefined,
+    store,
+  );
+  await host.setIdentity({ run: state.run?.run_id ?? "", source: "live" });
+  expect(store.load).not.toHaveBeenCalled();
+  state.leadViews = views;
+  await host.setIdentity({ run: state.run?.run_id ?? "", source: "live" });
+  expect(store.load).toHaveBeenCalledTimes(1);
   host.dispose();
 });

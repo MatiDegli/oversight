@@ -4,6 +4,7 @@ import { createPreviewController } from "./previewController";
 import type { PreviewClock, PreviewIdentity, PreviewPort } from "./previewPort";
 import { previewStartup } from "./previewStartup";
 import { parsePreviewStatus } from "./previewTypes";
+import { tabPreviewOwnership, type PreviewOwnershipStore } from "./previewOwnership";
 
 export const previewClock: PreviewClock = {
   schedule(callback, delay) {
@@ -21,8 +22,9 @@ export function createPreviewHost(
   read: () => State,
   canOpen: () => boolean,
   now = () => Date.now(),
+  ownership: PreviewOwnershipStore | undefined = tabPreviewOwnership(),
 ) {
-  const controller = createPreviewController(port, clock, identity);
+  const controller = createPreviewController(port, clock, identity, ownership);
   let currentIdentity = identity;
   let open = false;
   let disposed = false;
@@ -35,6 +37,52 @@ export function createPreviewHost(
   let clickedAt = 0;
   let targetAgent: string | undefined;
   const listeners = new Set<() => void>();
+  const recover = () => {
+    const state = read();
+    if (
+      disposed ||
+      closing ||
+      !canOpen() ||
+      previewStartup().kind === "invalid" ||
+      currentIdentity.source !== "live" ||
+      !currentIdentity.run ||
+      state.gap ||
+      state.run?.run_id !== currentIdentity.run
+    )
+      return Promise.resolve();
+    if (
+      !Object.values(state.leadViews).some((events) =>
+        events.some(
+          (event) =>
+            event.payload.view.kind === "preview" && event.payload.through_seq <= state.lastSeq,
+        ),
+      )
+    )
+      return Promise.resolve(); // Do not consume recovery during an incomplete bootstrap prefix.
+    return controller.recover(() => {
+      if (disposed || !canOpen() || previewStartup().kind === "invalid") return null;
+      let record;
+      try {
+        record = ownership?.load(currentIdentity);
+      } catch {
+        return null;
+      }
+      if (!record) return null;
+      for (const events of Object.values(read().leadViews)) {
+        for (const event of events) {
+          const request = event.payload;
+          if (
+            request.view.kind !== "preview" ||
+            request.view.agent_id !== record.candidate.agent_id
+          )
+            continue;
+          const candidate = resolvePreviewReference(read(), request).candidate;
+          if (candidate) return candidate;
+        }
+      }
+      return null;
+    });
+  };
   const publish = (next: boolean) => {
     if (open === next || disposed) return;
     open = next;
@@ -139,14 +187,15 @@ export function createPreviewHost(
       frameHidden = false;
       clickedAt = now();
       publish(true);
-      opening = controller
-        .see(() => {
+      const see = () =>
+        controller.see(() => {
           if (disposed || closing || previewStartup().kind === "invalid" || !canOpen()) return null;
           return resolvePreviewReference(read(), request).candidate;
-        })
-        .finally(() => {
-          opening = null;
         });
+      // Keep the synchronous start path for memory-only hosts and await tab recovery otherwise.
+      opening = (ownership ? recover().then(see) : see()).finally(() => {
+        opening = null;
+      });
       return opening;
     },
     accept(event: PreviewStatusEvent) {
@@ -161,12 +210,16 @@ export function createPreviewHost(
         return;
       const status = parsePreviewStatus(event.payload);
       controller.observe(status);
+      void recover();
       if (status.state === "ready") refresh();
     },
     close,
     navigate: close,
     async setIdentity(next: PreviewIdentity) {
-      if (next.run === currentIdentity.run && next.source === currentIdentity.source) return;
+      if (next.run === currentIdentity.run && next.source === currentIdentity.source) {
+        await recover();
+        return;
+      }
       currentIdentity = next;
       ++generation;
       frameHidden = true;
@@ -174,6 +227,7 @@ export function createPreviewHost(
       notifyPanel();
       await controller.setIdentity(next);
       if (!controller.snapshot().visible) publish(false);
+      await recover();
     },
     dispose() {
       disposed = true;
