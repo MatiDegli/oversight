@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-restricted-imports -- Share the scoped event-profile provenance selector without extending the state facade.
+import { isScriptedAgent } from "../../state/scriptedAgents";
 import type { LeadStatusEvent } from "@contracts";
 import type { State } from "../../state";
 import { selectPlanEvidence } from "../../review";
@@ -67,6 +69,7 @@ export function selectLeadConversation(state: State, leadId: string): LeadConver
       letter: identity.letter,
       kind: "lead",
       agentId: leadId,
+      scripted: isScriptedAgent(state, leadId),
       modelLabel: profile?.label ?? current.payload.model,
       reasoning: profile?.reasoning ?? null,
       turn: progress.turn,

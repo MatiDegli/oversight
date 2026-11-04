@@ -9,6 +9,9 @@ from oversight.changes import ShortcutKind, detect_shortcuts
 from oversight.changes import _shortcuts_common as common
 from oversight.changes._shortcuts_common import Source
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 OLD = "def check():\n    assert f() == 3\ndef test_f():\n    check()\n"
 
 
@@ -29,7 +32,8 @@ def test_extraction_to_helper_without_checks_is_a_fact(
         [
             ("tests/test_calc.py", OLD, f"{statement}\ndef test_f():\n    {call}\n"),
             ("tests/helpers.py", None, f"def check():\n    {body}\n"),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert result.status == "findings"
     assert ShortcutKind.ASSERTION_LOOSENED in {f.kind for f in result}
@@ -151,7 +155,8 @@ def test_extracted_helper_retains_explicit_schema_validation(validation: str) ->
                 f"def check(response):\n"
                 f"    return ErrorResponse.{validation}(response.json()).error.code\n",
             ),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert result.status == "no_facts" and not result
 

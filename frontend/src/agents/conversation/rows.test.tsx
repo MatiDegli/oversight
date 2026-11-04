@@ -58,6 +58,8 @@ it("names the agent once in the header and keeps the task in the first timeline 
   expect(header.match(/<h2\b/g)).toHaveLength(1);
   expect(header).toMatch(/<h2[^>]*>Agent A<\/h2>/);
   expect(header).not.toContain(task.text);
+  expect(header).not.toContain("Scripted demo agents");
+  expect(header).not.toContain("Entered text does not determine scripted actions.");
   const panel = renderToStaticMarkup(<ConversationPanel conversation={conversation} />);
   expect(panel.match(/<h[1-6]\b/g)).toHaveLength(1);
   expect(panel.split(task.text)).toHaveLength(2);

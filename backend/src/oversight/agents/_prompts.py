@@ -5,7 +5,7 @@ import json
 
 from oversight.agents._lead_policy import LEAD_LIMITS, build_lead_prompt
 from oversight.agents._lead_tools import LEAD_TOOL_SCHEMAS, build_lead_tool_schemas
-from oversight.agents.tools import TOOL_SCHEMAS
+from oversight.agents.tools import tool_schemas
 from oversight_contracts.events import LeadLimits
 
 _BASE_PROMPT = """You are a coding agent working on a small Python repository, in your own copy.
@@ -23,6 +23,7 @@ edit, then run the tests. Read whole functions when practical. Use the same tool
 failure and correct that hypothesis. Keep dependent steps ordered.
 Stop when the requested change is implemented and tested, or evidence shows you cannot proceed
 within the limits. Call finish with a short note on the change, tests and any remaining blocker.
+Use find_symbol for read-only Python definitions and references.
 A person reviews the change before it is merged."""
 
 
@@ -65,6 +66,15 @@ LEAD_PROMPT = lead_system_prompt(LEAD_LIMITS)
 
 
 HISTORY_STUB = "[Lines {first}-{last} of {path}: a later read of this path covers these lines.]"
+HISTORY_DEFAULT_TOKENS = 64_000
+HISTORY_MASK_STUB = (
+    "[Output of {name} {arguments} cleared to save context; call it again if you need it.]"
+)
+HISTORY_TEST_STUB = (
+    " [Rest of the test output cleared to save context; run the tests again if you need it.]"
+)
+HISTORY_MASK_PROTECTED_CALLS = 10
+HISTORY_ARGUMENT_CHARS = 200
 HISTORY_LOW_WATER = 0.75
 HISTORY_REARM = 0.25
 HISTORY_PROTECTED_CALLS = 6
@@ -72,7 +82,7 @@ HISTORY_PROTECTED_CALLS = 6
 
 def prompt_version(
     harness_pack: bool = False,
-    history_prune_tokens: int | None = None,
+    history_prune_tokens: int | None = HISTORY_DEFAULT_TOKENS,
     *,
     lead_limits: LeadLimits | None = None,
 ) -> str:
@@ -89,6 +99,10 @@ def prompt_version(
                 HISTORY_LOW_WATER,
                 HISTORY_REARM,
                 HISTORY_PROTECTED_CALLS,
+                HISTORY_MASK_STUB,
+                HISTORY_TEST_STUB,
+                HISTORY_MASK_PROTECTED_CALLS,
+                HISTORY_ARGUMENT_CHARS,
             ]
         )
     return (
@@ -99,7 +113,7 @@ def prompt_version(
                 + REVISION_PROMPT
                 + PLAN_PROMPT
                 + lead_prompt
-                + json.dumps(TOOL_SCHEMAS, sort_keys=True)
+                + json.dumps(tool_schemas(harness_pack), sort_keys=True)
                 + json.dumps(schemas, sort_keys=True)
                 + json.dumps(
                     limits.model_dump() | {"wall_clock_s": float(limits.wall_clock_s)},

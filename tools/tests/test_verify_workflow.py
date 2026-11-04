@@ -33,6 +33,10 @@ def mapping(text: str) -> dict[str, str]:
     result: dict[str, str] = {}
     offset = 0
     while offset < len(text):
+        # Ignore comments only at this mapping's level; literal bodies stay intact.
+        if text[offset] == "#":
+            offset = text.index("\n", offset) + 1
+            continue
         match = field.match(text, offset)
         assert match is not None, f"Unsupported mapping near {text[offset : offset + 80]!r}"
         key, scalar, children = match.groups()
@@ -98,7 +102,7 @@ def assert_verify_policy(verify: str, ci: str) -> None:
         job = mapping(jobs[job_id])
         assert set(job) == {"name", "runs-on", "timeout-minutes", "permissions", "steps"}
         assert job["name"] == job_id
-        assert job["runs-on"] == "ubuntu-latest"
+        assert job["runs-on"] == ("ubuntu-24.04" if job_id == "check" else "ubuntu-latest")
         assert job["timeout-minutes"] == timeout
         assert mapping(job["permissions"]) == {"contents": "read"}
         job_steps = steps(job["steps"])
@@ -109,17 +113,21 @@ def assert_verify_policy(verify: str, ci: str) -> None:
 
     check = parsed_steps["check"]
     ci_check = steps(mapping(ci_jobs["check"])["steps"])
-    assert len(check) == 10
-    assert len(ci_check) == 9
+    assert len(check) == 11
+    assert len(ci_check) == 10
     for actual, source in zip(check[:6], ci_check[:6], strict=True):
         assert_named_copy(actual, source)
     assert [step.get("uses") for step in check[:6]] == [*ACTIONS.values(), None, GITLEAKS]
     assert mapping(check[2]["with"]) == {"package_json_file": "frontend/package.json"}
     assert mapping(check[3]["with"]) == {"node-version": "24"}
     assert check[4]["run"] == "make install"
-    assert check[6:9] == ci_check[6:9]
-    assert check[6:8] == [{"run": "make check-ci"}, {"run": "make smoke"}]
-    assert check[8]["name"] == "Report network isolation probe"
+    assert check[6:10] == ci_check[6:10]
+    assert check[6] == {
+        "name": "Allow unprivileged user namespaces",
+        "run": "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
+    }
+    assert check[7:9] == [{"run": "make check-ci"}, {"run": "make smoke"}]
+    assert check[9]["name"] == "Report network isolation probe"
 
     secrets = parsed_steps["secrets"]
     ci_secrets = steps(mapping(ci_jobs["secrets"])["steps"])
@@ -214,6 +222,67 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
         assert_ci_triggers(ci.replace("on:\n", "on:\n  pull_request:\n", 1))
 
 
+@pytest.mark.parametrize(
+    "filename,job_id",
+    [
+        ("ci.yml", "browser"),
+        ("verify-frontend.yml", "browser-1"),
+        ("verify-frontend.yml", "browser-2"),
+        ("verify-frontend.yml", "browser-3"),
+        ("verify-frontend.yml", "browser-4"),
+    ],
+)
+def test_browser_jobs_use_supported_host(filename: str, job_id: str) -> None:
+    jobs = mapping(mapping((WORKFLOWS / filename).read_text())["jobs"])
+    assert mapping(jobs[job_id])["runs-on"] == "ubuntu-24.04"
+
+
+def test_browser_workflows_keep_four_matching_bounded_shards() -> None:
+    ci = mapping(mapping((WORKFLOWS / "ci.yml").read_text())["jobs"])
+    browser = mapping(ci["browser"])
+    assert browser["name"] == "browser tests (${{ matrix.shard }}/4)"
+    assert mapping(browser["strategy"]) == {
+        "fail-fast": "false",
+        "matrix": "shard: [1, 2, 3, 4]",
+    }
+    ci_steps = steps(re.sub(r"(?m)^#.*\n", "", browser["steps"]))
+    cache = next(
+        step for step in ci_steps if step.get("name") == "Cache browser fixture dependencies"
+    )
+    cache_values = mapping(cache["with"])
+    prefix = "browser-vite-${{ runner.os }}-${{ runner.arch }}-${{ matrix.shard }}-of-4-"
+    assert cache_values == {
+        "path": ".shots/*-vite-cache",
+        "key": prefix + "${{ hashFiles('frontend/pnpm-lock.yaml', 'frontend/vite.config.ts', "
+        "'frontend/**/*.support.ts') }}",
+        "restore-keys": "|\n" + prefix,
+    }
+    assert {
+        "name": "Monaco and graph tests in Chromium",
+        "run": "make test-browser BROWSER_SHARD=${{ matrix.shard }}/4",
+    } in ci_steps
+    upload = next(
+        step for step in ci_steps if step.get("name") == "Upload browser failure evidence"
+    )
+    assert mapping(upload["with"])["name"] == "browser-failure-evidence-${{ matrix.shard }}-of-4"
+    verify = mapping(mapping((WORKFLOWS / "verify-frontend.yml").read_text())["jobs"])
+    assert {name for name in verify if name.startswith("browser-")} == {
+        f"browser-{shard}" for shard in range(1, 5)
+    }
+    template = verify["browser-2"]
+    for shard in range(1, 5):
+        name = f"browser-{shard}"
+        assert verify[name] == template.replace("browser-2", name).replace("2/4", f"{shard}/4")
+        job = mapping(verify[name])
+        assert {
+            "name": f"Run {name}",
+            "run": f"make test-browser BROWSER_SHARD={shard}/4",
+        } in steps(job["steps"])
+        for bounded_job in (browser, job):
+            assert bounded_job["timeout-minutes"] == "25"
+            assert mapping(bounded_job["permissions"]) == {"contents": "read"}
+
+
 WINDOWS_PATHS = (
     "desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, "
     "docs/**, "
@@ -236,17 +305,26 @@ UPLOAD = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.
 WINDOWS_NATIVE_IF = "${{ !cancelled() && steps.frontend_build.outcome == 'success' }}"
 
 
+def assert_no_job_runner_environment(jobs: dict[str, str]) -> None:
+    for name, body in jobs.items():
+        for value in mapping(mapping(body).get("env", "")).values():
+            for expression in re.findall(r"\$\{\{(.*?)\}\}", value, re.DOTALL):
+                assert not re.search(r"\brunner\b", expression, re.IGNORECASE), name
+
+
 def assert_windows_policy(text: str) -> None:
     workflow = mapping(text)
     assert set(workflow) == {"name", "on", "permissions", "jobs"}
     assert workflow["name"] == "windows advisory" and workflow["permissions"] == "{}"
     assert mapping(workflow["on"]) == {
         "pull_request": f"paths: [{WINDOWS_PATHS}]",
-        "push": f"branches: [main]\npaths: [{WINDOWS_PATHS}]",
+        "push": f"branches: [main, 'desktop/**']\npaths: [{WINDOWS_PATHS}]",
         "workflow_dispatch": "",
     }
     assert "secrets" not in text and "continue-on-error" not in text
-    assert mapping(workflow["jobs"]).keys() == {"windows"}
+    assert mapping(workflow["jobs"]).keys() == {"windows", "package"}
+    assert_no_job_runner_environment(mapping(workflow["jobs"]))
+    assert_package_policy(mapping(mapping(workflow["jobs"])["package"]))
     job = mapping(mapping(workflow["jobs"])["windows"])
     assert set(job) == {
         "name",
@@ -452,11 +530,32 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
     assert_windows_policy((WORKFLOWS / "windows.yml").read_text())
 
 
+@pytest.mark.parametrize("job", ["windows", "package"])
+@pytest.mark.parametrize(
+    "expression", ["${{ runner.temp }}", "${{runner['temp']}}", "${{ toJSON(runner) }}"]
+)
+def test_windows_rejects_runner_in_any_job_environment(job: str, expression: str) -> None:
+    jobs = mapping(mapping((WORKFLOWS / "windows.yml").read_text())["jobs"])
+    jobs[job] = jobs[job].replace("env:\n", f"env:\n  INVALID: {expression}\n", 1)
+    with pytest.raises(AssertionError, match=job):
+        assert_no_job_runner_environment(jobs)
+
+
+@pytest.mark.parametrize("event", ["pull_request", "push"])
+def test_windows_trigger_paths_exclude_notice_only_changes(event: str) -> None:
+    workflow = mapping((WORKFLOWS / "windows.yml").read_text())
+    trigger = mapping(mapping(workflow["on"])[event])
+    paths = trigger["paths"].removeprefix("[").removesuffix("]").split(", ")
+    assert {"LICENSE", "THIRD_PARTY_NOTICES.md"}.isdisjoint(paths)
+
+
 @pytest.mark.parametrize(
     "old,new",
     [
-        ("branches: [main]", "branches: ['*']"),
+        ("branches: [main, 'desktop/**']", "branches: ['*']"),
         ("docs/**, ", ""),
+        ("DECISIONS.md, ", "DECISIONS.md, LICENSE, "),
+        ("DECISIONS.md, ", "DECISIONS.md, THIRD_PARTY_NOTICES.md, "),
         ("permissions: {}", "permissions: write-all"),
         ("contents: read", "contents: write"),
         ("shell: pwsh", "shell: bash"),
@@ -533,3 +632,171 @@ def test_windows_rejects_native_condition_on_setup(index: int) -> None:
     items[index]["if"] = WINDOWS_NATIVE_IF
     with pytest.raises(AssertionError):
         assert_windows_steps(items)
+
+
+PACKAGE_COMMANDS = {
+    "Scan checkout with gitleaks": [
+        "gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .",
+    ],
+    "Prepare exact Rust toolchain and Cargo store": [
+        "rustup toolchain install 1.98.0 --profile minimal --component rustfmt",
+        "rustup default 1.98.0",
+        "cargo fetch --locked --manifest-path desktop/Cargo.toml",
+    ],
+    "Prepare frozen build inputs": [
+        "uv sync --frozen --python 3.12.12",
+        "pnpm -C frontend install --frozen-lockfile",
+        "pnpm -C frontend build",
+        "pnpm dlx @tauri-apps/cli@2.12.0 --version",
+    ],
+    "Offline locked desktop checks and metadata": [
+        "$env:CARGO_NET_OFFLINE = 'true'",
+        "New-Item -ItemType Directory -Force package-evidence, desktop/packaging/cache | Out-Null",
+        "cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check",
+        "cargo --offline test --locked --manifest-path desktop/Cargo.toml "
+        "-p oversight-desktop-core",
+        "cargo --offline metadata --locked --manifest-path desktop/Cargo.toml "
+        "--filter-platform x86_64-pc-windows-msvc --format-version 1 "
+        "> desktop/packaging/cache/cargo-metadata.json",
+        "cargo --offline metadata --locked --manifest-path desktop/Cargo.toml --format-version 1 "
+        "> desktop/packaging/cache/cargo-all-metadata.json",
+    ],
+    "Stage verified embedded runtimes and notices": [
+        "uv run --frozen python desktop/packaging/stage.py",
+        "Copy-Item desktop/packaging/stage/app/payload.json package-evidence/",
+        "Copy-Item desktop/packaging/stage/app/THIRD_PARTY_NOTICES.md package-evidence/",
+    ],
+}
+
+
+def assert_package_policy(job: dict[str, str]) -> None:
+    assert set(job) == {
+        "name",
+        "runs-on",
+        "timeout-minutes",
+        "permissions",
+        "defaults",
+        "env",
+        "steps",
+    }
+    assert job["name"] == "desktop installer" and job["runs-on"] == "windows-latest"
+    assert job["timeout-minutes"] == "75"
+    assert mapping(job["permissions"]) == {"contents": "read"}
+    assert mapping(mapping(job["defaults"])["run"]) == {"shell": "pwsh"}
+    assert mapping(job["env"]) == {
+        "META_API_KEY": '""',
+        "BASETEN_API_KEY": '""',
+        "OVERSIGHT_CROSS_REVIEW": '"false"',
+        "OVERSIGHT_WORKSPACE_SOURCE": '""',
+        "OVERSIGHT_AGENT_MODEL": "fake",
+        "OVERSIGHT_AGENT_MODEL_B": "fake",
+        "PYTHONDONTWRITEBYTECODE": '"1"',
+    }
+    items = steps(job["steps"])
+    assert len(items) == 14
+    assert items[0] == {
+        "name": "Set desktop Cargo home",
+        "run": '|\n"CARGO_HOME=$env:RUNNER_TEMP\\oversight-tauri-cargo" '
+        "| Out-File -Append -Encoding utf8 $env:GITHUB_ENV",
+    }
+    items = items[1:]
+    assert items[:5] == [
+        {"uses": ACTIONS["actions/checkout"], "with": "persist-credentials: false"},
+        {"uses": ACTIONS["astral-sh/setup-uv"], "with": 'version: "0.11.21"'},
+        {"uses": ACTIONS["pnpm/action-setup"], "with": "package_json_file: frontend/package.json"},
+        {"uses": ACTIONS["actions/setup-node"], "with": 'node-version: "24.11.0"'},
+        {"uses": GITLEAKS},
+    ]
+    for item, (name, commands) in zip(items[5:10], PACKAGE_COMMANDS.items(), strict=True):
+        assert set(item) == {"name", "run"} and item["name"] == name
+        script = item["run"].removeprefix("|\n").splitlines()
+        expected = []
+        for command in commands:
+            expected.append(command)
+            if command.startswith(("cargo ", "uv ", "pnpm ", "rustup ", "gitleaks ")):
+                expected.append("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }")
+        assert script == expected
+    assert items[10] == {
+        "name": "Build locked NSIS installer",
+        "run": "|\n$env:CARGO_NET_OFFLINE = 'true'\n"
+        "$timer = [System.Diagnostics.Stopwatch]::StartNew()\nPush-Location desktop/shell\n"
+        "try {\n  pnpm --offline dlx @tauri-apps/cli@2.12.0 build --ci --bundles nsis "
+        "-- --offline --locked\n  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+        "} finally { Pop-Location }\n$timer.Stop()\n"
+        '"Installer build seconds: $($timer.Elapsed.TotalSeconds)" '
+        "| Set-Content package-evidence/build.txt",
+    }
+    assert items[11] == {
+        "name": "Install smoke twice and preserve data on uninstall",
+        "timeout-minutes": "8",
+        "run": "./desktop/packaging/installed-smoke.ps1",
+    }
+    assert items[12] == {
+        "name": "Upload desktop installer",
+        "uses": UPLOAD,
+        "with": "name: oversight-windows-installer\npath: |\n"
+        "  desktop/target/release/bundle/nsis/*-setup.exe\n  package-evidence/\n"
+        "if-no-files-found: error\nretention-days: 7",
+    }
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("$env:RUNNER_TEMP\\oversight-tauri-cargo", "$env:USERPROFILE\\.cargo"),
+        ('version: "0.11.21"', 'version: "latest"'),
+        ('node-version: "24.11.0"', 'node-version: "24"'),
+        ("@tauri-apps/cli@2.12.0", "@tauri-apps/cli@latest"),
+        ("--bundles nsis -- --offline --locked", "--bundles nsis"),
+        ("./desktop/packaging/installed-smoke.ps1", "Write-Output skip"),
+        ("name: oversight-windows-installer", "name: other"),
+    ],
+)
+def test_package_rejects_weakened_build_or_acceptance(old, new):
+    text = (WORKFLOWS / "windows.yml").read_text()
+    assert old in text
+    with pytest.raises(AssertionError):
+        assert_windows_policy(text.replace(old, new))
+
+
+@pytest.mark.parametrize(
+    "regression",
+    [
+        "missing",
+        "late",
+        "version-only",
+        "zero-exit",
+        "ignored-failure",
+        "allowed-failure",
+        "conditional",
+    ],
+)
+def test_package_rejects_missing_late_or_nonblocking_secret_scan(regression: str) -> None:
+    text = (WORKFLOWS / "windows.yml").read_text()
+    scan = (
+        "      - name: Scan checkout with gitleaks\n"
+        "        run: |\n"
+        "          gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .\n"
+        "          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+    )
+    assert scan in text
+    replacements = {
+        "missing": "",
+        "late": "",
+        "version-only": scan.replace(
+            "gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .",
+            "gitleaks version",
+        ),
+        "zero-exit": scan.replace("--redact", "--exit-code 0 --redact"),
+        "ignored-failure": scan.replace("exit $LASTEXITCODE", "Write-Output ignored"),
+        "allowed-failure": scan.replace(
+            "        run:", "        continue-on-error: true\n        run:"
+        ),
+        "conditional": scan.replace("        run:", "        if: false\n        run:"),
+    }
+    text = text.replace(scan, replacements[regression], 1)
+    if regression == "late":
+        marker = "      - name: Stage verified embedded runtimes and notices\n"
+        text = text.replace(marker, scan + marker, 1)
+    with pytest.raises(AssertionError):
+        assert_windows_policy(text)

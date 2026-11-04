@@ -9,10 +9,12 @@ import contextlib
 import json
 import os
 import secrets
+import socket
 import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +28,8 @@ from oversight.workspace.locks import offload
 from oversight.workspace.preview_registry import PreviewRegistry, identity_data
 from oversight.workspace.preview_types import preserve_ownership
 from oversight.workspace.runner import ProcessCollector, child_env
+
+ENTRY_PATH = Path(__file__).resolve()
 
 
 @dataclass
@@ -225,6 +229,23 @@ async def supervise(runtime: Path, control: int, output: int, listener: int) -> 
             await offload(lambda: registry.update(phase="dead"))
             report(output, kind="dead", reason="shutdown", exit_code=None, diagnostic="")
             return
+        if "reviewed" in data["launch"]:
+            from oversight.workspace._reviewed_preview import ReviewedExecution
+
+            owner_socket = socket.socket(fileno=listener)
+            handed_over = True
+            try:
+                await ReviewedExecution(
+                    data["launch"],
+                    registry,
+                    reader,
+                    owner_socket,
+                    partial(report, output),
+                ).run()
+            finally:
+                pipe.close()
+                os.close(output)
+            return
         owner = Supervisor(data["launch"], control, output, listener)
         handed_over = True
         await owner.run(reader, pipe, authorized=True)
@@ -280,10 +301,191 @@ async def watch(
 
 
 def main() -> None:
+    if sys.argv[1] == "hold":
+        asyncio.run(hold_listener(*map(int, sys.argv[2:5])))
+        return
     control, output, listener = map(int, sys.argv[1:4])
     # Configuration is private server-authored JSON in the ownership directory, no model input.
     with contextlib.suppress(BrokenPipeError):
         asyncio.run(supervise(Path(sys.argv[4]), control, output, listener))
+
+
+class ListenerGuardian:
+    """Trusted reservation owner survives supervisor death, never enters T's namespaces."""
+
+    def __init__(self, registry: PreviewRegistry) -> None:
+        self.registry = registry
+        self.channel: socket.socket | None = None
+        self.transport: asyncio.SubprocessTransport | None = None
+        self.collector = ProcessCollector(2048)
+        self.pidfd: int | None = None
+
+    async def start(self, listener: socket.socket) -> None:
+        from oversight.workspace.isolation import open_pidfd
+
+        parent, child = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        parent.setblocking(False)
+        self.channel = parent
+        supervisor = open_pidfd(os.getpid())
+        try:
+            await preserve_ownership(self._spawn(child.fileno(), listener.fileno(), supervisor))
+        finally:
+            child.close()
+            os.close(supervisor)
+
+    async def _spawn(self, control: int, listener: int, supervisor: int) -> None:
+        from oversight.workspace.isolation import open_pidfd
+
+        self.transport, _ = await asyncio.get_running_loop().subprocess_exec(
+            lambda: self.collector,
+            sys.executable,
+            "-I",
+            "-B",
+            str(ENTRY_PATH),
+            "hold",
+            str(control),
+            str(listener),
+            str(supervisor),
+            env=child_env(None),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+            pass_fds=(control, listener, supervisor),
+        )
+        pid = self.transport.get_pid()
+        self.pidfd = open_pidfd(pid)
+        await offload(lambda: self.registry.update(guardian=identity_data(pid)))
+
+    async def track(self, pidfds: tuple[int, ...], births: dict[str, Any]) -> None:
+        import array
+
+        if self.channel is None:
+            raise ValueError("missing listener guardian")
+        payload = json.dumps(births, separators=(",", ":")).encode()
+        rights = array.array("i", pidfds)
+        if self.channel.sendmsg([payload], [(socket.SOL_SOCKET, socket.SCM_RIGHTS, rights)]) != len(
+            payload
+        ):
+            raise ValueError("incomplete listener ownership handoff")
+        async with asyncio.timeout(10):
+            if await asyncio.get_running_loop().sock_recv(self.channel, 32) != b"tracked":
+                raise ValueError("listener ownership handoff refused")
+
+    async def close(self) -> None:
+        from oversight.workspace.isolation import verify_preview_namespace_death
+        from oversight.workspace.runner import wait_done
+
+        if self.channel is not None:
+            self.channel.close()
+            self.channel = None
+        if self.transport is not None:
+            if not await wait_done(self.collector.exited, 10):
+                raise ValueError("listener guardian death is unverified")
+            if self.pidfd is not None:
+                fd, self.pidfd = self.pidfd, None
+                await verify_preview_namespace_death(fd)
+            self.transport.close()
+
+
+async def guardian_packet(channel: socket.socket) -> tuple[bytes, list[int]]:
+    import array
+
+    loop = asyncio.get_running_loop()
+    ready: asyncio.Future[None] = loop.create_future()
+    loop.add_reader(channel.fileno(), lambda: ready.set_result(None) if not ready.done() else None)
+    try:
+        await ready
+        raw, ancillary, flags, _ = channel.recvmsg(
+            4096, socket.CMSG_SPACE(16 * 4), socket.MSG_CMSG_CLOEXEC
+        )
+        descriptors: list[int] = []
+        for level, kind, data in ancillary:
+            if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+                values = array.array("i")
+                values.frombytes(data[: len(data) - len(data) % values.itemsize])
+                descriptors.extend(values)
+        if flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC):
+            for fd in descriptors:
+                os.close(fd)
+            raise ValueError("truncated listener ownership")
+        return raw, descriptors
+    finally:
+        loop.remove_reader(channel.fileno())
+
+
+async def guardian_death(fd: int) -> None:
+    loop = asyncio.get_running_loop()
+    ready: asyncio.Future[None] = loop.create_future()
+    loop.add_reader(fd, lambda: ready.set_result(None) if not ready.done() else None)
+    try:
+        await ready
+    finally:
+        loop.remove_reader(fd)
+
+
+def guardian_verify(raw: bytes, descriptors: list[int]) -> None:
+    from oversight.workspace.preview_registry import registered_identity
+
+    data = json.loads(raw)
+    if set(data) != {"outer", "setup", "init"} or len(descriptors) != 3:
+        raise ValueError("incomplete listener ownership")
+    for name, fd in zip(("outer", "setup", "init"), descriptors, strict=True):
+        identity = registered_identity(data[name])
+        info = dict(
+            row.split(":", 1) for row in Path(f"/proc/self/fdinfo/{fd}").read_text().splitlines()
+        )
+        if int(info.get("Pid", "-1")) != identity.pid or not identity.alive():
+            raise ValueError("stale listener ownership")
+
+
+async def hold_listener(control: int, listener: int, supervisor: int) -> None:
+    """On owner EOF, pinned PID 1 death precedes public-listener release."""
+    from oversight.workspace.preview_registry import kill_pinned
+
+    channel, public = socket.socket(fileno=control), socket.socket(fileno=listener)
+    channel.setblocking(False)
+    owned: list[int] = []
+    death = asyncio.create_task(guardian_death(supervisor))
+    packet: asyncio.Task[tuple[bytes, list[int]]] | None = None
+    try:
+        while True:
+            packet = asyncio.create_task(guardian_packet(channel))
+            done, _ = await asyncio.wait({packet, death}, return_when=asyncio.FIRST_COMPLETED)
+            if death in done and packet not in done:
+                break
+            raw, incoming = await packet
+            if not raw:
+                for fd in incoming:
+                    os.close(fd)
+                break
+            try:
+                guardian_verify(raw, incoming)
+                # A previous namespace must be dead before replacing its witnesses.
+                await asyncio.gather(*(guardian_death(fd) for fd in owned))
+                for fd in owned:
+                    os.close(fd)
+                owned = incoming
+                incoming = []
+                channel.send(b"tracked")
+            finally:
+                for fd in incoming:
+                    os.close(fd)
+    finally:
+        death.cancel()
+        if packet is not None:
+            packet.cancel()
+            await asyncio.gather(packet, return_exceptions=True)
+        await asyncio.gather(death, return_exceptions=True)
+        # EOF, malformed control or supervisor crash cannot strand a live namespace.
+        if owned:
+            with contextlib.suppress(ProcessLookupError):
+                kill_pinned(owned[2])
+            await asyncio.gather(*(guardian_death(fd) for fd in owned))
+        for fd in owned:
+            os.close(fd)
+        public.close()
+        channel.close()
+        os.close(supervisor)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,18 @@ from oversight.limits import bounded_text
 from oversight.workspace import PreviewProfile
 from oversight_contracts.events import LeadLimits
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+
+def _application_root() -> Path:
+    value = os.environ.get("OVERSIGHT_APP_ROOT")
+    if value is None:
+        return Path(__file__).resolve().parents[3]
+    root = Path(value)
+    if not root.is_absolute():
+        raise ValueError("OVERSIGHT_APP_ROOT must be absolute")
+    return root.resolve()
+
+
+REPO_ROOT = _application_root()
 TEST_TIMEOUT_ERROR = (
     "OVERSIGHT_TEST_TIMEOUT_S must be a whole number of seconds from 1 to 999999999"
 )
@@ -26,6 +37,22 @@ LEAD_SETTING_DEFAULTS = {
     "lead_max_task_chars": 2000,
     "lead_history_chars": 24000,
 }
+
+
+def _history_threshold(raw: str | None) -> int | None:
+    from oversight.agents import HISTORY_DEFAULT_TOKENS
+
+    if raw is None or raw == "":
+        return HISTORY_DEFAULT_TOKENS
+    if raw in {"0", "off"}:
+        return None
+    try:
+        return int(raw)
+    except ValueError as error:
+        raise ValueError(
+            "OVERSIGHT_HISTORY_PRUNE_TOKENS must be 0, off, or an integer of at least 8000"
+        ) from error
+
 
 type ParsedSettingName = str
 
@@ -123,10 +150,10 @@ class Settings:
     """OVERSIGHT_BEHAVIOR_DIFF: opt-in finite measurements and bounded public samples."""
     measured_cone: bool = False
     """OVERSIGHT_MEASURED_CONE: opt-in pytest caller evidence, independent of direct probes."""
-    harness_pack: bool = False
-    """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
-    history_prune_tokens: int | None = None
-    """OVERSIGHT_HISTORY_PRUNE_TOKENS: opt-in covered-read pruning; minimum 8,000."""
+    harness_pack: bool = True
+    """OVERSIGHT_HARNESS_PACK: default-on agent harness, selected before process startup."""
+    history_prune_tokens: int | None = field(default_factory=lambda: _history_threshold(None))
+    """Default-on history compaction; minimum 8,000 estimated tokens, None disables it."""
     reviewer_fake_script: Path | None = None
     """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
     reviewer_fake_b_script: Path | None = None
@@ -184,6 +211,7 @@ class Settings:
             "preview_profile",
             replace(
                 self.preview_profile,
+                log_secrets=tuple(k for k in (self.meta_api_key, self.baseten_api_key) if k),
                 backend_port=self.port,
                 vite_port=self.vite_port,
                 trusted_demo=not self.workspace_source and self.preview_profile.trusted_demo,
@@ -215,8 +243,10 @@ class Settings:
                 raise ValueError("Review card deadlines must be finite and positive")
 
     @classmethod
-    def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
+    def load(cls, env_file: Path | None = None) -> "Settings":
         """The process environment wins over the .env file."""
+        if env_file is None:
+            env_file = Path(os.environ.get("OVERSIGHT_ENV_FILE", REPO_ROOT / ".env"))
         merged = read_env_file(env_file) | dict(os.environ)
         port, vite_port = resolve_ports(merged)
         max_agents = resolve_max_agents(merged)
@@ -281,12 +311,8 @@ class Settings:
             baseten_budget_usd=positive_amount(merged.get("OVERSIGHT_BASETEN_BUDGET_USD")),
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
-            harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
-            history_prune_tokens=(
-                int(merged["OVERSIGHT_HISTORY_PRUNE_TOKENS"])
-                if merged.get("OVERSIGHT_HISTORY_PRUNE_TOKENS")
-                else None
-            ),
+            harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "true").lower() == "true",
+            history_prune_tokens=_history_threshold(merged.get("OVERSIGHT_HISTORY_PRUNE_TOKENS")),
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
@@ -332,10 +358,21 @@ def resolve_preview_profile(
         vite_port=vite,
         trusted_demo=not values.get("OVERSIGHT_WORKSPACE_SOURCE"),
         heartbeat_s=duration("HEARTBEAT_S", 10),
-        lease_s=duration("LEASE_S", 30),
+        lease_s=duration("LEASE_S", 600),
         lifetime_s=duration("LIFETIME_S", 900),
-        readiness_s=duration("READINESS_S", 10),
+        readiness_s=duration("READINESS_S", 30),
         memory_limit_bytes=int(values.get("OVERSIGHT_PREVIEW_MEMORY_LIMIT_BYTES", "536870912")),
+        build_memory_bytes=int(values.get("OVERSIGHT_PREVIEW_BUILD_MEMORY_BYTES", "2147483648")),
+        build_cores=int(values.get("OVERSIGHT_PREVIEW_BUILD_CORES", "2")),
+        nested_memory_bytes=int(values.get("OVERSIGHT_PREVIEW_NESTED_MEMORY_BYTES", "1073741824")),
+        nested_cores=int(values.get("OVERSIGHT_PREVIEW_NESTED_CORES", "1")),
+        node_heap_mib=int(values.get("OVERSIGHT_PREVIEW_NODE_HEAP_MIB", "1536")),
+        output_file_bytes=int(values.get("OVERSIGHT_PREVIEW_OUTPUT_FILE_BYTES", "16777216")),
+        output_total_bytes=int(values.get("OVERSIGHT_PREVIEW_OUTPUT_TOTAL_BYTES", "268435456")),
+        output_files=int(values.get("OVERSIGHT_PREVIEW_OUTPUT_FILES", "10000")),
+        cache_bytes=int(values.get("OVERSIGHT_PREVIEW_CACHE_BYTES", "2147483648")),
+        diagnostics_bytes=int(values.get("OVERSIGHT_PREVIEW_DIAGNOSTICS_BYTES", "1048576")),
+        queue_cap=int(values.get("OVERSIGHT_PREVIEW_QUEUE_CAP", "8")),
     )
 
 

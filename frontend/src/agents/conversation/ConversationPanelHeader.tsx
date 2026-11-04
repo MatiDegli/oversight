@@ -1,3 +1,4 @@
+import { ScriptedAgentLabel } from "../../teams/ScriptedAgentLabel";
 import { LeadHeaderView } from "./LeadHeaderView";
 import { presentationLook } from "../../teams/badge";
 import { costText } from "../../state";
@@ -25,6 +26,7 @@ export function ConversationPanelHeader({ header }: { header: ConversationHeader
           {header.waiting ? "Waiting" : labels[header.state]}
         </span>
       </div>
+      {header.scripted && <ScriptedAgentLabel explain />}
       <div className="mt-[14px] flex flex-wrap gap-2">
         <span className={chip}>
           {header.modelLabel}

@@ -33,7 +33,10 @@ export function usageBrowserSupport(cachePrefix = "") {
       entries.push({ url: server.resolvedUrls?.local[0] ?? "", html });
     }
     browser = await launchBrowser();
-  }, 60_000);
+    const replay = entries[1];
+    if (!replay) throw new Error("Missing replay server");
+    await warmReplay(browser, replay);
+  }, 210_000);
   afterAll(async () => {
     await browser.close();
     await Promise.all(servers.map((server) => server.close()));
@@ -70,6 +73,29 @@ export function usageBrowserSupport(cachePrefix = "") {
     return page;
   }
   return { open };
+}
+
+async function warmReplay(browser: Browser, entry: { url: string; html: string }) {
+  // Replay mounts App rather than Harness: warm its own Vite graph/dependency pass once.
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  try {
+    await page.route("**/usage", (route) => route.fulfill({ json: recorded }));
+    await page.route("**/", (route) =>
+      route.fulfill({ contentType: "text/html", body: entry.html }),
+    );
+    await page.goto(entry.url, { timeout: 60_000 });
+    await page.getByRole("button", { name: "Oversight", exact: true }).click({ timeout: 60_000 });
+    await page.waitForFunction(
+      () =>
+        (document
+          .querySelector<GraphProbeHost>('[aria-label="Repository graph"]')
+          ?.oversightGraph?.nodeCenters().length ?? 0) > 0,
+      undefined,
+      { timeout: 60_000 },
+    );
+  } finally {
+    await page.close();
+  }
 }
 
 export function required<T>(value: T | null | undefined): T {

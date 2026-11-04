@@ -209,6 +209,16 @@ def test_generation_is_sorted_portable_and_keeps_font_copyrights() -> None:
     assert "| Frontend | @playwright/test |" not in generated
 
 
+def test_committed_notices_include_current_python_runtime_inventory() -> None:
+    document = (notices.ROOT / "THIRD_PARTY_NOTICES.md").read_text()
+    for package in notices.python_packages():
+        assert f"| Python | {package.name} | {package.version} | {package.license} |" in document
+        for filename, body in package.texts:
+            assert f"### {package.name} {package.version} — {filename}\n\n```text\n{body}\n```" in (
+                document
+            )
+
+
 def test_frontend_rejects_stale_installed_lock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -231,3 +241,39 @@ def test_ambiguous_python_classifier_is_not_guessed() -> None:
     assert notices.python_license(cast(metadata.PackageMetadata, info)) == "UNKNOWN"
     info["License-Expression"] = "BSD-3-Clause"
     assert notices.python_license(cast(metadata.PackageMetadata, info)) == "BSD-3-Clause"
+
+
+@pytest.mark.parametrize(
+    ("ecosystem", "name", "version", "expression", "expected"),
+    [
+        ("Rust", "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception", True),
+        ("Python", "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception", False),
+        ("Rust", "another-crate", "0.12.16", "Apache-2.0 WITH LLVM-exception", False),
+        ("Rust", "target-lexicon", "0.12.17", "Apache-2.0 WITH LLVM-exception", False),
+        ("Rust", "target-lexicon", "0.12.16", "MIT WITH LLVM-exception", False),
+        ("Rust", "target-lexicon", "0.12.16", "Apache-2.0 WITH other-exception", False),
+        ("Rust", "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception OR GPL-3.0", False),
+    ],
+)
+def test_desktop_exception_is_exact(ecosystem, name, version, expression, expected):
+    package = notices.Package(
+        ecosystem, name, version, expression, "https://example.org", lockfile="desktop/Cargo.lock"
+    )
+    assert (
+        notices.allowed_license(
+            expression, name, version=version, ecosystem=ecosystem, lockfile="desktop/Cargo.lock"
+        )
+        is expected
+    )
+    assert bool(notices.policy_errors([package])) is not expected
+
+
+def test_desktop_exception_needs_its_lockfile_scope():
+    for lockfile in ("", "Cargo.lock", "another/Cargo.lock"):
+        assert not notices.allowed_license(
+            "Apache-2.0 WITH LLVM-exception",
+            "target-lexicon",
+            version="0.12.16",
+            ecosystem="Rust",
+            lockfile=lockfile,
+        )

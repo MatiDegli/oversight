@@ -16,7 +16,7 @@ async def test_observer_on_and_off_preserve_outcomes_and_reconcile_wall_time(tmp
         out = root / "evidence" / "results.jsonl"
         monkeypatch.setenv("OVERSIGHT_EVAL_TRACE_DIR", str(out.parent))
         factory = Scripts([script()])
-        async with live_server(live_settings(root), factory) as server:
+        async with live_server(live_settings(root, harness_pack=False), factory) as server:
             await execute(str(server.client.base_url), "fake", 1, out, [TASK], FREE, trace=enabled)
             results.append(result(out))
         paths = list(out.parent.glob("timing-*.jsonl"))

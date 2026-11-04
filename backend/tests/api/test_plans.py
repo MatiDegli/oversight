@@ -156,7 +156,7 @@ async def test_single_subtask_lifecycle_and_status_provenance(
 ) -> None:
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _p, _s: scripted_a()) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), lambda _p, _s: scripted_a()) as s,
     ):
         plan = await create(s)
         identifier = await queue(s, plan, via_start=via_start)

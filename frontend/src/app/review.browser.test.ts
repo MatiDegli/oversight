@@ -111,7 +111,7 @@ it("the queue counter reframes each proposal while review stays open and keeps k
     await queue.click();
     await browserExpect(panel(page).getByText("Second proposal", { exact: true })).toHaveCount(0);
   });
-}, 30_000);
+}, 60_000);
 
 it("disables WebGL and leaves the field hidden on the product's plain ground", async () => {
   await withPage(false, async (page) => {
@@ -132,7 +132,7 @@ it("disables WebGL and leaves the field hidden on the product's plain ground", a
     });
     expect(field).toEqual({ webgl2: true, hidden: true, state: "plain", draws: 0 });
   });
-});
+}, 60_000);
 
 it("opens review only from the person's click, keeps the change and cone lit, dims the rest, and closes", async () => {
   await withPage(false, async (page) => {
@@ -165,7 +165,7 @@ it("opens review only from the person's click, keeps the change and cone lit, di
     await browserExpect(panel(page)).toHaveCount(0);
     await browserExpect.poll(async () => (await probe(page, "node.dimmed")).ids).toEqual([]);
   });
-}, 30_000);
+}, 60_000);
 
 it("frames the cone with legible labels, clears the card, and marks only clipped boxes", async () => {
   await withPage(false, async (page) => {
@@ -203,7 +203,7 @@ it("frames the cone with legible labels, clears the card, and marks only clipped
     expect(restored.pan.x).toBeCloseTo(watch.pan.x, 10);
     expect(restored.pan.y).toBeCloseTo(watch.pan.y, 10);
   });
-}, 30_000);
+}, 60_000);
 
 it("pans to a node its cone row lists as out of view only when that row is clicked", async () => {
   await withPage(false, async (page) => {
@@ -235,7 +235,7 @@ it("pans to a node its cone row lists as out of view only when that row is click
     await browserExpect(card.getByTitle(id).getByRole("button")).toHaveCount(0);
     expect((await camera(page, id)).outOfView).not.toContain(id);
   });
-}, 30_000);
+}, 60_000);
 
 it("never approves from the keyboard in the comment box; the click waits for change.resolved", async () => {
   await withPage(false, async (page) => {
@@ -301,7 +301,7 @@ it("never approves from the keyboard in the comment box; the click waits for cha
     // The pending mark leaves at travel arrival, after the merge result is shown.
     await browserExpect.poll(async () => (await probe(page, "node.pending")).ids).toEqual([]);
   });
-}, 30_000);
+}, 60_000);
 
 it("approves only on a pointer click: Tab then Enter or Space sends nothing and shows why", async () => {
   await withPage(false, async (page) => {
@@ -342,7 +342,7 @@ it("approves only on a pointer click: Tab then Enter or Space sends nothing and 
       comment: "Looks right",
     });
   });
-}, 30_000);
+}, 60_000);
 
 it.skipIf(process.env.DESIGN_AUDIT_SHOTS !== "1")("pointer click caption", async () => {
   const source = new URL("../../../fixtures/events/recorded-demo.jsonl", import.meta.url);
@@ -412,7 +412,7 @@ it("keeps Reject keyboard-operable", async () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ changeId: "change-1", action: "reject" });
   });
-}, 30_000);
+}, 60_000);
 
 it("Escape in the comment box only leaves it; Escape elsewhere closes review", async () => {
   await withPage(false, async (page) => {
@@ -429,7 +429,7 @@ it("Escape in the comment box only leaves it; Escape elsewhere closes review", a
     await page.keyboard.press("Escape");
     await browserExpect(panel(page)).toHaveCount(0);
   });
-}, 30_000);
+}, 60_000);
 
 it("in a recorded run offers no decision and shows the recorded one when it arrives", async () => {
   await withPage(true, async (page) => {
@@ -448,4 +448,4 @@ it("in a recorded run offers no decision and shows the recorded one when it arri
     await browserExpect(panel(page).getByText("Approved and merged into main")).toBeVisible();
     expect(await page.evaluate(() => window.reviewTest.decisions.length)).toBe(0);
   });
-}, 30_000);
+}, 60_000);

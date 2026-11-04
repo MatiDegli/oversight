@@ -121,10 +121,18 @@ def reviewed_startup_report(profile: PreviewProfile, build_log: str) -> str:
         f"build {sum(c.timeout_s for c in spec.build)}s; start {spec.start.timeout_s}s; "
         f"ready {profile.readiness_s:g}s; lease {profile.lease_s:g}s; "
         f"heartbeat {profile.heartbeat_s:g}s; life {profile.lifetime_s:g}s; "
-        f"memory {profile.memory_limit_bytes}",
+        f"Python AS {profile.memory_limit_bytes}; Node heap {profile.node_heap_mib}MiB; "
+        f"build {profile.build_memory_bytes}B/{profile.build_cores} cores; "
+        f"nested {profile.nested_memory_bytes}B/{profile.nested_cores} core; "
+        f"output {profile.output_file_bytes}/{profile.output_total_bytes}B/"
+        f"{profile.output_files} files; "
+        f"cache {profile.cache_bytes}B; diagnostics {profile.diagnostics_bytes}B; "
+        f"one active/build, queue {profile.queue_cap}; aggregate delegation when available; "
+        "otherwise per-process limits only; aggregate usage is not enforced",
         NATIVE_WARNING
         if sys.platform == "win32"
-        else "Linux: execution unavailable; namespace-only tests/shop; Origin-less writes remain.",
+        else "Linux: reviewed self execution unavailable; controlled boundary wiring only; "
+        "namespace-only tests/shop; Origin-less writes remain.",
         build_log,
     )
     return serialize_preview_startup(report)
