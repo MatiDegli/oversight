@@ -2,10 +2,10 @@ name: windows advisory
 
 on:
   pull_request:
-    paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, LICENSE, THIRD_PARTY_NOTICES.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
+    paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
   push:
     branches: [main, 'desktop/**']
-    paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, LICENSE, THIRD_PARTY_NOTICES.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
+    paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
   workflow_dispatch:
 
 permissions: {}
@@ -153,9 +153,11 @@ jobs:
       OVERSIGHT_WORKSPACE_SOURCE: ""
       OVERSIGHT_AGENT_MODEL: fake
       OVERSIGHT_AGENT_MODEL_B: fake
-      CARGO_HOME: ${{ runner.temp }}/oversight-tauri-cargo
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
+      - name: Set desktop Cargo home
+        run: |
+          "CARGO_HOME=$env:RUNNER_TEMP\oversight-tauri-cargo" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

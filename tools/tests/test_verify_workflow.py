@@ -217,8 +217,7 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
 WINDOWS_PATHS = (
     "desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, "
     "docs/**, "
-    "README.md, ARCHITECTURE.md, DECISIONS.md, LICENSE, THIRD_PARTY_NOTICES.md, "
-    ".github/**, .gitattributes, .python-version, "
+    "README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, "
     "pyproject.toml, uv.lock, conftest.py, Makefile"
 )
 WINDOWS_TOOLS = (
@@ -237,6 +236,13 @@ UPLOAD = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.
 WINDOWS_NATIVE_IF = "${{ !cancelled() && steps.frontend_build.outcome == 'success' }}"
 
 
+def assert_no_job_runner_environment(jobs: dict[str, str]) -> None:
+    for name, body in jobs.items():
+        for value in mapping(mapping(body).get("env", "")).values():
+            for expression in re.findall(r"\$\{\{(.*?)\}\}", value, re.DOTALL):
+                assert not re.search(r"\brunner\b", expression, re.IGNORECASE), name
+
+
 def assert_windows_policy(text: str) -> None:
     workflow = mapping(text)
     assert set(workflow) == {"name", "on", "permissions", "jobs"}
@@ -248,6 +254,7 @@ def assert_windows_policy(text: str) -> None:
     }
     assert "secrets" not in text and "continue-on-error" not in text
     assert mapping(workflow["jobs"]).keys() == {"windows", "package"}
+    assert_no_job_runner_environment(mapping(workflow["jobs"]))
     assert_package_policy(mapping(mapping(workflow["jobs"])["package"]))
     job = mapping(mapping(workflow["jobs"])["windows"])
     assert set(job) == {
@@ -454,11 +461,32 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
     assert_windows_policy((WORKFLOWS / "windows.yml").read_text())
 
 
+@pytest.mark.parametrize("job", ["windows", "package"])
+@pytest.mark.parametrize(
+    "expression", ["${{ runner.temp }}", "${{runner['temp']}}", "${{ toJSON(runner) }}"]
+)
+def test_windows_rejects_runner_in_any_job_environment(job: str, expression: str) -> None:
+    jobs = mapping(mapping((WORKFLOWS / "windows.yml").read_text())["jobs"])
+    jobs[job] = jobs[job].replace("env:\n", f"env:\n  INVALID: {expression}\n", 1)
+    with pytest.raises(AssertionError, match=job):
+        assert_no_job_runner_environment(jobs)
+
+
+@pytest.mark.parametrize("event", ["pull_request", "push"])
+def test_windows_trigger_paths_exclude_notice_only_changes(event: str) -> None:
+    workflow = mapping((WORKFLOWS / "windows.yml").read_text())
+    trigger = mapping(mapping(workflow["on"])[event])
+    paths = trigger["paths"].removeprefix("[").removesuffix("]").split(", ")
+    assert {"LICENSE", "THIRD_PARTY_NOTICES.md"}.isdisjoint(paths)
+
+
 @pytest.mark.parametrize(
     "old,new",
     [
         ("branches: [main, 'desktop/**']", "branches: ['*']"),
         ("docs/**, ", ""),
+        ("DECISIONS.md, ", "DECISIONS.md, LICENSE, "),
+        ("DECISIONS.md, ", "DECISIONS.md, THIRD_PARTY_NOTICES.md, "),
         ("permissions: {}", "permissions: write-all"),
         ("contents: read", "contents: write"),
         ("shell: pwsh", "shell: bash"),
@@ -590,11 +618,16 @@ def assert_package_policy(job: dict[str, str]) -> None:
         "OVERSIGHT_WORKSPACE_SOURCE": '""',
         "OVERSIGHT_AGENT_MODEL": "fake",
         "OVERSIGHT_AGENT_MODEL_B": "fake",
-        "CARGO_HOME": "${{ runner.temp }}/oversight-tauri-cargo",
         "PYTHONDONTWRITEBYTECODE": '"1"',
     }
     items = steps(job["steps"])
-    assert len(items) == 11
+    assert len(items) == 12
+    assert items[0] == {
+        "name": "Set desktop Cargo home",
+        "run": '|\n"CARGO_HOME=$env:RUNNER_TEMP\\oversight-tauri-cargo" '
+        "| Out-File -Append -Encoding utf8 $env:GITHUB_ENV",
+    }
+    items = items[1:]
     assert items[:4] == [
         {"uses": ACTIONS["actions/checkout"], "with": "persist-credentials: false"},
         {"uses": ACTIONS["astral-sh/setup-uv"], "with": 'version: "0.11.21"'},
@@ -637,6 +670,7 @@ def assert_package_policy(job: dict[str, str]) -> None:
 @pytest.mark.parametrize(
     "old,new",
     [
+        ("$env:RUNNER_TEMP\\oversight-tauri-cargo", "$env:USERPROFILE\\.cargo"),
         ('version: "0.11.21"', 'version: "latest"'),
         ('node-version: "24.11.0"', 'node-version: "24"'),
         ("@tauri-apps/cli@2.12.0", "@tauri-apps/cli@latest"),
