@@ -18,7 +18,9 @@ it.each([".conversation-entries", ".chat-change-card", ".conversation-composer"]
     try {
       await selectScene(session, "coder");
       await check(session.page.locator(selector)).toBeVisible();
-      await session.page.locator(selector).evaluate((node) => node.remove());
+      await session.page.locator(selector).evaluate((node) => {
+        node.remove();
+      });
       await expect(capture(session, "coder")).rejects.toThrow();
     } finally {
       await session.close();
