@@ -5021,3 +5021,18 @@ manager keeps its existing clock. No reader substitutes the current wall time fo
 
 Residual: after a backward step, event times run ahead of the wall clock by at most that step
 until the wall clock catches up. They are logical event times during that interval.
+## 2026-11-04 — Preview recovery requires the departing page's mark
+
+A live preview owner persists its minimal private record in per-tab sessionStorage. Pagehide
+disposal marks that record before the unchanged best-effort keepalive Stop. Only a marked
+record can recover the same preview; successful recovery rewrites it without the mark.
+A duplicate tab copying an unmarked record stays a read-only observer: it never uses the
+copied token for recovery, renewal or Stop, and leaves that record untouched. This deliberately
+trades crash recovery for single-tab authority: without pagehide, lease expiry is the fallback.
+Absent or older applied candidates keep recovery waiting; a newer revision or a different
+change/head at the same or higher revision clears a superseded marked record without I/O or
+slot intent. Storage refusal leaves memory ownership and best-effort Stop usable.
+
+Reason: sessionStorage can be copied by Duplicate tab, so possession of the token alone cannot
+establish that the previous owning page departed. No token enters localStorage, URLs, events
+or logs, and recovery still requires the current applied candidate and a valid server lease.

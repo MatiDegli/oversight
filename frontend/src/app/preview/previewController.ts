@@ -44,6 +44,7 @@ class Controller implements PreviewController {
   #saved: PreviewOwnership | null = null;
   #recovery: Promise<void> | null = null;
   #recoveryChecked = false;
+  #copiedOwner = false;
   #recovered = false;
   #resume = false;
   #token: string | null = null;
@@ -143,6 +144,14 @@ class Controller implements PreviewController {
     }
     this.#saved = null;
   }
+  #save(record: PreviewOwnership) {
+    this.#saved = record;
+    try {
+      this.#ownership?.save(record);
+    } catch {
+      /* Memory ownership remains valid. */
+    }
+  }
   #discardRecovery(status?: PreviewStatus) {
     this.#clearSaved();
     this.#cancelRenewal();
@@ -166,11 +175,17 @@ class Controller implements PreviewController {
       return Promise.resolve();
     this.#recoveryChecked = true;
     try {
-      this.#saved = this.#ownership.load(this.#identity);
+      const record = this.#ownership.load(this.#identity);
+      // sessionStorage can be copied by Duplicate tab. Only a departing owner marks it.
+      if (!record) return Promise.resolve();
+      if (!record.unloaded) {
+        this.#copiedOwner = !this.#view.status || !confirmed(this.#view.status);
+        return Promise.resolve();
+      }
+      this.#saved = record;
     } catch {
       return Promise.resolve();
     }
-    if (!this.#saved) return Promise.resolve();
     this.#cancelStart = false;
     const flight = this.#recover(this.#saved, getCandidate).finally(() => {
       if (this.#recovery === flight) this.#recovery = null;
@@ -211,7 +226,14 @@ class Controller implements PreviewController {
       await this.#renew();
       if (this.#current(epoch)) {
         if (!sameOwnershipCandidate(record.candidate, getCandidate())) this.#discardRecovery();
-        else this.#publish({});
+        else {
+          if (this.#token && this.#saved) {
+            const saved = { ...this.#saved };
+            delete saved.unloaded;
+            this.#save(saved);
+          }
+          this.#publish({});
+        }
       }
     } catch {
       if (this.#current(epoch)) this.#discardRecovery(this.#view.status ?? undefined);
@@ -263,6 +285,7 @@ class Controller implements PreviewController {
     if (this.#token) {
       if (this.#matches(status)) this.#accept(status);
     } else if (!this.#flight && status.run_id === this.#identity.run) {
+      if (confirmed(status)) this.#copiedOwner = false;
       // After the start deadline, the run's single slot can also prove that a
       // different preview holds it, or that the run's preview has ended.
       if (
@@ -374,10 +397,11 @@ class Controller implements PreviewController {
     const observed = this.#view.status;
     if (
       !this.#token &&
-      observed &&
-      (active(observed) ||
-        observed.state === "stopping" ||
-        observed.reason === "cleanup_unverified")
+      (this.#copiedOwner ||
+        (observed &&
+          (active(observed) ||
+            observed.state === "stopping" ||
+            observed.reason === "cleanup_unverified")))
     ) {
       this.#publish({ visible: true });
       return Promise.resolve();
@@ -445,17 +469,12 @@ class Controller implements PreviewController {
         ...observed,
         ...(candidate.change_id && { change_id: candidate.change_id }),
       };
-      this.#saved = {
+      this.#save({
         identity: { ...this.#identity },
         candidate: { ...this.#candidate },
         preview_id: this.#id,
         lease_token: this.#token,
-      };
-      try {
-        this.#ownership?.save(this.#saved);
-      } catch {
-        /* Memory ownership remains valid. */
-      }
+      });
       this.#publish({ notice: null });
       await this.refresh();
       this.#publish({ pending: false });
@@ -572,6 +591,7 @@ class Controller implements PreviewController {
     if (identity.run === this.#identity.run && identity.source === this.#identity.source) return;
     const runChanged = identity.run !== this.#identity.run;
     this.#identity = { ...identity };
+    this.#copiedOwner = false;
     ++this.#epoch;
     if (!this.#token) this.#clearSaved();
     this.#recovery = null;
@@ -596,6 +616,7 @@ class Controller implements PreviewController {
     for (const request of this.#requests) request.abort();
     const id = this.#id,
       token = this.#token;
+    if (id && token && this.#saved) this.#save({ ...this.#saved, unloaded: true });
     this.#token = null;
     this.#listeners.clear();
     if (id && token && !this.#closing && !this.#pendingStops.has(id))

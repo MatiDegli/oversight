@@ -453,9 +453,13 @@ membership and the current candidate under admission locks. The advertised enum,
 and model-facing inventory stay unchanged; no model suggestions, cards or frontend production mounting
 are released.
 
-Only the initiating tab keeps the token, in memory. An observer sees “Preview in use in another
-tab” with no frame, renewal or takeover. Close dismisses only that observer's panel. Reload loses
-ownership; absent successful owner cleanup, the server expires the lease. Replacement requires
+The private token is kept in memory and per-tab sessionStorage. Pagehide disposal marks the
+saved record; after reload, only a marked record can recover the same preview, and successful recovery
+removes its mark. Invalid or cross-run records are cleared. Marked records are also cleared for a
+superseded candidate, a terminal state or failed recovery. An unmarked copy from Duplicate tab stays
+read-only and leaves its record untouched. An observer sees “Preview in use in another
+tab” with no frame, renewal or takeover. Close dismisses only that observer's panel.
+Without pagehide, ownership is not recovered and lease expiry remains the fallback. Replacement requires
 authenticated Stop and verified drain before reading the new candidate or requesting revision/Git.
 Uncertain stop retains cleanup ownership and blocks replacement. The sandbox is exactly
 `allow-forms`, referrer policy `no-referrer`. Static/Vite `frame-src` lists only exact

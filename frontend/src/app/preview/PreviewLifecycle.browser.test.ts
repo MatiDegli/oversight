@@ -77,6 +77,7 @@ it.each(matrix)(
       try {
         expect(await ownershipPresent(observer.page)).toBe(false);
         const calls = { start: support.count("start"), stop: support.count("stop") };
+        const unloads = support.unloadDispatches().length;
         await arrivalGuard(observer);
         await option(observer).click();
         await check(
@@ -96,9 +97,15 @@ it.each(matrix)(
         ).toBeVisible();
         expect(support.sourceMutations(observer.page)).toEqual([]);
         expect({ start: support.count("start"), stop: support.count("stop") }).toEqual(calls);
-        await observer.page.close();
+        await observer.page.reload();
+        await support.lead(observer.page);
+        await check.poll(() => support.pagehideCount(observer.page)).toBe(1);
+        await check(observer.page.locator(".chat-preview-slot, iframe")).toHaveCount(0);
+        expect(support.unloadDispatches()).toHaveLength(unloads);
+        expect(support.sourceMutations(observer.page)).toEqual([]);
         expect({ start: support.count("start"), stop: support.count("stop") }).toEqual(calls);
         expect(support.state()).toBe("ready");
+        await frame(session);
       } finally {
         if (!observer.page.isClosed()) await observer.page.close();
       }
@@ -165,3 +172,63 @@ it.each(matrix)(
   },
   60_000,
 );
+
+it("a duplicate copying an unmarked owner record stays an observer and sends nothing", async () => {
+  support.reset();
+  const session = await support.open({ width: 1920, height: 1080 }, "dark");
+  try {
+    await support.lead(session.page);
+    await option(session).click();
+    await support.ready();
+    await frame(session);
+    const id = support.previewId();
+    const duplicate = await support.observer(session, true);
+    try {
+      expect(await ownershipPresent(duplicate.page)).toBe(true);
+      const unmarked = () =>
+        duplicate.page.evaluate(() => {
+          const key = Object.keys(sessionStorage).find((key) =>
+            key.startsWith("oversight.preview.owner:"),
+          );
+          return (
+            !!key &&
+            !(JSON.parse(sessionStorage.getItem(key) ?? "{}") as { unloaded?: boolean }).unloaded
+          );
+        });
+      expect(await unmarked()).toBe(true);
+      const calls = { start: support.count("start"), stop: support.count("stop") };
+      const unloads = support.unloadDispatches().length;
+      await option(duplicate).click();
+      await check(
+        duplicate.page.getByText("Preview in use in another tab", { exact: true }),
+      ).toBeVisible();
+      await check(duplicate.page.locator("iframe")).toHaveCount(0);
+      await duplicate.page.clock.fastForward(20_001);
+      expect(support.sourceDispatches(duplicate.page)).toEqual([]);
+      await duplicate.page.reload();
+      await support.lead(duplicate.page);
+      await check.poll(() => support.pagehideCount(duplicate.page)).toBe(1);
+      expect(await unmarked()).toBe(true);
+      await option(duplicate).click();
+      await check(
+        duplicate.page.getByText("Preview in use in another tab", { exact: true }),
+      ).toBeVisible();
+      await check(duplicate.page.locator("iframe")).toHaveCount(0);
+      expect(support.sourceDispatches(duplicate.page)).toEqual([]);
+      expect(support.unloadDispatches()).toHaveLength(unloads);
+      expect({ start: support.count("start"), stop: support.count("stop") }).toEqual(calls);
+      expect(support.state()).toBe("ready");
+      expect(support.previewId()).toBe(id);
+      await frame(session);
+      expect(duplicate.pageErrors).toEqual([]);
+      expect(session.pageErrors).toEqual([]);
+      expect(support.invalidRequests()).toEqual([]);
+    } finally {
+      await duplicate.page.close();
+    }
+    await session.page.locator(".preview-panel button").click();
+    expect(support.state()).toBe("stopped");
+  } finally {
+    await session.context.close();
+  }
+}, 60_000);
