@@ -4791,6 +4791,13 @@ determine scripted actions.” This covers outer and nested instances without ch
 Reason: a scripted demo must remain distinguishable from Muse while preserving team identity.
 Follow-up: label Oversight cards and rail, graph badges, map captions, moving markers, review,
 live diff, usage, dock, preview option and panel, focus tabs and lead reply attributions.
+## 2026-11-03 — Contracts 1.21.0 — approved by the maintainer
+
+Slot is now a strict, nonempty ASCII uppercase string matching `^[A-Z]+$`, without a product maximum.
+Contracts advance to 1.21.0; 1.20.0 stays reserved for merge rehearsal.
+Seats name capacity, not agent identity, and are ordered by position: A..Z, then AA, AB, ...
+Recorded A–F logs remain valid without modification.
+Runtime admission stays at 1–6 agents, default 4; limits widen in the backend front.
 
 ## Mask old tool outputs by default (2026-11-03)
 

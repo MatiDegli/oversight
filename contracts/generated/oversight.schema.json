@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.19.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.21.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -6571,14 +6571,8 @@
       "type": "object"
     },
     "Slot": {
-      "enum": [
-        "A",
-        "B",
-        "C",
-        "D",
-        "E",
-        "F"
-      ],
+      "minLength": 1,
+      "pattern": "^[A-Z]+$",
       "type": "string"
     },
     "SlotInfo": {
