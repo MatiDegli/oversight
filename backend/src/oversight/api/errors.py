@@ -1,6 +1,6 @@
 """The single error format of section 4.7: `{"error": {"code", "message"}}`, for every error."""
 
-from typing import cast
+from typing import cast, get_args
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from oversight.api.preview_policy import is_preview
 from oversight_contracts.commands import (
     ERROR_STATUS,
+    EditableSettingName,
     ErrorCode,
     ErrorDetail,
     ErrorResponse,
@@ -53,6 +54,18 @@ def install_error_handlers(app: FastAPI) -> None:
             return private(
                 request, error_response("invalid_request", "Live preview request is invalid.")
             )
+        if request.url.path == "/settings":
+            names = set(get_args(EditableSettingName.__value__))
+            invalid = sorted(
+                {
+                    str(part)
+                    for problem in error.errors()
+                    for part in problem["loc"]
+                    if part in names
+                }
+            )
+            message = "Invalid settings" + (": " + ", ".join(invalid) if invalid else " request")
+            return error_response("invalid_request", message + ".")
         body: object = error.body
         problems: list[str] = []
         for problem in error.errors():

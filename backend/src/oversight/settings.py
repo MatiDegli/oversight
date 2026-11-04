@@ -79,6 +79,10 @@ def read_env_file(path: Path) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class Settings:
+    env_file: Path | None = None
+    """The selected configuration path; direct no-file constructors leave editing unavailable."""
+    loaded_file_values: dict[str, str] = field(default_factory=dict[str, str], repr=False)
+    """Startup file snapshot, held in memory only; never serialized or logged."""
     host: str = "127.0.0.1"
     port: int = 8710
     vite_port: int | None = None
@@ -247,12 +251,27 @@ class Settings:
         """The process environment wins over the .env file."""
         if env_file is None:
             env_file = Path(os.environ.get("OVERSIGHT_ENV_FILE", REPO_ROOT / ".env"))
-        merged = read_env_file(env_file) | dict(os.environ)
+        env_file = env_file.resolve()
+        file_values = read_env_file(env_file)
+        return cls.from_values(
+            file_values | dict(os.environ), env_file=env_file, loaded_file_values=file_values
+        )
+
+    @classmethod
+    def from_values(
+        cls,
+        merged: Mapping[str, str],
+        *,
+        env_file: Path | None = None,
+        loaded_file_values: dict[str, str] | None = None,
+    ) -> "Settings":
+        """Parse a candidate without reading a file or consulting the process environment."""
         port, vite_port = resolve_ports(merged)
         max_agents = resolve_max_agents(merged)
         models, scripts, slot_problems = resolve_slot_overrides(merged, max_agents)
         for name in (
             "OVERSIGHT_BUDGET_USD",
+            "OVERSIGHT_BASETEN_BUDGET_USD",
             "MUSE_SPARK_INPUT_USD_PER_M",
             "MUSE_SPARK_OUTPUT_USD_PER_M",
             "BASETEN_INPUT_USD_PER_M",
@@ -261,6 +280,8 @@ class Settings:
             if merged.get(name) and positive_amount(merged[name]) is None:
                 slot_problems[name] = "invalid"
         return cls(
+            env_file=env_file,
+            loaded_file_values=loaded_file_values or {},
             preview_profile=resolve_preview_profile(merged, port, vite_port),
             preview_app=merged.get("OVERSIGHT_PREVIEW_APP"),
             preview_node=Path(merged["OVERSIGHT_PREVIEW_NODE"])
