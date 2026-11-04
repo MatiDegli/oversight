@@ -5238,3 +5238,32 @@ Refusals and the persistent restart instruction sit beside the affected section'
 visible after either section's save at 1280×800. On phones the decisions chip retains its number
 beside the Settings gear, omitting the word Decisions visually while retaining its accessible
 label. Scripted API, state and browser regressions cover these cases; no paid call is needed.
+
+
+## 2026-11-04 — Apply spending settings without a restart
+
+The maintainer decided that saving budgets, brake share and token prices applies to the next
+run without restarting Oversight or stopping active agents. This supersedes the restart-only
+behavior for these seven editable names: OVERSIGHT_BUDGET_USD, OVERSIGHT_SPEND_BRAKE_PERCENT,
+MUSE_SPARK_INPUT_USD_PER_M, MUSE_SPARK_OUTPUT_USD_PER_M, OVERSIGHT_BASETEN_BUDGET_USD,
+BASETEN_INPUT_USD_PER_M and BASETEN_OUTPUT_USD_PER_M. Keys, the agent cap and cross-review
+remain restart-only; clients, redaction and slot capacity retain their startup dependencies.
+
+After an atomic save, the saved live values use the same Settings parser as startup, with
+process-environment precedence. Only the seven live fields and their setting_problems entries
+replace the current snapshot. Unsent invalid file values fail closed as at startup: an invalid
+share refuses metered starts and revisions, decision admission reports budget_unconfigured,
+and invalid required amounts or prices make setup not_configured. Invalid submitted values
+still reject the patch without writing. Invalid restart-only values cannot block a live update.
+
+One copied Settings snapshot is swapped into LiveRun and app.state.settings under the shared
+synchronous start/revision admission lock, without yielding between readers. Health, setup,
+rules spending evidence, new accounting and each Baseten decision allowance check read the
+current snapshot. An admitted run or revision retains its budget, share and prices across a
+save, including while awaiting its worktree or revision resolution; overlapping work shares
+the spending total. Historical run.started events remain unchanged.
+
+restart_required compares only restart-only editable values against the startup file snapshot;
+apply retains its existing desktop_reload or server_restart meaning. Replay remains read-only.
+The success line for a live-only limits save says “Saved. Applies to the next run.” Contracts
+remain unchanged: SettingsView.restart_required and apply already express this distinction.
