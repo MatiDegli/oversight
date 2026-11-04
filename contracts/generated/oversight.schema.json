@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.21.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.22.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -2168,6 +2168,68 @@
         "imports",
         "calls",
         "inherits"
+      ],
+      "type": "string"
+    },
+    "EditableSetting": {
+      "additionalProperties": false,
+      "description": "File configuration state; secret values are always withheld.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/EditableSettingName"
+        },
+        "kind": {
+          "enum": [
+            "secret",
+            "number",
+            "boolean"
+          ],
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "set",
+            "missing",
+            "invalid"
+          ],
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "overridden": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "state",
+        "value",
+        "overridden"
+      ],
+      "title": "EditableSetting",
+      "type": "object"
+    },
+    "EditableSettingName": {
+      "enum": [
+        "META_API_KEY",
+        "BASETEN_API_KEY",
+        "OVERSIGHT_BUDGET_USD",
+        "MUSE_SPARK_INPUT_USD_PER_M",
+        "MUSE_SPARK_OUTPUT_USD_PER_M",
+        "OVERSIGHT_BASETEN_BUDGET_USD",
+        "BASETEN_INPUT_USD_PER_M",
+        "BASETEN_OUTPUT_USD_PER_M",
+        "OVERSIGHT_CROSS_REVIEW",
+        "OVERSIGHT_MAX_AGENTS"
       ],
       "type": "string"
     },
@@ -6520,6 +6582,35 @@
       ],
       "type": "string"
     },
+    "SettingsView": {
+      "additionalProperties": false,
+      "description": "200 from GET/PUT /settings; saved values apply on the next start.",
+      "properties": {
+        "settings": {
+          "items": {
+            "$ref": "#/$defs/EditableSetting"
+          },
+          "type": "array"
+        },
+        "restart_required": {
+          "type": "boolean"
+        },
+        "apply": {
+          "enum": [
+            "desktop_reload",
+            "server_restart"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "settings",
+        "restart_required",
+        "apply"
+      ],
+      "title": "SettingsView",
+      "type": "object"
+    },
     "ShapeFact": {
       "additionalProperties": false,
       "description": "One neutral structural observation, never an automatic size gate.",
@@ -7292,6 +7383,27 @@
         "subtasks"
       ],
       "title": "UpdatePlan",
+      "type": "object"
+    },
+    "UpdateSettings": {
+      "additionalProperties": false,
+      "description": "Edit only supplied file values; an empty string clears a value.",
+      "properties": {
+        "values": {
+          "additionalProperties": {
+            "maxLength": 512,
+            "type": "string"
+          },
+          "propertyNames": {
+            "$ref": "#/$defs/EditableSettingName"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "values"
+      ],
+      "title": "UpdateSettings",
       "type": "object"
     },
     "UsageActor": {

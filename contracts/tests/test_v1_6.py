@@ -225,6 +225,10 @@ _APPROVED_ATTACHMENTS = {
     "PreviewTokenRequest",
     "PreviewStatus",
     "PreviewDetails",
+    "EditableSettingName",
+    "EditableSetting",
+    "SettingsView",
+    "UpdateSettings",
     "PreviewStatusEvent",
 }
 

@@ -4,7 +4,7 @@ A 202 means only that a command was accepted; its results arrive as events. Requ
 omit their optional keys; responses always carry every key.
 """
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, NonNegativeInt, PositiveInt, model_validator
 
@@ -171,6 +171,50 @@ type SettingName = Literal[
     "MUSE_SPARK_INPUT_USD_PER_M",
     "MUSE_SPARK_OUTPUT_USD_PER_M",
 ]
+
+
+type EditableSettingName = Literal[
+    "META_API_KEY",
+    "BASETEN_API_KEY",
+    "OVERSIGHT_BUDGET_USD",
+    "MUSE_SPARK_INPUT_USD_PER_M",
+    "MUSE_SPARK_OUTPUT_USD_PER_M",
+    "OVERSIGHT_BASETEN_BUDGET_USD",
+    "BASETEN_INPUT_USD_PER_M",
+    "BASETEN_OUTPUT_USD_PER_M",
+    "OVERSIGHT_CROSS_REVIEW",
+    "OVERSIGHT_MAX_AGENTS",
+]
+
+
+class EditableSetting(ContractModel):
+    """File configuration state; secret values are always withheld."""
+
+    name: EditableSettingName
+    kind: Literal["secret", "number", "boolean"]
+    state: Literal["set", "missing", "invalid"]
+    value: str | None
+    overridden: bool
+
+    @model_validator(mode="after")
+    def withhold_secret(self) -> Self:
+        if self.kind == "secret" and self.value is not None:
+            raise ValueError("secret values must be withheld")
+        return self
+
+
+class SettingsView(ContractModel):
+    """200 from GET/PUT /settings; saved values apply on the next start."""
+
+    settings: list[EditableSetting]
+    restart_required: bool
+    apply: Literal["desktop_reload", "server_restart"]
+
+
+class UpdateSettings(ContractModel):
+    """Edit only supplied file values; an empty string clears a value."""
+
+    values: dict[EditableSettingName, Annotated[str, Field(max_length=512)]]
 
 
 class MissingSetting(ContractModel):

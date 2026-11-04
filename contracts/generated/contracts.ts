@@ -42,6 +42,17 @@ export type PossibleReason =
 export type FileStatus = "added" | "modified" | "deleted";
 export type RunId = string;
 export type ReviewSeverity = "BLOCKING" | "SHOULD-FIX" | "NIT";
+export type EditableSettingName =
+  | "META_API_KEY"
+  | "BASETEN_API_KEY"
+  | "OVERSIGHT_BUDGET_USD"
+  | "MUSE_SPARK_INPUT_USD_PER_M"
+  | "MUSE_SPARK_OUTPUT_USD_PER_M"
+  | "OVERSIGHT_BASETEN_BUDGET_USD"
+  | "BASETEN_INPUT_USD_PER_M"
+  | "BASETEN_OUTPUT_USD_PER_M"
+  | "OVERSIGHT_CROSS_REVIEW"
+  | "OVERSIGHT_MAX_AGENTS";
 export type ErrorCode =
   | "not_found"
   | "wrong_state"
@@ -1561,6 +1572,16 @@ export interface DictateTask {
   language?: NonEmptyText | null;
 }
 /**
+ * File configuration state; secret values are always withheld.
+ */
+export interface EditableSetting {
+  name: EditableSettingName;
+  kind: "secret" | "number" | "boolean";
+  state: "set" | "missing" | "invalid";
+  value: string | null;
+  overridden: boolean;
+}
+/**
  * Queue work without starting it immediately.
  */
 export interface EnqueueTask {
@@ -2576,6 +2597,14 @@ export interface SetMergeMode {
   revision: number;
 }
 /**
+ * 200 from GET/PUT /settings; saved values apply on the next start.
+ */
+export interface SettingsView {
+  settings: EditableSetting[];
+  restart_required: boolean;
+  apply: "desktop_reload" | "server_restart";
+}
+/**
  * `POST /agents`.
  */
 export interface StartAgent {
@@ -2700,6 +2729,14 @@ export interface UpdatePlan {
   revision: number;
   graph_version: NonEmptyText;
   subtasks: SubtaskDraft[];
+}
+/**
+ * Edit only supplied file values; an empty string clears a value.
+ */
+export interface UpdateSettings {
+  values: {
+    [k: string]: string;
+  };
 }
 /**
  * One actor's observed working time, never fixed time buckets.
@@ -2875,4 +2912,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.21.0";
+export const CONTRACT_VERSION = "1.22.0";
