@@ -5003,3 +5003,21 @@ refuses original-tree reads, secret paths and snapshot imports. Returned paths a
 again through Tree; external definitions expose only module names. History treats the tool
 as a read, and nested coder admission follows the pack. No shell tool, scratchpad or language
 server is authorized. Existing frontend fallbacks display its steps without a UI change.
+
+## Per-store event timestamps never go back (2026-11-04)
+
+The WSL wall clock stepped backwards by 1,428 ms in a committed live run. A backward
+step between a revision's receipt and the person's resolution can make its recorded
+waiting interval unknown, even though time passed. Correct the store's timestamp source.
+
+Each `EventStore` without an injected clock creates a fresh `EventClock`. Its first call
+uses the wall clock; later calls return `max(previous + monotonic elapsed, wall now)`,
+with elapsed measured since the previous call. Results are timezone-aware UTC. Time
+advances through backward wall steps and catches up on forward steps or after suspend.
+
+Contracts, the faithful recorded-time fold, explicit replay `ts`, injected clocks and
+payload times are unchanged. Replay keeps its recorded timestamps, and the change
+manager keeps its existing clock. No reader substitutes the current wall time for `ts`.
+
+Residual: after a backward step, event times run ahead of the wall clock by at most that step
+until the wall clock catches up. They are logical event times during that interval.

@@ -1,7 +1,8 @@
 """The injectable clock behind every event's `ts` (docs/proposal.md, rule 7)."""
 
+import time
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 type Clock = Callable[[], datetime]
 """Returns the current time; it must be timezone-aware."""
@@ -9,6 +10,33 @@ type Clock = Callable[[], datetime]
 
 def system_clock() -> datetime:
     return datetime.now(UTC)
+
+
+class EventClock:
+    """One store's UTC clock: advance by monotonic elapsed time, catching up to wall time."""
+
+    def __init__(
+        self,
+        wall_clock: Clock = system_clock,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._wall_clock = wall_clock
+        self._monotonic = monotonic
+        self._previous: datetime | None = None
+        self._previous_monotonic = 0.0
+
+    def __call__(self) -> datetime:
+        monotonic_now = self._monotonic()
+        wall_now = self._wall_clock()
+        if wall_now.tzinfo is None or wall_now.utcoffset() is None:
+            raise ValueError("the clock must return a timezone-aware datetime")
+        moment = wall_now.astimezone(UTC)
+        if self._previous is not None:
+            elapsed = timedelta(seconds=monotonic_now - self._previous_monotonic)
+            moment = max(self._previous + elapsed, moment)
+        self._previous = moment
+        self._previous_monotonic = monotonic_now
+        return moment
 
 
 def format_ts(moment: datetime) -> str:
