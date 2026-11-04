@@ -4,6 +4,7 @@
 //! adapter must establish ownership before asking readiness to admit a window.
 
 pub mod health;
+pub mod installed;
 pub mod launch;
 pub mod lifecycle;
 
