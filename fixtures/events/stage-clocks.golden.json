@@ -1,0 +1,7279 @@
+[
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 1,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 2,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 3,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 4,
+    "stages": {
+      "agent_work": {
+        "ms": 46,
+        "known_ms": 46,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 5,
+    "stages": {
+      "agent_work": {
+        "ms": 67,
+        "known_ms": 67,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 6,
+    "stages": {
+      "agent_work": {
+        "ms": 77,
+        "known_ms": 77,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 7,
+    "stages": {
+      "agent_work": {
+        "ms": 1560,
+        "known_ms": 1560,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 8,
+    "stages": {
+      "agent_work": {
+        "ms": 1562,
+        "known_ms": 1562,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 9,
+    "stages": {
+      "agent_work": {
+        "ms": 2131,
+        "known_ms": 2131,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 10,
+    "stages": {
+      "agent_work": {
+        "ms": 2132,
+        "known_ms": 2132,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 11,
+    "stages": {
+      "agent_work": {
+        "ms": 2455,
+        "known_ms": 2455,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 12,
+    "stages": {
+      "agent_work": {
+        "ms": 2456,
+        "known_ms": 2456,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 13,
+    "stages": {
+      "agent_work": {
+        "ms": 2456,
+        "known_ms": 2456,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 14,
+    "stages": {
+      "agent_work": {
+        "ms": 2458,
+        "known_ms": 2458,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 15,
+    "stages": {
+      "agent_work": {
+        "ms": 2458,
+        "known_ms": 2458,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 16,
+    "stages": {
+      "agent_work": {
+        "ms": 3425,
+        "known_ms": 3425,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 17,
+    "stages": {
+      "agent_work": {
+        "ms": 3426,
+        "known_ms": 3426,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 18,
+    "stages": {
+      "agent_work": {
+        "ms": 3426,
+        "known_ms": 3426,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 19,
+    "stages": {
+      "agent_work": {
+        "ms": 4130,
+        "known_ms": 4130,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 20,
+    "stages": {
+      "agent_work": {
+        "ms": 4131,
+        "known_ms": 4131,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 21,
+    "stages": {
+      "agent_work": {
+        "ms": 4132,
+        "known_ms": 4132,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 22,
+    "stages": {
+      "agent_work": {
+        "ms": 4133,
+        "known_ms": 4133,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 23,
+    "stages": {
+      "agent_work": {
+        "ms": 4133,
+        "known_ms": 4133,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 24,
+    "stages": {
+      "agent_work": {
+        "ms": 4497,
+        "known_ms": 4497,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 25,
+    "stages": {
+      "agent_work": {
+        "ms": 4505,
+        "known_ms": 4505,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 26,
+    "stages": {
+      "agent_work": {
+        "ms": 4505,
+        "known_ms": 4505,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 27,
+    "stages": {
+      "agent_work": {
+        "ms": 4505,
+        "known_ms": 4505,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 28,
+    "stages": {
+      "agent_work": {
+        "ms": 5759,
+        "known_ms": 5759,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 29,
+    "stages": {
+      "agent_work": {
+        "ms": 5768,
+        "known_ms": 5768,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 30,
+    "stages": {
+      "agent_work": {
+        "ms": 5768,
+        "known_ms": 5768,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 31,
+    "stages": {
+      "agent_work": {
+        "ms": 5769,
+        "known_ms": 5769,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 32,
+    "stages": {
+      "agent_work": {
+        "ms": 6316,
+        "known_ms": 6316,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 33,
+    "stages": {
+      "agent_work": {
+        "ms": 6324,
+        "known_ms": 6324,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 34,
+    "stages": {
+      "agent_work": {
+        "ms": 6324,
+        "known_ms": 6324,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 35,
+    "stages": {
+      "agent_work": {
+        "ms": 6325,
+        "known_ms": 6325,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 36,
+    "stages": {
+      "agent_work": {
+        "ms": 6804,
+        "known_ms": 6804,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 37,
+    "stages": {
+      "agent_work": {
+        "ms": 7065,
+        "known_ms": 7065,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 38,
+    "stages": {
+      "agent_work": {
+        "ms": 7754,
+        "known_ms": 7754,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 39,
+    "stages": {
+      "agent_work": {
+        "ms": 8666,
+        "known_ms": 8666,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 40,
+    "stages": {
+      "agent_work": {
+        "ms": 8673,
+        "known_ms": 8673,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 41,
+    "stages": {
+      "agent_work": {
+        "ms": 8674,
+        "known_ms": 8674,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 42,
+    "stages": {
+      "agent_work": {
+        "ms": 8674,
+        "known_ms": 8674,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 43,
+    "stages": {
+      "agent_work": {
+        "ms": 8834,
+        "known_ms": 8834,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 44,
+    "stages": {
+      "agent_work": {
+        "ms": 8835,
+        "known_ms": 8835,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 45,
+    "stages": {
+      "agent_work": {
+        "ms": 8835,
+        "known_ms": 8835,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 46,
+    "stages": {
+      "agent_work": {
+        "ms": 8837,
+        "known_ms": 8837,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 47,
+    "stages": {
+      "agent_work": {
+        "ms": 8837,
+        "known_ms": 8837,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 48,
+    "stages": {
+      "agent_work": {
+        "ms": 9912,
+        "known_ms": 9912,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 49,
+    "stages": {
+      "agent_work": {
+        "ms": 10150,
+        "known_ms": 10150,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 50,
+    "stages": {
+      "agent_work": {
+        "ms": 11273,
+        "known_ms": 11273,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 51,
+    "stages": {
+      "agent_work": {
+        "ms": 11281,
+        "known_ms": 11281,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 52,
+    "stages": {
+      "agent_work": {
+        "ms": 11281,
+        "known_ms": 11281,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 53,
+    "stages": {
+      "agent_work": {
+        "ms": 11282,
+        "known_ms": 11282,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 54,
+    "stages": {
+      "agent_work": {
+        "ms": 11318,
+        "known_ms": 11318,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 55,
+    "stages": {
+      "agent_work": {
+        "ms": 11318,
+        "known_ms": 11318,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 56,
+    "stages": {
+      "agent_work": {
+        "ms": 11592,
+        "known_ms": 11592,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 57,
+    "stages": {
+      "agent_work": {
+        "ms": 11592,
+        "known_ms": 11592,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 58,
+    "stages": {
+      "agent_work": {
+        "ms": 19598,
+        "known_ms": 19598,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 59,
+    "stages": {
+      "agent_work": {
+        "ms": 19839,
+        "known_ms": 19839,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 60,
+    "stages": {
+      "agent_work": {
+        "ms": 21213,
+        "known_ms": 21213,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 61,
+    "stages": {
+      "agent_work": {
+        "ms": 21214,
+        "known_ms": 21214,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 62,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 63,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 64,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 64."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 65,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 64."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 66,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 64."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 67,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 64."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 68,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 64."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-1",
+    "n": 69,
+    "stages": {
+      "agent_work": {
+        "ms": 21457,
+        "known_ms": 21457,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 64."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 1,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 2,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 3,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 4,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 5,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 6,
+    "stages": {
+      "agent_work": {
+        "ms": 10,
+        "known_ms": 10,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 7,
+    "stages": {
+      "agent_work": {
+        "ms": 1493,
+        "known_ms": 1493,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 8,
+    "stages": {
+      "agent_work": {
+        "ms": 1495,
+        "known_ms": 1495,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 9,
+    "stages": {
+      "agent_work": {
+        "ms": 2064,
+        "known_ms": 2064,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 10,
+    "stages": {
+      "agent_work": {
+        "ms": 2065,
+        "known_ms": 2065,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 11,
+    "stages": {
+      "agent_work": {
+        "ms": 2388,
+        "known_ms": 2388,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 12,
+    "stages": {
+      "agent_work": {
+        "ms": 2389,
+        "known_ms": 2389,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 13,
+    "stages": {
+      "agent_work": {
+        "ms": 2389,
+        "known_ms": 2389,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 14,
+    "stages": {
+      "agent_work": {
+        "ms": 2391,
+        "known_ms": 2391,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 15,
+    "stages": {
+      "agent_work": {
+        "ms": 2391,
+        "known_ms": 2391,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 16,
+    "stages": {
+      "agent_work": {
+        "ms": 3358,
+        "known_ms": 3358,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 17,
+    "stages": {
+      "agent_work": {
+        "ms": 3359,
+        "known_ms": 3359,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 18,
+    "stages": {
+      "agent_work": {
+        "ms": 3359,
+        "known_ms": 3359,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 19,
+    "stages": {
+      "agent_work": {
+        "ms": 4063,
+        "known_ms": 4063,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 20,
+    "stages": {
+      "agent_work": {
+        "ms": 4064,
+        "known_ms": 4064,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 21,
+    "stages": {
+      "agent_work": {
+        "ms": 4065,
+        "known_ms": 4065,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 22,
+    "stages": {
+      "agent_work": {
+        "ms": 4066,
+        "known_ms": 4066,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 23,
+    "stages": {
+      "agent_work": {
+        "ms": 4066,
+        "known_ms": 4066,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 24,
+    "stages": {
+      "agent_work": {
+        "ms": 4430,
+        "known_ms": 4430,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 25,
+    "stages": {
+      "agent_work": {
+        "ms": 4438,
+        "known_ms": 4438,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 26,
+    "stages": {
+      "agent_work": {
+        "ms": 4438,
+        "known_ms": 4438,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 27,
+    "stages": {
+      "agent_work": {
+        "ms": 4438,
+        "known_ms": 4438,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 28,
+    "stages": {
+      "agent_work": {
+        "ms": 5692,
+        "known_ms": 5692,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 29,
+    "stages": {
+      "agent_work": {
+        "ms": 5701,
+        "known_ms": 5701,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 30,
+    "stages": {
+      "agent_work": {
+        "ms": 5701,
+        "known_ms": 5701,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 31,
+    "stages": {
+      "agent_work": {
+        "ms": 5702,
+        "known_ms": 5702,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 32,
+    "stages": {
+      "agent_work": {
+        "ms": 6249,
+        "known_ms": 6249,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 33,
+    "stages": {
+      "agent_work": {
+        "ms": 6257,
+        "known_ms": 6257,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 34,
+    "stages": {
+      "agent_work": {
+        "ms": 6257,
+        "known_ms": 6257,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 35,
+    "stages": {
+      "agent_work": {
+        "ms": 6258,
+        "known_ms": 6258,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 36,
+    "stages": {
+      "agent_work": {
+        "ms": 6737,
+        "known_ms": 6737,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 37,
+    "stages": {
+      "agent_work": {
+        "ms": 6998,
+        "known_ms": 6998,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 38,
+    "stages": {
+      "agent_work": {
+        "ms": 7687,
+        "known_ms": 7687,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 39,
+    "stages": {
+      "agent_work": {
+        "ms": 8599,
+        "known_ms": 8599,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 40,
+    "stages": {
+      "agent_work": {
+        "ms": 8606,
+        "known_ms": 8606,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 41,
+    "stages": {
+      "agent_work": {
+        "ms": 8607,
+        "known_ms": 8607,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 42,
+    "stages": {
+      "agent_work": {
+        "ms": 8607,
+        "known_ms": 8607,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 43,
+    "stages": {
+      "agent_work": {
+        "ms": 8767,
+        "known_ms": 8767,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 44,
+    "stages": {
+      "agent_work": {
+        "ms": 8768,
+        "known_ms": 8768,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 45,
+    "stages": {
+      "agent_work": {
+        "ms": 8768,
+        "known_ms": 8768,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 46,
+    "stages": {
+      "agent_work": {
+        "ms": 8770,
+        "known_ms": 8770,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 47,
+    "stages": {
+      "agent_work": {
+        "ms": 8770,
+        "known_ms": 8770,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 48,
+    "stages": {
+      "agent_work": {
+        "ms": 9845,
+        "known_ms": 9845,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 49,
+    "stages": {
+      "agent_work": {
+        "ms": 10083,
+        "known_ms": 10083,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 50,
+    "stages": {
+      "agent_work": {
+        "ms": 11206,
+        "known_ms": 11206,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 51,
+    "stages": {
+      "agent_work": {
+        "ms": 11214,
+        "known_ms": 11214,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 52,
+    "stages": {
+      "agent_work": {
+        "ms": 11214,
+        "known_ms": 11214,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 53,
+    "stages": {
+      "agent_work": {
+        "ms": 11215,
+        "known_ms": 11215,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 54,
+    "stages": {
+      "agent_work": {
+        "ms": 11251,
+        "known_ms": 11251,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 55,
+    "stages": {
+      "agent_work": {
+        "ms": 11251,
+        "known_ms": 11251,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 56,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 57,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 58,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 8006,
+        "known_ms": 8006,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 59,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 8247,
+        "known_ms": 8247,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 60,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 9621,
+        "known_ms": 9621,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 61,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 9622,
+        "known_ms": 9622,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 62,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 9865,
+        "known_ms": 9865,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 63,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 9865,
+        "known_ms": 9865,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 64,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 11076,
+        "known_ms": 11076,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 65,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 11076,
+        "known_ms": 11076,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 66,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 11077,
+        "known_ms": 11077,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 67,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 67."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 68,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 67."
+      ]
+    }
+  },
+  {
+    "log": "recorded-demo",
+    "change_id": "change-2",
+    "n": 69,
+    "stages": {
+      "agent_work": {
+        "ms": 11525,
+        "known_ms": 11525,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "No recorded decider for revision 1 at seq 67."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 1,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 2,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 3,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 4,
+    "stages": {
+      "agent_work": {
+        "ms": 99000,
+        "known_ms": 99000,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 5,
+    "stages": {
+      "agent_work": {
+        "ms": 120000,
+        "known_ms": 120000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 6,
+    "stages": {
+      "agent_work": {
+        "ms": 120000,
+        "known_ms": 120000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 7,
+    "stages": {
+      "agent_work": {
+        "ms": 120000,
+        "known_ms": 120000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 10000,
+        "known_ms": 10000,
+        "intervals": 1,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 8,
+    "stages": {
+      "agent_work": {
+        "ms": 120000,
+        "known_ms": 120000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 10000,
+        "known_ms": 10000,
+        "intervals": 1,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 9,
+    "stages": {
+      "agent_work": {
+        "ms": 120000,
+        "known_ms": 120000,
+        "intervals": 2,
+        "open": true
+      },
+      "checks": {
+        "ms": 10000,
+        "known_ms": 10000,
+        "intervals": 1,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 10,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 10000,
+        "known_ms": 10000,
+        "intervals": 1,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 11,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 10000,
+        "known_ms": 10000,
+        "intervals": 2,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 12,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 15000,
+        "known_ms": 15000,
+        "intervals": 2,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 20000,
+        "known_ms": 20000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 13,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 20000,
+        "known_ms": 20000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 20000,
+        "known_ms": 20000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 14,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 20000,
+        "known_ms": 20000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 15,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 35000,
+        "known_ms": 35000,
+        "intervals": 2,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 3,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 16,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 36000,
+        "known_ms": 36000,
+        "intervals": 2,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 40000,
+        "known_ms": 40000,
+        "intervals": 4,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 17,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 18,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 19,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 20,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 21,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 22,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 23,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 24,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 25,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 26,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 27,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 28,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 29,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 30,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 31,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 32,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 1,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 2,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 3,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 4,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 5,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 6,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 7,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 8,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 9,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 10,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 11,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 12,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 13,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 14,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 15,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 16,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 17,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 18,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 19,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 20,
+    "stages": {
+      "agent_work": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 21,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 22,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 23,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 24,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 2,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 25,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 2000,
+        "known_ms": 2000,
+        "intervals": 2,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 26,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 3000,
+        "known_ms": 3000,
+        "intervals": 2,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 0,
+        "open": false
+      },
+      "test_phases": [],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 27,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 4000,
+        "known_ms": 4000,
+        "intervals": 2,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 0,
+          "runs": 1
+        }
+      ],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 28,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 0,
+          "runs": 1
+        }
+      ],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24.",
+        "No recorded decider for revision 2 at seq 28."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 29,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 2,
+        "open": true
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 0,
+          "runs": 1
+        }
+      ],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24.",
+        "No recorded decider for revision 2 at seq 28."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 30,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 2000,
+        "known_ms": 2000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 3,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 0,
+          "runs": 1
+        }
+      ],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24.",
+        "No recorded decider for revision 2 at seq 28."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 31,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 2000,
+        "known_ms": 2000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 0,
+          "runs": 1
+        }
+      ],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24.",
+        "No recorded decider for revision 2 at seq 28."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 32,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 2000,
+        "known_ms": 2000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 0,
+          "runs": 1
+        }
+      ],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24.",
+        "No recorded decider for revision 2 at seq 28."
+      ]
+    }
+  }
+]

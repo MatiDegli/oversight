@@ -37,6 +37,7 @@ describe("live transport", () => {
         [reply.seq]: { type: reply.type, ts: reply.ts, agentId: "agent-1" },
       },
       lastSeq: reply.seq,
+      stageEvents: [...before.stageEvents, reply],
       clock: reply.ts,
       leadReplies: { ...before.leadReplies, "agent-1": [reply] },
     });
@@ -66,6 +67,7 @@ describe("live transport", () => {
         [idle.seq]: { type: idle.type, ts: idle.ts, agentId: "agent-1" },
       },
       lastSeq: idle.seq,
+      stageEvents: [...before.stageEvents, reply, idle],
       clock: idle.ts,
       decisionEvents: [...before.decisionEvents, idle],
       leadReplies: { ...before.leadReplies, "agent-1": [reply] },
@@ -111,9 +113,10 @@ describe("live transport", () => {
       "queue.updated",
       "lead.status",
     ]);
-    for (const [index, example] of unwired.entries()) {
-      source().raw(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 }));
-    }
+    const delivered = unwired.map((example, index) =>
+      parseEvent(JSON.stringify({ ...example, seq: before.lastSeq + index + 1 })),
+    );
+    for (const event of delivered) source().emit(event);
     expect(onError).not.toHaveBeenCalled();
     expect(store.getState().state).toEqual({
       ...before,
@@ -132,6 +135,7 @@ describe("live transport", () => {
       },
       mergeMode: { mode: "merge_when_safe", revision: 1 },
       lastSeq: before.lastSeq + unwired.length,
+      stageEvents: [...before.stageEvents, ...delivered],
       clock: reservedA.at(-1)?.ts,
       decisionEvents: [
         ...before.decisionEvents,
@@ -184,12 +188,18 @@ describe("live transport", () => {
       },
       mergeMode: { mode: "merge_when_safe", revision: 1 },
       lastSeq: before.lastSeq + reserved.length + reservedA.length - 1,
+      stageEvents: [...before.stageEvents, ...delivered],
       clock: reservedA.at(-1)?.ts,
       changes: {
         ...before.changes,
         "change-1": {
           ...prior,
           reviews: [{ seq: review.seq, review: review.payload }],
+          stages: prior.stages && {
+            ...prior.stages,
+            test_runs: { ms: 1, known_ms: 1, intervals: 1, open: false },
+            test_phases: [{ phase: "proposal", ms: 1, runs: 1 }],
+          },
         },
       },
       testExecutions: { [suite.seq]: suite.payload },
@@ -436,6 +446,7 @@ describe("live transport", () => {
     expect(store.getState().state).toEqual({
       ...createInitialState(),
       run: newRun.payload,
+      stageEvents: [newRun],
       runStartedAt: newRun.ts,
       eventFacts: { 1: { type: "run.started", ts: newRun.ts, agentId: null } },
       lastSeq: 1,

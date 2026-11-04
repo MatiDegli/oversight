@@ -17,6 +17,8 @@ import type {
   UsageTick,
   LeadReplyEvent,
   LeadViewEvent,
+  ChangeStages,
+  ServerEvent,
 } from "@contracts";
 
 import type { DecisionEvent } from "./decisionProjection";
@@ -51,6 +53,9 @@ export interface ChangeState {
   crossReviewRound: ChangeResolved | null;
   needsYou: NeedsYou | null;
   personActed: boolean;
+  stages: ChangeStages | null;
+  /** Confirmed changes_requested resolutions, independent of steps or conversation rounds. */
+  revisionRounds: number;
 }
 
 export type ModelWait = Pick<ModelAttemptFailed, "attempt" | "max_attempts" | "cause"> & {
@@ -131,6 +136,8 @@ export interface State {
   changeFacts: Record<string, ChangeFacts[]>;
   /** Run-local inbox evidence; retained even when the current proposal is replaced. */
   decisionEvents: DecisionEvent[];
+  /** Complete accepted inventory: continuity and horizon include unrelated events. */
+  stageEvents: ServerEvent[];
 }
 
 export function createInitialState(): State {
@@ -167,6 +174,7 @@ export function createInitialState(): State {
     testExecutions: {},
     changeFacts: {},
     decisionEvents: [],
+    stageEvents: [],
   };
 }
 
@@ -193,5 +201,7 @@ export function createChange(change_id: string, agent_id: string): ChangeState {
     crossReviewRound: null,
     needsYou: null,
     personActed: false,
+    stages: null,
+    revisionRounds: 0,
   };
 }

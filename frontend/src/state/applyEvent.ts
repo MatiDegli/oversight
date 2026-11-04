@@ -9,11 +9,33 @@ import { applyGraphEvent } from "./applyGraphEvent";
 import { isDecisionEvent } from "./decisionProjection";
 import { createInitialState } from "./types";
 import type { State } from "./types";
+import { foldStages } from "./stageFold";
 
 /** Apply validated events, identically for live streams and parsed replay logs. */
 export function applyEvent(state: State, event: ServerEvent): State {
   const next = applyEnvelope(state, event);
-  return next.gap ? next : recordEventFact(next, event);
+  if (next.gap) return next;
+  const stageEvents = [...(event.type === "run.started" ? [] : state.stageEvents), event];
+  let changes = next.changes;
+  for (const [id, change] of Object.entries(next.changes)) {
+    const stages = foldStages(stageEvents, id);
+    const revisionRounds =
+      change.revisionRounds +
+      Number(
+        event.type === "change.resolved" &&
+          event.payload.change_id === id &&
+          event.payload.decision === "changes_requested",
+      );
+    // Closed readings remain stable on unrelated events, preserving existing subscriptions.
+    if (
+      revisionRounds === change.revisionRounds &&
+      JSON.stringify(stages) === JSON.stringify(change.stages)
+    )
+      continue;
+    if (changes === next.changes) changes = { ...next.changes };
+    changes[id] = { ...change, stages, revisionRounds };
+  }
+  return recordEventFact({ ...next, stageEvents, changes }, event);
 }
 
 function applyEnvelope(state: State, event: ServerEvent): State {
