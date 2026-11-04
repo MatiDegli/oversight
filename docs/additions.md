@@ -105,7 +105,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | --- | --- | --- | --- |
 | 1 | Facts and a summary from events (package 3) | On main — summary producer `027ec36`, review rendering `9cdd02a`; facts row/steps `ae9822d` | Yes — summary; report check needs no field |
 | 2 | Behavior diff | Backend and review rows on main — `2896b29`; shared inputs `647d545`, methods/properties `2cfe760`, object arguments `8a4a2ec`, unprobed reasons `f44dd62`; graph count chips and sample popovers `f6d7e2a`; supplied new-parameter observations `2122430` (dedicated UI remains) | Yes |
-| 3 | Agent harness pack | On main — opt-in pack `42976ee`, runner wiring `b4446cc` | No |
+| 3 | Agent harness pack | Original pack on main `42976ee`, runner wiring `b4446cc`; now on by default with static diagnostics and read-only Python `find_symbol` | No |
 | 4 | Measured impact cone | On main — caller evidence `1c50382`, GET /impact `920e930`, review rows `09865ec`/`d3f64fd`, review rework `cf1e536`; graph caller words `5ba8584` | Yes |
 | 5 | Live overlap between agents | Partial — shared edits and change-lifetime reads `1e51e51`, graph overlap `e4cec56`; review's **Other pending changes** shows bounded current-graph cone membership with explicit limits; deeper edit facts remain | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
@@ -335,13 +335,15 @@ new candidate work waits for the maintainer’s order.
   the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
   merge and tests still work. Needs a per-repository test command with JUnit output and an approved
   sketch first.
-- Conditional pre-freeze Tauri spike, after the maintainer's other feature: the
-  [portable desktop core](../desktop/README.md) is implemented and tested on Linux with a standalone
-  offline target. The native Windows core lane exists but has not run yet.
-  The Windows executable, complete Tauri lock/license
-  reconciliation, nested Jobs/console lifecycle, WebView2/UI proof and duration/size are deferred.
-  The [future runbook](../README.md#future-tauri-shell-runbook) wraps the advanced native backend;
-  no WSL bridge or native picker. Cut: November 3, 17:00 ART; freeze: 20:00 ART.
+- Windows desktop packaging implementation is present: Tauri 2 shell with owned nested-Job
+  lifecycle, installed launch/data layout, prepared demo Python, pinned runtime staging,
+  NSIS/currentUser/zlib and a separate Windows install/smoke/uninstall/artifact job. The
+  [runbook](../desktop/README.md) distinguishes implementation from pending native evidence.
+  All 443 external crates reconcile under the scoped grants, including the exact inactive
+  target-lexicon exception; [audit](../desktop/packaging/crate-license-audit.md). One installer
+  notice generator inventories crate, Python, CPython/component, frontend and NSIS terms.
+  Native runner results, failure-path/headed rendering acceptance and independent review remain
+  pending; no WSL bridge or native picker. See the November 4 DECISIONS entry.
 - The minimal native Windows backend and public own-repository COPY are implemented;
   their native qualification remains pending. Broader platform ports and macOS follow as
   separate fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
@@ -435,16 +437,22 @@ proves no equivalence. Empty output reads “no difference measured on these inp
 
 ### 3. Agent harness pack
 
-Reduce avoidable failures without changing the six tools. Under one setting: reject a Python edit
+Reduce avoidable failures under one setting: reject a Python edit
 that breaks previously valid syntax, return the error line and preserve old bytes; summarize broad
 searches with per-file match counts and a narrowing hint; retain a bounded whole failure block
 with test/assertion/relevant frame; remind `finish` once to run tests if edits followed the last
 run; prompt for one evidence-led path and a stopping point.
 
-The opt-in pack is on main (`42976ee`), including hash/uniqueness checks and bounded observations
+The pack is on by default (maintainer ruling, 2026-11-04); explicit false retains the six-tool
+comparison arm. Successful Python edits append only new isolated ruff diagnostics without
+reverting the edit; unavailable diagnostics log a warning. Read-only Python `find_symbol` is
+available only with the pack on: bounded definitions,
+references and focus from an isolated Jedi/parso subprocess, with secret/link checks and
+external definitions shown only as module names. The original pack is on main (`42976ee`),
+including hash/uniqueness checks and bounded observations
 (`backend/src/oversight/agents/tools.py`, `backend/src/oversight/agents/_observations.py`).
 Runner failure retention is wired too (`b4446cc`, `backend/src/oversight/workspace/suite_guard.py`).
-Preserve failures before the runner discards text. No contract addition or tool is needed. One
+Preserve failures before the runner discards text. No contract addition is needed. One
 setting lets the bench compare both arms with the same model, reasoning and limits. This does
 not replace independent server proposal tests.
 

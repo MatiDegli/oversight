@@ -88,7 +88,7 @@ async def test_a_revision_resumes_the_kept_run_with_the_comment(
     model = scripted_a()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), lambda _p, _s: model) as s,
     ):
         assert (await start(s)).status_code == 201
         first = await ready(s)
@@ -152,7 +152,7 @@ async def test_request_changes_keeps_the_slot(tmp_path: Path) -> None:
     model = scripted_a()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), lambda _p, _s: model) as s,
     ):
         live = s.live
         await start(s)
@@ -205,7 +205,7 @@ async def test_request_changes_and_stop_need_a_state_that_takes_them(
     model = Stepped(parse_script(revisable()))
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), lambda _p, _s: model) as s,
         HeldRequests(s.store, monkeypatch) as held,
     ):
         await start(s)
@@ -267,7 +267,9 @@ async def test_the_brake_refuses_a_revision_of_the_metered_agent_only(tmp_path: 
     # A runs the fake model and B Muse Spark, each with a revision turn. The brake closes after
     # both proposed: B's request is `spend_brake` and changes nothing, A's goes through, and B's
     # goes through once the brake opens again.
-    settings = meta_settings(tmp_path, agent_model="fake", agent_model_b="muse-spark")
+    settings = meta_settings(
+        tmp_path, harness_pack=False, agent_model="fake", agent_model_b="muse-spark"
+    )
     models = {
         "A": ScriptedModel(parse_script(revisable())),
         "B": ScriptedModel(parse_script(revisable_b()), MUSE_SPARK),
@@ -375,7 +377,7 @@ async def test_a_request_that_moves_no_base_ends_with_no_run_and_the_change_read
     model = scripted_a()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), lambda _p, _s: model) as s,
     ):
         live = s.live
         await start(s)

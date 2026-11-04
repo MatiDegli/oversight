@@ -3,6 +3,7 @@
 
 import argparse
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import uvicorn
@@ -17,6 +18,11 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     serve = commands.add_parser("serve", help="serve the API")
     serve.add_argument("--reload", action="store_true", help="restart on source changes")
+    serve.add_argument(
+        "--demo-python",
+        type=Path,
+        help="absolute prepared Python with pytest; never installs or falls back to uv",
+    )
     replay = commands.add_parser("replay", help="serve a recorded event log over /events")
     replay.add_argument("log", type=Path, help="a JSONL event log, such as fixtures/events/*.jsonl")
     replay.add_argument("--allow-fake-provider", action="store_true")
@@ -42,14 +48,21 @@ def main() -> None:
     args = parser.parse_args()
     if args.command == "serve" and args.reload and sys.platform == "win32":
         parser.error("serve --reload is unavailable on Windows; use ordinary serve")
+    if args.command == "serve" and args.demo_python is not None:
+        if args.reload:
+            parser.error("--demo-python cannot be combined with --reload")
+        if not args.demo_python.is_absolute() or not args.demo_python.is_file():
+            parser.error("--demo-python must name an existing absolute interpreter")
     settings = Settings.load()
 
     if args.command == "isolation-probe":
         print_isolation_probe(args.runtime, REPO_ROOT / "demo-repo", pytest_pin=pytest_pin())
     elif args.command == "serve":
         uvicorn.run(
-            "oversight.app:create_app",
-            factory=True,
+            create_app(replace(settings, demo_python=args.demo_python))
+            if args.demo_python is not None
+            else "oversight.app:create_app",
+            factory=args.demo_python is None,
             host=settings.host,
             port=settings.port,
             reload=args.reload,

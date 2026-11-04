@@ -74,12 +74,12 @@ async def test_restart_keeps_known_spend_and_refuses_next_reservation(tmp_path):
     factory = Scripts([json.dumps({"task": task.prompt, "turns": turns})])
     out = tmp_path / "results" / "r.jsonl"
     rates = Tariff(input=1, output=2)
-    async with live_server(live_settings(tmp_path), factory) as server:
+    async with live_server(live_settings(tmp_path, harness_pack=False), factory) as server:
         await execute(str(server.client.base_url), "fake", 1, out, [task], rates)
     assert json.loads(out.read_text())["cost_usd"] == pytest.approx(0.42)
     # Simulate a crash after ledger fsync but before materializing the results file.
     out.unlink()
-    async with live_server(live_settings(tmp_path), factory) as server:
+    async with live_server(live_settings(tmp_path, harness_pack=False), factory) as server:
         with pytest.raises(BenchError, match="cannot reserve"):
             await execute(str(server.client.base_url), "fake", 1, out, tasks, rates)
         assert factory.calls == 1

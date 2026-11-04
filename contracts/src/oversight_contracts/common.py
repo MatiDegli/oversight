@@ -76,8 +76,12 @@ type Timestamp = Annotated[
 ]
 """UTC with millisecond precision and a `Z`: `2026-10-27T14:03:12.345Z`."""
 
-type Slot = Literal["A", "B", "C", "D", "E", "F"]
+type Slot = Annotated[
+    str,
+    StringConstraints(strict=True, min_length=1, pattern=r"^[A-Z]+$"),
+]
 """A seat representing capacity, not agent identity; its color comes from the team.
+Seats are named A..Z, then AA, AB, ... in spreadsheet order by position.
 Slot reuse across starts uses distinct agent ids.
 """
 

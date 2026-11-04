@@ -12,7 +12,18 @@ from oversight.workspace import PreviewProfile
 from oversight_contracts.commands import SettingName
 from oversight_contracts.events import LeadLimits
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+
+def _application_root() -> Path:
+    value = os.environ.get("OVERSIGHT_APP_ROOT")
+    if value is None:
+        return Path(__file__).resolve().parents[3]
+    root = Path(value)
+    if not root.is_absolute():
+        raise ValueError("OVERSIGHT_APP_ROOT must be absolute")
+    return root.resolve()
+
+
+REPO_ROOT = _application_root()
 TEST_TIMEOUT_ERROR = (
     "OVERSIGHT_TEST_TIMEOUT_S must be a whole number of seconds from 1 to 999999999"
 )
@@ -144,8 +155,8 @@ class Settings:
     """OVERSIGHT_BEHAVIOR_DIFF: opt-in finite measurements and bounded public samples."""
     measured_cone: bool = False
     """OVERSIGHT_MEASURED_CONE: opt-in pytest caller evidence, independent of direct probes."""
-    harness_pack: bool = False
-    """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
+    harness_pack: bool = True
+    """OVERSIGHT_HARNESS_PACK: default-on agent harness, selected before process startup."""
     history_prune_tokens: int | None = field(default_factory=lambda: _history_threshold(None))
     """Default-on history compaction; minimum 8,000 estimated tokens, None disables it."""
     reviewer_fake_script: Path | None = None
@@ -229,8 +240,10 @@ class Settings:
                 raise ValueError("Review card deadlines must be finite and positive")
 
     @classmethod
-    def load(cls, env_file: Path = REPO_ROOT / ".env") -> "Settings":
+    def load(cls, env_file: Path | None = None) -> "Settings":
         """The process environment wins over the .env file."""
+        if env_file is None:
+            env_file = Path(os.environ.get("OVERSIGHT_ENV_FILE", REPO_ROOT / ".env"))
         merged = read_env_file(env_file) | dict(os.environ)
         port, vite_port = resolve_ports(merged)
         return cls(
@@ -292,7 +305,7 @@ class Settings:
             baseten_budget_usd=positive_amount(merged.get("OVERSIGHT_BASETEN_BUDGET_USD")),
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
-            harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
+            harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "true").lower() == "true",
             history_prune_tokens=_history_threshold(merged.get("OVERSIGHT_HISTORY_PRUNE_TOKENS")),
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),

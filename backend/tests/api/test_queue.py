@@ -165,7 +165,7 @@ async def test_ready_revising_halted_and_conflict_keep_their_slot(tmp_path: Path
     model = scripted_a()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), lambda _p, _s: model) as s,
     ):
         await enqueue(s)
         await state(s, "queued-task-1", "running")

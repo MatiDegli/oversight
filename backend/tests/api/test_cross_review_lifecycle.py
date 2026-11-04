@@ -111,6 +111,7 @@ async def running(
     script.write_text(json.dumps({"task": "review", "turns": [{"text": "VERDICT: accept"}]}))
     settings = two_fakes(
         tmp_path,
+        harness_pack=False,
         agent_model_b="fake",
         cross_review=enabled,
         review_model="fake-b",

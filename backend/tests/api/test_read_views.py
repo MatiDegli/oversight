@@ -55,7 +55,7 @@ async def test_fake_model_view_survives_revision_and_worktree_disposal(tmp_path)
     model = scripted_a()
     async with (
         asyncio.timeout(DEADLINE_S),
-        live_server(live_settings(tmp_path), lambda _p, _s: model) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), lambda _p, _s: model) as s,
     ):
         created = (await start(s)).json()
         await ready(s)
