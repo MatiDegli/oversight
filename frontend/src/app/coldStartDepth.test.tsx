@@ -23,6 +23,7 @@ it("inventories event-bearing fixtures and verifies exporter provenance without 
     ["fixtures/contracts/reserved-1.3.json", 3, 4180, "no lead.view"],
     ["fixtures/contracts/reserved-1.4.json", 7, 6705, "no lead.view"],
     ["fixtures/contracts/slots-answering-1.6.json", 7, 4750, "no lead.view"],
+    ["fixtures/contracts/slots-extended-1.21.json", 1, 1599, "no lead.view"],
     ["fixtures/contracts/views-1.18.json", 4, 1253, 0],
     ["fixtures/events/handwritten-behavior-review.jsonl", 24, 36038, "no lead.view"],
     ["fixtures/events/handwritten-inbox-answers.jsonl", 11, 6688, "no lead.view"],
