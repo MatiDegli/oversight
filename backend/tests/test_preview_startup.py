@@ -273,7 +273,7 @@ async def test_oversize_startup_report_refuses_only_preview(tmp_path, monkeypatc
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url=f"http://127.0.0.1:{settings.port}"
         ) as client:
-            for path in ("/", "/index.html", "/settings"):
+            for path in ("/", "/index.html", "/review/change-1"):
                 response = await client.get(path)
                 assert response.status_code == 200
                 assert "oversight-preview-startup" not in response.text
@@ -326,7 +326,7 @@ async def test_real_resources_default_runtime_report_is_disclosed(tmp_path, monk
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url=f"http://127.0.0.1:{live._settings.port}"
     ) as client:
-        for path in ("/", "/index.html", "/settings"):
+        for path in ("/", "/index.html", "/review/change-1"):
             response = await client.get(path)
             assert response.status_code == 200
             assert response.text.count('id="oversight-preview-startup"') == 1

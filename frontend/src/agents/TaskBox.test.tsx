@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { applyEvent, createInitialState } from "../state";
+import { CommandError } from "../transport";
 import { twoSlotState } from "../taskBox.fixture";
 
 import { createTaskBoxStore } from "./taskBoxModel";
@@ -266,4 +267,29 @@ describe("the new-agent box in a replay", () => {
     expect(box()).toContain("Replay: agents cannot be started here.");
     expect(box()).not.toMatch(/recorded run/i);
   });
+});
+
+it("offers the existing Settings opener only after a not_configured refusal", async () => {
+  const store = createTaskBoxStore();
+  store.getState().setDraft("Keep this task");
+  await store
+    .getState()
+    .start(() =>
+      Promise.reject(new CommandError(503, "not_configured", "Server setup is incomplete.")),
+    );
+  const render = () =>
+    renderToStaticMarkup(
+      <TaskBox
+        state={twoSlotState()}
+        store={{ ...store, getInitialState: store.getState }}
+        onStart={vi.fn()}
+        onOpenSettings={vi.fn()}
+      />,
+    );
+  expect(render()).toContain("Open settings");
+  expect(render()).toContain("Keep this task");
+  store.getState().setDraft("Edited task");
+  expect(render()).not.toContain("Open settings");
+  await store.getState().start(() => Promise.reject(new CommandError(409, "slot_busy", "Busy.")));
+  expect(render()).not.toContain("Open settings");
 });

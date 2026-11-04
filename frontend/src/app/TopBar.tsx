@@ -120,7 +120,8 @@ export function TopBar({
             <span>Nothing needs you</span>
           ) : (
             <span>
-              Decisions · <span className="font-mono tabular-nums">{ready}</span>
+              <span className="decisions-chip-label">Decisions · </span>
+              <span className="decisions-chip-count font-mono tabular-nums">{ready}</span>
             </span>
           )}
         </button>

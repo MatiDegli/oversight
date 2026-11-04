@@ -1,4 +1,4 @@
-import type { AgentStatus, Slot, StartAgent } from "@contracts";
+import type { AgentStatus, ErrorCode, Slot, StartAgent } from "@contracts";
 import { createStore } from "zustand/vanilla";
 
 import { selectSpend } from "../state";
@@ -126,6 +126,7 @@ export interface TaskBoxModel {
   pending: boolean;
   /** The last start's failure; the next edit or start clears it. */
   failure: string | null;
+  failureCode: ErrorCode | null;
   choice: SlotChoice | null;
   choose: (choice: SlotChoice) => void;
   setDraft: (text: string) => void;
@@ -145,28 +146,33 @@ export function createTaskBoxStore() {
     prefilled: null,
     pending: false,
     failure: null,
+    failureCode: null,
     choice: null,
     choose: (choice) => {
-      if (!get().pending) set({ choice, failure: null });
+      if (!get().pending) set({ choice, failure: null, failureCode: null });
     },
     setDraft: (draft) => {
-      set({ draft, prefilled: null, failure: null });
+      set({ draft, prefilled: null, failure: null, failureCode: null });
     },
     prefill: (draft, nodeId) => {
       if (get().pending || get().draft !== "") return false;
-      set({ draft, prefilled: { nodeId, text: draft }, failure: null });
+      set({ draft, prefilled: { nodeId, text: draft }, failure: null, failureCode: null });
       return true;
     },
     start: async (send, slot) => {
       const task = get().draft.trim();
       if (get().pending || task === "") return;
-      set({ pending: true, failure: null });
+      set({ pending: true, failure: null, failureCode: null });
       try {
         await send(slot ? { task, slot } : { task });
         // The agent's card arrives as events; the box only empties.
         set({ draft: "", prefilled: null, pending: false });
       } catch (error) {
-        set({ pending: false, failure: startFailure(error) });
+        set({
+          pending: false,
+          failure: startFailure(error),
+          failureCode: error instanceof CommandError ? (error.code ?? null) : null,
+        });
       }
     },
   }));

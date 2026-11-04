@@ -30,6 +30,7 @@ const apiPaths = [
   "/health",
   "/impact",
   "/merge-mode",
+  "/settings",
   "/plans",
   "/tree",
   "/history",

@@ -86,6 +86,8 @@ LIVE_ONLY: tuple[tuple[str, str, str], ...] = (
     ("POST", "/changes/{change_id}/approve", "Approve"),
     ("POST", "/changes/{change_id}/reject", "Reject"),
     ("POST", "/changes/{change_id}/request-changes", "Request changes"),
+    ("GET", "/settings", "Reading settings"),
+    ("PUT", "/settings", "Saving settings"),
     ("GET", "/merge-mode", "Reading the merge mode"),
     ("PUT", "/merge-mode", "Setting the merge mode"),
     ("POST", "/changes/{change_id}/revert", "Revert"),

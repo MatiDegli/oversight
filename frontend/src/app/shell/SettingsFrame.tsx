@@ -4,7 +4,7 @@ export function SettingsFrame({ children }: { children?: ReactNode }) {
   return (
     <section
       aria-labelledby="merge-mode-heading"
-      className="@container min-h-0 w-full min-w-0 overflow-y-auto p-8"
+      className="@container min-h-0 w-full min-w-0 overflow-y-auto p-4 sm:p-8"
     >
       <h2 id="merge-mode-heading" className="text-(length:--title-size) font-bold">
         Merge mode

@@ -328,7 +328,6 @@
   .shell-frame:has(.chat-shell) > .shell-top-bar .palette-trigger,
   .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Spend"],
   .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Usage"],
-  .shell-frame:has(.chat-shell) > .shell-top-bar [aria-label="Settings"],
   .shell-frame:has(.chat-shell) > .shell-top-bar [data-practice-entry],
   .shell-frame:has(.chat-shell) > .narrow-notice {
     display: none;

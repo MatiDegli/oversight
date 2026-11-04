@@ -34,6 +34,7 @@ import { useChatReviewNavigation } from "./chatReviewNavigation";
 import { PaletteMount } from "./palette/PaletteMount";
 import "./shell/shell.css";
 import "./shell/chatShell.css";
+import "./shell/settings.css";
 import "./shell/life.css";
 import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
@@ -241,6 +242,7 @@ export function Frame(input: FrameProps) {
       : `${shell.sidebar ?? ""}:${String(shell.dock)}:${String(shell.maximized)}:${String(task.expanded)}:${String(shell.layoutRevision)}`;
   return (
     <div
+      data-settings-open={view.activeTab === "settings" || undefined}
       className={`shell-frame flex h-full flex-col bg-background text-text ${phone ? "practice-phone" : ""}`}
     >
       <TopBar
@@ -376,6 +378,7 @@ export function Frame(input: FrameProps) {
                     <ChatMergeChip state={state} onOpenSettings={props.onOpenSettings} />
                   }
                   state={state}
+                  onOpenSettings={props.onOpenSettings}
                   onStart={props.onStartAgent}
                   replayOf={props.replayOf}
                   inputRef={task.inputRef}
