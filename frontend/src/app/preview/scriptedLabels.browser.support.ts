@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { expect as check } from "@playwright/test";
+import { expect as check, type Page } from "@playwright/test";
 import { expect } from "vitest";
 import { chatEvents, previewChatSupport } from "./previewChat.browser.support";
 import { captureCheckpoint } from "./previewPanel.browser.support";
@@ -61,18 +61,39 @@ export async function selectScene(
   await check(row).toHaveAttribute("aria-pressed", "true");
   return row;
 }
-export async function capture(
-  session: Awaited<ReturnType<ReturnType<typeof scriptedLabelsSupport>["session"]>>,
-  scene: string,
-) {
-  const { page, viewport, theme, pageErrors } = session;
+async function waitForConversation(page: Page, scene: string) {
+  const agentId = scene === "coder" ? "agent-1" : "agent-900001";
+  await check(page.locator(".chat-agents")).toHaveAttribute("data-selected-agent", agentId);
+  const panel = page.locator(".conversation-panel");
+  await check(panel).toHaveAttribute(
+    "aria-label",
+    scene === "coder" ? "Agent A conversation" : "Lead conversation",
+  );
+  const thread = panel.locator(".conversation-entries");
+  await check(thread).toBeVisible();
+  await check(thread.getByRole("listitem").first()).toBeVisible();
+  await check(thread).toContainText("Task from you");
+  if (scene === "coder")
+    await check(
+      thread.getByRole("article", { name: "Proposed change", exact: true }),
+    ).toBeVisible();
+  else
+    await check(thread).toContainText(
+      "The coupon change is ready to try. Check the shop, then review the change.",
+    );
+  await check(panel.locator(".conversation-composer")).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
-  const horizontalOverflow = await page.evaluate(() => {
+}
+async function captureOverflow(page: Page) {
+  return page.evaluate(() => {
     const selectors = [
       "html",
       "body",
       ".chat-agents",
       ".conversation-header",
+      ".conversation-panel",
+      ".conversation-timeline",
+      ".conversation-composer",
       ".scripted-agent-label",
       ".scripted-agent-explanation",
     ];
@@ -89,6 +110,14 @@ export async function capture(
       ]),
     );
   });
+}
+export async function capture(
+  session: Awaited<ReturnType<ReturnType<typeof scriptedLabelsSupport>["session"]>>,
+  scene: string,
+) {
+  const { page, viewport, theme, pageErrors } = session;
+  await waitForConversation(page, scene);
+  const horizontalOverflow = await captureOverflow(page);
   const stage = process.env.SCRIPTED_LABELS_CAPTURE ?? "after";
   const directory = fileURLToPath(
     new URL(`../../../../.shots/scripted-labels/${stage}/`, import.meta.url),

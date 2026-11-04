@@ -11,6 +11,20 @@ import {
 const support = scriptedLabelsSupport();
 const label = "Scripted demo agents";
 const explanation = "Entered text does not determine scripted actions.";
+it.each([".conversation-entries", ".chat-change-card", ".conversation-composer"])(
+  "refuses a coder capture without %s",
+  async (selector) => {
+    const session = await support.session();
+    try {
+      await selectScene(session, "coder");
+      await check(session.page.locator(selector)).toBeVisible();
+      await session.page.locator(selector).evaluate((node) => node.remove());
+      await expect(capture(session, "coder")).rejects.toThrow();
+    } finally {
+      await session.close();
+    }
+  },
+);
 it.each(matrix)(
   "shows scripted $scene at $viewport.width in $theme",
   async ({ scene, viewport, theme }) => {
