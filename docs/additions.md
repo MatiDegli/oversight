@@ -333,13 +333,15 @@ new candidate work waits for the maintainer’s order.
   the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
   merge and tests still work. Needs a per-repository test command with JUnit output and an approved
   sketch first.
-- Conditional pre-freeze Tauri spike, after the maintainer's other feature: the
-  [portable desktop core](../desktop/README.md) is implemented and tested on Linux with a standalone
-  offline target. The native Windows core lane exists but has not run yet.
-  The Windows executable, complete Tauri lock/license
-  reconciliation, nested Jobs/console lifecycle, WebView2/UI proof and duration/size are deferred.
-  The [future runbook](../README.md#future-tauri-shell-runbook) wraps the advanced native backend;
-  no WSL bridge or native picker. Cut: November 3, 17:00 ART; freeze: 20:00 ART.
+- Windows desktop installer scope approved November 4: per-user NSIS/zlib, embedded CPython,
+  external Git for Windows and retained per-user configuration/data. Implementation stopped at
+  dependency preflight before the shell adapter: `target-lexicon 0.12.16` has an unapproved
+  `Apache-2.0 WITH LLVM-exception` expression in the candidate all-platform lock, although it is
+  inactive for Windows. The [complete audit](../desktop/packaging/crate-license-audit.md) records
+  all 443 external entries; candidate shell/lock changes were withdrawn. The
+  [portable desktop core](../desktop/README.md) remains the only delivered desktop code.
+  Installed-layout/backend adaptations, staging, packaging CI, installer notices and native
+  acceptance remain pending. No WSL bridge or native picker. See the November 4 DECISIONS entry.
 - The minimal native Windows backend and public own-repository COPY are implemented;
   their native qualification remains pending. Broader platform ports and macOS follow as
   separate fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,

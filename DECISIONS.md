@@ -4776,3 +4776,37 @@ admission/execution refuses with `Reviewed-app startup disclosure is unavailable
 `not_configured`. Source selection, declaration and authority validation errors still refuse
 startup. Real prepared resources at the default runtime can now pass disclosure admission;
 reviewed-app execution remains unavailable pending its separately required boundary and supervisor.
+
+## Package a Windows installer with an embedded Python (2026-11-04)
+
+The maintainer approved a full Windows desktop window and current-user NSIS installer.
+This supersedes the clone-only/bundling-inactive scope in the November 3 bounded desktop
+preparation decision and the older future runbook. It retains the native backend, accepted
+single-instance/owned-Job lifecycle, one 120-second health deadline and five-second close
+allowance. No WSL bridge, native picker or product UI change is authorized by packaging.
+
+CPython 3.12 under PSF-2.0 is approved **only for the desktop installer**. Bundled third-party
+components retain their own licenses and need individual inventory and notice texts.
+Anything outside MIT, Apache-2.0, BSD, ISC, PSF-2.0, Zlib or MPL-2.0 (unmodified) must be
+reported before shipping; nothing is silently covered by CPython's license. The October 27
+exact typing-extensions/PSF-2.0 exception remains unchanged, as does general dependency policy.
+NSIS must use zlib compression, never LZMA. Git for Windows is a checked external prerequisite
+and is never bundled. Use WebView2's download bootstrapper when the runtime is absent.
+
+The install payload belongs under `%LOCALAPPDATA%\Programs\Oversight\app`; writable
+`.runtime` and `.env` belong under `%LOCALAPPDATA%\Oversight` and survive upgrades and
+uninstall. First launch creates configuration from a blank-key template only when absent,
+without reading its values in the shell. A prepared demo interpreter is a serve command-line
+option, never an environment variable. A supplied interpreter must pass its pytest probe;
+no runtime uv rebuild or fallback is permitted. Git remains mandatory.
+
+Implementation stopped before step 1's shell adapter, at the dependency preflight required
+for the eventual lock: 443 external entries were reconciled, including 243 active for Windows.
+Only `target-lexicon 0.12.16` has no approved license choice: `Apache-2.0 WITH LLVM-exception`.
+It is inactive for Windows but enters Cargo's all-platform lock through GTK/system-deps/cfg-expr.
+The existing strict policy refuses WITH expressions; the named desktop grants do not cover
+LLVM-exception, and the installer brief requires every locked entry to pass. See the
+[complete candidate audit](desktop/packaging/crate-license-audit.md) for exact versions,
+features, checksums and dependency path. The candidate shell/lock changes were withdrawn.
+No executable, Python payload, installer or native acceptance is claimed. Resume requires
+resolving that exact policy mismatch and rerunning reconciliation before implementing the shell.

@@ -1,11 +1,44 @@
-# Desktop preparation: portable core only
+# Desktop package: blocked at dependency preflight
 
-The November 3 bounded spike delivers `oversight-desktop-core`, its exact dependency
-features/lockfile and portable tests. **There is no shell crate or executable yet.**
-The executable is deferred under the smallest-slice rule: this Linux session cannot
-prove native Windows compilation, nested Jobs, console shutdown or WebView2 rendering.
-The [future native runbook](../README.md#future-tauri-shell-runbook) is prospective.
-The existing browser and advanced native backend remain the usable entry points.
+The November 4 installer scope is approved, but implementation stopped at the shell's
+dependency preflight: `target-lexicon 0.12.16` declares `Apache-2.0 WITH LLVM-exception`,
+which is outside the current exact license policy and named desktop grants. It is inactive
+for Windows but present in the candidate lock; every locked crate must pass. See the
+[complete candidate audit](packaging/crate-license-audit.md). The exploratory shell and lock
+changes were withdrawn. **There is no shell executable or installer.** Steps 1–6 remain
+unfinished; installed-layout/backend work and CI packaging did not begin.
+
+The delivered code remains the November 3 `oversight-desktop-core` and its portable tests.
+The browser and advanced native backend remain the usable entry points. The
+[future native runbook](../README.md#future-tauri-shell-runbook) is prospective; its
+clone-only/bundling-inactive scope is superseded by the approved installer specification below.
+
+## Approved installer layout (not implemented)
+
+The planned per-user NSIS installer uses **zlib compression only**, with Tauri's WebView2
+download bootstrapper. Prerequisites: **Git for Windows** on an absolute PATH and WebView2;
+the bootstrapper needs network access when WebView2 is absent. Git is never bundled.
+An installed launch needs no separately installed Python, uv or Node.
+
+- Install: `%LOCALAPPDATA%\Programs\Oversight`; read-only payload in its `app` directory.
+- Backend: `app\python\python.exe -m oversight serve`; prepared tests use a separate
+  relocatable `app\demo-python\python.exe`, passed through a serve command-line option.
+- Retained data: `%LOCALAPPDATA%\Oversight\.runtime`.
+- Retained configuration: `%LOCALAPPDATA%\Oversight\.env`. First launch creates it from a
+  committed blank-key template only when absent. Upgrade/uninstall must preserve data and
+  configuration; the shell never reads configuration values.
+
+To configure a future installed build: close Oversight, edit
+`%LOCALAPPDATA%\Oversight\.env` in a text editor, add `META_API_KEY` and the existing
+budget/pricing settings, save, and restart. Starting the server makes no provider call.
+The person deliberately starts any agent; smoke runs use fake A/B scripts and blank keys.
+
+Embedded CPython under PSF-2.0 is approved only for this installer. Its actual bundled
+components must each be inventoried with their own licenses; anything outside MIT,
+Apache-2.0, BSD, ISC, PSF-2.0, Zlib or unmodified MPL-2.0 must be reported before shipping.
+No CPython archive or component is selected or shipped by this blocked slice.
+
+## Existing portable core
 
 The core contains policy, not a platform adapter:
 
@@ -40,8 +73,8 @@ CARGO_NET_OFFLINE=true make check-desktop
 
 Rust 1.98 and rustfmt must already exist. This target has no fetch/install fallback
 and is outside `GATES`; ordinary check, check-ci, CI, verify and offline verification
-lanes do not need Cargo. Only Windows advisory installs Rust with its preinstalled
-rustup, seeds the locked store online and runs the portable desktop checks offline.
+lanes do not need Cargo. Only the existing Windows advisory job installs Rust with its
+preinstalled rustup, seeds the locked store online and runs the portable desktop checks offline.
 Its 75-minute budget reserves the accepted cold-build margin; the release build,
 headless lifecycle driver, actual added native duration and executable size are
 still deferred. No new action is introduced.
@@ -61,7 +94,8 @@ unicode-ident requires `(MIT OR Apache-2.0) AND Unicode-3.0`, covered by the
 recorded scoped grant. All eleven external crates are unmodified. No unapproved
 license was found. No MPL or Zlib crate is added in this slice.
 
-This is **not** reconciliation of the deferred Tauri graph. Before adding the shell,
+The [candidate Tauri audit](packaging/crate-license-audit.md) is blocked and does not
+replace this delivered-core reconciliation. Before adding the shell,
 pin exact versions/features of tauri, tauri-build, tauri-plugin-single-instance and
 windows-sys, regenerate the lock and repeat Windows-target metadata reconciliation.
 Retain all required license/notice texts with any distributed Rust executable.
