@@ -302,6 +302,9 @@ allowlisted, with no backend credentials or PYTHONPATH discovery.
 
 The reviewed-app Linux boundary preserves each source mount's locked read-only, nosuid, nodev,
 noexec and atime settings on bind remounts, retaining every restriction added by the boundary.
+Before pivoting into the allowlisted root, setup (PID 1 of P0, owned by U0) mounts a fresh
+P0 proc as an anchor: Linux requires a fully visible proc before U1 can mount P1 proc over it.
+The host proc never enters the root, and U1's maps are written through P0 proc.
 
 The adapter vector is the absolute interpreter, `-I -B`, absolute adapter, `--listener-fd`, `--port`,
 `--worktree`, `--memory-limit-bytes`, repeated `--oversight-origin`, and a supervisor-generated
