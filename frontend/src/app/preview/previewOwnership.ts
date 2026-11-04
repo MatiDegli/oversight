@@ -49,6 +49,20 @@ export function sameOwnershipCandidate(a: PreviewCandidate, b: PreviewCandidate 
     a.head_commit === b.head_commit
   );
 }
+function encoded(record: PreviewOwnership) {
+  return JSON.stringify({
+    identity: { run: record.identity.run, source: record.identity.source },
+    candidate: {
+      run_id: record.candidate.run_id,
+      agent_id: record.candidate.agent_id,
+      change_id: record.candidate.change_id,
+      revision: record.candidate.revision,
+      head_commit: record.candidate.head_commit,
+    },
+    preview_id: record.preview_id,
+    lease_token: record.lease_token,
+  });
+}
 /** One origin's record in this tab only. Storage refusal leaves memory ownership usable. */
 export function createPreviewOwnershipStore(
   origin: string,
@@ -82,7 +96,7 @@ export function createPreviewOwnershipStore(
     },
     save(record) {
       try {
-        if (parse(record)) storage()?.setItem(key, JSON.stringify(record));
+        if (parse(record)) storage()?.setItem(key, encoded(record));
       } catch {
         /* The current owner keeps its in-memory authority. */
       }
@@ -90,7 +104,9 @@ export function createPreviewOwnershipStore(
     clear(record) {
       try {
         const disk = storage();
-        if (disk?.getItem(key) === JSON.stringify(record)) disk.removeItem(key);
+        const raw = disk?.getItem(key);
+        const current = raw ? parse(JSON.parse(raw)) : null;
+        if (current && encoded(current) === encoded(record)) disk?.removeItem(key);
       } catch {
         /* Clearing storage never certifies drainage. */
       }

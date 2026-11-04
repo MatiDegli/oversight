@@ -36,6 +36,8 @@ export function createPreviewHost(
   let generation = 0;
   let clickedAt = 0;
   let targetAgent: string | undefined;
+  let bootstrapStatus: PreviewStatusEvent | null = null;
+  let identityChanging = false;
   const listeners = new Set<() => void>();
   const recover = () => {
     const state = read();
@@ -114,6 +116,9 @@ export function createPreviewHost(
     if (!controller.snapshot().visible) publish(false);
     closing = false;
   };
+  // App's bootstrap and Chat selection also navigate. Hidden recovery has no slot
+  // to dismiss; an explicit Close can still drain its private authority.
+  const navigate = () => (open || !canOpen() ? close() : Promise.resolve());
   // The panel proxy masks the frame during navigation/Stop without changing controller evidence.
   let frameHidden = false;
   let cached = controller.snapshot();
@@ -160,7 +165,7 @@ export function createPreviewHost(
         };
       },
       close,
-      navigate: close,
+      navigate,
     },
     clock,
     targetAgent: () => targetAgent,
@@ -204,28 +209,46 @@ export function createPreviewHost(
         disposed ||
         state.gap ||
         event.seq !== state.lastSeq ||
-        event.payload.run_id !== currentIdentity.run ||
-        state.run?.run_id !== currentIdentity.run
+        event.payload.run_id !== state.run?.run_id
       )
         return;
+      if ((!currentIdentity.run || identityChanging) && currentIdentity.source === "live") {
+        // The applied SSE prefix can outrun App's identity effect. Retain metadata only.
+        bootstrapStatus = event;
+        return;
+      }
+      if (event.payload.run_id !== currentIdentity.run) return;
       const status = parsePreviewStatus(event.payload);
       controller.observe(status);
       void recover();
       if (status.state === "ready") refresh();
     },
     close,
-    navigate: close,
+    navigate,
     async setIdentity(next: PreviewIdentity) {
       if (next.run === currentIdentity.run && next.source === currentIdentity.source) {
         await recover();
         return;
       }
       currentIdentity = next;
+      identityChanging = true;
       ++generation;
       frameHidden = true;
       refreshAgain = false;
       notifyPanel();
       await controller.setIdentity(next);
+      identityChanging = false;
+      if (bootstrapStatus) {
+        const state = read();
+        if (
+          next.source === "live" &&
+          !state.gap &&
+          next.run === state.run?.run_id &&
+          bootstrapStatus.payload.run_id === next.run
+        )
+          controller.observe(bootstrapStatus.payload);
+        bootstrapStatus = null;
+      }
       if (!controller.snapshot().visible) publish(false);
       await recover();
     },
@@ -233,6 +256,7 @@ export function createPreviewHost(
       disposed = true;
       ++generation;
       refreshAgain = false;
+      bootstrapStatus = null;
       unsubscribe();
       listeners.clear();
       panelListeners.clear();

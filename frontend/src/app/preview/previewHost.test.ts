@@ -317,3 +317,104 @@ it("does not consume a persisted owner before bootstrap supplies preview referen
   expect(store.load).toHaveBeenCalledTimes(1);
   host.dispose();
 });
+
+it("retains a public bootstrap arrival for an empty-store observer without start or authority", async () => {
+  const { host: owner, state, port, request } = setup();
+  await owner.activate(request);
+  const store: PreviewOwnershipStore = { load: () => null, save: vi.fn(), clear: vi.fn() };
+  const observer = createPreviewHost(
+    port,
+    previewClock,
+    { run: "", source: "live" },
+    () => state,
+    () => true,
+    undefined,
+    store,
+  );
+  const status = port.publicStatus();
+  if (!status) throw new Error("Missing preview");
+  observer.accept({ type: "preview.status", seq: state.lastSeq, ts: "same", payload: status });
+  await observer.setIdentity({ run: status.run_id, source: "live" });
+  const before = port.calls.length;
+  await observer.activate(request);
+  expect(observer.controller.snapshot()).toMatchObject({ owned: false, frameUrl: null, status });
+  expect(port.calls).toHaveLength(before);
+  await observer.close();
+  observer.accept({ type: "preview.status", seq: state.lastSeq, ts: "same", payload: status });
+  await observer.controller.see(() => resolvePreviewReference(state, request).candidate);
+  expect(port.calls).toHaveLength(before);
+  observer.dispose();
+  expect(port.calls).toHaveLength(before);
+  await owner.close();
+  owner.dispose();
+});
+
+it("retains observation arriving while bootstrap identity is settling", async () => {
+  const { host: owner, state, port, request } = setup();
+  await owner.activate(request);
+  const observer = createPreviewHost(
+    port,
+    previewClock,
+    { run: "", source: "live" },
+    () => state,
+    () => true,
+  );
+  const changing = observer.setIdentity({ run: state.run?.run_id ?? "", source: "live" });
+  const status = port.publicStatus();
+  if (!status) throw new Error("Missing preview");
+  observer.accept({ type: "preview.status", seq: state.lastSeq, ts: "same", payload: status });
+  await changing;
+  const count = port.calls.length;
+  await observer.activate(request);
+  expect(port.calls).toHaveLength(count);
+  expect(observer.controller.snapshot().status).toEqual(status);
+  observer.dispose();
+  await owner.close();
+});
+
+it("bootstrap and Chat selection navigation leave a hidden recovered owner renewing until explicit activation or Close", async () => {
+  const { host: owner, port, state, request } = setup();
+  await owner.activate(request);
+  const candidate = resolvePreviewReference(state, request).candidate;
+  if (!candidate) throw new Error("Missing candidate");
+  let saved: PreviewOwnership | null = {
+    identity: { run: candidate.run_id, source: "live" },
+    candidate,
+    preview_id: port.publicStatus()?.preview_id ?? "",
+    lease_token: "fake-private-1",
+  };
+  const store: PreviewOwnershipStore = {
+    load: () => saved,
+    save: (value) => {
+      saved = value;
+    },
+    clear: () => {
+      saved = null;
+    },
+  };
+  const recovered = createPreviewHost(
+    port,
+    previewClock,
+    { run: "", source: "live" },
+    () => state,
+    () => true,
+    undefined,
+    store,
+  );
+  await recovered.navigate();
+  await recovered.setIdentity({ run: candidate.run_id, source: "live" });
+  await recovered.navigate();
+  await recovered.controller.navigate();
+  expect(port.calls.filter((call) => call.kind === "stop")).toHaveLength(0);
+  expect(recovered.controller.snapshot()).toMatchObject({
+    owned: true,
+    visible: false,
+    frameUrl: null,
+  });
+  await recovered.activate(request);
+  expect(recovered.controller.snapshot().frameUrl).toBe(port.frameUrl);
+  await recovered.navigate();
+  expect(port.calls.filter((call) => call.kind === "stop")).toHaveLength(1);
+  expect(recovered.snapshot()).toBe(false);
+  recovered.dispose();
+});

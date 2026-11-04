@@ -311,3 +311,219 @@ it("clears persistence for cleanup_unverified while a mounted owner retains veri
   expect(fake.calls.filter((call) => call.kind === "stop")).toHaveLength(1);
   expect(owner.snapshot()).toMatchObject({ owned: false, visible: false });
 });
+
+it("keeps independent-store observers read-only across dismissal, arrivals, recovery and disposal", async () => {
+  const { controller, port, clock, fake, store } = setup();
+  const first = controller();
+  await first.see(() => candidate);
+  fake.stopMode = "lost";
+  first.dispose();
+  const owner = controller();
+  await owner.recover(() => candidate);
+  const observerStore = createPreviewOwnershipStore(origin, () => storage());
+  const observer = createPreviewController(port, clock, identity, observerStore);
+  await observer.recover(() => candidate);
+  const before = fake.calls.length;
+  for (let count = 0; count < 3; count++) {
+    observer.observe(fake.publicStatus() ?? fakeStatus("ready"));
+    await observer.see(() => ({ ...candidate, revision: 2 }));
+    await observer.refresh();
+    expect(observer.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+    await observer.close();
+    expect(observer.snapshot().visible).toBe(false);
+  }
+  expect(fake.calls).toHaveLength(before);
+  observer.dispose();
+  expect(fake.calls).toHaveLength(before);
+  expect(store.load(identity)).toEqual(record);
+  fake.stopMode = "verified";
+  await owner.close();
+  expect(store.load(identity)).toBeNull();
+});
+it.each(["closed", "lease_expired", "launch_failed"] as const)(
+  "an observer cannot reopen the same candidate after public %s, but a new candidate remains eligible",
+  async (reason) => {
+    const { controller, port, fake, clock } = setup();
+    const owner = controller();
+    await owner.see(() => candidate);
+    fake.expire();
+    const observer = createPreviewController(
+      port,
+      clock,
+      identity,
+      createPreviewOwnershipStore(origin, () => storage()),
+    );
+    observer.observe(fakeStatus(reason === "launch_failed" ? "failed" : "stopped", reason));
+    await observer.close();
+    const starts = fake.calls.filter((call) => call.kind === "start").length;
+    await observer.see(() => candidate);
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(starts);
+    expect(observer.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+    await observer.see(() => ({ ...candidate, revision: 2, head_commit: "new-head" }));
+    expect(observer.snapshot()).toMatchObject({ owned: true, status: { revision: 2 } });
+    observer.dispose();
+  },
+);
+it("terminal recovery cannot be revived by activation or repeated public ready arrivals", async () => {
+  const { controller, port, fake, clock } = setup();
+  await controller().see(() => candidate);
+  fake.expire();
+  const recovered = controller();
+  await recovered.recover(() => candidate);
+  recovered.observe(fakeStatus("ready"));
+  await recovered.see(() => candidate);
+  await recovered.close();
+  clock.advance(10_000);
+  expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+  expect(fake.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
+  expect(recovered.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+  const stop = vi.spyOn(port, "stop");
+  recovered.dispose();
+  expect(stop).not.toHaveBeenCalled();
+});
+
+it("a recovered mounted owner retains normal verified-Close and explicit new-start behavior", async () => {
+  const { controller, fake, port, clock } = setup();
+  const first = controller();
+  await first.see(() => candidate);
+  fake.stopMode = "lost";
+  first.dispose();
+  const owner = controller();
+  owner.observe(fakeStatus("ready"));
+  await owner.recover(() => candidate);
+  await owner.see(() => candidate);
+  fake.renewalRejects = true;
+  clock.advance(10_000);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(owner.snapshot().owned).toBe(true);
+  fake.stopMode = "verified";
+  await owner.close();
+  fake.renewalRejects = false;
+  await owner.see(() => candidate);
+  expect(owner.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+  expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+  const stop = vi.spyOn(port, "stop");
+  owner.dispose();
+  expect(stop).toHaveBeenCalledTimes(1);
+});
+
+it("hidden recovered ownership cannot obtain frame details through a direct refresh", async () => {
+  const { controller, fake, port } = setup();
+  const first = controller();
+  await first.see(() => candidate);
+  fake.stopMode = "lost";
+  first.dispose();
+  const owner = controller();
+  await owner.recover(() => candidate);
+  const details = vi.spyOn(port, "details");
+  await owner.refresh();
+  expect(owner.snapshot()).toMatchObject({ owned: true, visible: false, frameUrl: null });
+  expect(details).not.toHaveBeenCalled();
+  fake.stopMode = "verified";
+  await owner.close();
+});
+it.each(["stopped", "failed"] as const)(
+  "a hidden owner receiving %s after recovery cannot revive its candidate",
+  async (state) => {
+    const { controller, fake, clock } = setup();
+    const first = controller();
+    await first.see(() => candidate);
+    fake.stopMode = "lost";
+    first.dispose();
+    const owner = controller();
+    await owner.recover(() => candidate);
+    fake.expire();
+    owner.observe(fakeStatus(state, state === "failed" ? "launch_failed" : "closed"));
+    await owner.see(() => candidate);
+    clock.advance(10_000);
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+    expect(owner.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+  },
+);
+it("clears a valid stored record with different whitespace and property order", () => {
+  const disk = storage(),
+    store = createPreviewOwnershipStore(origin, () => disk);
+  store.save(record);
+  const key = [...disk.data.keys()][0];
+  if (!key) throw new Error("Missing fixture key");
+  disk.data.set(
+    key,
+    JSON.stringify(
+      {
+        lease_token: record.lease_token,
+        preview_id: record.preview_id,
+        candidate: record.candidate,
+        identity: record.identity,
+      },
+      null,
+      2,
+    ),
+  );
+  const saved = store.load(identity);
+  expect(saved).toEqual(record);
+  if (saved) store.clear(saved);
+  expect(disk.data.size).toBe(0);
+});
+
+it("Close during recovery details stops the matching owner without renewing or revealing it", async () => {
+  const { controller, fake, port, store } = setup();
+  const first = controller();
+  await first.see(() => candidate);
+  fake.stopMode = "lost";
+  first.dispose();
+  fake.stopMode = "verified";
+  const pending = deferred<PreviewDetails>();
+  vi.spyOn(port, "details").mockReturnValue(pending.promise);
+  const renew = vi.spyOn(port, "renew"),
+    stop = vi.spyOn(port, "stop");
+  const owner = controller();
+  const recovering = owner.recover(() => candidate);
+  const closing = owner.close();
+  pending.resolve({ status: fakeStatus("ready"), url: fake.frameUrl });
+  await Promise.all([recovering, closing]);
+  expect(renew).not.toHaveBeenCalled();
+  expect(stop).toHaveBeenCalledTimes(1);
+  expect(store.load(identity)).toBeNull();
+  expect(owner.snapshot()).toMatchObject({ owned: false, visible: false, frameUrl: null });
+});
+
+it.each(["reject", "unverified"] as const)(
+  "discards a hidden recovered owner's %s stop authority while retaining quarantine",
+  async (mode) => {
+    const { controller, fake, port, store } = setup();
+    const first = controller();
+    await first.see(() => candidate);
+    fake.stopMode = "lost";
+    first.dispose();
+    const owner = controller();
+    await owner.recover(() => candidate);
+    fake.stopMode = mode;
+    await owner.close();
+    expect(store.load(identity)).toBeNull();
+    expect(owner.snapshot()).toMatchObject({ owned: false, uncertain: true, frameUrl: null });
+    const stop = vi.spyOn(port, "stop");
+    await owner.close();
+    owner.dispose();
+    expect(stop).not.toHaveBeenCalled();
+  },
+);
+
+it("clears a late verified stop receipt after the local Close deadline without duplicate unload", async () => {
+  const { controller, port, clock, store } = setup();
+  const owner = controller();
+  await owner.see(() => candidate);
+  const pending = deferred<ReturnType<typeof fakeStatus>>();
+  const stop = vi.spyOn(port, "stop").mockReturnValue(pending.promise);
+  const closing = owner.close();
+  await Promise.resolve();
+  clock.advance(5_000);
+  await closing;
+  expect(store.load(identity)).toEqual(record);
+  owner.dispose();
+  expect(stop).toHaveBeenCalledTimes(1);
+  pending.resolve(fakeStatus("stopped", "closed"));
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(store.load(identity)).toBeNull();
+});

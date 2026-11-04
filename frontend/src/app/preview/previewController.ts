@@ -26,6 +26,8 @@ const sameCandidate = (status: PreviewStatus, candidate: PreviewCandidate) =>
   status.revision === candidate.revision &&
   status.head_commit === candidate.head_commit;
 const rank = { starting: 0, ready: 1, stopping: 2, stopped: 3, failed: 3 };
+const candidateKey = (candidate: PreviewCandidate) =>
+  JSON.stringify([candidate.run_id, candidate.agent_id, candidate.revision, candidate.head_commit]);
 
 /** Injected controller. Browser storage is optional and stays behind a private port. */
 export function createPreviewController(
@@ -46,6 +48,7 @@ class Controller implements PreviewController {
   #recoveryChecked = false;
   #recovered = false;
   #resume = false;
+  #observedCandidates = new Set<string>();
   #token: string | null = null;
   #id: string | null = null;
   #candidate: PreviewCandidate | null = null;
@@ -62,6 +65,7 @@ class Controller implements PreviewController {
   #closing: Promise<boolean> | null = null;
   #listeners = new Set<() => void>();
   #requests = new Set<AbortController>();
+  #pendingStops = new Map<string, Promise<PreviewStatus>>();
   #view: PreviewView = Object.freeze({
     visible: false,
     status: null,
@@ -143,6 +147,8 @@ class Controller implements PreviewController {
     this.#saved = null;
   }
   #discardRecovery(status?: PreviewStatus) {
+    const candidate = this.#saved?.candidate ?? this.#candidate;
+    if (candidate) this.#observedCandidates.add(candidateKey(candidate));
     this.#clearSaved();
     this.#cancelRenewal();
     this.#token = null;
@@ -170,6 +176,7 @@ class Controller implements PreviewController {
       return Promise.resolve();
     }
     if (!this.#saved) return Promise.resolve();
+    this.#cancelStart = false;
     const flight = this.#recover(this.#saved, getCandidate).finally(() => {
       if (this.#recovery === flight) this.#recovery = null;
     });
@@ -202,10 +209,17 @@ class Controller implements PreviewController {
       this.#id = record.preview_id;
       this.#token = record.lease_token;
       this.#recovered = this.#resume = true;
+      if (this.#cancelStart) {
+        await this.#stop();
+        return;
+      }
       await this.#renew();
       if (this.#current(epoch)) {
         if (!sameOwnershipCandidate(record.candidate, getCandidate())) this.#discardRecovery();
-        else this.#publish({});
+        else {
+          if (this.#token) this.#observedCandidates.delete(candidateKey(record.candidate));
+          this.#publish({});
+        }
       }
     } catch {
       if (this.#current(epoch)) this.#discardRecovery(this.#view.status ?? undefined);
@@ -257,6 +271,11 @@ class Controller implements PreviewController {
     if (this.#token) {
       if (this.#matches(status)) this.#accept(status);
     } else if (!this.#flight && status.run_id === this.#identity.run) {
+      const previous = this.#view.status;
+      // A late duplicate after this owner's verified release is still that release.
+      // First terminal arrivals and failed recovery already retain observer refusal.
+      if (previous?.preview_id !== status.preview_id || !confirmed(previous))
+        this.#observedCandidates.add(candidateKey(status));
       // After the start deadline, the run's single slot can also prove that a
       // different preview holds it, or that the run's preview has ended.
       if (
@@ -310,7 +329,14 @@ class Controller implements PreviewController {
   refresh = async () => {
     const epoch = this.#epoch,
       id = this.#id;
-    if (!id || !this.#token || this.#disposed || this.#closing || this.#detailsEpoch === epoch)
+    if (
+      !id ||
+      !this.#token ||
+      this.#resume ||
+      this.#disposed ||
+      this.#closing ||
+      this.#detailsEpoch === epoch
+    )
       return;
     this.#detailsEpoch = epoch;
     try {
@@ -392,6 +418,10 @@ class Controller implements PreviewController {
       this.#publish({ pending: false });
       return;
     }
+    if (this.#observedCandidates.has(candidateKey(candidate))) {
+      this.#publish({ pending: false, visible: true, frameUrl: null });
+      return;
+    }
     const observed = {
       run_id: candidate.run_id,
       agent_id: candidate.agent_id,
@@ -454,24 +484,36 @@ class Controller implements PreviewController {
       this.#publish({ pending: false, uncertain: true, notice: "start_failed" });
     }
   }
+  #sendStop(id: string, token: string, signal: AbortSignal) {
+    const pending = this.#pendingStops.get(id);
+    if (pending) return pending;
+    // A UI deadline does not finish a keepalive fetch. Retain that flight until
+    // transport settles so later Close/disposal cannot dispatch a competing stop.
+    const flight = this.#port
+      .stop(id, { lease_token: token }, signal, { keepalive: true })
+      .then(parsePreviewStatus)
+      .then((status) => {
+        if (
+          this.#saved?.preview_id === status.preview_id &&
+          sameCandidate(status, this.#saved.candidate) &&
+          terminal(status)
+        )
+          this.#clearSaved();
+        return status;
+      })
+      .finally(() => {
+        if (this.#pendingStops.get(id) === flight) this.#pendingStops.delete(id);
+      });
+    this.#pendingStops.set(id, flight);
+    return flight;
+  }
   async #abandon(receipt: { preview_id: string; lease_token: string }) {
     if (!previewId(receipt.preview_id) || !receipt.lease_token) return;
     try {
-      const status = parsePreviewStatus(
-        await this.#bounded(
-          (signal) =>
-            this.#port.stop(receipt.preview_id, { lease_token: receipt.lease_token }, signal, {
-              keepalive: true,
-            }),
-          false,
-        ),
+      await this.#bounded(
+        (signal) => this.#sendStop(receipt.preview_id, receipt.lease_token, signal),
+        false,
       );
-      if (
-        this.#saved?.preview_id === receipt.preview_id &&
-        sameCandidate(status, this.#saved.candidate) &&
-        terminal(status)
-      )
-        this.#clearSaved();
     } catch {
       /* Expiry remains the fallback. */
     }
@@ -497,10 +539,7 @@ class Controller implements PreviewController {
     });
     try {
       const status = parsePreviewStatus(
-        await this.#bounded(
-          (signal) => this.#port.stop(id, { lease_token: token }, signal, { keepalive: true }),
-          false,
-        ),
+        await this.#bounded((signal) => this.#sendStop(id, token, signal), false),
       );
       if (
         status.preview_id === id &&
@@ -515,6 +554,7 @@ class Controller implements PreviewController {
       return true;
     } catch {
       if (!this.#current(epoch)) return !this.#token && !this.#quarantined;
+      if (this.#recovered) this.#discardRecovery();
       this.#quarantined = true;
       this.#publish({
         pending: false,
@@ -555,6 +595,7 @@ class Controller implements PreviewController {
     this.#recoveryChecked = false;
     await this.close();
     if (!this.#token && runChanged) {
+      this.#observedCandidates.clear();
       this.#startDeadlineOff?.();
       this.#quarantined = false;
       this.#candidate = null;
@@ -575,6 +616,7 @@ class Controller implements PreviewController {
       token = this.#token;
     this.#token = null;
     this.#listeners.clear();
-    if (id && token && !this.#closing) void this.#abandon({ preview_id: id, lease_token: token });
+    if (id && token && !this.#closing && !this.#pendingStops.has(id))
+      void this.#abandon({ preview_id: id, lease_token: token });
   };
 }

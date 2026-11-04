@@ -493,3 +493,28 @@ it("catches unload rejection without retry; an observer dispatches no stop", asy
   expect(stop.mock.calls[0]?.[3]).toEqual({ keepalive: true });
   expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
 });
+
+it("does not duplicate a transport-pending stop when disposal follows the Close deadline", async () => {
+  const { port, controller } = setup();
+  await controller.see(() => fakeCandidate);
+  port.stopMode = "lost";
+  const stop = vi.spyOn(port, "stop");
+  const closing = controller.close();
+  await vi.advanceTimersByTimeAsync(5_000);
+  await closing;
+  controller.dispose();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(stop).toHaveBeenCalledTimes(1);
+  expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
+});
+
+it("a duplicate terminal arrival after verified owner Close does not turn its candidate into an observer refusal", async () => {
+  const { port, controller } = setup();
+  await controller.see(() => fakeCandidate);
+  await controller.close();
+  controller.observe(fakeStatus("stopped", "closed"));
+  await controller.see(() => fakeCandidate);
+  expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+  expect(controller.snapshot()).toMatchObject({ owned: true, frameUrl: port.frameUrl });
+  controller.dispose();
+});
