@@ -30,7 +30,7 @@ async def test_setup_failure_rolls_back_and_cleanup_failure_blocks_retry(endpoin
     for turn in turns:
         turn["usage"] = {"input_tokens": 100, "output_tokens": 20}
     factory = Scripts([json.dumps({"task": task.prompt, "turns": turns})])
-    settings = live_settings(tmp_path)
+    settings = live_settings(tmp_path, harness_pack=False)
     out = tmp_path / "results" / "r.jsonl"
     rates = Tariff(input=0, output=0)
     async with live_server(settings, factory) as server:

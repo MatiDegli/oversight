@@ -53,6 +53,7 @@ def test_nested_factory_requires_explicit_inputs(tmp_path: Path) -> None:
     assert inputs["tree"] == config.tree
     assert isinstance(inputs["settings"], Settings)
     assert inputs["settings"].runtime_dir == config.preview_dir / "state" / ".runtime"
+    assert inputs["settings"].harness_pack is True
     assert inputs["policy"].supported_roles == ("coder", "lead")
     assert inputs["coder_factory"] is not inputs["lead_factory"]
     assert list(inspect.signature(AppFactory.__call__).parameters) == [

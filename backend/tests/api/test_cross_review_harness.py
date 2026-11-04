@@ -50,6 +50,7 @@ async def test_three_clean_fake_starts_request_once_and_preserve_second_review(
             )
             settings = two_fakes(
                 root,
+                harness_pack=False,
                 agent_model_b="fake-b",
                 cross_review=True,
                 review_model="fake-b",

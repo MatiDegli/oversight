@@ -4975,3 +4975,31 @@ BSD-3-Clause. No component is described as covered solely by CPython's PSF grant
 policy exception. Upstream license bytes are preserved across Windows/Linux checkout for hashes.
 Native runner success, remaining failure-path evidence, headed UI acceptance and independent
 review remain necessary; local cross-target compilation is not native execution evidence.
+
+
+## Harness pack on by default, with static diagnostics and a symbol tool (2026-11-04)
+
+Maintainer ruling: the existing `OVERSIGHT_HARNESS_PACK` now defaults to true. Explicit false
+retains the comparison arm's six tools, prompts and observations. This supersedes only the
+off-by-default part of the 2026-10-28 harness ruling; the single-switch comparison remains.
+
+With the pack on, successful Python edits keep their changes and append only newly introduced
+static diagnostics, compared by code and message. Isolated ruff checks read the before/after
+content on stdin outside the worktree, use only E9,F63,F7,F82, and stop after ten seconds.
+At most twenty bounded rows ask the agent to fix findings before tests. Missing ruff, timeout
+or malformed output logs a warning and preserves the ordinary edit result. Ruff is a pinned
+runtime dependency. Its stdin subprocess is the narrow exception to the workspace runner's
+no-stdin interface; it receives no inherited provider credentials.
+
+Read-only Python `find_symbol` is inside the same pack, advertised only when it is on. It
+accepts an identifier or dotted name and an optional search path. Definitions and references
+have bounded source rows, focus ranges and graph node ids. Jedi and parso are exactly pinned
+MIT dependencies admitted by the fourteen-day cutoff. Static navigation may be incomplete.
+
+The isolated Python worker runs outside the worktree with a twenty-second kill timeout. It
+uses Jedi with unsafe extensions disabled, empty added paths and smart sys.path disabled.
+Only validated, non-secret Python sources enter its disposable snapshot; an audit guard
+refuses original-tree reads, secret paths and snapshot imports. Returned paths are validated
+again through Tree; external definitions expose only module names. History treats the tool
+as a read, and nested coder admission follows the pack. No shell tool, scratchpad or language
+server is authorized. Existing frontend fallbacks display its steps without a UI change.

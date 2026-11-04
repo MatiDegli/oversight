@@ -351,7 +351,7 @@ def test_bounded_context_and_prompt_version(monkeypatch: pytest.MonkeyPatch) -> 
     long = example_context("x" * 13000, target_excerpts=[], test_excerpts=[], supplied=[])
     assert len(long) == EXAMPLE_CONTEXT_CHARS and long.endswith("text omitted.]")
     versions = [prompt_version(pack) for pack in (False, True)]
-    assert versions == ["agent-v1-2e780e372af4", "agent-v1-80a055d05910"]
+    assert versions == ["agent-v1-2e780e372af4", "agent-v1-78ca67b00cfe"]
     monkeypatch.setattr(phase, "EXAMPLES_PROMPT", "different prompt")
     assert versions == [prompt_version(pack) for pack in (False, True)]
 

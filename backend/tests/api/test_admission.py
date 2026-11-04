@@ -64,7 +64,7 @@ def fake_settings(tmp_path: Path, maximum: int) -> Settings:
             )
         )
         paths["fake_script" + (f"_{slot.lower()}" if slot != "A" else "")] = path
-    return live_settings(tmp_path, max_agents=maximum, **paths)
+    return live_settings(tmp_path, harness_pack=False, max_agents=maximum, **paths)
 
 
 @pytest.mark.parametrize("maximum", [4, 6])

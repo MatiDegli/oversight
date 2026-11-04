@@ -9,11 +9,11 @@ from typing import Protocol, cast
 from oversight.agents import (
     FAKE_MODEL,
     FAKE_MODEL_B,
-    TOOL_NAMES,
     ModelClient,
     Script,
     ScriptedModel,
     parse_script,
+    tool_names,
 )
 from oversight.limits import bounded_text
 from oversight_contracts.common import Slot
@@ -72,7 +72,7 @@ class ScriptedStory:
     scripted_actions_notice: str
 
 
-def load_story(path: Path) -> ScriptedStory:
+def load_story(path: Path, *, harness_pack: bool = True) -> ScriptedStory:
     """Load explicit local files only; preserve compatibility with the existing script loader."""
     raw_data: object = json.loads(bounded_text(path))
     if not isinstance(raw_data, dict):
@@ -85,21 +85,21 @@ def load_story(path: Path) -> ScriptedStory:
     ):
         raise ValueError("Scripted story requires its label, notice and coder role")
     coder = parse_script(json.dumps(data))
-    _validate_role_script(coder, "coder")
+    _validate_role_script(coder, "coder", harness_pack=harness_pack)
     lead: Script | None = None
     if "lead" in data:
         raw = data["lead"]
         if not isinstance(raw, dict) or cast(dict[str, object], raw).get("role") != "lead":
             raise ValueError("Scripted story requires a separate lead role")
         lead = parse_script(json.dumps(raw))
-        _validate_role_script(lead, "lead")
+        _validate_role_script(lead, "lead", harness_pack=harness_pack)
     return ScriptedStory(coder, lead, AGENTS_LABEL, SCRIPTED_ACTIONS_NOTICE)
 
 
-def _validate_role_script(script: Script, role: str) -> None:
+def _validate_role_script(script: Script, role: str, *, harness_pack: bool = True) -> None:
     calls = [call for turn in script.turns for call in turn.tool_calls]
     names = {call.name for call in calls}
-    allowed = frozenset(TOOL_NAMES) if role == "coder" else _LEAD_TOOLS
+    allowed = frozenset(tool_names(harness_pack)) if role == "coder" else _LEAD_TOOLS
     required = (
         {"edit_file", "run_tests", "finish"} if role == "coder" else {"request_plan", "finish"}
     )
@@ -114,10 +114,12 @@ def _validate_role_script(script: Script, role: str) -> None:
         raise ValueError(f"Script finish does not match the {role} role")
 
 
-def _make_factory(script: Script, role: str, policy: NestedPolicy) -> ScriptedFactory:
+def _make_factory(
+    script: Script, role: str, policy: NestedPolicy, harness_pack: bool
+) -> ScriptedFactory:
     policy.admit(role)
     snapshot = deepcopy(script)
-    _validate_role_script(snapshot, role)
+    _validate_role_script(snapshot, role, harness_pack=harness_pack)
 
     def factory(profile: ModelProfile, slot: Slot) -> ModelClient:
         selected = policy.admit(role, profile)
@@ -132,11 +134,13 @@ def _make_factory(script: Script, role: str, policy: NestedPolicy) -> ScriptedFa
     return factory
 
 
-def make_coder_factory(script: Script, *, policy: NestedPolicy) -> ScriptedFactory:
+def make_coder_factory(
+    script: Script, *, policy: NestedPolicy, harness_pack: bool = True
+) -> ScriptedFactory:
     """Reject role/profile mismatches before constructing a fresh facade-exported fake client."""
-    return _make_factory(script, "coder", policy)
+    return _make_factory(script, "coder", policy, harness_pack)
 
 
 def make_lead_factory(script: Script, *, policy: NestedPolicy) -> ScriptedFactory:
     """A lead plays only its orchestration script, never the coder's edits."""
-    return _make_factory(script, "lead", policy)
+    return _make_factory(script, "lead", policy, False)

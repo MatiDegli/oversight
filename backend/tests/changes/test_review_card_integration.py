@@ -68,6 +68,7 @@ async def test_measured_callers_and_edited_nodes_replay_from_sqlite_without_work
     monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: client(api))
     settings = live_settings(
         tmp_path,
+        harness_pack=False,
         behavior_diff=True,
         measured_cone=True,
         baseten_api_key="test",
@@ -187,6 +188,7 @@ async def test_f1_invalid_json_is_unavailable_and_asked_for_never_approves(
     monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: client(api))
     settings = live_settings(
         tmp_path,
+        harness_pack=False,
         behavior_diff=True,
         baseten_api_key="test",
         baseten_budget_usd=10,
@@ -211,7 +213,7 @@ async def test_f1_invalid_json_is_unavailable_and_asked_for_never_approves(
 async def test_f2_reuses_f1_fail_closed_budget_admission(tmp_path, monkeypatch):
     forbidden = Mock(side_effect=AssertionError("unconfigured budget must not create a client"))
     monkeypatch.setattr(runtime_decisions, "configured_decision", forbidden)
-    settings = live_settings(tmp_path, behavior_diff=True)
+    settings = live_settings(tmp_path, harness_pack=False, behavior_diff=True)
     edits = [(PRICING, "if quantity >= minimum:", "if quantity > minimum:")]
     async with asyncio.timeout(90), live_server(settings, Scripts([script(edits)])) as s:
         await run(s)
@@ -228,6 +230,7 @@ async def test_f1_queue_wait_uses_the_f2_call_deadline(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_decisions, "configured_decision", forbidden)
     settings = live_settings(
         tmp_path,
+        harness_pack=False,
         behavior_diff=True,
         review_card_call_s=0.05,
         review_card_total_s=1,
@@ -249,6 +252,7 @@ async def test_cancelling_f2_keeps_the_real_f1_receipt_and_usage(tmp_path, monke
     monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: client(api))
     settings = live_settings(
         tmp_path,
+        harness_pack=False,
         behavior_diff=True,
         baseten_api_key="test",
         baseten_budget_usd=10,

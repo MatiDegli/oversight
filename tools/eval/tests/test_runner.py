@@ -62,7 +62,7 @@ async def test_end_to_end(mode, outcome, tmp_path):
     factory = Scripts(
         [script(fix=mode != "incorrect", tamper=mode == "tamper", halt=mode == "halted")]
     )
-    settings = live_settings(tmp_path)
+    settings = live_settings(tmp_path, harness_pack=False)
     out = tmp_path / "results" / "results.jsonl"
     async with live_server(settings, factory) as server:
         await execute(str(server.client.base_url), "fake", 1, out, [TASK], FREE)
@@ -93,7 +93,7 @@ async def test_unknown_usage_stops_and_persists_across_server_restart(tmp_path, 
     out = tmp_path / "results" / "results.jsonl"
     factory = Scripts([script(usage=not missing_counts)])
     tariff = FREE if missing_counts else None
-    async with live_server(live_settings(tmp_path), factory) as server:
+    async with live_server(live_settings(tmp_path, harness_pack=False), factory) as server:
         with pytest.raises(BenchError, match="unknown cost"):
             await execute(str(server.client.base_url), "fake", 1, out, [TASK], tariff)
         row = result(out)
@@ -101,7 +101,7 @@ async def test_unknown_usage_stops_and_persists_across_server_restart(tmp_path, 
         assert row["cost_usd"] == "unknown"
         # Stop may cancel another call before it can report usage; totals stay unknown.
         assert row["tokens"] == {"input": "unknown", "output": "unknown"}
-    async with live_server(live_settings(tmp_path), factory) as server:
+    async with live_server(live_settings(tmp_path, harness_pack=False), factory) as server:
         with pytest.raises(BenchError, match="unknown cost"):
             await execute(str(server.client.base_url), "fake", 1, out, [TASK], tariff)
         assert factory.calls == 1
@@ -113,7 +113,7 @@ async def test_two_tasks_use_one_agent_at_a_time(tmp_path):
     tasks = load_tasks()[:2]
     factory = Scripts([script(t) for t in tasks])
     out = tmp_path / "results" / "results.jsonl"
-    async with live_server(live_settings(tmp_path), factory) as server:
+    async with live_server(live_settings(tmp_path, harness_pack=False), factory) as server:
         await execute(str(server.client.base_url), "fake", 1, out, tasks, FREE)
         rows = [json.loads(line) for line in out.read_text().splitlines()]
         assert [r["outcome"] for r in rows] == ["solved", "solved"]
@@ -131,7 +131,7 @@ async def test_two_tasks_use_one_agent_at_a_time(tmp_path):
 async def test_explicit_cancellation_stops_and_restores(tmp_path):
     model = GatedModel()
     out = tmp_path / "results" / "results.jsonl"
-    settings = live_settings(tmp_path)
+    settings = live_settings(tmp_path, harness_pack=False)
     async with live_server(settings, lambda p, s: model) as server:
         task = asyncio.create_task(
             execute(str(server.client.base_url), "fake", 1, out, [TASK], FREE)
