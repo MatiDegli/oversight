@@ -34,7 +34,11 @@ REPOSITORY = Path(__file__).resolve().parents[3]
 
 
 async def git(root, *args):
-    result = await run_process(["git", *args], cwd=root, timeout_s=30)
+    result = await run_process(
+        ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", *args],
+        cwd=root,
+        timeout_s=30,
+    )
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 

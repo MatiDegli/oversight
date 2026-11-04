@@ -177,6 +177,50 @@ jobs:
           PY
       - run: make install
       - uses: ./.github/actions/setup-gitleaks
+      - name: Normalize system data permissions
+        run: |
+          uv run --frozen python - <<'PY'
+          import asyncio
+          import json
+          import stat
+          from pathlib import Path
+
+          from oversight.workspace.preview_boundary_entry import SYSTEM_DIRECTORIES, SYSTEM_FILES
+
+
+          async def main():
+              targets = [t for t in SYSTEM_FILES if t in {"/etc/localtime", "/usr/share/zoneinfo/Etc/UTC"}]
+              if len(targets) != 2:
+                  raise SystemExit("Missing timezone targets in product system list")
+              if set(SYSTEM_DIRECTORIES) != {"/usr/lib/locale/C.utf8", "/usr/share/git-core/templates"}:
+                  raise SystemExit("Unexpected product system data directories")
+              targets.extend(SYSTEM_DIRECTORIES)
+              # Resolve every required target before making any change; never follow child symlinks.
+              roots = sorted({Path(target).resolve(strict=True) for target in targets})
+              changed = 0
+              for root in roots:
+                  if not (root.is_file() or root.is_dir()):
+                      raise SystemExit(f"Unsupported system data target: {root}")
+                  paths = sorted(root.rglob("*")) if root.is_dir() else (root,)
+                  for path in paths:
+                      info = path.lstat()
+                      if not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111:
+                          continue
+                      with path.open("rb") as stream:
+                          header = stream.read(4)
+                      if header.startswith((b"#!", b"\x7fELF")):
+                          continue
+                      process = await asyncio.create_subprocess_exec("sudo", "chmod", "a-x", "--", str(path))
+                      if await asyncio.wait_for(process.wait(), timeout=10) != 0:
+                          raise SystemExit(f"Could not clear system data execute bits: {path}")
+                      changed += 1
+                      if changed <= 20:
+                          print(f"Cleared system data execute bits: {json.dumps(str(path))}", flush=True)
+              print(f"System data permissions: changed {changed} regular files (first 20 listed)")
+
+
+          asyncio.run(main())
+          PY
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: make check-ci

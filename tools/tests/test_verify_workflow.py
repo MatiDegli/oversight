@@ -166,6 +166,54 @@ PY""",
 }
 
 
+SYSTEM_DATA_PERMISSIONS = {
+    "name": "Normalize system data permissions",
+    "run": r"""|
+uv run --frozen python - <<'PY'
+import asyncio
+import json
+import stat
+from pathlib import Path
+
+from oversight.workspace.preview_boundary_entry import SYSTEM_DIRECTORIES, SYSTEM_FILES
+
+
+async def main():
+    targets = [t for t in SYSTEM_FILES if t in {"/etc/localtime", "/usr/share/zoneinfo/Etc/UTC"}]
+    if len(targets) != 2:
+        raise SystemExit("Missing timezone targets in product system list")
+    if set(SYSTEM_DIRECTORIES) != {"/usr/lib/locale/C.utf8", "/usr/share/git-core/templates"}:
+        raise SystemExit("Unexpected product system data directories")
+    targets.extend(SYSTEM_DIRECTORIES)
+    # Resolve every required target before making any change; never follow child symlinks.
+    roots = sorted({Path(target).resolve(strict=True) for target in targets})
+    changed = 0
+    for root in roots:
+        if not (root.is_file() or root.is_dir()):
+            raise SystemExit(f"Unsupported system data target: {root}")
+        paths = sorted(root.rglob("*")) if root.is_dir() else (root,)
+        for path in paths:
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111:
+                continue
+            with path.open("rb") as stream:
+                header = stream.read(4)
+            if header.startswith((b"#!", b"\x7fELF")):
+                continue
+            process = await asyncio.create_subprocess_exec("sudo", "chmod", "a-x", "--", str(path))
+            if await asyncio.wait_for(process.wait(), timeout=10) != 0:
+                raise SystemExit(f"Could not clear system data execute bits: {path}")
+            changed += 1
+            if changed <= 20:
+                print(f"Cleared system data execute bits: {json.dumps(str(path))}", flush=True)
+    print(f"System data permissions: changed {changed} regular files (first 20 listed)")
+
+
+asyncio.run(main())
+PY""",
+}
+
+
 def mapping(text: str) -> dict[str, str]:
     """Consume every line, rejecting duplicate keys and unsupported YAML forms."""
     text = text.strip("\n") + "\n"
@@ -230,6 +278,13 @@ def assert_named_copy(actual: dict[str, str], source: dict[str, str]) -> None:
     assert {key: value for key, value in actual.items() if key != "name"} == source
 
 
+def remove_system_data_step(check, ci_check):
+    assert len(check) == 14
+    assert len(ci_check) == 13
+    assert check[8] == ci_check[8] == SYSTEM_DATA_PERMISSIONS
+    return check[:8] + check[9:], ci_check[:8] + ci_check[9:]
+
+
 def assert_verify_policy(verify: str, ci: str) -> None:
     workflow = mapping(verify)
     assert set(workflow) == {"name", "on", "permissions", "jobs"}
@@ -261,6 +316,7 @@ def assert_verify_policy(verify: str, ci: str) -> None:
 
     check = parsed_steps["check"]
     ci_check = steps(mapping(ci_jobs["check"])["steps"])
+    check, ci_check = remove_system_data_step(check, ci_check)
     assert len(check) == 13
     assert len(ci_check) == 12
     assert check[5] == ci_check[5] == VERIFIED_PNPM
@@ -304,6 +360,100 @@ def assert_verify_policy(verify: str, ci: str) -> None:
 
 def test_verify_has_only_the_manual_backend_jobs_and_required_gates() -> None:
     assert_verify_policy((WORKFLOWS / "verify.yml").read_text(), (WORKFLOWS / "ci.yml").read_text())
+
+
+def system_data_harness(paths: dict[str, Path], tmp_path: Path, unexpected: bool) -> str:
+    script = SYSTEM_DATA_PERMISSIONS["run"].split("<<'PY'\n", 1)[1].removesuffix("PY")
+    # Run the pinned script with only product-root resolution and sudo intercepted.
+    return f"""
+import asyncio, os
+from pathlib import Path
+import oversight.workspace.preview_boundary_entry as entry
+if {unexpected!r}:
+    entry.SYSTEM_DIRECTORIES += ("/unexpected",)
+mapping = { {k: str(v) for k, v in paths.items()}!r}
+resolve = Path.resolve
+def fixture_resolve(self, **kwargs):
+    return resolve(Path(mapping.get(str(self), str(self))), **kwargs)
+Path.resolve = fixture_resolve
+class Process:
+    async def wait(self): return 0
+async def chmod(*args):
+    assert args[:4] == ("sudo", "chmod", "a-x", "--")
+    path = Path(args[4])
+    assert path.is_relative_to({str(tmp_path / "host")!r})
+    os.chmod(path, path.stat().st_mode & ~0o111)
+    return Process()
+asyncio.create_subprocess_exec = chmod
+exec({script!r})
+"""
+
+
+@pytest.mark.parametrize("layout", ["data", "alias", "missing", "bounded", "unexpected"])
+def test_system_data_permissions_change_only_regular_nonexecutables(tmp_path, layout):
+    declarations = [
+        "/etc/localtime",
+        "/usr/share/zoneinfo/Etc/UTC",
+        "/usr/lib/locale/C.utf8",
+        "/usr/share/git-core/templates",
+    ]
+    paths = {target: tmp_path / "host" / target.removeprefix("/") for target in declarations}
+    data = []
+    for index, target in enumerate(declarations):
+        root = paths[target]
+        if index < 2:
+            root.parent.mkdir(parents=True, exist_ok=True)
+            entry = root
+        else:
+            root.mkdir(parents=True)
+            entry = root / "description"
+        entry.write_bytes(b"Unnamed repository\n")
+        entry.chmod(0o755)
+        data.append(entry)
+    templates = paths[declarations[-1]]
+    for name, header in (("hook", b"#!/bin/sh\n"), ("tool", b"\x7fELFfixture")):
+        entry = templates / name
+        entry.write_bytes(header)
+        entry.chmod(0o755)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "private").write_bytes(b"data")
+    (outside / "private").chmod(0o755)
+    (templates / "link").symlink_to(outside / "private")
+    (templates / "directory-link").symlink_to(outside, target_is_directory=True)
+    readonly = templates / "readonly"
+    readonly.write_bytes(b"data")
+    readonly.chmod(0o640)
+    if layout == "alias":
+        data[0].unlink()
+        data[0].symlink_to(data[1])
+        data.pop(0)
+    elif layout == "missing":
+        data[0].unlink()
+    elif layout == "bounded":
+        for index in range(25):
+            entry = templates / f"data-{index:02}"
+            entry.write_bytes(b"data")
+            entry.chmod(0o755)
+            data.append(entry)
+    harness = system_data_harness(paths, tmp_path, layout == "unexpected")
+    result = asyncio.run(
+        run_process([sys.executable, "-I", "-c", harness], cwd=tmp_path, timeout_s=20)
+    )
+    assert not result.timed_out
+    assert (result.returncode == 0) == (layout not in {"missing", "unexpected"}), result.stderr
+    if layout in {"missing", "unexpected"}:
+        assert "Cleared system data" not in result.stdout
+        remaining = data[1:] if layout == "missing" else data
+        assert all(p.stat().st_mode & 0o111 for p in remaining)
+    else:
+        assert all(not p.stat().st_mode & 0o111 for p in data)
+        assert result.stdout.count("Cleared system data execute bits:") == min(len(data), 20)
+        assert f"changed {len(data)} regular files" in result.stdout
+    assert readonly.stat().st_mode & 0o777 == 0o640
+    assert (outside / "private").stat().st_mode & 0o111
+    assert all((templates / name).stat().st_mode & 0o111 for name in ("hook", "tool"))
+    assert templates.stat().st_mode & 0o111
 
 
 def pnpm_fixture(tmp_path: Path, declaration: str = "pnpm@12.5.1") -> tuple[Path, Path]:
@@ -546,6 +696,11 @@ exec({script!r})
             "      - name: Verify standalone pnpm on PATH\n        if: false\n",
         ),
         ("command -v pnpm", "command -v node"),
+        (
+            "      - name: Normalize system data permissions\n",
+            "      - name: Normalize system data permissions\n        if: false\n",
+        ),
+        ('"sudo", "chmod", "a-x"', '"sudo", "chmod", "a+x"'),
         ("      - name: Set up uv\n", "      - name: Set up uv\n        if: false\n"),
         (
             "      - name: Install dependencies\n",

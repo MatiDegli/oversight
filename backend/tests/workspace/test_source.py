@@ -46,7 +46,11 @@ def outside_tree(root: Path) -> Path:
 
 
 async def git(root: Path, *args: str) -> str:
-    result = await run_process(["git", *args], cwd=root, timeout_s=10)
+    result = await run_process(
+        ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", *args],
+        cwd=root,
+        timeout_s=10,
+    )
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 

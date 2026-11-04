@@ -9,7 +9,16 @@ from oversight.workspace import run_process
 
 async def raw_git(root: Path, *args: str) -> str:
     result = await run_process(
-        ["git", "-c", "core.hooksPath=/dev/null", *args],
+        [
+            "git",
+            "-c",
+            "maintenance.autoDetach=false",
+            "-c",
+            "gc.autoDetach=false",
+            "-c",
+            "core.hooksPath=/dev/null",
+            *args,
+        ],
         cwd=root,
         timeout_s=5,
         env={
@@ -55,7 +64,8 @@ def test_leave_nested_repo():
     sub.mkdir()
     def git(*args):
         subprocess.run(
-            ["git", "-c", "core.hooksPath=/dev/null", "-c", "user.name=Test",
+            ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false",
+             "-c", "core.hooksPath=/dev/null", "-c", "user.name=Test",
              "-c", "user.email=test@example.invalid", *args], cwd=sub, check=True,
             timeout=5, capture_output=True,
         )

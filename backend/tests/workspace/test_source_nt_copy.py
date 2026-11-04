@@ -31,7 +31,18 @@ GIT_TIMEOUT_S = signature(Workspace.git).parameters["timeout_s"].default
 
 async def git(root: Path, *args: str) -> str:
     result = await run_process(
-        [executable("git"), "-c", "user.name=Fixture", "-c", "user.email=f@example.invalid", *args],
+        [
+            executable("git"),
+            "-c",
+            "maintenance.autoDetach=false",
+            "-c",
+            "gc.autoDetach=false",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=f@example.invalid",
+            *args,
+        ],
         cwd=root,
         timeout_s=10,
     )

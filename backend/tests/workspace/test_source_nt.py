@@ -146,7 +146,11 @@ async def test_real_readonly_git_dirty_untracked_deleted_and_tracked_ignored(
         root = source.root
 
         async def setup(*args: str) -> str:
-            result = await run_process(["git", *args], cwd=root, timeout_s=10)
+            result = await run_process(
+                ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", *args],
+                cwd=root,
+                timeout_s=10,
+            )
             assert result.returncode == 0, result.stderr
             return result.stdout.strip()
 

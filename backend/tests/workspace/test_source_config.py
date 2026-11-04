@@ -451,7 +451,12 @@ async def test_pinned_fsmonitor_is_disabled_and_checkout_stays_clean(tmp_path: P
     root.mkdir(parents=True)
 
     async def git(*args: str) -> str:
-        result = await run_process(["git", *args], cwd=root, timeout_s=10, env=SOURCE_GIT_ENV)
+        result = await run_process(
+            ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", *args],
+            cwd=root,
+            timeout_s=10,
+            env=SOURCE_GIT_ENV,
+        )
         assert result.returncode == 0, result.stderr
         return result.stdout.strip()
 

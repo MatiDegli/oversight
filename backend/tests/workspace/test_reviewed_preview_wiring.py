@@ -728,19 +728,14 @@ def assert_copied_executable_headers(root: Path, name: str) -> None:
         )
 
 
-def copy_system_input(source: Path, destination: Path, target: str) -> None:
-    """System data keeps its bytes, without inherited executable permissions."""
+def copy_system_input(source: Path, destination: Path) -> None:
+    """System mount copies must retain the host's bytes, modes and symlinks."""
     import shutil
 
     if source.is_dir():
         shutil.copytree(source, destination, symlinks=True)
     else:
         shutil.copy2(source, destination)
-    if target.startswith(("/etc/", "/usr/share/zoneinfo/", "/usr/lib/locale/")):
-        paths = destination.rglob("*") if destination.is_dir() else (destination,)
-        for path in paths:
-            if not path.is_symlink() and path.is_file():
-                path.chmod(path.stat().st_mode & ~0o111)
 
 
 @pytest.mark.parametrize(
@@ -764,8 +759,10 @@ def test_copied_executable_header_failure_identifies_relative_entry(tmp_path, he
 @pytest.mark.parametrize(
     "target", ["/etc/localtime", "/usr/share/zoneinfo/Etc/UTC", "/usr/lib/locale/C.utf8"]
 )
-def test_copied_system_data_removes_executable_bits_before_inventory(tmp_path, target):
+def test_copied_system_data_preserves_host_modes_and_refuses_executable_data(tmp_path, target):
     import shutil
+
+    from oversight.workspace.preview_boundary_entry import manifest_digest
 
     source = tmp_path / "source"
     source.write_bytes(b"TZif2\0\n")
@@ -781,16 +778,57 @@ def test_copied_system_data_removes_executable_bits_before_inventory(tmp_path, t
         locale = tmp_path / "locale"
         locale.mkdir()
         shutil.copy2(source, locale / "LC_TIME")
-        copy_system_input(locale, after / "C.utf8", target)
+        copy_system_input(locale, after / "C.utf8")
         copied = after / "C.utf8/LC_TIME"
         assert (after / "C.utf8").stat().st_mode & 0o111
     else:
         copied = after / "localtime"
-        copy_system_input(source, copied, target)
+        copy_system_input(source, copied)
     assert copied.read_bytes() == source.read_bytes()
-    assert not copied.stat().st_mode & 0o111
+    assert copied.stat().st_mode == source.stat().st_mode
+    assert manifest_digest(copied) == manifest_digest(source)
     assert source.stat().st_mode & 0o111
-    assert_copied_executable_headers(after, "system-3")
+    with pytest.raises(AssertionError, match="first bytes b'TZif2"):
+        assert_copied_executable_headers(after, "system-3")
+
+
+async def test_normalizing_only_system_copy_breaks_recorded_mount_digest(
+    inputs, tmp_path, monkeypatch
+):
+    from oversight.workspace import _reviewed_preview as wiring
+    from oversight.workspace.preview_boundary_entry import manifest_digest
+    from oversight.workspace.preview_preparation import RootMapping
+
+    from .test_preview_preparation import record
+
+    prepared = await prepare_reviewed(inputs)
+    host, copy = tmp_path / "host/etc", tmp_path / "system-copy"
+    host.mkdir(parents=True)
+    copy.mkdir()
+    original = host / "localtime"
+    original.write_bytes(b"TZif2\0\n")
+    original.chmod(0o755)
+    copied = copy / "localtime"
+    copy_system_input(original, copied)
+    assert manifest_digest(copied) == manifest_digest(original)
+    copied.chmod(copied.stat().st_mode & ~0o111)
+    assert copied.read_bytes() == original.read_bytes()
+    assert manifest_digest(copied) != manifest_digest(original)
+    prepared = replace(
+        prepared,
+        root_mappings=(
+            *(
+                replace(m, target=Path("/T")) if m.source == prepared.tree else m
+                for m in prepared.root_mappings
+            ),
+            RootMapping(copy, host),
+        ),
+        manifests=(*prepared.manifests, record(copy, "system-copy", owned=True)),
+    )
+    monkeypatch.setattr(wiring, "SYSTEM_FILES", (str(original),))
+    monkeypatch.setattr(wiring, "SYSTEM_DIRECTORIES", ())
+    with pytest.raises(ValueError, match="recorded system mount changed"):
+        wiring.boundary_roots(prepared, inputs.excluded_roots)
 
 
 @pytest.mark.parametrize("header", [b"\x7fELFfixture", b"#!/bin/sh\nexit 0\n"])
@@ -801,7 +839,7 @@ def test_copied_system_executables_keep_their_format_and_permissions(tmp_path, h
     root = tmp_path / "copy"
     root.mkdir()
     destination = root / "tool"
-    copy_system_input(source, destination, "/usr/bin/tool")
+    copy_system_input(source, destination)
     assert destination.read_bytes() == header
     assert destination.stat().st_mode & 0o111
     assert_copied_executable_headers(root, "system-0")
@@ -911,7 +949,7 @@ def real_prepared_inputs(directory, tracked):
         root = groups.setdefault(parent, storage / ("system-" + str(len(groups))))
         root.mkdir(exist_ok=True)
         source, destination = Path(target).resolve(strict=True), root / Path(target).name
-        copy_system_input(source, destination, target)
+        copy_system_input(source, destination)
     # The static inventory also validates dormant Git template shebangs. These extra
     # validation inputs are not mounted: the adapter still selects the fixed system list.
     shutil.copy2("/usr/bin/perl", groups["/usr/bin"] / "perl")
