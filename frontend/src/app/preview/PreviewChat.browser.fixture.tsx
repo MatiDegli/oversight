@@ -16,7 +16,7 @@ document.addEventListener(
       event.target instanceof Element &&
       event.target.closest("button")?.textContent === "Preview app"
     ) {
-      window.previewChatTiming = { clicked: Date.now() };
+      window.previewChatTiming = { clicked: performance.now() };
     }
   },
   true,

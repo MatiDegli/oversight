@@ -91,6 +91,31 @@ it("records the capture HEAD and working-tree state beside the Chat PNG", async 
     await session.close();
   }
 });
+it.each([-86_400_000, 86_400_000])(
+  "measures preview durations across a wall-clock adjustment of %i ms",
+  async (offset) => {
+    const session = await support.session(chatSizes[2]);
+    try {
+      await session.page.getByRole("button", { name: "Preview app", exact: true }).click();
+      await check(session.page.locator(".preview-panel-phase")).toContainText("App starting");
+      await session.page.evaluate((delta) => {
+        const original = Date.now;
+        Date.now = () => original() + delta;
+      }, offset);
+      session.publish("ready");
+      await check(
+        session.page.frameLocator("iframe").getByRole("heading", { name: "Candidate shop" }),
+      ).toBeVisible();
+      const manifest = await support.capture(session, "clock-adjustment");
+      expect(manifest.timeToReadyMs).toBeGreaterThan(0);
+      expect(manifest.timeToReadyMs).toBeLessThan(10_000);
+      expect(manifest.timeToInteractiveMs).toBeGreaterThan(0);
+      expect(manifest.timeToInteractiveMs).toBeLessThan(10_000);
+    } finally {
+      await session.close();
+    }
+  },
+);
 it.each(matrix)(
   "proves App option/starting/shop/refusal/replay at $viewport.width in $theme",
   async ({ viewport, theme }) => {

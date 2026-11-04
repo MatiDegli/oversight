@@ -142,13 +142,13 @@ stateStore.subscribe(({ state }) => { window.coldStartTrace.cursors.push(state.l
         );
         replace(
           "          retryWindow = 500;",
-          '          if (event.type === "preview.status" && event.payload.state === "ready") { window.previewChatTiming ??= {}; window.previewChatTiming.ready ??= Date.now(); }\n          retryWindow = 500;',
+          '          if (event.type === "preview.status" && event.payload.state === "ready") { window.previewChatTiming ??= {}; window.previewChatTiming.ready ??= performance.now(); }\n          retryWindow = 500;',
         );
       }
       if (id.endsWith("/preview/PreviewPanel.tsx"))
         replace(
           "progress.load(frame);",
-          "window.previewChatTiming ??= {}; window.previewChatTiming.loaded ??= Date.now(); progress.load(frame);",
+          "window.previewChatTiming ??= {}; window.previewChatTiming.loaded ??= performance.now(); progress.load(frame);",
         );
       return source;
     },
@@ -418,7 +418,7 @@ class ChatSupport {
     );
     page.on("request", (request) => {
       const path = new URL(request.url()).pathname;
-      if (request.method() === "POST" && path === "/previews") started = Date.now();
+      if (request.method() === "POST" && path === "/previews") started = performance.now();
       if (this.real) {
         if (path.endsWith("/lease")) calls.renew++;
         if (path.endsWith("/stop")) calls.stop++;
@@ -431,13 +431,13 @@ class ChatSupport {
           .json()
           .then((value: { status?: PreviewStatus }) => {
             if (value.status) status = value.status;
-            if (value.status?.state === "ready" && readyAt === null) readyAt = Date.now();
+            if (value.status?.state === "ready" && readyAt === null) readyAt = performance.now();
           })
           .catch(() => {});
       }
     });
     page.on("framenavigated", (frame) => {
-      if (frame.parentFrame() && frame.url() !== "about:blank") loadedAt = Date.now();
+      if (frame.parentFrame() && frame.url() !== "about:blank") loadedAt = performance.now();
     });
     await page.goto(`${this.url}preview-chat?theme=${theme}&real=${String(this.real)}&${extra}`, {
       timeout: 30_000,
@@ -452,7 +452,7 @@ class ChatSupport {
     const publish = (state: PreviewStatus["state"], reason: PreviewStatus["reason"] = null) => {
       if (!status) throw new Error("Click Preview app first");
       status = { ...status, state, reason };
-      if (state === "ready") readyAt = Date.now();
+      if (state === "ready") readyAt = performance.now();
       this.send(status);
     };
     return {

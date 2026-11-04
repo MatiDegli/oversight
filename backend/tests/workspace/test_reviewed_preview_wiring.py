@@ -472,7 +472,8 @@ async def test_reviewed_teardown_before_execute(tmp_path, monkeypatch, inputs, t
 
 
 @pytest.mark.parametrize(
-    "fault", ["stale", "backend_dead", "gateway_dead", "forged", "incomplete", "expired"]
+    "fault",
+    ["stale", "backend_dead", "gateway_dead", "forged", "incomplete", "slow_incomplete", "expired"],
 )
 async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
     from oversight.workspace.preview_gateway import PreviewGateway
@@ -484,7 +485,23 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         inputs,
         health_run="stale-run" if fault == "stale" else "fresh-run",
     )
-    execution.config["readiness_s"] = 2
+    attach_gateway = execution.attach_gateway
+
+    async def attach_with_probe_budget():
+        # Keep the normal fixture budget for namespace entry and shorten only readiness.
+        execution.config["readiness_s"] = 2
+        await attach_gateway()
+
+    monkeypatch.setattr(execution, "attach_gateway", attach_with_probe_budget)
+    if fault == "slow_incomplete":
+        confirm = execution.confirm
+
+        async def slow_confirm(handle):
+            await confirm(handle)
+            # A healthy namespace handshake can exceed the short fault-probe budget.
+            await asyncio.sleep(2.1)
+
+        monkeypatch.setattr(execution, "confirm", slow_confirm)
     original = PreviewGateway.probe
     original_get = PreviewGateway._probe_get
     probing = asyncio.Event()
@@ -502,7 +519,7 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         if not fault.endswith("dead"):
             probing.set()
             await proceed.wait()
-        if fault == "incomplete":
+        if fault.endswith("incomplete"):
             kwargs["workers"] = ()
         evidence = await original(gateway, **kwargs)
         if fault == "forged":
