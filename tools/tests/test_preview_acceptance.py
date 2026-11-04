@@ -92,6 +92,7 @@ async def test_acceptance_settings_explicitly_enable_trusted_profile(tmp_path):
     from oversight.workspace import PreviewProfile
 
     config = settings(tmp_path / ".runtime", 18710, vite=15710, pool=(19901, 19902))
+    assert config.preview_profile.origins == ("http://localhost:18710", "http://localhost:15710")
     assert config.preview_profile.enabled is True
     assert config.preview_profile.production_open is True
     assert config.preview_profile.trusted_demo is True

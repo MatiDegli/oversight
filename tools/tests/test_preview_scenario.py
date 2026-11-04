@@ -20,7 +20,7 @@ from oversight_contracts import CONTRACT_VERSION
 pytestmark = pytest.mark.anyio
 ROOT = Path(__file__).resolve().parents[2]
 BASE = "b" * 40
-ORIGIN = "http://127.0.0.1:8710"
+ORIGIN = "http://localhost:8710"
 
 
 class Stream(httpx.AsyncByteStream):
@@ -340,7 +340,7 @@ async def test_scenario_deadline_still_closes_and_rejects(monkeypatch):
     "url",
     [
         "http://example.com:8710",
-        "http://localhost:8710",
+        "http://127.0.0.1:8710",
         "http://127.0.0.1",
         "https://127.0.0.1:8710",
         "http://127.0.0.1:8710/?token=private",
@@ -351,6 +351,62 @@ async def test_scenario_deadline_still_closes_and_rejects(monkeypatch):
 async def test_explicit_loopback_only(url):
     with pytest.raises(story.ScenarioError):
         story.loopback_url(url, root=True)
+
+
+async def test_localhost_backend_and_exact_opposite_frame_are_supported():
+    assert story.loopback_url(ORIGIN + "/", root=True) == ORIGIN
+    assert story.loopback_url("http://127.0.0.1:19999/") == "http://127.0.0.1:19999/"
+
+
+@pytest.mark.parametrize(
+    "root,urls",
+    [
+        (
+            True,
+            [
+                "http://localhost",
+                "https://localhost:8710",
+                "http://localhost:99999",
+                "http://user:pass@localhost:8710",
+                "http://localhost:8710/?token=private",
+                "http://localhost:8710/#private",
+                "http://localhost:8710/graph",
+            ],
+        ),
+        (
+            False,
+            [
+                "http://localhost:19999/",
+                "http://127.0.0.1",
+                "https://127.0.0.1:19999/",
+                "http://127.0.0.1:99999/",
+                "http://user:pass@127.0.0.1:19999/",
+                "http://127.0.0.1:19999/?token=private",
+                "http://127.0.0.1:19999/#private",
+                "http://127.0.0.1:19999/cart",
+                "http://example.com:19999/",
+            ],
+        ),
+    ],
+)
+async def test_parent_and_frame_keep_unsafe_url_refusals(root, urls):
+    for url in urls:
+        with pytest.raises(story.ScenarioError):
+            story.loopback_url(url, root=root)
+
+
+@pytest.mark.parametrize("url", ["http://localhost:19999/", "http://127.0.0.1:8710/"])
+async def test_wrong_frame_or_shared_port_never_opens_document(monkeypatch, url):
+    async def ready(self, candidate):
+        return url
+
+    monkeypatch.setattr(PreviewDouble, "ready", ready)
+    backend = Backend()
+    with pytest.raises(story.ScenarioError):
+        await run_backend(backend)
+    assert not backend.owned
+    assert not any(path == "shop" for _, path in backend.log)
+    assert ("POST", "/agents/agent-1/stop") in backend.log
 
 
 class Exit(asyncio.SubprocessProtocol):

@@ -73,7 +73,7 @@ class Wire:
 async def test_exact_requests_memory_only_tokens_and_verified_stop():
     wire = Wire()
     async with httpx.AsyncClient(
-        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(wire), trust_env=False
+        base_url="http://localhost:8710", transport=httpx.MockTransport(wire), trust_env=False
     ) as client:
         previews = factory(client)
         await previews.open(CANDIDATE)
@@ -95,7 +95,7 @@ async def test_unresolved_terminal_proposal_can_open_and_close(state):
     wire = Wire()
     wire.agent = AGENT.model_copy(update={"state": state})
     async with httpx.AsyncClient(
-        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(wire), trust_env=False
+        base_url="http://localhost:8710", transport=httpx.MockTransport(wire), trust_env=False
     ) as client:
         previews = factory(client)
         await previews.open(CANDIDATE)
@@ -110,7 +110,7 @@ async def test_terminal_agent_with_wrong_proposal_never_starts_preview(state):
     wire = Wire()
     wire.agent = AGENT.model_copy(update={"state": state, "change_id": "change-2"})
     async with httpx.AsyncClient(
-        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(wire), trust_env=False
+        base_url="http://localhost:8710", transport=httpx.MockTransport(wire), trust_env=False
     ) as client:
         with pytest.raises(ScenarioError, match="coding-agent identity differs"):
             await factory(client).open(CANDIDATE)
@@ -121,7 +121,7 @@ async def test_stale_details_still_retain_receipt_for_authenticated_cleanup():
     wire = Wire()
     wire.wrong_details = True
     async with httpx.AsyncClient(
-        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(wire), trust_env=False
+        base_url="http://localhost:8710", transport=httpx.MockTransport(wire), trust_env=False
     ) as client:
         previews = factory(client)
         with pytest.raises(ScenarioError):
@@ -145,7 +145,7 @@ async def test_concurrent_operations_wait_for_admission_and_preserve_cleanup(act
         return wire(request)
 
     async with httpx.AsyncClient(
-        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(delayed), trust_env=False
+        base_url="http://localhost:8710", transport=httpx.MockTransport(delayed), trust_env=False
     ) as client:
         previews = factory(client)
         first = asyncio.create_task(previews.open(CANDIDATE))
@@ -182,7 +182,7 @@ async def test_refusals_never_release_uncertain_ownership(failure):
     wire.failed = failure == "lost"
     wire.extra = failure == "extra"
     async with httpx.AsyncClient(
-        base_url="http://127.0.0.1:8710", transport=httpx.MockTransport(wire), trust_env=False
+        base_url="http://localhost:8710", transport=httpx.MockTransport(wire), trust_env=False
     ) as client:
         previews = factory(client)
         if failure in {"lost", "extra"}:
@@ -210,3 +210,51 @@ async def test_refusals_never_release_uncertain_ownership(failure):
             await previews.stop()
         with pytest.raises(ScenarioError):
             await previews.open(CANDIDATE)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1:8710",
+        "http://localhost",
+        "https://localhost:8710",
+        "http://user:pass@localhost:8710",
+        "http://localhost:8710/?private=1",
+        "http://localhost:8710/#private",
+        "http://localhost:8710/graph",
+    ],
+)
+async def test_wrong_or_unsafe_backend_parent_refuses_before_requests(url):
+    wire = Wire()
+    async with httpx.AsyncClient(
+        base_url=url, transport=httpx.MockTransport(wire), trust_env=False
+    ) as client:
+        with pytest.raises(ScenarioError):
+            factory(client)
+    assert wire.calls == []
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://localhost:19900/",
+        "http://127.0.0.1:8710/",
+        "http://127.0.0.1:19900/cart",
+        "http://127.0.0.1:19900/?private=1",
+        "http://127.0.0.1:19900/#private",
+        "http://user:pass@127.0.0.1:19900/",
+        "http://127.0.0.1/",
+    ],
+)
+async def test_wrong_or_unsafe_frame_retains_authenticated_cleanup(url):
+    wire = Wire()
+    wire.url = url
+    async with httpx.AsyncClient(
+        base_url="http://localhost:8710", transport=httpx.MockTransport(wire), trust_env=False
+    ) as client:
+        previews = factory(client)
+        await previews.open(CANDIDATE)
+        with pytest.raises(ScenarioError):
+            await previews.ready(CANDIDATE)
+        await previews.stop()
+    assert wire.calls[-1] == ("POST", f"/previews/{ID}/stop", {"lease_token": TOKEN})
