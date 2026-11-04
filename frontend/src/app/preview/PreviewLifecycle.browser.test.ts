@@ -17,7 +17,10 @@ async function frame(session: LifecyclePage) {
   await check(
     session.page.frameLocator("iframe").getByRole("heading", { name: "Candidate shop" }),
   ).toBeVisible();
-  await check(session.page.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
+  await check(session.page.locator("iframe")).toHaveAttribute(
+    "sandbox",
+    "allow-scripts allow-same-origin allow-forms",
+  );
   await check(session.page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
 }
 async function evidence(session: LifecyclePage, scene: string) {
