@@ -15,7 +15,7 @@ from oversight.workspace import preview_boundary as boundary
 from oversight.workspace import preview_boundary_entry as entry
 from oversight.workspace.runner import child_env
 
-from .preview_boundary_support import Inputs, config, prepared, result
+from .preview_boundary_support import Inputs, config, prepared, released_descendants, result
 
 pytestmark = pytest.mark.anyio
 
@@ -512,12 +512,7 @@ async def test_boundary_stop_verified_kills_all_descendants(roots: Inputs, mode:
     if mode == "deadline":
         settings = dataclasses.replace(settings, lifetime_s=3)
     if mode in {"normal", "nonzero"}:
-        settings = config(
-            DESCENDANTS.rsplit("while True: time.sleep(1)", 1)[0]
-            + "signal.alarm(20)\n"
-            + "while not pathlib.Path('/state/release').exists(): time.sleep(0.01)\n"
-            + f"os._exit({0 if mode == 'normal' else 7})\n"
-        )
+        settings = config(released_descendants(0 if mode == "normal" else 7))
     handle = await boundary.launch_boundary(settings, roots)
     await eventually_file(roots.state / "detached")
     await eventually_file(roots.state / "reaped")
@@ -557,6 +552,18 @@ async def test_boundary_stop_verified_kills_all_descendants(roots: Inputs, mode:
     finally:
         for fd in independent:
             os.close(fd)
+        await handle.stop_verified()
+
+
+async def test_boundary_release_wait_expires_for_namespace_init(roots: Inputs) -> None:
+    await asyncio.to_thread((roots.state / "release").unlink, missing_ok=True)
+    handle = await boundary.launch_boundary(config(released_descendants(0, wait_s=1)), roots)
+    try:
+        async with asyncio.timeout(5):
+            await handle.wait()
+        assert handle.returncode == 9
+        assert handle.verified_dead
+    finally:
         await handle.stop_verified()
 
 

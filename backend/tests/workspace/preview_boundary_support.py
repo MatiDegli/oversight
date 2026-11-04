@@ -270,6 +270,16 @@ while True: time.sleep(1)
 """
 
 
+def released_descendants(exit_code: int, wait_s: int = 20) -> str:
+    return (
+        DESCENDANTS.rsplit("while True: time.sleep(1)", 1)[0]
+        + "signal.signal(signal.SIGALRM, lambda *_: os._exit(9))\n"
+        + f"signal.alarm({wait_s})\n"
+        + "while not pathlib.Path('/state/release').exists(): time.sleep(0.01)\n"
+        + f"os._exit({exit_code})\n"
+    )
+
+
 def descendants(pid: int) -> list[int]:
     found: list[int] = []
     pending = [pid]
