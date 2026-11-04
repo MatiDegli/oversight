@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { EffectCallback, SetStateAction } from "react";
+import type { PreviewStatusEvent } from "@contracts";
 import type { FrameProps } from "./Frame";
 import { App } from "./App";
 import { applyEvent, createInitialState, createStateStore, stateStore } from "../state";
@@ -188,6 +189,63 @@ function reconcileAppPass() {
   if (!frame) throw new Error("Missing App frame");
   return frame;
 }
+it("keeps App's displayed state stable while preview envelopes advance open stage horizons", () => {
+  const source = sources.find(({ path }) => path === "fixtures/views/reference-cases.json#events");
+  if (!source) throw new Error("Missing preview reference fixture");
+  reconciliation.slots.length = 0;
+  reconciliation.writes.length = 0;
+  const before = source.events.reduce(applyEvent, createInitialState());
+  stateStore.setState({ state: before });
+  try {
+    expect(reconcileAppPass().state).toBe(before);
+    for (const [index, phase] of ["starting", "ready", "stopped"].entries()) {
+      const status: PreviewStatusEvent = {
+        type: "preview.status",
+        seq: before.lastSeq + index + 1,
+        ts: `2026-11-03T00:00:0${String(index + 1)}.000Z`,
+        payload: {
+          preview_id: "preview-" + "a".repeat(32),
+          run_id: before.run?.run_id ?? "",
+          agent_id: "agent-1",
+          change_id: "change-1",
+          revision: 1,
+          head_commit: "c1",
+          state: phase as PreviewStatusEvent["payload"]["state"],
+          reason: null,
+        },
+      };
+      stateStore.getState().applyEvents([status]);
+      const accepted = stateStore.getState().state;
+      expect(accepted.gap).toBe(false);
+      expect(accepted.lastSeq).toBe(status.seq);
+      expect(accepted.stageEvents.at(-1)).toBe(status);
+      expect(accepted.changeStages).not.toBe(before.changeStages);
+      expect(accepted.changeStages["change-1"]?.agent_work).toMatchObject({
+        open: true,
+        ms: (index + 1) * 1000,
+      });
+      expect(reconcileAppPass().state).toBe(before);
+    }
+    const agent = source.events.find((event) => event.type === "agent.status");
+    if (!agent) throw new Error("Missing agent status");
+    stateStore.getState().applyEvents([
+      { ...agent, seq: stateStore.getState().state.lastSeq + 1, ts: "2026-11-03T00:00:04.000Z" },
+    ]);
+    expect(reconcileAppPass().state).toBe(stateStore.getState().state);
+    expect(reconcileAppPass().state.stageEvents).toHaveLength(source.events.length + 4);
+    stateStore.getState().applyEvents([{ ...agent, seq: stateStore.getState().state.lastSeq + 2 }]);
+    expect(reconcileAppPass().state.gap).toBe(true);
+    const start = source.events[0];
+    if (start?.type !== "run.started") throw new Error("Missing run start");
+    stateStore.getState().applyEvents([
+      { ...start, payload: { ...start.payload, run_id: "new-preview-run" } },
+    ]);
+    expect(reconcileAppPass().state).toBe(stateStore.getState().state);
+    expect(reconcileAppPass().state.changeStages).toEqual({});
+  } finally {
+    stateStore.setState({ state: createInitialState() });
+  }
+});
 it("requests no view update for unchanged cold prefixes or valid highlights, and settles one invalidation", () => {
   const events = coldStartStress(80);
   reconciliation.slots.length = 0;
