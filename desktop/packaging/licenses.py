@@ -14,6 +14,9 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT))
 from tools import notices  # noqa: E402
 
+# Exact LICENSE.txt bytes from the uv.lock wheel; provenance is in licenses/sources.json.
+COLORAMA_0_4_6_LICENSE_SHA256 = "cac35c02686e5d04a5a7140bfb3b36e73aed496656e891102e428886d7930318"
+
 GRANTS = {
     "MPL-2.0": set(["cssparser", "cssparser-macros", "dtoa-short", "option-ext", "selectors"]),
     "Zlib": {"foldhash", "zlib-rs"},
@@ -124,6 +127,12 @@ def python_notices(app: Path, lock: dict[str, Any]) -> list[str]:
             if name in local:
                 continue
             expression = notices.python_license(dist.metadata)
+            if (name, dist.version, expression) == ("colorama", "0.4.6", "UNKNOWN"):
+                for file in dist.files or ():
+                    if file.as_posix() == "colorama-0.4.6.dist-info/licenses/LICENSE.txt":
+                        digest = hashlib.sha256(Path(str(dist.locate_file(file))).read_bytes())
+                        if digest.hexdigest() == COLORAMA_0_4_6_LICENSE_SHA256:
+                            expression = "BSD-3-Clause"
             if not notices.allowed_license(expression, name):
                 raise ValueError(f"unapproved Python package: {name}: {expression}")
             result.append(f"### {runtime}: {name} {dist.version} — {expression}\n")

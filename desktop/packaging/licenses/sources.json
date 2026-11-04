@@ -89,5 +89,13 @@
     "file": "webview2-sdk-0.txt",
     "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3800.47/microsoft.web.webview2.1.0.3800.47.nupkg (LICENSE.txt)",
     "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"
+  },
+  {
+    "file": "colorama-0.4.6.txt",
+    "url": "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl (colorama-0.4.6.dist-info/licenses/LICENSE.txt)",
+    "sha256": "cac35c02686e5d04a5a7140bfb3b36e73aed496656e891102e428886d7930318",
+    "package": "colorama",
+    "version": "0.4.6",
+    "license": "BSD-3-Clause"
   }
 ]

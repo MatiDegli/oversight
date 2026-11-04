@@ -3,6 +3,7 @@
 import importlib.util
 import io
 import json
+import shutil
 import sys
 import tarfile
 import tomllib
@@ -102,3 +103,75 @@ def test_pinned_third_party_texts_are_complete_and_unchanged():
         "cpython-incorporated.txt",
         "webview2-sdk-0.txt",
     } <= {entry["file"] for entry in entries}
+
+
+def staged_bsd_distribution(app, runtime, name="colorama", version="0.4.6", text=None):
+    folder = app / runtime / "Lib/site-packages" / f"{name}-{version}.dist-info"
+    folder.mkdir(parents=True)
+    (folder / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: {name}\nVersion: {version}\n"
+        "License-File: LICENSE.txt\n"
+        "Classifier: License :: OSI Approved :: BSD License\n",
+        encoding="utf-8",
+    )
+    file = folder / "licenses/LICENSE.txt"
+    file.parent.mkdir()
+    file.write_bytes((HERE / "licenses/colorama-0.4.6.txt").read_bytes() if text is None else text)
+    (folder / "RECORD").write_text(
+        f"{folder.name}/METADATA,,\n{folder.name}/licenses/LICENSE.txt,,\n",
+        encoding="utf-8",
+    )
+    return {"package": [{"name": name, "version": version, "source": {"registry": "test"}}]}
+
+
+@pytest.mark.parametrize("runtime", ["python", "demo-python"])
+def test_colorama_exact_wheel_license_is_bsd_three_clause_with_text(tmp_path, runtime):
+    lock = staged_bsd_distribution(tmp_path, runtime)
+    text = "\n".join(licenses.python_notices(tmp_path, lock))
+    assert f"### {runtime}: colorama 0.4.6 — BSD-3-Clause" in text
+    assert (HERE / "licenses/colorama-0.4.6.txt").read_text(encoding="utf-8") in text
+
+
+@pytest.mark.parametrize("runtime", ["python", "demo-python"])
+@pytest.mark.parametrize(
+    "name,version,text",
+    [
+        ("colorama", "0.4.6", b"changed license"),
+        ("colorama", "0.4.7", None),
+        ("other", "0.4.6", None),
+        ("colorama", "0.4.6", b""),
+    ],
+)
+def test_generic_bsd_license_does_not_widen_colorama_pin(tmp_path, runtime, name, version, text):
+    lock = staged_bsd_distribution(tmp_path, runtime, name, version, text)
+    with pytest.raises(ValueError, match=f"unapproved Python package: {name}: UNKNOWN"):
+        licenses.python_notices(tmp_path, lock)
+
+
+def test_installer_notices_ship_colorama_license_and_text(tmp_path, monkeypatch):
+    app = tmp_path / "app"
+    lock = staged_bsd_distribution(app, "demo-python")
+    packaging = tmp_path / "packaging"
+    shutil.copytree(HERE / "licenses", packaging / "licenses")
+    cache = packaging / "cache"
+    cache.mkdir()
+    for file in ("cargo-metadata.json", "cargo-all-metadata.json"):
+        (cache / file).write_text('{"packages": []}')
+    monkeypatch.setattr(licenses, "HERE", packaging)
+    monkeypatch.setattr(licenses, "crate_inventory", lambda _: ([], []))
+    (app / "payload.json").write_text(
+        json.dumps(
+            {
+                "components": dict.fromkeys(
+                    ["openssl", "sqlite", "zlib", "mpdecimal", "expat"], "test"
+                )
+            }
+        )
+    )
+    frontend = app / "frontend/dist"
+    frontend.mkdir(parents=True)
+    (frontend / "THIRD_PARTY_NOTICES.md").write_text("Frontend notice")
+    licenses.write_notices(app, lock)
+    text = (app / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "### demo-python: colorama 0.4.6 — BSD-3-Clause" in text
+    assert (HERE / "licenses/colorama-0.4.6.txt").read_text(encoding="utf-8") in text
