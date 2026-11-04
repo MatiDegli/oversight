@@ -33,7 +33,16 @@ beforeAll(async () => {
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
   browser = await launchBrowser();
-}, 60_000);
+  // Pay the cold module transform and dependency pass before the per-test navigation budget.
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url, { timeout: 60_000 });
+    await page.waitForFunction(() => "reviewTest" in window, undefined, { timeout: 60_000 });
+  } finally {
+    await page.close();
+  }
+}, 150_000);
 afterAll(async () => {
   await browser?.close();
   await server?.close();
@@ -57,7 +66,7 @@ export async function withPage(
   try {
     // Only the frame is mounted: no transport, so nothing reaches a server.
     await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
-    await page.goto(url);
+    await page.goto(url, { timeout: 30_000 });
     await page.waitForFunction(() => "reviewTest" in window);
     await page.evaluate(
       ({ flag, cursor }) => {

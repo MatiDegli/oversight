@@ -4759,9 +4759,10 @@ text nodes only; missing/invalid data disables reviewed-app actions. Nondismissi
 disclosure is required in the selected-agent Chat composer and Settings before actions. Consumer
 rendering acceptance remains pending; this carrier does not implement or certify that rendering.
 
-Reviewed-app execution remains unavailable at admission and execution. Actual builds, nested
-execution, dependency installation, Linux filesystem boundary, gateway and nesting supervisor are
-not delivered. The Linux verified namespace/allowlisted-root boundary described in the approved
+Reviewed-app execution remains unavailable at admission and execution. At the earlier scaffold,
+“Actual builds, nested execution, dependency installation, Linux filesystem boundary, gateway and
+nesting supervisor are not delivered” described the unconnected state; the qualification below
+records the subsequently connected private path. The Linux verified namespace/allowlisted-root boundary described in the approved
 policy is a required future capability, not an isolation claim for this scaffold. Current run_tests
 and shop launches retain namespace-only network/PID isolation without filesystem isolation;
 Origin-less HTTP writes remain allowed by current API policy. These residuals remain open.
@@ -4828,3 +4829,68 @@ observation masking matching summarization's solve rate while halving cost relat
 agent in its experiments. That result motivates this simple policy; it does not measure
 Oversight's cost or correctness. All implementation and validation here are new and use scripted
 fake models only. Broader history bounds and a visible handoff remain separate candidates.
+The private reviewed supervisor now translates verified launch/source authority into prepared root
+commands, without sharing demo trust. Trusted inventory/copy work stays outside the event loop and
+executes no candidate code. Fresh sanitized import copies preserve originals and remove editable
+hooks; recorded manifests are rechecked before root adaptation and tools never recover host HOME.
+Only executable preparation, direct builds and startup enter fresh allowlisted roots. Canonical
+exclusions apply to writable roots and storage as well as read-only inputs. U0 owns N0; U1 locks
+read-only mounts in its own PID/mount namespaces with UID/GID 1000 and no capabilities, permitting
+nested isolation without retaining CAP_SETFCAP. The fixed glibc/x86-64 layout, detached old root,
+private proc/FD closure, syscall filter and interop refusal fail closed on missing support.
+
+Authenticated process births and namespaces are durably registered before execution acknowledgement;
+a persistence failure never opens that gate. Each command retains boundary ownership through verified
+death. Recovery remains under the runtime lock before orphan checks/reset, and ambiguous entry or
+cleanup retains quarantine. A prior build's death cannot stand in for a failed later entry. The
+unchanged leaf root-directory cleanup failure is still a blocking uncertainty.
+
+Publication receives T explicitly, copies bounded regular files into supervisor-owned storage and
+serves pinned handles. Exact HTTP authorities, replacement CSP, fixed routing, header stripping,
+restricted redirects and WebSocket refusal remain independent of edited code. The connector enters
+U0 then N0 through live pidfds while remaining outside U1/PID/mount; it hands back connected sockets,
+never a host listener. There is no fallback without equivalent proof. Fresh health, index/assets/
+workers, API and same-run SSE evidence precede the supervisor's readiness nonce. A retained public
+reservation prevents a gateway shutdown from freeing the port while descendants still execute. A separately registered trusted listener guardian survives supervisor death, pins the authenticated
+namespace processes and releases its duplicate only after their pidfds report death. Fresh import
+copy identities are persisted too; recovery retires only matching owned copies after verified death,
+retaining quarantine on replacement or ambiguous cleanup.
+
+Readiness/lease defaults are now 30/600 seconds; heartbeat/lifetime remain 10/900. Lifetime starts at
+reservation, including waiting; execution starts at dequeue with build plus readiness allowance.
+Queue and static preparation timings are separate. One owner/startup/build also bounds admission
+below the configured queue cap eight. Defaults remain frozen and person-owned. Delegated aggregate
+memory/CPU controls are probed outside the root; otherwise disclose exactly “per-process limits only;
+aggregate usage is not enforced”. Python address space, Node heap without small Node RLIMIT_AS,
+lower priority, CPU affinity, admission and sampled RSS/cache monitoring supplement the fallback;
+sampling is not aggregate enforcement. Sanitized build diagnostics never enter lifecycle events.
+Resolved server provider values travel only over the private control pipe to the log redactor,
+never the durable registry or candidate environment. Durable build/transition phases keep polling
+and renewal valid while the supervisor and listener guardian own the next command entry.
+
+The accepted request Host owns the opposite loopback frame name and its exact Host/Origin and parent
+frame-ancestors. Production and Vite frame-src use that same request, naming only the opposite
+loopback host for the configured pool; Vite refuses every other Host or listening-port mismatch.
+Custom HTML embedders retain their explicit CSP after the same Host check; Vite-owned HTML keeps
+the request-aware pool policy.
+Direct shop launches without a request parent keep the person's configured origins; the localhost
+default selects only the frame URL. An explicit request parent still selects exactly its own Origin.
+The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents are refused before
+reservation with `not_configured`, without a listener, process or lifecycle event. Shop localhost
+parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin. Real-route
+acceptance and the three-start driver use 127.0.0.1 parents and remain blocked prerequisites, not
+current qualification evidence. The frontend transport's opposite-name integration remains a
+separately owned prerequisite. Kernel acceptance fixtures also still require explicit profile opt-in.
+Admission-lock waits expire at the earlier lease or absolute deadline, retaining the corresponding
+expiry reason. Stop, EOF or cancellation
+before execution opens no acknowledgement and settles verified boundary death before releasing
+ownership. Logs stay at the startup report's exact path; `wslpath -w` gives the person's Windows/WSL editor path, with no delivered
+desktop log viewer. The 4,096-byte HTML carrier remains unchanged and Health/contracts stay untouched.
+
+The nested configuration uses explicit no-key Settings and injection, closed role policy and separate
+outer-marker/NESTED10 scripts because person input cannot select paid execution or scripted actions.
+Both agents require their scripted label. These landed components and controlled namespace wiring
+do not enable the reviewed self app, certify final application/story/browser acceptance, or eliminate
+the tests/shop filesystem residual. Its ordinary Settings entry and equal ports remain refused;
+the explicit nested entry, distinct-port declaration/re-pin, frontend consumer and final acceptance
+remain required. Native Windows keeps the exact warning and grants no paid-run authority.

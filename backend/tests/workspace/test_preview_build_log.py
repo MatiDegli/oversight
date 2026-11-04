@@ -75,3 +75,10 @@ def test_redaction_cannot_recreate_secrets_or_leak_through_marker(tmp_path):
     log.write("abXXa " + "界" * 400000)
     text = path.read_text()
     assert all(secret not in text for secret in log.secrets)
+
+
+def test_person_can_raise_diagnostic_budget(tmp_path):
+    path = log_path(tmp_path)
+    log = SanitizedBuildLog(path, max_bytes=2 * 1024**2)
+    log.write("x" * (1024**2 + 10))
+    assert path.stat().st_size == 1024**2 + 10
