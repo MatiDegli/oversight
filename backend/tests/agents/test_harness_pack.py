@@ -156,13 +156,14 @@ async def test_pack_prompt_has_one_evidence_path_and_stop(small_tree: Opened) ->
     assert _prompts.prompt_version(True) != "agent-v1-9d084b21af2c"
 
 
-def test_architecture_advertises_current_baseline_and_pack_versions() -> None:
+def test_architecture_records_unpruned_baseline_and_pack_versions() -> None:
     architecture = (Path(__file__).resolve().parents[3] / "ARCHITECTURE.md").read_text()
     marker = "`show_view` is advertised and dispatched with the moved prompt version: baseline\n"
     assert architecture.count(marker) == 1
     versions = architecture.partition(marker)[2].splitlines()[0]
     assert versions == (
-        f"`{_prompts.prompt_version()}` and pack `{_prompts.prompt_version(True)}` "
+        f"`{_prompts.prompt_version(False, None)}` and pack "
+        f"`{_prompts.prompt_version(True, None)}` "
         "(DECISIONS, November 3)."
     )
 
@@ -188,8 +189,9 @@ def test_preview_decision_follows_existing_record_without_rewriting_entry() -> N
     "history_prune_tokens,versions",
     [
         (None, ("agent-v1-9d084b21af2c", "agent-v1-3dc7d749888a")),
-        (8000, ("agent-v1-4a5b9923f98b", "agent-v1-f378a76b516f")),
-        (9000, ("agent-v1-97a2eb45e9bf", "agent-v1-672909eebe92")),
+        (8000, ("agent-v1-20ca92a1ea0d", "agent-v1-56a26c30d4ae")),
+        (9000, ("agent-v1-0def3a212e1a", "agent-v1-6735b0f2df2d")),
+        (64000, ("agent-v1-2e780e372af4", "agent-v1-80a055d05910")),
     ],
 )
 async def test_startup_exports_the_selected_prompt_version(
@@ -242,7 +244,7 @@ async def test_agent_prompt_version_follows_the_configured_lead_limits(
         started = await anext(stream)
         version = json.loads(started.envelope)["payload"]["prompt_version"]
         assert version == _prompts.prompt_version(
-            enabled, None, lead_limits=build_lead_limits(settings)
+            enabled, settings.history_prune_tokens, lead_limits=build_lead_limits(settings)
         )
         assert version != _prompts.prompt_version(enabled)
         agent = await live.start(StartAgent(task="Do the task."))
@@ -270,7 +272,8 @@ async def test_off_preserves_prompt_and_tool_results(
         + ["[1 more matches; narrow the search]"]
     )
     assert content[-1] == "Edited shop/mod.py."
-    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-9d084b21af2c"
+    assert _prompts.prompt_version(False, None) == "agent-v1-9d084b21af2c"
+    assert _prompts.prompt_version(False) == _prompts.PROMPT_VERSION == "agent-v1-2e780e372af4"
     assert (
         hashlib.sha256(_prompts.SYSTEM_PROMPT.encode()).hexdigest()
         == "8b02c2c5d9e6ea51b5be9c201cc0de04ebc56b51e49f87ea8d83e79cfd98c454"
@@ -315,13 +318,16 @@ def test_setting_defaults_off_and_environment_overrides_env_file(
     assert Settings.load(env_file).harness_pack is False
 
 
-@pytest.mark.parametrize("raw,expected", [(None, None), ("", None), ("8000", 8000)])
+@pytest.mark.parametrize(
+    "raw,expected", [(None, 64000), ("", 64000), ("8000", 8000), ("0", None), ("off", None)]
+)
 def test_history_setting_loading(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw: str | None, expected: int | None
 ) -> None:
     monkeypatch.delenv("OVERSIGHT_HISTORY_PRUNE_TOKENS", raising=False)
     env_file = tmp_path / "history.env"
-    assert Settings.load(env_file).history_prune_tokens is None
+    assert Settings.load(env_file).history_prune_tokens == 64000
+    assert Settings().history_prune_tokens == 64000
     env_file.write_text("OVERSIGHT_HISTORY_PRUNE_TOKENS=9000\n")
     assert Settings.load(env_file).history_prune_tokens == 9000
     if raw is None:
@@ -332,7 +338,7 @@ def test_history_setting_loading(
     assert Settings(history_prune_tokens=expected).history_prune_tokens == expected
 
 
-@pytest.mark.parametrize("raw", ["7999", "eight thousand", "8000.0", "-1"])
+@pytest.mark.parametrize("raw", ["7999", "eight thousand", "8000.0", "-1", "OFF", "0.0"])
 def test_history_setting_rejects_invalid_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, raw: str
 ) -> None:
@@ -341,7 +347,7 @@ def test_history_setting_rejects_invalid_environment(
         Settings.load(tmp_path / "missing.env")
 
 
-@pytest.mark.parametrize("value", [7999, "8000", 8000.0, True, "", -1])
+@pytest.mark.parametrize("value", [7999, "8000", 8000.0, True, "", -1, 0])
 def test_history_setting_rejects_invalid_direct_construction(value: object) -> None:
     with pytest.raises(ValueError, match="OVERSIGHT_HISTORY_PRUNE_TOKENS"):
         Settings(history_prune_tokens=value)  # type: ignore[arg-type]
@@ -354,14 +360,19 @@ def test_history_setting_rejects_invalid_direct_construction(value: object) -> N
         ("HISTORY_LOW_WATER", 0.5),
         ("HISTORY_REARM", 0.5),
         ("HISTORY_PROTECTED_CALLS", 7),
+        ("HISTORY_MASK_STUB", "different mask"),
+        ("HISTORY_TEST_STUB", "different test suffix"),
+        ("HISTORY_MASK_PROTECTED_CALLS", 11),
+        ("HISTORY_ARGUMENT_CHARS", 199),
     ],
 )
 def test_history_policy_inputs_change_only_enabled_hash(
     monkeypatch: pytest.MonkeyPatch, name: str, value: object
 ) -> None:
-    baseline = _prompts.prompt_version()
+    baseline = _prompts.prompt_version(history_prune_tokens=None)
     enabled = _prompts.prompt_version(history_prune_tokens=8000)
     assert enabled != _prompts.prompt_version(history_prune_tokens=9000)
     monkeypatch.setattr(_prompts, name, value)
-    assert _prompts.prompt_version() == baseline
+    assert _prompts.prompt_version(history_prune_tokens=None) == baseline
+    assert _prompts.prompt_version() != baseline
     assert _prompts.prompt_version(history_prune_tokens=8000) != enabled

@@ -105,7 +105,8 @@ def test_raw_paths_and_all_protected_messages() -> None:
     old = add(history, rows())
     add(history, rows(1, 20))
     history.append({"role": "user", "content": "delivered message"})
-    protect(history, 5)
+    # Ten calls keep masking inactive here, isolating the covered-read path rules.
+    protect(history, 4)
     recent = add(history, rows())
     snapshot = deepcopy(history)
     prune(history)
@@ -219,7 +220,7 @@ def test_threshold_low_water_newest_first_and_rearm(monkeypatch: pytest.MonkeyPa
     assert calls == [1, 1]
 
 
-def test_default_off_is_byte_identical_and_estimate_counts_utf8_and_tools() -> None:
+def test_disabled_is_byte_identical_and_estimate_counts_utf8_and_tools() -> None:
     history: list[Message] = []
     add(history, rows(text='á"\\'))
     add(history, rows(whole=True))

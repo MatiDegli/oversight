@@ -2,6 +2,7 @@ import type { LeadView, PreviewStatusEvent } from "@contracts";
 import { resolvePreviewReference, type State } from "../../state";
 import { createPreviewController } from "./previewController";
 import type { PreviewClock, PreviewIdentity, PreviewPort } from "./previewPort";
+import { previewStartup } from "./previewStartup";
 import { parsePreviewStatus } from "./previewTypes";
 
 export const previewClock: PreviewClock = {
@@ -128,6 +129,7 @@ export function createPreviewHost(
         disposed ||
         closing ||
         opening ||
+        previewStartup().kind === "invalid" ||
         !canOpen() ||
         !resolvePreviewReference(read(), request).candidate
       )
@@ -139,7 +141,7 @@ export function createPreviewHost(
       publish(true);
       opening = controller
         .see(() => {
-          if (disposed || closing || !canOpen()) return null;
+          if (disposed || closing || previewStartup().kind === "invalid" || !canOpen()) return null;
           return resolvePreviewReference(read(), request).candidate;
         })
         .finally(() => {
