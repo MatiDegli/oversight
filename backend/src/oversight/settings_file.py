@@ -71,11 +71,12 @@ def _editable(values: dict[str, str]) -> dict[str, str]:
 
 
 def _updated(text: str, values: dict[EditableSettingName, str]) -> str:
+    bom = "\ufeff" if text.startswith("\ufeff") else ""
     lines: list[str] = []
     replacements = {str(name): value for name, value in values.items()}
     seen: set[str] = set()
     newline = "\r\n" if "\r\n" in text else "\n"
-    for line in text.splitlines(keepends=True):
+    for line in text.removeprefix("\ufeff").splitlines(keepends=True):
         name, separator, _ = line.partition("=")
         if not separator or name.strip() not in values:
             lines.append(line)
@@ -90,7 +91,7 @@ def _updated(text: str, values: dict[EditableSettingName, str]) -> str:
             if lines and not lines[-1].endswith(("\n", "\r")):
                 lines[-1] += newline
             lines.append(f"{name}={value}{newline}")
-    return "".join(lines)
+    return bom + "".join(lines)
 
 
 def _atomic_write(path: Path, content: str) -> None:

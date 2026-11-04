@@ -62,7 +62,7 @@ def read_env_file(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     if not path.is_file():
         return values
-    for raw in bounded_text(path).splitlines():
+    for raw in bounded_text(path).removeprefix("\ufeff").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
