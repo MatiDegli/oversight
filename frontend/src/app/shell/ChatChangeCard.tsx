@@ -67,7 +67,9 @@ export function ChatChangeCard({
   const identity = presentationFor(state, proposal.agent_id);
   const label = identity?.label ?? "unknown";
   const change = state.changes[changeId];
-  const timing = change && <ChangeTiming stages={change.stages} rounds={change.revisionRounds} />;
+  const timing = change && (
+    <ChangeTiming stages={state.changeStages[changeId] ?? null} rounds={change.revisionRounds} />
+  );
   return (
     <div className="chat-proposal" style={presentationStyle(identity)}>
       <div className="chat-proposal-note">

@@ -53,7 +53,6 @@ export interface ChangeState {
   crossReviewRound: ChangeResolved | null;
   needsYou: NeedsYou | null;
   personActed: boolean;
-  stages: ChangeStages | null;
   /** Confirmed changes_requested resolutions, independent of steps or conversation rounds. */
   revisionRounds: number;
 }
@@ -138,6 +137,8 @@ export interface State {
   decisionEvents: DecisionEvent[];
   /** Complete accepted inventory: continuity and horizon include unrelated events. */
   stageEvents: ServerEvent[];
+  /** Stage horizons are independent of change and graph-evidence identities. */
+  changeStages: Record<string, ChangeStages | null>;
 }
 
 export function createInitialState(): State {
@@ -175,6 +176,7 @@ export function createInitialState(): State {
     changeFacts: {},
     decisionEvents: [],
     stageEvents: [],
+    changeStages: {},
   };
 }
 
@@ -201,7 +203,6 @@ export function createChange(change_id: string, agent_id: string): ChangeState {
     crossReviewRound: null,
     needsYou: null,
     personActed: false,
-    stages: null,
     revisionRounds: 0,
   };
 }

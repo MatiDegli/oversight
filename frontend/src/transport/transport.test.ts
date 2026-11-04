@@ -195,11 +195,14 @@ describe("live transport", () => {
         "change-1": {
           ...prior,
           reviews: [{ seq: review.seq, review: review.payload }],
-          stages: prior.stages && {
-            ...prior.stages,
-            test_runs: { ms: 1, known_ms: 1, intervals: 1, open: false },
-            test_phases: [{ phase: "proposal", ms: 1, runs: 1 }],
-          },
+        },
+      },
+      changeStages: {
+        ...before.changeStages,
+        "change-1": {
+          ...before.changeStages["change-1"],
+          test_runs: { ms: 1, known_ms: 1, intervals: 1, open: false },
+          test_phases: [{ phase: "proposal", ms: 1, runs: 1 }],
         },
       },
       testExecutions: { [suite.seq]: suite.payload },

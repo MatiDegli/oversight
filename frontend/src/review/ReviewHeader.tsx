@@ -79,7 +79,12 @@ export function ReviewHeader({
           {base?.slice(0, 7) ?? "unknown"}
         </code>
       </p>
-      {change && <ChangeTiming stages={change.stages} rounds={change.revisionRounds} />}
+      {change && (
+        <ChangeTiming
+          stages={state.changeStages[changeId] ?? null}
+          rounds={change.revisionRounds}
+        />
+      )}
       <div className="mt-3">
         <ChangeFactsRow state={state} changeId={changeId} />
       </div>

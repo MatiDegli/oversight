@@ -32,7 +32,7 @@ it("reconstructs identical live and replay clocks through exact seeking and rest
     }
     replay.seekSeq(14);
     const prefix = store.getState().state;
-    expect(prefix.changes["change-1"]?.stages?.waiting_for_person.open).toBe(true);
+    expect(prefix.changeStages["change-1"]?.waiting_for_person.open).toBe(true);
     await vi.advanceTimersByTimeAsync(100000);
     expect(store.getState().state).toBe(prefix);
     replay.restart();

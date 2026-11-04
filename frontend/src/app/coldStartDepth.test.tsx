@@ -45,7 +45,7 @@ it("inventories event-bearing fixtures and verifies exporter provenance without 
     ["fixtures/events/recorded-demo.jsonl", 69, 125491, "no lead.view"],
     ["fixtures/events/scripted-level2.jsonl", 98, 167027, "no lead.view"],
     ["fixtures/events/scripted-rules.jsonl", 59, 137958, "no lead.view"],
-    ["fixtures/events/stage-clocks.jsonl", 32, 41047, "no lead.view"],
+    ["fixtures/events/stage-clocks.jsonl", 33, 41154, "no lead.view"],
     ["fixtures/views/reference-cases.json#events", 15, 21527, "no lead.view"],
   ]);
   for (const source of sources) {

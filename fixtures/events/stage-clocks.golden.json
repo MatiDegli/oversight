@@ -6163,6 +6163,65 @@
   },
   {
     "log": "stage-clocks",
+    "change_id": "change-1",
+    "n": 33,
+    "stages": {
+      "agent_work": {
+        "ms": 150000,
+        "known_ms": 150000,
+        "intervals": 2,
+        "open": false
+      },
+      "checks": {
+        "ms": 30000,
+        "known_ms": 30000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": 90000,
+        "known_ms": 90000,
+        "intervals": 2,
+        "open": false
+      },
+      "test_runs": {
+        "ms": 60000,
+        "known_ms": 60000,
+        "intervals": 5,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 15000,
+          "runs": 1
+        },
+        {
+          "phase": "proposal",
+          "ms": 5000,
+          "runs": 1
+        },
+        {
+          "phase": "combined",
+          "ms": 20000,
+          "runs": 1
+        },
+        {
+          "phase": "base_probe",
+          "ms": 10000,
+          "runs": 1
+        },
+        {
+          "phase": "head_probe",
+          "ms": 10000,
+          "runs": 1
+        }
+      ],
+      "problems": []
+    }
+  },
+  {
+    "log": "stage-clocks",
     "change_id": "change-2",
     "n": 1,
     "stages": {
@@ -7212,6 +7271,48 @@
       "waiting_for_person": {
         "ms": null,
         "known_ms": 0,
+        "intervals": 3,
+        "open": true
+      },
+      "test_runs": {
+        "ms": 0,
+        "known_ms": 0,
+        "intervals": 1,
+        "open": false
+      },
+      "test_phases": [
+        {
+          "phase": "agent",
+          "ms": 0,
+          "runs": 1
+        }
+      ],
+      "problems": [
+        "Revision 1 replaced without a decision at seq 24.",
+        "No recorded decider for revision 2 at seq 28."
+      ]
+    }
+  },
+  {
+    "log": "stage-clocks",
+    "change_id": "change-2",
+    "n": 32,
+    "stages": {
+      "agent_work": {
+        "ms": 1000,
+        "known_ms": 1000,
+        "intervals": 1,
+        "open": false
+      },
+      "checks": {
+        "ms": 2000,
+        "known_ms": 2000,
+        "intervals": 2,
+        "open": false
+      },
+      "waiting_for_person": {
+        "ms": null,
+        "known_ms": 0,
         "intervals": 2,
         "open": false
       },
@@ -7237,7 +7338,7 @@
   {
     "log": "stage-clocks",
     "change_id": "change-2",
-    "n": 32,
+    "n": 33,
     "stages": {
       "agent_work": {
         "ms": 1000,

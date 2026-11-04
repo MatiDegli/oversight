@@ -44,7 +44,10 @@ for (const name of ["recorded-demo", "stage-clocks"]) {
       const context = `${name}/${entry.change_id}, prefix ${String(entry.n)}`;
       expect(foldStages(events.slice(0, entry.n), entry.change_id), context).toEqual(entry.stages);
       const change = states[entry.n - 1]?.changes[entry.change_id];
-      if (change) expect(change.stages, `reducer: ${context}`).toEqual(entry.stages);
+      if (change)
+        expect(states[entry.n - 1]?.changeStages[entry.change_id], `reducer: ${context}`).toEqual(
+          entry.stages,
+        );
     }
   });
 }

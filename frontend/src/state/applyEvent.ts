@@ -17,6 +17,7 @@ export function applyEvent(state: State, event: ServerEvent): State {
   if (next.gap) return next;
   const stageEvents = [...(event.type === "run.started" ? [] : state.stageEvents), event];
   let changes = next.changes;
+  let changeStages = next.changeStages;
   for (const [id, change] of Object.entries(next.changes)) {
     const stages = foldStages(stageEvents, id);
     const revisionRounds =
@@ -26,16 +27,18 @@ export function applyEvent(state: State, event: ServerEvent): State {
           event.payload.change_id === id &&
           event.payload.decision === "changes_requested",
       );
-    // Closed readings remain stable on unrelated events, preserving existing subscriptions.
-    if (
-      revisionRounds === change.revisionRounds &&
-      JSON.stringify(stages) === JSON.stringify(change.stages)
-    )
-      continue;
-    if (changes === next.changes) changes = { ...next.changes };
-    changes[id] = { ...change, stages, revisionRounds };
+    // Open horizons can advance on any envelope without invalidating graph evidence.
+    // Equal readings also keep the stage map itself stable on unrelated events.
+    if (JSON.stringify(stages) !== JSON.stringify(changeStages[id])) {
+      if (changeStages === next.changeStages) changeStages = { ...next.changeStages };
+      changeStages[id] = stages;
+    }
+    if (revisionRounds !== change.revisionRounds) {
+      if (changes === next.changes) changes = { ...next.changes };
+      changes[id] = { ...change, revisionRounds };
+    }
   }
-  return recordEventFact({ ...next, stageEvents, changes }, event);
+  return recordEventFact({ ...next, stageEvents, changeStages, changes }, event);
 }
 
 function applyEnvelope(state: State, event: ServerEvent): State {

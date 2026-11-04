@@ -67,28 +67,25 @@ describe("preview contract readers", () => {
     const parsed = parseEvent(JSON.stringify(status));
     expect(parsed).toEqual(status);
     const after = applyEvent(before, parsed);
-    const prior = before.changes["change-1"];
-    if (!prior?.stages) throw new Error("Missing stage readings");
+    const prior = before.changeStages["change-1"];
+    if (!prior) throw new Error("Missing stage readings");
     expect(after).toEqual({
       ...before,
       lastSeq: status.seq,
       clock: status.ts,
       gap: false,
       stageEvents: [...before.stageEvents, status],
-      changes: {
-        ...before.changes,
+      changeStages: {
+        ...before.changeStages,
         "change-1": {
           ...prior,
-          stages: {
-            ...prior.stages,
-            agent_work: { ...prior.stages.agent_work, ms: 1000, known_ms: 1000 },
-            waiting_for_person: { ...prior.stages.waiting_for_person, known_ms: 1000 },
-          },
+          agent_work: { ...prior.agent_work, ms: 1000, known_ms: 1000 },
+          waiting_for_person: { ...prior.waiting_for_person, known_ms: 1000 },
         },
       },
     });
     for (const key of Object.keys(before)) {
-      if (!["lastSeq", "clock", "gap", "stageEvents", "changes"].includes(key))
+      if (!["lastSeq", "clock", "gap", "stageEvents", "changeStages"].includes(key))
         expect(after[key as keyof typeof after]).toBe(before[key as keyof typeof before]);
     }
     expect(resolveViewReferences(after, request)).toEqual([]);
