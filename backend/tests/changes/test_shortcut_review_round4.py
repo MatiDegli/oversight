@@ -13,6 +13,9 @@ from oversight.changes._shortcuts_asserts import (
 from oversight.changes._shortcuts_common import Source
 from oversight.changes._shortcuts_tests import _Case, _collect_parametrize, _compare_rows
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 TEST = (
     "@pytest.mark.parametrize('x,expected', CASES)\n"
     "def test_f(x, expected):\n    assert f(x) == expected\n"
@@ -33,20 +36,28 @@ def test_named_literal_rows_are_compared(
     replacement: str, kind: ShortcutKind, annotated: bool
 ) -> None:
     old = OLD.replace("CASES =", "CASES: list =") if annotated else OLD
-    result = detect_shortcuts([("test_calc.py", old, old.replace("[(1, 3), (2, 4)]", replacement))])
+    result = detect_shortcuts(
+        [("test_calc.py", old, old.replace("[(1, 3), (2, 4)]", replacement))],
+        timeout=DETECTION_TIMEOUT_S,
+    )
     assert result.status == "findings" and kind in {f.kind for f in result}
     assert not result.reasons
 
 
 def test_named_tuple_rows_are_compared() -> None:
     old = OLD.replace("[(1, 3), (2, 4)]", "((1, 3), (2, 4))")
-    result = detect_shortcuts([("test_calc.py", old, old.replace("(2, 4)", "(2, 5)"))])
+    result = detect_shortcuts(
+        [("test_calc.py", old, old.replace("(2, 4)", "(2, 5)"))], timeout=DETECTION_TIMEOUT_S
+    )
     assert {f.kind for f in result} == {ShortcutKind.EXPECTED_VALUE_CHANGED}
 
 
 def test_named_pytest_param_rows_are_compared() -> None:
     old = OLD.replace("(2, 4)", "pytest.param(2, 4, id='second')")
-    result = detect_shortcuts([("test_calc.py", old, old.replace("param(2, 4", "param(2, 5"))])
+    result = detect_shortcuts(
+        [("test_calc.py", old, old.replace("param(2, 4", "param(2, 5"))],
+        timeout=DETECTION_TIMEOUT_S,
+    )
     assert {f.kind for f in result} == {ShortcutKind.EXPECTED_VALUE_CHANGED}
 
 
@@ -107,13 +118,16 @@ def test_opaque_table_in_renamed_or_moved_test_is_still_a_comparison(moved: bool
 @pytest.mark.parametrize("setup", ["CASES = [(1, 3)]\n", "from data import CASES\n"])
 def test_pure_addition_with_named_table_has_no_comparison(before: str | None, setup: str) -> None:
     result = detect_shortcuts(
-        [("test_calc.py", before, (before or "") + "import pytest\n" + setup + TEST)]
+        [("test_calc.py", before, (before or "") + "import pytest\n" + setup + TEST)],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert result == [] and result.status == "no_facts" and not result.reasons
 
 
 def test_unchanged_literal_table_does_not_report_unknown() -> None:
-    result = detect_shortcuts([("test_calc.py", OLD, OLD + "# unrelated edit\n")])
+    result = detect_shortcuts(
+        [("test_calc.py", OLD, OLD + "# unrelated edit\n")], timeout=DETECTION_TIMEOUT_S
+    )
     assert result == [] and result.status == "no_facts"
 
 
@@ -137,7 +151,7 @@ def test_method_decorator_respects_its_enclosing_table_binding(shadowed: bool) -
 def test_new_test_over_bound_or_transformed_table_has_no_earlier_rows(table: str) -> None:
     setup = "import pytest\nfrom data import CASES, load_cases\n"
     new = setup + TEST.replace("', CASES)", f"', {table})")
-    result = detect_shortcuts([("test_calc.py", None, new)])
+    result = detect_shortcuts([("test_calc.py", None, new)], timeout=DETECTION_TIMEOUT_S)
     assert result == [] and result.status == "no_facts"
 
 
@@ -163,7 +177,8 @@ def test_moved_helper_still_imported_and_called_is_not_removed(statement: str, c
         [
             ("tests/test_calc.py", old, new),
             ("tests/helpers.py", None, "def check():\n    assert f() == 3, 'diagnostic'\n"),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert result == [] and result.status == "no_facts"
 
@@ -178,7 +193,8 @@ def test_extraction_does_not_hide_another_removed_helper_call() -> None:
         [
             ("tests/test_calc.py", old, new),
             ("tests/helpers.py", None, "def check():\n    assert f() == 3\n"),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert {f.kind for f in result} == {ShortcutKind.ASSERTION_LOOSENED}
     assert "a call to an asserting helper was removed" in result[0].message

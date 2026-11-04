@@ -4,9 +4,12 @@ import pytest
 
 from oversight.changes import ShortcutKind, detect_shortcuts
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 
 def kinds(old: str, new: str, path: str = "tests/test_calc.py") -> set[str]:
-    return {f.kind for f in detect_shortcuts([(path, old, new)])}
+    return {f.kind for f in detect_shortcuts([(path, old, new)], timeout=DETECTION_TIMEOUT_S)}
 
 
 @pytest.mark.parametrize("rows", ["[(1, 3)]", "[]"])
@@ -35,7 +38,9 @@ def test_expected_column_from_assertion(column: str) -> None:
 def test_move_must_remain_collected(destination: str, keep_origin: bool) -> None:
     old = "def test_f():\n    assert f() == 3\n"
     changes = [("tests/test_calc.py", old, "" if keep_origin else None), (destination, None, old)]
-    assert "test_removed" in {f.kind for f in detect_shortcuts(changes)}
+    assert "test_removed" in {
+        f.kind for f in detect_shortcuts(changes, timeout=DETECTION_TIMEOUT_S)
+    }
 
 
 @pytest.mark.parametrize(
@@ -108,7 +113,13 @@ def test_asserting_helper_is_not_lost(edit: str) -> None:
 
 def test_helper_rename_with_checks_preserved_is_clean() -> None:
     old = "def check():\n    assert f() == 3\ndef test_f():\n    check()\n"
-    assert detect_shortcuts([("tests/test_calc.py", old, old.replace("check", "verify"))]) == []
+    assert (
+        detect_shortcuts(
+            [("tests/test_calc.py", old, old.replace("check", "verify"))],
+            timeout=DETECTION_TIMEOUT_S,
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize("replacement", ["x -= x - 1", "import os as x"])
@@ -130,7 +141,13 @@ def test_general_plain_binding_changes_are_a_documented_limit(before: str, after
 
     assert "Plain binding value changes" in (detector.__doc__ or "")
     old = f"def test_f():\n    result = {before}\n    assert result == 73\n"
-    assert detect_shortcuts([("test_calc.py", old, old.replace(f"= {before}", f"= {after}"))]) == []
+    assert (
+        detect_shortcuts(
+            [("test_calc.py", old, old.replace(f"= {before}", f"= {after}"))],
+            timeout=DETECTION_TIMEOUT_S,
+        )
+        == []
+    )
 
 
 @pytest.mark.parametrize("expected", ["expected", "g()"])
@@ -257,7 +274,7 @@ def test_single_literal_case_can_be_inlined() -> None:
         "import pytest\n@pytest.mark.parametrize('x', [1])\ndef test_f(x):\n    assert f(x) == 3\n"
     )
     new = "def test_f():\n    assert f(1) == 3\n"
-    assert detect_shortcuts([("test_calc.py", old, new)]) == []
+    assert detect_shortcuts([("test_calc.py", old, new)], timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_replacing_a_row_still_removes_the_old_case() -> None:
