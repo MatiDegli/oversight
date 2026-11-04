@@ -40,7 +40,7 @@ class SnapshotUsage(UsageLedger):
     def __init__(self, live: LiveRun, settings: Settings) -> None:
         self._total = live._usage
         super().__init__(
-            settings.budget_usd or 0.0,
+            settings.budget_usd,
             self._total.spent_usd,
             warn_at=(0.5, 0.8),
             block_at=settings.spend_brake_percent / 100 if settings.spend_brake_percent else 0.0,

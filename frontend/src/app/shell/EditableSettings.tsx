@@ -17,6 +17,11 @@ const fields: readonly [EditableSettingName, string, EditableSetting["kind"]][] 
   ["OVERSIGHT_SPEND_BRAKE_PERCENT", "Brake at (% of budget)", "number"],
   ["OVERSIGHT_MAX_AGENTS", "Agent cap (agents)", "number"],
 ];
+const helpers: Partial<Record<EditableSettingName, string>> = {
+  OVERSIGHT_BUDGET_USD: "Leave empty for no spending cap.",
+  MUSE_SPARK_INPUT_USD_PER_M: "Leave empty to use 0.10",
+  MUSE_SPARK_OUTPUT_USD_PER_M: "Leave empty to use 0.20",
+};
 const states = { set: "Configured", missing: "Missing", invalid: "Invalid" };
 const fieldClass = `mt-2 block min-h-10 w-full min-w-0 rounded-card border border-control-edge bg-field px-3 py-2 text-base text-text placeholder:text-faint read-only:text-muted ${focusRing}`;
 const buttonClass = `min-h-10 rounded-control border border-control-edge px-4 py-2 text-sm font-semibold text-text aria-disabled:cursor-default aria-disabled:text-faint not-aria-disabled:hover:bg-page-raised ${focusRing}`;
@@ -240,6 +245,11 @@ function SettingField({
       {kind === "secret" && row && row.state !== "missing" && live && (
         <KeyClearAction clearing={clearing} readOnly={readOnly} onClear={onClear} onUndo={onUndo} />
       )}
+      {helpers[name] && (
+        <p id={`${id}-default`} className="mt-1 text-sm text-muted">
+          {helpers[name]}
+        </p>
+      )}
       {name === "OVERSIGHT_MAX_AGENTS" && (
         <p id={`${id}-default`} className="mt-1 text-sm text-muted">
           Leave empty to use 4 agents.
@@ -341,7 +351,9 @@ function SettingControl({
       aria-describedby={
         [
           row?.overridden ? `${id}-environment` : "",
-          name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+          helpers[name] ||
+          name === "OVERSIGHT_MAX_AGENTS" ||
+          name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
             ? `${id}-default`
             : "",
         ]

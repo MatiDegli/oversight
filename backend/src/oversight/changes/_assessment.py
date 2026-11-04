@@ -133,7 +133,13 @@ class RulesScheduler:
             return
         if self.spend_receipt is not None and stored.seq <= self.spend_receipt.seq:
             return
-        if not math.isfinite(total) or total < 0 or not math.isfinite(budget) or budget <= 0:
+        if (
+            budget is None
+            or not math.isfinite(total)
+            or total < 0
+            or not math.isfinite(budget)
+            or budget <= 0
+        ):
             return
         self.spend_receipt, self.spend_receipt_total = stored, total
         self.spend_changed()

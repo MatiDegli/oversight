@@ -257,3 +257,19 @@ it("shows plain Saved for a restart-only value restored to its startup value", a
   expect(markup(store)).toContain("<p>Saved.</p>");
   expect(markup(store)).not.toContain("Applies to the next run.");
 });
+
+it("explains the optional Meta budget and both default token prices beside their fields", () => {
+  const { store } = setup();
+  const html = markup(store);
+  for (const [name, helper] of [
+    ["OVERSIGHT_BUDGET_USD", "Leave empty for no spending cap."],
+    ["MUSE_SPARK_INPUT_USD_PER_M", "Leave empty to use 0.10"],
+    ["MUSE_SPARK_OUTPUT_USD_PER_M", "Leave empty to use 0.20"],
+  ] as const) {
+    const input = new RegExp(`<input[^>]*name="${name}"[^>]*>`).exec(html)?.[0];
+    const descriptionId = /aria-describedby="([^"]+)"/.exec(input ?? "")?.[1] ?? "";
+    expect(descriptionId).not.toBe("");
+    expect(html).toContain(`id="${descriptionId}"`);
+    expect(html.slice(html.indexOf(`id="${descriptionId}"`))).toContain(helper);
+  }
+});

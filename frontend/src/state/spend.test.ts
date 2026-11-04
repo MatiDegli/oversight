@@ -375,3 +375,18 @@ describe("shared agent cost wording", () => {
     expect(costText(cost)).toBe(text);
   });
 });
+
+it("retains uncapped spending before and after ticks without budget marks", () => {
+  const state = through(1);
+  if (!state.run) throw new Error("Missing run");
+  state.run = { ...state.run, budget: { ...state.run.budget, budget_usd: null, warn_at: [] } };
+  expect(selectSpend(state)).toEqual({ spentUsd: 0, budgetUsd: null, brake: "ok" });
+  const next = applyEvent(state, { ...tick, payload: { ...tick.payload, budget_usd: null } });
+  expect(selectSpend(next)).toEqual({ spentUsd: 12.4, budgetUsd: null, brake: "ok" });
+  expect(next.budgetMarks).toEqual([]);
+  const unknown = applyEvent(state, {
+    ...tick,
+    payload: { ...tick.payload, budget_usd: null, cost_usd: null },
+  });
+  expect(selectSpend(unknown)?.spentUsd).toBeNull();
+});

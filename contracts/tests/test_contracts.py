@@ -18,12 +18,20 @@ from oversight_contracts.commands import (
     RequestChanges,
     StartAgent,
 )
-from oversight_contracts.events import ServerEvent
+from oversight_contracts.events import Budget, ServerEvent
 from oversight_contracts.graph import GraphEdge
 
 GENERATED = Path(__file__).resolve().parents[1] / "generated"
 EVENTS = TypeAdapter(ServerEvent)
 TS = "2026-10-27T14:03:12.345Z"
+
+
+def test_run_budget_can_be_explicitly_uncapped() -> None:
+    budget = Budget(budget_usd=None, spent_usd=1.25, warn_at=[], block_at=0.9)
+    assert budget.model_dump()["budget_usd"] is None
+    with pytest.raises(ValidationError):
+        Budget.model_validate({"spent_usd": 1.25, "warn_at": [], "block_at": 0.9})
+
 
 NODE = {
     "id": "shop.pricing:compute_price",

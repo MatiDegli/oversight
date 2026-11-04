@@ -77,6 +77,7 @@ export function applyAgentEvent(state: State, next: State, event: Event): State 
       const tick = event.payload;
       const rank = { ok: 0, warn_50: 1, warn_80: 2, blocked: 3 };
       const budgetMarks =
+        tick.budget_usd !== null &&
         tick.brake !== "ok" &&
         state.budgetMarks.every((mark) => rank[tick.brake] > rank[mark.brake])
           ? [

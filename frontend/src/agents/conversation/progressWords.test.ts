@@ -89,3 +89,20 @@ it.each([
     detail: "new Meta runs stop at 58%",
   });
 });
+
+it.each([false, true])("writes uncapped spending without a percentage (unknown %s)", (unknown) => {
+  const state = progressState("limits"),
+    budget = state.run?.budget,
+    mark = state.budgetMarks[0];
+  if (!budget || !mark) throw new Error("Missing budget");
+  expect(
+    budgetWords(
+      { ...mark, budget_usd: null },
+      { ...budget, budget_usd: null, warn_at: [] },
+      unknown,
+    ),
+  ).toEqual({
+    lead: "Spending",
+    detail: `${unknown ? "" : "US$120.04 · "}No budget: spending is not capped`,
+  });
+});

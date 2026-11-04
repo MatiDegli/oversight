@@ -554,7 +554,7 @@ class LiveRun:
         except LedgerError as error:
             ledger_error = str(error)
         spent = self.ledger.state.spent_usd if self.ledger.state is not None else 0.0
-        budget = settings.budget_usd or 0.0
+        budget = settings.budget_usd
         block_at = (
             settings.spend_brake_percent / 100 if settings.spend_brake_percent is not None else 0.0
         )
@@ -587,7 +587,7 @@ class LiveRun:
             budget=Budget(
                 budget_usd=budget,
                 spent_usd=spent,
-                warn_at=[mark for mark in WARN_AT if mark < block_at],
+                warn_at=[mark for mark in WARN_AT if mark < block_at] if budget is not None else [],
                 block_at=block_at,
             ),
         )
@@ -970,7 +970,7 @@ class LiveRun:
                 f"{len(state.unknown)} model calls of unknown cost are in the ledger; check "
                 "Meta's console and settle it (uv run python -m oversight ledger settle)"
             )
-        if settings.budget_usd is None:
+        if settings.setting_problems.get("OVERSIGHT_BUDGET_USD") == "invalid":
             return "OVERSIGHT_BUDGET_USD is not configured"
         if self._pricing is None:
             return "Muse Spark input and output prices are not configured"
@@ -979,6 +979,7 @@ class LiveRun:
             settings.budget_usd, state.spent_usd, warn_at=WARN_AT, block_at=block_at
         )
         if ledger.brake == "blocked":
+            assert settings.budget_usd is not None
             return (
                 f"US${state.spent_usd:.2f} of the US${settings.budget_usd:.2f} budget is spent, "
                 f"above {block_at:.0%}: no new runs"

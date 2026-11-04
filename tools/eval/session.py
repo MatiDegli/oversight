@@ -53,11 +53,13 @@ def profile(run: RunStarted, model: str, reasoning: str | None = "__profile__") 
     if not any(s.slot == "A" for s in run.slots):
         raise BenchError("slot A is not offered")
     budget = run.budget
+    # A paid bench run needs a budget; only the fake provider may run uncapped.
+    cap = budget.budget_usd if budget.budget_usd is not None else 0.0
     if (
         not math.isfinite(budget.spent_usd)
         or budget.spent_usd < 0
-        or not math.isfinite(budget.budget_usd)
-        or (chosen.provider != "fake" and budget.budget_usd <= 0)
+        or not math.isfinite(cap)
+        or (chosen.provider != "fake" and cap <= 0)
     ):
         raise BenchError("invalid advertised budget")
     limits = run.limits

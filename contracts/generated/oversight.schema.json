@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.22.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.23.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -661,7 +661,15 @@
       "additionalProperties": false,
       "properties": {
         "budget_usd": {
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "None: no budget, so no brake"
         },
         "spent_usd": {
           "description": "From the ledger, before this run.",
@@ -7921,7 +7929,15 @@
           "type": "number"
         },
         "budget_usd": {
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "None: no budget, so no brake"
         },
         "brake": {
           "enum": [

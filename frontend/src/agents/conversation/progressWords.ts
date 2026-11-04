@@ -23,6 +23,12 @@ export function timeWords(ms: number, bound: number) {
   };
 }
 export function budgetWords(mark: BudgetMark, budget: Budget, unknown: boolean) {
+  if (budget.budget_usd === null || mark.budget_usd === null) {
+    return {
+      lead: "Spending",
+      detail: `${unknown ? "" : `${formatUsd(mark.spent_usd)} · `}No budget: spending is not capped`,
+    };
+  }
   const blocked = mark.brake === "blocked";
   const percent = blocked
     ? !unknown && mark.budget_usd > 0

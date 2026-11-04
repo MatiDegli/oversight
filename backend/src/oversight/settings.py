@@ -23,6 +23,8 @@ def _application_root() -> Path:
 
 
 REPO_ROOT = _application_root()
+# muse-spark-1.3-contributor, US dollars per million input/output tokens.
+MUSE_SPARK_DEFAULT_PRICES = (0.10, 0.20)
 TEST_TIMEOUT_ERROR = (
     "OVERSIGHT_TEST_TIMEOUT_S must be a whole number of seconds from 1 to 999999999"
 )
@@ -166,13 +168,12 @@ class Settings:
     """OVERSIGHT_REVIEWER_FAKE_B_SCRIPT: reviewer fake-b, reviewing author fake."""
     spend_brake_percent: int | None = 90
     """OVERSIGHT_SPEND_BRAKE_PERCENT: whole percentage from 1 to 100; None refuses spending."""
-    # Budget and prices have no defaults. A value missing, not a number or not positive is
-    # `None`, and every start on a Meta profile is then refused (not_configured).
+    # No budget means no spending cap; explicitly invalid amounts still refuse starts.
     budget_usd: float | None = None
     """The credits, in US dollars. OVERSIGHT_BUDGET_USD."""
-    input_usd_per_m: float | None = None
+    input_usd_per_m: float | None = MUSE_SPARK_DEFAULT_PRICES[0]
     """Muse Spark's input price, US dollars per million tokens. MUSE_SPARK_INPUT_USD_PER_M."""
-    output_usd_per_m: float | None = None
+    output_usd_per_m: float | None = MUSE_SPARK_DEFAULT_PRICES[1]
     """Muse Spark's output price, US dollars per million tokens. MUSE_SPARK_OUTPUT_USD_PER_M."""
     baseten_input_usd_per_m: float | None = None
     """Optional Baseten input price, US dollars per million tokens. BASETEN_INPUT_USD_PER_M."""
@@ -351,8 +352,12 @@ class Settings:
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
             spend_brake_percent=spend_brake_percent,
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
-            input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
-            output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
+            input_usd_per_m=positive_amount(merged["MUSE_SPARK_INPUT_USD_PER_M"])
+            if merged.get("MUSE_SPARK_INPUT_USD_PER_M")
+            else MUSE_SPARK_DEFAULT_PRICES[0],
+            output_usd_per_m=positive_amount(merged["MUSE_SPARK_OUTPUT_USD_PER_M"])
+            if merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")
+            else MUSE_SPARK_DEFAULT_PRICES[1],
             baseten_input_usd_per_m=positive_amount(merged.get("BASETEN_INPUT_USD_PER_M")),
             baseten_output_usd_per_m=positive_amount(merged.get("BASETEN_OUTPUT_USD_PER_M")),
             setting_problems=slot_problems,

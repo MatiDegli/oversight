@@ -133,7 +133,7 @@ async def test_extended_run_fixture_round_trips_and_matches_generated_schema(
     event = adapter.validate_python(RUN_EVENT)
     assert event.type == "run.started"
     assert event.payload.contract_version == "1.21.0"
-    assert CONTRACT_VERSION == "1.22.0"
+    assert CONTRACT_VERSION == "1.23.0"
     assert [seat.slot for seat in event.payload.slots] == [*"ABCDEFGH", "AA"]
     assert adapter.validate_json(adapter.dump_json(event)) == event
     serialized = tmp_path / "extended-run.json"

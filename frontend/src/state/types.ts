@@ -68,7 +68,7 @@ export interface BudgetMark {
   ts: string;
   brake: "warn_50" | "warn_80" | "blocked";
   spent_usd: number;
-  budget_usd: number;
+  budget_usd: number | null;
 }
 
 export interface AgentMessage {

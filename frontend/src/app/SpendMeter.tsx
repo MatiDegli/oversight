@@ -13,7 +13,7 @@ const captions: Record<UsageTick["brake"], string | null> = {
 /**
  * "Spent US$0.47 of US$150" on the bar's own line. The group is anchored to the bar's right
  * edge, and a brake caption (icon and words) comes before it on the same line, so the total never
- * moves when the caption appears.
+ * moves when the caption appears. With no budget it says spending is not capped instead.
  */
 export function SpendMeter({ state, showBrake = true }: { state: State; showBrake?: boolean }) {
   const spend = selectSpend(state);
@@ -37,8 +37,18 @@ export function SpendMeter({ state, showBrake = true }: { state: State; showBrak
       </div>
       <p>
         Spent{" "}
-        <span className="font-mono text-(length:--data-size) font-bold text-text">{total}</span> of{" "}
-        <span className="font-mono text-(length:--data-size)">{formatBudget(spend.budgetUsd)}</span>
+        <span className="font-mono text-(length:--data-size) font-bold text-text">{total}</span>
+        {spend.budgetUsd === null ? (
+          " · No budget: spending is not capped"
+        ) : (
+          <>
+            {" "}
+            of{" "}
+            <span className="font-mono text-(length:--data-size)">
+              {formatBudget(spend.budgetUsd)}
+            </span>
+          </>
+        )}
       </p>
     </div>
   );

@@ -50,4 +50,4 @@ from oversight_contracts.views import (
     ViewPath as ViewPath,
 )
 
-CONTRACT_VERSION = "1.22.0"
+CONTRACT_VERSION = "1.23.0"
