@@ -20,7 +20,7 @@ from typing import Literal, cast
 
 from pydantic import TypeAdapter
 
-from oversight.events.clock import Clock, format_ts, system_clock
+from oversight.events.clock import Clock, EventClock, format_ts
 from oversight.events.graph_fold import apply_delta
 from oversight.events.lead_fold import CommittedLeadPrefix, fold_lead_status
 from oversight.events.needs_you import TerminalClaim, TerminalClaims, terminal_key
@@ -202,7 +202,7 @@ class EventStore:
         self,
         path: Path,
         run_id: str,
-        clock: Clock = system_clock,
+        clock: Clock | None = None,
         max_batch: int = 256,
         *,
         mode: Literal["live", "replay"] = "live",
@@ -212,7 +212,7 @@ class EventStore:
         self.allow_fake_provider = allow_fake_provider
         self.path = path
         self.run_id = run_id
-        self._clock = clock
+        self._clock = EventClock() if clock is None else clock
         self._max_batch = max_batch
         self._connection: sqlite3.Connection | None = None
         self._queue: asyncio.Queue[_Pending | None] = asyncio.Queue()
