@@ -115,3 +115,5 @@ One line per day, in Argentina time (ART).
   coverage. Polling/renewal now preserve supervisor-owned build transitions; provider values reach
   only the private redaction channel, and failure/log and boundary-input regressions cover the
   wiring. Retained the absence of final self-app/story/Windows-browser acceptance.
+
+- 2026-11-04 — Hardened scripted Chat captures to require the selected thread, Proposed change card and composer; separated coder provenance from the model line, aligned lead header reading order and restored the design spacing rhythm, with regression and responsive browser evidence.

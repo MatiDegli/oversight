@@ -4779,6 +4779,25 @@ admission/execution refuses with `Reviewed-app startup disclosure is unavailable
 startup. Real prepared resources at the default runtime can now pass disclosure admission;
 reviewed-app execution remains unavailable pending its separately required boundary and supervisor.
 
+## 2026-11-03 — Scripted agent provenance in Chat
+
+Chat rail rows and conversation headers label agents “Scripted demo agents” only when their
+latest coding status, or highest lead status revision, resolves to a current run profile with
+provider `fake`. Names, tasks, plan text, model labels and messages never determine provenance.
+Missing status, an unknown profile or no run supplies no label. Terminal agents keep the label;
+a new run clears it through the shared reducer. Headers explain: “Entered text does not
+determine scripted actions.” This covers outer and nested instances without changing contracts.
+
+Reason: a scripted demo must remain distinguishable from Muse while preserving team identity.
+Follow-up: label Oversight cards and rail, graph badges, map captions, moving markers, review,
+live diff, usage, dock, preview option and panel, focus tabs and lead reply attributions.
+## 2026-11-03 — Contracts 1.21.0 — approved by the maintainer
+
+Slot is now a strict, nonempty ASCII uppercase string matching `^[A-Z]+$`, without a product maximum.
+Contracts advance to 1.21.0; 1.20.0 stays reserved for merge rehearsal.
+Seats name capacity, not agent identity, and are ordered by position: A..Z, then AA, AB, ...
+Recorded A–F logs remain valid without modification.
+Runtime admission stays at 1–6 agents, default 4; limits widen in the backend front.
 
 ## Mask old tool outputs by default (2026-11-03)
 

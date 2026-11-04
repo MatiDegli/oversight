@@ -101,7 +101,11 @@ async function fieldLight(page: Page) {
     );
     const field = canvas?.oversightField;
     if (!field || field.state() !== "webgl") throw new Error("Missing rendered field");
-    field.pixel(0, 0);
+    // Off-canvas probes refresh the lamp grid without reading a pixel back from the GPU.
+    // Keep a fresh draw for the life/lamps comparisons below, including software rendering.
+    const draws = field.draws();
+    field.pixel(-1, -1);
+    if (field.draws() <= draws) throw new Error("Lamp snapshot did not redraw");
     const lamps = [];
     for (let y = 0; y < canvas.clientHeight; y += 49)
       for (let x = 0; x < canvas.clientWidth; x += 49) lamps.push(field.lamp(x, y));

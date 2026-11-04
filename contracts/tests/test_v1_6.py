@@ -8,9 +8,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from oversight_contracts.commands import AgentCreated, MissingSetting, StartAgent
-from oversight_contracts.events import AgentStatus, RunStarted, SlotInfo
-from oversight_contracts.queue import QueuedAgentTask
+from oversight_contracts.commands import StartAgent
+from oversight_contracts.events import AgentStatus
 from oversight_contracts.review import NodeBehaviorDiff
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,49 +24,6 @@ STATUS = dict(
     max_steps=30,
     detail=None,
 )
-RUN = json.loads((ROOT / "fixtures/events/handwritten-level1.jsonl").read_text().splitlines()[0])[
-    "payload"
-]
-SLOT_MODELS = [
-    (StartAgent, dict(task="work"), "slot"),
-    (AgentCreated, dict(agent_id="agent-1", change_id="change-1"), "slot"),
-    (MissingSetting, dict(name="META_API_KEY", problem="missing"), "slots"),
-    (SlotInfo, dict(default_model="fake"), "slot"),
-    (RunStarted, RUN, "slots"),
-    (AgentStatus, STATUS, "slot"),
-    (QueuedAgentTask, dict(task="work", model=None, zone=None), "slot"),
-]
-
-
-def slot_payload(model: Any, base: Any, field: str, slot: Any) -> dict[str, Any]:
-    value = slot
-    if model is MissingSetting:
-        value = [slot]
-    elif model is RunStarted:
-        value = [dict(slot=slot, default_model="fake")]
-    return {**base, field: value}
-
-
-@pytest.mark.parametrize("model,base,field", SLOT_MODELS, ids=lambda v: getattr(v, "__name__", ""))
-@pytest.mark.parametrize("slot", list("ABCDEF"))
-def test_each_slot_bearing_model_accepts_a_through_f(
-    model: Any, base: Any, field: str, slot: str
-) -> None:
-    payload = slot_payload(model, base, field, slot)
-    parsed = model.model_validate(payload)
-    assert model.model_validate_json(parsed.model_dump_json()) == parsed
-    assert parsed.model_dump(mode="json")[field] == payload[field]
-
-
-@pytest.mark.parametrize("model,base,field", SLOT_MODELS, ids=lambda v: getattr(v, "__name__", ""))
-@pytest.mark.parametrize("slot", ["G", *list("abcdef"), "", "AA", "1", 1, True, {}])
-def test_each_slot_bearing_model_rejects_outside_the_closed_enum(
-    model: Any, base: Any, field: str, slot: Any
-) -> None:
-    with pytest.raises(ValidationError):
-        model.model_validate(slot_payload(model, base, field, slot))
-
-
 CHANGE = dict(change_id="change-1", revision=0, head_commit="base", evidence_seq=1)
 CARD = dict(**CHANGE, kind="review_card", node_id="shop.pricing:compute_price", question="Keep it?")
 REFS = [
@@ -303,7 +259,7 @@ def test_schema_changes_only_approved_attachments() -> None:
             "ServerEvent",
         }:
             assert current[name] == definition, name
-    assert current["Slot"]["enum"] == list("ABCDEF")
+    assert current["Slot"] == {"minLength": 1, "pattern": r"^[A-Z]+$", "type": "string"}
     for name, field in (("ApproveChange", "grant"), ("ChangeResolved", "grants")):
         properties = current[name]["properties"]
         assert set(properties) - set(baseline[name]["properties"]) == {field}

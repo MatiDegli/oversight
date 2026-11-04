@@ -48,7 +48,7 @@ def test_supported_job_hosts_and_check_namespace_setup(filename: str) -> None:
         job = mapping(body)
         assert job["runs-on"] == (
             "ubuntu-24.04"
-            if job_id in {"check", "browser", "browser-1", "browser-2"}
+            if job_id in {"check", "browser", "browser-1", "browser-2", "browser-3", "browser-4"}
             else "ubuntu-latest"
         )
     check_steps = steps(mapping(jobs["check"])["steps"])
