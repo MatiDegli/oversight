@@ -28,6 +28,26 @@ jobs:
         with:
           package_json_file: frontend/package.json
           standalone: true
+      - name: Use standalone pnpm executable
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+          executables = set()
+          for candidate in root.glob("**/@pnpm/exe.linux-x64/pnpm"):
+              candidate = candidate.resolve(strict=True)
+              if not candidate.is_relative_to(root) or not candidate.is_file():
+                  continue
+              with candidate.open("rb") as stream:
+                  if stream.read(4) == b"\x7fELF" and os.access(candidate, os.X_OK):
+                      executables.add(candidate)
+          if len(executables) != 1:
+              raise SystemExit("Expected exactly one executable standalone pnpm ELF in setup destination")
+          with open(os.environ["GITHUB_PATH"], "a") as path:
+              path.write(str(executables.pop().parent) + "\n")
+          PY
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:

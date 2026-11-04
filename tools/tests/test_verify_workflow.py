@@ -4,10 +4,15 @@ Only the reviewed mapping, step-list and literal-script forms are accepted. Pars
 each block at its own indentation so a later job cannot satisfy an earlier job's policy.
 """
 
+import asyncio
+import os
 import re
+import sys
 from pathlib import Path
 
 import pytest
+
+from oversight.workspace.runner import run_process
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github/workflows"
 ACTIONS = {
@@ -20,6 +25,29 @@ GITLEAKS = "./.github/actions/setup-gitleaks"
 TRACKED = {
     "name": "tracked files",
     "run": '|\nstatus=$(git status --porcelain --untracked-files=no)\ntest -z "$status"',
+}
+
+STANDALONE_PNPM = {
+    "name": "Use standalone pnpm executable",
+    "run": r"""|
+python3 - <<'PY'
+import os
+from pathlib import Path
+
+root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+executables = set()
+for candidate in root.glob("**/@pnpm/exe.linux-x64/pnpm"):
+    candidate = candidate.resolve(strict=True)
+    if not candidate.is_relative_to(root) or not candidate.is_file():
+        continue
+    with candidate.open("rb") as stream:
+        if stream.read(4) == b"\x7fELF" and os.access(candidate, os.X_OK):
+            executables.add(candidate)
+if len(executables) != 1:
+    raise SystemExit("Expected exactly one executable standalone pnpm ELF in setup destination")
+with open(os.environ["GITHUB_PATH"], "a") as path:
+    path.write(str(executables.pop().parent) + "\n")
+PY""",
 }
 
 
@@ -118,6 +146,10 @@ def assert_verify_policy(verify: str, ci: str) -> None:
 
     check = parsed_steps["check"]
     ci_check = steps(mapping(ci_jobs["check"])["steps"])
+    assert len(check) == 12
+    assert len(ci_check) == 11
+    assert check[3] == ci_check[3] == STANDALONE_PNPM
+    check, ci_check = check[:3] + check[4:], ci_check[:3] + ci_check[4:]
     assert len(check) == 11
     assert len(ci_check) == 10
     for actual, source in zip(check[:6], ci_check[:6], strict=True):
@@ -153,6 +185,52 @@ def assert_verify_policy(verify: str, ci: str) -> None:
 
 def test_verify_has_only_the_manual_backend_jobs_and_required_gates() -> None:
     assert_verify_policy((WORKFLOWS / "verify.yml").read_text(), (WORKFLOWS / "ci.yml").read_text())
+
+
+@pytest.mark.parametrize(
+    "layout", ["flat", "nested", "missing", "script", "mode", "escape", "many"]
+)
+def test_standalone_pnpm_selection_requires_a_unique_executable_elf(tmp_path, layout):
+    root = tmp_path / "setup/node_modules"
+    home = root / ".bin"
+    home.mkdir(parents=True)
+    (home / "pnpm").write_text("#!/bin/sh\nexec node ../pnpm/bin/pnpm.cjs\n")
+    target = root / "@pnpm/exe.linux-x64/pnpm"
+    if layout == "nested":
+        target = root / ".pnpm/exe/node_modules/@pnpm/exe.linux-x64/pnpm"
+    if layout != "missing":
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"#!/bin/sh\n" if layout == "script" else b"\x7fELFfixture")
+        target.chmod(0o644 if layout == "mode" else 0o755)
+    if layout == "escape":
+        outside = tmp_path / "outside"
+        target.rename(outside)
+        target.symlink_to(outside)
+    if layout == "many":
+        other = root / ".pnpm/other/node_modules/@pnpm/exe.linux-x64/pnpm"
+        other.parent.mkdir(parents=True)
+        other.write_bytes(b"\x7fELFother")
+        other.chmod(0o755)
+    output = tmp_path / "github-path"
+    output.write_text("existing\n")
+    script = STANDALONE_PNPM["run"].removeprefix("|\npython3 - <<'PY'\n").removesuffix("PY")
+    result = asyncio.run(
+        run_process(
+            [sys.executable, "-I", "-c", script],
+            cwd=tmp_path,
+            timeout_s=20,
+            env={"PNPM_HOME": str(home), "GITHUB_PATH": str(output)},
+        )
+    )
+    assert not result.timed_out
+    # Windows does not expose POSIX execute bits; this selector runs on Linux check jobs.
+    if layout in {"flat", "nested"} or (layout == "mode" and os.name == "nt"):
+        assert result.returncode == 0, result.stderr
+        assert output.read_text() == f"existing\n{target.parent}\n"
+    else:
+        assert result.returncode != 0
+        assert "Expected exactly one executable standalone pnpm ELF" in result.stderr
+        assert output.read_text() == "existing\n"
 
 
 @pytest.mark.parametrize(
@@ -326,7 +404,9 @@ def assert_windows_policy(text: str) -> None:
 
 def assert_windows_steps(items: list[dict[str, str]]) -> None:
     ci = mapping(mapping((WORKFLOWS / "ci.yml").read_text())["jobs"])
-    setup = steps(mapping(ci["check"])["steps"])[:4]
+    setup = steps(mapping(ci["check"])["steps"])
+    assert setup[3] == STANDALONE_PNPM
+    setup = (setup[:3] + setup[4:])[:4]
     assert mapping(setup[2]["with"]) == {
         "package_json_file": "frontend/package.json",
         "standalone": "true",
