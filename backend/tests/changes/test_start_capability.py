@@ -75,11 +75,13 @@ async def test_ordered_truth_table_refuses_without_any_event(h, monkeypatch):
     h.workspace.integrity.main_suspect = False
 
 
-@pytest.mark.parametrize("slot", ["A", "B", "C", "D", "E", "F"])
+@pytest.mark.parametrize("slot", ["A", "B", "C", "D", "E", "F", "G", "AA"])
 async def test_reviewer_differs_from_every_offered_author(h, slot):
     await h.workspace.check_isolation()
-    values = {"cross_review": True, "review_model": "muse-spark-open", "max_agents": 6}
-    values["agent_model" + ("" if slot == "A" else f"_{slot.lower()}")] = "muse-spark-open"
+    values = {"cross_review": True, "review_model": "muse-spark-open", "max_agents": 28}
+    values["agent_models"] = {slot: "muse-spark-open"} if slot != "A" else {}
+    if slot == "A":
+        values["agent_model"] = "muse-spark-open"
     configured(h, Settings(**values))
     assert h.manager._ctx.mode.capability().reason == (
         "The reviewer model must differ from each author model"

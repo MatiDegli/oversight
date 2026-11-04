@@ -38,7 +38,7 @@ export function ReviewEditor({
   const report = useEffectEvent((next: FileState) => {
     onBlocked(next.dirty || next.phase === "saving" ? "edits" : !next.loaded ? "loading" : null);
   });
-  const mount = (diff: editor.IStandaloneDiffEditor) => {
+  const mount = (diff: editor.IStandaloneDiffEditor, waitForDiff: () => Promise<void>) => {
     const model = diff.getModifiedEditor().getModel();
     if (!model) return;
     const opened = new FileDocument(
@@ -47,12 +47,13 @@ export function ReviewEditor({
       files,
       setState,
       (text) => {
-        // An edit rebuilds folded ranges without flushing the diff view or detaching its models.
+        // Rebuild folded ranges without flushing the diff view or detaching its models.
         model.pushStackElement();
         model.pushEditOperations([], [{ range: model.getFullModelRange(), text }], () => null);
         model.pushStackElement();
       },
       true,
+      waitForDiff,
     );
     document.current = opened;
     onMount?.(diff);
@@ -109,7 +110,7 @@ export function ReviewEditor({
             disabled={saving}
             className={`${control} text-failed-text`}
             onClick={() => {
-              document.current?.discard();
+              void document.current?.discard();
             }}
           >
             Discard edits

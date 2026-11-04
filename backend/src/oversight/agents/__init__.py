@@ -97,7 +97,7 @@ from oversight.agents.loop import (
 )
 from oversight.agents.reviewer import REVIEW_MAX_OUTPUT_TOKENS, ReviewOutcome, review_candidate
 from oversight.agents.sink import ChangeSink
-from oversight.agents.tools import TOOL_NAMES, TOOL_SCHEMAS
+from oversight.agents.tools import TOOL_NAMES, TOOL_SCHEMAS, tool_names
 from oversight.agents.usage import (
     Brake,
     LedgerError,
@@ -204,6 +204,7 @@ __all__ = [
     "run_review_call",
     "system_prompt",
     "task_examples",
+    "tool_names",
     "validate_agent_status",
     "validate_answering",
     "validate_person_examples",

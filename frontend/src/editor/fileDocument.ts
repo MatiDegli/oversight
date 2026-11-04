@@ -68,11 +68,13 @@ export class FileDocument {
       model.setValue(text);
     },
     review = false,
+    private readonly beforeReplace?: () => Promise<void>,
   ) {
     this.key = fileKey(target.path, target.agentId);
     this.writable = !files.readOnly && (target.agentId === null || review);
     const draft = this.writable ? files.drafts.get(this.key) : undefined;
-    if (draft) this.replace(draft.content);
+    // Review restores drafts in load(), after its initial worker diff has settled.
+    if (draft && !beforeReplace) this.replace(draft.content);
     this.subscription = model.onDidChangeContent((event) => {
       if (this.replacing) return;
       if (event.isFlush) {
@@ -177,10 +179,12 @@ export class FileDocument {
     this.emit();
     try {
       const answer = await this.files.readFile(this.target.path, this.target.agentId ?? undefined);
+      if (this.beforeReplace) await this.beforeReplace();
       if (!this.active || generation !== this.generation || model !== this.model) return;
-      const draft = this.writable ? this.files.drafts.get(this.key) : undefined;
       this.fetched = answer;
+      const draft = this.writable ? this.files.drafts.get(this.key) : undefined;
       const unchanged = model.getVersionId() === version;
+      if (unchanged && draft && !reload && !this.loaded) this.replace(draft.content);
       if (unchanged && (reload || clean) && (!draft || reload)) {
         this.loaded = { content: this.replace(answer.content), hash: answer.hash };
         this.stale = false;
@@ -263,9 +267,15 @@ export class FileDocument {
     );
   }
 
-  discard() {
+  async discard() {
     if (!this.fetched || this.pending()) return;
-    ++this.generation;
+    const generation = ++this.generation;
+    const version = this.model.getVersionId();
+    // Monaco 0.57 cannot rebase a pending worker diff across a whole-document edit.
+    // Let it apply its mappings to the text they describe before shrinking that text.
+    if (this.beforeReplace) await this.beforeReplace();
+    if (!this.active || generation !== this.generation || this.model.getVersionId() !== version)
+      return;
     this.loaded = { content: this.replace(this.fetched.content), hash: this.fetched.hash };
     this.stale = false;
     this.failure = null;

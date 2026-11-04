@@ -26,7 +26,12 @@ export interface PreviewPort {
   start(input: PreviewCandidate, signal: AbortSignal): Promise<PreviewCreated>;
   details(id: string, signal: AbortSignal): Promise<PreviewDetails>;
   renew(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus>;
-  stop(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus>;
+  stop(
+    id: string,
+    body: PreviewTokenRequest,
+    signal: AbortSignal,
+    delivery?: { keepalive: true },
+  ): Promise<PreviewStatus>;
 }
 export interface PreviewClock {
   schedule(callback: () => void, delay: number): () => void;
@@ -47,6 +52,8 @@ export interface PreviewController {
   see: (candidate: () => PreviewCandidate | null) => Promise<void>;
   observe: (status: PreviewStatus) => void;
   refresh: () => Promise<void>;
+  /** Validated tab recovery grants authority, never slot intent. */
+  recover?: (candidate: () => PreviewCandidate | null) => Promise<void>;
   close: () => Promise<void>;
   navigate: () => Promise<void>;
   setIdentity: (identity: PreviewIdentity) => Promise<void>;

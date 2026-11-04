@@ -17,6 +17,25 @@ ON = OFF.model_copy(update={"arm_id": "packed", "harness_pack": "on"})
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("arm", [OFF, ON], ids=["off", "on"])
+async def test_server_with_wrong_pack_is_refused_before_start(tmp_path, arm):
+    factory = Scripts([script_with_tests()])
+    settings = live_settings(tmp_path, harness_pack=arm.harness_pack != "on")
+    async with live_server(settings, factory) as server:
+        with pytest.raises(BenchError, match="server limits/prompt do not match"):
+            await execute(
+                str(server.client.base_url),
+                "fake",
+                1,
+                tmp_path / "results.jsonl",
+                [TASK],
+                FREE,
+                arm=arm,
+            )
+        assert factory.calls == 0
+
+
+@pytest.mark.anyio
 async def test_same_profile_arms_repetitions_and_resume_have_distinct_keys(tmp_path):
     out = tmp_path / "results.jsonl"
     configurations = [(OFF, 1), (ON, 1), (OFF, 2)]
@@ -173,7 +192,10 @@ async def test_repetitions_alone_are_independent_attempts(tmp_path):
     out = tmp_path / "results.jsonl"
     for repetition in (1, 2):
         factory = Scripts([script_with_tests()])
-        async with live_server(live_settings(tmp_path / str(repetition)), factory) as server:
+        async with live_server(
+            live_settings(tmp_path / str(repetition), harness_pack=OFF.harness_pack == "on"),
+            factory,
+        ) as server:
             await execute(
                 str(server.client.base_url),
                 "fake",

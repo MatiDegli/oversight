@@ -67,7 +67,8 @@ the agents' lights, the diff) is where this happens, not the pitch.
   Reject and, from level 2, Request changes. Approve has no keyboard shortcut.
 - Live diff (read-only) and file view share the review panel; there is no third screen.
 - Agents use only Meta models: Muse Spark through the Meta Model API, and Muse Spark Open through
-  Baseten. Their tools are fixed (list, read, search, edit, run tests, finish); no shell.
+  Baseten. Tools are list_files, read_file, search, edit_file, run_tests and finish, plus find_symbol
+  (read-only Python navigation) when the harness pack is on, the default. There is no shell tool.
 - The impact cone is bounded and always presented as "possibly affected", never as complete.
 - Scope is set by levels in docs/proposal.md, section 5; level 3 items and day mode are cut if time runs short.
 - Terminology: agent A and agent B, change, pending change, impact cone, watch, review, live diff,

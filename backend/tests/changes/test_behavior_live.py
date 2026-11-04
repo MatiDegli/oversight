@@ -85,7 +85,7 @@ async def test_boundary_change_has_named_differing_rows_and_private_reasons(tmp_
     async with (
         asyncio.timeout(60),
         live_server(
-            live_settings(tmp_path, behavior_diff=True, measured_cone=True),
+            live_settings(tmp_path, harness_pack=False, behavior_diff=True, measured_cone=True),
             Scripts([script(edits)]),
         ) as s,
     ):
@@ -130,7 +130,7 @@ async def test_refactor_compares_without_claiming_equivalence(tmp_path):
     async with (
         asyncio.timeout(60),
         live_server(
-            live_settings(tmp_path, behavior_diff=True, measured_cone=True),
+            live_settings(tmp_path, harness_pack=False, behavior_diff=True, measured_cone=True),
             Scripts([script([edit])]),
         ) as s,
     ):
@@ -169,7 +169,10 @@ async def test_missing_isolation_refuses_workers(tmp_path, monkeypatch):
     edit = (PRICING, "base = unit_price * quantity", "base = quantity * unit_price")
     async with (
         asyncio.timeout(60),
-        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script([edit])])) as s,
+        live_server(
+            live_settings(tmp_path, harness_pack=False, behavior_diff=True),
+            Scripts([script([edit])]),
+        ) as s,
     ):
         rec = await run(s)
         [result] = rec.behavior_diffs[1].functions
@@ -208,7 +211,10 @@ async def test_global_assignment_is_not_probed(tmp_path, monkeypatch):
     )
     async with (
         asyncio.timeout(60),
-        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script([edit])])) as s,
+        live_server(
+            live_settings(tmp_path, harness_pack=False, behavior_diff=True),
+            Scripts([script([edit])]),
+        ) as s,
     ):
         rec = await run(s)
         [result] = rec.behavior_diffs[1].functions
@@ -230,7 +236,10 @@ async def test_hidden_mutable_default_marks_differing_rows_unstable(tmp_path):
     ]
     async with (
         asyncio.timeout(60),
-        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script(edits)])) as s,
+        live_server(
+            live_settings(tmp_path, harness_pack=False, behavior_diff=True),
+            Scripts([script(edits)]),
+        ) as s,
     ):
         rec = await run(s)
         [result] = rec.behavior_diffs[1].functions
@@ -242,7 +251,10 @@ async def test_module_tier_boundary_is_probed(tmp_path):
     edit = (PRICING, "if quantity >= minimum:", "if quantity >= minimum + 1:")
     async with (
         asyncio.timeout(60),
-        live_server(live_settings(tmp_path, behavior_diff=True), Scripts([script([edit])])) as s,
+        live_server(
+            live_settings(tmp_path, harness_pack=False, behavior_diff=True),
+            Scripts([script([edit])]),
+        ) as s,
     ):
         rec = await run(s)
         [result] = rec.behavior_diffs[1].functions
@@ -256,7 +268,7 @@ async def test_default_off_does_not_spawn_or_retain(tmp_path, monkeypatch):
     edit = (PRICING, "base = unit_price * quantity", "base = quantity * unit_price")
     async with (
         asyncio.timeout(60),
-        live_server(live_settings(tmp_path), Scripts([script([edit])])) as s,
+        live_server(live_settings(tmp_path, harness_pack=False), Scripts([script([edit])])) as s,
     ):
         rec = await run(s)
         assert rec.behavior_diffs == {}
@@ -302,7 +314,9 @@ async def test_direct_and_caller_measurement_switches_are_independent(
     monkeypatch.setattr("oversight.changes._proposal.probe_behavior", probe)
     monkeypatch.setattr("oversight.changes._proposal.measure_cone", callers)
     edit = (PRICING, "base = unit_price * quantity", "base = quantity * unit_price")
-    settings = live_settings(tmp_path, behavior_diff=behavior_diff, measured_cone=measured_cone)
+    settings = live_settings(
+        tmp_path, harness_pack=False, behavior_diff=behavior_diff, measured_cone=measured_cone
+    )
     async with asyncio.timeout(60), live_server(settings, Scripts([script([edit])])) as s:
         rec = await run(s)
         assert probe.await_count == int(behavior_diff)

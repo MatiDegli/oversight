@@ -70,6 +70,7 @@ type DiffText = Pick<LiveDiffData, "changeId" | "path" | "original" | "modified"
 export interface ShownDiff {
   key: string;
   models: editor.IDiffEditorModel;
+  viewModel: editor.IDiffEditorViewModel;
 }
 
 /**
@@ -78,7 +79,7 @@ export interface ShownDiff {
  * selection updates its models in place.
  */
 export function showDiff(
-  diffEditor: Pick<editor.IStandaloneDiffEditor, "setModel">,
+  diffEditor: Pick<editor.IStandaloneDiffEditor, "setModel" | "createViewModel">,
   shown: ShownDiff | undefined,
   next: DiffText,
   createModel: (text: string) => editor.ITextModel,
@@ -92,10 +93,12 @@ export function showDiff(
     return shown;
   }
   const models = { original: createModel(next.original), modified: createModel(next.modified) };
-  diffEditor.setModel(models);
+  const viewModel = diffEditor.createViewModel(models);
+  diffEditor.setModel(viewModel);
+  shown?.viewModel.dispose();
   shown?.models.original.dispose();
   shown?.models.modified.dispose();
-  return { key, models };
+  return { key, models, viewModel };
 }
 
 function createFileModel(text: string, path: string): editor.ITextModel {
@@ -116,7 +119,7 @@ export function InlineDiff({
   readOnly?: boolean;
   managedModified?: boolean;
   follow?: boolean;
-  onMount?: (diffEditor: editor.IStandaloneDiffEditor) => void;
+  onMount?: (diffEditor: editor.IStandaloneDiffEditor, waitForDiff: () => Promise<void>) => void;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const diffEditor = useRef<editor.IStandaloneDiffEditor | null>(null);
@@ -132,7 +135,7 @@ export function InlineDiff({
       },
       follow,
     );
-    onMount?.(created);
+    onMount?.(created, () => shown.current?.viewModel.waitForDiff() ?? Promise.resolve());
   });
 
   useEffect(() => {
@@ -145,11 +148,13 @@ export function InlineDiff({
     diffEditor.current = created;
     reportMount(created);
     return () => {
-      const models = shown.current?.models;
+      const current = shown.current;
+      const models = current?.models;
       viewport.current?.dispose();
       viewport.current = undefined;
       created.setModel(null);
       created.dispose();
+      current?.viewModel.dispose();
       models?.original.dispose();
       models?.modified.dispose();
       diffEditor.current = null;
@@ -190,7 +195,7 @@ export interface LiveDiffProps {
   /** Live updates follow the agent unless the person is using the diff. Review only opens at a hunk. */
   follow?: boolean;
   /** Called once, when the diff editor is created; selections and edits reuse it. */
-  onMount?: (diffEditor: editor.IStandaloneDiffEditor) => void;
+  onMount?: (diffEditor: editor.IStandaloneDiffEditor, waitForDiff: () => Promise<void>) => void;
 }
 
 /**
