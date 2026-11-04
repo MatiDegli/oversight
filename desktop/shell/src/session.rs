@@ -14,6 +14,7 @@ use oversight_desktop_core::launch::{Launch, require_free_port};
 use oversight_desktop_core::lifecycle::Listener;
 use oversight_desktop_core::refusal::Refusal;
 use oversight_desktop_core::source::SelectedSource;
+use oversight_desktop_core::switch::SWITCH_TIMEOUT;
 use oversight_desktop_core::switch::{Action, PAGE_LIMIT, Phase, Request, Switch};
 use tauri::AppHandle;
 
@@ -315,7 +316,7 @@ fn load_inert(ui: &Ui, quit: &AtomicBool, state: &mut Switch, began: Instant) ->
                 if state.phase() == Phase::Ready {
                     window.backend()?;
                 }
-                ui.message("The switch could not start", "The switching page did not finish loading within five seconds. The current session is still running. Try again.")?;
+                ui.message("The switch could not start", SWITCH_TIMEOUT)?;
                 ui.enable(true)?;
                 return Ok(false);
             }

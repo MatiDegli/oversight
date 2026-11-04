@@ -2,6 +2,7 @@ use std::path::Path;
 
 use oversight_desktop_core::refusal::Refusal;
 use oversight_desktop_core::source::{SelectedSource, runtime_dir};
+use oversight_desktop_core::switch::{RELOAD_CONTENT, SWITCH_TIMEOUT};
 
 #[test]
 fn selection_refuses_ambiguous_paths_before_filesystem_access() {
@@ -121,4 +122,27 @@ fn recovery_never_names_the_shared_data_parent_as_a_folder_to_delete() {
         )));
         assert!(!remedy.contains("delete the per-source folder"));
     }
+}
+
+#[test]
+fn reload_disclosures_match_the_reopen_policy_and_runbook() {
+    let readme = include_str!("../../README.md");
+    let instructions = readme.split("**File > Reload settings**").nth(1).unwrap();
+    let instructions = instructions.split("## Open").next().unwrap();
+    let words: Vec<_> = instructions.split_whitespace().collect();
+    let words = words.join(" ");
+    for text in [RELOAD_CONTENT, words.as_str()] {
+        for required in [
+            "Pending changes are discarded",
+            "approved changes",
+            "restart is refused",
+            "even if you already exported them",
+            "folder holding them is named",
+        ] {
+            assert!(text.contains(required));
+        }
+    }
+    let remedy = Refusal::Other.remedy(Path::new("runtime"));
+    assert!(remedy.contains("settings saved with File > Edit settings…"));
+    assert!(SWITCH_TIMEOUT.contains("The current session is still running. Try again."));
 }

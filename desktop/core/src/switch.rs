@@ -4,6 +4,8 @@ use std::time::Duration;
 use crate::source::SelectedSource;
 
 pub const PAGE_LIMIT: Duration = Duration::from_secs(5);
+pub const RELOAD_CONTENT: &str = "Pending changes are discarded. When reloading an opened repository, if this session approved changes, the restart is refused even if you already exported them, and the folder holding them is named.";
+pub const SWITCH_TIMEOUT: &str = "The switching page did not finish loading within five seconds. The current session is still running. Try again.";
 
 /// Menu requests share one channel; only the supervisor owns the current source.
 #[derive(Clone, Debug)]
