@@ -44,7 +44,7 @@ async def test_switch_off_preserves_level2_manual_review_log(
     ]
     model = scripted_a()
     clients = BySlot(lambda _profile, _slot: model)
-    settings = two_fakes(tmp_path, cross_review=False)
+    settings = two_fakes(tmp_path, harness_pack=False, cross_review=False)
     async with asyncio.timeout(DEADLINE_S), live_server(settings, clients) as server:
         assert (await start(server, slot="A")).status_code == 201
         await ready(server)

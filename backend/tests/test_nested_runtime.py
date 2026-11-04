@@ -6,13 +6,13 @@ import inspect
 import sys
 from pathlib import Path
 from typing import Any, cast
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from oversight.settings import REPO_ROOT, Settings
 from oversight.slots import resolve_slots
-from oversight.workspace import Workspace, run_process
+from oversight.workspace import ProcessResult, Workspace, run_process
 
 FILES = REPO_ROOT / "fixtures/fake-model"
 
@@ -53,6 +53,7 @@ def test_nested_factory_requires_explicit_inputs(tmp_path: Path) -> None:
     assert inputs["tree"] == config.tree
     assert isinstance(inputs["settings"], Settings)
     assert inputs["settings"].runtime_dir == config.preview_dir / "state" / ".runtime"
+    assert inputs["settings"].harness_pack is True
     assert inputs["policy"].supported_roles == ("coder", "lead")
     assert inputs["coder_factory"] is not inputs["lead_factory"]
     assert list(inspect.signature(AppFactory.__call__).parameters) == [
@@ -87,7 +88,7 @@ def assert_import_has_no_side_effects(config) -> None:
 import importlib.abc
 import sys
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 class NoApp(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if fullname == 'oversight.app':
@@ -172,7 +173,13 @@ def test_nested_settings_are_explicit_and_private(
         pytest_pin="9.1.1",
         demo_python=settings.demo_python,
     )
+    denied.assert_not_called()  # Composition still reads no environment and starts no process.
+    probe = AsyncMock(return_value=ProcessResult(0, "", "", False, False, 1))
+    monkeypatch.setattr("oversight.workspace.core.run_process", probe)
     asyncio.run(workspace.ensure_demo_venv())
+    probe.assert_awaited_once()
+    assert probe.call_args.args[0] == [str(config.demo_python), "-c", "import pytest"]
+    assert probe.call_args.kwargs["timeout_s"] == 60
     denied.assert_not_called()
     assert not (settings.runtime_dir / "demo-venv").exists()
     assert not (config.preview_dir / ".runtime/demo-venv").exists()

@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from backend.tests.workspace.workspace_helpers import fixture_git
 
 from oversight.agents.tools import Toolbox
 from oversight.workspace import (
@@ -39,13 +40,12 @@ async def opened(tmp_path: Path, files: dict[str, bytes], autocrlf: str | None =
     try:
         if autocrlf is not None:
             result = await run_process(
-                ["git", "init", "-q", "--template="], cwd=source, timeout_s=10
+                fixture_git("init", "-q", "--template="), cwd=source, timeout_s=10
             )
             assert result.returncode == 0
             for command in [("add", "-A"), ("commit", "-q", "-m", "Source baseline")]:
                 result = await run_process(
-                    [
-                        "git",
+                    fixture_git(
                         "-c",
                         f"core.autocrlf={autocrlf}",
                         "-c",
@@ -53,7 +53,7 @@ async def opened(tmp_path: Path, files: dict[str, bytes], autocrlf: str | None =
                         "-c",
                         "user.email=fixture@example.invalid",
                         *command,
-                    ],
+                    ),
                     cwd=source,
                     timeout_s=10,
                 )

@@ -33,7 +33,7 @@ async def test_reconnect_deduplicates_and_resumes_without_restarting_agent(tmp_p
     for turn in turns:
         turn["usage"] = {"input_tokens": 100, "output_tokens": 20}
     factory = Scripts([json.dumps({"task": task.prompt, "turns": turns})])
-    settings = live_settings(tmp_path)
+    settings = live_settings(tmp_path, harness_pack=False)
     out = tmp_path / "results" / "r.jsonl"
     async with live_server(settings, factory) as server:
         original = server.app.middleware_stack

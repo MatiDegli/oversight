@@ -254,3 +254,23 @@ Retain original HEAD/index/config/selected-file hashes before/after server opera
 restart refusal's binary export/check guidance before explicit apply; this workflow never supplies
 automatic apply or discard. Only driver-owned disposable fixtures permit automatic separate-target
 apply/exact-hash discard. Named unavailable-volume skips and large-fixture timing remain evidence.
+
+## Reviewed preview inputs and remaining acceptance
+
+Reviewed launch authority is separate from demo trust. Prepared dependencies and tools carry recorded
+inventories and hashes; reuse rechecks them and mismatches refuse. Static preparation copies imports
+into private per-preview environments and maps backend/contracts to T, without running hooks or
+installing/synchronizing dependencies. The final environment is scrubbed after additions, forces
+offline/no-sync values and uses child HOME/cache paths. Host HOME is never restored for tools.
+
+The private supervisor adapts those proposals to immutable boundary mounts. Metadata, publications
+and sanitized logs stay outside child state. The explicit nested configuration supplies no provider
+keys, injects scripted role factories and refuses paid/unsupported roles and further managed previews.
+Separate outer-marker and nested NESTED10 stories retain the historical coupon fixture and require
+both “Scripted demo agents” labels. Controlled wiring is not final application/story/browser proof;
+the reviewed self declaration remains refused pending its explicit no-key entry and re-pin. Optional
+Health disclosure still uses the existing bounded HTML fallback, with consumer ownership unchanged.
+
+Use the exact build-log path printed in Preview startup. Windows users of WSL can translate it with
+`wslpath -w`; there is no delivered desktop log-viewer integration. Tests/shop still have no filesystem
+isolation, and native Windows same-user execution grants no no-key/no-paid-call guarantee.

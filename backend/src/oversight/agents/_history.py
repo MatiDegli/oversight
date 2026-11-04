@@ -1,4 +1,4 @@
-"""Deterministic, opt-in pruning of covered read results in retained model history."""
+"""Deterministic covered-read pruning followed by old observation masking."""
 
 import json
 import re
@@ -7,10 +7,14 @@ from dataclasses import dataclass
 from typing import cast
 
 from oversight.agents._prompts import (
+    HISTORY_ARGUMENT_CHARS,
     HISTORY_LOW_WATER,
+    HISTORY_MASK_PROTECTED_CALLS,
+    HISTORY_MASK_STUB,
     HISTORY_PROTECTED_CALLS,
     HISTORY_REARM,
     HISTORY_STUB,
+    HISTORY_TEST_STUB,
 )
 from oversight.agents.client import Message, ToolSchema
 
@@ -89,6 +93,63 @@ def _reads(messages: Sequence[Message]) -> tuple[list[_Read], int]:
     return reads, total
 
 
+def _mask_stub(function: dict[str, object], content: str) -> str | None:
+    name = function.get("name")
+    if name == "run_tests":
+        if content.endswith(HISTORY_TEST_STUB):
+            return None
+        return content.split("\n", 1)[0] + HISTORY_TEST_STUB
+    if name not in {"read_file", "search", "list_files", "find_symbol"}:
+        return None
+    # Keep covered-read stubs untouched by the observation-masking pass.
+    if re.fullmatch(
+        r"\[Lines \d+-\d+ of .*: a later read of this path covers these lines\.\]",
+        content,
+        flags=re.DOTALL,
+    ):
+        return None
+    try:
+        arguments = json.dumps(json.loads(str(function.get("arguments"))), separators=(",", ":"))
+    except (ValueError, TypeError):
+        return None  # No exact JSON call to name; retain the original observation.
+    if len(arguments) > HISTORY_ARGUMENT_CHARS:
+        arguments = arguments[: HISTORY_ARGUMENT_CHARS - 1] + "…"
+    return HISTORY_MASK_STUB.format(name=name, arguments=arguments)
+
+
+def _mask(messages: Sequence[Message], total: int, estimate: float, target: float) -> float:
+    """Mask oldest first using only the supplied history, with local call/result pairing."""
+    pending: list[dict[str, object]] = []
+    position = base = count = 0
+    for message in messages:
+        if estimate <= target:
+            break
+        if message["role"] == "assistant":
+            calls = message.get("tool_calls")
+            pending = cast(list[dict[str, object]], calls) if isinstance(calls, list) else []
+            base, position = count, 0
+            count += len(pending)
+        elif message["role"] == "tool" and position < len(pending):
+            call = pending[position]
+            index = base + position
+            position += 1
+            function, content = call.get("function"), message.get("content")
+            if (
+                index >= total - HISTORY_MASK_PROTECTED_CALLS
+                or not isinstance(function, dict)
+                or not isinstance(content, str)
+            ):
+                continue
+            stub = _mask_stub(cast(dict[str, object], function), content)
+            if stub is None or len(stub) >= len(content):
+                continue
+            saved = _json_bytes(content) - _json_bytes(stub)
+            if saved > 0:
+                message["content"] = stub
+                estimate -= saved / 4
+    return estimate
+
+
 @dataclass
 class HistoryPruner:
     threshold: int | None
@@ -123,5 +184,6 @@ class HistoryPruner:
                 read.message["content"] = stub
                 estimate -= saved / 4
                 later[read.path].pop()  # Only retained reads can cover older results.
+        estimate = _mask(messages, total, estimate, self.threshold * HISTORY_LOW_WATER)
         # Also record exhausted/no-candidate batches, to avoid rechecking every turn.
         self.last_batch_tokens = estimate

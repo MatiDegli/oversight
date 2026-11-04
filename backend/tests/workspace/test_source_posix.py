@@ -7,10 +7,12 @@ import shutil
 import stat
 import sys
 import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from backend.tests.workspace.workspace_helpers import fixture_git
 
 from oversight.workspace import source_posix as posix
 from oversight.workspace.locks import offload
@@ -21,7 +23,14 @@ GIT = shutil.which("git") or "/usr/bin/git"
 
 async def git(root: Path, *args: str) -> str:
     result = await run_process(
-        [GIT, "-c", "user.name=Fixture", "-c", "user.email=f@example.invalid", *args],
+        fixture_git(
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=f@example.invalid",
+            *args,
+            executable=GIT,
+        ),
         cwd=root,
         timeout_s=10,
         env={"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull},
@@ -40,6 +49,62 @@ async def repository(tmp_path: Path) -> posix.PosixSource:
     await git(source, "add", ".")
     await git(source, "commit", "-qm", "Fixture")
     return await posix.prepare_source(source, runtime, ide)
+
+
+def test_fixture_git_waits_for_maintenance(tmp_path):
+    async def scenario():
+        source = await repository(tmp_path)
+        version = (await git(source.root, "version")).split()[2].split(".")
+        if tuple(map(int, version[:2])) < (2, 56):
+            pytest.skip("Git 2.56 is required for the loose-object pre-auto-gc hook witness")
+        marker, release = tmp_path / "entered", tmp_path / "release"
+        hook = source.root / ".git/hooks/pre-auto-gc"
+        hook.parent.mkdir()
+        hook.write_text(
+            f"#!{sys.executable}\nimport time\nfrom pathlib import Path\n"
+            f"Path({str(marker)!r}).touch()\n"
+            f"deadline = time.monotonic() + 5\n"
+            f"while not Path({str(release)!r}).exists() and time.monotonic() < deadline:\n"
+            " time.sleep(0.01)\n"
+        )
+        hook.chmod(0o700)
+        task = asyncio.create_task(
+            git(
+                source.root,
+                "-c",
+                "maintenance.gc.enabled=false",
+                "-c",
+                "maintenance.loose-objects.enabled=true",
+                "-c",
+                "maintenance.loose-objects.auto=1",
+                "commit",
+                "--allow-empty",
+                "-qm",
+                "Maintenance witness",
+            )
+        )
+        try:
+            async with asyncio.timeout(5):
+                for _ in range(500):
+                    if marker.exists():
+                        break
+                    await asyncio.sleep(0.01)
+                assert marker.exists()
+            # A detached maintenance child closes its inherited output pipes at entry.
+            await asyncio.sleep(0.1)
+            lock = source.root / ".git/objects/maintenance.lock"
+            assert lock.exists()
+            with pytest.raises(OSError, match="Git metadata lock present"):
+                await posix.inventory(source, git=GIT)
+            assert lock.exists()
+            assert not task.done(), "fixture Git returned while maintenance still held its lock"
+        finally:
+            release.touch()
+            await task
+        assert not tuple((source.root / ".git").rglob("*.lock"))
+        await posix.inventory(source, git=GIT)
+
+    asyncio.run(scenario())
 
 
 def witness(root: Path) -> tuple[tuple[str, tuple[int, ...], str], ...]:
@@ -189,6 +254,48 @@ def test_git_metadata_hashes_only_head_and_index(tmp_path, monkeypatch):
                 assert item.sha256 is None
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "commondir",
+        "gitdir",
+        "worktrees",
+        "modules",
+        "shallow",
+        "info/grafts",
+        "objects/info/alternates",
+        "objects/info/http-alternates",
+        "refs/replace",
+        "index.lock",
+        "objects/maintenance.lock",
+        "refs/heads/private-name.lock",
+    ],
+)
+def test_git_metadata_refusal_diagnostics(tmp_path, name):
+    gitdir = tmp_path / ".git"
+    gitdir.mkdir()
+    target = gitdir / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.touch()
+    reason = "Git metadata lock present" if name.endswith(".lock") else "forbidden Git metadata"
+    with pytest.raises(OSError) as error:
+        posix.metadata(tmp_path, time.monotonic() + 10)
+    assert str(error.value) == "POSIX source refused: " + reason
+    assert target.exists()
+
+
+def test_git_metadata_total_entry_budget_diagnostic(tmp_path, monkeypatch):
+    gitdir = tmp_path / ".git"
+    gitdir.mkdir()
+    for name in ("first", "second"):
+        (gitdir / name).mkdir()
+        (gitdir / name / "file").touch()
+    monkeypatch.setattr(posix, "MAX_PATHS", 2)
+    with pytest.raises(OSError) as error:
+        posix.metadata(tmp_path, time.monotonic() + 10)
+    assert str(error.value) == "POSIX source refused: Git metadata entry budget exceeded"
 
 
 @pytest.mark.parametrize("phase", ["selection", "copy"])

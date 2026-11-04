@@ -8,7 +8,8 @@ permissions: {}
 jobs:
   check:
     name: check
-    runs-on: ubuntu-latest
+    # The preview boundary refuses Ubuntu 26.04's hardlinked coreutils.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -32,6 +33,8 @@ jobs:
         run: make install
       - name: Set up gitleaks
         uses: ./.github/actions/setup-gitleaks
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: make check-ci
       - run: make smoke
       - name: Report network isolation probe
@@ -78,7 +81,8 @@ jobs:
 
   browser-1:
     name: browser-1
-    runs-on: ubuntu-latest
+    # Browser suites time out on Ubuntu 26.04; Ubuntu 24.04 matches the check job.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -104,7 +108,7 @@ jobs:
       - name: Install Playwright's Chromium and its system libraries
         run: pnpm -C frontend exec playwright install --with-deps chromium
       - name: Run browser-1
-        run: make test-browser BROWSER_SHARD=1/2
+        run: make test-browser BROWSER_SHARD=1/4
       - name: tracked files
         run: |
           status=$(git status --porcelain --untracked-files=no)
@@ -112,7 +116,8 @@ jobs:
 
   browser-2:
     name: browser-2
-    runs-on: ubuntu-latest
+    # Browser suites time out on Ubuntu 26.04; Ubuntu 24.04 matches the check job.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -138,7 +143,77 @@ jobs:
       - name: Install Playwright's Chromium and its system libraries
         run: pnpm -C frontend exec playwright install --with-deps chromium
       - name: Run browser-2
-        run: make test-browser BROWSER_SHARD=2/2
+        run: make test-browser BROWSER_SHARD=2/4
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  browser-3:
+    name: browser-3
+    # Browser suites time out on Ubuntu 26.04; Ubuntu 24.04 matches the check job.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Install Playwright's Chromium and its system libraries
+        run: pnpm -C frontend exec playwright install --with-deps chromium
+      - name: Run browser-3
+        run: make test-browser BROWSER_SHARD=3/4
+      - name: tracked files
+        run: |
+          status=$(git status --porcelain --untracked-files=no)
+          test -z "$status"
+
+  browser-4:
+    name: browser-4
+    # Browser suites time out on Ubuntu 26.04; Ubuntu 24.04 matches the check job.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: make install
+      - name: Set up gitleaks
+        uses: ./.github/actions/setup-gitleaks
+      - name: Install Playwright's Chromium and its system libraries
+        run: pnpm -C frontend exec playwright install --with-deps chromium
+      - name: Run browser-4
+        run: make test-browser BROWSER_SHARD=4/4
       - name: tracked files
         run: |
           status=$(git status --porcelain --untracked-files=no)

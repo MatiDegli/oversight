@@ -2,6 +2,9 @@
 
 from oversight.changes import detect_shortcuts
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 NEW = (
     '"""The command routes of section 4.7: start an agent, approve or reject '
     "a change; 501 for the rest.\n\nA replay takes no commands: every command r"
@@ -62,4 +65,9 @@ NEW = (
 
 
 def test_commit_5648808_protocol_is_clean() -> None:
-    assert detect_shortcuts([("backend/src/oversight/api/commands.py", None, NEW)]) == []
+    assert (
+        detect_shortcuts(
+            [("backend/src/oversight/api/commands.py", None, NEW)], timeout=DETECTION_TIMEOUT_S
+        )
+        == []
+    )

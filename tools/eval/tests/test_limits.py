@@ -33,7 +33,7 @@ def test_cli_cap_refusal_before_network_or_files(cap, tmp_path, monkeypatch):
 @pytest.mark.anyio
 async def test_insufficient_allowance_refuses_before_setup_or_start(tmp_path):
     factory = Scripts()
-    settings = live_settings(tmp_path)
+    settings = live_settings(tmp_path, harness_pack=False)
     async with live_server(settings, factory) as server:
         initial = server.events()
         with pytest.raises(BenchError, match="cannot reserve"):

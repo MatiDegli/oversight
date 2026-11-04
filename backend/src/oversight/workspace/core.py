@@ -761,7 +761,7 @@ class Workspace:
                 raise
         if sys.platform == "win32":
             await offload(partial(executable, "git"))
-            if self._own_source is None:
+            if self._own_source is None and not self._demo_python_given:
                 await offload(partial(executable, "uv"))
         with self._locks.track():
             async with self._locks.acquire(main=True):
@@ -853,6 +853,20 @@ class Workspace:
         if self._own_source is not None:
             raise WorkspaceError("own sources never build or install a test environment")
         if self._demo_python_given:
+            try:
+                async with self.guard_nt_cleanup():
+                    probe = await run_process(
+                        [str(self._demo_python), "-c", "import pytest"],
+                        cwd=self._root,
+                        timeout_s=60,
+                        env={"HOME": str(self._root / "tmp" / "home")},
+                    )
+            except NtCleanupError:
+                raise
+            except OSError as error:
+                raise WorkspaceError("prepared demo Python with pytest is unavailable") from error
+            if probe.returncode != 0 or probe.timed_out:
+                raise WorkspaceError("prepared demo Python failed its pytest probe; no uv fallback")
             return
         venv = self._root / "demo-venv"
         stamp = venv / "oversight-stamp"
