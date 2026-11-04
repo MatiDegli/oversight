@@ -30,13 +30,29 @@ async def _run_worker(command: list[str], **kwargs: Any) -> int:
         raise
 
 
+def _write_term_hook(path: Path) -> None:
+    path.write_text(
+        textwrap.dedent(
+            """\
+            import faulthandler
+            import os
+            import signal
+            import sys
+
+            def pytest_configure():
+                global term_stderr
+                term_stderr = os.fdopen(os.dup(sys.stderr.fileno()), "w")
+                faulthandler.register(signal.SIGTERM, file=term_stderr, chain=True)
+            """
+        )
+    )
+
+
 @pytest.mark.parametrize("hang", [True, False], ids=["bounded-hang", "passing-teardown"])
 def test_a_worker_names_its_slow_teardown_in_the_log(tmp_path: Path, hang: bool) -> None:
     bound = HANG_BOUND if hang else PASS_BOUND
     (tmp_path / "pytest.ini").write_text("[pytest]\n")
-    (tmp_path / "conftest.py").write_text(
-        "import faulthandler\nimport signal\n\nfaulthandler.register(signal.SIGTERM, chain=True)\n"
-    )
+    _write_term_hook(tmp_path / "conftest.py")
     (tmp_path / "test_inner.py").write_text(
         textwrap.dedent(
             f"""\
@@ -104,6 +120,9 @@ def test_a_worker_names_its_slow_teardown_in_the_log(tmp_path: Path, hang: bool)
     )
     if hang:
         assert bound_line in output, output
+        # Concurrent TERM dumps can interleave frame fields. Count function names:
+        # the one-shot timeout supplies one; TERM must supply another.
+        assert output.count("slow_teardown") >= 2, output
     else:
         assert "1 passed" in output, output
         assert "TIME BOUND:" not in output, output
@@ -124,14 +143,15 @@ def test_worker_probe_allows_startup_and_bounds_an_orphaned_teardown(
         assert kwargs["timeout"] >= bound + OUTER_MARGIN_S
         source = (tmp_path / "test_inner.py").read_text()
         assert f"time.sleep({HANG_SLEEP if hang else PASS_SLEEP})" in source
-        # Execute the generated diagnostic hook, then deliver a real SIGTERM. The
-        # dump must reach stderr and chain=True must retain signal termination.
+        # Check signal termination separately; the real xdist run above proves
+        # that the hook keeps writing to the log while pytest capture is active.
         with (tmp_path / "term.log").open("w") as log:
             code = await run_worker(
                 [
                     sys.executable,
                     "-c",
-                    "import os, runpy, signal; runpy.run_path('conftest.py'); "
+                    "import os, runpy, signal; "
+                    "runpy.run_path('conftest.py')['pytest_configure'](); "
                     "os.kill(os.getpid(), signal.SIGTERM)",
                 ],
                 cwd=tmp_path,
@@ -142,6 +162,8 @@ def test_worker_probe_allows_startup_and_bounds_an_orphaned_teardown(
         assert code == -signal.SIGTERM
         assert 'File "<string>", line 1 in <module>' in (tmp_path / "term.log").read_text()
         output = 'Timeout (0:00:01)!\nFile "/probe/test_inner.py", line 8 in slow_teardown\n'
+        if hang:
+            output += 'File "/probe/test_inner.py", line 8 in slow_teardown\n'
         output += (
             f"TIME BOUND: the run passed its outer bound of {bound} s and was ended "
             "(exit 124); RUN_TIMEOUT sets it"
