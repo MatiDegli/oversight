@@ -621,20 +621,21 @@ def assert_package_policy(job: dict[str, str]) -> None:
         "PYTHONDONTWRITEBYTECODE": '"1"',
     }
     items = steps(job["steps"])
-    assert len(items) == 12
+    assert len(items) == 13
     assert items[0] == {
         "name": "Set desktop Cargo home",
         "run": '|\n"CARGO_HOME=$env:RUNNER_TEMP\\oversight-tauri-cargo" '
         "| Out-File -Append -Encoding utf8 $env:GITHUB_ENV",
     }
     items = items[1:]
-    assert items[:4] == [
+    assert items[:5] == [
         {"uses": ACTIONS["actions/checkout"], "with": "persist-credentials: false"},
         {"uses": ACTIONS["astral-sh/setup-uv"], "with": 'version: "0.11.21"'},
         {"uses": ACTIONS["pnpm/action-setup"], "with": "package_json_file: frontend/package.json"},
         {"uses": ACTIONS["actions/setup-node"], "with": 'node-version: "24.11.0"'},
+        {"uses": GITLEAKS},
     ]
-    for item, (name, commands) in zip(items[4:8], PACKAGE_COMMANDS.items(), strict=True):
+    for item, (name, commands) in zip(items[5:9], PACKAGE_COMMANDS.items(), strict=True):
         assert set(item) == {"name", "run"} and item["name"] == name
         script = item["run"].removeprefix("|\n").splitlines()
         expected = []
@@ -643,7 +644,7 @@ def assert_package_policy(job: dict[str, str]) -> None:
             if command.startswith(("cargo ", "uv ", "pnpm ", "rustup ")):
                 expected.append("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }")
         assert script == expected
-    assert items[8] == {
+    assert items[9] == {
         "name": "Build locked NSIS installer",
         "run": "|\n$env:CARGO_NET_OFFLINE = 'true'\n"
         "$timer = [System.Diagnostics.Stopwatch]::StartNew()\nPush-Location desktop/shell\n"
@@ -653,12 +654,12 @@ def assert_package_policy(job: dict[str, str]) -> None:
         '"Installer build seconds: $($timer.Elapsed.TotalSeconds)" '
         "| Set-Content package-evidence/build.txt",
     }
-    assert items[9] == {
+    assert items[10] == {
         "name": "Install smoke twice and preserve data on uninstall",
         "timeout-minutes": "8",
         "run": "./desktop/packaging/installed-smoke.ps1",
     }
-    assert items[10] == {
+    assert items[11] == {
         "name": "Upload desktop installer",
         "uses": UPLOAD,
         "with": "name: oversight-windows-installer\npath: |\n"

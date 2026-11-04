@@ -12,7 +12,8 @@ impl Layout {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
-            .join("target/test-fixtures")
+            .join("target")
+            .join("test-fixtures")
             .join(format!(
                 "installed-{}-{} español 日本",
                 std::process::id(),
