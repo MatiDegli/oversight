@@ -54,16 +54,51 @@ function serverPorts(command: "serve" | "build") {
     throw new Error("OVERSIGHT_VITE_PORT must differ from OVERSIGHT_PORT");
   return { backendPort, vitePort };
 }
-function previewFrames(command: "serve" | "build", mode: string, backend: number, vite: number) {
+function previewFrames(
+  command: "serve" | "build",
+  mode: string,
+  backend: number,
+  vite: number,
+): Plugin {
   const rawPool = command === "serve" ? process.env.OVERSIGHT_PREVIEW_PORTS || "" : "";
   const pool = rawPool
     ? rawPool.split(",").map((raw) => port("OVERSIGHT_PREVIEW_PORTS", raw.trim()))
     : [];
   if (new Set(pool).size !== pool.length || pool.some((p) => p === backend || p === vite))
     throw new Error("Invalid preview port pool");
-  return mode === "replay" || pool.length === 0
-    ? "frame-src 'none'"
-    : `frame-src ${pool.map((p) => `http://127.0.0.1:${String(p)}`).join(" ")}`;
+  return {
+    name: "preview-frame-authorities",
+    configureServer(server) {
+      server.middlewares.use((request, response, next) => {
+        const address = server.httpServer?.address();
+        const listeningPort = address && typeof address !== "string" ? address.port : vite;
+        const hosts = request.rawHeaders.filter(
+          (_, index) => index % 2 === 0 && request.rawHeaders[index]?.toLowerCase() === "host",
+        );
+        const host = request.headers.host;
+        const parent =
+          hosts.length === 1 && host === `localhost:${String(listeningPort)}`
+            ? "localhost"
+            : hosts.length === 1 && host === `127.0.0.1:${String(listeningPort)}`
+              ? "127.0.0.1"
+              : undefined;
+        response.setHeader("Content-Security-Policy", "frame-src 'none'");
+        if (parent === undefined) {
+          response.statusCode = 403;
+          response.end("Forbidden preview parent");
+          return;
+        }
+        if (mode !== "replay" && pool.length > 0) {
+          const frame = parent === "localhost" ? "127.0.0.1" : "localhost";
+          response.setHeader(
+            "Content-Security-Policy",
+            `frame-src ${pool.map((p) => `http://${frame}:${String(p)}`).join(" ")}`,
+          );
+        }
+        next();
+      });
+    },
+  };
 }
 function previewFramePlugin(mode: string): Plugin {
   return {
@@ -121,6 +156,7 @@ export default defineConfig(({ command, mode }) => {
     ...(cacheDir === undefined || cacheDir === "" ? {} : { cacheDir }),
     plugins: [
       previewFramePlugin(mode),
+      previewFrames(command, mode, backendPort, vitePort),
       noticesPlugin(),
       recordedReplayPlugin(),
       react(),
@@ -136,7 +172,6 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     server: {
-      headers: { "Content-Security-Policy": previewFrames(command, mode, backendPort, vitePort) },
       host: "127.0.0.1",
       port: vitePort,
       strictPort: true,

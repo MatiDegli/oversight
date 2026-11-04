@@ -183,6 +183,14 @@ def test_preview_example_and_decision_document_the_default_closed_switch():
     assert "OVERSIGHT_PREVIEW_ENABLED" in decisions and "default false" in decisions
 
 
+@pytest.mark.parametrize("document", ["DECISIONS.md", "DEVLOG.md", "docs/isolation.md"])
+def test_shop_authority_prerequisite_and_admission_refusal_are_explicit(document):
+    prose = " ".join((ROOT / document).read_text().split())
+    assert "The shop authority adapter is an unowned prerequisite" in prose
+    assert "shop `127.0.0.1` parents are refused before reservation" in prose
+    assert "Vite" in prose and "opposite loopback" in prose
+
+
 def test_capture_inventory_distinguishes_uninspected_matrix_from_missing_windows_proof():
     docs = (ROOT / "docs/isolation.md").read_text()
     audit = docs.split("### Hardening and technical audit recheck", 1)[1]

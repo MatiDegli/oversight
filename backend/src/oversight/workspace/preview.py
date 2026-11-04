@@ -153,6 +153,16 @@ class PreviewManager:
         self._admit()
         if parent_authority is not None:
             parent_authority = self._validate_parent(parent_authority)
+        if (
+            self.profile.reviewed_app is None
+            and parent_authority is not None
+            and parent_authority.split(":")[0] != "localhost"
+        ):
+            raise PreviewError(
+                "Shop preview requires a localhost parent "
+                "until its authority adapter is available.",
+                code="not_configured",
+            )
         # Synchronous reservation BEFORE waiting for locks/preflight Git: never evict an owner.
         if self._reserved:
             raise PreviewError("Live preview already has an owner; stop it first.")

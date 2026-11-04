@@ -52,7 +52,7 @@ def app_for(previews=None):
 def client_for(app):
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
-        base_url="http://127.0.0.1:8710",
+        base_url="http://localhost:8710",
         trust_env=False,
     )
 
@@ -288,11 +288,22 @@ async def test_failed_stop_preserves_quarantine_and_no_false_repeat_success(prev
 
 
 @pytest.mark.parametrize("parent,frame", [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")])
-async def test_reviewed_request_host_selects_opposite_frame(preview, parent, frame):
+async def test_shop_request_host_matches_supported_adapter(preview, parent, frame):
     h = preview
     async with client_for(app_for(h.manager)) as client:
         authority = parent + ":8710"
         response = await client.post("/previews", json=start_body(h), headers={"Host": authority})
+        if parent == "127.0.0.1":
+            error(response, "not_configured")
+            assert response.json()["error"]["message"] == (
+                "Shop preview requires a localhost parent until its authority adapter is available."
+            )
+            assert not h.manager.has_owner and not h.processes and not h.sink.records
+            assert h.manager.registry.read() is None
+            authority, frame = "localhost:8710", "127.0.0.1"
+            response = await client.post(
+                "/previews", json=start_body(h), headers={"Host": authority}
+            )
         assert response.status_code == 202
         identifier = response.json()["preview_id"]
         await h.sink.wait("ready", identifier)
@@ -301,7 +312,7 @@ async def test_reviewed_request_host_selects_opposite_frame(preview, parent, fra
         data = h.manager.registry.read()
         assert data is not None
         argv = data["launch"]["argv"]
-        assert argv[argv.index("--frame-host") + 1] == frame
+        assert "--frame-host" not in argv
         assert argv.count("--oversight-origin") == 1
         assert argv[argv.index("--oversight-origin") + 1] == "http://" + authority
         assert h.processes[0].public_authority == f"{frame}:{h.processes[0].port}"

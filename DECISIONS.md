@@ -4804,9 +4804,12 @@ never the durable registry or candidate environment. Durable build/transition ph
 and renewal valid while the supervisor and listener guardian own the next command entry.
 
 The accepted request Host owns the opposite loopback frame name and its exact Host/Origin and parent
-frame-ancestors. Production frame-src uses that same request, naming only the opposite loopback
-host for the configured pool. The Vite header, trusted shop adapter and frontend transport retain
-their accepted baseline; their opposite-name integration remains a separately owned prerequisite.
+frame-ancestors. Production and Vite frame-src use that same request, naming only the opposite
+loopback host for the configured pool; Vite refuses every other Host or listening-port mismatch.
+The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents are refused before
+reservation with `not_configured`, without a listener, process or lifecycle event. Shop localhost
+parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin. The frontend
+transport's opposite-name integration remains a separately owned prerequisite.
 Admission-lock waits expire at the earlier lease or absolute deadline, retaining the corresponding
 expiry reason. Stop, EOF or cancellation
 before execution opens no acknowledgement and settles verified boundary death before releasing

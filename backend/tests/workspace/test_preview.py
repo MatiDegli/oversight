@@ -16,6 +16,34 @@ from .preview_fakes import FakeProcess, harness, profile
 pytestmark = pytest.mark.anyio
 
 
+@pytest.mark.parametrize("port", [8710, 5710])
+async def test_shop_refuses_unsupported_parent_before_reservation(workspace, monkeypatch, port):
+    from unittest.mock import AsyncMock
+
+    h = await harness(workspace)
+    h.manager.profile = replace(h.manager.profile, vite_port=5710)
+    resolve = AsyncMock(side_effect=AssertionError("candidate resolved before parent refusal"))
+    monkeypatch.setattr(h.manager, "resolve_candidate", resolve)
+    try:
+        with pytest.raises(
+            PreviewError, match="Shop preview requires a localhost parent"
+        ) as caught:
+            await h.manager.start(
+                run_id="run-20261103-000000",
+                agent_id="agent-1",
+                revision=1,
+                head_commit=h.head,
+                parent_authority=f"127.0.0.1:{port}",
+            )
+        assert caught.value.code == "not_configured"
+        resolve.assert_not_awaited()
+        assert not h.manager.has_owner and not h.processes and not h.sink.records
+        assert h.manager.registry.read() is None and h.manager.barrier.owner is None
+        assert h.manager._parent_authority == "localhost:8710"
+    finally:
+        await h.close()
+
+
 @pytest.mark.parametrize("ending", ["closed", "mutation", "lease_expired"])
 async def test_authenticated_stop_retries_return_final_record_without_drain(
     workspace, monkeypatch, ending

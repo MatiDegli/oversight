@@ -549,10 +549,13 @@ Diagnostics are sanitized, bounded and separate from lifecycle events.
 
 The request's accepted Host selects one frame name: localhost parents use 127.0.0.1 frames;
 127.0.0.1 parents use localhost frames. The gateway uses that exact frame Host/browser Origin and
-only the actual parent as frame-ancestors. The production parent response resolves frame-src from
-that same accepted request; IPv6 and other parent names cannot start this preview. The development
-header, shop and frontend transport authority changes remain separately owned prerequisites;
-their files retain the accepted baseline.
+only the actual parent as frame-ancestors. Production and Vite parent responses resolve frame-src
+from that same accepted request, naming only the opposite loopback host for the configured pool;
+Vite also refuses every other Host or listening-port mismatch. IPv6 and other parent names cannot
+start this preview. The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents
+are refused before reservation with `not_configured`, without a listener, process or lifecycle event.
+Shop localhost parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin.
+The frontend transport's opposite-name integration remains a separately owned prerequisite.
 Waiting for admission locks is bounded by the earlier lease or absolute deadline and retains the
 corresponding expiry reason. Stop, EOF and cancellation before execute withhold acknowledgement
 and settle verified boundary death within the backend stop bound.
