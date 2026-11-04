@@ -55,7 +55,7 @@ async def test_get_withholds_secrets_and_reports_file_state(settings_file: Path)
     assert SECRET not in response.text and "bad key" not in response.text
     view = SettingsView.model_validate(response.json())
     rows = {entry.name: entry for entry in view.settings}
-    assert len(rows) == 10
+    assert len(rows) == 11
     assert rows["META_API_KEY"].state == "set" and rows["META_API_KEY"].value is None
     assert rows["BASETEN_API_KEY"].state == "invalid"
     assert rows["OVERSIGHT_BUDGET_USD"].state == "invalid"
@@ -271,3 +271,58 @@ async def test_get_marks_an_externally_emptied_capacity_invalid(settings_file: P
             row for row in response.json()["settings"] if row["name"] == "OVERSIGHT_MAX_AGENTS"
         )
         assert cap["state"] == "invalid"
+
+
+@pytest.mark.parametrize("value", ["1", "100", "090"])
+async def test_save_brake_uses_startup_percent_parser(settings_file: Path, value: str) -> None:
+    async with client_for(settings_file) as client:
+        response = await client.put(
+            "/settings", json={"values": {"OVERSIGHT_SPEND_BRAKE_PERCENT": value}}
+        )
+        assert response.status_code == 200
+        row = next(
+            row
+            for row in response.json()["settings"]
+            if row["name"] == "OVERSIGHT_SPEND_BRAKE_PERCENT"
+        )
+        assert row["state"] == "set" and row["kind"] == "number" and row["value"] == value
+    assert (await asyncio.to_thread(Settings.load, settings_file)).spend_brake_percent == int(value)
+
+
+@pytest.mark.parametrize("value", ["0", "101", "9.5", "-5", "bad-percent"])
+async def test_bad_brake_is_rejected_without_writing(settings_file: Path, value: str) -> None:
+    before = await asyncio.to_thread(settings_file.read_bytes)
+    async with client_for(settings_file) as client:
+        response = await client.put(
+            "/settings", json={"values": {"OVERSIGHT_SPEND_BRAKE_PERCENT": value}}
+        )
+        assert response.status_code == 422
+        assert "OVERSIGHT_SPEND_BRAKE_PERCENT" in response.json()["error"]["message"]
+        assert value not in response.text
+    assert await asyncio.to_thread(settings_file.read_bytes) == before
+
+
+async def test_clear_defaulted_settings_removes_all_declarations(settings_file: Path) -> None:
+    await asyncio.to_thread(
+        settings_file.write_text,
+        "# Keep\r\nOVERSIGHT_MAX_AGENTS=8\r\nOTHER=keep\r\n"
+        "OVERSIGHT_MAX_AGENTS=9\r\nOVERSIGHT_SPEND_BRAKE_PERCENT=50\r\n"
+        "# Stay\r\nOVERSIGHT_SPEND_BRAKE_PERCENT=60\r\n",
+    )
+    async with client_for(settings_file) as client:
+        response = await client.put(
+            "/settings",
+            json={
+                "values": {
+                    "OVERSIGHT_MAX_AGENTS": "",
+                    "OVERSIGHT_SPEND_BRAKE_PERCENT": "",
+                }
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["restart_required"]
+    assert (
+        await asyncio.to_thread(settings_file.read_bytes) == b"# Keep\r\nOTHER=keep\r\n# Stay\r\n"
+    )
+    loaded = await asyncio.to_thread(Settings.load, settings_file)
+    assert loaded.max_agents == 4 and loaded.spend_brake_percent == 90

@@ -184,6 +184,7 @@ type EditableSettingName = Literal[
     "BASETEN_OUTPUT_USD_PER_M",
     "OVERSIGHT_CROSS_REVIEW",
     "OVERSIGHT_MAX_AGENTS",
+    "OVERSIGHT_SPEND_BRAKE_PERCENT",
 ]
 
 
@@ -198,7 +199,9 @@ class EditableSetting(ContractModel):
 
     @model_validator(mode="after")
     def withhold_secret(self) -> Self:
-        if self.kind == "secret" and self.value is not None:
+        if (
+            self.kind == "secret" or self.name in {"META_API_KEY", "BASETEN_API_KEY"}
+        ) and self.value is not None:
             raise ValueError("secret values must be withheld")
         return self
 

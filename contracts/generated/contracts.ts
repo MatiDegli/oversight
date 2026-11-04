@@ -52,7 +52,8 @@ export type EditableSettingName =
   | "BASETEN_INPUT_USD_PER_M"
   | "BASETEN_OUTPUT_USD_PER_M"
   | "OVERSIGHT_CROSS_REVIEW"
-  | "OVERSIGHT_MAX_AGENTS";
+  | "OVERSIGHT_MAX_AGENTS"
+  | "OVERSIGHT_SPEND_BRAKE_PERCENT";
 export type ErrorCode =
   | "not_found"
   | "wrong_state"

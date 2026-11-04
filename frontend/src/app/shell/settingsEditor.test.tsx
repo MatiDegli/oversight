@@ -105,3 +105,11 @@ it("drops reverted numeric drafts and serializes saves without losing the other 
   await store.getState().save("models");
   expect(api.updateSettings).toHaveBeenCalledExactlyOnceWith({ values: { META_API_KEY: "" } });
 });
+
+it("labels the brake's budget share and explains both empty-field defaults", () => {
+  const { store } = setup();
+  const html = markup(store);
+  expect(html).toContain("Brake at (% of budget)");
+  expect(html).toContain("Leave empty to use 90%.");
+  expect(html).toContain("Leave empty to use 4 agents.");
+});

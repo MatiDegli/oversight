@@ -13,11 +13,13 @@ from oversight.settings import (
     positive_amount,
     read_env_file,
     resolve_max_agents,
+    resolve_spend_brake_percent,
 )
 from oversight.workspace import offload
 from oversight_contracts.commands import EditableSetting, EditableSettingName, SettingsView
 
 NAMES: tuple[EditableSettingName, ...] = get_args(EditableSettingName.__value__)
+DEFAULTED: set[EditableSettingName] = {"OVERSIGHT_MAX_AGENTS", "OVERSIGHT_SPEND_BRAKE_PERCENT"}
 SECRETS = {"META_API_KEY", "BASETEN_API_KEY"}
 
 
@@ -26,6 +28,8 @@ def _invalid(name: EditableSettingName, value: str) -> bool:
         return True
     if name in SECRETS:
         return any(char.isspace() for char in value)
+    if name == "OVERSIGHT_SPEND_BRAKE_PERCENT":
+        return resolve_spend_brake_percent({name: value}) is None
     if name == "OVERSIGHT_MAX_AGENTS":
         try:
             resolve_max_agents({name: value})
@@ -56,10 +60,11 @@ def _updated(text: str, values: dict[EditableSettingName, str]) -> str:
             continue
         name = name.strip()
         if name not in seen:
-            lines.append(f"{name}={replacements[name]}{newline}")
+            if not (name in DEFAULTED and replacements[name] == ""):
+                lines.append(f"{name}={replacements[name]}{newline}")
             seen.add(name)
     for name, value in values.items():
-        if name not in seen:
+        if name not in seen and not (name in DEFAULTED and value == ""):
             if lines and not lines[-1].endswith(("\n", "\r")):
                 lines[-1] += newline
             lines.append(f"{name}={value}{newline}")
@@ -141,8 +146,15 @@ class SettingsFile:
 
     def _save(self, values: dict[EditableSettingName, str]) -> SettingsView:
         path = self._path()
-        bad = {name for name, value in values.items() if _invalid(name, value)}
+        bad = {
+            name
+            for name, value in values.items()
+            if not (name in DEFAULTED and value == "") and _invalid(name, value)
+        }
         candidate = read_env_file(path) | values
+        for name in DEFAULTED:
+            if values.get(name) == "":
+                candidate.pop(name, None)
         # Parse all editable candidates with the startup parser, without environment overrides.
         # Unrelated startup declarations cannot be changed by this endpoint.
         editable = {name: value for name, value in candidate.items() if name in NAMES}

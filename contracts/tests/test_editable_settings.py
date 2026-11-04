@@ -25,6 +25,7 @@ NAMES = {
     "BASETEN_OUTPUT_USD_PER_M",
     "OVERSIGHT_CROSS_REVIEW",
     "OVERSIGHT_MAX_AGENTS",
+    "OVERSIGHT_SPEND_BRAKE_PERCENT",
 }
 
 
@@ -53,3 +54,18 @@ def test_secret_shape_and_generated_settings_contract() -> None:
     assert (
         schema["UpdateSettings"]["properties"]["values"]["additionalProperties"]["maxLength"] == 512
     )
+
+
+@pytest.mark.parametrize("name", ["META_API_KEY", "BASETEN_API_KEY"])
+@pytest.mark.parametrize("kind", ["secret", "number", "boolean"])
+def test_key_names_cannot_return_a_value_regardless_of_kind(name: str, kind: str) -> None:
+    with pytest.raises(ValidationError, match="secret values must be withheld"):
+        EditableSetting.model_validate(
+            {
+                "name": name,
+                "kind": kind,
+                "state": "set",
+                "value": "synthetic-key",
+                "overridden": False,
+            }
+        )
