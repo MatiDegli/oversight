@@ -8,6 +8,9 @@ pub mod health;
 pub mod installed;
 pub mod launch;
 pub mod lifecycle;
+pub mod refusal;
+pub mod source;
+pub mod switch;
 
 pub const HOST: &str = "127.0.0.1";
 pub const PORT: u16 = 8710;

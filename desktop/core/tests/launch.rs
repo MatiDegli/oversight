@@ -130,7 +130,7 @@ fn argv_preserves_spaces_and_unicode_without_shell_interpolation_or_reload() {
         root.0.join(".venv").join("Scripts").join("python.exe")
     );
     assert_eq!(launch.args, ["-m", "oversight", "serve"]);
-    assert_eq!(launch.env.len(), 4);
+    assert_eq!(launch.env.len(), 7);
     assert_eq!(launch.env["OVERSIGHT_HOST"], "127.0.0.1");
     assert_eq!(launch.env["OVERSIGHT_PORT"], "8710");
     assert_eq!(launch.env["OVERSIGHT_VITE_PORT"], "");

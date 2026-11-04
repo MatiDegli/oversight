@@ -81,3 +81,18 @@ fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     }
     fs::remove_dir_all(data).unwrap();
 }
+
+#[test]
+fn refusal_output_is_fragmented_bounded_and_closed_without_retaining_raw_text() {
+    use oversight_desktop_core::refusal::Refusal;
+    let mut tail = OutputTail::new("app".into(), "data".into());
+    tail.feed(b"OVERSIGHT_REF");
+    assert_eq!(tail.refusal(), None);
+    tail.feed(b"USAL=previous-session-changed\r\n");
+    assert_eq!(tail.refusal(), Some(Refusal::PreviousSessionChanged));
+    tail.feed(b"OVERSIGHT_REFUSAL=garbage\n OVERSIGHT_REFUSAL=other\n");
+    tail.feed(&vec![b'x'; 2048]);
+    tail.feed(b"OVERSIGHT_REFUSAL=other\n");
+    assert_eq!(tail.refusal(), Some(Refusal::PreviousSessionChanged));
+    assert_eq!(tail.text(), "");
+}

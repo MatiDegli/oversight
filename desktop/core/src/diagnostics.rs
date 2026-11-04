@@ -28,6 +28,7 @@ pub enum Stage {
 
 /// At most sixteen sanitized lines; even a backend's unterminated line is bounded.
 pub struct OutputTail {
+    refusal: Option<crate::refusal::Refusal>,
     pending: Vec<u8>,
     overflow: bool,
     lines: VecDeque<String>,
@@ -38,6 +39,7 @@ pub struct OutputTail {
 impl OutputTail {
     pub fn new(app: PathBuf, data: PathBuf) -> Self {
         Self {
+            refusal: None,
             pending: Vec::new(),
             overflow: false,
             lines: VecDeque::new(),
@@ -51,6 +53,9 @@ impl OutputTail {
             if *byte == b'\n' {
                 if !self.overflow {
                     let line = String::from_utf8_lossy(&self.pending);
+                    if let Some(refusal) = crate::refusal::Refusal::parse(&line) {
+                        self.refusal = Some(refusal);
+                    }
                     if let Some(safe) = self.sanitize(line.trim()) {
                         if self.lines.len() == 16 {
                             self.lines.pop_front();
@@ -119,6 +124,10 @@ impl OutputTail {
             }
         }
         None
+    }
+
+    pub fn refusal(&self) -> Option<crate::refusal::Refusal> {
+        self.refusal
     }
 
     pub fn text(&self) -> String {

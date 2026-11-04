@@ -76,6 +76,19 @@ pub fn initialize_data(app: &Path, data: &Path) -> io::Result<()> {
 
 impl Launch {
     pub fn installed(app: &Path, data: &Path, smoke: bool) -> io::Result<Self> {
+        Self::installed_source(app, data, smoke, None)
+    }
+
+    pub fn installed_source(
+        app: &Path,
+        data: &Path,
+        smoke: bool,
+        source: Option<&crate::source::SelectedSource>,
+    ) -> io::Result<Self> {
+        let selected = if smoke { None } else { source };
+        let selected = selected
+            .map(|s| crate::source::SelectedSource::validate(s.path()))
+            .transpose()?;
         payload(app)?;
         validate_directory(data)?;
         if data.starts_with(app) || app.starts_with(data) {
@@ -85,7 +98,20 @@ impl Launch {
         launch.env.extend([
             ("OVERSIGHT_APP_ROOT", display(app)?),
             ("OVERSIGHT_ENV_FILE", display(&data.join(".env"))?),
-            ("OVERSIGHT_RUNTIME_DIR", display(&data.join(".runtime"))?),
+            (
+                "OVERSIGHT_RUNTIME_DIR",
+                display(&crate::source::runtime_dir(data, selected.as_ref()))?,
+            ),
+            ("OVERSIGHT_LEDGER_DIR", display(&data.join(".runtime"))?),
+            (
+                "OVERSIGHT_WORKSPACE_SOURCE",
+                selected
+                    .as_ref()
+                    .map(|s| display(s.path()))
+                    .transpose()?
+                    .unwrap_or_default(),
+            ),
+            ("OVERSIGHT_DISCARD_OWN_RUNTIME", String::new()),
             ("PYTHONNOUSERSITE", "1".into()),
             ("PYTHONDONTWRITEBYTECODE", "1".into()),
         ]);

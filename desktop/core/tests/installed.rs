@@ -112,3 +112,41 @@ fn links_in_payload_or_existing_configuration_are_refused() {
     symlink(layout.app().join("demo-python/python.exe"), &python).unwrap();
     assert!(Launch::installed(&layout.app(), &layout.data(), false).is_err());
 }
+
+#[test]
+fn every_launch_overrides_inherited_source_runtime_ledger_and_discard() {
+    use oversight_desktop_core::source::SelectedSource;
+    let layout = Layout::new();
+    initialize_data(&layout.app(), &layout.data()).unwrap();
+    let source = SelectedSource::validate(Path::new(r"C:\private\repo")).unwrap();
+    for (selected, smoke) in [(None, false), (Some(&source), false), (Some(&source), true)] {
+        let launch =
+            Launch::installed_source(&layout.app(), &layout.data(), smoke, selected).unwrap();
+        let mut inherited = std::collections::BTreeMap::from([
+            ("OVERSIGHT_WORKSPACE_SOURCE", "hostile".to_owned()),
+            ("OVERSIGHT_RUNTIME_DIR", "elsewhere".to_owned()),
+            ("OVERSIGHT_LEDGER_DIR", "elsewhere".to_owned()),
+            (
+                "OVERSIGHT_DISCARD_OWN_RUNTIME",
+                "authorize-discard".to_owned(),
+            ),
+        ]);
+        inherited.extend(launch.env);
+        let effective = if smoke { None } else { selected };
+        assert_eq!(
+            inherited["OVERSIGHT_WORKSPACE_SOURCE"],
+            effective.map(|s| s.path().to_str().unwrap()).unwrap_or("")
+        );
+        assert_eq!(
+            inherited["OVERSIGHT_RUNTIME_DIR"],
+            oversight_desktop_core::source::runtime_dir(&layout.data(), effective)
+                .to_str()
+                .unwrap()
+        );
+        assert_eq!(
+            inherited["OVERSIGHT_LEDGER_DIR"],
+            layout.data().join(".runtime").to_str().unwrap()
+        );
+        assert_eq!(inherited["OVERSIGHT_DISCARD_OWN_RUNTIME"], "");
+    }
+}
