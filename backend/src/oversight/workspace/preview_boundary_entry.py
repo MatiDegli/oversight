@@ -173,7 +173,7 @@ def parent_death(parent: int) -> None:
         raise RuntimeError("owner disappeared")
 
 
-def enter_user(procfd: int | None = None, mapped_id: int = 0) -> None:
+def enter_user(mapped_id: int = 0) -> None:
     uid, gid = os.getuid(), os.getgid()
     checked(LIBC.unshare(USER), "unshare user")
     for name, value in (
@@ -181,8 +181,7 @@ def enter_user(procfd: int | None = None, mapped_id: int = 0) -> None:
         ("uid_map", f"{mapped_id} {uid} 1\n"),
         ("gid_map", f"{mapped_id} {gid} 1\n"),
     ):
-        path = f"{os.getpid()}/{name}" if procfd is not None else "/proc/self/" + name
-        fd = os.open(path, os.O_WRONLY | os.O_CLOEXEC, dir_fd=procfd)
+        fd = os.open("/proc/self/" + name, os.O_WRONLY | os.O_CLOEXEC)
         try:
             os.write(fd, value.encode())
         finally:
@@ -200,9 +199,8 @@ def loopback() -> None:
         fcntl.ioctl(control, 0x8914, struct.pack("16sH22x", b"lo", flags | 1))
 
 
-def close_except(keep: set[int], procfd: int | None = None) -> None:
-    path = "self/fd" if procfd is not None else "/proc/self/fd"
-    directory = os.open(path, os.O_RDONLY | os.O_DIRECTORY, dir_fd=procfd)
+def close_except(keep: set[int]) -> None:
+    directory = os.open("/proc/self/fd", os.O_RDONLY | os.O_DIRECTORY)
     try:
         names = os.listdir(directory)
     finally:
@@ -307,6 +305,9 @@ def install_root(config: dict[str, Any]) -> None:
         (root / "dev" / name).symlink_to(target)
     for name, mode in (("tmp", "1777"), ("dev/shm", "1777")):
         mount("tmpfs", str(root / name), "tmpfs", NOSUID | NODEV, "mode=" + mode)
+    # A fully visible P0 proc lets U1 mount P1 proc under mount_too_revealing.
+    # Never import the host proc: this process is already PID 1 in P0, owned by U0.
+    mount("proc", str(root / "proc"), "proc", NOSUID | NODEV | NOEXEC)
     os.chdir(root)
     checked(LIBC.syscall(155, b".", b".oldroot"), "pivot_root")
     os.chdir("/")
@@ -434,14 +435,16 @@ def reap(child: int, owner: int | None, deadline: float) -> int:
 
 
 def descendant(
-    config: dict[str, Any], report: int, ack: int, outer: dict[str, str], procfd: int
+    config: dict[str, Any], report: int, ack: int, outer: dict[str, str], parentfd: int
 ) -> None:
-    # The host proc descriptor exists solely in trusted setup, never in the payload.
-    parent = os.getppid()
     # UID zero in U1 would make nested root mappings require CAP_SETFCAP in U1.
     # A nonzero mapped identity permits nesting while dropping every U1 capability.
-    enter_user(procfd, 1000)
-    parent_death(parent)
+    # /proc/self now resolves through P0 proc, matching this process's P0 PID 1.
+    enter_user(mapped_id=1000)
+    parent_death(0)
+    if select.select([parentfd], [], [], 0)[0]:
+        os._exit(125)
+    os.close(parentfd)
     checked(LIBC.unshare(MOUNT | PID), "unshare descendant mount/pid")
     parentfd = checked(LIBC.syscall(434, os.getpid(), 0), "pin setup parent")
     child = os.fork()
@@ -456,7 +459,6 @@ def descendant(
     os.close(report)
     os.close(ack)
     os.close(parentfd)
-    os.close(procfd)
     code = reap(child, None, config["deadline"])
     os._exit(code if code >= 0 else 128 - code)
 
@@ -470,7 +472,7 @@ def main() -> None:
     deny_vsock()
     enter_user()
     parent_death(parent)
-    checked(LIBC.unshare(NET | MOUNT), "unshare outer network/mount")
+    checked(LIBC.unshare(NET | MOUNT | PID), "unshare outer network/mount/pid")
     # Reopen pinned inodes in the cloned mount namespace: a bind from an fd whose
     # mount still belongs to the parent's namespace is refused by the kernel.
     for item in [config, *config["mounts"]]:
@@ -491,19 +493,22 @@ def main() -> None:
             item[key] = new
     loopback()
     outer = {name: os.readlink("/proc/self/ns/" + name) for name in ("user", "net", "pid", "mnt")}
-    procfd = os.open("/proc", os.O_PATH | os.O_CLOEXEC)
-    install_root(config)
-    close_except({report, ack, owner, procfd}, procfd)
-    parent = os.getpid()
+    parentfd = checked(LIBC.syscall(434, os.getpid(), 0), "pin outer parent")
+    inputs = {config["tree_fd"], config["state_fd"], *(m["fd"] for m in config["mounts"])}
+    close_except({report, ack, owner, parentfd, *inputs})
     child = os.fork()
     if child == 0:
-        parent_death(parent)
+        # Reuse setup as P0 init: its death tears down the entire boundary tree.
+        parent_death(0)
+        if select.select([parentfd], [], [], 0)[0]:
+            os._exit(125)
         os.close(owner)
-        descendant(config, report, ack, outer, procfd)
+        install_root(config)
+        close_except({report, ack, parentfd})
+        descendant(config, report, ack, outer, parentfd)
         os._exit(125)
-    os.close(report)
-    os.close(ack)
-    os.close(procfd)
+    for fd in (report, ack, parentfd, *inputs):
+        os.close(fd)
     code = reap(child, owner, config["deadline"])
     os.close(owner)
     sys.exit(code if code >= 0 else 128 - code)

@@ -341,6 +341,7 @@ class _Handle:
         for key, pid, name in (
             ("u0", outer, "user"),
             ("n0", outer, "net"),
+            ("p0", setup, "pid"),
             ("u1", init, "user"),
             ("pid", init, "pid"),
             ("mount", init, "mnt"),
@@ -370,26 +371,45 @@ class _Handle:
             or evidence["outer"]["net"] != evidence["inner"]["net"]
             or evidence["outer"]["pid"] != os.readlink("/proc/self/ns/pid")
             or os.readlink(f"/proc/{setup}/ns/user") != evidence["inner"]["user"]
+            or self.identities["p0"] == self.pid
+            or os.readlink(f"/proc/{setup}/ns/pid") == evidence["outer"]["pid"]
+            or os.readlink(f"/proc/{setup}/ns/net") != evidence["outer"]["net"]
+            or os.readlink(f"/proc/{setup}/ns/mnt") != evidence["inner"]["mnt"]
         ):
             raise BoundaryUnavailable("invalid boundary topology")
-        for key, owner in (("n0", self.u0), ("pid", self.u1), ("mount", self.u1)):
+        for key, owner in (("n0", self.u0), ("p0", self.u0), ("pid", self.u1), ("mount", self.u1)):
             fd = fcntl.ioctl(self.namespace_fds[key], 0xB701)  # NS_GET_USERNS
             try:
                 if _ns(fd) != owner:
                     raise BoundaryUnavailable("incorrect namespace owner")
             finally:
                 os.close(fd)
-        fd = fcntl.ioctl(self.namespace_fds["u1"], 0xB702)  # NS_GET_PARENT
-        try:
-            if _ns(fd) != self.u0:
-                raise BoundaryUnavailable("U1 is not a child of U0")
-        finally:
-            os.close(fd)
+        for key, parent in (("u1", self.u0), ("pid", self.identities["p0"])):
+            fd = fcntl.ioctl(self.namespace_fds[key], 0xB702)  # NS_GET_PARENT
+            try:
+                if _ns(fd) != parent:
+                    raise BoundaryUnavailable("incorrect namespace parent")
+            finally:
+                os.close(fd)
+        self._check_process_state(setup, init)
+        self._check_root(evidence, outer, init)
+        if _child(outer) != setup or _child(setup) != init:
+            raise BoundaryUnavailable("boundary process changed")
+
+    def _check_process_state(self, setup: int, init: int) -> None:
         status = dict(
             line.split(":", 1) for line in Path(f"/proc/{init}/status").read_text().splitlines()
         )
+        setup_status = dict(
+            line.split(":", 1) for line in Path(f"/proc/{setup}/status").read_text().splitlines()
+        )
+        pids = status["NSpid"].split()
         if (
-            status["NSpid"].split() != [str(init), "1"]
+            len(pids) != 3
+            or pids[0] != str(init)
+            or int(pids[1]) <= 1
+            or pids[2] != "1"
+            or setup_status["NSpid"].split() != [str(setup), "1"]
             or any(
                 int(status[key].strip(), 16)
                 for key in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")
@@ -399,6 +419,8 @@ class _Handle:
             or int(status["Seccomp_filters"]) != _filter_count() + 1
         ):
             raise BoundaryUnavailable("unsafe boundary process state")
+
+    def _check_root(self, evidence: dict[str, Any], outer: int, init: int) -> None:
         if type(evidence["procdev"]) is not int or evidence["procdev"] == os.stat("/proc").st_dev:
             raise BoundaryUnavailable("host proc inherited")
         root = Path(f"/proc/{init}/root")
@@ -409,8 +431,26 @@ class _Handle:
             or os.readlink(root / "proc/1/ns/pid") != evidence["inner"]["pid"]
         ):
             raise BoundaryUnavailable("root or proc evidence mismatch")
-        if _child(outer) != setup or _child(setup) != init:
-            raise BoundaryUnavailable("boundary process changed")
+        anchor = Path(f"/proc/{outer}/root/proc")
+        anchor_dev = os.stat(anchor).st_dev
+        if (
+            anchor_dev in (evidence["procdev"], os.stat("/proc").st_dev)
+            or os.readlink(anchor / "1/ns/pid") != f"pid:[{self.identities['p0'].inode}]"
+        ):
+            raise BoundaryUnavailable("invalid boundary proc anchor")
+        rows = [r.split() for r in Path(f"/proc/{init}/mountinfo").read_text().splitlines()]
+        procs = [r for r in rows if r[r.index("-") + 1] == "proc"]
+        expected = {f"{os.major(dev)}:{os.minor(dev)}" for dev in (anchor_dev, evidence["procdev"])}
+        if (
+            len(procs) != 2
+            or {r[2] for r in procs} != expected
+            or any(
+                r[3:5] != ["/", "/proc"]
+                or not {"nosuid", "nodev", "noexec"} <= set(r[5].split(","))
+                for r in procs
+            )
+        ):
+            raise BoundaryUnavailable("missing or unsafe boundary proc mounts")
 
     async def monitor(self) -> None:
         try:
