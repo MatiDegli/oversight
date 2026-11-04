@@ -5087,3 +5087,47 @@ slot intent. Storage refusal leaves memory ownership and best-effort Stop usable
 Reason: sessionStorage can be copied by Duplicate tab, so possession of the token alone cannot
 establish that the previous owning page departed. No token enters localStorage, URLs, events
 or logs, and recovery still requires the current applied candidate and a valid server lease.
+
+
+## 2026-11-04 — Edit startup settings from the Settings tab
+
+The maintainer explicitly approved this contract change and its file editor in the
+`frontend/settings-screen` brief, based on main `b40543f2`. This supersedes the October 31
+merge-mode-only scope and the deferred packaged-key editor in additions. Contracts advance from
+1.21.0 to 1.22.0 with EditableSettingName, EditableSetting, SettingsView and UpdateSettings;
+frozen schema baselines and historical recordings remain unchanged.
+
+The closed editable allowlist is META_API_KEY, BASETEN_API_KEY, OVERSIGHT_BUDGET_USD,
+MUSE_SPARK_INPUT_USD_PER_M, MUSE_SPARK_OUTPUT_USD_PER_M, OVERSIGHT_BASETEN_BUDGET_USD,
+BASETEN_INPUT_USD_PER_M, BASETEN_OUTPUT_USD_PER_M, OVERSIGHT_CROSS_REVIEW and
+OVERSIGHT_MAX_AGENTS. Only supplied names are written; empty strings clear optional values.
+Startup parsing still refuses an explicitly empty agent cap; omit it to use the default four.
+Cross-review retains startup's case-insensitive true test, with other text interpreted as false.
+No model, agent tool, event or merge authority can edit this file through this feature.
+
+Live GET/PUT /settings use the path retained by Settings.load: OVERSIGHT_ENV_FILE, otherwise the
+repository .env, with the existing process-environment precedence. Reads report file state and
+nonsecret file text, plus environment overrides. Secret values are always null in the response,
+including after replacement; password fields start empty. Rejected values never enter response
+messages: domain validation names only approved variables, and the request-validation handler
+also filters locations to that allowlist without echoing values, arbitrary keys or validator text.
+The existing origin/host guard and body limit cover both routes. Replay refuses both before
+body parsing, and the static frontend never requests them.
+
+An asyncio lock serializes saves. File work uses offload (now exported by the workspace facade)
+so cancellation retains the lock through completion. A same-directory temporary file is flushed
+and fsynced before os.replace; existing permissions survive, new POSIX files use 0600, and a
+failed replacement cleans up its temporary file. The first declaration is replaced in place,
+later duplicates of supplied names are dropped, and other lines, comments and order survive.
+Candidate validation reuses startup parsing without letting environment overrides mask invalid
+file values. Malformed amounts, whitespace in keys and control characters refuse the whole patch.
+
+The startup file snapshot stays in memory only. A changed editable value sets restart_required;
+restoring it clears that flag. Saving never mutates live Settings or restarts the process. An
+OVERSIGHT_ENV_FILE launch pointing outside the repository identifies installed desktop reload;
+other launches require server restart. File > Reload settings belongs to another front.
+The UI sends only changed fields, shows Saved. only on success, retains refused drafts and keeps
+a persistent apply instruction. Overridden rows and replay are read-only. Chat keeps the Settings
+opener reachable at 390px and uses the available panel for its scrolling form; Oversight's graph
+ownership remains unchanged. No new colors, shortcut or automatic focus change is introduced.
+Evidence uses temporary synthetic files and scripted fake models only; no provider is called.

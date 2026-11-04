@@ -386,8 +386,13 @@ new candidate work waits for the maintainer’s order.
   of the other displaced fronts, superseding its after-Tauri order (DECISIONS.md). Windows isolation follows that port. Until a port has its own isolation, it runs
   in the existing mode without isolation (network open; rules, Revert and added-test probes disabled).
   Any new dependency follows the license list; filelock (Unlicense) needs the maintainer's OK.
-- After the hackathon: keys typed into a packaged app's Settings, write-only and kept by the
-  local backend; needs the secrets rule changed, a contract change and a reviewed security plan.
+- Built on `frontend/settings-screen` (2026-11-04): Settings edits the ten approved file variables
+  through contract 1.22.0 and live GET/PUT /settings. Keys stay in .env and are never returned;
+  saves preserve unrelated lines and apply after restart. The tab includes Models and keys,
+  Limits and budget, environment-override labels and a task-refusal Open settings action.
+  Scripted API and frontend evidence covers rejection privacy, atomic saves, replay and 1280/390
+  widths. Desktop File > Reload settings is a separate front; native Windows acceptance remains
+  pending. See DECISIONS, “Edit startup settings from the Settings tab”.
 
 | # | Item | State and commit or branch | In contracts proposal |
 | --- | --- | --- | --- |
