@@ -172,8 +172,12 @@ impl SessionLog {
         exit: Option<u32>,
         tail: &OutputTail,
     ) -> io::Result<()> {
+        let hint = match self.stage {
+            Stage::Git => "Hint: Git for Windows (git.exe) is required on PATH.\n",
+            _ => "",
+        };
         self.write(&format!(
-            "Oversight desktop launch failed\nStage: {:?}\nKind: {:?}\nOS code: {:?}\nBackend exit: {exit:?}\n{}\n",
+            "Oversight desktop launch failed\nStage: {:?}\nKind: {:?}\n{hint}OS code: {:?}\nBackend exit: {exit:?}\n{}\n",
             self.stage, error.kind(), error.raw_os_error(), tail.text()
         ))
     }

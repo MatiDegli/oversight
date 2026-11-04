@@ -179,6 +179,30 @@ def test_installer_notices_ship_colorama_license_and_text(tmp_path, monkeypatch)
 
 def test_installed_smoke_prints_diagnostics_before_unchanged_failure_gates():
     script = (HERE / "installed-smoke.ps1").read_text()
+    selection = (
+        "$gitCommand = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue "
+        "| Select-Object -First 1"
+    )
+    assert selection in script
+    assert "(Get-Command git.exe -CommandType Application).Source" not in script
+    assert "$git = $gitCommand.Source" in script
+    assert "$gitDirectory = [System.IO.Path]::GetDirectoryName($git)" in script
+    path_line = '$env:PATH = "$gitDirectory;$env:SystemRoot\\System32;$env:SystemRoot"'
+    assert path_line in script
+    assert '"$(Split-Path $git);' not in script
+    for validation in (
+        "if ($null -eq $gitCommand)",
+        "[System.IO.Path]::IsPathFullyQualified($git)",
+        "Test-Path -LiteralPath $git -PathType Leaf",
+        "Test-Path -LiteralPath $gitDirectory -PathType Container",
+        "Test-Path -LiteralPath (Join-Path $gitDirectory 'git.exe') -PathType Leaf",
+    ):
+        assert script.index(selection) < script.index(validation) < script.index(path_line)
+    refusal = "if (Get-Command $tool -ErrorAction SilentlyContinue)"
+    assert (
+        script.index(path_line) < script.index(refusal) < script.index("foreach ($attempt in 1..2)")
+    )
+    assert "foreach ($tool in @('python.exe', 'uv.exe', 'node.exe'))" in script
     assert "'.runtime\\desktop-session.log'" in script
     assert "Get-Content -LiteralPath $log -Tail 32" in script
     assert "if (!$started.WaitForExit(140000))" in script

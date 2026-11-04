@@ -24,10 +24,19 @@ $installed = Start-Process $installer[0].FullName -ArgumentList '/S' -Wait -Pass
 if ($installed.ExitCode -ne 0) { throw "Installer failed: $($installed.ExitCode)" }
 $exe = Join-Path $install 'oversight-desktop.exe'
 if (!(Test-Path $exe)) { throw 'Installed executable missing at accepted location' }
-$git = (Get-Command git.exe -CommandType Application).Source
+$gitCommand = Get-Command git.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($null -eq $gitCommand) { throw 'Git for Windows (git.exe) is required to run installed smoke.' }
+$git = $gitCommand.Source
+if (!([System.IO.Path]::IsPathFullyQualified($git)) -or !(Test-Path -LiteralPath $git -PathType Leaf)) {
+    throw 'First Git application must be an existing absolute executable.'
+}
+$gitDirectory = [System.IO.Path]::GetDirectoryName($git)
+if (!(Test-Path -LiteralPath $gitDirectory -PathType Container) -or !(Test-Path -LiteralPath (Join-Path $gitDirectory 'git.exe') -PathType Leaf)) {
+    throw 'First Git application directory must exist and contain git.exe.'
+}
 $originalPath = $env:PATH
 try {
-    $env:PATH = "$(Split-Path $git);$env:SystemRoot\System32;$env:SystemRoot"
+    $env:PATH = "$gitDirectory;$env:SystemRoot\System32;$env:SystemRoot"
     foreach ($tool in @('python.exe', 'uv.exe', 'node.exe')) {
         if (Get-Command $tool -ErrorAction SilentlyContinue) { throw "Unexpected prerequisite: $tool" }
     }

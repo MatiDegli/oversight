@@ -61,6 +61,12 @@ fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     assert!(text.contains("Stage: Payload") && text.contains("Backend exit: Some(1)"));
     assert!(!text.contains("secret") && !text.contains("/private"));
     assert!(text.len() < 4096);
+    log.advance(Stage::Git).unwrap();
+    log.failure(&io::Error::other("PATH=secret /private/home"), None, &tail)
+        .unwrap();
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.contains("Hint: Git for Windows (git.exe) is required on PATH.\n"));
+    assert!(!text.contains("secret") && !text.contains("/private") && !text.contains("PATH="));
     drop(log);
     drop(SessionLog::open(&data).unwrap());
     assert!(!fs::read_to_string(&path).unwrap().contains("failed"));
