@@ -1,0 +1,172 @@
+.workflow-panel {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: min(var(--review-panel-width), calc(100% - var(--graph-min-width)));
+  min-width: 0;
+  min-height: 0;
+  background: var(--page);
+  color: var(--text);
+  border-inline-end: 1px solid var(--divider);
+  font-size: var(--body-size);
+  line-height: 1.5;
+}
+.workflow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  flex-shrink: 0;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-block-end: 1px solid var(--divider);
+}
+.workflow-header h2,
+.workflow-detail h3,
+.workflow-detail h4 {
+  font-size: var(--title-size);
+  font-weight: 700;
+}
+.workflow-panel button,
+.plan-flow .workflow-launch {
+  border: 1px solid var(--control-edge);
+  border-radius: var(--radius-control);
+  padding: var(--spacing-xs) var(--spacing-md);
+  min-height: 34px;
+  font-size: var(--label-size);
+  font-weight: 600;
+}
+.workflow-header button {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+.plan-flow .workflow-launch {
+  margin: var(--spacing-md) var(--spacing-lg);
+}
+.workflow-panel button:hover,
+.plan-flow .workflow-launch:hover {
+  background: var(--raised);
+  border-color: var(--text);
+}
+.workflow-panel button[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: default;
+}
+.workflow-panel button:focus-visible,
+.plan-flow .workflow-launch:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.workflow-body {
+  overflow-y: auto;
+  overflow-anchor: none;
+  scrollbar-gutter: stable;
+  padding: var(--spacing-xl);
+  min-height: 0;
+}
+.workflow-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  list-style: none;
+}
+.workflow-panel .workflow-step {
+  display: grid;
+  grid-template-columns: 2ch minmax(0, 1fr);
+  column-gap: var(--spacing-md);
+  row-gap: var(--spacing-xs);
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  text-align: start;
+  background: var(--page);
+  overflow-wrap: anywhere;
+}
+.workflow-step[aria-pressed="true"] {
+  border-color: var(--text);
+  background: var(--raised);
+}
+.workflow-step > span:nth-child(2) {
+  font-size: var(--body-size);
+  font-weight: 400;
+}
+.workflow-number,
+.workflow-data {
+  font-family: var(--code-font);
+  font-size: var(--data-size);
+  font-variant-numeric: tabular-nums;
+}
+.workflow-step .workflow-word {
+  grid-column: 2;
+}
+.workflow-word {
+  color: var(--muted);
+  font-size: var(--caption-size);
+}
+.workflow-word[data-word="Merged"],
+.workflow-gates [data-mark="passed"],
+.workflow-gates [data-mark="merged"] {
+  color: var(--passed);
+}
+.workflow-word[data-word="Not merged"],
+.workflow-gates [data-mark="failed"] {
+  color: var(--failed-text);
+}
+.workflow-detail {
+  margin-block-start: var(--spacing-xl);
+  padding-block-start: var(--spacing-xl);
+  border-block-start: 1px solid var(--divider);
+  overflow-wrap: anywhere;
+}
+.workflow-detail > p {
+  margin-block-start: var(--spacing-xs);
+  max-width: 75ch;
+}
+.workflow-facts {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin-block: var(--spacing-xl);
+}
+.workflow-facts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--spacing-md);
+}
+.workflow-facts dt,
+.workflow-gates p {
+  color: var(--muted);
+  font-size: var(--caption-size);
+}
+.workflow-team {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--slot-text);
+}
+.workflow-team > span {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--slot-graphic);
+}
+.workflow-gates {
+  margin-block: var(--spacing-md) var(--spacing-xl);
+  list-style: none;
+}
+.workflow-gates li {
+  padding-block: var(--spacing-sm);
+  border-block-end: 1px solid var(--divider);
+}
+.workflow-gates strong {
+  display: block;
+  font-size: var(--caption-size);
+  font-weight: 600;
+}
+.workflow-panel[hidden] {
+  display: none;
+}
+/* Below desktop width the retained plan card remains the launcher-free fallback. */
+@media (max-width: 1279px) {
+  .plan-flow .workflow-launch {
+    display: none;
+  }
+}

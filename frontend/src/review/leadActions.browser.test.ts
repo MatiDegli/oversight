@@ -393,7 +393,14 @@ it.each([
         );
       });
       await expect(queued).toContainText("Starting");
-      await expect(queued.getByRole("button")).toHaveCount(0);
+      await expect(queued.getByRole("button")).toHaveText(["Open workflow"]);
+      await queued.getByRole("button", { name: "Open workflow", exact: true }).click();
+      const workflow = page.getByRole("region", { name: "Workflow", exact: true });
+      await expect(
+        workflow.getByRole("list", { name: "Workflow steps" }).getByRole("button"),
+      ).toHaveCount(3);
+      expect(requests).toHaveLength(4);
+      await workflow.getByRole("button", { name: "Close", exact: true }).click();
       await expect(queued.locator(".plan-piece .flow-row")).toHaveCount(3);
       await expect(chip).toHaveAccessibleName("Decisions: 2 pending. Open decisions inbox");
       await closeForEvent();
@@ -411,7 +418,7 @@ it.each([
       await expect(failedHeading).toHaveCSS("letter-spacing", "0.92px");
       await expect(failedHeading).toHaveCSS("text-transform", "uppercase");
       await expect(failed.locator("blockquote")).toHaveText("The dispatch could not start");
-      await expect(failed.getByRole("button")).toHaveCount(0);
+      await expect(failed.getByRole("button")).toHaveText(["Open workflow"]);
       expect(await camera()).toEqual(unchanged);
       await page.evaluate(() => {
         window.leadActions.restart();
@@ -514,7 +521,14 @@ it("keeps plan pieces readable through App's replay path without mutation reques
     });
     const queued = inbox.getByRole("region", { name: "Queued, waiting for slots" });
     await expect(queued.locator(".plan-piece .flow-row")).toHaveCount(3);
-    await expect(queued.getByRole("button")).toHaveCount(0);
+    await expect(queued.getByRole("button")).toHaveText(["Open workflow"]);
+    await queued.getByRole("button", { name: "Open workflow", exact: true }).click();
+    const workflow = page.getByRole("region", { name: "Workflow", exact: true });
+    await expect(
+      workflow.getByRole("list", { name: "Workflow steps" }).getByRole("button"),
+    ).toHaveCount(3);
+    expect(sent).toEqual([]);
+    await workflow.getByRole("button", { name: "Close", exact: true }).click();
     await expect(inbox.locator(".plan-piece .flow-row")).toHaveCount(5);
     expect(sent).toEqual([]);
     await page.evaluate(() => {

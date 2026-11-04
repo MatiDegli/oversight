@@ -32,6 +32,11 @@ const ConversationPanel = lazy(() =>
 
 const PlanActions = lazy(loadPlanActions);
 
+type WorkflowNavigation = {
+  onOpenWorkflow?: (id: string, launcher: HTMLButtonElement) => void;
+  workflowCovered?: boolean;
+};
+
 const LeadConversationFocus = lazy(() =>
   loadConversationPanel().then((module) => ({
     default: ({
@@ -48,6 +53,7 @@ const LeadConversationFocus = lazy(() =>
       onViewFile,
       replay,
       onReview,
+      onOpenWorkflow,
     }: Pick<
       FrameProps,
       | "state"
@@ -60,11 +66,12 @@ const LeadConversationFocus = lazy(() =>
       | "onViewFile"
       | "replay"
       | "onReview"
-    > & {
-      agentId: string;
-      chat?: boolean;
-      composerDisclosure?: ReactNode;
-    }) => {
+    > &
+      WorkflowNavigation & {
+        agentId: string;
+        chat?: boolean;
+        composerDisclosure?: ReactNode;
+      }) => {
       const threadState = chatState ?? state;
       const conversation = module.selectLeadConversation(threadState, agentId);
       const { plans } = selectPlanEvidence(threadState);
@@ -84,6 +91,7 @@ const LeadConversationFocus = lazy(() =>
                     plan={plan}
                     slots={slotUsage(threadState)}
                     onReview={onReview}
+                    onOpenWorkflow={onOpenWorkflow}
                   />
                 </article>
               </Suspense>
@@ -139,15 +147,16 @@ function LeadConversationFrame({
 }
 
 export function FocusPanel(
-  props: FrameProps & {
-    startAgentAction: ReactNode;
-    chat?: boolean;
-    composerDisclosure?: ReactNode;
-    onGraph?: (changeId: string) => void;
-    practiceOnly?: boolean;
-    maximized: boolean;
-    onMaximize: () => void;
-  },
+  props: FrameProps &
+    WorkflowNavigation & {
+      startAgentAction: ReactNode;
+      chat?: boolean;
+      composerDisclosure?: ReactNode;
+      onGraph?: (changeId: string) => void;
+      practiceOnly?: boolean;
+      maximized: boolean;
+      onMaximize: () => void;
+    },
 ) {
   const { view, state, onClosePanel, onTabAction } = props;
   const tabs = view.tabs ?? [];
@@ -167,7 +176,12 @@ export function FocusPanel(
     );
   const Icon = props.maximized ? Minimize2 : Maximize2;
   return (
-    <section className="focus-panel" aria-label="Focus panel">
+    <section
+      className="focus-panel"
+      aria-label="Focus panel"
+      hidden={props.workflowCovered}
+      inert={props.workflowCovered}
+    >
       <div
         className="focus-tabs"
         hidden={
@@ -272,7 +286,11 @@ export function FocusPanel(
           </LazyPanel>
         ) : view.activeTab === "inbox" ? (
           <LazyPanel key="inbox" frame={<InboxFrame state={state} />}>
-            <DecisionInbox state={state} onReview={props.onReview} />
+            <DecisionInbox
+              state={state}
+              onReview={props.onReview}
+              onOpenWorkflow={props.onOpenWorkflow}
+            />
           </LazyPanel>
         ) : view.activeTab === "practice" && props.practice?.active ? (
           props.practice.content
@@ -334,12 +352,14 @@ function ConversationFocus({
   canReview,
   onReview,
   onGraph,
-}: FrameProps & {
-  agentId: string;
-  chat?: boolean;
-  composerDisclosure?: ReactNode;
-  onGraph?: (id: string) => void;
-}) {
+  onOpenWorkflow,
+}: FrameProps &
+  WorkflowNavigation & {
+    agentId: string;
+    chat?: boolean;
+    composerDisclosure?: ReactNode;
+    onGraph?: (id: string) => void;
+  }) {
   const threadState = chatState ?? state;
   const conversation = selectConversation(
     threadState,
@@ -359,6 +379,7 @@ function ConversationFocus({
             onViewFile={onViewFile}
             replay={replay}
             onReview={onReview}
+            onOpenWorkflow={onOpenWorkflow}
             agentId={agentId}
             onMessageLead={onMessageLead}
             onStopLead={onStopLead}
