@@ -15,6 +15,18 @@ pytestmark = pytest.mark.anyio
 MESSAGE = "Revert rule merge\n\nPreserve later work.\n"
 
 
+def fixture_git(*args: str, executable: str = "git") -> list[str]:
+    """Await our own maintenance before inventory; external locks still refuse."""
+    return [
+        executable,
+        "-c",
+        "maintenance.autoDetach=false",
+        "-c",
+        "gc.autoDetach=false",
+        *args,
+    ]
+
+
 @pytest.fixture
 def api():
     from oversight.workspace import revert
