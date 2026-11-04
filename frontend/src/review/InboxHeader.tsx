@@ -55,8 +55,16 @@ export function InboxHeading({
         <h2>{count ? "Decisions waiting for you" : "No decisions waiting"}</h2>
         <p className="decision-muted">
           {agents} {agents === 1 ? "agent" : "agents"} took {steps} {steps === 1 ? "step" : "steps"}
-          {minutes === null ? "" : ` in ${String(minutes)} min`}.{" "}
-          {count ? `These ${String(count)} need a person.` : "Nothing needs your decision now."}
+          {minutes === null
+            ? ""
+            : minutes
+              ? ` in ${String(minutes)} min`
+              : " in under a minute"}.{" "}
+          {count === 1
+            ? "This one needs a person."
+            : count
+              ? `These ${String(count)} need a person.`
+              : "Nothing needs your decision now."}
         </p>
       </div>
     </header>

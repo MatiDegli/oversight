@@ -18,8 +18,11 @@ it("uses current events, run fallback and unknown without inventing a mode or ac
     ),
   ).toContain("Merge mode: Merge alone when safe");
   const unknown = html(<ChatMergeChip state={createInitialState()} />);
-  expect(unknown).toContain("Merge mode: unknown");
+  expect(unknown).toContain("Merge mode: not recorded");
   expect(unknown).not.toContain("<button");
+  const settings = html(<ChatMergeChip state={createInitialState()} onOpenSettings={() => {}} />);
+  expect(settings).toContain("Merge mode: not recorded");
+  expect(settings).not.toContain("lucide-chevron-down");
 });
 function evidence() {
   const state = chatMergeState();

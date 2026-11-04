@@ -19,11 +19,12 @@ export function ChatMergeChip({
   state: State;
   onOpenSettings?: () => void;
 }) {
+  const line = selectMergeModeLine(state);
   const content = (
     <>
       <GitMerge aria-hidden="true" size={15} />
-      <span>{selectMergeModeLine(state) ?? "Merge mode: unknown"}</span>
-      {onOpenSettings && <ChevronDown aria-hidden="true" size={14} />}
+      <span>{line ?? "Merge mode: not recorded"}</span>
+      {onOpenSettings && line && <ChevronDown aria-hidden="true" size={14} />}
     </>
   );
   return (

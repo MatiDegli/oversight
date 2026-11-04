@@ -106,6 +106,11 @@ describe("the decision area's state", () => {
     expect(failureMessage("approve", internal)).toBe(
       "Approve failed: the server hit an internal error. Try again.",
     );
+    const replay = new CommandError(501, "not_implemented", "Approve is not available in a replay");
+    expect(failureMessage("approve", replay)).toBe("Approve is not available in a replay");
+    expect(failureMessage("approve", new CommandError(501, undefined, "HTTP 501"))).toBe(
+      "Approve is not available here.",
+    );
     expect(failureMessage("reject", new TypeError("Failed to fetch"))).toBe(
       "Reject did not reach the server. Check the connection and try again.",
     );

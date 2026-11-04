@@ -8,11 +8,14 @@ export { Dock as BottomDock } from "./dock/Dock";
 export function StatusLine(props: FrameProps & { dock: boolean; onToggleDock: () => void }) {
   const mergeMode = selectMergeModeLine(props.state);
   const budget = selectBudgetLine(props.state);
+  const real = props.replayOf === "real recorded run";
+  const source =
+    props.replayLabel ?? (real ? "Replay" : props.replayOf ? `Replay · ${props.replayOf}` : "Live");
   return (
     <footer aria-label="Status line" className="status-line">
       <span>
-        {props.replayLabel ?? (props.replayOf ? `Replay · ${props.replayOf}` : "Live")}
-        {props.replayOf === "real recorded run" && " · Real recorded run"}
+        {source}
+        {real && " · Real recorded run"}
         {props.practice?.active && " · Two-change practice"}
       </span>
       {mergeMode && (
