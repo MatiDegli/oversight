@@ -27,6 +27,8 @@ jobs:
     # The preview boundary refuses Ubuntu 26.04's hardlinked coreutils.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
     permissions:
       contents: read
     steps:
@@ -38,11 +40,187 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         with:
           package_json_file: frontend/package.json
+          standalone: true
+      - name: Use standalone pnpm executable
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          version_pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
+          try:
+              declaration = json.loads(Path("frontend/package.json").read_text())["packageManager"]
+              match = re.fullmatch(r"pnpm@(" + version_pattern + r")", declaration)
+              if match is None or len(match[1]) > 80:
+                  raise ValueError
+              version = match[1]
+              root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+          except (OSError, RuntimeError, KeyError, TypeError, ValueError):
+              raise SystemExit("Require packageManager pnpm@<exact-version> and an existing setup root")
+
+
+          def inspect(candidate):
+              try:
+                  resolved = candidate.resolve(strict=True)
+                  if not resolved.is_relative_to(root):
+                      return None, "outside setup root"
+                  if not resolved.is_file():
+                      return None, "not a file"
+                  with resolved.open("rb") as stream:
+                      if stream.read(4) != b"\x7fELF":
+                          return None, "not an ELF"
+                  if not os.access(resolved, os.X_OK):
+                      return None, "not executable"
+                  metadata_path = (resolved.parent / "package.json").resolve(strict=True)
+                  if not metadata_path.is_relative_to(root):
+                      return None, "package metadata outside setup root"
+                  metadata = json.loads(metadata_path.read_text())
+                  found = metadata.get("version")
+                  if (
+                      not isinstance(found, str)
+                      or len(found) > 80
+                      or re.fullmatch(version_pattern, found) is None
+                  ):
+                      return None, "invalid package version"
+                  if metadata.get("name") != "@pnpm/exe.linux-x64":
+                      return None, f"version {found}: wrong package name"
+                  if found != version:
+                      return None, f"version {found}: expected {version}"
+                  return resolved, f"version {found}: eligible"
+              except (OSError, RuntimeError, ValueError, AttributeError):
+                  return None, "unreadable file or package metadata"
+
+
+          executables = set()
+          listing = []
+          candidates = sorted(root.glob("**/@pnpm/exe.linux-x64/pnpm"))
+          for candidate in candidates:
+              resolved, reason = inspect(candidate)
+              if resolved is not None:
+                  executables.add(resolved)
+              if len(listing) < 10:
+                  relative = json.dumps(str(candidate.relative_to(root))[:200], ensure_ascii=True)
+                  listing.append(f"  {relative}: {reason}")
+          if len(executables) != 1:
+              detail = "\n".join(listing) or "  no candidates found"
+              raise SystemExit(
+                  f"Expected exactly one executable standalone pnpm ELF at {version}; "
+                  f"matched {len(executables)} of {len(candidates)} candidates (first 10):\n{detail}"
+              )
+          selected = executables.pop()
+          with open(os.environ["GITHUB_PATH"], "a") as path:
+              path.write(str(selected.parent) + "\n")
+          print(f"Selected pnpm {version}: {json.dumps(str(selected.relative_to(root))[:200])}")
+          PY
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+      - name: Verify standalone pnpm on PATH
+        run: |
+          pnpm_executable=$(command -v pnpm) || { echo "pnpm not found on PATH"; exit 1; }
+          python3 - "$pnpm_executable" <<'PY'
+          import asyncio
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
+          try:
+              declaration = json.loads(Path("frontend/package.json").read_text())["packageManager"]
+              match = re.fullmatch(r"pnpm@(" + pattern + r")", declaration)
+              if match is None or len(match[1]) > 80:
+                  raise ValueError
+              version = match[1]
+              root = Path(os.environ["PNPM_HOME"]).parent.resolve(strict=True)
+              executable = Path(sys.argv[1]).resolve(strict=True)
+              if not executable.is_relative_to(root):
+                  raise SystemExit("PATH pnpm is outside setup root")
+              location = json.dumps(str(executable.relative_to(root))[:200], ensure_ascii=True)
+              if not executable.is_file() or not os.access(executable, os.X_OK):
+                  raise SystemExit(f"PATH pnpm {location}: not an executable file")
+              with executable.open("rb") as stream:
+                  if stream.read(4) != b"\x7fELF":
+                      raise SystemExit(f"PATH pnpm {location}: not an ELF (expected {version})")
+          except (OSError, RuntimeError, KeyError, TypeError, ValueError):
+              raise SystemExit("Cannot validate PATH pnpm or pinned packageManager")
+
+
+          async def verify():
+              try:
+                  process = await asyncio.create_subprocess_exec(
+                      str(executable), "--version", stdout=asyncio.subprocess.PIPE,
+                      stderr=asyncio.subprocess.DEVNULL,
+                  )
+                  try:
+                      stdout, _ = await asyncio.wait_for(process.communicate(), timeout=20)
+                  except TimeoutError:
+                      process.kill()
+                      await process.wait()
+                      raise SystemExit(f"PATH pnpm {location}: --version timed out")
+              except OSError:
+                  raise SystemExit(f"PATH pnpm {location}: --version could not execute")
+              found = stdout.decode("ascii", errors="replace").strip()
+              observed = found if re.fullmatch(pattern, found) and len(found) <= 80 else "<invalid output>"
+              if process.returncode != 0 or found != version:
+                  raise SystemExit(
+                      f"PATH pnpm {location}: ELF version {observed}, exit {process.returncode}; "
+                      f"expected {version}"
+                  )
+              print(f"Verified PATH pnpm {location}: ELF version {found}")
+
+
+          asyncio.run(verify())
+          PY
       - run: make install
       - uses: ./.github/actions/setup-gitleaks
+      - name: Normalize system data permissions
+        run: |
+          uv run --frozen python - <<'PY'
+          import asyncio
+          import json
+          import stat
+          from pathlib import Path
+
+          from oversight.workspace.preview_boundary_entry import SYSTEM_DIRECTORIES, SYSTEM_FILES
+
+
+          async def main():
+              targets = [t for t in SYSTEM_FILES if t in {"/etc/localtime", "/usr/share/zoneinfo/Etc/UTC"}]
+              if len(targets) != 2:
+                  raise SystemExit("Missing timezone targets in product system list")
+              if set(SYSTEM_DIRECTORIES) != {"/usr/lib/locale/C.utf8", "/usr/share/git-core/templates"}:
+                  raise SystemExit("Unexpected product system data directories")
+              targets.extend(SYSTEM_DIRECTORIES)
+              # Resolve every required target before making any change; never follow child symlinks.
+              roots = sorted({Path(target).resolve(strict=True) for target in targets})
+              changed = 0
+              for root in roots:
+                  if not (root.is_file() or root.is_dir()):
+                      raise SystemExit(f"Unsupported system data target: {root}")
+                  paths = sorted(root.rglob("*")) if root.is_dir() else (root,)
+                  for path in paths:
+                      info = path.lstat()
+                      if not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111:
+                          continue
+                      with path.open("rb") as stream:
+                          header = stream.read(4)
+                      if header.startswith((b"#!", b"\x7fELF")):
+                          continue
+                      process = await asyncio.create_subprocess_exec("sudo", "chmod", "a-x", "--", str(path))
+                      if await asyncio.wait_for(process.wait(), timeout=10) != 0:
+                          raise SystemExit(f"Could not clear system data execute bits: {path}")
+                      changed += 1
+                      if changed <= 20:
+                          print(f"Cleared system data execute bits: {json.dumps(str(path))}", flush=True)
+              print(f"System data permissions: changed {changed} regular files (first 20 listed)")
+
+
+          asyncio.run(main())
+          PY
       - name: Allow unprivileged user namespaces
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: make check-ci

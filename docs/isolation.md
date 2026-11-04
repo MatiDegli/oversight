@@ -302,6 +302,9 @@ allowlisted, with no backend credentials or PYTHONPATH discovery.
 
 The reviewed-app Linux boundary preserves each source mount's locked read-only, nosuid, nodev,
 noexec and atime settings on bind remounts, retaining every restriction added by the boundary.
+Before pivoting into the allowlisted root, setup (PID 1 of P0, owned by U0) mounts a fresh
+P0 proc as an anchor: Linux requires a fully visible proc before U1 can mount P1 proc over it.
+The host proc never enters the root, and U1's maps are written through P0 proc.
 
 The adapter vector is the absolute interpreter, `-I -B`, absolute adapter, `--listener-fd`, `--port`,
 `--worktree`, `--memory-limit-bytes`, repeated `--oversight-origin`, and a supervisor-generated
@@ -450,9 +453,13 @@ membership and the current candidate under admission locks. The advertised enum,
 and model-facing inventory stay unchanged; no model suggestions, cards or frontend production mounting
 are released.
 
-Only the initiating tab keeps the token, in memory. An observer sees “Preview in use in another
-tab” with no frame, renewal or takeover. Close dismisses only that observer's panel. Reload loses
-ownership; absent successful owner cleanup, the server expires the lease. Replacement requires
+The private token is kept in memory and per-tab sessionStorage. Pagehide disposal marks the
+saved record; after reload, only a marked record can recover the same preview, and successful recovery
+removes its mark. Invalid or cross-run records are cleared. Marked records are also cleared for a
+superseded candidate, a terminal state or failed recovery. An unmarked copy from Duplicate tab stays
+read-only and leaves its record untouched. An observer sees “Preview in use in another
+tab” with no frame, renewal or takeover. Close dismisses only that observer's panel.
+Without pagehide, ownership is not recovered and lease expiry remains the fallback. Replacement requires
 authenticated Stop and verified drain before reading the new candidate or requesting revision/Git.
 Uncertain stop retains cleanup ownership and blocks replacement. The sandbox is exactly
 `allow-forms`, referrer policy `no-referrer`. Static/Vite `frame-src` lists only exact
@@ -473,19 +480,20 @@ Acceptance and missing-proof inventory follows in the hand-back. Claims are tied
 [isolated browser proof](../frontend/src/app/preview/PreviewAcceptance.browser.test.ts).
 A skip, injected namespace or capture implementation is never collected trust evidence.
 
-These links include historical qualification, not a current passing acceptance claim. The
-real-route cases in `backend/tests/workspace/test_preview_acceptance.py` and the three-start
-driver send a `127.0.0.1` parent; the shop admission refusal currently blocks them. The driver
-also requires that backend name in `tools/preview_scenario.py`. Restoring these HTTP/browser
-harnesses requires the unowned shop authority adapter and the frontend transport integration;
-they remain explicit acceptance prerequisites. Direct manager launches without a request parent
-retain the person's configured `profile.origins`, including `http://127.0.0.1:8710`, while the
-default localhost parent still selects the frame URL. This preserves the direct socket/death
-and mutation checks' required origins without certifying the blocked route or three-start
-scenarios. The direct kernel fixtures in `backend/tests/workspace/preview_acceptance_support.py`
-and `backend/tests/changes/test_preview_acceptance.py` also omit the required `enabled=True`
-profile opt-in, as does `tools/preview_acceptance_checks.py`. Updating those fixtures is a
-separate prerequisite before claiming current kernel acceptance.
+Current Linux kernel acceptance passes with `OVERSIGHT_ISOLATION_KERNEL_TESTS=1`:
+the [workspace suite](../backend/tests/workspace/test_preview_acceptance.py) has 13 passes,
+the [mutation authority suite](../backend/tests/changes/test_preview_acceptance.py) has 18,
+and the [driver tooling suite](../tools/tests/test_preview_acceptance.py) has six, all without
+skips. The [three-start driver](../tools/preview_acceptance.py) also completes three consecutive
+clean starts with totals of 1500 and 1350 cents, verified namespace death and released registry,
+listeners and runtime lock. The HTTP harness uses a `localhost` parent and a `127.0.0.1` frame,
+with numeric loopback listener bindings. Its fixtures explicitly opt in with `enabled=True`;
+the product default remains off. Direct manager launches without a request parent retain their
+configured `profile.origins`, including `http://127.0.0.1:8710`; HTTP launches declare only the
+actual parent. The supported localhost combination needs no new shop authority adapter; explicit
+numeric shop parents remain refused. The [live browser proof](../frontend/src/app/preview/PreviewAcceptance.browser.test.ts),
+including the separately owned frontend transport integration, remains a prerequisite. These
+kernel results do not certify the browser, the reviewed self application or Windows.
 
 The November 3 clone acceptance collected 12 Linux Chromium before/after frames and six
 comparisons under `.shots/preview-acceptance/`, with UTC/viewport/theme/error/overflow metadata.

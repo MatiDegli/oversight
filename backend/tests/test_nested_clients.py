@@ -74,6 +74,11 @@ def test_nested_role_admission_and_factory_separation(monkeypatch: pytest.Monkey
                 factory(profile, "A")
         with pytest.raises(ValueError):
             factory(FAKE_MODEL, cast(Any, "invalid"))
+        for slot in ("G", "Z", "AA", "AB"):
+            assert factory(FAKE_MODEL, slot).profile == FAKE_MODEL
+        for invalid in ("", "a", "A1", "Å", True):
+            with pytest.raises(ValueError):
+                factory(FAKE_MODEL, cast(Any, invalid))
         first, second = factory(FAKE_MODEL, "A"), factory(FAKE_MODEL_B, "B")
         assert first is not second
         assert first.profile == FAKE_MODEL and second.profile == FAKE_MODEL_B

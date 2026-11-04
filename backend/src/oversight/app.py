@@ -75,7 +75,7 @@ from oversight.events import (
     run_store_path,
 )
 from oversight.graph import WorkspaceGraph, read_layout
-from oversight.limits import SizeLimitError, bounded_text
+from oversight.limits import MAX_EVENT_LINE_BYTES, SizeLimitError, bounded_text
 from oversight.nested_clients import NestedPolicy
 from oversight.preview_startup import ENABLE_HINT, reviewed_startup_report
 from oversight.redaction import Redactor
@@ -89,8 +89,8 @@ from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings, build_lead_limits, run_time_limits
 from oversight.setup import missing_settings, offered_profiles
+from oversight.slots import CAPACITY_SIZE_ERROR, SlotDefault, resolve_slots
 from oversight.slots import PROFILES as PROFILES
-from oversight.slots import SlotDefault, resolve_slots
 from oversight.startup_refusals import startup_refusals
 from oversight.workspace import (
     OPEN_NOTICE,
@@ -574,31 +574,36 @@ class LiveRun:
             block_at=BLOCK_AT,
             braked=any(_metered(profile) for profile in profiles),
         )
-        await self.store.start()
-        started = await self.store.publish(
-            RunStarted(
-                merge_mode=MergeModeState(),
-                run_id=self.run_id,
-                contract_version=CONTRACT_VERSION,
-                prompt_version=prompt_version(
-                    settings.harness_pack,
-                    settings.history_prune_tokens,
-                    lead_limits=self._lead_limits,
-                ),
-                max_leads=self._max_leads,
-                workspace=self._source.provenance if self._source else TEMPLATE.name,
-                base_commit=base,
-                models=list({profile.id: profile for profile in profiles}.values()),
-                slots=[
-                    SlotInfo(slot=slot, default_model=profile.id)
-                    for slot, profile in self._slot_profiles.items()
-                ],
-                limits=self._limits,
-                budget=Budget(
-                    budget_usd=budget, spent_usd=spent, warn_at=list(WARN_AT), block_at=BLOCK_AT
-                ),
-            )
+        payload = RunStarted(
+            merge_mode=MergeModeState(),
+            run_id=self.run_id,
+            contract_version=CONTRACT_VERSION,
+            prompt_version=prompt_version(
+                settings.harness_pack,
+                settings.history_prune_tokens,
+                lead_limits=self._lead_limits,
+            ),
+            max_leads=self._max_leads,
+            workspace=self._source.provenance if self._source else TEMPLATE.name,
+            base_commit=base,
+            models=list({profile.id: profile for profile in profiles}.values()),
+            slots=[
+                SlotInfo(slot=slot, default_model=profile.id)
+                for slot, profile in self._slot_profiles.items()
+            ],
+            limits=self._limits,
+            budget=Budget(
+                budget_usd=budget, spent_usd=spent, warn_at=list(WARN_AT), block_at=BLOCK_AT
+            ),
         )
+        # Measure the actual UTF-8 envelope (excluding LF, as the JSONL reader does).
+        # Publish with this timestamp so measurement and the writer serialize identical bytes.
+        timestamp = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        event = RunStartedEvent(seq=1, ts=timestamp, type="run.started", payload=payload)
+        if len(event.model_dump_json().encode("utf-8")) > MAX_EVENT_LINE_BYTES:
+            raise ValueError(CAPACITY_SIZE_ERROR)
+        await self.store.start()
+        started = await self.store.publish(payload, ts=timestamp)
         graph = WorkspaceGraph(self.workspace.main.root, self.layout)
         snapshot = await asyncio.to_thread(graph.scan, base)
         await self.store.publish(snapshot)

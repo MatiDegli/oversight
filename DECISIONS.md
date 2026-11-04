@@ -4624,6 +4624,24 @@ default single-link requirement.
 Residual risk: a linked file can also change through its uv cache name. The token recheck after
 each read refuses a change observed during that read; it cannot prevent later cache writes.
 
+## 2026-11-03 — Team-wide agent ordinals and read-only plan progress
+
+The maintainer's November 3 approval supersedes the per-plan numbering and collision
+captions in “Team hue and agent label” and the former DESIGN label rules. Lead-owned plans
+use stable team-wide ordinals in first-observed plan/subtask order: later plans continue
+A·3, A·4. Waiting and ended siblings reserve their numbers. Revisions, delayed assignment
+and runtime seat reuse preserve identity. Local subtask indices, team hue, lead identity,
+leadless plans and standalone agents retain their existing meanings.
+
+The read-only flow renders inside the shared plan card in both lead-thread layouts and
+the inbox, including Running plans. Existing commands remain the only mutations; pending
+attempts are shared, dispatch removes controls, and replay/history suppress them. Main
+movement derives from accepted event-prefix observations and the assigned agent's base,
+without a wire field. Unknown remains unknown; equal known commits permit not needed,
+observed combined suites win, and terminal evidence excludes a change's own merge.
+Reason: the person can follow dependencies and merge evidence without opening another panel,
+and every agent keeps one unambiguous label across all of a lead's plans.
+
 ## 2026-11-03 — Configuration attribution stays advisory and uses the current change base
 
 The maintainer authorized advisory configuration attribution for demo/Boltons agent suites and
@@ -5030,3 +5048,63 @@ Windows profile names; the other lexical refusals remain unchanged.
 Open demo deliberately reuses the repository disclosure: it warns that the current session
 stops and preserves the same default-Cancel confirmation. Its prepared-environment requirement
 is already satisfied by the bundled demo interpreter.
+
+## Harness pack on by default, with static diagnostics and a symbol tool (2026-11-04)
+
+Maintainer ruling: the existing `OVERSIGHT_HARNESS_PACK` now defaults to true. Explicit false
+retains the comparison arm's six tools, prompts and observations. This supersedes only the
+off-by-default part of the 2026-10-28 harness ruling; the single-switch comparison remains.
+
+With the pack on, successful Python edits keep their changes and append only newly introduced
+static diagnostics, compared by code and message. Isolated ruff checks read the before/after
+content on stdin outside the worktree, use only E9,F63,F7,F82, and stop after ten seconds.
+At most twenty bounded rows ask the agent to fix findings before tests. Missing ruff, timeout
+or malformed output logs a warning and preserves the ordinary edit result. Ruff is a pinned
+runtime dependency. Its stdin subprocess is the narrow exception to the workspace runner's
+no-stdin interface; it receives no inherited provider credentials.
+
+Read-only Python `find_symbol` is inside the same pack, advertised only when it is on. It
+accepts an identifier or dotted name and an optional search path. Definitions and references
+have bounded source rows, focus ranges and graph node ids. Jedi and parso are exactly pinned
+MIT dependencies admitted by the fourteen-day cutoff. Static navigation may be incomplete.
+
+The isolated Python worker runs outside the worktree with a twenty-second kill timeout. It
+uses Jedi with unsafe extensions disabled, empty added paths and smart sys.path disabled.
+Only validated, non-secret Python sources enter its disposable snapshot; an audit guard
+refuses original-tree reads, secret paths and snapshot imports. Returned paths are validated
+again through Tree; external definitions expose only module names. History treats the tool
+as a read, and nested coder admission follows the pack. No shell tool, scratchpad or language
+server is authorized. Existing frontend fallbacks display its steps without a UI change.
+
+## Per-store event timestamps never go back (2026-11-04)
+
+The WSL wall clock stepped backwards by 1,428 ms in a committed live run. A backward
+step between a revision's receipt and the person's resolution can make its recorded
+waiting interval unknown, even though time passed. Correct the store's timestamp source.
+
+Each `EventStore` without an injected clock creates a fresh `EventClock`. Its first call
+uses the wall clock; later calls return `max(previous + monotonic elapsed, wall now)`,
+with elapsed measured since the previous call. Results are timezone-aware UTC. Time
+advances through backward wall steps and catches up on forward steps or after suspend.
+
+Contracts, the faithful recorded-time fold, explicit replay `ts`, injected clocks and
+payload times are unchanged. Replay keeps its recorded timestamps, and the change
+manager keeps its existing clock. No reader substitutes the current wall time for `ts`.
+
+Residual: after a backward step, event times run ahead of the wall clock by at most that step
+until the wall clock catches up. They are logical event times during that interval.
+## 2026-11-04 — Preview recovery requires the departing page's mark
+
+A live preview owner persists its minimal private record in per-tab sessionStorage. Pagehide
+disposal marks that record before the unchanged best-effort keepalive Stop. Only a marked
+record can recover the same preview; successful recovery rewrites it without the mark.
+A duplicate tab copying an unmarked record stays a read-only observer: it never uses the
+copied token for recovery, renewal or Stop, and leaves that record untouched. This deliberately
+trades crash recovery for single-tab authority: without pagehide, lease expiry is the fallback.
+Absent or older applied candidates keep recovery waiting; a newer revision or a different
+change/head at the same or higher revision clears a superseded marked record without I/O or
+slot intent. Storage refusal leaves memory ownership and best-effort Stop usable.
+
+Reason: sessionStorage can be copied by Duplicate tab, so possession of the token alone cannot
+establish that the previous owning page departed. No token enters localStorage, URLs, events
+or logs, and recovery still requires the current applied candidate and a valid server lease.

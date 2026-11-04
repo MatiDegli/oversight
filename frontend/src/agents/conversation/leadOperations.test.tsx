@@ -70,6 +70,28 @@ const project = (events: ServerEvent[]) => required(selectLeadConversation(fold(
 const html = (events: ServerEvent[]) =>
   renderToStaticMarkup(createElement(ConversationPanelHeader, { header: project(events).header }));
 
+it("omits plan list items without a renderer and retains rendered plan placement", () => {
+  const conversation = project([
+    lead(1, "idle", 0),
+    { ...plan, payload: { ...plan.payload, started_by: "lead-a" } },
+  ]);
+  expect(conversation.entries.some((entry) => entry.kind === "lead-plan")).toBe(true);
+  const withoutRenderer = renderToStaticMarkup(<LeadThreadRows conversation={conversation} />);
+  expect(withoutRenderer.match(/role="listitem"/g)).toHaveLength(1);
+  expect(withoutRenderer).toContain("Task from you");
+  expect(withoutRenderer).not.toContain('<div role="listitem"></div>');
+  const markup = renderToStaticMarkup(
+    <LeadThreadRows
+      conversation={conversation}
+      renderPlan={(id) => <article aria-label={`Plan ${id}`}>Plan content</article>}
+    />,
+  );
+  expect(markup.match(/role="listitem"/g)).toHaveLength(2);
+  expect(markup.indexOf("Task from you")).toBeLessThan(markup.indexOf("Plan content"));
+  expect(markup).toContain(`aria-label="Plan ${plan.payload.plan_id}"`);
+  expect(markup).toContain("Plan content");
+});
+
 it("projects nondefault limits, exact task, profile reasoning and distinct owned plans across revisions", () => {
   const events = [
     lead(1, "working", 100, { task: "Keep THIS exact goal." }),

@@ -204,7 +204,7 @@ export function FileView({
           shown.current?.save();
         }}
         onDiscard={() => {
-          shown.current?.discard();
+          void shown.current?.discard();
         }}
       />
       <FileFeedback

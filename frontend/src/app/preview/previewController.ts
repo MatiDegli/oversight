@@ -8,6 +8,11 @@ import type {
 } from "./previewPort";
 import { parsePreviewDetails, parsePreviewStatus, previewId } from "./previewTypes";
 import type { PreviewStatus } from "./previewTypes";
+import {
+  sameOwnershipCandidate,
+  type PreviewOwnership,
+  type PreviewOwnershipStore,
+} from "./previewOwnership";
 
 const active = (status: PreviewStatus | null) =>
   status?.state === "starting" || status?.state === "ready";
@@ -22,18 +27,26 @@ const sameCandidate = (status: PreviewStatus, candidate: PreviewCandidate) =>
   status.head_commit === candidate.head_commit;
 const rank = { starting: 0, ready: 1, stopping: 2, stopped: 3, failed: 3 };
 
-/** Dormant, injected controller. No transport, store, browser globals or persistence. */
+/** Injected controller. Browser storage is optional and stays behind a private port. */
 export function createPreviewController(
   port: PreviewPort,
   clock: PreviewClock,
   identity: PreviewIdentity,
-): PreviewController {
-  return new Controller(port, clock, identity);
+  ownership?: PreviewOwnershipStore,
+): PreviewController & Required<Pick<PreviewController, "recover">> {
+  return new Controller(port, clock, identity, ownership);
 }
 class Controller implements PreviewController {
   #port: PreviewPort;
   #clock: PreviewClock;
   #identity: PreviewIdentity;
+  #ownership?: PreviewOwnershipStore;
+  #saved: PreviewOwnership | null = null;
+  #recovery: Promise<void> | null = null;
+  #recoveryChecked = false;
+  #copiedOwner = false;
+  #recovered = false;
+  #resume = false;
   #token: string | null = null;
   #id: string | null = null;
   #candidate: PreviewCandidate | null = null;
@@ -50,6 +63,7 @@ class Controller implements PreviewController {
   #closing: Promise<boolean> | null = null;
   #listeners = new Set<() => void>();
   #requests = new Set<AbortController>();
+  #pendingStops = new Map<string, Promise<PreviewStatus>>();
   #view: PreviewView = Object.freeze({
     visible: false,
     status: null,
@@ -59,10 +73,16 @@ class Controller implements PreviewController {
     frameUrl: null,
     notice: null,
   });
-  constructor(port: PreviewPort, clock: PreviewClock, identity: PreviewIdentity) {
+  constructor(
+    port: PreviewPort,
+    clock: PreviewClock,
+    identity: PreviewIdentity,
+    ownership?: PreviewOwnershipStore,
+  ) {
     this.#port = port;
     this.#clock = clock;
     this.#identity = { ...identity };
+    this.#ownership = ownership;
   }
   snapshot = () => this.#view;
   subscribe = (listener: () => void) => {
@@ -76,9 +96,12 @@ class Controller implements PreviewController {
     this.#view = Object.freeze({ ...this.#view, ...patch, owned: this.#token !== null });
     for (const listener of this.#listeners) listener();
   }
-  async #bounded<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  async #bounded<T>(
+    request: (signal: AbortSignal) => Promise<T>,
+    abortOnDispose = true,
+  ): Promise<T> {
     const abort = new AbortController();
-    this.#requests.add(abort);
+    if (abortOnDispose) this.#requests.add(abort);
     let cancel: () => void = () => undefined;
     const deadline = new Promise<never>((_, reject) => {
       cancel = this.#clock.schedule(() => {
@@ -111,10 +134,121 @@ class Controller implements PreviewController {
       (!this.#view.status || status.change_id === this.#view.status.change_id)
     );
   }
+  #clearSaved() {
+    if (this.#saved) {
+      try {
+        this.#ownership?.clear(this.#saved);
+      } catch {
+        /* Memory authority is independent. */
+      }
+    }
+    this.#saved = null;
+  }
+  #save(record: PreviewOwnership) {
+    this.#saved = record;
+    try {
+      this.#ownership?.save(record);
+    } catch {
+      /* Memory ownership remains valid. */
+    }
+  }
+  #discardRecovery(status?: PreviewStatus) {
+    this.#clearSaved();
+    this.#cancelRenewal();
+    this.#token = null;
+    this.#id = null;
+    this.#recovered = this.#resume = false;
+    this.#quarantined = status?.reason === "cleanup_unverified";
+    this.#publish({ frameUrl: null, pending: false, uncertain: this.#quarantined });
+  }
+  recover = (getCandidate: () => PreviewCandidate | null): Promise<void> => {
+    if (this.#recovery) return this.#recovery;
+    if (
+      this.#disposed ||
+      this.#recoveryChecked ||
+      this.#token ||
+      this.#flight ||
+      !this.#ownership ||
+      !this.#identity.run ||
+      this.#identity.source !== "live"
+    )
+      return Promise.resolve();
+    this.#recoveryChecked = true;
+    try {
+      const record = this.#ownership.load(this.#identity);
+      // sessionStorage can be copied by Duplicate tab. Only a departing owner marks it.
+      if (!record) return Promise.resolve();
+      if (!record.unloaded) {
+        this.#copiedOwner = !this.#view.status || !confirmed(this.#view.status);
+        return Promise.resolve();
+      }
+      this.#saved = record;
+    } catch {
+      return Promise.resolve();
+    }
+    this.#cancelStart = false;
+    const flight = this.#recover(this.#saved, getCandidate).finally(() => {
+      if (this.#recovery === flight) this.#recovery = null;
+    });
+    return (this.#recovery = flight);
+  };
+  async #recover(record: PreviewOwnership, getCandidate: () => PreviewCandidate | null) {
+    const epoch = this.#epoch;
+    this.#dismissed = true;
+    try {
+      if (!sameOwnershipCandidate(record.candidate, getCandidate())) throw new Error("Stale owner");
+      const details = parsePreviewDetails(
+        await this.#bounded((signal) => this.#port.details(record.preview_id, signal)),
+      );
+      if (!this.#current(epoch)) return;
+      if (
+        details.status.preview_id !== record.preview_id ||
+        !sameCandidate(details.status, record.candidate) ||
+        !sameOwnershipCandidate(record.candidate, getCandidate()) ||
+        (this.#view.status?.preview_id === record.preview_id &&
+          rank[this.#view.status.state] > rank[details.status.state]) ||
+        details.url?.includes(record.lease_token)
+      )
+        throw new Error("Stale details");
+      this.#publish({ status: details.status, visible: false, frameUrl: null });
+      if (!active(details.status)) {
+        this.#discardRecovery(details.status);
+        return;
+      }
+      this.#candidate = { ...record.candidate };
+      this.#id = record.preview_id;
+      this.#token = record.lease_token;
+      this.#recovered = this.#resume = true;
+      if (this.#cancelStart) {
+        await this.#stop();
+        return;
+      }
+      await this.#renew();
+      if (this.#current(epoch)) {
+        if (!sameOwnershipCandidate(record.candidate, getCandidate())) this.#discardRecovery();
+        else {
+          if (this.#token && this.#saved) {
+            const saved = { ...this.#saved };
+            delete saved.unloaded;
+            this.#save(saved);
+          }
+          this.#publish({});
+        }
+      }
+    } catch {
+      if (this.#current(epoch)) this.#discardRecovery(this.#view.status ?? undefined);
+    }
+  }
   #accept(status: PreviewStatus) {
     const old = this.#view.status;
     if (old && rank[status.state] < rank[old.state]) return false;
     if (old && JSON.stringify(old) === JSON.stringify(status)) return false;
+    if (terminal(status)) this.#clearSaved();
+    if (this.#recovered && !active(status)) {
+      this.#publish({ status });
+      this.#discardRecovery(status);
+      return true;
+    }
     if (this.#token && confirmed(status)) {
       this.#release(status);
       return true;
@@ -127,6 +261,8 @@ class Controller implements PreviewController {
     return true;
   }
   #release(status: PreviewStatus) {
+    this.#clearSaved();
+    this.#recovered = this.#resume = false;
     this.#cancelRenewal();
     this.#startDeadlineOff?.();
     ++this.#epoch;
@@ -149,6 +285,7 @@ class Controller implements PreviewController {
     if (this.#token) {
       if (this.#matches(status)) this.#accept(status);
     } else if (!this.#flight && status.run_id === this.#identity.run) {
+      if (confirmed(status)) this.#copiedOwner = false;
       // After the start deadline, the run's single slot can also prove that a
       // different preview holds it, or that the run's preview has ended.
       if (
@@ -191,6 +328,10 @@ class Controller implements PreviewController {
       this.#scheduleRenewal();
     } catch {
       if (!this.#current(epoch)) return;
+      if (this.#recovered) {
+        this.#discardRecovery();
+        return;
+      }
       this.#quarantined = true;
       this.#publish({ uncertain: true, notice: "renewal_failed" });
     }
@@ -198,7 +339,14 @@ class Controller implements PreviewController {
   refresh = async () => {
     const epoch = this.#epoch,
       id = this.#id;
-    if (!id || !this.#token || this.#disposed || this.#closing || this.#detailsEpoch === epoch)
+    if (
+      !id ||
+      !this.#token ||
+      this.#resume ||
+      this.#disposed ||
+      this.#closing ||
+      this.#detailsEpoch === epoch
+    )
       return;
     this.#detailsEpoch = epoch;
     try {
@@ -226,8 +374,19 @@ class Controller implements PreviewController {
     }
   };
   see = (candidate: () => PreviewCandidate | null): Promise<void> => {
+    if (this.#recovery) return this.#recovery.then(() => this.see(candidate));
     if (this.#disposed || this.#flight || this.#closing) return Promise.resolve();
     this.#dismissed = false;
+    if (
+      this.#resume &&
+      this.#token &&
+      this.#candidate &&
+      sameOwnershipCandidate(this.#candidate, candidate())
+    ) {
+      this.#resume = this.#recovered = false;
+      this.#publish({ visible: true });
+      return this.refresh();
+    }
     if (this.#quarantined) {
       this.#publish({
         visible: true,
@@ -238,10 +397,11 @@ class Controller implements PreviewController {
     const observed = this.#view.status;
     if (
       !this.#token &&
-      observed &&
-      (active(observed) ||
-        observed.state === "stopping" ||
-        observed.reason === "cleanup_unverified")
+      (this.#copiedOwner ||
+        (observed &&
+          (active(observed) ||
+            observed.state === "stopping" ||
+            observed.reason === "cleanup_unverified")))
     ) {
       this.#publish({ visible: true });
       return Promise.resolve();
@@ -309,6 +469,12 @@ class Controller implements PreviewController {
         ...observed,
         ...(candidate.change_id && { change_id: candidate.change_id }),
       };
+      this.#save({
+        identity: { ...this.#identity },
+        candidate: { ...this.#candidate },
+        preview_id: this.#id,
+        lease_token: this.#token,
+      });
       this.#publish({ notice: null });
       await this.refresh();
       this.#publish({ pending: false });
@@ -320,11 +486,35 @@ class Controller implements PreviewController {
       this.#publish({ pending: false, uncertain: true, notice: "start_failed" });
     }
   }
+  #sendStop(id: string, token: string, signal: AbortSignal) {
+    const pending = this.#pendingStops.get(id);
+    if (pending) return pending;
+    // A UI deadline does not finish a keepalive fetch. Retain that flight until
+    // transport settles so later Close/disposal cannot dispatch a competing stop.
+    const flight = this.#port
+      .stop(id, { lease_token: token }, signal, { keepalive: true })
+      .then(parsePreviewStatus)
+      .then((status) => {
+        if (
+          this.#saved?.preview_id === status.preview_id &&
+          sameCandidate(status, this.#saved.candidate) &&
+          terminal(status)
+        )
+          this.#clearSaved();
+        return status;
+      })
+      .finally(() => {
+        if (this.#pendingStops.get(id) === flight) this.#pendingStops.delete(id);
+      });
+    this.#pendingStops.set(id, flight);
+    return flight;
+  }
   async #abandon(receipt: { preview_id: string; lease_token: string }) {
     if (!previewId(receipt.preview_id) || !receipt.lease_token) return;
     try {
-      await this.#bounded((signal) =>
-        this.#port.stop(receipt.preview_id, { lease_token: receipt.lease_token }, signal),
+      await this.#bounded(
+        (signal) => this.#sendStop(receipt.preview_id, receipt.lease_token, signal),
+        false,
       );
     } catch {
       /* Expiry remains the fallback. */
@@ -351,14 +541,22 @@ class Controller implements PreviewController {
     });
     try {
       const status = parsePreviewStatus(
-        await this.#bounded((signal) => this.#port.stop(id, { lease_token: token }, signal)),
+        await this.#bounded((signal) => this.#sendStop(id, token, signal), false),
       );
+      if (
+        status.preview_id === id &&
+        this.#candidate &&
+        sameCandidate(status, this.#candidate) &&
+        terminal(status)
+      )
+        this.#clearSaved();
       if (!this.#current(epoch)) return !this.#token && !this.#quarantined;
       if (!this.#matches(status) || !confirmed(status)) throw new Error("Unverified drainage");
       this.#release(status);
       return true;
     } catch {
       if (!this.#current(epoch)) return !this.#token && !this.#quarantined;
+      if (this.#recovered) this.#discardRecovery();
       this.#quarantined = true;
       this.#publish({
         pending: false,
@@ -371,6 +569,7 @@ class Controller implements PreviewController {
   close = async () => {
     this.#cancelStart = true;
     this.#publish({ frameUrl: null });
+    if (this.#recovery) await this.#recovery;
     await this.#flight;
     if (this.#disposed) return;
     if (!this.#token) {
@@ -392,7 +591,11 @@ class Controller implements PreviewController {
     if (identity.run === this.#identity.run && identity.source === this.#identity.source) return;
     const runChanged = identity.run !== this.#identity.run;
     this.#identity = { ...identity };
+    this.#copiedOwner = false;
     ++this.#epoch;
+    if (!this.#token) this.#clearSaved();
+    this.#recovery = null;
+    this.#recoveryChecked = false;
     await this.close();
     if (!this.#token && runChanged) {
       this.#startDeadlineOff?.();
@@ -413,8 +616,10 @@ class Controller implements PreviewController {
     for (const request of this.#requests) request.abort();
     const id = this.#id,
       token = this.#token;
+    if (id && token && this.#saved) this.#save({ ...this.#saved, unloaded: true });
     this.#token = null;
     this.#listeners.clear();
-    if (id && token) void this.#abandon({ preview_id: id, lease_token: token });
+    if (id && token && !this.#closing && !this.#pendingStops.has(id))
+      void this.#abandon({ preview_id: id, lease_token: token });
   };
 }

@@ -8,10 +8,12 @@ type ViewEntry = Extract<LeadEntry, { kind: "lead-view" }>;
 export default function LeadPreviewRows({
   conversation,
   renderView,
+  renderPlan,
   onReady,
 }: {
   conversation: LeadConversation;
   renderView?: (entry: ViewEntry) => ReactNode;
+  renderPlan?: (planId: string) => ReactNode;
   onReady?: () => void;
 }) {
   useLayoutEffect(() => onReady?.(), [onReady]);
@@ -35,6 +37,7 @@ export default function LeadPreviewRows({
         <LeadThreadRows
           conversation={{ ...conversation, entries: [entry] }}
           renderView={renderView}
+          renderPlan={renderPlan}
         />
       )}
     </Fragment>

@@ -37,7 +37,7 @@ from oversight.agents.client import (
     require_verified,
 )
 from oversight.agents.sink import ChangeSink
-from oversight.agents.tools import TOOL_SCHEMAS, Toolbox, ToolOutcome, interrupted
+from oversight.agents.tools import Toolbox, ToolOutcome, interrupted, tool_schemas
 from oversight.agents.usage import Pricing, UsageLedger
 from oversight.events import EventPayload
 from oversight.telemetry import CURRENT, annotate, span
@@ -154,6 +154,7 @@ class AgentRun:
         self._ledger = ledger
         self._pricing = pricing
         self._monotonic = monotonic
+        self._tool_schemas = tool_schemas(harness_pack)
         self._system_prompt = system_prompt(harness_pack)
         self.prompt_version = prompt_version(
             harness_pack, history_prune_tokens, lead_limits=lead_limits
@@ -375,9 +376,9 @@ class AgentRun:
                 raise _Halt(f"Reached the limit of {self._max_turns} model calls.")
             await self.control.gate(deadline, self._status, active)
             self.control.deliver(messages)
-            self._history.prune(messages, TOOL_SCHEMAS)
+            self._history.prune(messages, self._tool_schemas)
             self._turns += 1
-            reply = await model_turn(self, messages, TOOL_SCHEMAS)
+            reply = await model_turn(self, messages, self._tool_schemas)
             await self._usage(reply)
             try:
                 recovering = self._recovery.recover(reply, messages)

@@ -14,6 +14,8 @@ export type AgentPresentation = Readonly<{
   planContext?: Readonly<{ shortLabel: string; caption: string }>;
   planId: string | null;
   subtask: number | null;
+  /** Team-wide display position; subtask remains local to its plan. */
+  ordinal?: number;
   hue: PaletteKey;
   family: AgentFamily;
   order: number;
@@ -27,8 +29,8 @@ export function compareAgentPresentation(
   if (!a || !b) return a ? -1 : b ? 1 : 0;
   return (
     a.order - b.order ||
-    (a.planId ?? "").localeCompare(b.planId ?? "") ||
-    (a.subtask ?? 0) - (b.subtask ?? 0) ||
+    Number(a.kind !== "lead") - Number(b.kind !== "lead") ||
+    (a.ordinal ?? a.subtask ?? 0) - (b.ordinal ?? b.subtask ?? 0) ||
     a.agentId.localeCompare(b.agentId)
   );
 }
@@ -136,7 +138,11 @@ function metadata(state: State) {
   const plans = new Map<string, Plan>();
   const origins = new Map<string, AgentStatus>();
   for (const event of state.decisionEvents) {
-    if (event.type === "plan.updated") plans.set(event.payload.plan_id, event.payload);
+    if (
+      event.type === "plan.updated" &&
+      event.payload.revision > (plans.get(event.payload.plan_id)?.revision ?? 0)
+    )
+      plans.set(event.payload.plan_id, event.payload);
     if (event.type === "agent.status") {
       const agent = event.payload,
         first = origins.get(agent.agent_id);
@@ -147,41 +153,43 @@ function metadata(state: State) {
   return { plans, origins };
 }
 
-/** Qualify only collisions; plan order follows first observation, including ended plans. */
-function qualifyPlanLabels(
-  byAgent: Record<string, AgentPresentation>,
-  plans: Map<string, Plan>,
-): Record<string, AgentPresentation> {
-  const rows = Object.values(byAgent);
-  return Object.fromEntries(
-    rows.map((identity) => {
-      const peers = rows.filter(
-        (peer) => peer.team === identity.team && peer.label === identity.label && peer.planId,
-      );
-      if (identity.planId && new Set(peers.map((peer) => peer.planId)).size > 1) {
-        const ordinal =
-          [...plans.values()]
-            .filter((plan) => plan.started_by === identity.team)
-            .findIndex((plan) => plan.plan_id === identity.planId) + 1;
-        const caption = `plan ${String(ordinal)}`;
-        return [
-          identity.agentId,
-          Object.freeze({
-            ...identity,
-            label: `${identity.label} · ${caption}`,
-            planContext: Object.freeze({ shortLabel: identity.label, caption }),
-          }),
-        ];
+/** Reserve waiting and ended siblings before assigning any display number. */
+function teamOrdinals(state: State, plans: Map<string, Plan>) {
+  const slots = new Map<string, number>();
+  const assigned = new Map<string, number>();
+  const locals = new Map<string, number>();
+  const sizes = new Map<string, number>();
+  const next = new Map<string, number>();
+  const revisions = new Map<string, number>();
+  for (const event of state.decisionEvents) {
+    if (event.type !== "plan.updated") continue;
+    const plan = event.payload;
+    if (plan.revision <= (revisions.get(plan.plan_id) ?? 0)) continue;
+    revisions.set(plan.plan_id, plan.revision);
+    const team = plans.get(plan.plan_id)?.started_by ?? plan.plan_id;
+    sizes.set(plan.plan_id, Math.max(sizes.get(plan.plan_id) ?? 0, plan.subtasks?.length ?? 0));
+    plan.subtasks?.forEach((task, index) => {
+      const key = `${plan.plan_id}:${String(index)}`;
+      if (!slots.has(key)) {
+        const ordinal = (next.get(team) ?? 0) + 1;
+        next.set(team, ordinal);
+        slots.set(key, ordinal);
       }
-      return [identity.agentId, identity];
-    }),
-  );
+      const ordinal = slots.get(key);
+      if (task.agent_id && ordinal !== undefined && !assigned.has(task.agent_id)) {
+        assigned.set(task.agent_id, ordinal);
+        locals.set(task.agent_id, index + 1);
+      }
+    });
+  }
+  return { assigned, locals, sizes };
 }
 
 function buildPresentation(state: State) {
   const identities = selectTeams(state);
   const teams = allocate(state, identities);
   const { plans, origins } = metadata(state);
+  const ordinals = teamOrdinals(state, plans);
   const byAgent: Record<string, AgentPresentation> = {};
   for (const [agentId, identity] of Object.entries(identities.byAgent)) {
     const order = identities.teamOrder.indexOf(identity.team);
@@ -191,24 +199,29 @@ function buildPresentation(state: State) {
     const plan = planId ? plans.get(planId) : undefined;
     const index = plan?.subtasks?.findIndex((task) => task.agent_id === agentId) ?? -1;
     // A waiting or finished sibling counts. Never derive the index from running agents.
-    const lone = identity.kind !== "lead" && (plan?.subtasks?.length ?? 0) <= 1;
-    const subtask = index >= 0 && !lone ? index + 1 : null;
+    const lone = identity.kind !== "lead" && (ordinals.sizes.get(planId ?? "") ?? 0) <= 1;
+    const local = ordinals.locals.get(agentId) ?? (index >= 0 ? index + 1 : null);
+    const subtask = lone ? null : local;
     const hue = teams.get(identity.team)?.hue;
     if (!hue) continue;
     byAgent[agentId] = Object.freeze({
       agentId,
       ...identity,
       letter,
-      label: subtask === null ? letter : `${letter}·${String(subtask)}`,
+      label:
+        subtask === null
+          ? letter
+          : `${letter}·${String(ordinals.assigned.get(agentId) ?? subtask)}`,
       planId,
       subtask,
+      ordinal: ordinals.assigned.get(agentId) ?? subtask ?? 0,
       hue,
       family: agentLook[hue].family,
       order,
     });
   }
   return Object.freeze({
-    byAgent: Object.freeze(qualifyPlanLabels(byAgent, plans)),
+    byAgent: Object.freeze(byAgent),
     teamOrder: identities.teamOrder,
   });
 }

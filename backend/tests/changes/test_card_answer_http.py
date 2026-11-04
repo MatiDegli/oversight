@@ -26,6 +26,7 @@ async def proposed_cards(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: client(api))
     settings = live_settings(
         tmp_path,
+        harness_pack=False,
         behavior_diff=True,
         baseten_api_key="test",
         baseten_budget_usd=10,
@@ -111,6 +112,7 @@ async def test_recorded_answers_replay_without_worktree_or_decision_client(tmp_p
     monkeypatch.setattr(runtime_decisions, "configured_decision", lambda _: client(api))
     settings = live_settings(
         tmp_path,
+        harness_pack=False,
         behavior_diff=True,
         baseten_api_key="test",
         baseten_budget_usd=10,

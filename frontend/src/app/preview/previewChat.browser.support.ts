@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
 import { createServer, type ViteDevServer, type Plugin } from "vite";
-import { expect as check, type Browser } from "@playwright/test";
+import { expect as check, type Browser, type Page } from "@playwright/test";
 import { afterAll, beforeAll, expect } from "vitest";
 import type { ReplayPlayer } from "../../transport";
 import type { State } from "../../state";
@@ -166,8 +166,17 @@ declare global {
     previewChatTiming?: { clicked?: number; ready?: number; loaded?: number };
   }
 }
-export function previewChatSupport(real = false, enabled = true) {
-  const support = new ChatSupport(real);
+/** Opt-in lifecycle proof uses one HTTP authority across reloads and sibling pages. */
+export interface ChatLifecycleHooks {
+  previews: (
+    request: IncomingMessage,
+    response: ServerResponse,
+    send: (status: PreviewStatus) => void,
+  ) => void;
+  beforeNavigate: (page: Page) => Promise<void>;
+}
+export function previewChatSupport(real = false, enabled = true, lifecycle?: ChatLifecycleHooks) {
+  const support = new ChatSupport(real, lifecycle);
   beforeAll(() => (enabled ? support.start() : undefined), 60_000);
   afterAll(() => support.dispose());
   return support;
@@ -189,7 +198,10 @@ class ChatSupport {
     chunks?: number[];
   }[] = [];
   candidate?: StartPreview;
-  constructor(readonly real: boolean) {}
+  constructor(
+    readonly real: boolean,
+    readonly lifecycle?: ChatLifecycleHooks,
+  ) {}
   async start() {
     if (this.real) {
       const path = process.env.OVERSIGHT_PREVIEW_ACCEPTANCE_CANDIDATE;
@@ -207,10 +219,21 @@ class ChatSupport {
         : {
             port: 0,
             strictPort: false,
-            headers: { "Content-Security-Policy": "frame-src http://127.0.0.1:19800" },
+            headers: { "Content-Security-Policy": "frame-src http://localhost:19800" },
           },
     });
     this.server = server;
+    if (this.lifecycle)
+      server.middlewares.stack.unshift({
+        route: "",
+        handle: (request: IncomingMessage, response: ServerResponse, next: () => void) => {
+          if (request.url?.startsWith("/previews"))
+            this.lifecycle?.previews(request, response, (status) => {
+              this.send(status);
+            });
+          else next();
+        },
+      });
     // Install fixture SSE before Vite's API proxy. Real-local sessions use the production proxy.
     if (!this.real)
       server.middlewares.stack.unshift({
@@ -319,7 +342,7 @@ class ChatSupport {
   }
   async session(viewport = chatSizes[0], theme = "dark", extra = "", input?: ServerEvent[]) {
     if (!this.browser || !viewport) throw new Error("Missing Chat browser");
-    if (!this.real)
+    if (!this.real && !this.lifecycle)
       this.events =
         input ?? (extra.includes("replyLate") ? chatEvents().slice(0, 9) : chatEvents());
     this.deliveries = [];
@@ -367,46 +390,47 @@ class ChatSupport {
       head_commit: "head",
     };
     if (!this.real) {
-      await context.route("**/previews**", async (route) => {
-        const request = route.request(),
-          path = new URL(request.url()).pathname;
-        let body: unknown;
-        if (path === "/previews") {
-          calls.start++;
-          requests.push(request.postDataJSON() as StartPreview);
-          status = {
-            ...base,
-            change_id: "change-1",
-            preview_id: `preview-${(++serial).toString(16).padStart(32, "0")}`,
-            state: "starting",
-            reason: null,
-          };
-          body = { preview_id: status.preview_id, lease_token: "F".repeat(43) };
-        } else if (path.endsWith("/stop")) {
-          calls.stop++;
-          if (status) {
-            status = { ...status, state: "stopped", reason: "closed" };
-            this.send(status);
+      if (!this.lifecycle)
+        await context.route("**/previews**", async (route) => {
+          const request = route.request(),
+            path = new URL(request.url()).pathname;
+          let body: unknown;
+          if (path === "/previews") {
+            calls.start++;
+            requests.push(request.postDataJSON() as StartPreview);
+            status = {
+              ...base,
+              change_id: "change-1",
+              preview_id: `preview-${(++serial).toString(16).padStart(32, "0")}`,
+              state: "starting",
+              reason: null,
+            };
+            body = { preview_id: status.preview_id, lease_token: "F".repeat(43) };
+          } else if (path.endsWith("/stop")) {
+            calls.stop++;
+            if (status) {
+              status = { ...status, state: "stopped", reason: "closed" };
+              this.send(status);
+            }
+            body = status;
+          } else if (path.endsWith("/lease")) {
+            calls.renew++;
+            body = status;
+          } else {
+            calls.details++;
+            if (extra.includes("lateInitialDetails") && calls.details > 1)
+              await initialDetailsObserved.promise;
+            body = { status, url: status?.state === "ready" ? "http://localhost:19800/" : null };
+            if (extra.includes("lateInitialDetails") && calls.details === 1)
+              await initialDetails.promise;
           }
-          body = status;
-        } else if (path.endsWith("/lease")) {
-          calls.renew++;
-          body = status;
-        } else {
-          calls.details++;
-          if (extra.includes("lateInitialDetails") && calls.details > 1)
-            await initialDetailsObserved.promise;
-          body = { status, url: status?.state === "ready" ? "http://127.0.0.1:19800/" : null };
-          if (extra.includes("lateInitialDetails") && calls.details === 1)
-            await initialDetails.promise;
-        }
-        await route.fulfill({
-          status: path === "/previews" ? 202 : 200,
-          headers: { "Cache-Control": "no-store" },
-          json: body,
+          await route.fulfill({
+            status: path === "/previews" ? 202 : 200,
+            headers: { "Cache-Control": "no-store" },
+            json: body,
+          });
         });
-      });
-      await context.route("http://127.0.0.1:19800/**", (route) =>
+      await context.route("http://localhost:19800/**", (route) =>
         route.fulfill({
           contentType: "text/html",
           body: '<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font:16px sans-serif;margin:24px"><p>Fixture shop</p><h1>Candidate shop</h1><form><label>Quantity <input value="1" type="number" style="max-width:100%"></label><p><label>Coupon <input value="" style="max-width:100%"></label></p><button>Update cart</button></form><p>Total: <output data-total-cents="1500">1500 cents</output></p></body></html>',
@@ -448,6 +472,7 @@ class ChatSupport {
     page.on("framenavigated", (frame) => {
       if (frame.parentFrame() && frame.url() !== "about:blank") loadedAt = Date.now();
     });
+    await this.lifecycle?.beforeNavigate(page);
     await page.goto(`${this.url}preview-chat?theme=${theme}&real=${String(this.real)}&${extra}`, {
       timeout: 30_000,
     });

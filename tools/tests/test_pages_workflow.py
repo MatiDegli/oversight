@@ -14,6 +14,8 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from tools.tests.test_verify_workflow import STANDALONE_PNPM, VERIFIED_PNPM
+from tools.tests.test_verify_workflow import steps as canonical_steps
 
 ROOT = Path(__file__).resolve().parents[2]
 PAGES = ROOT / ".github/workflows/pages.yml"
@@ -47,18 +49,34 @@ def assert_pinned_actions(text: str) -> None:
             assert re.fullmatch(r"[\w.-]+/[\w./-]+@[0-9a-fA-F]{40}", action), action
 
 
-def assert_install_matches_ci(text: str) -> None:
+def assert_install_matches_ci(text: str, ci: str | None = None) -> None:
     build = block(block(text, "jobs"), "build")
-    ci_jobs = block((PAGES.parent / "ci.yml").read_text(), "jobs")
-    for job in (build, block(ci_jobs, "check"), block(ci_jobs, "browser")):
+    ci_jobs = block(ci if ci is not None else (PAGES.parent / "ci.yml").read_text(), "jobs")
+    for name, job in (
+        ("build", build),
+        ("check", block(ci_jobs, "check")),
+        ("browser", block(ci_jobs, "browser")),
+    ):
+        raw_steps = [step for step in re.split(r"(?m)(?=^- )", block(job, "steps")) if step.strip()]
+        if name == "check":
+            # These two preparation steps need an ELF for the real mount boundary.
+            # Compare their complete scripts before stripping comments or blank lines.
+            parsed = canonical_steps(block(job, "steps"))
+            allowed = [STANDALONE_PNPM, VERIFIED_PNPM]
+            assert [parsed[3], parsed[5]] == allowed
+            assert [
+                step for step in parsed if step.get("name") in {s["name"] for s in allowed}
+            ] == allowed
+            assert {"run": "make install"} in parsed
+            assert parsed.index({"run": "make install"}) > 5
+            raw_steps = [step for index, step in enumerate(raw_steps) if index not in {3, 5}]
         steps = [
             "\n".join(
                 line
                 for line in step.splitlines()
                 if line.strip() and not line.lstrip().startswith("#")
             )
-            for step in re.split(r"(?m)(?=^- )", block(job, "steps"))
-            if step.strip()
+            for step in raw_steps
         ]
         commands = re.findall(r"^(?:- |  )run: (.+)$", "\n".join(steps), re.MULTILINE)
         assert commands[0] == "make install"
@@ -110,6 +128,70 @@ def test_pages_deploys_only_the_selected_main_commit_with_least_privilege() -> N
 
 def test_build_installs_exactly_as_ci_jobs() -> None:
     assert_install_matches_ci(PAGES.read_text())
+
+
+@pytest.mark.parametrize(
+    ("old", "new"),
+    [
+        ("Use standalone pnpm executable", "Other preparation"),
+        ("Verify standalone pnpm on PATH", "Other verification"),
+        ("command -v pnpm", "command -v node"),
+        ("len(executables) != 1", "len(executables) > 1"),
+        (
+            "      - name: Use standalone pnpm executable\n",
+            "      - name: Use standalone pnpm executable\n        if: false\n",
+        ),
+        (
+            "      - name: Verify standalone pnpm on PATH\n",
+            "      - name: Verify standalone pnpm on PATH\n        continue-on-error: true\n",
+        ),
+        ("      - run: make install\n", "      - run: echo extra\n      - run: make install\n"),
+        ("      - run: make install\n", "      - run: make install\n      - run: make install\n"),
+        (
+            "      - uses: ./.github/actions/setup-gitleaks\n",
+            "      - run: echo extra\n      - uses: ./.github/actions/setup-gitleaks\n",
+        ),
+    ],
+)
+def test_install_policy_rejects_changes_to_check_preparation(old: str, new: str) -> None:
+    ci = (PAGES.parent / "ci.yml").read_text()
+    start = ci.index("  check:\n")
+    assert old in ci[start:]
+    with pytest.raises(AssertionError):
+        assert_install_matches_ci(PAGES.read_text(), ci[:start] + ci[start:].replace(old, new, 1))
+
+
+@pytest.mark.parametrize("step", [STANDALONE_PNPM, VERIFIED_PNPM])
+@pytest.mark.parametrize("fault", ["missing", "duplicate", "after_install", "pages", "browser"])
+def test_install_policy_limits_pnpm_preparation_to_two_check_steps(step, fault):
+    ci = (PAGES.parent / "ci.yml").read_text()
+    pages = PAGES.read_text()
+    script = step["run"].removeprefix("|\n")
+    serialized = (
+        f"      - name: {step['name']}\n        run: |\n"
+        + textwrap.indent(script, "          ")
+        + "\n"
+    )
+    assert serialized in ci
+    if fault == "missing":
+        ci = ci.replace(serialized, "", 1)
+    elif fault == "duplicate":
+        ci = ci.replace(serialized, serialized * 2, 1)
+    elif fault == "after_install":
+        ci = ci.replace(serialized, "", 1).replace(
+            "      - run: make install\n", "      - run: make install\n" + serialized, 1
+        )
+    elif fault == "pages":
+        pages = pages.replace(
+            "      - run: make install\n", serialized + "      - run: make install\n", 1
+        )
+    else:
+        start = ci.index("  browser:\n")
+        ci = ci[:start] + ci[start:].replace(
+            "      - run: make install\n", serialized + "      - run: make install\n", 1
+        )
+    with pytest.raises(AssertionError):
+        assert_install_matches_ci(pages, ci)
 
 
 @pytest.mark.parametrize("workflow", ["ci.yml", "pages.yml", "windows.yml"])

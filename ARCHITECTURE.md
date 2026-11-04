@@ -75,14 +75,16 @@ See [Opening the person's own repository](docs/own-repository.md) for its separa
    Start and before the first model call; a revision installs a fresh control sharing the
    lifetime message budget. Active registrations are dropped when a drive ends, on Stop and
    during shutdown. Closed controls cannot restart a paused gate.
-4. The loop offers `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`.
-   There is no shell tool. Paths stay within the worktree. Reads are bounded. An edit needs
+4. Tools are list_files, read_file, search, edit_file, run_tests and finish, plus find_symbol
+   (read-only Python navigation) when the harness pack is on, the default. There is no shell tool.
+   Paths stay within the worktree. Reads are bounded. An edit needs
    a unique old-text match and the hash from the agent's last read. Tests run in the disposable tested tree with a
    fixed pytest command and a timeout. Demo and pinned profiles use the runtime's demo environment; selected own
    repositories on native Windows use their validated original virtual environment with imports mapped to the copy.
    Status follows tool execution and human run controls, never model text.
 5. Every completed tool call emits `agent.step`. Read focus precedes the step; `list_files`
-   sends none, and `search` focuses only its first five matching nodes. Successful edits publish
+   sends none, and `search` and `find_symbol` focus only their first five matching nodes.
+   Successful edits publish
    `change.updated`, edit focus and then the step. Updates carry full original and modified file
    contents, author and a pending graph overlay. Model replies produce `usage.tick`; the loop
    does not stream model text.
@@ -249,7 +251,7 @@ specifies the UI's "+12 omitted by depth" and "possibly affected", never a compl
 
 Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
 
-The data flow above specifies the six tools, per-call steps, read and edit focus, the first
+The data flow above specifies the tools, per-call steps, read and edit focus, the first
 five search matches, unique-match and last-read-hash edit checks, and the fixed test command.
 A worktree does not isolate: it shares `.git/config` and the stash, hence the no-shell rule.
 Read focus uses read mode; edit focus uses edit mode.
@@ -312,7 +314,8 @@ including dynamic imports. Only transport may use `fetch` or `EventSource`. Only
 Cytoscape/fcose; only editor imports Monaco. State cannot import React or React DOM.
 
 - [State](frontend/src/state/index.ts) exports the pure reducer, Zustand store, selectors and
-  spend helpers. Main's graph and pending change graphs stay separate.
+  spend helpers. Main's graph and pending change graphs stay separate. Accepted main-head
+  observations retain event order for pure plan-flow projection and terminal gate inference.
 - [Transport](frontend/src/transport/index.ts) owns live SSE, replay and command requests.
   It checks event envelopes; generated TypeScript types do not validate payloads at runtime.
 - [App](frontend/src/app/index.ts) composes panels, owns transport lifetime and local view
@@ -322,6 +325,9 @@ Cytoscape/fcose; only editor imports Monaco. State cannot import React or React 
 - [Review](frontend/src/review/index.ts) presents proposals, impact and the three decisions.
   Accepted decisions stay pending until an event or error settles them. Unsaved review edits
   block Approve and Request changes until saved or discarded. Approve has no keyboard shortcut.
+  One lazy read-only plan card serves inbox and lead-thread callbacks in both layouts. It joins
+  subtasks to changes by assigned agent ID, projects waves and current-revision gate evidence,
+  and shares app-owned Queue/Reject/cancel attempts. Running plans do not count as decisions.
 - [Editor](frontend/src/editor/index.ts) exports `LiveDiff`, `EditorDiff`, `ReviewEditor`,
   `FileView` and file helpers. Monaco and its worker are bundled locally. Fonts load before
   creation. The live diff and original side stay read-only; the modified side is editable
@@ -423,7 +429,7 @@ session. Historical command capabilities are withheld. Highlights frame on click
 first graph mount without a panel, and prune missing IDs without changing the frame key.
 
 `show_view` is advertised and dispatched with the moved prompt version: baseline
-`agent-v1-9d084b21af2c` and pack `agent-v1-3dc7d749888a` (DECISIONS, November 3).
+`agent-v1-9d084b21af2c` and pack `agent-v1-49ee5e3b962f` (DECISIONS, November 3).
 Remaining release gates are the separately authorized paid probe and prompt validation,
 a real recording and bundle replacement. Until those pass, the verified Oct 27 public
 recording remains bundled.
@@ -508,6 +514,8 @@ within 20,000 characters and report the exact number omitted.
 status folds one committed prefix, fences escaped fields at 200 characters and omits whole entries
 within 20,000 characters; through_seq is the maximum committed status or server-digest horizon
 observed this turn, or null.
+The shared plan card now renders ordered lead-plan entries in Chat and Oversight, resolving
+winning revisions from the displayed thread state. Read-only progress owns no commands or scroll.
 L3 owns Chat/composer, freshness/cut/withheld UI, plan links, graph/focus, fixture exclusion,
 approval keyboard protection, the 50-turn cost fixture and separate Playwright coverage.
 
