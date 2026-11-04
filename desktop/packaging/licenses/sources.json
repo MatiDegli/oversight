@@ -1,0 +1,93 @@
+[
+  {
+    "file": "bzip2.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.bzip2.txt",
+    "sha256": "1f38bbc7caacafd65169276d759c0d88c991b753b643ce35d0e45ea1971dd441"
+  },
+  {
+    "file": "expat.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.expat.txt",
+    "sha256": "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534"
+  },
+  {
+    "file": "libffi.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.libffi.txt",
+    "sha256": "deaf3a42effb551a5b140fa9afefed183a27f1341c6d1bf430d106a5e6931fc0"
+  },
+  {
+    "file": "liblzma.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.liblzma.txt",
+    "sha256": "828d5b508798d6a95c1c08ce5eee517a84ed1bda14eac58c440b6bce2c5cf1ca"
+  },
+  {
+    "file": "mpdecimal.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.mpdecimal.txt",
+    "sha256": "669512af7219f58be03a398766d7c9da11a3b3df9d3f05cb74c5ceca25c8da3b"
+  },
+  {
+    "file": "openssl-3.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.openssl-3.txt",
+    "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+  },
+  {
+    "file": "sqlite.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.sqlite.txt",
+    "sha256": "38bef3d28b24f145ea293bd3b6eb4b20396982abc8303128fb493986ea5bc719"
+  },
+  {
+    "file": "zlib.txt",
+    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.zlib.txt",
+    "sha256": "818922b2620f12801a12bf78e399644a30990e66824abd8ca8ec24d451d6f92c"
+  },
+  {
+    "file": "cpython-incorporated.txt",
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.12.12/Doc/license.rst",
+    "sha256": "341832873fd316a37927e79385093fbbfd40a467428480835fe435a80cadf4e5"
+  },
+  {
+    "file": "cpython-windows.txt",
+    "url": "CPython install_only archive LICENSE.txt",
+    "sha256": "886a0ead2d89030ee62dbff52b04e47ab91998341295bb9c56fb952b4e081c7a"
+  },
+  {
+    "file": "nsis.txt",
+    "url": "https://raw.githubusercontent.com/kichik/nsis/v311/Docs/src/license.but",
+    "sha256": "eba8495e56c75ade8a0e5c1ef7457acce169f1725ee3a99d451887968410aa95"
+  },
+  {
+    "file": "webview2-com.txt",
+    "url": "https://raw.githubusercontent.com/wravery/webview2-rs/edc2caf886175ccaebe86078c9cfe1ae2a187328/LICENSE",
+    "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+    "crate": "webview2-com",
+    "version": "0.39.1"
+  },
+  {
+    "file": "webview2-com-sys.txt",
+    "url": "https://raw.githubusercontent.com/wravery/webview2-rs/edc2caf886175ccaebe86078c9cfe1ae2a187328/LICENSE",
+    "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+    "crate": "webview2-com-sys",
+    "version": "0.39.1"
+  },
+  {
+    "file": "webview2-com-macros.txt",
+    "url": "https://raw.githubusercontent.com/wravery/webview2-rs/dffa41a8a46d3f5565eefbff2de57d38d399f158/LICENSE",
+    "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+    "crate": "webview2-com-macros",
+    "version": "0.8.1"
+  },
+  {
+    "file": "mpl-2.0.txt",
+    "url": "https://crates.io/api/v1/crates/cssparser/0.37.0/download (LICENSE)",
+    "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+  },
+  {
+    "file": "nsis-tauri-utils.txt",
+    "url": "https://raw.githubusercontent.com/tauri-apps/nsis-tauri-utils/nsis_tauri_utils-v0.5.3/LICENSE_MIT",
+    "sha256": "1c1020fa10a6bf318717e82c911bcc54ebdfb9bb280460ae332bcb2f82f57fbe"
+  },
+  {
+    "file": "webview2-sdk-0.txt",
+    "url": "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.3800.47/microsoft.web.webview2.1.0.3800.47.nupkg (LICENSE.txt)",
+    "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"
+  }
+]
