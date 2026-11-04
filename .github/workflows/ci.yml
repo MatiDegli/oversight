@@ -24,7 +24,8 @@ jobs:
 
   check:
     name: make check
-    runs-on: ubuntu-latest
+    # The preview boundary refuses Ubuntu 26.04's hardlinked coreutils.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -42,6 +43,8 @@ jobs:
           node-version: 24
       - run: make install
       - uses: ./.github/actions/setup-gitleaks
+      - name: Allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: make check-ci
       - run: make smoke
       - name: Report network isolation probe

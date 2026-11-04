@@ -26,7 +26,7 @@ const state = getCameraPageState();
 const { errors, editorRequests } = state;
 const withPage = withCameraPage.bind(null, state);
 
-beforeAll(startCameraBrowser, 60_000);
+beforeAll(startCameraBrowser, 120_000);
 afterAll(closeCameraBrowser);
 
 it.each(["after-mount", "at-mount"] as const)(

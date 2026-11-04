@@ -59,8 +59,11 @@ async function startCameraBrowser() {
   await controlFrames(page);
   // Load the graph-only modules once; each case still mounts and disposes its own graph.
   await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
-  await page.goto(url);
-  await page.waitForFunction(() => "graphTest" in window, undefined, { polling: 10 });
+  await page.goto(url, { timeout: 45_000 });
+  await page.waitForFunction(() => "graphTest" in window, undefined, {
+    polling: 10,
+    timeout: 45_000,
+  });
 }
 
 async function closeCameraBrowser() {

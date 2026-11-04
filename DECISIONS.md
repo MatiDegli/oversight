@@ -3489,11 +3489,12 @@ event's timestamp, including for open intervals, with unknown intervals preservi
 known lower bounds and bounded, sequence-ordered diagnostics. `stages` is null on an
 incomplete prefix; older recordings and clients without the optional field remain valid.
 
-## Opt-in pruning of superseded file reads (2026-11-01)
+## Pruning of superseded file reads (2026-11-01)
 
 Repeated file reads accumulate in retained agent history, including across Request changes.
-`OVERSIGHT_HISTORY_PRUNE_TOKENS` enables deterministic read stubs at an integer threshold of
-at least 8,000; unset or empty keeps pruning off and preserves existing prompt-version hashes.
+`OVERSIGHT_HISTORY_PRUNE_TOKENS` controls deterministic compaction at an integer threshold of
+at least 8,000. As amended on November 3 below, unset or empty means 64,000 estimated tokens
+and compaction is on by default; `0` or `off` disables it.
 The UTF-8 byte length of messages and tool schemas serialized as JSON, divided by four, is a
 trigger estimate only: provider usage and unknown usage accounting are unchanged.
 
@@ -3508,17 +3509,17 @@ skipped results and existing stubs supply no coverage. Empty reads remain unchan
 
 The one-line stub is `[Lines A-B of PATH: a later read of this path covers these lines.]`.
 It must strictly shorten both result text and the JSON estimate. Every user message, system
-prompt, assistant message, non-read result, uncovered read and the last six individual tool calls
-are retained. Calls/results retain their local positional pairing, identifiers and order.
+prompt and assistant message are retained. This covered-read pass retains non-read results,
+uncovered reads and the last six individual tool calls; the November 3 masking pass follows it. Calls/results retain their local positional pairing, identifiers and order.
 The stub template, threshold, low-water fraction, re-arm fraction and protected-call count
 participate in the enabled prompt version. Live tool outcomes, edit checks, stop rules, events,
-contracts and replay do not change. This ships off by default with scripted measurements only;
-enabling it by default requires a separate maintainer-approved paid A/B. Bounded history with
+contracts and replay do not change. The November 3 approval below supersedes the original
+opt-in rollout and paid A/B prerequisite; evidence here remains scripted only. Bounded history with
 a visible handoff and fresh revision context remain separate candidates.
 
 Proposed replacement for the maintainer in `AGENTS.md` (the file is unchanged):
 
-> read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the retained history. With history pruning explicitly enabled, covered older read_file results may become shorter stubs; every user message is retained.
+> read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the retained history. With history compaction on by default, covered older read_file results may become shorter stubs; every user message is retained.
 
 ## 2026-10-31 — Host memory may hold new agent starts
 
@@ -4776,3 +4777,47 @@ admission/execution refuses with `Reviewed-app startup disclosure is unavailable
 `not_configured`. Source selection, declaration and authority validation errors still refuse
 startup. Real prepared resources at the default runtime can now pass disclosure admission;
 reviewed-app execution remains unavailable pending its separately required boundary and supervisor.
+
+
+## Mask old tool outputs by default (2026-11-03)
+
+The maintainer approved deterministic observation masking at 20:28 ART on November 3.
+Every coding-agent model call resends retained history, so long observations accumulate cost
+and can exceed the provider's input context. No model call or model-written summary is added.
+The existing covered-read pass runs first without changing its coverage rules or six-call
+protection. It loses no information that a retained later read supplies.
+
+If the estimate remains above 75% of the threshold, mask eligible observations oldest first,
+stopping immediately at that low-water mark. The last ten individual tool calls are protected:
+this retains recent working evidence while keeping the policy deterministic. Older `read_file`,
+`search` and `list_files` results use this one-line stub:
+`[Output of NAME ARGUMENTS cleared to save context; call it again if you need it.]`
+ARGUMENTS is the call's own compact JSON, limited to 200 characters including a final ellipsis
+when truncated. `run_tests` keeps its entire first line and appends
+` [Rest of the test output cleared to save context; run the tests again if you need it.]`.
+A replacement must shorten both text and the JSON estimate. Existing stubs are retained.
+Edits, finish results, all assistant messages and arguments, system/user messages and other
+tool results stay intact. The same history produces the same result; repeating compaction
+without new history changes nothing. Fetching an observation again creates a fresh result.
+
+The default threshold is 64,000 estimated tokens: high enough to leave short runs alone while
+providing room for compaction before a long conversation fills its context. This is a heuristic,
+not a provider capacity or usage claim. Unset or empty `OVERSIGHT_HISTORY_PRUNE_TOKENS` uses this
+default; `0` or `off` disables compaction; any other value must be an integer of at least 8,000.
+Both passes share the existing rearm rule: growth of 25% of the threshold since the last batch's
+ending estimate, even when candidates ran out. The enabled prompt hash includes both policies,
+thresholds, windows, stub templates and argument cap. Default baseline/pack versions are
+`agent-v1-2e780e372af4` / `agent-v1-80a055d05910`; recorded runs retain their own versions.
+
+A provider HTTP 400 or 413 with `context_length_exceeded`, or a message that the input exceeds
+the model's maximum context length or token limit, is not retried. Both the run detail and fatal
+`model_api` error say: "This agent's conversation is longer than the model accepts; start a new
+agent to continue." Other HTTP 400 errors keep their existing text. No contract changes.
+The four-identical-real-results stop is unchanged and can still be reached within 30 steps
+when an agent rereads a masked observation and repeats it without changing the file.
+
+This policy follows [The Complexity Trap](https://arxiv.org/abs/2508.21433), which reports
+observation masking matching summarization's solve rate while halving cost relative to a raw
+agent in its experiments. That result motivates this simple policy; it does not measure
+Oversight's cost or correctness. All implementation and validation here are new and use scripted
+fake models only. Broader history bounds and a visible handoff remain separate candidates.
