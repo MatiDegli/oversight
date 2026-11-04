@@ -285,24 +285,8 @@ for (const width of [1280, 390])
   }
 
 const shots = fileURLToPath(new URL("../../../.shots/plan-flow/", import.meta.url));
-async function capture(page: Page, basename: string, scene: FlowScene, width: number) {
-  await page.evaluate(() => document.fonts.ready);
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() =>
-          requestAnimationFrame(() => {
-            resolve();
-          }),
-        ),
-      ),
-  );
-  const card = page.locator(".thread-plan-card, .inbox-row:has(.plan-flow)").first();
-  // Explicit capture navigation only. Production event updates retain timeline ownership.
-  await card.evaluate((node) => {
-    node.scrollIntoView({ block: "start" });
-  });
-  const measured = await page.evaluate(() => {
+async function measure(page: Page) {
+  return page.evaluate(() => {
     const selectors = [
       ".thread-plan-card",
       ".plan-flow",
@@ -314,10 +298,13 @@ async function capture(page: Page, basename: string, scene: FlowScene, width: nu
       ".flow-review",
       ".conversation-header",
       ".conversation-timeline",
+      '.plan-group[aria-label="Running plans"]',
     ];
     return {
       provenance: "Synthetic scripted event scene, rendered by production components",
       theme: document.documentElement.dataset.theme,
+      layout: document.querySelector(".chat-shell") ? "Chat" : "Oversight",
+      focusMaximized: Boolean(document.querySelector(".is-maximized")),
       width: innerWidth,
       documentWidth: document.documentElement.scrollWidth,
       selectors: Object.fromEntries(
@@ -342,12 +329,34 @@ async function capture(page: Page, basename: string, scene: FlowScene, width: nu
       ),
     };
   });
+}
+async function capture(page: Page, basename: string, scene: FlowScene, width: number) {
+  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            resolve();
+          }),
+        ),
+      ),
+  );
+  const card = page.locator(".thread-plan-card, .inbox-row:has(.plan-flow)").first();
+  // Explicit capture navigation only. Production event updates retain timeline ownership.
+  const start = scene === "inbox" ? page.locator('.plan-group[aria-label="Running plans"]') : card;
+  await start.evaluate((node) => {
+    node.scrollIntoView({ block: "start" });
+  });
+  const measured = await measure(page);
   expect(measured.documentWidth).toBeLessThanOrEqual(width);
   await mkdir(shots, { recursive: true });
   if (width === 390)
     await page.evaluate(() => {
       window.scrollTo(0, 0);
     });
+  if (scene === "inbox")
+    await check(page.getByRole("heading", { name: "Running plans", exact: true })).toBeInViewport();
   await page.screenshot({ path: `${shots}${basename}.png`, animations: "disabled" });
   // Real scroll positions expose the bottom of tall cards without changing layout or clipping ancestors.
   await card
@@ -372,11 +381,26 @@ for (const scene of ["proposed", "running", "gates", "failed", "inbox", "large"]
         async () => {
           const page = await open(
             scene,
-            width,
+            scene === "inbox" && width === 390 ? 1280 : width,
             theme,
-            scene === "inbox" && width >= 1280 ? "Oversight" : "Chat",
+            scene === "inbox" ? "Oversight" : "Chat",
           );
           try {
+            if (scene === "inbox") {
+              if (width === 390) {
+                await page
+                  .getByRole("button", { name: "Maximize focus panel", exact: true })
+                  .click();
+                await page.setViewportSize({ width, height: 844 });
+              }
+              await check(page.locator(".chat-shell")).toHaveCount(0);
+              await check(
+                page.getByRole("heading", { name: "Running plans", exact: true }),
+              ).toBeVisible();
+              await check(
+                page.locator('.plan-group[aria-label="Running plans"] .plan-flow'),
+              ).toBeVisible();
+            }
             await capture(page, `${scene}-${String(width)}-${theme}`, scene, width);
           } finally {
             await page.close();

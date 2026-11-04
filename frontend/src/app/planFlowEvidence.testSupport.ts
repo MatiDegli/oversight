@@ -14,6 +14,7 @@ const provenance = "Synthetic scripted event scene, rendered by production compo
 interface Measurement {
   scene: string;
   theme: string;
+  layout: string;
   provenance: string;
   width: number;
   documentWidth: number;
@@ -41,6 +42,9 @@ export async function writeCaptureMatrix(root: URL) {
           data.provenance !== provenance ||
           !Number.isFinite(data.documentWidth) ||
           data.documentWidth > data.width ||
+          (scene === "inbox" &&
+            (data.layout !== "Oversight" ||
+              !data.selectors['.plan-group[aria-label="Running plans"]']?.length)) ||
           !data.selectors[".plan-flow"]?.length ||
           data.selectors[".plan-flow"].some((flow) => flow.scrollWidth > flow.clientWidth)
         )
