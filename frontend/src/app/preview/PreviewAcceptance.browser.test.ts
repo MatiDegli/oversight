@@ -315,7 +315,10 @@ it.runIf(chatOnly)(
           await check(app.getByRole("heading", { name: "Candidate shop" })).toBeVisible({
             timeout: 20_000,
           });
-          await check(page.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
+          await check(page.locator("iframe")).toHaveAttribute(
+            "sandbox",
+            "allow-scripts allow-same-origin allow-forms",
+          );
           await check(page.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
           await check(app.locator("output")).toHaveAttribute("data-total-cents", "1500");
           await chatSupport.capture(session, "ready");

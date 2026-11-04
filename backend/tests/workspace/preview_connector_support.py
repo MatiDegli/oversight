@@ -10,6 +10,7 @@ import os
 import socket
 import struct
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,35 @@ from oversight.workspace.isolation import open_pidfd
 from oversight.workspace.runner import ProcessCollector, child_env, run_process, wait_done
 
 SUPPORT = Path(__file__).resolve()
+
+
+def fd_table() -> Counter[str]:
+    descriptors: Counter[str] = Counter()
+    for name in os.listdir("/proc/self/fd"):
+        with contextlib.suppress(OSError):
+            descriptors[os.readlink(f"/proc/self/fd/{name}")] += 1
+    return descriptors
+
+
+async def fd_baseline() -> Counter[str]:
+    # Settle unrelated cleanup before the code under test can open any descriptors.
+    before = fd_table()
+    for _ in range(40):
+        await asyncio.sleep(0.025)
+        current = fd_table()
+        if current == before:
+            return current
+        before = current
+    return before
+
+
+def new_descriptors(before: Counter[str]) -> Counter[str]:
+    return fd_table() - before
+
+
+def assert_no_new_descriptors(before: Counter[str]) -> None:
+    leaked = new_descriptors(before)
+    assert not leaked, f"descriptors left open: {dict(leaked)}"
 
 
 def identities() -> dict[str, str]:

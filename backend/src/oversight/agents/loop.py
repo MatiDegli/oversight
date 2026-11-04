@@ -29,6 +29,7 @@ from oversight.agents._trace import model_turn, publications, timed, traced_driv
 from oversight.agents.client import (
     CALL_SCOPE,
     CallScope,
+    ContextLengthError,
     Message,
     ModelAPIError,
     ModelClient,
@@ -301,7 +302,11 @@ class AgentRun:
             detail = f"Ran past the time limit of {self._task.limits.max_wall_clock_s} s."
         except ModelAPIError as error:
             self.control.close()
-            detail = f"The model API failed: {error}."
+            detail = (
+                str(error)
+                if isinstance(error, ContextLengthError)
+                else f"The model API failed: {error}."
+            )
             await self._publish(
                 ErrorReport(
                     source="model_api",

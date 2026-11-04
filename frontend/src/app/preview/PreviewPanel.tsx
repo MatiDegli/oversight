@@ -127,7 +127,7 @@ export function PreviewPanel({
               name ? `Live preview for Agent ${name.label}` : "Live preview for the selected app"
             }
             src={frame}
-            sandbox="allow-forms"
+            sandbox="allow-scripts allow-same-origin allow-forms"
             referrerPolicy="no-referrer"
             onLoad={() => {
               progress.load(frame);

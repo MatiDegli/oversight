@@ -257,11 +257,29 @@ async def test_edit_after_a_save_needs_a_read(small_tree: Opened) -> None:
     assert "return 3" in path.read_text()
 
 
-def test_prompt_version_hashes_the_revision_prompt() -> None:
-    from oversight.agents import LEAD_LIMITS
+@pytest.mark.parametrize("threshold", [None, 64000])
+def test_prompt_version_hashes_the_revision_prompt(threshold: int | None) -> None:
+    from oversight.agents import LEAD_LIMITS, _prompts
     from oversight.agents._lead_tools import LEAD_TOOL_SCHEMAS
     from oversight.agents._prompts import LEAD_PROMPT, PLAN_PROMPT
 
+    policy = (
+        ""
+        if threshold is None
+        else json.dumps(
+            [
+                _prompts.HISTORY_STUB,
+                threshold,
+                _prompts.HISTORY_LOW_WATER,
+                _prompts.HISTORY_REARM,
+                _prompts.HISTORY_PROTECTED_CALLS,
+                _prompts.HISTORY_MASK_STUB,
+                _prompts.HISTORY_TEST_STUB,
+                _prompts.HISTORY_MASK_PROTECTED_CALLS,
+                _prompts.HISTORY_ARGUMENT_CHARS,
+            ]
+        )
+    )
     expected = (
         "agent-v1-"
         + hashlib.sha256(
@@ -273,10 +291,15 @@ def test_prompt_version_hashes_the_revision_prompt() -> None:
                 + json.dumps(TOOL_SCHEMAS, sort_keys=True)
                 + json.dumps(LEAD_TOOL_SCHEMAS, sort_keys=True)
                 + json.dumps(LEAD_LIMITS.model_dump(), sort_keys=True)
+                + policy
             ).encode()
         ).hexdigest()[:12]
     )
-    assert expected == PROMPT_VERSION == "agent-v1-9d084b21af2c"
+    assert expected == _prompts.prompt_version(history_prune_tokens=threshold)
+    if threshold is None:
+        assert expected == "agent-v1-9d084b21af2c"
+    else:
+        assert expected == PROMPT_VERSION == "agent-v1-2e780e372af4"
 
 
 async def test_revise_before_a_run_raises(small_tree: Opened) -> None:

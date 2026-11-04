@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from backend.tests.workspace.workspace_helpers import fixture_git
 from workspace.test_preview_launch_spec import prepared_app
 
 from oversight.app import LiveRun
@@ -34,7 +35,7 @@ REPOSITORY = Path(__file__).resolve().parents[3]
 
 
 async def git(root, *args):
-    result = await run_process(["git", *args], cwd=root, timeout_s=30)
+    result = await run_process(fixture_git(*args), cwd=root, timeout_s=30)
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 

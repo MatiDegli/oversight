@@ -45,6 +45,7 @@ const LeadConversationFocus = lazy(() =>
       onMessageLead,
       onStopLead,
       chat,
+      composerDisclosure,
       onOpenSettings,
       chatState,
       onViewMoment,
@@ -69,6 +70,7 @@ const LeadConversationFocus = lazy(() =>
       WorkflowNavigation & {
         agentId: string;
         chat?: boolean;
+        composerDisclosure?: ReactNode;
       }) => {
       const threadState = chatState ?? state;
       const conversation = module.selectLeadConversation(threadState, agentId);
@@ -107,6 +109,7 @@ const LeadConversationFocus = lazy(() =>
           actionAccessory={
             chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
           }
+          composerDisclosure={chat ? composerDisclosure : undefined}
           onStopLead={onStopLead}
           onSend={onMessageLead ? (text) => onMessageLead(agentId, text) : undefined}
         />
@@ -148,6 +151,7 @@ export function FocusPanel(
     WorkflowNavigation & {
       startAgentAction: ReactNode;
       chat?: boolean;
+      composerDisclosure?: ReactNode;
       onGraph?: (changeId: string) => void;
       practiceOnly?: boolean;
       maximized: boolean;
@@ -341,6 +345,7 @@ function ConversationFocus({
   onOpenChange,
   canOpenChange,
   chat,
+  composerDisclosure,
   onOpenSettings,
   onTabAction,
   view,
@@ -349,7 +354,12 @@ function ConversationFocus({
   onGraph,
   onOpenWorkflow,
 }: FrameProps &
-  WorkflowNavigation & { agentId: string; chat?: boolean; onGraph?: (id: string) => void }) {
+  WorkflowNavigation & {
+    agentId: string;
+    chat?: boolean;
+    composerDisclosure?: ReactNode;
+    onGraph?: (id: string) => void;
+  }) {
   const threadState = chatState ?? state;
   const conversation = selectConversation(
     threadState,
@@ -374,6 +384,7 @@ function ConversationFocus({
             onMessageLead={onMessageLead}
             onStopLead={onStopLead}
             chat={chat}
+            composerDisclosure={composerDisclosure}
             onOpenSettings={onOpenSettings}
           />
         </LazyPanel>
@@ -438,6 +449,7 @@ function ConversationFocus({
         actionAccessory={
           chat ? <ChatMergeChip state={state} onOpenSettings={onOpenSettings} /> : undefined
         }
+        composerDisclosure={chat ? composerDisclosure : undefined}
         onSend={onMessageAgent ? (text) => onMessageAgent(agentId, text) : undefined}
         onPause={onPauseAgent ? () => onPauseAgent(agentId) : undefined}
         onResume={onResumeAgent ? () => onResumeAgent(agentId) : undefined}

@@ -34,6 +34,7 @@ def bind_listener(ports: tuple[int, ...]) -> socket.socket:
     for port in ports:
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind(("127.0.0.1", port))
             listener.listen(16)
             return listener
@@ -50,26 +51,36 @@ def launch_configuration(
     listener: socket.socket,
     refusal: socket.socket,
     now: float,
+    *,
+    parent_authority: str | None = None,
 ) -> dict[str, Any]:
-    argv = [
-        str(profile.interpreter),
-        "-I",
-        "-B",
-        str(profile.adapter),
-        "--listener-fd",
-        str(listener.fileno()),
-        "--port",
-        str(listener.getsockname()[1]),
-        "--worktree",
-        str(worktree),
-        "--memory-limit-bytes",
-        str(profile.memory_limit_bytes),
-    ]
-    for origin in profile.origins:
-        argv.extend(("--oversight-origin", origin))
+    argv: list[str] = []
+    if profile.reviewed_app is None:
+        argv = [
+            str(profile.interpreter),
+            "-I",
+            "-B",
+            str(profile.adapter),
+            "--listener-fd",
+            str(listener.fileno()),
+            "--port",
+            str(listener.getsockname()[1]),
+            "--worktree",
+            str(worktree),
+            "--memory-limit-bytes",
+            str(profile.memory_limit_bytes),
+        ]
+        origins = profile.origins
+        if parent_authority is not None:
+            from oversight.workspace._reviewed_preview import opposite_host
+
+            opposite_host(parent_authority.split(":")[0])
+            origins = ("http://" + parent_authority,)
+        for origin in origins:
+            argv.extend(("--oversight-origin", origin))
     return {
         "runtime": str(runtime),
-        "argv": argv,
+        **({"argv": argv} if argv else {}),
         "scratch": str(scratch),
         "env": {key: str(scratch) for key in ("HOME", "TMP", "TEMP")},
         "refusal_port": refusal.getsockname()[1],
@@ -79,20 +90,25 @@ def launch_configuration(
     }
 
 
-async def probe_ready(port: int, nonce: str) -> bool:
+async def probe_ready(
+    port: int, nonce: str, authority: str | None = None, *, reviewed: bool = False
+) -> bool:
     """No Origin or token; no redirects, proxy discovery, compression or unbounded bodies."""
     writer: asyncio.StreamWriter | None = None
     try:
         async with asyncio.timeout(1):
             reader, writer = await asyncio.open_connection("127.0.0.1", port, limit=2048)
             writer.write(
-                f"GET /_oversight_ready HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+                f"GET /_oversight_ready HTTP/1.1\r\nHost: {authority or f'127.0.0.1:{port}'}\r\n"
                 "Connection: close\r\n\r\n".encode()
             )
             await writer.drain()
             header = await reader.readuntil(b"\r\n\r\n")
             lines = header.decode("ascii").split("\r\n")
-            if lines[0] != "HTTP/1.1 200 OK" and lines[0] != "HTTP/1.0 200 OK":
+            expected = (
+                {"HTTP/1.1 200 Response"} if reviewed else {"HTTP/1.1 200 OK", "HTTP/1.0 200 OK"}
+            )
+            if lines[0] not in expected:
                 return False
             fields = [line.split(":", 1) for line in lines[1:] if line]
             names = [key.lower() for key, _ in fields]
@@ -128,6 +144,9 @@ class PreviewProcess:
     def __init__(self, registry: PreviewRegistry, port: int) -> None:
         self.registry = registry
         self.port = port
+        self.public_authority = f"127.0.0.1:{port}"
+        self.reviewed = False
+        self.stage = "build"
         self.control = -1
         self.pidfd: int | None = None
         self.transport: asyncio.SubprocessTransport | None = None
@@ -143,8 +162,17 @@ class PreviewProcess:
         self.authorize_execution: Callable[[], None] = lambda: None
 
     async def launch(self, listener: socket.socket, profile: PreviewProfile) -> None:
-        async with asyncio.timeout(profile.readiness_s):
-            await self._handoff(listener, profile)
+        self.reviewed = profile.reviewed_app is not None
+        allowance = profile.readiness_s
+        if profile.reviewed_app is not None:
+            allowance += sum(c.timeout_s for c in profile.reviewed_app.launch.build)
+        try:
+            async with asyncio.timeout(allowance):
+                await self._handoff(listener, profile)
+        except TimeoutError:
+            if not self.reviewed:
+                raise
+            raise PreviewError("Live preview launch failed.") from None
 
     async def _handoff(self, listener: socket.socket, profile: PreviewProfile) -> None:
         read_control = read_report = write_report = -1
@@ -164,15 +192,22 @@ class PreviewProcess:
 
             self.reader, self.pipe = await control_reader(read_report)
             read_report = -1
-            async with asyncio.timeout(profile.readiness_s):
+            allowance = profile.readiness_s
+            if profile.reviewed_app is not None:
+                allowance += sum(c.timeout_s for c in profile.reviewed_app.launch.build)
+            async with asyncio.timeout(allowance):
                 confirmed = await self.message()
                 if confirmed.get("kind") != "confirmed":
                     self.accept_death(confirmed)
                     raise PreviewError("Live preview launch failed.")
                 nonce = confirmed.get("nonce")
-                if not isinstance(nonce, str) or re.fullmatch(r"[0-9a-f]{64}", nonce) is None:
+                if self.reviewed and nonce is not None:
+                    raise PreviewError("Live preview readiness was released before probing.")
+                if not self.reviewed and (
+                    not isinstance(nonce, str) or re.fullmatch(r"[0-9a-f]{64}", nonce) is None
+                ):
                     raise PreviewError("Live preview launch failed.")
-                self.nonce = nonce
+                self.nonce = nonce if isinstance(nonce, str) else None
                 data = await offload(self.registry.read)
                 if data is None:
                     raise PreviewError()
@@ -181,6 +216,8 @@ class PreviewProcess:
                 if not await self.confirmed_live():
                     raise PreviewError("Live preview launch failed.")
                 self.authorize_execution()
+                if self.reviewed:
+                    self.send((json.dumps({"log_secrets": profile.log_secrets}) + "\n").encode())
                 self.send(b"execute\n")
                 executing = await self.message()
                 if executing.get("kind") != "executing":
@@ -238,10 +275,28 @@ class PreviewProcess:
 
     async def confirmed_live(self) -> bool:
         data = await offload(self.registry.read)
-        if data is None or (data["phase"] != "executing" and data["phase"] != "confirmed"):
+        if data is None:
+            return False
+        if self.reviewed and data["phase"] in {"building", "between_commands"}:
+            # Completed builds may have no live boundary while the trusted supervisor
+            # rehashes/enters the next command. Both durable owners must still be alive.
+            return bool(
+                data.get("boundary")
+                and data.get("guardian")
+                and registered_identity(data["supervisor"]).alive()
+                and registered_identity(data["guardian"]).alive()
+            )
+        if data["phase"] not in {"executing", "confirmed"}:
             return False
         for key in ("supervisor", "unshare", "namespace"):
             if not registered_identity(data[key]).alive():
+                return False
+        if data.get("boundary"):
+            if not data.get("guardian") or not registered_identity(data["guardian"]).alive():
+                return False
+            if not all(
+                registered_identity(raw).alive() for raw in data["boundary"]["processes"].values()
+            ):
                 return False
         pid = data["namespace"]["pid"]
         return all(
@@ -250,18 +305,43 @@ class PreviewProcess:
         )
 
     async def ready(self, within_s: float) -> bool:
+        if self.reviewed:
+            return await self._reviewed_ready(within_s)
         deadline = time.monotonic() + within_s
         try:
             async with asyncio.timeout(within_s):
                 while time.monotonic() < deadline:
                     if not await self.confirmed_live():
                         return False
-                    if self.nonce and await probe_ready(self.port, self.nonce):
+                    if self.nonce and await probe_ready(
+                        self.port, self.nonce, self.public_authority
+                    ):
                         return await self.confirmed_live()
                     await asyncio.sleep(min(0.05, max(0, deadline - time.monotonic())))
         except TimeoutError:
             return False
         return False
+
+    async def _reviewed_ready(self, within_s: float) -> bool:
+        try:
+            async with asyncio.timeout(within_s):
+                message = await self.message()
+                while message.get("kind") == "probing":
+                    self.stage = "readiness"
+                    message = await self.message()
+                if message.get("kind") != "ready":
+                    self.accept_death(message)
+                    return False
+                nonce = message.get("nonce")
+                if not isinstance(nonce, str) or re.fullmatch(r"[0-9a-f]{64}", nonce) is None:
+                    return False
+                self.nonce = nonce
+                return await self.confirmed_live() and await probe_ready(
+                    self.port, nonce, self.public_authority, reviewed=True
+                )
+        except TimeoutError:
+            self.reason = "readiness_timeout" if self.stage == "readiness" else "launch_failed"
+            return False
 
     def accept_death(self, message: dict[str, Any]) -> None:
         if message.get("kind") != "dead":
@@ -286,7 +366,12 @@ class PreviewProcess:
                     # launch reader has settled before stop takes sole channel ownership.
                     while not self.reported_dead:
                         message = await self.message()
-                        if message.get("kind") not in {"confirmed", "executing"}:
+                        if message.get("kind") not in {
+                            "confirmed",
+                            "executing",
+                            "probing",
+                            "ready",
+                        }:
                             self.accept_death(message)
                 if self.transport is not None and not await wait_done(self.collector.exited, 8):
                     raise PreviewError()
@@ -299,7 +384,7 @@ class PreviewProcess:
                     data = await offload(self.registry.read)
                 if data is None or data["phase"] != "dead":
                     raise PreviewError()
-                for key in ("namespace", "unshare", "supervisor"):
+                for key in ("namespace", "unshare", "supervisor", "guardian"):
                     if data.get(key) and registered_identity(data[key]).alive():
                         raise PreviewError()
                 self.dead = True

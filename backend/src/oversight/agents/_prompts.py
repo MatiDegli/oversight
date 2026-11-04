@@ -65,6 +65,15 @@ LEAD_PROMPT = lead_system_prompt(LEAD_LIMITS)
 
 
 HISTORY_STUB = "[Lines {first}-{last} of {path}: a later read of this path covers these lines.]"
+HISTORY_DEFAULT_TOKENS = 64_000
+HISTORY_MASK_STUB = (
+    "[Output of {name} {arguments} cleared to save context; call it again if you need it.]"
+)
+HISTORY_TEST_STUB = (
+    " [Rest of the test output cleared to save context; run the tests again if you need it.]"
+)
+HISTORY_MASK_PROTECTED_CALLS = 10
+HISTORY_ARGUMENT_CHARS = 200
 HISTORY_LOW_WATER = 0.75
 HISTORY_REARM = 0.25
 HISTORY_PROTECTED_CALLS = 6
@@ -72,7 +81,7 @@ HISTORY_PROTECTED_CALLS = 6
 
 def prompt_version(
     harness_pack: bool = False,
-    history_prune_tokens: int | None = None,
+    history_prune_tokens: int | None = HISTORY_DEFAULT_TOKENS,
     *,
     lead_limits: LeadLimits | None = None,
 ) -> str:
@@ -89,6 +98,10 @@ def prompt_version(
                 HISTORY_LOW_WATER,
                 HISTORY_REARM,
                 HISTORY_PROTECTED_CALLS,
+                HISTORY_MASK_STUB,
+                HISTORY_TEST_STUB,
+                HISTORY_MASK_PROTECTED_CALLS,
+                HISTORY_ARGUMENT_CHARS,
             ]
         )
     return (

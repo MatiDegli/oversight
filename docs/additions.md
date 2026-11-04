@@ -199,9 +199,10 @@ new candidate work waits for the maintainer’s order.
 - Resume a halted agent in the same conversation and worktree remains a candidate; the live
   Resume command only releases a pending or active pause (`agents/_control.py:RunControl`).
 - Budget reminders with steps reserved for `finish`, and a bounded history with a visible handoff.
-- Covered older `read_file` results can now become deterministic stubs with
-  `OVERSIGHT_HISTORY_PRUNE_TOKENS` explicitly set; bounded history with a visible handoff remains a
-  separate candidate.
+- Covered older `read_file` results become deterministic stubs first; old read, search and list
+  outputs can then be masked, keeping test headlines. Compaction defaults on at 64,000 estimated
+  tokens; `OVERSIGHT_HISTORY_PRUNE_TOKENS=0` or `off` disables it. Bounded history with a visible
+  handoff remains a separate candidate.
 - Fresh revision context built from facts, distinct from the existing retained-history revision.
 - A dependency guard for package existence, license and vulnerability evidence.
 - Native workflow candidates from the maintainer (2026-10-29); memory admission below is built,
@@ -319,9 +320,10 @@ new candidate work waits for the maintainer’s order.
 - Tell the later agent about an overlap in its next tool result; each agent already has a worktree.
 - Select tests from the graph inside the agent loop, starting in shadow mode.
 - Per-test coverage, beyond the per-test outcomes already recorded.
-- Covered older read results can be pruned with opt-in `OVERSIGHT_HISTORY_PRUNE_TOKENS`; measure
-  dollars and correctness before default adoption. Broader history bounds and a visible handoff
-  remain separate candidates.
+- History compaction defaults on at 64,000 estimated tokens: covered-read pruning runs before
+  old observation masking with ten recent calls protected. `OVERSIGHT_HISTORY_PRUNE_TOKENS=0`
+  or `off` disables it. Measure dollars and correctness separately; broader history bounds and
+  a visible handoff remain separate candidates.
 - Generate inputs for behavior that the bounded probes did not reach.
 - Run the bench on a real repository.
 - Filesystem isolation for tests and probes (bubblewrap on Linux); today's isolation covers the

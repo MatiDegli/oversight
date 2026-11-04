@@ -1,12 +1,14 @@
 import { presentationFor } from "../teams/presentation";
 import { stateStore } from "../state";
+import { PreviewStartupPanel } from "./preview/PreviewStartupPanel";
+import { previewStartup } from "./preview/previewStartup";
 import { PreviewPanel } from "./preview/PreviewPanel";
 import "./preview/previewChatLayout.css";
 import { PreviewActionsContext, type PreviewActions } from "../agents";
 // eslint-disable-next-line no-restricted-imports -- Shared event-backed admission projection.
 import { leadCapacity } from "../agents/chatLeadSelectors";
 import type { MergeMode, StartAgent, StartLead, StopLead } from "@contracts";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
 import type { DecisionAction, DecisionAttempt, RevertAttempt } from "../review";
@@ -127,6 +129,14 @@ export function Frame(input: FrameProps) {
   const props = workflowNavigation(available, () => {
     setWorkflow(null);
   });
+  const startup = previewStartup();
+  const startupId = useId();
+  const composerDisclosure =
+    startup.kind === "missing" ? undefined : (
+      <div id={`${startupId}-description`}>
+        <PreviewStartupPanel result={startup} headingId={`${startupId}-heading`} />
+      </div>
+    );
   const { state, onClosePanel } = props;
   const arrival = useMergeArrival(state);
   const phone = usePhonePractice(props.practice?.active ?? false);
@@ -155,6 +165,16 @@ export function Frame(input: FrameProps) {
   // Keep shared tabs; opening or activating a tab creates a new View and reveals the panel.
   const shell = useShell(panelOpen(view), onClosePanel, hiddenChatView === view);
   const open = shell.panelOpen;
+  const previewActions = props.previewActions
+    ? {
+        ...props.previewActions,
+        ...(startup.kind === "invalid" && {
+          previewRestriction: {
+            describedBy: shell.layout === "Chat" ? `${startupId}-description` : undefined,
+          },
+        }),
+      }
+    : null;
   const previewSlot = useMemo(
     () =>
       props.previewHost
@@ -253,7 +273,7 @@ export function Frame(input: FrameProps) {
           </button>
         </div>
       )}
-      <PreviewActionsContext value={props.previewActions ?? null}>
+      <PreviewActionsContext value={previewActions}>
         <ChatShell
           previewSlot={previewSlot}
           state={props.chatState ?? state}
@@ -313,6 +333,7 @@ export function Frame(input: FrameProps) {
                   {...props}
                   view={view}
                   chat={shell.layout === "Chat"}
+                  composerDisclosure={composerDisclosure}
                   onGraph={chatReview.onGraph}
                   onViewHighlight={(ids, key) => {
                     props.onViewHighlight?.(ids, key);
