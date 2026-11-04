@@ -16,6 +16,11 @@ impl SelectedSource {
         if !path.to_str().is_some_and(native_drive_path) {
             return Err(invalid("select an absolute local Windows repository path"));
         }
+        if path.to_str().unwrap().contains('~') {
+            return Err(invalid(
+                "choose the repository by its full folder name, without ~",
+            ));
+        }
         Ok(Self(path.to_path_buf()))
     }
 

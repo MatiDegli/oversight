@@ -26,6 +26,10 @@ async def git(root: Path, *args: str) -> None:
         "-c",
         "commit.gpgsign=false",
         "-c",
+        "core.autocrlf=false",
+        "-c",
+        "core.eol=lf",
+        "-c",
         f"core.hooksPath={os.devnull}",
         *args,
         cwd=root,
@@ -36,7 +40,9 @@ async def main() -> None:
     operation, raw = sys.argv[1:]
     root = Path(raw)
     if operation == "advance":
-        (root / "fixture_value.py").write_text("value = 'approved in disposable main'\n")
+        (root / "fixture_value.py").write_text(
+            "value = 'approved in disposable main'\n", encoding="utf-8", newline="\n"
+        )
         await git(root, "add", "fixture_value.py")
         await git(root, "commit", "-qm", "Approved fixture change")
         return
@@ -45,12 +51,20 @@ async def main() -> None:
     for name in ("one", "two"):
         source = root / name
         source.mkdir(parents=True)
-        (source / "fixture_value.py").write_text(f"value = '{name}'\n")
-        (source / "test_value.py").write_text(
-            f"from fixture_value import value\ndef test_value():\n    assert value == '{name}'\n"
+        (source / "fixture_value.py").write_text(
+            f"value = '{name}'\n", encoding="utf-8", newline="\n"
         )
-        (source / "pyproject.toml").write_text("[tool.pytest.ini_options]\n")
-        (source / ".gitignore").write_text(".venv/\n__pycache__/\n.pytest_cache/\n")
+        (source / "test_value.py").write_text(
+            f"from fixture_value import value\ndef test_value():\n    assert value == '{name}'\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        (source / "pyproject.toml").write_text(
+            "[tool.pytest.ini_options]\n", encoding="utf-8", newline="\n"
+        )
+        (source / ".gitignore").write_text(
+            ".venv/\n__pycache__/\n.pytest_cache/\n", encoding="utf-8", newline="\n"
+        )
         await git(source, "init", "-q", "--template=", "-b", "main")
         await git(source, "add", "-A")
         await git(source, "commit", "-qm", "Disposable own fixture")

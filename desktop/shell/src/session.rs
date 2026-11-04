@@ -154,16 +154,17 @@ fn supervise_loop(
             stop(child, primary, ui)?;
             break;
         }
-        if ready.is_err() {
+        if let Err(error) = ready {
             if ui.menu.is_none() {
-                return ready;
+                return Err(error);
             }
             // Refusals have no live backend; keep the inert window and allow another selection.
             if let Err(cleanup) = stop(child, Ok(()), ui) {
                 return Err(io::Error::other(format!(
-                    "startup: {ready:?}; cleanup: {cleanup:?}"
+                    "startup: {error:?}; cleanup: {cleanup:?}"
                 )));
             }
+            diagnostic.record_failure(&error);
             let refusal = diagnostic
                 .tail
                 .lock()

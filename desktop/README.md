@@ -1,6 +1,6 @@
 # Windows desktop package
 
-The Tauri 2 shell, installed launch mode, runtime staging and current-user NSIS
+The Tauri 2 shell, installed launch mode, runtime staging, the current-user NSIS
 packaging job and native repository switching are implemented. The native runner's
 build/install/smoke results and headed acceptance are still required before delivery; no
 installer artifact is claimed from a Linux check.

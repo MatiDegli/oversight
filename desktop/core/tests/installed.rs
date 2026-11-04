@@ -62,7 +62,8 @@ fn installed_app_and_data_accept_profile_names_containing_tildes() {
         app_directory(&install.join("oversight-desktop.exe")).unwrap(),
         app
     );
-    let source = SelectedSource::validate(Path::new(r"C:\Users\ana~dev\repository")).unwrap();
+    assert!(SelectedSource::validate(Path::new(r"C:\Users\ana~dev\repository")).is_err());
+    let source = SelectedSource::validate(Path::new(r"C:\Users\ana\repository")).unwrap();
     for selected in [None, Some(&source)] {
         let launch = Launch::installed_source(&app, &data, false, selected).unwrap();
         assert_eq!(launch.cwd, app);

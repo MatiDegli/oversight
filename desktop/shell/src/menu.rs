@@ -98,11 +98,11 @@ impl OpenMenu {
             };
             match SelectedSource::validate(&path) {
                 Ok(source) => Some(source),
-                Err(_) => {
+                Err(error) => {
                     dialogs::message(
                         window,
                         "This repository could not be opened",
-                        &Refusal::UnsupportedLocation.remedy(&path),
+                        &format!("{error}\n\n{}", Refusal::UnsupportedLocation.remedy(&path)),
                     );
                     self.busy.store(false, Ordering::SeqCst);
                     return;

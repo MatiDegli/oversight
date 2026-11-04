@@ -1,4 +1,4 @@
-use oversight_desktop_core::diagnostics::{OutputTail, SessionLog, Stage, finish};
+use oversight_desktop_core::diagnostics::{OutputTail, SessionLog, Stage};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -25,25 +25,6 @@ fn backend_tail_discards_free_text_secrets_paths_and_unbounded_lines() {
 }
 
 #[test]
-fn cleanup_never_masks_the_startup_error_or_accepts_forced_shutdown() {
-    let error = finish(
-        Err(io::Error::from(io::ErrorKind::InvalidInput)),
-        Err(io::Error::from(io::ErrorKind::PermissionDenied)),
-    )
-    .unwrap_err();
-    assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
-    assert!(finish(Ok(()), Ok(false)).is_err());
-    assert!(
-        finish(
-            Ok(()),
-            Err(io::Error::from(io::ErrorKind::PermissionDenied))
-        )
-        .is_err()
-    );
-    assert!(finish(Ok(()), Ok(true)).is_ok());
-}
-
-#[test]
 fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -53,7 +34,7 @@ fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     let data = parent.join(format!("diagnostics-{}", std::process::id()));
     let mut log = SessionLog::open(&data).unwrap();
     log.advance(Stage::Payload).unwrap();
-    let tail = OutputTail::new(PathBuf::from("/install/app"), data.clone());
+    let mut tail = OutputTail::new(PathBuf::from("/install/app"), data.clone());
     log.failure(&io::Error::other("secret /private/home"), Some(1), &tail)
         .unwrap();
     let path = data.join(".runtime").join("desktop-session.log");
@@ -61,6 +42,22 @@ fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     assert!(text.contains("Stage: Payload") && text.contains("Backend exit: Some(1)"));
     assert!(!text.contains("secret") && !text.contains("/private"));
     assert!(text.len() < 4096);
+    // Installed refusals keep the UI alive, but retain the same sanitized readiness evidence.
+    tail.feed(b"OVERSIGHT_REFUSAL=other\nValueError: secret /private/home\n");
+    for (kind, exit) in [
+        (io::ErrorKind::BrokenPipe, Some(3)),
+        (io::ErrorKind::TimedOut, None),
+    ] {
+        log.advance(Stage::Readiness).unwrap();
+        log.failure(&io::Error::from(kind), exit, &tail).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("Stage: Readiness"));
+        assert!(text.contains(&format!("Kind: {kind:?}")));
+        assert!(text.contains(&format!("Backend exit: {exit:?}")));
+        assert!(text.contains("backend: ValueError"));
+        assert!(!text.contains("secret") && !text.contains("/private"));
+        assert!(!text.contains("OVERSIGHT_REFUSAL"));
+    }
     log.advance(Stage::Git).unwrap();
     log.failure(&io::Error::other("PATH=secret /private/home"), None, &tail)
         .unwrap();

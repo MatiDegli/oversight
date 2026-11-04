@@ -199,15 +199,6 @@ impl SessionLog {
     }
 }
 
-/// Attempt cleanup even on startup failure, while retaining the original cause.
-pub fn finish(primary: io::Result<()>, cleanup: io::Result<bool>) -> io::Result<()> {
-    primary?;
-    if !cleanup? {
-        return Err(io::Error::other("backend required forced cleanup"));
-    }
-    Ok(())
-}
-
 /// Keep cleanup evidence separate from the error that requested shutdown.
 #[derive(Debug)]
 pub struct CloseOutcome {

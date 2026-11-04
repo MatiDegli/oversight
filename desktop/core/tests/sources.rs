@@ -26,20 +26,28 @@ fn selection_refuses_ambiguous_paths_before_filesystem_access() {
         r"C:\LPT9\repo",
         r"C:\repo.\x",
         r"C:\repo \x",
-    ] {
-        assert!(SelectedSource::validate(Path::new(path)).is_err(), "{path}");
-    }
-    for path in [
-        r"C:\private\repo",
-        r"d:\space español 日本\repo",
+        r"C:\Users\ana\a~1\repo",
         r"C:\a~1\repo",
         r"C:\Users\ana~dev\AppData\Local\Oversight",
     ] {
+        assert!(SelectedSource::validate(Path::new(path)).is_err(), "{path}");
+    }
+    for path in [r"C:\private\repo", r"d:\space español 日本\repo"] {
         assert_eq!(
             SelectedSource::validate(Path::new(path)).unwrap().path(),
             Path::new(path)
         );
     }
+}
+
+#[test]
+fn tilde_selection_explains_how_to_choose_the_full_folder_name() {
+    let error = SelectedSource::validate(Path::new(r"C:\Users\ana\a~1\repo")).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidInput);
+    assert_eq!(
+        error.to_string(),
+        "choose the repository by its full folder name, without ~"
+    );
 }
 
 #[test]

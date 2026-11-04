@@ -5021,7 +5021,12 @@ non-Python repositories and in-app discard. Landing requires green Windows CI, t
 reviews and the maintainer's headed Windows acceptance before November 4, 18:00 ART (21:00 UTC).
 Without that acceptance this front stays unmerged; repository opening remains the next step.
 
-Native Rust path admission permits literal tildes, including ordinary Windows profile names
-and 8.3 spellings; the other lexical refusals remain unchanged. This avoids rejecting the
-shell's own installed and data paths. Source runtime keys still hash the selected spelling
-without expanding short names; backend admission remains authoritative.
+Selected repositories refuse `~` in every component, including 8.3 spellings, at menu admission
+and launch revalidation, as required by plan item 4 and the backend's own-source checks. The
+message asks the person to choose the repository by its full folder name. Paths derived by the
+shell for its installed app, data and per-source runtimes admit literal tildes, including ordinary
+Windows profile names; the other lexical refusals remain unchanged.
+
+Open demo deliberately reuses the repository disclosure: it warns that the current session
+stops and preserves the same default-Cancel confirmation. Its prepared-environment requirement
+is already satisfied by the bundled demo interpreter.

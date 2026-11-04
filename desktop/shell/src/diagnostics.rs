@@ -51,9 +51,8 @@ impl Diagnostics {
         *self.exit.lock().unwrap() = exit;
     }
 
-    pub fn failure(&self, error: &io::Error, smoke: bool) {
-        let saved = self
-            .log
+    pub fn record_failure(&self, error: &io::Error) -> bool {
+        self.log
             .lock()
             .unwrap()
             .failure(
@@ -61,7 +60,11 @@ impl Diagnostics {
                 *self.exit.lock().unwrap(),
                 &self.tail.lock().unwrap(),
             )
-            .is_ok();
+            .is_ok()
+    }
+
+    pub fn failure(&self, error: &io::Error, smoke: bool) {
+        let saved = self.record_failure(error);
         if !smoke {
             show_failure(saved);
         }
