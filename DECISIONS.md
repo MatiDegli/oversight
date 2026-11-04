@@ -5291,3 +5291,21 @@ The maintainer found the white native title and File menu bar foreign next to Ov
 ground. The desktop window is created with the dark window theme, which Tauri 2.12 also applies
 to the native menu bar on Windows. The webview then reports a dark preferred color scheme, so
 the startup page shows its night tokens; the in-app day palette stays a separate front.
+## 2026-11-04 — Optional Meta budget and default Muse Spark prices
+
+The maintainer decided that Oversight is configurable rather than restrictive: an absent or
+empty `OVERSIGHT_BUDGET_USD` means no budget, so no spending brake. Spend still reaches the durable
+ledger; an unreadable ledger or unknown-cost calls still refuse Meta starts and revisions.
+Absent or empty `MUSE_SPARK_INPUT_USD_PER_M` and `MUSE_SPARK_OUTPUT_USD_PER_M` default to 0.10 and
+0.20 US dollars per million tokens for `muse-spark-1.3-contributor`. Explicitly invalid budgets or
+prices still refuse starts. A configured budget retains the existing warning marks, brake share
+and refusal messages. Baseten's opt-in decision budget and prices remain required and unchanged.
+
+The approved contract change makes `Budget.budget_usd` and `UsageTick.budget_usd` nullable in
+version 1.23.0 (UsageTick added by his answer at 22:33Z); `null` means no budget, with no warning
+marks, brake `ok` and the configured `block_at` preserved. Each start's budget snapshot, shared by
+plans, leads and reviews, carries the absent budget instead of zero, so an uncapped run is never
+braked by a zero denominator. A paid eval bench run still requires a budget. JSON Schema and
+TypeScript are regenerated from Pydantic; older recorded runs remain valid. The UI shows spent
+dollars and “No budget: spending is not capped”, omits percentages and ticks, and reports
+“no spending cap” in the status line. Settings explains empty budgets and the default prices.

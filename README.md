@@ -42,7 +42,7 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Difference questions | Classify measured differences as asked for, not asked for or unclear; requires a separate Baseten budget. | Muse Spark Open | Opt-in (`OVERSIGHT_BEHAVIOR_DIFF` or `OVERSIGHT_MEASURED_CONE`) |
 | Measured callers | Compare caller results under tests, within the static impact cone. | None | Opt-in (`OVERSIGHT_MEASURED_CONE`) |
 | Merge decisions and rules | Approve, reject or request changes; explicitly select guarded rules, standing grants and Revert. | None | On |
-| Cost and usage | Track spend, unknown usage and archived totals; refuse new Meta runs above the person's configured share of the budget (`OVERSIGHT_SPEND_BRAKE_PERCENT`, default 90). | None | On |
+| Cost and usage | Track spend, unknown usage and archived totals with an optional Meta budget (no budget means no brake) and default Muse Spark input/output prices of US$0.10/US$0.20 per million tokens; when a budget is set, refuse new Meta runs above the person's configured share of it (`OVERSIGHT_SPEND_BRAKE_PERCENT`, default 90). | None | On |
 | Settings | Edit keys, budgets, prices, the agent cap, spending brake and cross-review setting; save to `.env`. Keys are never shown back. Budgets, brake share and prices apply to the next run; keys, agent cap and cross-review need a restart. The installed desktop File menu offers Edit settings… in Notepad and Reload settings with restart confirmation. | None | On in live sessions; read-only in replay |
 | Live demo preview | Open one agent's demo shop proposal at a time; one page owns it and other tabs show read-only status. Reviewed-app execution remains unavailable. | None | Opt-in (`OVERSIGHT_PREVIEW_ENABLED`) |
 | Replay and practice | Play the bundled real run without a backend and compare your decisions with the recorded ones. | None | On |
@@ -110,7 +110,8 @@ make dev
 ```
 
 Put keys only in `.env`: `META_API_KEY` and, for Baseten roles, `BASETEN_API_KEY`.
-Set `OVERSIGHT_BUDGET_USD`, `MUSE_SPARK_INPUT_USD_PER_M` and `MUSE_SPARK_OUTPUT_USD_PER_M`.
+`OVERSIGHT_BUDGET_USD` is optional: set it for a spending brake. Muse Spark prices default to
+0.10/0.20 (`MUSE_SPARK_INPUT_USD_PER_M`, `MUSE_SPARK_OUTPUT_USD_PER_M`).
 Difference decisions also need `OVERSIGHT_BASETEN_BUDGET_USD`, `BASETEN_INPUT_USD_PER_M`
 and `BASETEN_OUTPUT_USD_PER_M`. See [source setup](docs/workspace-source.md) for other repositories.
 `make dev` serves the UI at `http://localhost:5710`; the API defaults to port 8710.
