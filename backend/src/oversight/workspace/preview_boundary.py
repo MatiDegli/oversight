@@ -33,7 +33,12 @@ from oversight.workspace.preview_boundary_entry import (
 from oversight.workspace.runner import ProcessCollector, child_env, wait_done
 
 ENTRY = Path(__file__).with_name("preview_boundary_entry.py").resolve()
-REPO_ROOT = Path(__file__).resolve().parents[4]
+# A wheel lives under python/Lib/site-packages; exclude the actual installed payload.
+# Keep this bottom-layer module independent of settings (which imports the workspace facade).
+_payload_root = Path(os.environ.get("OVERSIGHT_APP_ROOT", Path(__file__).resolve().parents[4]))
+if not _payload_root.is_absolute():
+    raise ValueError("OVERSIGHT_APP_ROOT must be absolute")
+REPO_ROOT = _payload_root.resolve()
 
 
 class BoundaryUnavailable(OSError):
