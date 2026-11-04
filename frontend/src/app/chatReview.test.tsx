@@ -40,7 +40,7 @@ it.each([false, true])("shares recorded stage text in Chat, reviewing=%s", (revi
   ]) {
     expect(output).toContain(`aria-label="${label}"`);
   }
-  expect(output).toContain("Cost Unknown");
+  expect(output).toContain("Cost unknown");
   expect([...output.matchAll(/<li aria-label=/g)]).toHaveLength(reviewing ? 0 : 4);
 });
 
@@ -213,7 +213,7 @@ it("keeps unavailable and unstable evidence honest without repeating stable exam
   const output = html(
     <ChatChangeCard state={state} changeId="change-1" seq={62} reviewing={false} />,
   );
-  expect(output).toContain("Unknown");
+  expect(output).toContain("Cost unknown");
   expect(output).not.toContain("US$0.00");
 });
 it("sums exact change costs across roles and agents; preserves missing and null", () => {
@@ -433,4 +433,27 @@ it("replaces only the current entry, keeping ordinary rows, note attribution and
   expect(html(<ChatChangeCard state={state} changeId="change-1" seq={62} reviewing />)).toContain(
     "Reviewing in the panel",
   );
+});
+
+it("settles the recorded run's approved changes without an assessment count", () => {
+  const state = readFileSync(
+    new URL("../../../fixtures/events/recorded-demo.jsonl", import.meta.url),
+    "utf8",
+  )
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as ServerEvent)
+    .reduce(applyEvent, createInitialState());
+  for (const changeId of ["change-1", "change-2"]) {
+    const card = required(selectChatChange(state, changeId));
+    expect(card.waiting).toBe(false);
+    expect(card.assessed).toBe(false);
+    const output = html(
+      <ChatChangeCard state={state} changeId={changeId} seq={card.seq} reviewing={false} />,
+    );
+    expect(output).toContain("Evidence not assessed · decision recorded");
+    expect(output).toContain("Decision recorded.");
+    expect(output).not.toContain("Review is unavailable for this candidate.");
+    expect(output).not.toContain("of 6");
+  }
 });

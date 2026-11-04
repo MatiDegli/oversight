@@ -69,7 +69,10 @@ export function selectChatChange(state: State, changeId: string, seq?: number) {
   const settled = state.decisionEvents.some(
     (event) =>
       event.type === "change.resolved" &&
-      sameCandidate(event.payload, proposal) &&
+      event.payload.change_id === proposal.change_id &&
+      event.payload.revision === proposal.revision &&
+      // Recordings before head_commit was added resolve the revision without naming its head.
+      (!event.payload.head_commit || event.payload.head_commit === proposal.head_commit) &&
       event.payload.agent_id === proposal.agent_id &&
       (event.payload.decision === "rejected" ||
         event.payload.decision === "changes_requested" ||
@@ -90,6 +93,7 @@ export function selectChatChange(state: State, changeId: string, seq?: number) {
       (item) => !callers.differing.some((caller) => caller.nodeId === item.nodeId),
     ),
     rules,
+    assessed: assessment !== undefined,
     passes: rules.filter((r) => r.result === "pass").length,
     waiting: !settled,
     cost: changeCost(state, changeId),
