@@ -9,12 +9,21 @@ from typing import Any
 import pytest
 from completion_helpers import completion
 from openai.types.chat import ChatCompletion
+from revise_helpers import REVISION_A, revisable
 
-from oversight.agents import MUSE_SPARK, MUSE_SPARK_OPEN, LedgerError, _review_call
+from oversight.agents import (
+    MUSE_SPARK,
+    MUSE_SPARK_OPEN,
+    LedgerError,
+    ScriptedModel,
+    _review_call,
+    parse_script,
+)
+from oversight.app import LiveRun
 from oversight.events import parse_needs_you
 from oversight_contracts.events import ModelProfile
 
-from .test_cross_review_lifecycle import events, start, until
+from .test_cross_review_lifecycle import EVENT, events, start, until
 from .test_review_accounting import production
 
 pytestmark = pytest.mark.anyio
@@ -25,6 +34,44 @@ def response(text: str, profile: ModelProfile = MUSE_SPARK) -> ChatCompletion:
     result["model"] = profile.model
     result["choices"][0]["message"]["content"] = text
     return ChatCompletion.model_validate(result)
+
+
+def scripted_author(profile: ModelProfile, slot: str) -> ScriptedModel:
+    # The default harness requires fresh tests between a revision edit and finish.
+    turns = [
+        REVISION_A[0],
+        {"tool_calls": [{"name": "run_tests", "arguments": {}}]},
+        REVISION_A[1],
+    ]
+    return ScriptedModel(parse_script(revisable(turns=turns), profile), profile)
+
+
+def error_details(es: list[Any]) -> list[tuple[Any, str]]:
+    return [
+        (parse_needs_you(e.payload.message), e.payload.message) for e in es if e.type == "error"
+    ]
+
+
+async def terminal(live: LiveRun, code: str | None = None) -> None:
+    async for stored in live.store.subscribe(0):
+        event = EVENT.validate_json(stored.envelope)
+        if event.type == "error":
+            message = event.payload.message
+            note = parse_needs_you(message)
+            assert note is not None and note.code == code, (
+                f"Unexpected error (needs_you={note.code if note else None}): {message}"
+            )
+            return
+        if code is None and event.type == "change.reviewed":
+            return
+    raise AssertionError("store ended before expected terminal event")
+
+
+async def settled(live: LiveRun) -> None:
+    while live._runs or live._reviews:
+        await asyncio.gather(*list(live._runs.values()), *list(live._reviews.values()))
+        # Gathering already-finished tasks need not yield to their registry cleanup callbacks.
+        await asyncio.sleep(0)
 
 
 @pytest.mark.parametrize(
@@ -50,7 +97,8 @@ async def test_runtime_publishes_only_final_review_and_preserves_single_revision
         es = events(live)
         reviews = [e for e in es if e.type == "change.reviewed"]
         assert len(reviews) == (count - 1) // 2
-        assert not any(e.type == "error" for e in es)
+        errors = error_details(es)
+        assert not errors, errors
         if count % 2:
             return response("First invalid verdict", profile)
         assert admissions[-1] == count - 1
@@ -66,6 +114,7 @@ async def test_runtime_publishes_only_final_review_and_preserves_single_revision
         return response(text, profile)
 
     async with production(tmp_path, monkeypatch, create, reviewer_profile=profile) as live:
+        monkeypatch.setattr(live._client_factory, "_factory", scripted_author)
         real_check = live._check_spending
 
         def check(slot: Any, selected: ModelProfile) -> None:
@@ -85,11 +134,10 @@ async def test_runtime_publishes_only_final_review_and_preserves_single_revision
 
         monkeypatch.setattr(manager, "rules_received", received)
         await start(live)
-        if final == "accept":
-            await until(live, "change.reviewed")
-        else:
-            await until(live, "error")
-        await asyncio.gather(*list(live._runs.values()), *list(live._reviews.values()))
+        await terminal(
+            live, {"accept": None, "fix": "round_exhausted", "invalid": "review_invalid"}[final]
+        )
+        await settled(live)
         assert_final_events(live, profile, final, forwarded, len(requests))
 
 
@@ -103,7 +151,7 @@ def assert_final_events(
     ticks = [e for e in es if e.type == "usage.tick" and e.payload.role == "review"]
     rounds = [e for e in es if e.type == "change.resolved"]
     expected = 2 if final == "fix" else 1
-    assert request_count == len(ticks) == expected * 2
+    assert request_count == len(ticks) == expected * 2, error_details(es)
     assert len(reviews) == expected and forwarded == [e.seq for e in reviews]
     for index, reviewed in enumerate(reviews):
         assert ticks[index * 2].seq < ticks[index * 2 + 1].seq < reviewed.seq
@@ -118,12 +166,16 @@ def assert_final_events(
     if final == "fix":
         assert rounds[0].payload.review_seq == reviews[0].seq
         assert rounds[0].payload.decided_by == "cross_review"
+        revision_steps = [e.payload for e in es if e.type == "agent.step" and e.seq > rounds[0].seq]
+        assert [step.tool for step in revision_steps] == ["edit_file", "run_tests", "finish"]
+        assert all(step.result == "ok" for step in revision_steps), revision_steps
     notes = [parse_needs_you(e.payload.message) for e in es if e.type == "error"]
+    assert all(note is not None for note in notes), error_details(es)
     assert [n.code for n in notes if n] == {
         "accept": [],
         "fix": ["round_exhausted"],
         "invalid": ["review_invalid"],
-    }[final]
+    }[final], error_details(es)
     if final == "invalid":
         assert "last non-empty line" not in " ".join(reviews[0].payload.problems)
     if profile.provider == "meta":
@@ -186,8 +238,8 @@ async def test_first_receipt_can_refuse_reask_through_existing_spend_invalid_pat
             monkeypatch.setattr(live, "_settings", replace(live._settings, budget_usd=0.000095))
             live._usage.budget_usd = 0.000095
         await start(live)
-        await until(live, "error")
-        await asyncio.gather(*list(live._reviews.values()))
+        await terminal(live, "spend_invalid")
+        await settled(live)
         es = events(live)
         [tick] = [e for e in es if e.type == "usage.tick" and e.payload.role == "review"]
         [error] = [e for e in es if e.type == "error"]

@@ -4811,6 +4811,7 @@ Contracts, initial review prompt, provisional output budget, reasoning, prompt_v
 historical recordings remain unchanged. Scripted fakes and injected failures cover the new
 behavior; historical recordings do not prove it. No paid validation is performed in this front;
 any review-prompt edit requires separate paid re-validation.
+
 ## 2026-11-03 — Scripted agent provenance in Chat
 
 Chat rail rows and conversation headers label agents “Scripted demo agents” only when their
