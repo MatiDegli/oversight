@@ -3489,11 +3489,12 @@ event's timestamp, including for open intervals, with unknown intervals preservi
 known lower bounds and bounded, sequence-ordered diagnostics. `stages` is null on an
 incomplete prefix; older recordings and clients without the optional field remain valid.
 
-## Opt-in pruning of superseded file reads (2026-11-01)
+## Pruning of superseded file reads (2026-11-01)
 
 Repeated file reads accumulate in retained agent history, including across Request changes.
-`OVERSIGHT_HISTORY_PRUNE_TOKENS` enables deterministic read stubs at an integer threshold of
-at least 8,000; unset or empty keeps pruning off and preserves existing prompt-version hashes.
+`OVERSIGHT_HISTORY_PRUNE_TOKENS` controls deterministic compaction at an integer threshold of
+at least 8,000. As amended on November 3 below, unset or empty means 64,000 estimated tokens
+and compaction is on by default; `0` or `off` disables it.
 The UTF-8 byte length of messages and tool schemas serialized as JSON, divided by four, is a
 trigger estimate only: provider usage and unknown usage accounting are unchanged.
 
@@ -3508,17 +3509,17 @@ skipped results and existing stubs supply no coverage. Empty reads remain unchan
 
 The one-line stub is `[Lines A-B of PATH: a later read of this path covers these lines.]`.
 It must strictly shorten both result text and the JSON estimate. Every user message, system
-prompt, assistant message, non-read result, uncovered read and the last six individual tool calls
-are retained. Calls/results retain their local positional pairing, identifiers and order.
+prompt and assistant message are retained. This covered-read pass retains non-read results,
+uncovered reads and the last six individual tool calls; the November 3 masking pass follows it. Calls/results retain their local positional pairing, identifiers and order.
 The stub template, threshold, low-water fraction, re-arm fraction and protected-call count
 participate in the enabled prompt version. Live tool outcomes, edit checks, stop rules, events,
-contracts and replay do not change. This ships off by default with scripted measurements only;
-enabling it by default requires a separate maintainer-approved paid A/B. Bounded history with
+contracts and replay do not change. The November 3 approval below supersedes the original
+opt-in rollout and paid A/B prerequisite; evidence here remains scripted only. Bounded history with
 a visible handoff and fresh revision context remain separate candidates.
 
 Proposed replacement for the maintainer in `AGENTS.md` (the file is unchanged):
 
-> read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the retained history. With history pruning explicitly enabled, covered older read_file results may become shorter stubs; every user message is retained.
+> read_file returns numbered lines and has a size cap; long files are read by line range. Prefer few, large reads of whole functions: every step resends the retained history. With history compaction on by default, covered older read_file results may become shorter stubs; every user message is retained.
 
 ## 2026-10-31 — Host memory may hold new agent starts
 
@@ -4758,9 +4759,10 @@ text nodes only; missing/invalid data disables reviewed-app actions. Nondismissi
 disclosure is required in the selected-agent Chat composer and Settings before actions. Consumer
 rendering acceptance remains pending; this carrier does not implement or certify that rendering.
 
-Reviewed-app execution remains unavailable at admission and execution. Actual builds, nested
-execution, dependency installation, Linux filesystem boundary, gateway and nesting supervisor are
-not delivered. The Linux verified namespace/allowlisted-root boundary described in the approved
+Reviewed-app execution remains unavailable at admission and execution. At the earlier scaffold,
+“Actual builds, nested execution, dependency installation, Linux filesystem boundary, gateway and
+nesting supervisor are not delivered” described the unconnected state; the qualification below
+records the subsequently connected private path. The Linux verified namespace/allowlisted-root boundary described in the approved
 policy is a required future capability, not an isolation claim for this scaffold. Current run_tests
 and shop launches retain namespace-only network/PID isolation without filesystem isolation;
 Origin-less HTTP writes remain allowed by current API policy. These residuals remain open.
@@ -4776,3 +4778,112 @@ admission/execution refuses with `Reviewed-app startup disclosure is unavailable
 `not_configured`. Source selection, declaration and authority validation errors still refuse
 startup. Real prepared resources at the default runtime can now pass disclosure admission;
 reviewed-app execution remains unavailable pending its separately required boundary and supervisor.
+
+
+## Mask old tool outputs by default (2026-11-03)
+
+The maintainer approved deterministic observation masking at 20:28 ART on November 3.
+Every coding-agent model call resends retained history, so long observations accumulate cost
+and can exceed the provider's input context. No model call or model-written summary is added.
+The existing covered-read pass runs first without changing its coverage rules or six-call
+protection. It loses no information that a retained later read supplies.
+
+If the estimate remains above 75% of the threshold, mask eligible observations oldest first,
+stopping immediately at that low-water mark. The last ten individual tool calls are protected:
+this retains recent working evidence while keeping the policy deterministic. Older `read_file`,
+`search` and `list_files` results use this one-line stub:
+`[Output of NAME ARGUMENTS cleared to save context; call it again if you need it.]`
+ARGUMENTS is the call's own compact JSON, limited to 200 characters including a final ellipsis
+when truncated. `run_tests` keeps its entire first line and appends
+` [Rest of the test output cleared to save context; run the tests again if you need it.]`.
+A replacement must shorten both text and the JSON estimate. Existing stubs are retained.
+Edits, finish results, all assistant messages and arguments, system/user messages and other
+tool results stay intact. The same history produces the same result; repeating compaction
+without new history changes nothing. Fetching an observation again creates a fresh result.
+
+The default threshold is 64,000 estimated tokens: high enough to leave short runs alone while
+providing room for compaction before a long conversation fills its context. This is a heuristic,
+not a provider capacity or usage claim. Unset or empty `OVERSIGHT_HISTORY_PRUNE_TOKENS` uses this
+default; `0` or `off` disables compaction; any other value must be an integer of at least 8,000.
+Both passes share the existing rearm rule: growth of 25% of the threshold since the last batch's
+ending estimate, even when candidates ran out. The enabled prompt hash includes both policies,
+thresholds, windows, stub templates and argument cap. Default baseline/pack versions are
+`agent-v1-2e780e372af4` / `agent-v1-80a055d05910`; recorded runs retain their own versions.
+
+A provider HTTP 400 or 413 with `context_length_exceeded`, or a message that the input exceeds
+the model's maximum context length or token limit, is not retried. Both the run detail and fatal
+`model_api` error say: "This agent's conversation is longer than the model accepts; start a new
+agent to continue." Other HTTP 400 errors keep their existing text. No contract changes.
+The four-identical-real-results stop is unchanged and can still be reached within 30 steps
+when an agent rereads a masked observation and repeats it without changing the file.
+
+This policy follows [The Complexity Trap](https://arxiv.org/abs/2508.21433), which reports
+observation masking matching summarization's solve rate while halving cost relative to a raw
+agent in its experiments. That result motivates this simple policy; it does not measure
+Oversight's cost or correctness. All implementation and validation here are new and use scripted
+fake models only. Broader history bounds and a visible handoff remain separate candidates.
+The private reviewed supervisor now translates verified launch/source authority into prepared root
+commands, without sharing demo trust. Trusted inventory/copy work stays outside the event loop and
+executes no candidate code. Fresh sanitized import copies preserve originals and remove editable
+hooks; recorded manifests are rechecked before root adaptation and tools never recover host HOME.
+Only executable preparation, direct builds and startup enter fresh allowlisted roots. Canonical
+exclusions apply to writable roots and storage as well as read-only inputs. U0 owns N0; U1 locks
+read-only mounts in its own PID/mount namespaces with UID/GID 1000 and no capabilities, permitting
+nested isolation without retaining CAP_SETFCAP. The fixed glibc/x86-64 layout, detached old root,
+private proc/FD closure, syscall filter and interop refusal fail closed on missing support.
+
+Authenticated process births and namespaces are durably registered before execution acknowledgement;
+a persistence failure never opens that gate. Each command retains boundary ownership through verified
+death. Recovery remains under the runtime lock before orphan checks/reset, and ambiguous entry or
+cleanup retains quarantine. A prior build's death cannot stand in for a failed later entry. The
+unchanged leaf root-directory cleanup failure is still a blocking uncertainty.
+
+Publication receives T explicitly, copies bounded regular files into supervisor-owned storage and
+serves pinned handles. Exact HTTP authorities, replacement CSP, fixed routing, header stripping,
+restricted redirects and WebSocket refusal remain independent of edited code. The connector enters
+U0 then N0 through live pidfds while remaining outside U1/PID/mount; it hands back connected sockets,
+never a host listener. There is no fallback without equivalent proof. Fresh health, index/assets/
+workers, API and same-run SSE evidence precede the supervisor's readiness nonce. A retained public
+reservation prevents a gateway shutdown from freeing the port while descendants still execute. A separately registered trusted listener guardian survives supervisor death, pins the authenticated
+namespace processes and releases its duplicate only after their pidfds report death. Fresh import
+copy identities are persisted too; recovery retires only matching owned copies after verified death,
+retaining quarantine on replacement or ambiguous cleanup.
+
+Readiness/lease defaults are now 30/600 seconds; heartbeat/lifetime remain 10/900. Lifetime starts at
+reservation, including waiting; execution starts at dequeue with build plus readiness allowance.
+Queue and static preparation timings are separate. One owner/startup/build also bounds admission
+below the configured queue cap eight. Defaults remain frozen and person-owned. Delegated aggregate
+memory/CPU controls are probed outside the root; otherwise disclose exactly “per-process limits only;
+aggregate usage is not enforced”. Python address space, Node heap without small Node RLIMIT_AS,
+lower priority, CPU affinity, admission and sampled RSS/cache monitoring supplement the fallback;
+sampling is not aggregate enforcement. Sanitized build diagnostics never enter lifecycle events.
+Resolved server provider values travel only over the private control pipe to the log redactor,
+never the durable registry or candidate environment. Durable build/transition phases keep polling
+and renewal valid while the supervisor and listener guardian own the next command entry.
+
+The accepted request Host owns the opposite loopback frame name and its exact Host/Origin and parent
+frame-ancestors. Production and Vite frame-src use that same request, naming only the opposite
+loopback host for the configured pool; Vite refuses every other Host or listening-port mismatch.
+Custom HTML embedders retain their explicit CSP after the same Host check; Vite-owned HTML keeps
+the request-aware pool policy.
+Direct shop launches without a request parent keep the person's configured origins; the localhost
+default selects only the frame URL. An explicit request parent still selects exactly its own Origin.
+The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents are refused before
+reservation with `not_configured`, without a listener, process or lifecycle event. Shop localhost
+parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin. Real-route
+acceptance and the three-start driver use 127.0.0.1 parents and remain blocked prerequisites, not
+current qualification evidence. The frontend transport's opposite-name integration remains a
+separately owned prerequisite. Kernel acceptance fixtures also still require explicit profile opt-in.
+Admission-lock waits expire at the earlier lease or absolute deadline, retaining the corresponding
+expiry reason. Stop, EOF or cancellation
+before execution opens no acknowledgement and settles verified boundary death before releasing
+ownership. Logs stay at the startup report's exact path; `wslpath -w` gives the person's Windows/WSL editor path, with no delivered
+desktop log viewer. The 4,096-byte HTML carrier remains unchanged and Health/contracts stay untouched.
+
+The nested configuration uses explicit no-key Settings and injection, closed role policy and separate
+outer-marker/NESTED10 scripts because person input cannot select paid execution or scripted actions.
+Both agents require their scripted label. These landed components and controlled namespace wiring
+do not enable the reviewed self app, certify final application/story/browser acceptance, or eliminate
+the tests/shop filesystem residual. Its ordinary Settings entry and equal ports remain refused;
+the explicit nested entry, distinct-port declaration/re-pin, frontend consumer and final acceptance
+remain required. Native Windows keeps the exact warning and grants no paid-run authority.

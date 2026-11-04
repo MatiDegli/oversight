@@ -75,6 +75,8 @@ TOOL_TARGETS = {
 USER, NET, MOUNT, PID = 0x10000000, 0x40000000, 0x20000, 0x20000000
 BIND, REC, PRIVATE, REMOUNT, RDONLY = 4096, 16384, 1 << 18, 32, 1
 NOSUID, NODEV, NOEXEC = 2, 4, 8
+NOATIME, NODIRATIME, RELATIME = 1024, 2048, 1 << 21
+STRICTATIME = 1 << 24
 LIBC = ctypes.CDLL(None, use_errno=True)
 
 
@@ -233,6 +235,22 @@ def bind(source: str, destination: Path, *, readonly: bool, device: bool = False
             raise ValueError("submount in boundary input")
     mount(source, str(destination), None, BIND | REC)
     flags = BIND | REMOUNT | NOSUID
+    # Inspect the inherited mount itself: user namespaces lock its source restrictions.
+    inherited = os.statvfs(destination).f_flag
+    for source_flag, mount_flag in (
+        (os.ST_RDONLY, RDONLY),
+        (os.ST_NOSUID, NOSUID),
+        (os.ST_NODEV, NODEV),
+        (os.ST_NOEXEC, NOEXEC),
+        (os.ST_NOATIME, NOATIME),
+        (os.ST_NODIRATIME, NODIRATIME),
+        (os.ST_RELATIME, RELATIME),
+    ):
+        if inherited & source_flag:
+            flags |= mount_flag
+    # An explicit nodiratime without noatime/relatime must not default to relatime.
+    if not inherited & (os.ST_NOATIME | os.ST_RELATIME):
+        flags |= STRICTATIME
     if not device:
         flags |= NODEV
     if readonly:

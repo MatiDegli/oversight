@@ -36,12 +36,29 @@ class PreviewLifecycle:
     async def start(self, owner: "PreviewOwnership") -> None:
         """Cancellation settles before process.stop can take the channel's sole reader."""
         try:
-            ready_deadline = time.monotonic() + self.profile.readiness_s
-            async with asyncio.timeout(self.profile.readiness_s):
-                # Parent lock ownership never transfers into this task. A server Git lease
-                # first cancels/settles this work at the universal hook.
-                async with self.workspace.locks(main=True, agent_id=owner.candidate.agent_id):
-                    self.authorize(owner)
+            queued = time.monotonic()
+            # Convert person-owned clock deadlines to the loop's monotonic clock.
+            while True:
+                lease, absolute = self.deadlines()
+                expires_at = asyncio.get_running_loop().time() + min(lease, absolute) - self.clock()
+                try:
+                    async with asyncio.timeout_at(expires_at):
+                        async with self.workspace.locks(
+                            main=True, agent_id=owner.candidate.agent_id
+                        ):
+                            self.authorize(owner)
+                    break
+                except TimeoutError:
+                    # A valid renewal while queued may move the lease, never the lifetime.
+                    if self.clock() >= min(self.deadlines()):
+                        raise
+            owner.queue_s += time.monotonic() - queued
+            allowance = self.profile.readiness_s
+            if self.profile.reviewed_app is not None:
+                allowance += sum(c.timeout_s for c in self.profile.reviewed_app.launch.build)
+            ready_deadline = time.monotonic() + allowance
+            owner.execution_deadline = ready_deadline
+            async with asyncio.timeout(allowance):
                 deadline, _ = self.deadlines()
                 await self.launch(owner)
                 if owner.draining or self.barrier.owner is not owner:
@@ -52,7 +69,14 @@ class PreviewLifecycle:
                 if deadline != lease:
                     owner.process.send((f'{{"renew":{lease}}}\n').encode())
                 if not await owner.process.ready(max(0, ready_deadline - time.monotonic())):
-                    owner.reason = "readiness_timeout"
+                    if self.profile.reviewed_app is not None:
+                        owner.reason = (
+                            "readiness_timeout"
+                            if owner.process.reason == "readiness_timeout"
+                            else "launch_failed"
+                        )
+                    else:
+                        owner.reason = "readiness_timeout"
                     return
                 lease, absolute = self.deadlines()
                 if self.clock() >= min(lease, absolute):
@@ -64,7 +88,16 @@ class PreviewLifecycle:
                     self.authorize(owner)
                     await self.transition("ready", None)
         except TimeoutError:
-            owner.reason = owner.reason or "readiness_timeout"
+            lease, absolute = self.deadlines()
+            if self.clock() >= min(lease, absolute):
+                reason = "lifetime_expired" if self.clock() >= absolute else "lease_expired"
+            elif self.profile.reviewed_app is not None and (
+                owner.process is None or owner.process.stage != "readiness"
+            ):
+                reason = "launch_failed"
+            else:
+                reason = "readiness_timeout"
+            owner.reason = owner.reason or reason
 
     async def supervise(self, owner: "PreviewOwnership") -> None:
         """Observe failures after returning starting; never leak a task exception."""

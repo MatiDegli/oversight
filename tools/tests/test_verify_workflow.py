@@ -33,6 +33,10 @@ def mapping(text: str) -> dict[str, str]:
     result: dict[str, str] = {}
     offset = 0
     while offset < len(text):
+        # Ignore comments only at this mapping's level; literal bodies stay intact.
+        if text[offset] == "#":
+            offset = text.index("\n", offset) + 1
+            continue
         match = field.match(text, offset)
         assert match is not None, f"Unsupported mapping near {text[offset : offset + 80]!r}"
         key, scalar, children = match.groups()
@@ -98,7 +102,7 @@ def assert_verify_policy(verify: str, ci: str) -> None:
         job = mapping(jobs[job_id])
         assert set(job) == {"name", "runs-on", "timeout-minutes", "permissions", "steps"}
         assert job["name"] == job_id
-        assert job["runs-on"] == "ubuntu-latest"
+        assert job["runs-on"] == ("ubuntu-24.04" if job_id == "check" else "ubuntu-latest")
         assert job["timeout-minutes"] == timeout
         assert mapping(job["permissions"]) == {"contents": "read"}
         job_steps = steps(job["steps"])
@@ -109,17 +113,21 @@ def assert_verify_policy(verify: str, ci: str) -> None:
 
     check = parsed_steps["check"]
     ci_check = steps(mapping(ci_jobs["check"])["steps"])
-    assert len(check) == 10
-    assert len(ci_check) == 9
+    assert len(check) == 11
+    assert len(ci_check) == 10
     for actual, source in zip(check[:6], ci_check[:6], strict=True):
         assert_named_copy(actual, source)
     assert [step.get("uses") for step in check[:6]] == [*ACTIONS.values(), None, GITLEAKS]
     assert mapping(check[2]["with"]) == {"package_json_file": "frontend/package.json"}
     assert mapping(check[3]["with"]) == {"node-version": "24"}
     assert check[4]["run"] == "make install"
-    assert check[6:9] == ci_check[6:9]
-    assert check[6:8] == [{"run": "make check-ci"}, {"run": "make smoke"}]
-    assert check[8]["name"] == "Report network isolation probe"
+    assert check[6:10] == ci_check[6:10]
+    assert check[6] == {
+        "name": "Allow unprivileged user namespaces",
+        "run": "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
+    }
+    assert check[7:9] == [{"run": "make check-ci"}, {"run": "make smoke"}]
+    assert check[9]["name"] == "Report network isolation probe"
 
     secrets = parsed_steps["secrets"]
     ci_secrets = steps(mapping(ci_jobs["secrets"])["steps"])
@@ -212,6 +220,19 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
     ci = (WORKFLOWS / "ci.yml").read_text()
     with pytest.raises(AssertionError):
         assert_ci_triggers(ci.replace("on:\n", "on:\n  pull_request:\n", 1))
+
+
+@pytest.mark.parametrize(
+    "filename,job_id",
+    [
+        ("ci.yml", "browser"),
+        ("verify-frontend.yml", "browser-1"),
+        ("verify-frontend.yml", "browser-2"),
+    ],
+)
+def test_browser_jobs_use_supported_host(filename: str, job_id: str) -> None:
+    jobs = mapping(mapping((WORKFLOWS / filename).read_text())["jobs"])
+    assert mapping(jobs[job_id])["runs-on"] == "ubuntu-24.04"
 
 
 WINDOWS_PATHS = (
