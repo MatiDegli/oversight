@@ -306,12 +306,12 @@ async def test_off_preserves_failed_test_output(
     assert observations(model.requests[-1])[0] == expected
 
 
-def test_setting_defaults_off_and_environment_overrides_env_file(
+def test_setting_defaults_on_and_environment_overrides_env_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("OVERSIGHT_HARNESS_PACK", raising=False)
     env_file = tmp_path / "settings.env"
-    assert Settings.load(env_file).harness_pack is False
+    assert Settings.load(env_file).harness_pack is True
     env_file.write_text("OVERSIGHT_HARNESS_PACK=true\n")
     assert Settings.load(env_file).harness_pack is True
     monkeypatch.setenv("OVERSIGHT_HARNESS_PACK", "false")

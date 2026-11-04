@@ -4821,3 +4821,21 @@ observation masking matching summarization's solve rate while halving cost relat
 agent in its experiments. That result motivates this simple policy; it does not measure
 Oversight's cost or correctness. All implementation and validation here are new and use scripted
 fake models only. Broader history bounds and a visible handoff remain separate candidates.
+
+
+## Harness pack on by default, with static diagnostics and a symbol tool (2026-11-04)
+
+Maintainer ruling: the existing `OVERSIGHT_HARNESS_PACK` now defaults to true. Explicit false
+retains the comparison arm's six tools, prompts and observations. This supersedes only the
+off-by-default part of the 2026-10-28 harness ruling; the single-switch comparison remains.
+
+With the pack on, successful Python edits keep their changes and append only newly introduced
+static diagnostics, compared by code and message. Isolated ruff checks read the before/after
+content on stdin outside the worktree, use only E9,F63,F7,F82, and stop after ten seconds.
+At most twenty bounded rows ask the agent to fix findings before tests. Missing ruff, timeout
+or malformed output logs a warning and preserves the ordinary edit result. Ruff is a pinned
+runtime dependency. Its stdin subprocess is the narrow exception to the workspace runner's
+no-stdin interface; it receives no inherited provider credentials.
+
+The next delivery adds read-only Python `find_symbol` inside the same pack. No shell tool,
+scratchpad or language server is authorized.

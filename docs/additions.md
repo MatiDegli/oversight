@@ -441,7 +441,10 @@ searches with per-file match counts and a narrowing hint; retain a bounded whole
 with test/assertion/relevant frame; remind `finish` once to run tests if edits followed the last
 run; prompt for one evidence-led path and a stopping point.
 
-The opt-in pack is on main (`42976ee`), including hash/uniqueness checks and bounded observations
+The pack is on by default (maintainer ruling, 2026-11-04); explicit false retains the six-tool
+comparison arm. Successful Python edits append only new isolated ruff diagnostics without
+reverting the edit; unavailable diagnostics log a warning. Read-only Python symbol navigation
+is the next delivery in the same pack. The original pack is on main (`42976ee`), including hash/uniqueness checks and bounded observations
 (`backend/src/oversight/agents/tools.py`, `backend/src/oversight/agents/_observations.py`).
 Runner failure retention is wired too (`b4446cc`, `backend/src/oversight/workspace/suite_guard.py`).
 Preserve failures before the runner discards text. No contract addition or tool is needed. One

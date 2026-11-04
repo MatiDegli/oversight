@@ -144,8 +144,8 @@ class Settings:
     """OVERSIGHT_BEHAVIOR_DIFF: opt-in finite measurements and bounded public samples."""
     measured_cone: bool = False
     """OVERSIGHT_MEASURED_CONE: opt-in pytest caller evidence, independent of direct probes."""
-    harness_pack: bool = False
-    """OVERSIGHT_HARNESS_PACK: opt-in agent harness, selected before process startup."""
+    harness_pack: bool = True
+    """OVERSIGHT_HARNESS_PACK: default-on agent harness, selected before process startup."""
     history_prune_tokens: int | None = field(default_factory=lambda: _history_threshold(None))
     """Default-on history compaction; minimum 8,000 estimated tokens, None disables it."""
     reviewer_fake_script: Path | None = None
@@ -291,7 +291,7 @@ class Settings:
             baseten_budget_usd=positive_amount(merged.get("OVERSIGHT_BASETEN_BUDGET_USD")),
             behavior_diff=merged.get("OVERSIGHT_BEHAVIOR_DIFF", "false").lower() == "true",
             measured_cone=merged.get("OVERSIGHT_MEASURED_CONE", "false").lower() == "true",
-            harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "false").lower() == "true",
+            harness_pack=merged.get("OVERSIGHT_HARNESS_PACK", "true").lower() == "true",
             history_prune_tokens=_history_threshold(merged.get("OVERSIGHT_HISTORY_PRUNE_TOKENS")),
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),

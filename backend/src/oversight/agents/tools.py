@@ -17,6 +17,7 @@ from typing import Literal, cast
 
 from pydantic import ValidationError
 
+from oversight.agents._diagnostics import new_diagnostics
 from oversight.agents._harness import HarnessState, ToolError, search_rows
 from oversight.agents._observations import test_observation
 from oversight.graph import WorkspaceGraph
@@ -477,8 +478,11 @@ class Toolbox:
         start = current.content.count("\n", 0, index) + 1
         end = start + max(new.count("\n") - (1 if new.endswith("\n") else 0), 0)
         nodes = self._nodes_over(path, start, end)
+        diagnostics = ""
+        if self._harness.enabled and PurePosixPath(path).suffix == ".py":
+            diagnostics = await new_diagnostics(path, current.content, content, MAX_SEARCH_LINE)
         return ToolOutcome(
-            content=f"Edited {path}.",
+            content=f"Edited {path}." + diagnostics,
             ok=True,
             summary=self._where("Edited", path, nodes, (start, end)),
             focus="edit",

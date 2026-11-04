@@ -7,6 +7,7 @@ dependencies = [
     "fastapi==0.143.0",
     "openai==3.29.0",
     "oversight-contracts",
+    "ruff==0.17.0",
     "uvicorn==0.54.0",
 ]
 

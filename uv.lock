@@ -325,6 +325,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "openai" },
     { name = "oversight-contracts" },
+    { name = "ruff" },
     { name = "uvicorn" },
 ]
 
@@ -333,6 +334,7 @@ requires-dist = [
     { name = "fastapi", specifier = "==0.143.0" },
     { name = "openai", specifier = "==3.29.0" },
     { name = "oversight-contracts", editable = "contracts" },
+    { name = "ruff", specifier = "==0.17.0" },
     { name = "uvicorn", specifier = "==0.54.0" },
 ]
 
@@ -365,7 +367,6 @@ dev = [
     { name = "pytest" },
     { name = "pytest-timeout" },
     { name = "pytest-xdist" },
-    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -383,7 +384,6 @@ dev = [
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-timeout", specifier = "==2.4.0" },
     { name = "pytest-xdist", specifier = "==3.8.0" },
-    { name = "ruff", specifier = "==0.17.0" },
 ]
 
 [[package]]
