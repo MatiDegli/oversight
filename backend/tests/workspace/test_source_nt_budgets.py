@@ -195,6 +195,8 @@ async def test_copy_budget_no_reset(
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("extra", [0, 1])
+# Linear validation and staging of 16,384 paths need headroom on loaded hosts.
+@pytest.mark.timeout(300)
 async def test_copy_path_budget_no_reset(tmp_path: Path, extra: int) -> None:
     from .test_source_nt import HEAD
 

@@ -77,11 +77,13 @@ def _validate_prepared(config: NestedConfig) -> None:
 def build_nested_settings(config: NestedConfig) -> Settings:
     """Build private settings directly: no .env, inherited keys, installs or environment setup."""
     _validate_prepared(config)
+    if config.api_port != config.public_port:
+        raise ValueError("Nested static-api requires one listener with equal assigned ports")
     return Settings(
-        runtime_dir=config.preview_dir / "state",
+        runtime_dir=config.preview_dir / "state" / ".runtime",
         host="127.0.0.1",
         port=config.api_port,
-        vite_port=config.public_port,
+        vite_port=None,
         demo_python=config.demo_python,
         layout=config.layout,
         frontend_dist=config.frontend_dist,

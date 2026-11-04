@@ -54,6 +54,30 @@ def facts_ready(
     *,
     author: Literal["agent", "user"],
 ) -> None:
+    if live.nested_policy is not None:
+        if live._closing or author != "agent":
+            return
+        # Facts arrive while the author is still working, before review_current admits it.
+        task = asyncio.create_task(
+            live._report(
+                "server",
+                format_needs_you(
+                    proposal.revision,
+                    proposal.head_commit,
+                    "reviewer_missing",
+                    "Nested role is not supported: review.",
+                ),
+                agent_id=proposal.agent_id,
+                change_id=proposal.change_id,
+            ),
+            name=f"review-disabled-{capture.target.change_id}",
+            context=contextvars.Context(),
+        )
+        live._reviews[capture.target.change_id] = task
+        task.add_done_callback(
+            lambda done: live._forget(live._reviews, capture.target.change_id, done)
+        )
+        return
     if not live._settings.cross_review or live._closing or author != "agent":
         return
     # No task yet: finish still owns the run, and may end halted after proposing.
@@ -61,6 +85,9 @@ def facts_ready(
 
 
 def run_ended(live: LiveRun, agent_id: str, end: RunEnd | None) -> None:
+    if live.nested_policy is not None:
+        live._review_pending.pop(agent_id, None)
+        return
     pending = live._review_pending.pop(agent_id, None)
     manager = live._manager
     if pending is None or live._closing or manager is None or end is None or agent_id in live._runs:
@@ -140,6 +167,7 @@ async def review(
     finished: bool,
     ready_time: float,
 ) -> None:
+    live.require_role("review")
     accounting: ReviewAccounting | None = None
     try:
         if not finished:

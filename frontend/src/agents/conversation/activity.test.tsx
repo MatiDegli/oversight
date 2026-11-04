@@ -9,7 +9,12 @@ it("renders the header, timeline, notices and composer synchronously", () => {
   const conversation = selectConversation(progressState("retry"), "agent-1", []);
   if (!conversation) throw new Error("Missing conversation");
   const html = renderToStaticMarkup(
-    <ConversationPanel conversation={conversation} onSend={() => Promise.resolve()} />,
+    <ConversationPanel
+      conversation={conversation}
+      onSend={() => Promise.resolve()}
+      composerDisclosure={<section aria-label="Fixture startup disclosure">Startup facts</section>}
+      actionAccessory={<button type="button">Merge mode fixture</button>}
+    />,
   );
   expect(html).toContain('aria-label="Agent A conversation"');
   expect(html).toContain('aria-label="Conversation timeline"');
@@ -17,6 +22,13 @@ it("renders the header, timeline, notices and composer synchronously", () => {
   expect(html).toContain("Edited pricing.py");
   expect(html).toContain("Waiting for model");
   expect(html).toContain("<textarea");
+  const composer = html.slice(html.indexOf('class="conversation-composer'));
+  expect(composer).toContain('aria-label="Fixture startup disclosure"');
+  expect(composer).toContain('role="group" aria-label="Conversation details" tabindex="0"');
+  expect(composer).toContain("focus-visible:outline-text");
+  expect(composer.indexOf("Startup facts")).toBeLessThan(composer.indexOf("<textarea"));
+  expect(composer).toContain("Merge mode fixture");
+  expect(composer).toContain("Send");
 });
 
 it("renders a single call without a hidden fold row or an extra divider", () => {

@@ -33,7 +33,8 @@ export function PreviewOption({
       ? "Live preview actions are unavailable in this session."
       : null);
   const activate = (kind: "preview" | "review", origin: HTMLButtonElement) => {
-    if (readOnly || !actions || reason) return;
+    if (readOnly || !actions || reason || (kind === "preview" && actions.previewRestriction))
+      return;
     const fresh = resolvePreviewReference(actions.readState(), request);
     if (!fresh.candidate) return;
     if (kind === "preview") {
@@ -68,7 +69,8 @@ export function PreviewOption({
           <button
             type="button"
             className="lead-preview-primary"
-            disabled={Boolean(reason)}
+            disabled={Boolean(reason || actions?.previewRestriction)}
+            aria-describedby={actions?.previewRestriction?.describedBy}
             onClick={(event) => {
               activate("preview", event.currentTarget);
             }}

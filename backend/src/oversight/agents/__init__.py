@@ -35,7 +35,7 @@ from oversight.agents._lead_tools import (
 )
 from oversight.agents._lifecycle import TaskClients, close_model
 from oversight.agents._plan_call import run_plan_call
-from oversight.agents._prompts import prompt_version, system_prompt
+from oversight.agents._prompts import HISTORY_DEFAULT_TOKENS, prompt_version, system_prompt
 from oversight.agents._review_call import run_review_call
 from oversight.agents._status import done_when_text, task_examples, validate_agent_status
 from oversight.agents.answering import (
@@ -121,6 +121,7 @@ __all__ = [
     "EXAMPLE_MAX_OUTPUT_TOKENS",
     "FAKE_MODEL",
     "FAKE_MODEL_B",
+    "HISTORY_DEFAULT_TOKENS",
     "LEAD_LIMITS",
     "LEAD_TOOL_SCHEMAS",
     "LEDGER_DETAIL",
