@@ -206,8 +206,8 @@ function PanelMessage({ view, label }: { view: PreviewView; label: string }) {
       <h3>{heading}</h3>
       {observer ? (
         <p>
-          Close dismisses this panel only. Wait for ownership to expire before opening a preview
-          here.
+          Dismissing this panel only hides it here. Wait for ownership to expire before opening a
+          preview here.
         </p>
       ) : status?.state === "stopping" ||
         (view.pending && view.notice === "closure_unconfirmed") ? (

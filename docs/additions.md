@@ -59,7 +59,8 @@ The maintainer set this order on 2026-10-30, ahead of the queue below. Delivery 
 ### Chat view with the lead (2026-11-01)
 
 State: **Partly built** — the shared shell/switch, presence and shared merge mode/review are on main;
-the lead thread UI remains. The maintainer approved two views of one shell on 2026-11-01.
+the lead thread UI is also built ([LeadThreadRows](../frontend/src/agents/conversation/LeadThreadRows.tsx));
+reference-view release gates remain (see [Lead agent](#lead-agent)). The maintainer approved two views of one shell on 2026-11-01.
 Build Chat only from an approved sketch round.
 
 - Chat lists agents on the left, with the run's lead first and the agents it queued under it;
@@ -68,7 +69,8 @@ Build Chat only from an approved sketch round.
   as tabs. A "Chat | Oversight" switch in the top bar changes layout only: both views share
   one client state and switching never reloads. The graph loads on the first switch to Oversight.
 - The lead is Chat's first conversation. The lead thread contracts and L2 runtime are on main;
-  its Chat UI remains.
+  its Chat UI is built ([LeadThreadRows](../frontend/src/agents/conversation/LeadThreadRows.tsx));
+  reference-view release gates remain (see [Lead agent](#lead-agent)).
 - Review, merge mode and approve rules are shared. Chat opens the same review panel and the
   same merge-mode setting; it shows impact as text plus "See on graph", which switches to
   Oversight with the cone framed.
@@ -105,7 +107,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | --- | --- | --- | --- |
 | 1 | Facts and a summary from events (package 3) | On main — summary producer `027ec36`, review rendering `9cdd02a`; facts row/steps `ae9822d` | Yes — summary; report check needs no field |
 | 2 | Behavior diff | Backend and review rows on main — `2896b29`; shared inputs `647d545`, methods/properties `2cfe760`, object arguments `8a4a2ec`, unprobed reasons `f44dd62`; graph count chips and sample popovers `f6d7e2a`; supplied new-parameter observations `2122430` (dedicated UI remains) | Yes |
-| 3 | Agent harness pack | On main — opt-in pack `42976ee`, runner wiring `b4446cc` | No |
+| 3 | Agent harness pack | Original pack on main `42976ee`, runner wiring `b4446cc`; now on by default with static diagnostics and read-only Python `find_symbol` | No |
 | 4 | Measured impact cone | On main — caller evidence `1c50382`, GET /impact `920e930`, review rows `09865ec`/`d3f64fd`, review rework `cf1e536`; graph caller words `5ba8584` | Yes |
 | 5 | Live overlap between agents | Partial — shared edits and change-lifetime reads `1e51e51`, graph overlap `e4cec56`; review's **Other pending changes** shows bounded current-graph cone membership with explicit limits; deeper edit facts remain | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
@@ -152,6 +154,37 @@ diff for methods is delivered under item 2, superseding its earlier candidate st
 These retain useful ideas from the old inventory without approving a front or changing the freeze.
 None of the candidates below is queued. Delivered and retired ideas are recorded separately;
 new candidate work waits for the maintainer’s order.
+
+- <a id="git-at-agent-scale"></a>**Git at agent scale.** After the hackathon, not queued; measure first.
+  - Source: OpenAI's [Scaling Git at OpenAI](https://openai.com/index/scaling-git-at-openai/)
+    (2026-11-02). More concurrent agent tasks per engineer meant more branches, pushes, merges and
+    fetches than the monorepo backend could handle. OpenAI rebuilt the server side as Pando, with
+    per-branch ordering, stored packfile reuse, regional caches and background pack compaction;
+    it reports about 80% lower median push latency (nearly a fivefold reduction).
+  - Oversight has no Git server. Its analog is one local runtime repository shared by up to six
+    agent worktrees ([slot limit](../backend/src/oversight/settings.py),
+    [worktree creation](../backend/src/oversight/workspace/core.py)). Transfer each idea only after
+    measurement shows the need:
+    1. Measure main-lock wait (already observed in [locks.py](../backend/src/oversight/workspace/locks.py))
+       and Git command latency at 2, 4 and 6 agents, on the demo and a large pinned profile.
+    2. Per-branch ordering: per-worktree locks already order each agent's own operations. Audit
+       operations taking the main lock; retain only those changing main or its worktree list there.
+    3. Background compaction: run `git maintenance` tasks (`commit-graph`, `loose-objects`,
+       `incremental-repack`) on the runtime repository while idle, under the main lock.
+    4. One object store: agent worktrees already share objects through `git worktree add` in
+       [core.py](../backend/src/oversight/workspace/core.py). Inventory disposable trees that copy
+       files, such as `copytree` in [preview_preparation.py](../backend/src/oversight/workspace/preview_preparation.py),
+       and build from the shared store where safe; that preparation helper is not a live launch path.
+    5. A batched merge queue: when several approved changes wait, test their combination once and
+       bisect only on failure. Each change keeps its own Approve and the combined-result test rule.
+       This would change today's [one-candidate merge path](../backend/src/oversight/changes/_merge.py).
+    6. Sparse agent worktrees for large repositories, scoped to the plan's files and impact cone,
+       with tests still on a full tree. A reviewed plan must come first: path validation and
+       `run_tests` currently assume the full tree ([files](../backend/src/oversight/workspace/files.py),
+       [test runner](../backend/src/oversight/workspace/suite.py)).
+  - Not adopted: server-side pack serving, packfile-uri offload or regional caches; Oversight runs
+    on one machine without a Git server.
+  - Ideas only; no text or code copied.
 
 - Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on the
   out-of-scope list in docs/proposal.md, section 5; lifting it needs the maintainer's decision. Goal: safety without slowing
@@ -335,13 +368,15 @@ new candidate work waits for the maintainer’s order.
   the Files tree with presence instead of the graph. Agents, worktrees, diff, review, cross-review,
   merge and tests still work. Needs a per-repository test command with JUnit output and an approved
   sketch first.
-- Conditional pre-freeze Tauri spike, after the maintainer's other feature: the
-  [portable desktop core](../desktop/README.md) is implemented and tested on Linux with a standalone
-  offline target. The native Windows core lane exists but has not run yet.
-  The Windows executable, complete Tauri lock/license
-  reconciliation, nested Jobs/console lifecycle, WebView2/UI proof and duration/size are deferred.
-  The [future runbook](../README.md#future-tauri-shell-runbook) wraps the advanced native backend;
-  no WSL bridge or native picker. Cut: November 3, 17:00 ART; freeze: 20:00 ART.
+- Windows desktop packaging implementation is present: Tauri 2 shell with owned nested-Job
+  lifecycle, installed launch/data layout, prepared demo Python, pinned runtime staging,
+  NSIS/currentUser/zlib and a separate Windows install/smoke/uninstall/artifact job. The
+  [runbook](../desktop/README.md) distinguishes implementation from pending native evidence.
+  All 443 external crates reconcile under the scoped grants, including the exact inactive
+  target-lexicon exception; [audit](../desktop/packaging/crate-license-audit.md). One installer
+  notice generator inventories crate, Python, CPython/component, frontend and NSIS terms.
+  Native runner results, failure-path/headed rendering acceptance and independent review remain
+  pending; no WSL bridge or native picker. See the November 4 DECISIONS entry.
 - The minimal native Windows backend and public own-repository COPY are implemented;
   their native qualification remains pending. Broader platform ports and macOS follow as
   separate fronts. First a per-OS layer in `backend/src/oversight/workspace/` (network isolation,
@@ -435,16 +470,22 @@ proves no equivalence. Empty output reads “no difference measured on these inp
 
 ### 3. Agent harness pack
 
-Reduce avoidable failures without changing the six tools. Under one setting: reject a Python edit
+Reduce avoidable failures under one setting: reject a Python edit
 that breaks previously valid syntax, return the error line and preserve old bytes; summarize broad
 searches with per-file match counts and a narrowing hint; retain a bounded whole failure block
 with test/assertion/relevant frame; remind `finish` once to run tests if edits followed the last
 run; prompt for one evidence-led path and a stopping point.
 
-The opt-in pack is on main (`42976ee`), including hash/uniqueness checks and bounded observations
+The pack is on by default (maintainer ruling, 2026-11-04); explicit false retains the six-tool
+comparison arm. Successful Python edits append only new isolated ruff diagnostics without
+reverting the edit; unavailable diagnostics log a warning. Read-only Python `find_symbol` is
+available only with the pack on: bounded definitions,
+references and focus from an isolated Jedi/parso subprocess, with secret/link checks and
+external definitions shown only as module names. The original pack is on main (`42976ee`),
+including hash/uniqueness checks and bounded observations
 (`backend/src/oversight/agents/tools.py`, `backend/src/oversight/agents/_observations.py`).
 Runner failure retention is wired too (`b4446cc`, `backend/src/oversight/workspace/suite_guard.py`).
-Preserve failures before the runner discards text. No contract addition or tool is needed. One
+Preserve failures before the runner discards text. No contract addition is needed. One
 setting lets the bench compare both arms with the same model, reasoning and limits. This does
 not replace independent server proposal tests.
 

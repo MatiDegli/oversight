@@ -306,7 +306,7 @@ def test_extra_fields_are_rejected_at_every_level(where: str) -> None:
         ("agent.status", {"agent_id": "agent-0"}),
         ("agent.status", {"change_id": "change-x"}),
         ("run.started", {"run_id": "run-2026-10-27"}),
-        ("agent.status", {"slot": "G"}),
+        ("agent.status", {"slot": "A1"}),
     ],
 )
 def test_malformed_ids_are_rejected(event_type: str, changes: dict[str, Any]) -> None:
@@ -457,7 +457,7 @@ def test_setup_details_and_health_defaults() -> None:
 
 
 @pytest.mark.parametrize(
-    "bad", [{"name": "OTHER_KEY"}, {"problem": "secret"}, {"slots": ["G"]}, {"value": "secret"}]
+    "bad", [{"name": "OTHER_KEY"}, {"problem": "secret"}, {"slots": ["A1"]}, {"value": "secret"}]
 )
 def test_setup_details_reject_unknown_names_problems_slots_and_values(bad: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):

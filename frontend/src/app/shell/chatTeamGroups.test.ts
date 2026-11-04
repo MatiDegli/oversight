@@ -62,7 +62,7 @@ it("keeps team-wide labels across two plans of one lead", () => {
     ...team("p1", "lead", ["a1", "a2"]),
     ...team("p2", "lead", ["a3", "a4"]),
   ]);
-  expect(group?.members.map((m) => m.letter)).toEqual(["A·1", "A·3", "A·2", "A·4"]);
+  expect(group?.members.map((m) => m.letter)).toEqual(["A·1", "A·2", "A·3", "A·4"]);
 });
 it("uses the exact Q2 heading in the lead heading position", () => {
   const result = groups([lead("lead"), ...team("p2", null, ["b1", "b2"])]);

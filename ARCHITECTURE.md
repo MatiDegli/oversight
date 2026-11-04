@@ -75,14 +75,16 @@ See [Opening the person's own repository](docs/own-repository.md) for its separa
    Start and before the first model call; a revision installs a fresh control sharing the
    lifetime message budget. Active registrations are dropped when a drive ends, on Stop and
    during shutdown. Closed controls cannot restart a paused gate.
-4. The loop offers `list_files`, `read_file`, `search`, `edit_file`, `run_tests` and `finish`.
-   There is no shell tool. Paths stay within the worktree. Reads are bounded. An edit needs
+4. Tools are list_files, read_file, search, edit_file, run_tests and finish, plus find_symbol
+   (read-only Python navigation) when the harness pack is on, the default. There is no shell tool.
+   Paths stay within the worktree. Reads are bounded. An edit needs
    a unique old-text match and the hash from the agent's last read. Tests run in the disposable tested tree with a
    fixed pytest command and a timeout. Demo and pinned profiles use the runtime's demo environment; selected own
    repositories on native Windows use their validated original virtual environment with imports mapped to the copy.
    Status follows tool execution and human run controls, never model text.
 5. Every completed tool call emits `agent.step`. Read focus precedes the step; `list_files`
-   sends none, and `search` focuses only its first five matching nodes. Successful edits publish
+   sends none, and `search` and `find_symbol` focus only their first five matching nodes.
+   Successful edits publish
    `change.updated`, edit focus and then the step. Updates carry full original and modified file
    contents, author and a pending graph overlay. Model replies produce `usage.tick`; the loop
    does not stream model text.
@@ -249,7 +251,7 @@ specifies the UI's "+12 omitted by depth" and "possibly affected", never a compl
 
 Moved from AGENTS.md on 2026-11-01 with its authority: change these rules only with the maintainer's approval.
 
-The data flow above specifies the six tools, per-call steps, read and edit focus, the first
+The data flow above specifies the tools, per-call steps, read and edit focus, the first
 five search matches, unique-match and last-read-hash edit checks, and the fixed test command.
 A worktree does not isolate: it shares `.git/config` and the stash, hence the no-shell rule.
 Read focus uses read mode; edit focus uses edit mode.
@@ -427,7 +429,7 @@ session. Historical command capabilities are withheld. Highlights frame on click
 first graph mount without a panel, and prune missing IDs without changing the frame key.
 
 `show_view` is advertised and dispatched with the moved prompt version: baseline
-`agent-v1-9d084b21af2c` and pack `agent-v1-3dc7d749888a` (DECISIONS, November 3).
+`agent-v1-9d084b21af2c` and pack `agent-v1-49ee5e3b962f` (DECISIONS, November 3).
 Remaining release gates are the separately authorized paid probe and prompt validation,
 a real recording and bundle replacement. Until those pass, the verified Oct 27 public
 recording remains bundled.
@@ -607,7 +609,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.19.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.21.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

@@ -39,7 +39,7 @@ function loopback(value: string): URL {
   const url = new URL(value);
   if (
     url.protocol !== "http:" ||
-    url.hostname !== "127.0.0.1" ||
+    (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") ||
     !url.port ||
     url.pathname !== "/" ||
     url.search ||
@@ -68,12 +68,15 @@ class LivePreviewPort {
     path: string,
     signal: AbortSignal,
     body?: StartPreview | PreviewTokenRequest,
+    keepalive = false,
   ): Promise<unknown> {
     try {
       const request = this.request;
       const response = await request(new URL(path, this.origin), {
         method: body ? "POST" : "GET",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
+        ...(keepalive
+          ? { keepalive: true }
+          : { signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]) }),
         ...(body && {
           body: JSON.stringify(body),
           headers: { "Content-Type": "application/json" },
@@ -105,15 +108,25 @@ class LivePreviewPort {
   }
   async details(id: string, signal: AbortSignal): Promise<PreviewDetails> {
     const result = this.validators.details(await this.call(path(id), signal));
-    if (result.url !== null && loopback(result.url).port === this.origin.port)
-      throw new Error("Preview shares backend port");
+    if (result.url !== null) {
+      const url = loopback(result.url);
+      if (url.port === this.origin.port) throw new Error("Preview shares backend port");
+      if (url.hostname === this.origin.hostname) throw new Error("Preview shares backend hostname");
+    }
     return result;
   }
   async renew(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus> {
     return this.validators.status(await this.call(path(id, "/lease"), signal, token(body)));
   }
-  async stop(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus> {
-    const result = this.validators.status(await this.call(path(id, "/stop"), signal, token(body)));
+  async stop(
+    id: string,
+    body: PreviewTokenRequest,
+    signal: AbortSignal,
+    delivery?: { keepalive: true },
+  ): Promise<PreviewStatus> {
+    const result = this.validators.status(
+      await this.call(path(id, "/stop"), signal, token(body), delivery?.keepalive),
+    );
     if (
       (result.state !== "stopped" && result.state !== "failed") ||
       result.reason === "cleanup_unverified"

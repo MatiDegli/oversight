@@ -1,0 +1,2 @@
+# Preserve pinned upstream bytes, including their whitespace; SHA-256 tests guard content.
+*.txt -text -whitespace

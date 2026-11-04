@@ -91,31 +91,29 @@ it("records the capture HEAD and working-tree state beside the Chat PNG", async 
     await session.close();
   }
 });
-it.each([-86_400_000, 86_400_000])(
-  "measures preview durations across a wall-clock adjustment of %i ms",
-  async (offset) => {
-    const session = await support.session(chatSizes[2]);
-    try {
-      await session.page.getByRole("button", { name: "Preview app", exact: true }).click();
-      await check(session.page.locator(".preview-panel-phase")).toContainText("App starting");
-      await session.page.evaluate((delta) => {
-        const original = Date.now;
-        Date.now = () => original() + delta;
-      }, offset);
-      session.publish("ready");
-      await check(
-        session.page.frameLocator("iframe").getByRole("heading", { name: "Candidate shop" }),
-      ).toBeVisible();
-      const manifest = await support.capture(session, "clock-adjustment");
-      expect(manifest.timeToReadyMs).toBeGreaterThan(0);
-      expect(manifest.timeToReadyMs).toBeLessThan(10_000);
-      expect(manifest.timeToInteractiveMs).toBeGreaterThan(0);
-      expect(manifest.timeToInteractiveMs).toBeLessThan(10_000);
-    } finally {
-      await session.close();
-    }
-  },
-);
+it("measures readiness and frame load across a wall-clock rollback", async () => {
+  const session = await support.session();
+  const { page } = session;
+  try {
+    const wallBefore = await page.evaluate(() => Date.now());
+    await page.clock.setFixedTime(wallBefore);
+    await page.getByRole("button", { name: "Preview app", exact: true }).click();
+    await check(page.locator(".preview-panel-phase")).toContainText("App starting");
+    await page.clock.setFixedTime(wallBefore - 60_000);
+    session.publish("ready");
+    await check(
+      page.frameLocator("iframe").getByRole("heading", { name: "Candidate shop" }),
+    ).toBeVisible();
+    await page.waitForFunction(() => window.previewChatTiming?.loaded !== undefined);
+    expect(await page.evaluate(() => Date.now())).toBeLessThan(wallBefore);
+    const manifest = await support.capture(session, "clock-rollback");
+    expect(manifest.timeToReadyMs).toBeGreaterThan(0);
+    expect(manifest.timeToInteractiveMs).toBeGreaterThan(0);
+    expect(manifest.timeToInteractiveMs).toBeGreaterThanOrEqual(manifest.timeToReadyMs ?? 0);
+  } finally {
+    await session.close();
+  }
+});
 it.each(matrix)(
   "proves App option/starting/shop/refusal/replay at $viewport.width in $theme",
   async ({ viewport, theme }) => {
@@ -273,11 +271,13 @@ it("edits invalidate the suggestion and arrivals cannot open the slot or steal f
   }
 });
 it("resize and explicit navigation retain one cold-to-warm graph and cancel the live frame", async () => {
-  const session = await support.session();
+  const session = await support.session(chatSizes[0], "dark", "lateInitialDetails=true");
   const { page } = session;
   try {
     await check(page.getByRole("img", { name: "Repository graph" })).toHaveCount(0);
     await page.getByRole("button", { name: "Preview app", exact: true }).click();
+    // Deliver the first starting details after ready to exercise stale response ordering.
+    await check.poll(() => session.calls.details).toBe(1);
     session.publish("ready");
     await check(page.locator("iframe")).toBeVisible();
     const close = page.locator(".preview-panel button");

@@ -2,7 +2,7 @@ import type { AgentStatus } from "@contracts";
 import type { State } from "../state";
 import { costText, matchesNeedsYou } from "../state";
 import { selectAgentCard } from "./selectors";
-import { selectPresentation } from "../teams/presentation";
+import { compareAgentPresentation, selectPresentation } from "../teams/presentation";
 export { slotUsage as chatAgentCount } from "./taskBoxModel";
 
 const labels: Record<AgentStatus["state"], string> = {
@@ -28,7 +28,7 @@ export function teamIdentities(state: State) {
 /** Row facts reuse the card's tool, model-wait, step-limit and cumulative cost projections. */
 export function selectChatAgents(state: State) {
   return Object.entries(selectPresentation(state).byAgent)
-    .sort(([, a], [, b]) => a.order - b.order || (a.subtask ?? 0) - (b.subtask ?? 0))
+    .sort(([, a], [, b]) => compareAgentPresentation(a, b))
     .flatMap(([id, identity]) => {
       const card = selectAgentCard(state, id);
       if (!card) return [];

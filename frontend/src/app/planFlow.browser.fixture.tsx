@@ -146,32 +146,36 @@ export function flowEvents(scene: FlowScene): ServerEvent[] {
     start("flow-3", "A", 5, "synthetic-merged-1"),
   );
   if (scene !== "failed") return events;
-  events.push(
+  return [...events, ...failedEvents()];
+}
+
+function failedEvents(): ServerEvent[] {
+  const conflict = resolved("flow-3", true);
+  if (conflict.type !== "change.resolved") throw new Error("Missing conflict");
+  return [
     testEvent("flow-3", "proposal"),
     proposal("flow-3"),
     testEvent("flow-3", "combined", true),
-  );
-  const conflict = resolved("flow-3", true);
-  if (conflict.type !== "change.resolved") throw new Error("Missing conflict");
-  events.push({
-    ...conflict,
-    payload: {
-      ...conflict.payload,
-      decided_by: "person",
-      conflict: {
-        kind: "tests",
-        paths: [],
-        tests: testEvent("flow-3", "combined", true).payload.suite,
+    {
+      ...conflict,
+      payload: {
+        ...conflict.payload,
+        decided_by: "person",
+        conflict: {
+          kind: "tests",
+          paths: [],
+          tests: testEvent("flow-3", "combined", true).payload.suite,
+        },
       },
     },
-  });
-  return events;
+  ];
 }
 
 const Inbox = lazy(() => loadDecisionInbox().then((module) => ({ default: module.DecisionInbox })));
 const PlanActions = lazy(loadPlanActions);
 let root: Root | undefined;
 let current = createInitialState();
+let chatState: State | undefined;
 let options = { scene: "proposed" as FlowScene, layout: "Chat" as FlowLayout, readonly: false };
 export const sent: { action: string; revision: number; comment?: string }[] = [];
 function Harness({ state }: { state: State }) {
@@ -227,6 +231,7 @@ function Harness({ state }: { state: State }) {
         <InitialShellLayout value={options.layout}>
           <Frame
             state={state}
+            chatState={chatState}
             view={view}
             onReview={review}
             onOpenChange={review}
@@ -261,6 +266,7 @@ export function mountPlanFlow(
   readonly = false,
 ) {
   options = { scene, layout, readonly };
+  chatState = undefined;
   const events = flowEvents(scene).map((item, i) => ({
     ...item,
     seq: i + 1,
@@ -273,6 +279,11 @@ export function mountPlanFlow(
   host.style.height = "100vh";
   document.body.replaceChildren(host);
   root = createRoot(host);
+  render();
+}
+export function holdPlanFlowPrefix() {
+  chatState = current;
+  options.readonly = true;
   render();
 }
 export function emitPlanFlow(events: ServerEvent[]) {

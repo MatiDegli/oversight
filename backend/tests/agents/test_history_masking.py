@@ -36,7 +36,7 @@ def protect(history: list[Message]) -> None:
         add(history, "list_files", "recent " * 200)
 
 
-@pytest.mark.parametrize("name", ["read_file", "search", "list_files"])
+@pytest.mark.parametrize("name", ["read_file", "search", "list_files", "find_symbol"])
 def test_mask_stub_names_exact_call_with_compact_arguments(name: str) -> None:
     history: list[Message] = []
     arguments = '{ "path": "shop/cart.py", "start_line": 1 }'
@@ -102,7 +102,7 @@ def test_only_named_observations_change_and_only_when_shorter() -> None:
     assert history == before
 
 
-@pytest.mark.parametrize("name", ["read_file", "search", "list_files", "run_tests"])
+@pytest.mark.parametrize("name", ["read_file", "search", "list_files", "find_symbol", "run_tests"])
 def test_oldest_first_stops_immediately_at_low_water_and_is_idempotent(name: str) -> None:
     history: list[Message] = []
     oldest = add(history, name, "Headline\n" + "x" * 40000)

@@ -16,6 +16,7 @@ document.addEventListener(
       event.target instanceof Element &&
       event.target.closest("button")?.textContent === "Preview app"
     ) {
+      // Elapsed proof timings share the page's monotonic clock across wall-clock adjustments.
       window.previewChatTiming = { clicked: performance.now() };
     }
   },

@@ -77,6 +77,11 @@ function previewFrames(
             )?.[1]
           : undefined;
       server.middlewares.use((request, response, next) => {
+        // Match Vite's proxy prefixes; API authority and error policy belong to the backend.
+        if (apiPaths.some((path) => request.url?.startsWith(path))) {
+          next();
+          return;
+        }
         const address = server.httpServer?.address();
         const listeningPort = address && typeof address !== "string" ? address.port : vite;
         const hosts = request.rawHeaders.filter(

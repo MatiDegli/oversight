@@ -1,11 +1,34 @@
 import { readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 
+it.each(["| Parallel coding agents |", "- **Closed tools.**"])(
+  "documents the default harness tool in %s",
+  (prefix) => {
+    const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
+    const claim = readme.split("\n").find((line) => line.startsWith(prefix));
+    expect(claim).toBeDefined();
+    expect(claim).toContain("six fixed tools");
+    expect(claim).toContain(
+      "plus read-only `find_symbol` while the harness is on (the default), and no shell",
+    );
+  },
+);
+
+it("documents read-history pruning as default-on with an explicit opt-out", () => {
+  const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
+  const next = readme.split("## Next\n")[1]?.split("\n## ")[0];
+  const pruning = next?.split("\n- ").find((item) => item.includes("read-history pruning"));
+  expect(pruning).toBeDefined();
+  expect(pruning).toContain("Measure cost and correctness of the built, default-on");
+  expect(pruning).toContain("`OVERSIGHT_HISTORY_PRUNE_TOKENS=0` disables it");
+  expect(pruning).toContain("broader history bounds and a visible handoff remain");
+});
+
 it("lists lead reference cards as an unreleased capability with its release gates", () => {
   const readme = readFileSync(new URL("../../../../README.md", import.meta.url), "utf8");
-  const capabilities = readme.split("## What works today")[1]?.split("\n## ")[0];
+  const capabilities = readme.split("## Features")[1]?.split("\n## ")[0];
   const feature = capabilities?.match(
-    /- Built, not yet released: Lead Chat[^\n]*(?:\n {2}[^\n]+)*/,
+    /^\| Constrained generative UI \|[^\n]*\| Built, not released \|$/m,
   )?.[0];
   expect(feature).toBeDefined();
   for (const words of [

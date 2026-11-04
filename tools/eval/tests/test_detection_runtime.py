@@ -16,9 +16,55 @@ from tools.eval.grade import Result, Tariff
 from tools.eval.ledger import Ledger
 
 
+@pytest.fixture(autouse=True)
+def semantic_worker_budget(monkeypatch):
+    # Match the live/publication tests: assert evidence and cleanup under contention,
+    # not cold-import speed. Keep real workers, repeats, isolation and outer deadlines.
+    monkeypatch.setattr("oversight.workspace.behavior_run.PER_CALL_TIMEOUT_S", 1.0)
+
+
+@pytest.fixture
+def cold_behavior_import(request, tmp_path, monkeypatch):
+    if not request.param:
+        return
+    from oversight.workspace import behavior_run
+
+    worker = behavior_run.WORKER
+    wrapper = tmp_path / "cold_behavior_worker.py"
+    wrapper.write_text(
+        "import importlib, runpy, sys, time\n"
+        "original_import = importlib.import_module\n"
+        "def cold_import(name, package=None):\n"
+        "    if name == 'shop.cart' and name not in sys.modules:\n"
+        "        time.sleep(0.3)\n"
+        "    return original_import(name, package)\n"
+        "importlib.import_module = cold_import\n"
+        f"sys.path.insert(0, {str(worker.parent)!r})\n"
+        f"runpy.run_path({str(worker)!r}, run_name='__main__')\n"
+    )
+    monkeypatch.setattr(behavior_run, "WORKER", wrapper)
+
+
 @pytest.mark.anyio
-@pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.id)
-async def test_dev_patch_product_facts_and_disposable_cleanup(arm, tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    "arm,cold_behavior_import",
+    [
+        *[pytest.param(arm, False, id=arm.id) for arm in ARMS],
+        *[
+            pytest.param(
+                arm,
+                True,
+                id=f"{arm.id}-cold-import",
+            )
+            for arm in ARMS
+            if arm.behavior
+        ],
+    ],
+    indirect=["cold_behavior_import"],
+)
+async def test_dev_patch_product_facts_and_disposable_cleanup(
+    arm, cold_behavior_import, tmp_path, monkeypatch
+):
     from oversight.changes import ChangeManager
     from oversight.workspace import Workspace
 

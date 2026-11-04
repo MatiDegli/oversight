@@ -239,9 +239,9 @@ async def test_thread_builds_derived_policy_once_and_passes_its_snapshot(monkeyp
 @pytest.mark.parametrize(
     "prune,versions",
     [
-        (None, ("agent-v1-e8a918f3fab2", "agent-v1-9fb694889192")),
-        (8000, ("agent-v1-a96b6e26bb6b", "agent-v1-763b23887cec")),
-        (9000, ("agent-v1-e00d46824423", "agent-v1-8ee39b12b4f4")),
+        (None, ("agent-v1-e8a918f3fab2", "agent-v1-d6fb5b5eb0aa")),
+        (8000, ("agent-v1-a96b6e26bb6b", "agent-v1-5afc231bcf3a")),
+        (9000, ("agent-v1-e00d46824423", "agent-v1-860a78f78215")),
     ],
 )
 @pytest.mark.parametrize("pack", [False, True])

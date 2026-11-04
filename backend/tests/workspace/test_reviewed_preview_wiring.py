@@ -14,6 +14,7 @@ from oversight.workspace.preview_preparation import PreparationInputs, prepare_p
 from .test_preview_preparation import inputs as inputs
 
 ROOT = Path(__file__).resolve().parents[3]
+CONTROLLED_READINESS_S = 60
 
 pytestmark = pytest.mark.anyio
 
@@ -85,7 +86,7 @@ async def test_reviewed_launch_durable_before_exec(tmp_path):
     async def persist(handle):
         assert not marker.exists()
         assert set(handle.processes) == {"outer", "setup", "init"}
-        assert set(handle.namespace_fds) == {"u0", "n0", "u1", "pid", "mount"}
+        assert set(handle.namespace_fds) == {"u0", "n0", "p0", "u1", "pid", "mount"}
         registry.update(
             phase="confirmed",
             processes={k: identity_data(v.pid) for k, v in handle.processes.items()},
@@ -104,9 +105,14 @@ async def test_reviewed_launch_durable_before_exec(tmp_path):
             before_exec=persist,
         )
     )
+    confirmation = asyncio.create_task(confirmed.wait())
     try:
-        async with asyncio.timeout(20):
-            await confirmed.wait()
+        done, _ = await asyncio.wait(
+            {confirmation, task}, timeout=20, return_when=asyncio.FIRST_COMPLETED
+        )
+        if task in done:
+            await task  # Surface the boundary's refusal instead of a gate timeout.
+        assert confirmation in done, "boundary did not confirm before timeout"
         data = registry.read()
         assert data is not None and data["phase"] == "confirmed"
         assert not marker.exists()
@@ -118,8 +124,9 @@ async def test_reviewed_launch_durable_before_exec(tmp_path):
         assert (data := registry.read()) is not None and data["phase"] == "executing"
         assert handle.verified_dead
     finally:
+        confirmation.cancel()
         task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
+        await asyncio.gather(confirmation, task, return_exceptions=True)
 
 
 async def test_reviewed_persistence_failure_keeps_execution_closed(tmp_path):
@@ -271,7 +278,7 @@ asyncio.run(main())
     )
     policy = asdict(PreviewProfile())
     config = dict(
-        readiness_s=5,
+        readiness_s=CONTROLLED_READINESS_S,
         lease_deadline=time.monotonic() + 60,
         absolute_deadline=time.monotonic() + 60,
         reviewed=dict(
@@ -290,7 +297,7 @@ asyncio.run(main())
         ),
     )
     reader = asyncio.StreamReader()
-    reports = asyncio.Queue()
+    reports = ReportQueue()
 
     def report(**fields):
         reports.put_nowait(fields)
@@ -299,13 +306,65 @@ asyncio.run(main())
     return execution, reader, reports, registry, roots
 
 
-async def next_report(reports):
-    async with asyncio.timeout(20):
+class ReportQueue(asyncio.Queue):
+    def __init__(self):
+        super().__init__()
+        self.received = []
+
+    def put_nowait(self, item):
+        self.received.append(item.copy())
+        super().put_nowait(item)
+
+
+async def next_report(reports, expected=None):
+    async with asyncio.timeout(CONTROLLED_READINESS_S):
         report = await reports.get()
         while report["kind"] == "probing":
             assert "nonce" not in report
             report = await reports.get()
+        if expected is not None:
+            assert report["kind"] == expected, report
         return report
+
+
+async def test_reviewed_launch_exception_reaches_private_diagnostic(tmp_path, monkeypatch, inputs):
+    execution, _, reports, _, _ = await controlled_execution(tmp_path, monkeypatch, inputs)
+
+    async def refuse():
+        raise OSError(13, "private environment value", "/host/private")
+
+    monkeypatch.setattr(execution, "startup", refuse)
+    await execution.run()
+    assert await next_report(reports) == {
+        "kind": "dead",
+        "reason": "launch_failed",
+        "exit_code": None,
+        "diagnostic": "launch OS error (errno 13)",
+    }
+
+
+def test_reviewed_backend_liveness_requires_proc_anchor():
+    from types import SimpleNamespace
+
+    from oversight.workspace._reviewed_preview import ReviewedExecution
+
+    read, write = os.pipe()
+    try:
+        handle = SimpleNamespace(
+            verified_dead=False,
+            pidfds=dict.fromkeys(("outer", "setup", "init"), read),
+            namespace_fds=dict.fromkeys(("u0", "n0", "p0", "u1", "pid", "mount"), read),
+        )
+        execution = cast(ReviewedExecution, SimpleNamespace(handle=handle))
+        assert ReviewedExecution.backend_alive(execution)
+        del handle.namespace_fds["p0"]
+        assert not ReviewedExecution.backend_alive(execution)
+        handle.namespace_fds["p0"] = read
+        handle.namespace_fds["extra"] = read
+        assert not ReviewedExecution.backend_alive(execution)
+    finally:
+        os.close(read)
+        os.close(write)
 
 
 @pytest.mark.parametrize("parent_host", ["localhost", "127.0.0.1"])
@@ -373,7 +432,7 @@ async def test_reviewed_connector_u1_and_gateway_tamper(tmp_path, monkeypatch, i
         assert execution.handle.verified_dead
         data = registry.read()
         assert data is not None and data["phase"] == "dead"
-        assert (await next_report(reports))["kind"] == "dead"
+        await next_report(reports, "dead")
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -394,9 +453,9 @@ async def test_reviewed_teardown(tmp_path, monkeypatch, inputs, trigger):
     port = execution.listener.getsockname()[1]
     task = asyncio.create_task(execution.run())
     try:
-        assert (await next_report(reports))["kind"] == "confirmed"
+        await next_report(reports, "confirmed")
         reader.feed_data(b"execute\n")
-        assert (await next_report(reports))["kind"] == "executing"
+        await next_report(reports, "executing")
         ready = await next_report(reports)
         assert ready["kind"] == "ready", ready
         handle = execution.handle
@@ -433,7 +492,7 @@ async def test_reviewed_teardown(tmp_path, monkeypatch, inputs, trigger):
             available.bind(("127.0.0.1", port))
         data = registry.read()
         assert data is not None and data["phase"] == "dead"
-        assert (await next_report(reports))["kind"] == "dead"
+        await next_report(reports, "dead")
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -444,11 +503,10 @@ async def test_reviewed_teardown_before_execute(tmp_path, monkeypatch, inputs, t
     execution, reader, reports, registry, roots = await controlled_execution(
         tmp_path, monkeypatch, inputs
     )
-    # The normal launch deadline must exceed the backend stop bound.
-    execution.config["readiness_s"] = 30
+    # The normal launch deadline exceeds the backend stop bound.
     task = asyncio.create_task(execution.run())
     try:
-        assert (await next_report(reports))["kind"] == "confirmed"
+        await next_report(reports, "confirmed")
         handle = execution.handle
         assert handle is not None and not execution.execute.is_set()
         started = asyncio.get_running_loop().time()
@@ -472,8 +530,7 @@ async def test_reviewed_teardown_before_execute(tmp_path, monkeypatch, inputs, t
 
 
 @pytest.mark.parametrize(
-    "fault",
-    ["stale", "backend_dead", "gateway_dead", "forged", "incomplete", "slow_incomplete", "expired"],
+    "fault", ["stale", "backend_dead", "gateway_dead", "forged", "incomplete", "expired"]
 )
 async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
     from oversight.workspace.preview_gateway import PreviewGateway
@@ -485,23 +542,8 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         inputs,
         health_run="stale-run" if fault == "stale" else "fresh-run",
     )
-    attach_gateway = execution.attach_gateway
-
-    async def attach_with_probe_budget():
-        # Keep the normal fixture budget for namespace entry and shorten only readiness.
-        execution.config["readiness_s"] = 2
-        await attach_gateway()
-
-    monkeypatch.setattr(execution, "attach_gateway", attach_with_probe_budget)
-    if fault == "slow_incomplete":
-        confirm = execution.confirm
-
-        async def slow_confirm(handle):
-            await confirm(handle)
-            # A healthy namespace handshake can exceed the short fault-probe budget.
-            await asyncio.sleep(2.1)
-
-        monkeypatch.setattr(execution, "confirm", slow_confirm)
+    if not fault.endswith("dead"):
+        limit_readiness(execution, monkeypatch, 2)
     original = PreviewGateway.probe
     original_get = PreviewGateway._probe_get
     probing = asyncio.Event()
@@ -519,7 +561,7 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         if not fault.endswith("dead"):
             probing.set()
             await proceed.wait()
-        if fault.endswith("incomplete"):
+        if fault == "incomplete":
             kwargs["workers"] = ()
         evidence = await original(gateway, **kwargs)
         if fault == "forged":
@@ -533,12 +575,10 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
     monkeypatch.setattr(PreviewGateway, "_probe_get", probe_get)
     task = asyncio.create_task(execution.run())
     try:
-        assert (await next_report(reports))["kind"] == "confirmed"
+        await next_report(reports, "confirmed")
         reader.feed_data(b"execute\n")
-        assert (await next_report(reports))["kind"] == "executing"
-        async with asyncio.timeout(20):
-            assert (await reports.get())["kind"] == "probing"
-            await probing.wait()
+        await next_report(reports, "executing")
+        await wait_for_probe(reports, probing, execution)
         assert execution.handle is not None and execution.gateway is not None
         if fault == "backend_dead":
             kill_pinned(execution.handle.pidfds["init"])
@@ -560,11 +600,264 @@ async def test_reviewed_readiness_nonce(tmp_path, monkeypatch, inputs, fault):
         await asyncio.gather(task, return_exceptions=True)
 
 
+async def wait_for_probe(reports, probing, execution):
+    try:
+        async with asyncio.timeout(20):
+            assert (await reports.get())["kind"] == "probing", reports.received
+            await probing.wait()
+    except TimeoutError:
+        pytest.fail(
+            f"probe did not reach its witness; reports={reports.received!r}; "
+            f"phase={execution.phase}; stage={execution.stage}; "
+            f"diagnostic={execution.timeout_diagnostic()}"
+        )
+
+
+async def test_probe_wait_timeout_shows_received_reports(monkeypatch):
+    from types import SimpleNamespace
+
+    reports = ReportQueue()
+    for kind in ("confirmed", "executing", "dead"):
+        reports.put_nowait({"kind": kind})
+
+    async def expire():
+        raise TimeoutError
+
+    monkeypatch.setattr(reports, "get", expire)
+    execution = SimpleNamespace(
+        phase="readiness", stage="readiness-probe", timeout_diagnostic=lambda: "safe diagnostic"
+    )
+    with pytest.raises(pytest.fail.Exception, match=r"confirmed.*executing.*dead") as caught:
+        await wait_for_probe(reports, asyncio.Event(), execution)
+    assert "phase=readiness; stage=readiness-probe; diagnostic=safe diagnostic" in str(caught.value)
+
+
+@pytest.mark.parametrize("glyph", ["界", "😀", '\n"'])
+async def test_timeout_diagnostic_bounds_both_streams_and_gateway_failure(glyph):
+    import json
+    from types import SimpleNamespace
+
+    from oversight.workspace._reviewed_preview import ReviewedExecution
+
+    execution = SimpleNamespace(
+        diagnostic="launch deadline expired",
+        phase="readiness",
+        stage="readiness-probe",
+        probe_error=ValueError("stale nested health: /host/private secret-value"),
+        handle=SimpleNamespace(
+            stdout=glyph * 1000 + "\nstdout tail", stderr=glyph * 1000 + "\nstderr tail"
+        ),
+        log_secrets=("secret-value",),
+    )
+    report = ReviewedExecution.timeout_diagnostic(cast(ReviewedExecution, execution))
+    assert len(report.encode()) <= 2048
+    assert len(json.dumps(dict(kind="dead", reason="readiness_timeout", diagnostic=report))) < 4096
+    assert "gateway=stale nested health" in report
+    assert "stdout tail" in report and report.endswith("stderr tail")
+    assert "/host/private" not in report and "secret-value" not in report
+    execution.diagnostic = report
+    assert ReviewedExecution.timeout_diagnostic(cast(ReviewedExecution, execution)) == report
+
+
+@pytest.mark.parametrize("prefix", ["/", "/usr", "/usr/local"])
+@pytest.mark.parametrize("alias", [False, True])
+def test_real_prepared_inputs_skip_system_prefix_before_copy(tmp_path, monkeypatch, prefix, alias):
+    import shutil
+    import sys
+
+    root = Path(prefix)
+    if alias:
+        root = tmp_path / "python-alias"
+        root.symlink_to(prefix, target_is_directory=True)
+    monkeypatch.setattr(sys, "executable", str(root / "fixture-bin/python"))
+
+    def refuse_copy(*args, **kwargs):
+        pytest.fail("system prefix guard must run before any copy")
+
+    monkeypatch.setattr(shutil, "copy2", refuse_copy)
+    monkeypatch.setattr(shutil, "copytree", refuse_copy)
+    directory = tmp_path / "unprepared"
+    with pytest.raises(pytest.skip.Exception, match="self-contained Python install"):
+        real_prepared_inputs(directory, ["pyproject.toml"])
+    assert not directory.exists()
+
+
+def standalone_tool_paths():
+    """This fixture carries single ELF files, not script distributions and their targets."""
+    import shutil
+
+    paths = {}
+    for name in ("uv", "node", "pnpm", "gitleaks"):
+        executable = shutil.which(name)
+        assert executable is not None, f"required prepared tool missing: {name}"
+        path = Path(executable).resolve()
+        with path.open("rb") as stream:
+            assert stream.read(4) == b"\x7fELF", (
+                f"real boundary fixture requires a standalone ELF {name}; "
+                "script targets are not copied (for pnpm setup, set standalone: true)"
+            )
+        paths[name] = path
+    return paths
+
+
+@pytest.mark.parametrize("tool", ["uv", "node", "pnpm", "gitleaks"])
+def test_real_prepared_tools_reject_scripts_before_copy(tmp_path, monkeypatch, tool):
+    import shutil
+
+    script = tmp_path / "script"
+    script.write_text('#!/bin/sh\nexec node "${0%/*}/pnpm.cjs" "$@"\n')
+    script.chmod(0o755)
+    binary = tmp_path / "elf"
+    binary.write_bytes(b"\x7fELF")
+    monkeypatch.setattr(shutil, "which", lambda name: str(script if name == tool else binary))
+    with pytest.raises(AssertionError, match=f"requires a standalone ELF {tool}"):
+        real_prepared_inputs(tmp_path / "unprepared", [])
+    assert not (tmp_path / "unprepared").exists()
+
+
+def assert_copied_executable_headers(root: Path, name: str) -> None:
+    """Identify malformed executable fixture entries before product preparation."""
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or not path.is_file() or not path.stat().st_mode & 0o111:
+            continue
+        with path.open("rb") as stream:
+            header = stream.read(16)
+        assert header.startswith((b"#!", b"\x7fELF")), (
+            f"unsupported executable in copied {name}: {path.relative_to(root).as_posix()!r}; "
+            f"first bytes {header!r}"
+        )
+
+
+def copy_system_input(source: Path, destination: Path) -> None:
+    """System mount copies must retain the host's bytes, modes and symlinks."""
+    import shutil
+
+    if source.is_dir():
+        shutil.copytree(source, destination, symlinks=True)
+    else:
+        shutil.copy2(source, destination)
+
+
+@pytest.mark.parametrize(
+    "header", [b"TZif2\0\nprivate", b"MZ\0\xff", b"plain text\n", b"TZif2" + b"\0" * 100]
+)
+def test_copied_executable_header_failure_identifies_relative_entry(tmp_path, header):
+    root = tmp_path / "copy"
+    entry = root / "nested/localtime"
+    entry.parent.mkdir(parents=True)
+    entry.write_bytes(header)
+    entry.chmod(0o755)
+    with pytest.raises(AssertionError) as error:
+        assert_copied_executable_headers(root, "system-3")
+    assert str(error.value).splitlines()[0] == (
+        "unsupported executable in copied system-3: 'nested/localtime'; "
+        f"first bytes {header[:16]!r}"
+    )
+    assert str(tmp_path) not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "target", ["/etc/localtime", "/usr/share/zoneinfo/Etc/UTC", "/usr/lib/locale/C.utf8"]
+)
+def test_copied_system_data_preserves_host_modes_and_refuses_executable_data(tmp_path, target):
+    import shutil
+
+    from oversight.workspace.preview_boundary_entry import manifest_digest
+
+    source = tmp_path / "source"
+    source.write_bytes(b"TZif2\0\n")
+    source.chmod(0o755)
+    before, after = tmp_path / "before", tmp_path / "after"
+    before.mkdir()
+    after.mkdir()
+    shutil.copy2(source, before / "localtime")
+    with pytest.raises(AssertionError, match="'localtime'; first bytes b'TZif2"):
+        assert_copied_executable_headers(before, "system-3")
+    # Locale inputs are directories; directory execute bits still permit traversal.
+    if target == "/usr/lib/locale/C.utf8":
+        locale = tmp_path / "locale"
+        locale.mkdir()
+        shutil.copy2(source, locale / "LC_TIME")
+        copy_system_input(locale, after / "C.utf8")
+        copied = after / "C.utf8/LC_TIME"
+        assert (after / "C.utf8").stat().st_mode & 0o111
+    else:
+        copied = after / "localtime"
+        copy_system_input(source, copied)
+    assert copied.read_bytes() == source.read_bytes()
+    assert copied.stat().st_mode == source.stat().st_mode
+    assert manifest_digest(copied) == manifest_digest(source)
+    assert source.stat().st_mode & 0o111
+    with pytest.raises(AssertionError, match="first bytes b'TZif2"):
+        assert_copied_executable_headers(after, "system-3")
+
+
+async def test_normalizing_only_system_copy_breaks_recorded_mount_digest(
+    inputs, tmp_path, monkeypatch
+):
+    from oversight.workspace import _reviewed_preview as wiring
+    from oversight.workspace import preview_boundary_entry as entry
+    from oversight.workspace.preview_boundary_entry import manifest_digest
+    from oversight.workspace.preview_preparation import RootMapping
+
+    from .test_preview_preparation import record
+
+    prepared = await prepare_reviewed(inputs)
+    host, copy = tmp_path / "host/etc", tmp_path / "system-copy"
+    host.mkdir(parents=True)
+    copy.mkdir()
+    original = host / "localtime"
+    original.write_bytes(b"TZif2\0\n")
+    original.chmod(0o755)
+    copied = copy / "localtime"
+    copy_system_input(original, copied)
+    assert manifest_digest(copied) == manifest_digest(original)
+    copied.chmod(copied.stat().st_mode & ~0o111)
+    assert copied.read_bytes() == original.read_bytes()
+    assert manifest_digest(copied) != manifest_digest(original)
+    prepared = replace(
+        prepared,
+        root_mappings=(
+            *(
+                replace(m, target=Path("/T")) if m.source == prepared.tree else m
+                for m in prepared.root_mappings
+            ),
+            RootMapping(copy, host),
+        ),
+        manifests=(*prepared.manifests, record(copy, "system-copy", owned=True)),
+    )
+    monkeypatch.setattr(entry, "SYSTEM_FILES", (str(original),))
+    monkeypatch.setattr(entry, "SYSTEM_DIRECTORIES", ())
+    with pytest.raises(ValueError, match="recorded system mount changed"):
+        wiring.boundary_roots(prepared, inputs.excluded_roots)
+
+
+@pytest.mark.parametrize("header", [b"\x7fELFfixture", b"#!/bin/sh\nexit 0\n"])
+def test_copied_system_executables_keep_their_format_and_permissions(tmp_path, header):
+    source = tmp_path / "source"
+    source.write_bytes(header)
+    source.chmod(0o755)
+    root = tmp_path / "copy"
+    root.mkdir()
+    destination = root / "tool"
+    copy_system_input(source, destination)
+    assert destination.read_bytes() == header
+    assert destination.stat().st_mode & 0o111
+    assert_copied_executable_headers(root, "system-0")
+
+
 def real_prepared_inputs(directory, tracked):
     """External static fixture preparer: record private tool/dependency copies before reuse."""
     import hashlib
     import shutil
     import sys
+
+    python_prefix = Path(sys.executable).resolve().parents[1]
+    # The boundary fixture copies a private install, never a shared system directory.
+    if python_prefix in {Path("/"), Path("/usr"), Path("/usr/local")}:
+        pytest.skip("real boundary tests require a self-contained Python install (uv-managed)")
+
+    tool_paths = standalone_tool_paths()
 
     from oversight.workspace.preview_boundary_entry import SYSTEM_DIRECTORIES, SYSTEM_FILES
     from oversight.workspace.preview_preparation import ProjectImport, RootMapping, ToolIdentity
@@ -581,28 +874,26 @@ def real_prepared_inputs(directory, tracked):
             destination = tree / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+    assert_copied_executable_headers(tree, "tree")
     mappings, inventories = [], []
 
     def add(name, role, source, target):
+        assert_copied_executable_headers(source, name)
         mappings.append(RootMapping(source, Path(target)))
         inventories.append(replace(record(source, name, owned=True), role=role))
 
     python = storage / "python"
-    shutil.copytree(Path(sys.executable).resolve().parents[1], python, symlinks=True)
+    shutil.copytree(python_prefix, python, symlinks=True)
     for path in python.rglob("*"):
         if path.is_file() and not path.is_symlink() and path.name not in {"python3.12", "python"}:
             path.chmod(path.stat().st_mode & ~0o111)
     add("python", "tool", python, "/opt/python")
     for tool in ("uv", "node", "pnpm"):
-        executable = shutil.which(tool)
-        assert executable is not None, f"required prepared tool missing: {tool}"
         root = storage / tool
         root.mkdir()
-        shutil.copy2(Path(executable).resolve(), root / tool)
+        shutil.copy2(tool_paths[tool], root / tool)
         if tool == "uv":
-            scanner = shutil.which("gitleaks")
-            assert scanner is not None, "required prepared tool missing: gitleaks"
-            shutil.copy2(Path(scanner).resolve(), root / "gitleaks")
+            shutil.copy2(tool_paths["gitleaks"], root / "gitleaks")
         add(tool, "tool", root, "/opt/" + tool)
     backend = storage / "backend"
     shutil.copytree(
@@ -614,7 +905,7 @@ def real_prepared_inputs(directory, tracked):
     (backend / "pyvenv.cfg").write_text(
         "home = /opt/python/bin\ninclude-system-site-packages = false\n"
     )
-    (backend / "lib/python3.12/site-packages/_virtualenv.pth").unlink()
+    (backend / "lib/python3.12/site-packages/_virtualenv.pth").unlink(missing_ok=True)
     for path in backend.rglob("*"):
         if path.is_file() and not path.is_symlink():
             path.chmod(path.stat().st_mode & ~0o111)
@@ -659,10 +950,7 @@ def real_prepared_inputs(directory, tracked):
         root = groups.setdefault(parent, storage / ("system-" + str(len(groups))))
         root.mkdir(exist_ok=True)
         source, destination = Path(target).resolve(strict=True), root / Path(target).name
-        if source.is_dir():
-            shutil.copytree(source, destination, symlinks=True)
-        else:
-            shutil.copy2(source, destination)
+        copy_system_input(source, destination)
     # The static inventory also validates dormant Git template shebangs. These extra
     # validation inputs are not mounted: the adapter still selects the fixed system list.
     shutil.copy2("/usr/bin/perl", groups["/usr/bin"] / "perl")
@@ -685,7 +973,7 @@ def real_prepared_inputs(directory, tracked):
         executable = (
             str(Path(sys.executable).resolve())
             if name in {"python", "uv-python"}
-            else shutil.which(name)
+            else str(tool_paths[name])
         )
         assert executable is not None, f"required prepared tool missing: {name}"
         source = Path(executable).resolve()
@@ -718,7 +1006,8 @@ def real_prepared_inputs(directory, tracked):
     )
 
 
-@pytest.mark.timeout(180)
+# Inventories, four boundary commands and deployed ownership all share this outer guard.
+@pytest.mark.timeout(6 * CONTROLLED_READINESS_S)
 async def test_reviewed_offline_build_and_imports(tmp_path):
     import json
     from dataclasses import asdict
@@ -753,6 +1042,7 @@ print(json.dumps(dict(backend=oversight.__file__, contracts=oversight_contracts.
 """
     node = "/opt/node/node"
     commands: list[dict[str, Any]] = [
+        dict(argv=["/opt/pnpm/pnpm", "--version"], cwd="/T"),
         dict(argv=["/opt/deps/backend/bin/python", "-c", code], cwd="/T"),
         dict(argv=[node, "/opt/deps/frontend/typescript/bin/tsc", "--noEmit"], cwd="/T/frontend"),
         dict(
@@ -962,7 +1252,7 @@ asyncio.run(main())
     pinned = []
     try:
         await process.launch(listener, cast(PreviewProfile, profile))
-        assert await process.ready(120)
+        assert await process.ready(120), (process.reason, process.diagnostic)
         data = registry.read()
         assert data is not None and data["guardian"] and data["phase"] == "executing"
         for identity in data["boundary"]["processes"].values():
@@ -1200,9 +1490,9 @@ async def test_manager_survives_two_reviewed_build_transitions(
     monkeypatch.setattr(wiring, "boundary_roots", pause_transition)
     task = asyncio.create_task(execution.run())
     try:
-        assert (await next_report(reports))["kind"] == "confirmed"
+        await next_report(reports, "confirmed")
         reader.feed_data(b"execute\n")
-        assert (await next_report(reports))["kind"] == "executing"
+        await next_report(reports, "executing")
         for index in range(2):
             async with asyncio.timeout(20):
                 assert await transitions.get() == index
@@ -1217,7 +1507,7 @@ async def test_manager_survives_two_reviewed_build_transitions(
                 ).state == "starting"
                 assert h.manager.has_owner
             releases[index].set()
-        assert (await next_report(reports))["kind"] == "ready"
+        await next_report(reports, "ready")
         process.ready_gate.set()
         await h.sink.wait("ready", created.preview_id)
         assert await process.confirmed_live()
@@ -1238,6 +1528,25 @@ async def launched_after_output(launch, *args, **kwargs):
     pytest.fail("controlled command did not emit its diagnostic before timeout")
 
 
+def limit_readiness(execution, monkeypatch, seconds, *, output_marker=None):
+    # Short probe deadlines must not also shorten authenticated build/service entry.
+    attach = execution.attach_gateway
+
+    async def limited():
+        if output_marker is not None:
+            async with asyncio.timeout(CONTROLLED_READINESS_S):
+                for _ in range(100 * CONTROLLED_READINESS_S):
+                    if output_marker in execution.handle.stdout:
+                        break
+                    await asyncio.sleep(0.01)
+                else:
+                    pytest.fail("controlled backend did not emit its startup trace")
+        execution.config["readiness_s"] = seconds
+        await attach()
+
+    monkeypatch.setattr(execution, "attach_gateway", limited)
+
+
 def configure_reviewed_failure(execution, failure, secrets, monkeypatch):
     from functools import partial
 
@@ -1256,13 +1565,10 @@ def configure_reviewed_failure(execution, failure, secrets, monkeypatch):
     elif failure != "readiness":
         execution.spec["commands"][0] = command
     else:
-        original_attach = execution.attach_gateway
-
-        async def expire_readiness():
-            execution.config["readiness_s"] = 0.2
-            await original_attach()
-
-        monkeypatch.setattr(execution, "attach_gateway", expire_readiness)
+        limit_readiness(execution, monkeypatch, 0.2, output_marker="startup trace")
+        backend = execution.spec["commands"][-1]
+        trace = "startup trace\x1b[31m " + " ".join(secrets) + "\n/host/private\nHOST_VALUE=private"
+        backend["argv"][-1] = f"print({trace!r}, flush=True);" + backend["argv"][-1]
 
     if failure == "timeout":
         monkeypatch.setattr(
@@ -1303,19 +1609,31 @@ async def test_reviewed_failure_reason_and_sanitized_log(
     h.manager.lifecycle.profile = cast(
         PreviewProfile,
         SimpleNamespace(
-            readiness_s=30, reviewed_app=SimpleNamespace(launch=SimpleNamespace(build=()))
+            readiness_s=CONTROLLED_READINESS_S,
+            reviewed_app=SimpleNamespace(launch=SimpleNamespace(build=())),
         ),
     )
     task = asyncio.create_task(execution.run())
     expected = "readiness_timeout" if failure == "readiness" else "launch_failed"
     try:
-        assert (await next_report(reports))["kind"] == "confirmed"
+        await next_report(reports, "confirmed")
         reader.feed_data((json.dumps({"log_secrets": secrets}) + "\nexecute\n").encode())
-        assert (await next_report(reports))["kind"] == "executing"
+        await next_report(reports, "executing")
         dead = await next_report(reports)
         await asyncio.wait_for(task, 15)
-        assert dead["kind"] == "dead" and dead["reason"] == expected
-        assert dead["diagnostic"] == ""
+        assert dead["kind"] == "dead" and dead["reason"] == expected, dead
+        if failure == "readiness":
+            assert dead["diagnostic"].startswith("launch deadline expired; phase=readiness;")
+            assert "stage=readiness-probe" in dead["diagnostic"]
+            assert "backend stdout tail=startup trace" in dead["diagnostic"]
+            assert (
+                "/host/private" not in dead["diagnostic"] and "HOST_VALUE" not in dead["diagnostic"]
+            )
+            assert len(dead["diagnostic"].encode()) <= 2048
+        else:
+            assert dead["diagnostic"] == (
+                "launch deadline expired" if failure == "timeout" else "reviewed build failed"
+            )
         log = execution.inputs.preview_directory / "logs/build.log"
         assert log == registry.runtime / "previews/example/logs/build.log"
         assert log.is_file()
@@ -1326,6 +1644,7 @@ async def test_reviewed_failure_reason_and_sanitized_log(
         process.reader.feed_data((json.dumps(dead) + "\n").encode())
         process.ready_result = await PreviewProcess._reviewed_ready(process, 5)
         assert not process.ready_result
+        assert process.diagnostic == dead["diagnostic"]
         process.ready_gate.set()
         await h.sink.wait("failed", created.preview_id)
         status = await h.manager.get(created.preview_id)

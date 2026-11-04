@@ -456,3 +456,65 @@ it.each(["starting", "ready", "stopping", "failed"] as const)(
     expect(observer.snapshot()).toMatchObject({ owned: true, status: { agent_id: "agent-b" } });
   },
 );
+
+it.each(["dispose", "close", "navigate"] as const)(
+  "keeps one non-aborted stop through %s/disposal overlap and cancels renewal",
+  async (action) => {
+    const { port, controller } = setup();
+    await controller.see(() => fakeCandidate);
+    port.gate = deferred<undefined>();
+    const stop = vi.spyOn(port as PreviewPort, "stop");
+    const closing = action === "dispose" ? Promise.resolve() : controller[action]();
+    await Promise.resolve();
+    controller.dispose();
+    controller.dispose();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stop.mock.calls[0]?.[2].aborted).toBe(false);
+    expect(stop.mock.calls[0]?.[3]).toEqual({ keepalive: true });
+    port.gate.resolve(undefined);
+    await closing;
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
+  },
+);
+it("catches unload rejection without retry; an observer dispatches no stop", async () => {
+  const { port, controller } = setup();
+  await controller.see(() => fakeCandidate);
+  const stop = vi.spyOn(port as PreviewPort, "stop").mockRejectedValue(new Error("Offline"));
+  const observer = createPreviewController(port, clock, identity);
+  observer.observe(port.publicStatus() as PreviewStatus);
+  observer.dispose();
+  expect(stop).not.toHaveBeenCalled();
+  controller.dispose();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(stop).toHaveBeenCalledTimes(1);
+  expect(stop.mock.calls[0]?.[2].aborted).toBe(false);
+  expect(stop.mock.calls[0]?.[3]).toEqual({ keepalive: true });
+  expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
+});
+
+it("does not duplicate a transport-pending stop when disposal follows the Close deadline", async () => {
+  const { port, controller } = setup();
+  await controller.see(() => fakeCandidate);
+  port.stopMode = "lost";
+  const stop = vi.spyOn(port, "stop");
+  const closing = controller.close();
+  await vi.advanceTimersByTimeAsync(5_000);
+  await closing;
+  controller.dispose();
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(stop).toHaveBeenCalledTimes(1);
+  expect(port.calls.filter((call) => call.kind === "renew")).toHaveLength(0);
+});
+
+it("a duplicate terminal arrival after verified owner Close does not turn its candidate into an observer refusal", async () => {
+  const { port, controller } = setup();
+  await controller.see(() => fakeCandidate);
+  await controller.close();
+  controller.observe(fakeStatus("stopped", "closed"));
+  await controller.see(() => fakeCandidate);
+  expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+  expect(controller.snapshot()).toMatchObject({ owned: true, frameUrl: port.frameUrl });
+  controller.dispose();
+});

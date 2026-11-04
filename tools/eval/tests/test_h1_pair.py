@@ -72,7 +72,9 @@ def test_both_child_settings_read_pack(tmp_path, monkeypatch, pack, profile):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("arm", [OFF, ON], ids=["off", "on"])
-async def test_fake_child_advertisement_matches_planned_hash(tmp_path, arm):
+async def test_fake_child_advertisement_matches_planned_hash(tmp_path, monkeypatch, arm):
+    # An inherited value must never choose the arm the child advertises or executes.
+    monkeypatch.setenv("OVERSIGHT_HARNESS_PACK", str(arm.harness_pack != "on").lower())
     script_path = tmp_path / "script.json"
     script_path.write_text(script())
     async with server.dedicated(arm, tmp_path, 20, script_path) as url:
