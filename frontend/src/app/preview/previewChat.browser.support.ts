@@ -143,13 +143,13 @@ stateStore.subscribe(({ state }) => { window.coldStartTrace.cursors.push(state.l
         );
         replace(
           "          retryWindow = 500;",
-          '          if (event.type === "preview.status" && event.payload.state === "ready") { window.previewChatTiming ??= {}; window.previewChatTiming.ready ??= Date.now(); }\n          retryWindow = 500;',
+          '          if (event.type === "preview.status" && event.payload.state === "ready") { window.previewChatTiming ??= {}; window.previewChatTiming.ready ??= performance.now(); }\n          retryWindow = 500;',
         );
       }
       if (id.endsWith("/preview/PreviewPanel.tsx"))
         replace(
           "progress.load(frame);",
-          "window.previewChatTiming ??= {}; window.previewChatTiming.loaded ??= Date.now(); progress.load(frame);",
+          "window.previewChatTiming ??= {}; window.previewChatTiming.loaded ??= performance.now(); progress.load(frame);",
         );
       return source;
     },
