@@ -126,7 +126,7 @@ class SettingsFile:
     def _path(self) -> Path:
         if self.path is None:
             raise ValueError("Settings file is unavailable for this launch.")
-        return self.path
+        return self.path.resolve()
 
     def _read(self) -> SettingsView:
         path = self._path()

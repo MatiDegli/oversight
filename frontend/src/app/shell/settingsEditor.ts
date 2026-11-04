@@ -19,6 +19,7 @@ interface Editor {
   saved: Partial<Record<SettingsSection, boolean>>;
   failure: string | null;
   feedbackSection: SettingsSection | null;
+  restartSection: SettingsSection | null;
   load: () => Promise<void>;
   edit: (name: EditableSettingName, value: string) => void;
   clearKey: (name: EditableSettingName) => void;
@@ -35,6 +36,7 @@ export function createSettingsEditor(api: SettingsApi = createCommandClient()) {
     saved: {},
     failure: null,
     feedbackSection: null,
+    restartSection: null,
     load: async () => {
       if (get().loading || get().view) return;
       set({ loading: true, failure: null });
@@ -86,6 +88,7 @@ export function createSettingsEditor(api: SettingsApi = createCommandClient()) {
         );
         set({
           view: result,
+          restartSection: result.restart_required ? section : null,
           drafts: remaining,
           pending: null,
           saved: { ...get().saved, [section]: true },

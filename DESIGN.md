@@ -866,7 +866,8 @@ Gently rounded rectangles throughout; nothing pill-shaped except status pills, b
   It is absent from the static replay until that build has a bundled aggregate response.
 - **Decisions chip:** always visible in the same top-bar position and at the queue-counter height.
   At zero it reads "Nothing needs you" in muted gray, with no lamp or badge. Otherwise it reads
-  "Decisions · N", neutral across agents, with N in Mono and tabular figures. One pending change
+  "Decisions · N", neutral across agents, with N in Mono and tabular figures. In Chat below 768px,
+  only N is visible; the accessible name retains the count and Decisions label. One pending change
   counts once, with its questions and other decisions inside; answers and delegations do not
   consume it. Only its completed Approve, Request changes or Reject removes it. Standalone
   decisions, such as a lead plan, each count once. Its accessible name includes the count.
@@ -993,35 +994,50 @@ The Open workflow launcher appears from 1280 px and in Chat's phone layout; from
 ### Settings tab
 
 Settings opens in the focus panel. The tab names it once: there is no second Settings title in
-the content. Merge mode, Models and keys, Limits and budget, then Preview startup appear in one
-scrolling column, without a left navigation or an invented repository scope. At 390px, Chat gives
-Settings the available panel height; fields stack and the Settings opener remains reachable.
+the content. Merge mode, Models and keys, and Limits and budget follow in one scrolling content
+column, without a second navigation. Section headings remain in the content.
 
-- **Merge mode:** two choice cards, Ask me and Merge alone when safe, keep their existing
-  explanations, pending state and replay behavior. A rules checklist needs a backed source.
-- **Models and keys:** separate Meta and Baseten key rows show neutral text pills: Configured,
-  Missing or Invalid, from the saved file's parsed state. They never show a key value or imply a
-  provider was contacted. Each password field loads empty, labeled by provider, with Replace key
-  as its placeholder. Deleting a typed replacement sends nothing. Only Clear key queues an
-  empty value, shows `Key will be cleared when you save`, and offers Undo until saved. The
-  cross-review switch shares this section's Save button.
-- **Limits and budget:** numeric inputs show Meta and Baseten budgets in USD, four input/output
-  prices in USD per million tokens, Brake at as a whole-number share of the budget (1–100%),
-  and the positive whole-number agent cap in agents. Emptying the brake or agent cap removes
-  its file declaration, restoring 90% or 4 agents; each field explains its default. Only
-  changed fields in this section are sent by its Save button. Other limits and protected-area
-  editing remain absent until supported. The brake refuses new runs above the configured share,
-  90% by default.
-- **Save and apply:** Keys stay in .env. Both sections save to the same startup file atomically.
-  Saved appears only after a supported save succeeds, as `Saved.` beside that section's Save.
-  The section that was saved keeps a persistent restart line beside its Save status. It says
-  `Restart to apply: File > Reload settings.` for an installed desktop launch, or
-  `Restart the server to apply.` for a browser server. The desktop menu is
-  delivered separately; saving does not change the running configuration. Refusals keep typed
-  values and display the server's names-and-reasons message beside that section's Save status.
-  An environment override makes the row read-only with `Set by the environment`.
-  Replay sections are read-only and make no file request.
-  Loading, saving and errors never move focus. All fields follow Inputs / Fields above.
+- **Merge mode:** two choice cards, Ask me and Merge alone when safe, followed by the rules
+  checklist. Each rule is named in words with a result icon. The checklist reflects the backed
+  policy and its assessment; the sketch's sample list does not redefine the merge rules.
+- **Limits and budget:** a currency input for the budget, then a threshold bar showing spent,
+  warnings at 50% and 80%, and the brake at the configured share, 90% by default. Drop warning
+  marks at or above the brake. Labels and marks carry these meanings without color alone;
+  warnings are neutral. The brake refuses new runs above the configured share, 90% by default,
+  as ARCHITECTURE.md, Usage and the spend brake, specifies.
+  Steps per task is a minus/value/plus stepper. Change size and cone limits use numeric inputs
+  with visible units (lines, functions); they do not turn current implementation limits into editable
+  settings without backing support.
+  Supported file inputs cover Meta and Baseten budgets in USD, four input/output prices in USD
+  per million tokens, Brake at as a whole-number share of the budget (1–100%), and the positive
+  whole-number agent cap in agents. Emptying the brake or agent cap removes its file declaration,
+  restoring 90% or 4 agents; each field explains its default. Its Save sends only changed fields.
+- **Protected areas:** rows name the path or function, its type and a remove action; an add field
+  and Add button follow the list. The row states that an edit waits for the person.
+- **Models and keys:** one neutral card per offered model, with its model selector. Below the model
+  cards, separate rows hold the cross-review
+  selector and key-status pills. Selectors use actual offered models and review choices. Key
+  pills report configured, missing or invalid from the saved file's parsed state; they never show
+  a key value or imply a provider was contacted to verify it. Separate Meta and Baseten key rows
+  are backed by the settings editor even when a key is missing. Each password field loads empty,
+  labeled by provider, with Replace key as its placeholder. Deleting a typed replacement sends
+  nothing. Only Clear key queues an empty value, shows `Key will be cleared when you save`, and
+  offers Undo until saved. The cross-review switch shares this section's Save button.
+- **Real settings only:** sample values are illustrative. Drop any row or choice with no backing
+  in Oversight. A generic Muse key is not another credential: show Meta and Baseten file state
+  from their actual settings. Keys stay in .env. Reserved behavior is not presented as a working
+  control, and Saved appears only after a supported save succeeds. The threshold bar, steps,
+  size and cone inputs, protected-area editor and model selectors remain targets until backed.
+- **Save and apply:** both sections save to the same startup file atomically. Saved appears as
+  `Saved.` beside that section's Save only after success. The last successfully saved section
+  keeps a persistent restart line beside its Save status while restart is required; a refused save
+  in another section does not move it. It says `Restart to apply: File > Reload settings.` for an
+  installed desktop launch, or `Restart the server to apply.` for a browser server. The desktop
+  menu is delivered separately; saving does not change the running configuration. Refusals keep
+  typed values and display the server's names-and-reasons message beside that section's Save
+  status. An environment override makes the row read-only with `Set by the environment`.
+  Replay sections are read-only and make no file request. Loading, saving and errors never move
+  focus. All fields follow Inputs / Fields above.
 
 ### Graph nodes and their states (signature component)
 

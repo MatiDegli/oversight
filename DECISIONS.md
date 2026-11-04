@@ -5131,6 +5131,7 @@ a persistent apply instruction. Overridden rows and replay are read-only. Chat k
 opener reachable at 390px and uses the available panel for its scrolling form; Oversight's graph
 ownership remains unchanged. No new colors, shortcut or automatic focus change is introduced.
 Evidence uses temporary synthetic files and scripted fake models only; no provider is called.
+
 ## 2026-11-04 — The person sets the spending brake's share
 
 The maintainer decided that Oversight is configurable: the person sets
@@ -5152,7 +5153,6 @@ share. The brake still refuses only above the share, so equality remains admitte
 Published warning marks at 50% and 80% are dropped when at or above the brake;
 the ledger's warning states stay unchanged. `Budget.block_at` already carries
 the share to the UI. There is no contract change.
-
 
 ## 2026-11-04 — Settings review: explicit clears and local save feedback
 

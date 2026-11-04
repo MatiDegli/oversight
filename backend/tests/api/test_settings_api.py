@@ -455,3 +455,27 @@ async def test_request_validation_gives_safe_length_reason(settings_file: Path) 
     assert response.status_code == 422
     assert "META_API_KEY: must be at most 512 characters" in response.json()["error"]["message"]
     assert value not in response.text
+
+
+def test_load_defers_env_file_resolution(
+    settings_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse_resolution(self: Path, strict: bool = False) -> Path:
+        raise AssertionError("Settings.load must not resolve input before platform admission")
+
+    monkeypatch.setattr(Path, "resolve", refuse_resolution)
+    settings = Settings.load(settings_file)
+    assert settings.env_file == settings_file
+    assert settings.loaded_file_values["META_API_KEY"] == SECRET
+
+
+async def test_save_resolves_the_loaded_link_without_replacing_it(settings_file: Path) -> None:
+    link = settings_file.with_name("settings-link")
+    await asyncio.to_thread(link.symlink_to, settings_file.name)
+    async with client_for(link) as client:
+        response = await client.put("/settings", json={"values": {"OVERSIGHT_BUDGET_USD": "8"}})
+    assert response.status_code == 200, response.text
+    assert await asyncio.to_thread(link.is_symlink)
+    assert (await asyncio.to_thread(settings_file.read_text)) == (
+        f"# Keep this comment\nMETA_API_KEY={SECRET}\nOTHER=unchanged\nOVERSIGHT_BUDGET_USD=8\n"
+    )

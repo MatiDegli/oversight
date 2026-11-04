@@ -253,7 +253,6 @@ class Settings:
         """The process environment wins over the .env file."""
         if env_file is None:
             env_file = Path(os.environ.get("OVERSIGHT_ENV_FILE", REPO_ROOT / ".env"))
-        env_file = env_file.resolve()
         file_values = read_env_file(env_file)
         return cls.from_values(
             file_values | dict(os.environ), env_file=env_file, loaded_file_values=file_values

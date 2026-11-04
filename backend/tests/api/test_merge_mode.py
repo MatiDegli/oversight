@@ -121,8 +121,13 @@ async def test_put_waits_for_receipt_and_returns_confirmed_state(tmp_path: Path,
 def test_mode_routes_are_live_only_and_only_http_wiring_calls_the_setter():
     entries = [(method, path) for method, path, _ in LIVE_ONLY]
     offset = entries.index(("POST", "/changes/{change_id}/request-changes"))
-    assert entries[offset + 1 : offset + 3] == [("GET", "/merge-mode"), ("PUT", "/merge-mode")]
-    assert all(path != "/merge-mode" for _, path, _ in NOT_BUILT)
+    assert entries[offset + 1 : offset + 5] == [
+        ("GET", "/settings"),
+        ("PUT", "/settings"),
+        ("GET", "/merge-mode"),
+        ("PUT", "/merge-mode"),
+    ]
+    assert all(path not in {"/merge-mode", "/settings"} for _, path, _ in NOT_BUILT)
     root = Path(__file__).resolve().parents[2] / "src"
     callers = [
         (p.relative_to(root).as_posix(), line.strip())

@@ -71,7 +71,7 @@ it("retains refused values and shows the server's message in an alert", async ()
 it("keeps overridden rows read-only and labels desktop restart persistently", async () => {
   const { api, store } = setup({
     ...view,
-    settings: [{ ...key, overridden: true }],
+    settings: [{ ...key, overridden: true }, ...view.settings.slice(1)],
     apply: "desktop_reload",
     restart_required: true,
   });
@@ -82,7 +82,10 @@ it("keeps overridden rows read-only and labels desktop restart persistently", as
   const html = markup(store);
   expect(html).toContain("Set by the environment");
   expect(html).toContain("readOnly");
-  expect(html).toContain("Restart to apply: File &gt; Reload settings.");
+  expect(html).not.toContain("Restart to apply:");
+  store.getState().edit("OVERSIGHT_BUDGET_USD", "9");
+  await store.getState().save("limits");
+  expect(markup(store)).toContain("Restart to apply: File &gt; Reload settings.");
 });
 it("renders both sections read-only in replay without fetching settings", () => {
   const { api, store } = setup();
@@ -170,3 +173,35 @@ it.each(["models", "limits"] as const)(
     expect(sections()[1 - index]).not.toContain("Restart the server to apply.");
   },
 );
+
+it.each(["models", "limits"] as const)(
+  "keeps the restart reminder under the successful %s save after another section refuses",
+  async (section) => {
+    const { api, store } = setup();
+    await store.getState().load();
+    const other = section === "models" ? "limits" : "models";
+    store.getState().edit("META_API_KEY", "replacement");
+    store.getState().edit("OVERSIGHT_BUDGET_USD", "9");
+    await store.getState().save(section);
+    // Editing again removes Saved., but the persisted change still needs a restart.
+    store.getState().edit(section === "models" ? "META_API_KEY" : "OVERSIGHT_BUDGET_USD", "10");
+    api.updateSettings.mockRejectedValueOnce(
+      new CommandError(422, "invalid_request", "Other section refused."),
+    );
+    await store.getState().save(other);
+    const sections = [...markup(store).matchAll(/<section\b.*?<\/section>/gs)].map(
+      (match) => match[0],
+    );
+    const index = section === "models" ? 0 : 1;
+    expect(sections[index]).toContain("Restart the server to apply.");
+    expect(sections[index]).not.toContain("Other section refused.");
+    expect(sections[1 - index]).toContain("Other section refused.");
+    expect(sections[1 - index]).not.toContain("Restart the server to apply.");
+  },
+);
+
+it("does not attach a restart reminder to unsaved sections on load", async () => {
+  const { store } = setup({ ...view, restart_required: true });
+  await store.getState().load();
+  expect(markup(store)).not.toContain("Restart the server to apply.");
+});
