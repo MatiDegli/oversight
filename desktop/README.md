@@ -1,8 +1,9 @@
 # Windows desktop package
 
-The Tauri 2 shell, installed launch mode, runtime staging and current-user NSIS packaging job
-and native repository switching are implemented. The native runner's build/install/smoke results and headed acceptance are still
-required before delivery; no installer artifact is claimed from a Linux check.
+The Tauri 2 shell, installed launch mode, runtime staging and current-user NSIS
+packaging job and native repository switching are implemented. The native runner's
+build/install/smoke results and headed acceptance are still required before delivery; no
+installer artifact is claimed from a Linux check.
 
 ## Install and configure
 
@@ -13,12 +14,12 @@ on an absolute PATH entry. Git is never bundled. WebView2 is required; when abse
 installer downloads Microsoft's bootstrapper, which requires network access.
 No separately installed Python, uv or Node is needed by the installed application.
 
-The executable is `oversight-desktop.exe`. Its read-only payload lives in `app` beside it:
-`app\python` runs the backend; `app\demo-python` is the separate prepared pytest interpreter.
-The backend serves the existing UI at `http://127.0.0.1:8710/`; the window displays the backend only after
-live health, process liveness and listener ownership pass. An occupied port refuses startup.
-Each app launch starts on the prepared demo. The installed Windows menu can open a repository;
-there is no WSL bridge.
+The executable is `oversight-desktop.exe`. Its read-only payload lives in `app` beside
+it: `app\python` runs the backend; `app\demo-python` is the separate prepared pytest
+interpreter. The backend serves the existing UI at `http://127.0.0.1:8710/`; the window
+displays the backend only after live health, process liveness and listener ownership
+pass. An occupied port refuses startup. Each app launch starts on the prepared demo. The
+installed Windows menu can open a repository; there is no WSL bridge.
 
 Writable configuration is `%LOCALAPPDATA%\Oversight\.env`. First launch copies a committed
 blank-key template only when this file is absent. The shell never reads its values and never

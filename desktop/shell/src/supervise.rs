@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use oversight_desktop_core::diagnostics::CloseOutcome;
 use oversight_desktop_core::health;
 use oversight_desktop_core::lifecycle::{Failure, Readiness, Startup};
 
@@ -52,39 +53,20 @@ pub fn ready(child: &Child, stop: &AtomicBool) -> io::Result<()> {
     }
 }
 
-/// Preserve both the triggering failure and cleanup outcome; never relaunch after either fails.
-#[derive(Debug)]
-struct StopFailure {
-    primary: io::Result<()>,
-    cleanup: io::Result<bool>,
-    reaped: bool,
-}
-
-impl std::fmt::Display for StopFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "session: {:?}; cleanup: {:?}; reaped: {}",
-            self.primary, self.cleanup, self.reaped
-        )
-    }
-}
-impl std::error::Error for StopFailure {}
-
-pub fn close(child: Option<Child>, primary: io::Result<()>) -> io::Result<()> {
+/// Return observed shutdown evidence even when the triggering error was unrelated to cleanup.
+pub fn close(child: Option<Child>, primary: io::Result<()>) -> CloseOutcome {
     let Some(child) = child else {
-        return primary;
+        return CloseOutcome {
+            primary,
+            cleanup: None,
+            reaped: false,
+        };
     };
     let cleanup = child.close();
     child.drain_output();
-    let reaped = child.exit_code().is_some();
-    if primary.is_ok() && matches!(cleanup, Ok(true)) && reaped {
-        Ok(())
-    } else {
-        Err(io::Error::other(StopFailure {
-            primary,
-            cleanup,
-            reaped,
-        }))
+    CloseOutcome {
+        primary,
+        cleanup: Some(cleanup),
+        reaped: child.exit_code().is_some(),
     }
 }

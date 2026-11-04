@@ -82,3 +82,24 @@ def test_cli_bind_refusal_and_nested_lifespan_exit_are_once(tmp_path, monkeypatc
     with pytest.raises(SystemExit):
         cli.main()
     assert capsys.readouterr().err == "OVERSIGHT_REFUSAL=path-too-long\n"
+
+
+@pytest.mark.parametrize("command", ["serve", "ledger", "replay"])
+def test_settings_failure_prints_category_only_for_server_startup(command, monkeypatch, capsys):
+    import sys
+
+    from oversight import __main__ as cli
+    from oversight.settings import Settings
+
+    args = ["oversight", command]
+    if command == "replay":
+        args.append("unused-recording.jsonl")
+    monkeypatch.setattr(sys, "argv", args)
+
+    def unavailable():
+        raise ValueError("invalid settings")
+
+    monkeypatch.setattr(Settings, "load", unavailable)
+    with pytest.raises(ValueError, match=r"^invalid settings$"):
+        cli.main()
+    assert capsys.readouterr().err == ("OVERSIGHT_REFUSAL=other\n" if command == "serve" else "")

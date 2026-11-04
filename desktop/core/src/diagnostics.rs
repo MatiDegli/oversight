@@ -207,3 +207,40 @@ pub fn finish(primary: io::Result<()>, cleanup: io::Result<bool>) -> io::Result<
     }
     Ok(())
 }
+
+/// Keep cleanup evidence separate from the error that requested shutdown.
+#[derive(Debug)]
+pub struct CloseOutcome {
+    pub primary: io::Result<()>,
+    /// None means no child existed, so no shutdown failure message is warranted.
+    pub cleanup: Option<io::Result<bool>>,
+    pub reaped: bool,
+}
+
+impl CloseOutcome {
+    pub fn unverified(&self) -> bool {
+        self.cleanup
+            .as_ref()
+            .is_some_and(|result| !matches!(result, Ok(true)) || !self.reaped)
+    }
+
+    pub fn finish(self) -> io::Result<()> {
+        if self.unverified() {
+            // Preserve both the triggering error and cleanup outcome on failed shutdown.
+            Err(io::Error::other(self))
+        } else {
+            self.primary
+        }
+    }
+}
+
+impl std::fmt::Display for CloseOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "session: {:?}; cleanup: {:?}; reaped: {}",
+            self.primary, self.cleanup, self.reaped
+        )
+    }
+}
+impl std::error::Error for CloseOutcome {}

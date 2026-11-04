@@ -16,7 +16,6 @@ fn selection_refuses_ambiguous_paths_before_filesystem_access() {
         r"\\server\repo",
         r"\\?\C:\repo",
         r"\\wsl$\Ubuntu\repo",
-        r"C:\a~1\repo",
         r"C:\CON .txt\repo",
         r"C:\.git\repo",
         "C:\\repo\u{7f}",
@@ -30,7 +29,12 @@ fn selection_refuses_ambiguous_paths_before_filesystem_access() {
     ] {
         assert!(SelectedSource::validate(Path::new(path)).is_err(), "{path}");
     }
-    for path in [r"C:\private\repo", r"d:\space español 日本\repo"] {
+    for path in [
+        r"C:\private\repo",
+        r"d:\space español 日本\repo",
+        r"C:\a~1\repo",
+        r"C:\Users\ana~dev\AppData\Local\Oversight",
+    ] {
         assert_eq!(
             SelectedSource::validate(Path::new(path)).unwrap().path(),
             Path::new(path)
@@ -95,5 +99,18 @@ fn refusal_vocabulary_is_exact_and_never_passes_arbitrary_output() {
         "delete the per-source folder data/sources/123",
     ] {
         assert!(remedy.contains(text));
+    }
+}
+
+#[test]
+fn recovery_never_names_the_shared_data_parent_as_a_folder_to_delete() {
+    for runtime in ["data/.runtime", "data/custom/123/.runtime", ".runtime"] {
+        let path = Path::new(runtime);
+        let remedy = Refusal::PreviousSessionChanged.remedy(path);
+        assert!(remedy.contains(&format!(
+            "delete the runtime folder {} to open",
+            path.display()
+        )));
+        assert!(!remedy.contains("delete the per-source folder"));
     }
 }

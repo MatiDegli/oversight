@@ -42,6 +42,44 @@ impl Drop for Layout {
 }
 
 #[test]
+fn installed_app_and_data_accept_profile_names_containing_tildes() {
+    use oversight_desktop_core::source::SelectedSource;
+    let layout = Layout::new();
+    let local = layout
+        .0
+        .join("Users")
+        .join("ana~dev")
+        .join("AppData")
+        .join("Local");
+    let install = local.join("Programs").join("Oversight");
+    fs::create_dir_all(&install).unwrap();
+    let app = install.join("app");
+    let data = local.join("Oversight");
+    fs::rename(layout.app(), &app).unwrap();
+    // Both initialization and executable-relative resolution reach validate_directory.
+    initialize_data(&app, &data).unwrap();
+    assert_eq!(
+        app_directory(&install.join("oversight-desktop.exe")).unwrap(),
+        app
+    );
+    let source = SelectedSource::validate(Path::new(r"C:\Users\ana~dev\repository")).unwrap();
+    for selected in [None, Some(&source)] {
+        let launch = Launch::installed_source(&app, &data, false, selected).unwrap();
+        assert_eq!(launch.cwd, app);
+        assert_eq!(
+            launch.env["OVERSIGHT_ENV_FILE"],
+            data.join(".env").to_str().unwrap()
+        );
+        assert_eq!(
+            launch.env["OVERSIGHT_RUNTIME_DIR"],
+            oversight_desktop_core::source::runtime_dir(&data, selected)
+                .to_str()
+                .unwrap()
+        );
+    }
+}
+
+#[test]
 fn installed_arguments_and_paths_are_separate_and_preserve_unicode() {
     let layout = Layout::new();
     initialize_data(&layout.app(), &layout.data()).unwrap();

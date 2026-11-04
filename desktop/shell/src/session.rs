@@ -155,6 +155,9 @@ fn supervise_loop(
             break;
         }
         if ready.is_err() {
+            if ui.menu.is_none() {
+                return ready;
+            }
             // Refusals have no live backend; keep the inert window and allow another selection.
             if let Err(cleanup) = stop(child, Ok(()), ui) {
                 return Err(io::Error::other(format!(
@@ -287,9 +290,9 @@ fn load_inert(ui: &Ui, quit: &AtomicBool, state: &mut Switch, began: Instant) ->
 
 /// The child and its Job handles are dropped only after close/reap evidence is collected.
 fn stop(child: &mut Option<Child>, primary: io::Result<()>, ui: &Ui) -> io::Result<()> {
-    let result = supervise::close(child.take(), primary);
-    if result.is_err() {
+    let outcome = supervise::close(child.take(), primary);
+    if outcome.unverified() {
         let _ = ui.message("The session could not be stopped", "Oversight must close because shutdown could not be verified. Preserve retained state before opening the repository again.");
     }
-    result
+    outcome.finish()
 }

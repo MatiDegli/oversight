@@ -62,8 +62,7 @@ def _main() -> None:
             parser.error("--demo-python cannot be combined with --reload")
         if not args.demo_python.is_absolute() or not args.demo_python.is_file():
             parser.error("--demo-python must name an existing absolute interpreter")
-    with startup_refusals():
-        settings = Settings.load()
+    settings = Settings.load()
 
     if args.command == "isolation-probe":
         print_isolation_probe(args.runtime, REPO_ROOT / "demo-repo", pytest_pin=pytest_pin())

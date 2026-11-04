@@ -1482,8 +1482,9 @@ def _live_app(
 
 def ledger_command(settings: Settings, settle_usd: float | None) -> str:
     """`python -m oversight ledger [settle --spent-usd X]`: the ledger file, or, with `settle_usd`,
-    set `spent_usd` to Meta's console total and clear `unknown`. Settling takes the runtime lock,
-    so it refuses while a server runs (`WorkspaceBusy`)."""
+    set `spent_usd` to Meta's console total and clear `unknown`. Settling takes both server.lock
+    in the runtime directory and ledger.lock in the ledger directory, even when they coincide;
+    a held lock refuses (`WorkspaceBusy`)."""
     ledger = LedgerFile(settings.ledger_root / "ledger.json")
     if settle_usd is None:
         try:

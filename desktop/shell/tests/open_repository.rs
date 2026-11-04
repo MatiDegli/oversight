@@ -95,7 +95,7 @@ fn switch(
     assert_eq!(state.confirm(source, Duration::ZERO), Action::LoadPage);
     // Headless harness supplies page completion; the real window supplies on_page_load Finished.
     assert_eq!(state.page(Duration::from_secs(1), true), Action::Close);
-    let cleanup = supervise::close(current.child.take(), Ok(()));
+    let cleanup = supervise::close(current.child.take(), Ok(())).finish();
     assert_eq!(
         state.closed(cleanup.is_ok(), cleanup.is_ok()),
         Action::Launch
@@ -190,7 +190,9 @@ fn installed_open_repository() {
         &quit,
     );
     assert!(!current.ready);
-    supervise::close(current.child.take(), Ok(())).unwrap();
+    supervise::close(current.child.take(), Ok(()))
+        .finish()
+        .unwrap();
     assert_eq!(
         current.tail.lock().unwrap().refusal(),
         Some(Refusal::PreviousSessionChanged)
@@ -205,7 +207,9 @@ fn installed_open_repository() {
         &quit,
     );
     assert!(!current.ready);
-    supervise::close(current.child.take(), Ok(())).unwrap();
+    supervise::close(current.child.take(), Ok(()))
+        .finish()
+        .unwrap();
     assert_eq!(
         current.tail.lock().unwrap().refusal(),
         Some(Refusal::PreviousSessionChanged)

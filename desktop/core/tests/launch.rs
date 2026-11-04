@@ -117,6 +117,10 @@ fn native_path_refuses_wsl_unc_device_relative_and_ambiguous_components() {
         assert!(!native_drive_path(path), "accepted {path:?}");
     }
     assert!(native_drive_path("C:\\private\\oversight"));
+    assert!(native_drive_path(r"C:\a~1\repo"));
+    assert!(native_drive_path(
+        r"C:\Users\ana~dev\AppData\Local\Oversight"
+    ));
     assert!(native_drive_path("d:\\space español 日本\\oversight"));
 }
 

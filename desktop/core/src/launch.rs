@@ -113,7 +113,7 @@ pub fn native_drive_path(value: &str) -> bool {
                 || reserved_name(part)
                 || part
                     .chars()
-                    .any(|ch| ch < ' ' || ch == '\u{7f}' || "<>:\"/|?*~".contains(ch))
+                    .any(|ch| ch < ' ' || ch == '\u{7f}' || "<>:\"/|?*".contains(ch))
         })
 }
 

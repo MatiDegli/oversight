@@ -4976,7 +4976,6 @@ policy exception. Upstream license bytes are preserved across Windows/Linux chec
 Native runner success, remaining failure-path evidence, headed UI acceptance and independent
 review remain necessary; local cross-target compilation is not native execution evidence.
 
-
 ## Open a repository from the Windows app (2026-11-04)
 
 The maintainer approved native repository opening as one conditional Windows front. File >
@@ -5021,3 +5020,8 @@ Out of scope: remembering the last repository, --clone-root own sources, Linux a
 non-Python repositories and in-app discard. Landing requires green Windows CI, two independent
 reviews and the maintainer's headed Windows acceptance before November 4, 18:00 ART (21:00 UTC).
 Without that acceptance this front stays unmerged; repository opening remains the next step.
+
+Native Rust path admission permits literal tildes, including ordinary Windows profile names
+and 8.3 spellings; the other lexical refusals remain unchanged. This avoids rejecting the
+shell's own installed and data paths. Source runtime keys still hash the selected spelling
+without expanding short names; backend admission remains authoritative.
