@@ -265,6 +265,7 @@ if child == 0:
     pathlib.Path('/state/detached').write_text(str(os.getpid()))
     while True: time.sleep(1)
 os.waitpid(child, 0)
+pathlib.Path('/state/reaped').write_text('ready')
 while True: time.sleep(1)
 """
 

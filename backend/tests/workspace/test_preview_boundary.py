@@ -506,21 +506,21 @@ async def test_boundary_stop_verified_kills_all_descendants(roots: Inputs, mode:
 
     from .preview_boundary_support import DESCENDANTS, all_reaped, descendants, eventually_file
 
-    marker = roots.state / "detached"
-    if await asyncio.to_thread(marker.exists):
-        await asyncio.to_thread(marker.unlink)
+    for name in ("detached", "reaped", "release"):
+        await asyncio.to_thread((roots.state / name).unlink, missing_ok=True)
     settings = config(DESCENDANTS)
     if mode == "deadline":
         settings = dataclasses.replace(settings, lifetime_s=3)
     if mode in {"normal", "nonzero"}:
         settings = config(
-            DESCENDANTS.replace(
-                "while True: time.sleep(1)\n", "while True: time.sleep(1)\n", 1
-            ).rsplit("while True: time.sleep(1)", 1)[0]
-            + f"time.sleep(0.5)\nos._exit({0 if mode == 'normal' else 7})\n"
+            DESCENDANTS.rsplit("while True: time.sleep(1)", 1)[0]
+            + "signal.alarm(20)\n"
+            + "while not pathlib.Path('/state/release').exists(): time.sleep(0.01)\n"
+            + f"os._exit({0 if mode == 'normal' else 7})\n"
         )
     handle = await boundary.launch_boundary(settings, roots)
-    await eventually_file(marker)
+    await eventually_file(roots.state / "detached")
+    await eventually_file(roots.state / "reaped")
     identities = list(handle.processes.values())
     members = await asyncio.to_thread(descendants, handle.processes["init"].pid)
     assert members, "a detached descendant must exist before stop"
@@ -528,6 +528,8 @@ async def test_boundary_stop_verified_kills_all_descendants(roots: Inputs, mode:
     independent = [open_pidfd(pid) for pid in observed]
     owned = [*handle.pidfds.values(), *handle.namespace_fds.values()]
     try:
+        if mode in {"normal", "nonzero"}:
+            await asyncio.to_thread((roots.state / "release").touch)
         if mode == "stop":
             await handle.stop_verified()
         elif mode == "owner_eof":
