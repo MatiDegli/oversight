@@ -209,6 +209,16 @@ def test_generation_is_sorted_portable_and_keeps_font_copyrights() -> None:
     assert "| Frontend | @playwright/test |" not in generated
 
 
+def test_committed_notices_include_current_python_runtime_inventory() -> None:
+    document = (notices.ROOT / "THIRD_PARTY_NOTICES.md").read_text()
+    for package in notices.python_packages():
+        assert f"| Python | {package.name} | {package.version} | {package.license} |" in document
+        for filename, body in package.texts:
+            assert f"### {package.name} {package.version} — {filename}\n\n```text\n{body}\n```" in (
+                document
+            )
+
+
 def test_frontend_rejects_stale_installed_lock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

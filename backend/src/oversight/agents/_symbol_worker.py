@@ -97,6 +97,8 @@ def analyze(snapshot: Path, name: str, under: str, cap: int) -> dict[str, object
     project = api.Project(
         snapshot, load_unsafe_extensions=False, added_sys_path=(), smart_sys_path=False
     )
+    # Keep static import resolution in this process, under the filesystem audit guard.
+    environment = api.InterpreterEnvironment()
     definitions: set[tuple[str, int, str]] = set()
     references: set[tuple[str, int, str]] = set()
     modules: set[str] = set()
@@ -109,7 +111,7 @@ def analyze(snapshot: Path, name: str, under: str, cap: int) -> dict[str, object
         relative = path.relative_to(snapshot).as_posix()
         if not in_scope(relative):
             continue
-        script = cast(_Script, api.Script(path=path, project=project))
+        script = cast(_Script, api.Script(path=path, project=project, environment=environment))
         module = relative.removesuffix(path.suffix).replace("/", ".").removesuffix(".__init__")
         # Resolve an explicit repository module prefix without adding it to Jedi's sys.path.
         query = name.removeprefix(module + ".")

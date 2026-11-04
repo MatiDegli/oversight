@@ -105,7 +105,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | --- | --- | --- | --- |
 | 1 | Facts and a summary from events (package 3) | On main — summary producer `027ec36`, review rendering `9cdd02a`; facts row/steps `ae9822d` | Yes — summary; report check needs no field |
 | 2 | Behavior diff | Backend and review rows on main — `2896b29`; shared inputs `647d545`, methods/properties `2cfe760`, object arguments `8a4a2ec`, unprobed reasons `f44dd62`; graph count chips and sample popovers `f6d7e2a`; supplied new-parameter observations `2122430` (dedicated UI remains) | Yes |
-| 3 | Agent harness pack | On main — opt-in pack `42976ee`, runner wiring `b4446cc` | No |
+| 3 | Agent harness pack | Original pack on main `42976ee`, runner wiring `b4446cc`; now on by default with static diagnostics and read-only Python `find_symbol` | No |
 | 4 | Measured impact cone | On main — caller evidence `1c50382`, GET /impact `920e930`, review rows `09865ec`/`d3f64fd`, review rework `cf1e536`; graph caller words `5ba8584` | Yes |
 | 5 | Live overlap between agents | Partial — shared edits and change-lifetime reads `1e51e51`, graph overlap `e4cec56`; review's **Other pending changes** shows bounded current-graph cone membership with explicit limits; deeper edit facts remain | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |

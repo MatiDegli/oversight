@@ -105,6 +105,33 @@ async def test_links_secrets_and_worktree_shadow_modules_are_not_read(small_tree
     assert not refused.ok and "Cannot access" in refused.content
 
 
+@pytest.mark.parametrize("operation", ["insert", "append"])
+@pytest.mark.parametrize("location", ["original", "secret", "outside"])
+async def test_source_sys_path_cannot_resolve_outside_snapshot(
+    small_tree, tmp_path, operation, location
+):
+    _, tree = small_tree
+    directory = {
+        "original": tree.root / "hidden_modules",
+        "secret": tmp_path / ".env-private",
+        "outside": tmp_path / "outside",
+    }[location]
+    directory.mkdir()
+    (directory / "hidden_module.py").write_text("def hidden():\n    return 'private content'\n")
+    arguments = f"0, {str(directory)!r}" if operation == "insert" else repr(str(directory))
+    await tree.write_text(
+        "shop/hostile.py",
+        f"import sys\nsys.path.{operation}({arguments})\n"
+        "from hidden_module import hidden\nvalue = hidden()\n",
+        expected_hash=None,
+    )
+    tools = Toolbox(*small_tree, test_timeout_s=60, harness_pack=True)
+    result = await call(tools, "hidden", path="shop/hostile.py")
+    assert result.ok, result.content
+    assert "External definition" not in result.content
+    assert "private content" not in result.content
+
+
 async def test_returned_paths_are_revalidated_before_reading(small_tree, tmp_path):
     tree = small_tree[1]
     outside = tmp_path / "outside.py"
