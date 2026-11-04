@@ -32,7 +32,7 @@ Linux isolation; rules also require an independent reviewer. Every run starts in
 | Lead Chat and plans | Discuss tasks; approve a proposed plan before the server queues its agents. | Muse Spark, Muse Spark Open | On |
 | Constrained generative UI | Lead Chat composes closed highlight, changed-file, behavior and moment reference views from committed events through `show_view`, advertised and dispatched. Synthetic proofs exist; release awaits the paid probe, prompt validation and real recording. | Muse Spark, Muse Spark Open | Built, not released |
 | Parallel coding agents | Four slots by default, up to six; each agent edits and tests in its own worktree with six fixed tools and no shell. | Muse Spark, Muse Spark Open | On |
-| Agent harness | Add syntax checks, bounded search feedback and a test-before-finish guard. | None | Opt-in (`OVERSIGHT_HARNESS_PACK`) |
+| Agent harness | Syntax checks, edit diagnostics, bounded search feedback, a test-before-finish guard and read-only Python symbol lookup (`find_symbol`); turn off with `OVERSIGHT_HARNESS_PACK=false`. | None | On |
 | Repository graph and impact cone | See reads, edits, shared work and bounded possible effects, with module, function and detail views. | None | On |
 | Diff and facts | Review the diff, an event-derived summary, tests and recorded steps. | None | On |
 | Fails before, passes after | Check changed tests against both versions; missing evidence stays unknown. | None | On |
@@ -91,7 +91,7 @@ flowchart TD
 - **Evidence over claims.** Check added tests before and after; behavior comparisons and measured callers are opt-in ([proposal evidence](backend/src/oversight/changes/_proposal.py)).
 - **Independent review.** Opt-in cross-review uses a different model profile and no author conversation, an Elephant-Goldfish idea ([reviewer selection](backend/src/oversight/review_config.py), [review call](backend/src/oversight/agents/reviewer.py)).
 - **Visible context cuts.** The lead is told how many exchanges and queue entries the server omitted ([history](backend/src/oversight/agents/_lead_history.py), [queue view](backend/src/oversight/agents/_lead_tools.py)).
-- **Optional harness.** Syntax checks, bounded search feedback and a test-before-finish reminder are built behind `OVERSIGHT_HARNESS_PACK` ([harness](backend/src/oversight/agents/_harness.py)).
+- **Agent harness.** On by default: syntax checks, edit diagnostics, bounded search feedback, a test-before-finish guard and read-only Python symbol lookup (`find_symbol`). Turn it off with `OVERSIGHT_HARNESS_PACK=false` ([harness](backend/src/oversight/agents/_harness.py), [symbols](backend/src/oversight/agents/_symbols.py)).
 - **Bounded spending.** The 90% Meta spending brake refuses new runs; missing token usage stays unknown ([usage ledger](backend/src/oversight/agents/usage.py), [model client](backend/src/oversight/agents/client.py)).
 - **One event history.** Each run has an append-only log; live and replay use the same reducer ([event store](backend/src/oversight/events/store.py), [frontend state](frontend/src/state/store.ts)).
 
