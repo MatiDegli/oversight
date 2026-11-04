@@ -5,7 +5,16 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from live_helpers import DEADLINE_S, live_server, live_settings
+from live_helpers import (
+    DEADLINE_S,
+    Scripts,
+    error_code,
+    live_server,
+    live_settings,
+    meta_settings,
+    start,
+    write_ledger,
+)
 
 from oversight.app import LIMITS, ReplayConfig, create_app, new_run_id, pytest_pin
 from oversight.events import run_store_path
@@ -139,6 +148,58 @@ async def test_the_live_run_starts_with_run_started_then_the_snapshot(tmp_path: 
     assert snapshot.payload.positions and "shop.pricing:apply_coupon" in snapshot.payload.positions
     assert health.mode == "live" and health.run_id == run.run_id
     assert graph.seq >= 2 and graph.graph.version == snapshot.payload.version
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "percent,warnings", [(1, []), (50, []), (70, [0.5]), (80, [0.5]), (100, [0.5, 0.8]), (None, [])]
+)
+async def test_run_publishes_configured_brake_and_only_earlier_warnings(
+    tmp_path: Path, percent: int | None, warnings: list[float]
+) -> None:
+    settings = meta_settings(tmp_path, spend_brake_percent=percent, budget_usd=100)
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, Scripts()) as s:
+        budget = s.events()[0].payload.budget
+        assert budget.block_at == (percent / 100 if percent is not None else 0)
+        assert budget.warn_at == warnings
+        # The run ledger must also classify costs with the configured share.
+        s.live._usage.record(75)  # pyright: ignore[reportPrivateUsage]
+        expected = "warn_50" if percent in (80, 100) else "blocked"
+        assert s.live._usage.brake == expected  # pyright: ignore[reportPrivateUsage]
+        if percent is None:
+            response = await start(s)
+            assert error_code(response) == (403, "spend_brake")
+            assert response.json()["error"]["message"] == (
+                "OVERSIGHT_SPEND_BRAKE_PERCENT must be a whole number from 1 to 100"
+            )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "percent,spent,admitted",
+    [
+        (70, 75, False),
+        (70, 65, True),
+        (70, 70, True),
+        (100, 99, True),
+        (100, 100, True),
+        (100, 101, False),
+    ],
+)
+async def test_meta_start_uses_configured_spending_share(
+    tmp_path: Path, percent: int, spent: float, admitted: bool
+) -> None:
+    settings = meta_settings(tmp_path, spend_brake_percent=percent, budget_usd=100)
+    write_ledger(settings, {"spent_usd": spent, "unknown": []})
+    clients = Scripts()
+    async with asyncio.timeout(DEADLINE_S), live_server(settings, clients) as s:
+        response = await start(s)
+        if admitted:
+            assert response.status_code == 201, response.text
+        else:
+            assert error_code(response) == (403, "spend_brake")
+            assert f"above {percent}%" in response.json()["error"]["message"]
+            assert clients.calls == 0
 
 
 def test_a_second_server_on_the_same_runtime_fails_to_start(tmp_path: Path) -> None:
