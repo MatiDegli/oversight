@@ -2,13 +2,13 @@
 
 import base64
 import re
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
-from oversight.workspace import PreviewError
+from oversight.workspace import PreviewError, PreviewProfile
 
-from .preview_fakes import harness
+from .preview_fakes import FakeProcess, harness
 
 pytestmark = pytest.mark.anyio
 
@@ -508,3 +508,127 @@ async def test_renewal_during_queued_drain_does_not_extend_authenticated_deadlin
     async with asyncio.timeout(5):
         await stopping
     await h.close()
+
+
+@pytest.mark.parametrize("boundary", ["lease", "lifetime"])
+@pytest.mark.parametrize("renew", [False, True])
+async def test_admission_lock_expiry_drains_without_launch(workspace, monkeypatch, boundary, renew):
+    import asyncio
+    from contextlib import asynccontextmanager
+    from dataclasses import replace
+
+    from oversight.workspace import preview_lifecycle
+
+    h = await harness(workspace)
+    if boundary == "lifetime":
+        h.manager.profile = replace(h.manager.profile, lifetime_s=20)
+    entered = asyncio.Event()
+    timers = []
+    expected = []
+    renewed_timer = asyncio.Event()
+
+    def timeout_at(deadline):
+        expected.append(deadline)
+        timer = asyncio.timeout_at(deadline)
+        timers.append(timer)
+        if len(timers) == 2:
+            renewed_timer.set()
+        return timer
+
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        preview_lifecycle,
+        "asyncio",
+        SimpleNamespace(**(vars(asyncio) | {"timeout_at": timeout_at})),
+    )
+
+    @asynccontextmanager
+    async def blocked(**kwargs):
+        entered.set()
+        await asyncio.Event().wait()
+        yield
+
+    try:
+        async with workspace.locks(main=True):
+            created = await h.start(wait_ready=False)
+            owner = h.manager.barrier.owner
+            assert owner is not None and owner.launch_task is not None
+            # Park only the startup task's second admission, not the drain's locks.
+            with monkeypatch.context() as patch:
+                patch.setattr(workspace, "locks", blocked)
+                await asyncio.wait_for(entered.wait(), 5)
+            lease, absolute = h.manager._deadline, h.manager._absolute
+            deadline = min(lease, absolute)
+            assert expected == pytest.approx(
+                [asyncio.get_running_loop().time() + deadline - h.clock()], abs=0.1
+            )
+            if renew and boundary == "lease":
+                h.clock.now += 1
+                await h.manager.renew(created.preview_id, created.lease_token)
+                timers[0].reschedule(asyncio.get_running_loop().time())
+                await asyncio.wait_for(renewed_timer.wait(), 1)
+                assert not owner.launch_task.done()
+                lease = h.manager._deadline
+            h.clock.now = absolute if boundary == "lifetime" else lease
+            timers[-1].reschedule(asyncio.get_running_loop().time())
+            await asyncio.wait_for(owner.launch_task, 1)
+            assert owner.reason == boundary + "_expired"
+            assert not h.processes
+        await h.sink.wait("stopped", created.preview_id)
+        assert h.manager._watcher is not None
+        await h.manager._watcher
+        assert h.sink.records[-1].reason == boundary + "_expired"
+        assert not h.manager.has_owner and h.manager.registry.read() is None
+    finally:
+        await h.close()
+
+
+async def test_reviewed_build_and_readiness_allowance_begins_at_dequeue(workspace, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from oversight.workspace import preview_lifecycle
+
+    h = await harness(workspace)
+    monkeypatch.setattr(preview_lifecycle, "time", SimpleNamespace(monotonic=h.clock))
+    factory = h.manager.process_factory
+    available = asyncio.Event()
+
+    def parked(registry, port):
+        process = cast(FakeProcess, factory(registry, port))
+        process.launch_gate.clear()
+        available.set()
+        return process
+
+    h.manager.process_factory = parked
+    try:
+        async with workspace.locks(main=True):
+            created = await h.start(wait_ready=False)
+            h.manager.lifecycle.profile = cast(
+                PreviewProfile,
+                SimpleNamespace(
+                    readiness_s=30,
+                    reviewed_app=SimpleNamespace(
+                        launch=SimpleNamespace(
+                            build=(SimpleNamespace(timeout_s=11), SimpleNamespace(timeout_s=13))
+                        )
+                    ),
+                ),
+            )
+            await asyncio.sleep(0)
+            h.clock.now += 9
+        async with asyncio.timeout(5):
+            await available.wait()
+            process = h.processes[-1]
+            await process.launch_started.wait()
+        owner = h.manager.barrier.owner
+        assert owner is not None
+        assert owner.execution_deadline == h.clock.now + 54
+        assert owner.queue_s >= 9
+        h.clock.now += 7
+        process.launch_gate.set()
+        await h.sink.wait("ready", created.preview_id)
+        assert process.ready_budget == 47
+    finally:
+        await h.close()

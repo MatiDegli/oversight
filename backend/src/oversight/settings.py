@@ -197,6 +197,7 @@ class Settings:
             "preview_profile",
             replace(
                 self.preview_profile,
+                log_secrets=tuple(k for k in (self.meta_api_key, self.baseten_api_key) if k),
                 backend_port=self.port,
                 vite_port=self.vite_port,
                 trusted_demo=not self.workspace_source and self.preview_profile.trusted_demo,
@@ -348,10 +349,21 @@ def resolve_preview_profile(
         vite_port=vite,
         trusted_demo=not values.get("OVERSIGHT_WORKSPACE_SOURCE"),
         heartbeat_s=duration("HEARTBEAT_S", 10),
-        lease_s=duration("LEASE_S", 30),
+        lease_s=duration("LEASE_S", 600),
         lifetime_s=duration("LIFETIME_S", 900),
-        readiness_s=duration("READINESS_S", 10),
+        readiness_s=duration("READINESS_S", 30),
         memory_limit_bytes=int(values.get("OVERSIGHT_PREVIEW_MEMORY_LIMIT_BYTES", "536870912")),
+        build_memory_bytes=int(values.get("OVERSIGHT_PREVIEW_BUILD_MEMORY_BYTES", "2147483648")),
+        build_cores=int(values.get("OVERSIGHT_PREVIEW_BUILD_CORES", "2")),
+        nested_memory_bytes=int(values.get("OVERSIGHT_PREVIEW_NESTED_MEMORY_BYTES", "1073741824")),
+        nested_cores=int(values.get("OVERSIGHT_PREVIEW_NESTED_CORES", "1")),
+        node_heap_mib=int(values.get("OVERSIGHT_PREVIEW_NODE_HEAP_MIB", "1536")),
+        output_file_bytes=int(values.get("OVERSIGHT_PREVIEW_OUTPUT_FILE_BYTES", "16777216")),
+        output_total_bytes=int(values.get("OVERSIGHT_PREVIEW_OUTPUT_TOTAL_BYTES", "268435456")),
+        output_files=int(values.get("OVERSIGHT_PREVIEW_OUTPUT_FILES", "10000")),
+        cache_bytes=int(values.get("OVERSIGHT_PREVIEW_CACHE_BYTES", "2147483648")),
+        diagnostics_bytes=int(values.get("OVERSIGHT_PREVIEW_DIAGNOSTICS_BYTES", "1048576")),
+        queue_cap=int(values.get("OVERSIGHT_PREVIEW_QUEUE_CAP", "8")),
     )
 
 

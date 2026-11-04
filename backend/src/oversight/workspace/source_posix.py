@@ -317,8 +317,12 @@ def metadata(root: Path, deadline: float) -> tuple[FileEntry, ...]:
                 count += 1
                 rel = str((path / name).relative_to(root / ".git"))
                 relative(rel)
-                if count > MAX_PATHS or rel in forbidden or name.endswith(".lock"):
-                    raise refuse("unsafe or excessive Git metadata")
+                if count > MAX_PATHS:
+                    raise refuse("Git metadata entry budget exceeded")
+                if rel in forbidden:
+                    raise refuse("forbidden Git metadata")
+                if name.endswith(".lock"):
+                    raise refuse("Git metadata lock present")
                 info = os.stat(name, dir_fd=fd, follow_symlinks=False)
                 if stat.S_ISDIR(info.st_mode):
                     pending.append(path / name)

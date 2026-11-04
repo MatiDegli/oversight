@@ -71,7 +71,7 @@ One line per day, in Argentina time (ART).
   Rechecked the layout and clarify references in full, fixed the 390px capped-action overflow,
   and removed duplicate ended copy.
 
-- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls. Added event-derived reference cards, metadata-only moment facts, exact replay history/Back with retained Chat, click-owned graph framing and exact recorded-file diffs; synthetic responsive evidence, no paid calls or bundle replacement. Rechecked layout, language, typography and hardening: retained empty behavior titles, restored title weight, bounded speech measure, isolated caption direction and enlarged history/disclosure touch targets. Added the bounded desktop spike's portable Rust launch, health and lifecycle policy with offline tests, a standalone gate and native Windows core lane; recorded the scoped license grant and prospective runbook. Deferred the executable and native lifecycle/UI acceptance. Added the frozen, strict preview opening opt-in; retained demo/adapter trust, admission and execution rechecks, and verified shutdown ordering and failed-drain ownership with scripted fakes. Preserved raw preview opt-in values from .env so whitespace and quotes are rejected after environment precedence, with file-source regressions. Machine and Windows-browser qualification remain separate unresolved gates. Measured all event-bearing fixtures and cold-start/reconnect intake; the untouched real recording reaches React's depth limit through App SSE despite later cursor recovery, while public recorded-timing replay settles. Added event-profile scripted provenance and explicit Chat rail/header labels with live/replay and real-App browser evidence.
+- 2026-11-03 — Dormant reference views: contracts 1.18.0, strict adapters, opt-in eligibility, committed readers, shared resolution cases and caption withholding; prompts unchanged, no paid calls. Added event-derived reference cards, metadata-only moment facts, exact replay history/Back with retained Chat, click-owned graph framing and exact recorded-file diffs; synthetic responsive evidence, no paid calls or bundle replacement. Rechecked layout, language, typography and hardening: retained empty behavior titles, restored title weight, bounded speech measure, isolated caption direction and enlarged history/disclosure touch targets. Added the bounded desktop spike's portable Rust launch, health and lifecycle policy with offline tests, a standalone gate and native Windows core lane; recorded the scoped license grant and prospective runbook. Deferred the executable and native lifecycle/UI acceptance. Added the frozen, strict preview opening opt-in; retained demo/adapter trust, admission and execution rechecks, and verified shutdown ordering and failed-drain ownership with scripted fakes. Preserved raw preview opt-in values from .env so whitespace and quotes are rejected after environment precedence, with file-source regressions. Machine and Windows-browser qualification remain separate unresolved gates. Measured all event-bearing fixtures and cold-start/reconnect intake; the untouched real recording reaches React's depth limit through App SSE despite later cursor recovery, while public recorded-timing replay settles.
   K2b size rationale: chatLeads.browser.test.ts (1285 lines),
   chatLeads.browser.fixture.tsx (641 lines) and lifecycleScene (97 lines) remain together because
   the six-lead scene table and lifecycle proofs are inherently tabular. The fixture keeps valid
@@ -94,5 +94,26 @@ One line per day, in Argentina time (ART).
   Reviewed self-profile front (2026-11-03): added filtered pinned input and frozen launch authority,
   nonexecuting admission scaffold and bounded console/live-index startup carrier; consumer rendering,
   builds, boundary/gateway/nesting and native launch remain unavailable. No model API calls.
+
+  Added reviewed preview translation, effective-manifest/root adaptation, persistence before execution,
+  fresh-root build/start orchestration and supervisor-owned connector/publication/gateway lifecycle.
+  Retained quarantine, the self-application refusal and separate tests/shop filesystem residual.
+  Folded authenticated namespace/filter/teardown, static preparation/import/log, HTTP/readiness,
+  connector and explicit no-key nested configuration rationales into the preview documentation.
+  Readiness/lease defaults are 30/600 seconds; controlled wiring does not certify final self-app,
+  scripted-story or Windows-browser acceptance. No provider calls or contract changes.
+  Qualified the actual prepared offline production build and imports in the Linux root, and the
+  real supervisor/guardian death ordering. Vite now names only the opposite loopback frame host per
+  request and refuses foreign names/ports. Custom HTML embeddings retain their explicit policy
+  after the same Host check. The shop authority adapter is an unowned prerequisite;
+  shop `127.0.0.1` parents are refused before reservation, while localhost remains supported.
+  Direct launches without a request parent preserve configured origins; the default host selects
+  only the URL. Real-route acceptance and the three-start driver remain blocked prerequisites.
+  Frontend transport integration remains a separately owned prerequisite. Bounded admission-lock
+  waits by lease/lifetime
+  and fixed stop/EOF/cancellation before execute; added wiring-level probing-death and invalid-evidence
+  coverage. Polling/renewal now preserve supervisor-owned build transitions; provider values reach
+  only the private redaction channel, and failure/log and boundary-input regressions cover the
+  wiring. Retained the absence of final self-app/story/Windows-browser acceptance.
 
 - 2026-11-04 — Hardened scripted Chat captures to require the selected thread, Proposed change card and composer; separated coder provenance from the model line, aligned lead header reading order and restored the design spacing rhythm, with regression and responsive browser evidence.

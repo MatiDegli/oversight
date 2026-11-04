@@ -3,18 +3,62 @@
 import asyncio
 import dataclasses
 import errno
+import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from oversight.workspace import preview_boundary as boundary
+from oversight.workspace import preview_boundary_entry as entry
 from oversight.workspace.runner import child_env
 
 from .preview_boundary_support import Inputs, config, prepared, result
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("readonly,device", [(False, False), (True, False), (True, True)])
+@pytest.mark.parametrize(
+    "source_flags,mount_flags",
+    [
+        (0, 1 << 24),
+        (os.ST_RDONLY, 1 | (1 << 24)),
+        (os.ST_NOSUID, 2 | (1 << 24)),
+        (os.ST_NODEV, 4 | (1 << 24)),
+        (os.ST_NOEXEC, 8 | (1 << 24)),
+        (os.ST_NOATIME, 1024),
+        (os.ST_NODIRATIME, 2048 | (1 << 24)),
+        (os.ST_RELATIME, 1 << 21),
+        (os.ST_NOATIME | os.ST_NODIRATIME, 1024 | 2048),
+        (os.ST_NODIRATIME | os.ST_RELATIME, 2048 | (1 << 21)),
+        (os.ST_NOSUID | os.ST_NOEXEC | os.ST_RELATIME, 2 | 8 | (1 << 21)),
+    ],
+)
+async def test_bind_preserves_source_mount_flags(
+    tmp_path, monkeypatch, readonly, device, source_flags, mount_flags
+):
+    source, destination = tmp_path / "source", tmp_path / "destination"
+    source.touch()
+    calls = []
+    monkeypatch.setattr(entry, "mount", lambda *args: calls.append(args))
+
+    def statvfs(path):
+        assert path == destination
+        assert calls == [(str(source), str(destination), None, entry.BIND | entry.REC)]
+        return SimpleNamespace(f_flag=source_flags)
+
+    monkeypatch.setattr(os, "statvfs", statvfs)
+    entry.bind(str(source), destination, readonly=readonly, device=device)
+    added = entry.NOSUID | (entry.RDONLY if readonly else 0) | (0 if device else entry.NODEV)
+    assert calls[-1] == (
+        None,
+        str(destination),
+        None,
+        entry.BIND | entry.REMOUNT | added | mount_flags,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -732,3 +776,50 @@ async def test_boundary_interface_is_frozen_and_structural(roots: Inputs) -> Non
     handle: boundary.BoundaryHandle = await boundary.launch_boundary(settings, roots)
     await handle.wait()
     assert handle.verified_dead
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        "/opt/deps/../escape",
+        "/opt/deps/./python",
+        "/opt/deps//python",
+        "/opt/deps/",
+        "opt/deps/python",
+        "/opt/dependency/python",
+        "/T/deps",
+    ],
+)
+def test_dependency_mount_refuses_invalid_target(roots: Inputs, target: str) -> None:
+    mounts = tuple(
+        dataclasses.replace(m, target=target) if m.role == "dependencies" else m
+        for m in roots.readonly
+    )
+    with pytest.raises(boundary.BoundaryUnavailable, match="unapproved tool manifest"):
+        boundary._validate(config("pass"), dataclasses.replace(roots, readonly=mounts))
+
+
+@pytest.mark.parametrize("target", ["/opt/deps", "/opt/deps/nested"])
+def test_dependency_mount_refuses_duplicate_or_nested_target(roots: Inputs, target: str) -> None:
+    dependency = next(m for m in roots.readonly if m.role == "dependencies")
+    mounts = (*roots.readonly, dataclasses.replace(dependency, target=target))
+    with pytest.raises(boundary.BoundaryUnavailable, match=r"duplicate|incomplete"):
+        boundary._validate(config("pass"), dataclasses.replace(roots, readonly=mounts))
+
+
+@pytest.mark.parametrize("cap", [-1, True, 1.5, "1024", None])
+def test_boundary_refuses_invalid_output_cap(roots: Inputs, cap: Any) -> None:
+    with pytest.raises(boundary.BoundaryUnavailable, match="invalid boundary limits"):
+        boundary._validate(config("pass", output_cap=cap), roots)
+
+
+def test_boundary_accepts_separate_dependencies_and_raised_output_budget(roots: Inputs) -> None:
+    dependency = next(m for m in roots.readonly if m.role == "dependencies")
+    mounts = (
+        *(m for m in roots.readonly if m is not dependency),
+        dataclasses.replace(dependency, target="/opt/deps/python"),
+        dataclasses.replace(dependency, target="/opt/deps/node"),
+    )
+    boundary._validate(
+        config("pass", output_cap=2 * 1024**2), dataclasses.replace(roots, readonly=mounts)
+    )

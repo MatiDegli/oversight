@@ -16,6 +16,68 @@ from .preview_fakes import FakeProcess, harness, profile
 pytestmark = pytest.mark.anyio
 
 
+async def test_shop_without_request_parent_retains_configured_origins(workspace):
+    h = await harness(workspace)
+    h.manager.profile = replace(
+        h.manager.profile,
+        vite_port=5710,
+        origins=("http://127.0.0.1:8710", "http://127.0.0.1:5710"),
+    )
+    try:
+        for parent in (None, "localhost:5710", None):
+            created = await h.manager.start(
+                run_id="run-20261103-000000",
+                agent_id="agent-1",
+                revision=1,
+                head_commit=h.head,
+                parent_authority=parent,
+            )
+            await h.sink.wait("ready", created.preview_id)
+            data = h.manager.registry.read()
+            assert data is not None
+            argv = data["launch"]["argv"]
+            origins = tuple(
+                argv[index + 1]
+                for index, option in enumerate(argv)
+                if option == "--oversight-origin"
+            )
+            assert origins == ((f"http://{parent}",) if parent else h.manager.profile.origins)
+            assert (await h.manager.get(created.preview_id)).url == (
+                f"http://127.0.0.1:{data['port']}/"
+            )
+            await h.manager.stop(created.preview_id, created.lease_token)
+    finally:
+        await h.close()
+
+
+@pytest.mark.parametrize("port", [8710, 5710])
+async def test_shop_refuses_unsupported_parent_before_reservation(workspace, monkeypatch, port):
+    from unittest.mock import AsyncMock
+
+    h = await harness(workspace)
+    h.manager.profile = replace(h.manager.profile, vite_port=5710)
+    resolve = AsyncMock(side_effect=AssertionError("candidate resolved before parent refusal"))
+    monkeypatch.setattr(h.manager, "resolve_candidate", resolve)
+    try:
+        with pytest.raises(
+            PreviewError, match="Shop preview requires a localhost parent"
+        ) as caught:
+            await h.manager.start(
+                run_id="run-20261103-000000",
+                agent_id="agent-1",
+                revision=1,
+                head_commit=h.head,
+                parent_authority=f"127.0.0.1:{port}",
+            )
+        assert caught.value.code == "not_configured"
+        resolve.assert_not_awaited()
+        assert not h.manager.has_owner and not h.processes and not h.sink.records
+        assert h.manager.registry.read() is None and h.manager.barrier.owner is None
+        assert h.manager._parent_authority == "localhost:8710"
+    finally:
+        await h.close()
+
+
 @pytest.mark.parametrize("ending", ["closed", "mutation", "lease_expired"])
 async def test_authenticated_stop_retries_return_final_record_without_drain(
     workspace, monkeypatch, ending
@@ -194,7 +256,7 @@ async def test_capacity_is_reserved_before_any_preflight_git(workspace, monkeypa
     await h.close()
 
 
-@pytest.mark.parametrize("expiry,reason", [(31, "lease_expired"), (901, "lifetime_expired")])
+@pytest.mark.parametrize("expiry,reason", [(601, "lease_expired"), (901, "lifetime_expired")])
 async def test_no_renewal_revives_expiry(workspace, expiry, reason):
     h = await harness(workspace)
     created = await h.start()

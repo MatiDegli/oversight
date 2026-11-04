@@ -777,6 +777,12 @@ async def prepare_preview(
         )
 
 
+def verify_prepared_manifests(prepared: PreparedPreview) -> None:
+    """Recheck effective immutable inventories before adapting them to boundary mounts."""
+    for inventory in prepared.manifests:
+        _verify(inventory)
+
+
 def scrub_preview_env(env: Mapping[str, str], prepared: PreparedPreview) -> dict[str, str]:
     """Final allowlist after caller additions; complete PATH defeats runner inheritance.
 
