@@ -116,7 +116,10 @@ async def test_reference_is_copied_and_echoed_through_revise_and_done(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     clients = Scripts([revisable()])
-    async with asyncio.timeout(DEADLINE_S), live_server(live_settings(tmp_path), clients) as s:
+    async with (
+        asyncio.timeout(DEADLINE_S),
+        live_server(live_settings(tmp_path, harness_pack=False), clients) as s,
+    ):
         ref = await origin(s.store)
         expected = ref.model_dump(mode="json")
         body = StartAgent(task="t", answering=ref)

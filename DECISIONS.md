@@ -4906,3 +4906,100 @@ do not enable the reviewed self app, certify final application/story/browser acc
 the tests/shop filesystem residual. Its ordinary Settings entry and equal ports remain refused;
 the explicit nested entry, distinct-port declaration/re-pin, frontend consumer and final acceptance
 remain required. Native Windows keeps the exact warning and grants no paid-run authority.
+## Package a Windows installer with an embedded Python (2026-11-04)
+
+The maintainer approved a full Windows desktop window and current-user NSIS installer.
+This supersedes the clone-only/bundling-inactive scope in the November 3 bounded desktop
+preparation decision and the older future runbook. It retains the native backend, accepted
+single-instance/owned-Job lifecycle, one 120-second health deadline and five-second close
+allowance. No WSL bridge, native picker or product UI change is authorized by packaging.
+
+CPython 3.12 under PSF-2.0 is approved **only for the desktop installer**. Bundled third-party
+components retain their own licenses and need individual inventory and notice texts.
+Anything outside MIT, Apache-2.0, BSD, ISC, PSF-2.0, Zlib or MPL-2.0 (unmodified) must be
+reported before shipping; nothing is silently covered by CPython's license. The October 27
+exact typing-extensions/PSF-2.0 exception remains unchanged, as does general dependency policy.
+NSIS must use zlib compression, never LZMA. Git for Windows is a checked external prerequisite
+and is never bundled. Use WebView2's download bootstrapper when the runtime is absent.
+
+The install payload belongs under `%LOCALAPPDATA%\Programs\Oversight\app`; writable
+`.runtime` and `.env` belong under `%LOCALAPPDATA%\Oversight` and survive upgrades and
+uninstall. First launch creates configuration from a blank-key template only when absent,
+without reading its values in the shell. A prepared demo interpreter is a serve command-line
+option, never an environment variable. A supplied interpreter must pass its pytest probe;
+no runtime uv rebuild or fallback is permitted. Git remains mandatory.
+
+Implementation stopped before step 1's shell adapter, at the dependency preflight required
+for the eventual lock: 443 external entries were reconciled, including 243 active for Windows.
+Only `target-lexicon 0.12.16` has no approved license choice: `Apache-2.0 WITH LLVM-exception`.
+It is inactive for Windows but enters Cargo's all-platform lock through GTK/system-deps/cfg-expr.
+The existing strict policy refuses WITH expressions; the named desktop grants do not cover
+LLVM-exception, and the installer brief requires every locked entry to pass. See the
+[complete candidate audit](desktop/packaging/crate-license-audit.md) for exact versions,
+features, checksums and dependency path. The candidate shell/lock changes were withdrawn.
+No executable, Python payload, installer or native acceptance is claimed. Resume requires
+resolving that exact policy mismatch and rerunning reconciliation before implementing the shell.
+
+
+Amendment, 2026-11-04: the maintainer approved exactly `target-lexicon 0.12.16` with
+`Apache-2.0 WITH LLVM-exception` in `desktop/Cargo.lock`. It belongs to Tauri's inactive
+Linux branch and is not shipped. The notices policy accepts only that Rust crate, version
+and complete expression; no general WITH acceptance is added. This resolves the dependency
+preflight blocker above and authorizes resuming the installer implementation.
+
+
+Implementation amendment, 2026-11-04: `desktop/shell` now owns Windows process/console/Job
+operations through the portable launch, health and lifecycle policies. GUI dependencies are
+Windows-only. Installed startup resolves `app` beside the executable, creates configuration
+only when absent, keeps retained data outside the installer tree, and passes the prepared demo
+interpreter as a serve argument. Process-only app-root selection also reaches the Linux preview
+boundary's exclusion: a wheel's source-parent computation no longer identifies the payload.
+The boundary keeps this computation local to avoid importing settings through the workspace
+facade; module-relative entry/adapter paths correctly stay module-relative in a wheel.
+
+The staging manifest fixes CPython 3.12.12, install_only, release 20251014, Windows x86_64 MSVC,
+and its archive checksum. Separate relocatable interpreters receive hashed locked runtime or
+pytest dependencies and non-editable project wheels; no build-machine venv is distributed.
+The failed prepared-interpreter probe refuses without uv. The new least-privilege Windows
+package job builds NSIS/currentUser/zlib, installs, smoke-checks twice without Python/uv/Node
+on PATH, checks owned survivors/listeners, uninstalls while preserving data, and uploads the
+candidate installer, hashes and notices. Full gates/native execution remain separate acceptance.
+
+All 443 external crate lock entries reconcile, including the exact inactive target-lexicon grant.
+The installer notice generator retains pinned license texts, source availability for unmodified
+MPL crates, Python/frontend notices, CPython and incorporated terms, WebView2 loader and NSIS.
+Following decision 2's required disclosure, its component inventory explicitly identifies the
+licenses outside the named set: bzip2, public-domain SQLite/liblzma, CPython historical/incorporated
+terms and Microsoft Distributable Code in CPython. The WebView2 SDK loader notice is
+BSD-3-Clause. No component is described as covered solely by CPython's PSF grant. This is not a general dependency
+policy exception. Upstream license bytes are preserved across Windows/Linux checkout for hashes.
+Native runner success, remaining failure-path evidence, headed UI acceptance and independent
+review remain necessary; local cross-target compilation is not native execution evidence.
+
+
+## Harness pack on by default, with static diagnostics and a symbol tool (2026-11-04)
+
+Maintainer ruling: the existing `OVERSIGHT_HARNESS_PACK` now defaults to true. Explicit false
+retains the comparison arm's six tools, prompts and observations. This supersedes only the
+off-by-default part of the 2026-10-28 harness ruling; the single-switch comparison remains.
+
+With the pack on, successful Python edits keep their changes and append only newly introduced
+static diagnostics, compared by code and message. Isolated ruff checks read the before/after
+content on stdin outside the worktree, use only E9,F63,F7,F82, and stop after ten seconds.
+At most twenty bounded rows ask the agent to fix findings before tests. Missing ruff, timeout
+or malformed output logs a warning and preserves the ordinary edit result. Ruff is a pinned
+runtime dependency. Its stdin subprocess is the narrow exception to the workspace runner's
+no-stdin interface; it receives no inherited provider credentials.
+
+Read-only Python `find_symbol` is inside the same pack, advertised only when it is on. It
+accepts an identifier or dotted name and an optional search path. Definitions and references
+have bounded source rows, focus ranges and graph node ids. Jedi and parso are exactly pinned
+MIT dependencies admitted by the fourteen-day cutoff. Static navigation may be incomplete.
+
+The isolated Python worker runs outside the worktree with a twenty-second kill timeout. It
+uses Jedi with unsafe extensions disabled, empty added paths and smart sys.path disabled.
+Only validated, non-secret Python sources enter its disposable snapshot; an audit guard
+refuses original-tree reads, secret paths and snapshot imports. Returned paths are validated
+again through Tree; external definitions expose only module names. History treats the tool
+as a read, and nested coder admission follows the pack. No shell tool, scratchpad or language
+server is authorized. Existing frontend fallbacks display its steps without a UI change.

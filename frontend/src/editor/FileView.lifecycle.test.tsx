@@ -154,7 +154,7 @@ describe("file view document with a doubled Monaco model", () => {
     await oldLoad;
     expect(model.getValue()).toBe("new");
     expect(doc.state.message).toBeNull();
-    doc.discard();
+    await doc.discard();
     expect(model.getValue()).toBe("new");
   });
 });
@@ -221,7 +221,7 @@ it("restores the span decoration and editor view after Reload, refresh and Disca
   }
   model.setValue("draft");
   expect(decorated).toBe(false);
-  doc.discard();
+  await doc.discard();
   expect(decorated).toBe(true);
   expect(decorate).toHaveBeenCalledTimes(4);
   expect(code.restoreViewState).toHaveBeenCalledTimes(4);

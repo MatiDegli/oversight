@@ -99,7 +99,7 @@ def _mask_stub(function: dict[str, object], content: str) -> str | None:
         if content.endswith(HISTORY_TEST_STUB):
             return None
         return content.split("\n", 1)[0] + HISTORY_TEST_STUB
-    if name not in {"read_file", "search", "list_files"}:
+    if name not in {"read_file", "search", "list_files", "find_symbol"}:
         return None
     # Keep covered-read stubs untouched by the observation-masking pass.
     if re.fullmatch(

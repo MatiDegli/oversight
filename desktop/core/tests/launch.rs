@@ -78,6 +78,19 @@ fn launch_preserves_validated_root_spelling() {
 }
 
 #[test]
+fn clone_interpreter_spelling_uses_native_separators() {
+    let root = CloneRoot::new();
+    let launch = Launch::new(&root.0, false).unwrap();
+    let mut expected = root.0.as_os_str().to_os_string();
+    for component in [".venv", "Scripts", "python.exe"] {
+        expected.push(std::path::MAIN_SEPARATOR_STR);
+        expected.push(component);
+    }
+    // Path equality on Windows treats '/' and '\\' alike, so compare raw text.
+    assert_eq!(launch.program.as_os_str(), expected.as_os_str());
+}
+
+#[test]
 fn native_path_refuses_wsl_unc_device_relative_and_ambiguous_components() {
     for path in [
         "",
@@ -124,6 +137,8 @@ fn argv_preserves_spaces_and_unicode_without_shell_interpolation_or_reload() {
     assert_eq!(launch.env["OVERSIGHT_WORKSPACE_SOURCE"], "");
     assert!(launch.remove_env.contains(&"GIT_DIR"));
     assert!(launch.remove_env.contains(&"PYTHONPATH"));
+    assert!(launch.remove_env.contains(&"OVERSIGHT_APP_ROOT"));
+    assert!(launch.remove_env.contains(&"OVERSIGHT_ENV_FILE"));
 }
 
 #[test]

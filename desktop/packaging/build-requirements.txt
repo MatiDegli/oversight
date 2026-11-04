@@ -1,0 +1,4 @@
+# Exact MIT/Apache-2.0 build tool; both supported staging hosts, no unlocked build resolver.
+uv_build==0.11.10 \
+    --hash=sha256:915e155cbe57167f0cc7285789f5f47a756afa5191c1608504bfd0f40da21ff3 \
+    --hash=sha256:14b198a68280398881fe1e7ef26e40e9621e171249fac1040b18ebce4aae39b9

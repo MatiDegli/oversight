@@ -22,13 +22,18 @@ const validators = {
   status: vi.fn((value: unknown) => value as PreviewStatus),
   details: vi.fn((value: unknown) => value as PreviewDetails),
 };
-function setup(value: unknown, status = 200, headers = { "Cache-Control": "no-store" }) {
+function setup(
+  value: unknown,
+  status = 200,
+  headers = { "Cache-Control": "no-store" },
+  base = "http://127.0.0.1:8710",
+) {
   const request = vi
     .fn<typeof fetch>()
     .mockResolvedValue(new Response(JSON.stringify(value), { status, headers }));
   return {
     request,
-    port: createLivePreviewPort("http://127.0.0.1:8710", validators, request),
+    port: createLivePreviewPort(base, validators, request),
   };
 }
 it("projects exact generated requests and supplies private bounded fetch policies", async () => {
@@ -51,7 +56,7 @@ it("projects exact generated requests and supplies private bounded fetch policie
   expect(init?.signal).toBeInstanceOf(AbortSignal);
 });
 it("uses the existing injected validators for details and renewal", async () => {
-  const details = { status, url: "http://127.0.0.1:19800/" };
+  const details = { status, url: "http://localhost:19800/" };
   const first = setup(details);
   await expect(first.port.details(id, signal)).resolves.toEqual(details);
   expect(validators.details).toHaveBeenCalledWith(details);
@@ -62,15 +67,61 @@ it("uses the existing injected validators for details and renewal", async () => 
   expect(validators.status).toHaveBeenCalledWith(status);
   expect(second.request.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ lease_token: lease }));
 });
-it.each([
-  "https://127.0.0.1:19800/",
-  "http://localhost:19800/",
-  "http://127.0.0.1:8710/",
-  "http://127.0.0.1:19800/path",
-  "http://127.0.0.1:19800/?token=x",
-])("refuses unsafe frame destination %s", async (url) => {
-  const { port } = setup({ status, url });
+const hosts = ["127.0.0.1", "localhost"] as const;
+const opposite = (host: (typeof hosts)[number]) =>
+  host === "127.0.0.1" ? "localhost" : "127.0.0.1";
+const unsafe = (host: string, port: string) => [
+  `https://${host}:${port}/`,
+  `http://${host}/`,
+  `http://${host}:80/`,
+  `http://${host}:${port}/path`,
+  `http://${host}:${port}/?token=x`,
+  `http://${host}:${port}/#frame`,
+  `http://user@${host}:${port}/`,
+  `http://:password@${host}:${port}/`,
+  `http://user:password@${host}:${port}/`,
+  `http://example.com:${port}/`,
+  `http://[::1]:${port}/`,
+];
+it.each(hosts.flatMap((host) => unsafe(host, "8710")))("refuses unsafe base %s", (base) => {
+  const request = vi.fn<typeof fetch>();
+  expect(() => createLivePreviewPort(base, validators, request)).toThrow();
+  expect(request).not.toHaveBeenCalled();
+});
+it.each(
+  hosts.flatMap((host) =>
+    [
+      ...unsafe(opposite(host), "19800"),
+      `http://${host}:19800/`,
+      `http://${host}:8710/`,
+      `http://${opposite(host)}:8710/`,
+    ].map((url) => ({ base: `http://${host}:8710`, url })),
+  ),
+)("refuses unsafe frame $url for $base", async ({ base, url }) => {
+  const { port } = setup({ status, url }, 200, undefined, base);
   await expect(port.details(id, signal)).rejects.toThrow();
+});
+it.each(hosts)("uses supplied %s base despite ambient location changes", async (host) => {
+  const base = `http://${host}:8710`;
+  const details = { status, url: `http://${opposite(host)}:19800/` };
+  const location = { origin: `http://${opposite(host)}:9999` };
+  vi.stubGlobal("location", location);
+  vi.stubGlobal("window", { location });
+  try {
+    const { port, request } = setup(details, 200, undefined, base);
+    location.origin = "https://ambient.invalid";
+    await expect(port.details(id, signal)).resolves.toEqual(details);
+    expect(request).toHaveBeenCalledTimes(1);
+    const [url] = request.mock.calls[0] ?? [];
+    expect(url instanceof URL ? url.href : null).toBe(`${base}/previews/${id}`);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+it.each(hosts)("preserves null details for %s base", async (host) => {
+  const details = { status, url: null };
+  const { port } = setup(details, 200, undefined, `http://${host}:8710`);
+  await expect(port.details(id, signal)).resolves.toEqual(details);
 });
 it.each(["ready", "stopping", "failed"] as const)(
   "does not certify unverified stop %s",

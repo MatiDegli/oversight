@@ -381,7 +381,10 @@ class ReviewedExecution:
         self.authorized = False
         self.build_command = False
         self.phase = "build"
+        self.stage = "preparation"
+        self.probe_error: Exception | None = None
         self.reason = "launch_failed"
+        self.diagnostic = ""
         self.exit_code: int | None = None
         self.preparation_s = 0.0
         self.execution_reported = False
@@ -436,6 +439,7 @@ class ReviewedExecution:
         assert self.prepared is not None
         prepared = self.prepared
         self.build_command = build
+        self.stage = "build-entry" if build else "service-entry"
         env = scrub_preview_env({}, self.prepared)
         payload = dict(
             argv=command["argv"],
@@ -487,6 +491,7 @@ class ReviewedExecution:
             self.send(kind="executing")
             self.execution_reported = True
         if build:
+            self.stage = "build-wait"
             async with asyncio.timeout(command["timeout_s"]):
                 self.exit_code = await handle.wait()
             await self.write_log()
@@ -520,7 +525,7 @@ class ReviewedExecution:
             self.handle
             and not self.handle.verified_dead
             and set(self.handle.pidfds) == {"outer", "setup", "init"}
-            and set(self.handle.namespace_fds) == {"u0", "n0", "u1", "pid", "mount"}
+            and set(self.handle.namespace_fds) == {"u0", "n0", "p0", "u1", "pid", "mount"}
             and not any(select.select([fd], [], [], 0)[0] for fd in self.handle.pidfds.values())
         )
 
@@ -556,6 +561,7 @@ class ReviewedExecution:
         from oversight.workspace.preview_publication import OutputBudgets, publish_build
 
         assert self.prepared is not None and self.handle is not None
+        self.stage = "publication"
         self.publication = await publish_build(
             self.prepared.state / "dist",
             self.inputs.preview_directory / "published" / "build",
@@ -578,12 +584,14 @@ class ReviewedExecution:
             expected_run=self.spec["run_id"],
             backend_alive=self.backend_alive,
         )
+        self.stage = "gateway-start"
         await self.gateway.start()
         self.started_gateway = True
         paths = self.publication.paths
         assets = tuple("/" + p for p in paths if p.startswith("assets/") and "worker" not in p)
         workers = tuple("/" + p for p in paths if "worker" in p)
         self.phase = "readiness"
+        self.stage = "readiness-probe"
         self.send(kind="probing")
         gateway = self.gateway
         deadline = min(self.execution_deadline, time.monotonic() + self.config["readiness_s"])
@@ -601,10 +609,30 @@ class ReviewedExecution:
                     within_s=max(0.001, deadline - time.monotonic()),
                 )
                 break
-            except (OSError, ValueError, TimeoutError):
+            except (OSError, ValueError, TimeoutError) as error:
+                self.probe_error = error
                 await asyncio.sleep(min(0.05, max(0, deadline - time.monotonic())))
         nonce = self.gateway.authorize_ready(evidence, expected_run=self.spec["run_id"])
+        self.stage = "ready"
         self.send(kind="ready", nonce=nonce)
+
+    def timeout_diagnostic(self) -> str:
+        from oversight.workspace.preview_supervisor import launcher_diagnostic, preview_output_tail
+        from oversight.workspace.runner import ProcessCollector
+
+        gateway = (
+            launcher_diagnostic(ProcessCollector(0), self.probe_error)
+            if self.probe_error is not None
+            else "no probe failure recorded"
+        )
+        stdout = preview_output_tail(self.handle.stdout if self.handle else "", self.log_secrets)
+        stderr = preview_output_tail(self.handle.stderr if self.handle else "", self.log_secrets)
+        # The gateway has no output stream; retain only its allowlisted last probe failure.
+        cause = self.diagnostic.partition("; phase=")[0]
+        return (
+            f"{cause}; phase={self.phase}; stage={self.stage}; gateway={gateway}; "
+            f"backend stdout tail={stdout}; backend stderr tail={stderr}"
+        )
 
     async def controls(self) -> None:
         import json
@@ -716,9 +744,17 @@ class ReviewedExecution:
                 await asyncio.wait({stop, controls, monitor}, return_when=asyncio.FIRST_COMPLETED)
             elif not done:
                 self.reason = "readiness_timeout" if self.phase == "readiness" else "launch_failed"
+                self.diagnostic = "launch deadline expired"
         except asyncio.CancelledError:
             self.reason = "shutdown"
         except Exception as error:
+            from oversight.workspace.preview_supervisor import launcher_diagnostic
+            from oversight.workspace.runner import ProcessCollector
+
+            collector = ProcessCollector(2048)
+            if self.handle is not None:
+                collector.stderr.feed(self.handle.stderr.encode())
+            self.diagnostic = launcher_diagnostic(collector, error)
             if not self.stopped.is_set():
                 self.reason = (
                     "readiness_timeout"
@@ -756,7 +792,14 @@ class ReviewedExecution:
             self.listener.close()
             self.reservation.close()
             await offload(lambda: self.registry.update(phase="dead", boundary_pending=False))
-            self.send(kind="dead", reason=self.reason, exit_code=self.exit_code, diagnostic="")
+            if self.reason == "readiness_timeout":
+                self.diagnostic = self.timeout_diagnostic()
+            self.send(
+                kind="dead",
+                reason=self.reason,
+                exit_code=self.exit_code,
+                diagnostic=self.diagnostic,
+            )
         except BaseException:
             # Keep the listener, identities and registry on uncertain death. Recovery must
             # retain quarantine; no unknown PID or listener authorizes reclamation.

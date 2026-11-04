@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
   push:
-    branches: [main]
+    branches: [main, 'desktop/**']
     paths: [desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, docs/**, README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, pyproject.toml, uv.lock, conftest.py, Makefile]
   workflow_dispatch:
 
@@ -134,5 +134,103 @@ jobs:
         with:
           name: windows-advisory-evidence
           path: nt-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  package:
+    name: desktop installer
+    runs-on: windows-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      META_API_KEY: ""
+      BASETEN_API_KEY: ""
+      OVERSIGHT_CROSS_REVIEW: "false"
+      OVERSIGHT_WORKSPACE_SOURCE: ""
+      OVERSIGHT_AGENT_MODEL: fake
+      OVERSIGHT_AGENT_MODEL_B: fake
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - name: Set desktop Cargo home
+        run: |
+          "CARGO_HOME=$env:RUNNER_TEMP\oversight-tauri-cargo" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.11.21"
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.11.0"
+      - uses: ./.github/actions/setup-gitleaks
+      - name: Scan checkout with gitleaks
+        run: |
+          gitleaks dir --config .gitleaks.toml --redact --no-banner --log-level warn .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare exact Rust toolchain and Cargo store
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          rustup default 1.98.0
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo fetch --locked --manifest-path desktop/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare frozen build inputs
+        run: |
+          uv sync --frozen --python 3.12.12
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm -C frontend install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm -C frontend build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm dlx @tauri-apps/cli@2.12.0 --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Offline locked desktop checks and metadata
+        run: |
+          $env:CARGO_NET_OFFLINE = 'true'
+          New-Item -ItemType Directory -Force package-evidence, desktop/packaging/cache | Out-Null
+          cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo --offline test --locked --manifest-path desktop/Cargo.toml -p oversight-desktop-core
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo --offline metadata --locked --manifest-path desktop/Cargo.toml --filter-platform x86_64-pc-windows-msvc --format-version 1 > desktop/packaging/cache/cargo-metadata.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo --offline metadata --locked --manifest-path desktop/Cargo.toml --format-version 1 > desktop/packaging/cache/cargo-all-metadata.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stage verified embedded runtimes and notices
+        run: |
+          uv run --frozen python desktop/packaging/stage.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item desktop/packaging/stage/app/payload.json package-evidence/
+          Copy-Item desktop/packaging/stage/app/THIRD_PARTY_NOTICES.md package-evidence/
+      - name: Build locked NSIS installer
+        run: |
+          $env:CARGO_NET_OFFLINE = 'true'
+          $timer = [System.Diagnostics.Stopwatch]::StartNew()
+          Push-Location desktop/shell
+          try {
+            pnpm --offline dlx @tauri-apps/cli@2.12.0 build --ci --bundles nsis -- --offline --locked
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+          $timer.Stop()
+          "Installer build seconds: $($timer.Elapsed.TotalSeconds)" | Set-Content package-evidence/build.txt
+      - name: Install smoke twice and preserve data on uninstall
+        timeout-minutes: 8
+        run: ./desktop/packaging/installed-smoke.ps1
+      - name: Upload desktop installer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: oversight-windows-installer
+          path: |
+            desktop/target/release/bundle/nsis/*-setup.exe
+            package-evidence/
           if-no-files-found: error
           retention-days: 7
