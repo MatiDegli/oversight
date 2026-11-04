@@ -88,3 +88,10 @@ def test_serve_refuses_invalid_explicit_interpreters(args, tmp_path, monkeypatch
     with pytest.raises(SystemExit) as error:
         cli.main()
     assert error.value.code == 2
+
+
+def test_configuration_cannot_select_the_prepared_interpreter(tmp_path, monkeypatch):
+    file = tmp_path / "config.env"
+    file.write_text("OVERSIGHT_DEMO_PYTHON=untrusted.exe\n")
+    monkeypatch.setenv("OVERSIGHT_DEMO_PYTHON", str(tmp_path / "another.exe"))
+    assert Settings.load(file).demo_python is None

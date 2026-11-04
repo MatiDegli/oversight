@@ -9,11 +9,10 @@ use std::time::Duration;
 use oversight_desktop_core::launch::{Launch, require_free_port};
 use oversight_desktop_core::{PORT, URL};
 use tauri::{Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
-use windows_sys::Win32::System::Console::{AllocConsole, GetConsoleCP};
 
 use crate::{
     child::{Child, require_git},
-    listener, supervise,
+    console, listener, supervise,
 };
 
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -52,6 +51,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                         1
                     }
                 };
+                console::completed();
                 setup_exiting.store(true, Ordering::SeqCst);
                 handle.exit(code);
             });
@@ -59,19 +59,23 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         })
         .on_window_event({
             let stop = stop.clone();
-            move |_, event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
+            move |_, event| match event {
+                WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     stop.store(true, Ordering::SeqCst);
                 }
+                WindowEvent::Destroyed => stop.store(true, Ordering::SeqCst),
+                _ => (),
             }
         })
         .build(tauri::generate_context!())?;
     app.run(move |_, event| {
-        if let RunEvent::ExitRequested { api, .. } = event {
+        if let RunEvent::ExitRequested { api, code, .. } = event {
             if !exiting.load(Ordering::SeqCst) {
                 api.prevent_exit();
-                stop.store(true, Ordering::SeqCst);
+                if code.is_some() {
+                    stop.store(true, Ordering::SeqCst);
+                }
             }
         }
     });
@@ -82,14 +86,10 @@ fn session(
     app: &tauri::AppHandle,
     root: Option<PathBuf>,
     smoke: bool,
-    stop: &AtomicBool,
+    stop: &Arc<AtomicBool>,
 ) -> io::Result<()> {
     require_git()?;
-    unsafe {
-        if GetConsoleCP() == 0 && AllocConsole() == 0 {
-            return Err(io::Error::last_os_error());
-        }
-    }
+    console::install(stop.clone())?;
     let launch = if let Some(root) = root {
         Launch::new(&root, smoke)?
     } else {
@@ -100,6 +100,7 @@ fn session(
         oversight_desktop_core::installed::initialize_data(&app, &data)?;
         Launch::installed(&app, &data, smoke)?
     };
+    listener::require_unoccupied()?;
     require_free_port(PORT)?;
     let child = Child::spawn(&launch)?;
     let result = (|| {

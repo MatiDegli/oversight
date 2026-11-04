@@ -33,7 +33,12 @@ pub fn ready(child: &Child, stop: &AtomicBool) -> io::Result<()> {
             );
         }
         match state {
-            Readiness::Ready => return Ok(()),
+            Readiness::Ready => {
+                if stop.load(Ordering::SeqCst) {
+                    return Err(io::Error::other("startup cancelled"));
+                }
+                return Ok(());
+            }
             Readiness::Failed(reason) => {
                 return Err(io::Error::other(format!("backend startup: {reason:?}")));
             }

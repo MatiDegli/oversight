@@ -1,6 +1,8 @@
 #[cfg(windows)]
 mod child;
 #[cfg(windows)]
+mod console;
+#[cfg(windows)]
 mod listener;
 #[cfg(windows)]
 mod native;

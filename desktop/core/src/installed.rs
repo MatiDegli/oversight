@@ -43,8 +43,17 @@ pub fn initialize_data(app: &Path, data: &Path) -> io::Result<()> {
             "data and payload must be separate absolute directories",
         ));
     }
-    fs::create_dir_all(data)?;
+    validate_directory(
+        data.parent()
+            .ok_or_else(|| invalid("missing data parent"))?,
+    )?;
+    match fs::create_dir(data) {
+        Ok(()) => (),
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => (),
+        Err(error) => return Err(error),
+    }
     validate_directory(data)?;
+    let template = fs::read(app.join("config.env.example"))?;
     let config = data.join(".env");
     match OpenOptions::new()
         .write(true)
@@ -52,7 +61,7 @@ pub fn initialize_data(app: &Path, data: &Path) -> io::Result<()> {
         .open(&config)
     {
         Ok(mut file) => {
-            file.write_all(&fs::read(app.join("config.env.example"))?)?;
+            file.write_all(&template)?;
             file.sync_all()?;
         }
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {

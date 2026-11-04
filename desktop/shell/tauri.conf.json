@@ -3,16 +3,38 @@
   "productName": "Oversight",
   "version": "0.1.0",
   "identifier": "dev.oversight.desktop",
-  "build": { "frontendDist": "assets" },
-  "app": { "windows": [], "security": { "capabilities": [] } },
+  "build": {
+    "frontendDist": "assets"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "capabilities": []
+    }
+  },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.ico", "icons/icon.png"],
-    "resources": { "../packaging/stage/app/": "app/" },
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "resources": {
+      "../packaging/stage/app/": "app/"
+    },
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
-      "nsis": { "installMode": "currentUser", "compression": "zlib", "displayLanguageSelector": false }
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "compression": "zlib",
+        "displayLanguageSelector": false,
+        "installerHooks": "../packaging/installer-hooks.nsh"
+      }
     }
   }
 }

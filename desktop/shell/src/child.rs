@@ -15,10 +15,11 @@ use windows_sys::Win32::System::JobObjects::*;
 use windows_sys::Win32::System::Threading::*;
 
 pub struct Handle(pub HANDLE);
-unsafe impl Send for Handle {}
 impl Drop for Handle {
     fn drop(&mut self) {
-        unsafe { CloseHandle(self.0) };
+        if !self.0.is_null() {
+            unsafe { CloseHandle(self.0) };
+        }
     }
 }
 
@@ -133,8 +134,11 @@ impl Child {
             if AssignProcessToJobObject(job.0, process.0) == 0 || ResumeThread(thread.0) == u32::MAX
             {
                 let error = io::Error::last_os_error();
-                TerminateProcess(process.0, 1);
-                WaitForSingleObject(process.0, 5000);
+                let terminated = TerminateProcess(process.0, 1) != 0;
+                let reaped = WaitForSingleObject(process.0, 5000) == WAIT_OBJECT_0;
+                if !terminated || !reaped {
+                    return Err(io::Error::other("suspended startup child cleanup failed"));
+                }
                 return Err(error);
             }
             Ok(Self {
@@ -172,7 +176,7 @@ impl Child {
         loop {
             match policy.poll(began.elapsed(), self.active()?) {
                 CleanupAction::SignalOwnedGroup => unsafe {
-                    if GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, self.pid) == 0 {
+                    if self.alive() && GenerateConsoleCtrlEvent(CTRL_BREAK_EVENT, self.pid) == 0 {
                         return Err(io::Error::last_os_error());
                     }
                 },

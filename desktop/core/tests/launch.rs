@@ -124,6 +124,8 @@ fn argv_preserves_spaces_and_unicode_without_shell_interpolation_or_reload() {
     assert_eq!(launch.env["OVERSIGHT_WORKSPACE_SOURCE"], "");
     assert!(launch.remove_env.contains(&"GIT_DIR"));
     assert!(launch.remove_env.contains(&"PYTHONPATH"));
+    assert!(launch.remove_env.contains(&"OVERSIGHT_APP_ROOT"));
+    assert!(launch.remove_env.contains(&"OVERSIGHT_ENV_FILE"));
 }
 
 #[test]

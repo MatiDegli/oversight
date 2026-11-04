@@ -14,7 +14,7 @@ pub struct Launch {
     pub program: PathBuf,
     pub args: Vec<OsString>,
     pub env: BTreeMap<&'static str, String>,
-    pub remove_env: [&'static str; 7],
+    pub remove_env: [&'static str; 9],
 }
 
 impl Launch {
@@ -78,6 +78,8 @@ impl Launch {
                 "GIT_COMMON_DIR",
                 "GIT_PREFIX",
                 "PYTHONPATH",
+                "OVERSIGHT_APP_ROOT",
+                "OVERSIGHT_ENV_FILE",
             ],
         }
     }

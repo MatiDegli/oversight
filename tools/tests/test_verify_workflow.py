@@ -217,7 +217,8 @@ def test_ci_rejects_a_restored_pull_request_trigger() -> None:
 WINDOWS_PATHS = (
     "desktop/**, backend/**, contracts/**, tools/**, frontend/**, demo-repo/**, fixtures/**, "
     "docs/**, "
-    "README.md, ARCHITECTURE.md, DECISIONS.md, .github/**, .gitattributes, .python-version, "
+    "README.md, ARCHITECTURE.md, DECISIONS.md, LICENSE, THIRD_PARTY_NOTICES.md, "
+    ".github/**, .gitattributes, .python-version, "
     "pyproject.toml, uv.lock, conftest.py, Makefile"
 )
 WINDOWS_TOOLS = (
@@ -242,11 +243,12 @@ def assert_windows_policy(text: str) -> None:
     assert workflow["name"] == "windows advisory" and workflow["permissions"] == "{}"
     assert mapping(workflow["on"]) == {
         "pull_request": f"paths: [{WINDOWS_PATHS}]",
-        "push": f"branches: [main]\npaths: [{WINDOWS_PATHS}]",
+        "push": f"branches: [main, 'desktop/**']\npaths: [{WINDOWS_PATHS}]",
         "workflow_dispatch": "",
     }
     assert "secrets" not in text and "continue-on-error" not in text
-    assert mapping(workflow["jobs"]).keys() == {"windows"}
+    assert mapping(workflow["jobs"]).keys() == {"windows", "package"}
+    assert_package_policy(mapping(mapping(workflow["jobs"])["package"]))
     job = mapping(mapping(workflow["jobs"])["windows"])
     assert set(job) == {
         "name",
@@ -455,7 +457,7 @@ def test_windows_is_separate_frozen_least_privilege_and_explicitly_staged() -> N
 @pytest.mark.parametrize(
     "old,new",
     [
-        ("branches: [main]", "branches: ['*']"),
+        ("branches: [main, 'desktop/**']", "branches: ['*']"),
         ("docs/**, ", ""),
         ("permissions: {}", "permissions: write-all"),
         ("contents: read", "contents: write"),
@@ -533,3 +535,118 @@ def test_windows_rejects_native_condition_on_setup(index: int) -> None:
     items[index]["if"] = WINDOWS_NATIVE_IF
     with pytest.raises(AssertionError):
         assert_windows_steps(items)
+
+
+PACKAGE_COMMANDS = {
+    "Prepare exact Rust toolchain and Cargo store": [
+        "rustup toolchain install 1.98.0 --profile minimal --component rustfmt",
+        "rustup default 1.98.0",
+        "cargo fetch --locked --manifest-path desktop/Cargo.toml",
+    ],
+    "Prepare frozen build inputs": [
+        "uv sync --frozen --python 3.12.12",
+        "pnpm -C frontend install --frozen-lockfile",
+        "pnpm -C frontend build",
+        "pnpm dlx @tauri-apps/cli@2.12.0 --version",
+    ],
+    "Offline locked desktop checks and metadata": [
+        "$env:CARGO_NET_OFFLINE = 'true'",
+        "New-Item -ItemType Directory -Force package-evidence, desktop/packaging/cache | Out-Null",
+        "cargo --offline --locked fmt --manifest-path desktop/Cargo.toml --all -- --check",
+        "cargo --offline test --locked --manifest-path desktop/Cargo.toml "
+        "-p oversight-desktop-core",
+        "cargo --offline metadata --locked --manifest-path desktop/Cargo.toml "
+        "--filter-platform x86_64-pc-windows-msvc --format-version 1 "
+        "> desktop/packaging/cache/cargo-metadata.json",
+        "cargo --offline metadata --locked --manifest-path desktop/Cargo.toml --format-version 1 "
+        "> desktop/packaging/cache/cargo-all-metadata.json",
+    ],
+    "Stage verified embedded runtimes and notices": [
+        "uv run --frozen python desktop/packaging/stage.py",
+        "Copy-Item desktop/packaging/stage/app/payload.json package-evidence/",
+        "Copy-Item desktop/packaging/stage/app/THIRD_PARTY_NOTICES.md package-evidence/",
+    ],
+}
+
+
+def assert_package_policy(job: dict[str, str]) -> None:
+    assert set(job) == {
+        "name",
+        "runs-on",
+        "timeout-minutes",
+        "permissions",
+        "defaults",
+        "env",
+        "steps",
+    }
+    assert job["name"] == "desktop installer" and job["runs-on"] == "windows-latest"
+    assert job["timeout-minutes"] == "75"
+    assert mapping(job["permissions"]) == {"contents": "read"}
+    assert mapping(mapping(job["defaults"])["run"]) == {"shell": "pwsh"}
+    assert mapping(job["env"]) == {
+        "META_API_KEY": '""',
+        "BASETEN_API_KEY": '""',
+        "OVERSIGHT_CROSS_REVIEW": '"false"',
+        "OVERSIGHT_WORKSPACE_SOURCE": '""',
+        "OVERSIGHT_AGENT_MODEL": "fake",
+        "OVERSIGHT_AGENT_MODEL_B": "fake",
+        "CARGO_HOME": "${{ runner.temp }}/oversight-tauri-cargo",
+        "PYTHONDONTWRITEBYTECODE": '"1"',
+    }
+    items = steps(job["steps"])
+    assert len(items) == 11
+    assert items[:4] == [
+        {"uses": ACTIONS["actions/checkout"], "with": "persist-credentials: false"},
+        {"uses": ACTIONS["astral-sh/setup-uv"], "with": 'version: "0.11.21"'},
+        {"uses": ACTIONS["pnpm/action-setup"], "with": "package_json_file: frontend/package.json"},
+        {"uses": ACTIONS["actions/setup-node"], "with": 'node-version: "24.11.0"'},
+    ]
+    for item, (name, commands) in zip(items[4:8], PACKAGE_COMMANDS.items(), strict=True):
+        assert set(item) == {"name", "run"} and item["name"] == name
+        script = item["run"].removeprefix("|\n").splitlines()
+        expected = []
+        for command in commands:
+            expected.append(command)
+            if command.startswith(("cargo ", "uv ", "pnpm ", "rustup ")):
+                expected.append("if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }")
+        assert script == expected
+    assert items[8] == {
+        "name": "Build locked NSIS installer",
+        "run": "|\n$env:CARGO_NET_OFFLINE = 'true'\n"
+        "$timer = [System.Diagnostics.Stopwatch]::StartNew()\nPush-Location desktop/shell\n"
+        "try {\n  pnpm --offline dlx @tauri-apps/cli@2.12.0 build --ci --bundles nsis "
+        "-- --offline --locked\n  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }\n"
+        "} finally { Pop-Location }\n$timer.Stop()\n"
+        '"Installer build seconds: $($timer.Elapsed.TotalSeconds)" '
+        "| Set-Content package-evidence/build.txt",
+    }
+    assert items[9] == {
+        "name": "Install smoke twice and preserve data on uninstall",
+        "timeout-minutes": "8",
+        "run": "./desktop/packaging/installed-smoke.ps1",
+    }
+    assert items[10] == {
+        "name": "Upload desktop installer",
+        "uses": UPLOAD,
+        "with": "name: oversight-windows-installer\npath: |\n"
+        "  desktop/target/release/bundle/nsis/*-setup.exe\n  package-evidence/\n"
+        "if-no-files-found: error\nretention-days: 7",
+    }
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ('version: "0.11.21"', 'version: "latest"'),
+        ('node-version: "24.11.0"', 'node-version: "24"'),
+        ("@tauri-apps/cli@2.12.0", "@tauri-apps/cli@latest"),
+        ("--bundles nsis -- --offline --locked", "--bundles nsis"),
+        ("./desktop/packaging/installed-smoke.ps1", "Write-Output skip"),
+        ("name: oversight-windows-installer", "name: other"),
+    ],
+)
+def test_package_rejects_weakened_build_or_acceptance(old, new):
+    text = (WORKFLOWS / "windows.yml").read_text()
+    assert old in text
+    with pytest.raises(AssertionError):
+        assert_windows_policy(text.replace(old, new))
