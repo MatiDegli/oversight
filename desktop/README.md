@@ -44,6 +44,8 @@ repository in a short private local NTFS folder, read the trust disclosure, then
 **File > Open demo** returns to the bundled demo through the same confirmation. Opening stops
 the current session after the inert switching page has finished loading. Open and Reload are
 unavailable until the next session is ready or refused. A page-load timeout leaves the backend running.
+In the app, the repository name in the top bar opens Settings, whose Repository section points to
+this menu item; the page cannot open the picker itself.
 
 Prepare the repository's own `.venv` before opening it: Python 3.10+, pytest 8.2+ and pluggy 1.5+.
 Oversight installs nothing. An unavailable or invalid environment still permits graph access,

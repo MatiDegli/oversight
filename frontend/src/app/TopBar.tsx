@@ -12,6 +12,7 @@ const focusRing =
 
 /**
  * The top bar: name, repository, branch and commit, the review queue, spend and settings.
+ * The repository opens Settings, which says how to review another one.
  * "Earlier today" joins the bar when its feature is built, so
  * the bar never carries a control that looks present and does nothing.
  */
@@ -36,6 +37,12 @@ export function TopBar({
 }) {
   const ready = selectDecisionInboxCount(state);
   const commit = state.graph?.commit ?? state.run?.base_commit;
+  const repository = state.run && (
+    <>
+      <Folder aria-hidden="true" className="size-4 shrink-0 text-muted" />
+      <span className="truncate text-(length:--body-size)">{state.run.workspace}</span>
+    </>
+  );
   return (
     <header className="shell-top-bar flex h-(--top-bar-height) shrink-0 items-center gap-3.5 border-b border-divider bg-shell px-4.5">
       <span className="text-(length:--brand-size) font-bold">Oversight</span>
@@ -43,10 +50,21 @@ export function TopBar({
         <>
           <span aria-hidden="true" className="h-5 w-px shrink-0 bg-card-border" />
           <p className="flex min-w-0 items-center gap-3.5 text-sm text-muted">
-            <span className="inline-flex min-w-0 items-center gap-2 font-semibold text-text">
-              <Folder aria-hidden="true" className="size-4 shrink-0 text-muted" />
-              <span className="truncate text-(length:--body-size)">{state.run.workspace}</span>
-            </span>
+            {onOpenSettings ? (
+              <button
+                type="button"
+                title="Repository settings"
+                aria-label={`Repository ${state.run.workspace}. Open repository settings`}
+                onClick={onOpenSettings}
+                className={`-mx-1.5 inline-flex min-w-0 items-center gap-2 rounded-control px-1.5 font-semibold text-text hover:bg-page-raised ${focusRing}`}
+              >
+                {repository}
+              </button>
+            ) : (
+              <span className="inline-flex min-w-0 items-center gap-2 font-semibold text-text">
+                {repository}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <GitBranch aria-hidden="true" className="size-4" /> main
             </span>

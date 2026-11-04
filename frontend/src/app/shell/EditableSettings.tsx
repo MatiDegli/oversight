@@ -1,4 +1,4 @@
-import type { EditableSetting, EditableSettingName } from "@contracts";
+import type { EditableSetting, EditableSettingName, SettingsView } from "@contracts";
 import { useEffect, useId, useState } from "react";
 import { useStore } from "zustand";
 import { focusRing } from "./shared";
@@ -29,9 +29,11 @@ const buttonClass = `min-h-10 rounded-control border border-control-edge px-4 py
 type EditorStore = ReturnType<typeof createSettingsEditor>;
 export function EditableSettings({
   live,
+  workspace,
   store: supplied,
 }: {
   live: boolean;
+  workspace?: string;
   store?: EditorStore;
 }) {
   const [local] = useState(createSettingsEditor);
@@ -43,6 +45,7 @@ export function EditableSettings({
   const readOnly = !live || !editor.view || editor.pending !== null;
   return (
     <div className="mt-8 min-w-0 space-y-8">
+      <RepositorySection workspace={workspace} live={live} apply={editor.view?.apply} />
       {!live && <p className="text-sm text-muted">Settings are read-only in a replay.</p>}
       {live && editor.loading && <p role="status">Loading settings…</p>}
       {editor.failure && editor.feedbackSection === null && (
@@ -71,6 +74,44 @@ export function EditableSettings({
         />
       ))}
     </div>
+  );
+}
+
+/** The frontend cannot open the native picker; it points to the menu that does. */
+function RepositorySection({
+  workspace,
+  live,
+  apply,
+}: {
+  workspace?: string;
+  live: boolean;
+  apply?: SettingsView["apply"];
+}) {
+  const id = useId();
+  const another = !live
+    ? "In the Windows app, choose File > Open repository… to review your own repository."
+    : apply === "desktop_reload"
+      ? "To review another repository, choose File > Open repository… in the menu bar."
+      : apply === "server_restart"
+        ? "The repository is chosen when the server starts."
+        : null;
+  return (
+    <section aria-labelledby={`${id}-repository`}>
+      <h2 id={`${id}-repository`} className="text-(length:--title-size) font-bold">
+        Repository
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        {workspace ? (
+          <>
+            Agents edit a disposable copy of{" "}
+            <span className="font-semibold text-text">{workspace}</span>, never your folder.
+          </>
+        ) : (
+          "Agents edit a disposable copy, never your folder."
+        )}
+      </p>
+      {another && <p className="mt-3 text-sm text-text">{another}</p>}
+    </section>
   );
 }
 

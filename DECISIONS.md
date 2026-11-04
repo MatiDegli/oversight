@@ -5291,6 +5291,7 @@ The maintainer found the white native title and File menu bar foreign next to Ov
 ground. The desktop window is created with the dark window theme, which Tauri 2.12 also applies
 to the native menu bar on Windows. The webview then reports a dark preferred color scheme, so
 the startup page shows its night tokens; the in-app day palette stays a separate front.
+
 ## 2026-11-04 — Optional Meta budget and default Muse Spark prices
 
 The maintainer decided that Oversight is configurable rather than restrictive: an absent or
@@ -5321,3 +5322,14 @@ descendants share one console with no window, and cleanup joins that console onl
 unchanged, and forced cleanup still fails the smoke. A process that already has a console, such as the
 repository-switching test harness, keeps sharing it and keeps its close and Ctrl+C handler, so both
 paths stay covered: the installed smoke runs the windowed path and the switching test the console one.
+
+## 2026-11-04 — Point to File > Open repository… from inside the app
+
+Opening another repository was reachable only from the native File menu, which a person may never open.
+The frontend is served by the local backend inside the webview and has no Tauri API, so it cannot open
+the native picker, and the person must still choose the folder there. The repository name in the top
+bar now opens Settings, and Settings starts with a Repository section: it names the reviewed folder and
+says agents edit a disposable copy, never the folder itself. When the desktop shell started the server
+(the settings view's `apply` is `desktop_reload`) it points to File > Open repository… in the menu bar;
+a server started otherwise says the repository is chosen at startup; a replay says the Windows app is
+where to open one's own. No route or contract changes, and the native picker stays the only way in.

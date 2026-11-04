@@ -163,7 +163,9 @@ it.each(["models", "limits"] as const)(
     );
     await store.getState().save(section);
     const sections = () =>
-      [...markup(store).matchAll(/<section\b.*?<\/section>/gs)].map((match) => match[0]);
+      [...markup(store).matchAll(/<section\b.*?<\/section>/gs)]
+        .map((match) => match[0])
+        .filter((html) => !html.includes(">Repository</h2>"));
     const index = section === "models" ? 0 : 1;
     expect(sections()[index]).toContain("Synthetic refusal.");
     expect(sections()[1 - index]).not.toContain("Synthetic refusal.");
@@ -189,9 +191,9 @@ it.each(["models", "limits"] as const)(
       new CommandError(422, "invalid_request", "Other section refused."),
     );
     await store.getState().save(other);
-    const sections = [...markup(store).matchAll(/<section\b.*?<\/section>/gs)].map(
-      (match) => match[0],
-    );
+    const sections = [...markup(store).matchAll(/<section\b.*?<\/section>/gs)]
+      .map((match) => match[0])
+      .filter((html) => !html.includes(">Repository</h2>"));
     const index = section === "models" ? 0 : 1;
     expect(sections[index]).toContain("Restart the server to apply.");
     expect(sections[index]).not.toContain("Other section refused.");
@@ -272,4 +274,37 @@ it("explains the optional Meta budget and both default token prices beside their
     expect(html).toContain(`id="${descriptionId}"`);
     expect(html.slice(html.indexOf(`id="${descriptionId}"`))).toContain(helper);
   }
+});
+it.each([
+  [
+    "desktop_reload",
+    "To review another repository, choose File &gt; Open repository… in the menu bar.",
+  ],
+  ["server_restart", "The repository is chosen when the server starts."],
+] as const)(
+  "says how to review another repository when settings apply by %s",
+  async (apply, line) => {
+    const { store } = setup({ ...view, apply });
+    await store.getState().load();
+    const html = renderToStaticMarkup(
+      <EditableSettings
+        live
+        workspace="demo-repo"
+        store={{ ...store, getInitialState: store.getState }}
+      />,
+    );
+    expect(html).toContain(">Repository</h2>");
+    expect(html).toContain("demo-repo</span>, never your folder.");
+    expect(html).toContain(line);
+    expect(html.indexOf(">Repository</h2>")).toBeLessThan(html.indexOf("Models and keys"));
+  },
+);
+it("points a replay to the Windows app's folder picker without a desktop claim", () => {
+  const { store } = setup();
+  const html = markup(store, false);
+  expect(html).toContain(
+    "In the Windows app, choose File &gt; Open repository… to review your own repository.",
+  );
+  expect(html).toContain("Agents edit a disposable copy, never your folder.");
+  expect(html).not.toContain("in the menu bar.");
 });
