@@ -4,6 +4,7 @@ import { selectMergeMode, type State } from "../../state";
 import { PreviewStartupPanel } from "../preview/PreviewStartupPanel";
 import { previewStartup } from "../preview/previewStartup";
 import { mergeModePending, type MergeModeAttempt } from "./mergeModeAttempt";
+import { EditableSettings } from "./EditableSettings";
 import { SettingsFrame } from "./SettingsFrame";
 import { focusRing } from "./shared";
 
@@ -77,6 +78,7 @@ export function SettingsPanel({
           Setting the merge mode is not available in a replay.
         </p>
       )}
+      <EditableSettings live={Boolean(onSetMergeMode)} />
       <PreviewStartupPanel result={previewStartup()} headingId="settings-preview-startup-heading" />
     </SettingsFrame>
   );

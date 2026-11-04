@@ -15,6 +15,7 @@ export function AgentsPanel({
   canOpenChange,
   onOpenChange,
   onStartAgent,
+  onOpenSettings,
   onStopAgent,
   onOpenConversation,
   onPauseAgent,
@@ -34,6 +35,7 @@ export function AgentsPanel({
   | "onPauseAgent"
   | "onResumeAgent"
   | "onStartAgent"
+  | "onOpenSettings"
   | "canReview"
   | "onReview"
   | "replayOf"
@@ -81,7 +83,13 @@ export function AgentsPanel({
       {/* Pinned to the bottom, as in the sketch: a card appearing above never moves it, or the
           person's focus in it. */}
       <div className="shrink-0 border-t border-divider p-3.5">
-        <TaskBox state={state} onStart={onStartAgent} replayOf={replayOf} inputRef={inputRef} />
+        <TaskBox
+          onOpenSettings={onOpenSettings}
+          state={state}
+          onStart={onStartAgent}
+          replayOf={replayOf}
+          inputRef={inputRef}
+        />
       </div>
     </aside>
   );

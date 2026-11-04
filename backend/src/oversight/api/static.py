@@ -39,6 +39,7 @@ API_PATHS = frozenset(
         "health",
         "impact",
         "merge-mode",
+        "settings",
         "plans",
         "tree",
         "history",

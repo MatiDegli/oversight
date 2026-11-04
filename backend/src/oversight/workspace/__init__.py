@@ -55,6 +55,7 @@ from oversight.workspace.isolation_probe import print_isolation_probe
 from oversight.workspace.junit import MAX_TESTS, MAX_XML_BYTES, RunProblem, parse_junit
 from oversight.workspace.junit import Outcome as JUnitOutcome
 from oversight.workspace.junit import TestRun as JUnitRun
+from oversight.workspace.locks import offload
 from oversight.workspace.measured_report import CallReport, CallTarget, Invocation
 from oversight.workspace.preview import PreviewManager
 from oversight.workspace.preview_launch_spec import PreviewLaunchSpec, load_preview_app
@@ -186,6 +187,7 @@ __all__ = [
     "job_pids",
     "list_tree",
     "load_preview_app",
+    "offload",
     "outside_profile",
     "parse_cases",
     "parse_junit",

@@ -48,6 +48,7 @@ from oversight.api import (
     ApiGuard,
     AuthorityPolicy,
     BodyLimit,
+    add_settings_routes,
     add_static,
     create_router,
     install_error_handlers,
@@ -1460,6 +1461,7 @@ def _live_app(
             change_graph=live.change_graph,
         )
     )
+    add_settings_routes(app, settings)
     if settings.frontend_dist is not None:
         add_static(
             app, settings.frontend_dist, startup_report=lambda: live.preview_startup_serialized

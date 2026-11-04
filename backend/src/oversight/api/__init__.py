@@ -8,6 +8,7 @@ from oversight.api.commands import Commands
 from oversight.api.errors import ApiError, error_response, install_error_handlers
 from oversight.api.routes import create_router
 from oversight.api.security import ApiGuard, AuthorityPolicy
+from oversight.api.settings import add_settings_routes
 from oversight.api.static import add_static
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "AuthorityPolicy",
     "BodyLimit",
     "Commands",
+    "add_settings_routes",
     "add_static",
     "create_router",
     "error_response",

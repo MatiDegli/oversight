@@ -1,6 +1,6 @@
 """The single error format of section 4.7: `{"error": {"code", "message"}}`, for every error."""
 
-from typing import cast
+from typing import cast, get_args
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from oversight.api.preview_policy import is_preview
 from oversight_contracts.commands import (
     ERROR_STATUS,
+    EditableSettingName,
     ErrorCode,
     ErrorDetail,
     ErrorResponse,
@@ -37,6 +38,25 @@ def error_response(
     return JSONResponse(body.model_dump(mode="json"), status_code=ERROR_STATUS[code])
 
 
+def _settings_validation_message(error: RequestValidationError) -> str:
+    names = set(get_args(EditableSettingName.__value__))
+    reasons = {
+        "string_too_long": "must be at most 512 characters",
+        "string_type": "must be text",
+    }
+    invalid = sorted(
+        {
+            (str(part), reasons.get(problem["type"], "must use a supported text value"))
+            for problem in error.errors()
+            for part in problem["loc"]
+            if part in names
+        }
+    )
+    if not invalid:
+        return "Invalid settings request."
+    return "Invalid settings: " + "; ".join(f"{name}: {reason}" for name, reason in invalid) + "."
+
+
 def install_error_handlers(app: FastAPI) -> None:
     def private(request: Request, response: JSONResponse) -> JSONResponse:
         if is_preview(request.scope):
@@ -53,6 +73,8 @@ def install_error_handlers(app: FastAPI) -> None:
             return private(
                 request, error_response("invalid_request", "Live preview request is invalid.")
             )
+        if request.url.path == "/settings":
+            return error_response("invalid_request", _settings_validation_message(error))
         body: object = error.body
         problems: list[str] = []
         for problem in error.errors():

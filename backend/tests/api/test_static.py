@@ -145,6 +145,7 @@ async def test_api_routes_win_over_the_ui(tmp_path: Path, dist: Path) -> None:
     ("path", "status", "code"),
     [
         ("/graph/nope", 404, "not_found"),
+        ("/settings/nope", 404, "not_found"),
         ("/previews", 422, "invalid_request"),
         ("/previews/preview-" + "a" * 32, 501, "not_implemented"),
         ("/previews/nope/deeper", 404, "not_found"),

@@ -84,7 +84,10 @@ async function mode(page: Page, mode: "ask_me" | "merge_when_safe", revision: nu
 const rules = (page: Page) =>
   page.getByRole("button", { name: "Merge alone when safe", exact: false });
 async function disabledCards(page: Page) {
-  const cards = page.getByRole("region", { name: "Merge mode", exact: true }).getByRole("button");
+  const cards = page
+    .getByRole("region", { name: "Merge mode", exact: true })
+    .locator("button[aria-pressed]");
+  await check(cards).toHaveCount(2);
   for (const card of await cards.all()) {
     await check(card).toBeDisabled();
     await page.mouse.move(0, 0);
