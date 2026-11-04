@@ -1,4 +1,4 @@
-"""Regression coverage for workflow comments and the Linux check host policy."""
+"""Regression coverage for workflow comments and the Linux job host policy."""
 
 import pytest
 from tools.tests.test_verify_workflow import WORKFLOWS, assert_verify_policy, mapping, steps
@@ -42,11 +42,15 @@ def test_comments_do_not_hide_duplicate_keys_or_unsupported_yaml(text: str, reas
 
 
 @pytest.mark.parametrize("filename", ["ci.yml", "verify.yml", "verify-frontend.yml"])
-def test_only_check_job_uses_supported_host_and_enables_namespaces(filename: str) -> None:
+def test_supported_job_hosts_and_check_namespace_setup(filename: str) -> None:
     jobs = mapping(mapping((WORKFLOWS / filename).read_text())["jobs"])
     for job_id, body in jobs.items():
         job = mapping(body)
-        assert job["runs-on"] == ("ubuntu-24.04" if job_id == "check" else "ubuntu-latest")
+        assert job["runs-on"] == (
+            "ubuntu-24.04"
+            if job_id in {"check", "browser", "browser-1", "browser-2"}
+            else "ubuntu-latest"
+        )
     check_steps = steps(mapping(jobs["check"])["steps"])
     check_index = check_steps.index({"run": "make check-ci"})
     assert check_index > 0
