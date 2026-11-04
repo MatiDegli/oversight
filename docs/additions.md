@@ -59,7 +59,8 @@ The maintainer set this order on 2026-10-30, ahead of the queue below. Delivery 
 ### Chat view with the lead (2026-11-01)
 
 State: **Partly built** — the shared shell/switch, presence and shared merge mode/review are on main;
-the lead thread UI remains. The maintainer approved two views of one shell on 2026-11-01.
+the lead thread UI is also built ([LeadThreadRows](../frontend/src/agents/conversation/LeadThreadRows.tsx));
+reference-view release gates remain (see [Lead agent](#lead-agent)). The maintainer approved two views of one shell on 2026-11-01.
 Build Chat only from an approved sketch round.
 
 - Chat lists agents on the left, with the run's lead first and the agents it queued under it;
@@ -68,7 +69,8 @@ Build Chat only from an approved sketch round.
   as tabs. A "Chat | Oversight" switch in the top bar changes layout only: both views share
   one client state and switching never reloads. The graph loads on the first switch to Oversight.
 - The lead is Chat's first conversation. The lead thread contracts and L2 runtime are on main;
-  its Chat UI remains.
+  its Chat UI is built ([LeadThreadRows](../frontend/src/agents/conversation/LeadThreadRows.tsx));
+  reference-view release gates remain (see [Lead agent](#lead-agent)).
 - Review, merge mode and approve rules are shared. Chat opens the same review panel and the
   same merge-mode setting; it shows impact as text plus "See on graph", which switches to
   Oversight with the cone framed.
@@ -152,6 +154,37 @@ diff for methods is delivered under item 2, superseding its earlier candidate st
 These retain useful ideas from the old inventory without approving a front or changing the freeze.
 None of the candidates below is queued. Delivered and retired ideas are recorded separately;
 new candidate work waits for the maintainer’s order.
+
+- <a id="git-at-agent-scale"></a>**Git at agent scale.** After the hackathon, not queued; measure first.
+  - Source: OpenAI's [Scaling Git at OpenAI](https://openai.com/index/scaling-git-at-openai/)
+    (2026-11-02). More concurrent agent tasks per engineer meant more branches, pushes, merges and
+    fetches than the monorepo backend could handle. OpenAI rebuilt the server side as Pando, with
+    per-branch ordering, stored packfile reuse, regional caches and background pack compaction;
+    it reports about 80% lower median push latency (nearly a fivefold reduction).
+  - Oversight has no Git server. Its analog is one local runtime repository shared by up to six
+    agent worktrees ([slot limit](../backend/src/oversight/settings.py),
+    [worktree creation](../backend/src/oversight/workspace/core.py)). Transfer each idea only after
+    measurement shows the need:
+    1. Measure main-lock wait (already observed in [locks.py](../backend/src/oversight/workspace/locks.py))
+       and Git command latency at 2, 4 and 6 agents, on the demo and a large pinned profile.
+    2. Per-branch ordering: per-worktree locks already order each agent's own operations. Audit
+       operations taking the main lock; retain only those changing main or its worktree list there.
+    3. Background compaction: run `git maintenance` tasks (`commit-graph`, `loose-objects`,
+       `incremental-repack`) on the runtime repository while idle, under the main lock.
+    4. One object store: agent worktrees already share objects through `git worktree add` in
+       [core.py](../backend/src/oversight/workspace/core.py). Inventory disposable trees that copy
+       files, such as `copytree` in [preview_preparation.py](../backend/src/oversight/workspace/preview_preparation.py),
+       and build from the shared store where safe; that preparation helper is not a live launch path.
+    5. A batched merge queue: when several approved changes wait, test their combination once and
+       bisect only on failure. Each change keeps its own Approve and the combined-result test rule.
+       This would change today's [one-candidate merge path](../backend/src/oversight/changes/_merge.py).
+    6. Sparse agent worktrees for large repositories, scoped to the plan's files and impact cone,
+       with tests still on a full tree. A reviewed plan must come first: path validation and
+       `run_tests` currently assume the full tree ([files](../backend/src/oversight/workspace/files.py),
+       [test runner](../backend/src/oversight/workspace/suite.py)).
+  - Not adopted: server-side pack serving, packfile-uri offload or regional caches; Oversight runs
+    on one machine without a Git server.
+  - Ideas only; no text or code copied.
 
 - Native sandbox, the first level-3 candidate (maintainer, 2026-10-30). "A sandbox" is on the
   out-of-scope list in docs/proposal.md, section 5; lifting it needs the maintainer's decision. Goal: safety without slowing
