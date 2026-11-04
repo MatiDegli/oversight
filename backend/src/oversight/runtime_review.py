@@ -202,6 +202,7 @@ async def review(
                 author_reply_models=models,
                 ready_time=ready_time,
                 record=accounting.record,
+                check_spending=lambda: live._check_spending(agent.slot, client.profile),
                 agent_id=proposal.agent_id,
                 publish=live._publish,
             )
