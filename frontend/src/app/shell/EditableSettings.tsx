@@ -157,7 +157,13 @@ function SectionFeedback({
         </p>
       )}
       <div role="status" className="text-muted">
-        {editor.saved[section] && <p>Saved.</p>}
+        {editor.saved[section] && (
+          <p>
+            {section === "limits" && !editor.view?.restart_required
+              ? "Saved. Applies to the next run."
+              : "Saved."}
+          </p>
+        )}
         {editor.view?.restart_required && editor.restartSection === section && (
           <p className="text-text">
             {editor.view.apply === "desktop_reload"

@@ -205,3 +205,55 @@ it("does not attach a restart reminder to unsaved sections on load", async () =>
   await store.getState().load();
   expect(markup(store)).not.toContain("Restart the server to apply.");
 });
+
+it.each([
+  "OVERSIGHT_BUDGET_USD",
+  "OVERSIGHT_SPEND_BRAKE_PERCENT",
+  "MUSE_SPARK_INPUT_USD_PER_M",
+  "MUSE_SPARK_OUTPUT_USD_PER_M",
+  "OVERSIGHT_BASETEN_BUDGET_USD",
+  "BASETEN_INPUT_USD_PER_M",
+  "BASETEN_OUTPUT_USD_PER_M",
+] as const)("says saved %s applies to the next run in one status line", async (name) => {
+  const result: SettingsView = {
+    ...view,
+    settings: [{ name, kind: "number", state: "set", value: "10", overridden: false }],
+  };
+  const { api, store } = setup(result);
+  api.updateSettings.mockResolvedValue(result);
+  await store.getState().load();
+  store.getState().edit(name, "20");
+  await store.getState().save("limits");
+  const html = markup(store);
+  expect(html).toContain(
+    '<div role="status" class="text-muted"><p>Saved. Applies to the next run.</p></div>',
+  );
+  expect(html).not.toContain("Restart");
+  expect(html).not.toContain("<p>Saved.</p>");
+});
+
+it("keeps restart feedback when live and restart-only fields were saved together", async () => {
+  const { store } = setup({
+    ...view,
+    settings: [
+      ...view.settings,
+      { name: "OVERSIGHT_MAX_AGENTS", kind: "number", state: "set", value: "4", overridden: false },
+    ],
+  });
+  await store.getState().load();
+  store.getState().edit("OVERSIGHT_BUDGET_USD", "20");
+  store.getState().edit("OVERSIGHT_MAX_AGENTS", "8");
+  await store.getState().save("limits");
+  expect(markup(store)).toContain("Restart the server to apply.");
+  expect(markup(store)).not.toContain("Applies to the next run.");
+});
+
+it("shows plain Saved for a restart-only value restored to its startup value", async () => {
+  const { api, store } = setup();
+  api.updateSettings.mockResolvedValue(view);
+  await store.getState().load();
+  store.getState().edit("META_API_KEY", "restored-synthetic-key");
+  await store.getState().save("models");
+  expect(markup(store)).toContain("<p>Saved.</p>");
+  expect(markup(store)).not.toContain("Applies to the next run.");
+});
