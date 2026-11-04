@@ -1,9 +1,16 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { LeadView, PreviewStatusEvent, ServerEvent } from "@contracts";
 import fixture from "../../../../fixtures/views/reference-cases.json";
 import { applyEvent, createInitialState } from "../../state";
 import { createPreviewHost, previewClock } from "./previewHost";
 import { PreviewFake, deferred } from "./previewFake";
+import { previewStartup } from "./previewStartup";
+
+vi.mock("./previewStartup", () => ({ previewStartup: vi.fn() }));
+beforeEach(() => {
+  vi.mocked(previewStartup).mockReturnValue({ kind: "missing" });
+});
+
 function setup() {
   const state = (fixture.events as ServerEvent[])
     .slice(0, 6)
@@ -172,5 +179,48 @@ it("returns cached slot and panel snapshots between changes, including a masked 
   expect(host.controller.snapshot()).toBe(closed);
   expect(host.snapshot()).toBe(false);
   unsubscribe();
+  host.dispose();
+});
+
+it.each(["valid", "missing", "invalid"] as const)(
+  "enforces %s startup even for direct host activation before publishing a slot",
+  async (kind) => {
+    // Reader output is mocked; validation and byte limits belong to the frozen reader tests.
+    vi.mocked(previewStartup).mockReturnValue(
+      kind === "valid" ? { kind, report: {} as never } : { kind },
+    );
+    const { host, port, request } = setup();
+    const publish = vi.fn();
+    host.subscribe(publish);
+    await host.activate(request);
+    expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(
+      kind === "invalid" ? 0 : 1,
+    );
+    expect(host.snapshot()).toBe(kind !== "invalid");
+    expect(host.controller.snapshot().frameUrl !== null).toBe(kind !== "invalid");
+    if (kind === "invalid") {
+      expect(port.calls).toEqual([]);
+      expect(publish).not.toHaveBeenCalled();
+      expect(host.controller.snapshot()).toMatchObject({ visible: false, pending: false });
+    }
+    host.dispose();
+  },
+);
+
+it("rechecks startup after authenticated drainage before resolving the deferred candidate", async () => {
+  const { host, port, request } = setup();
+  await host.activate(request);
+  const drainage = deferred<undefined>();
+  const stop = port.stop.bind(port);
+  vi.spyOn(port, "stop").mockImplementation(async (...args) => {
+    await drainage.promise;
+    return stop(...args);
+  });
+  const replacing = host.activate(request);
+  vi.mocked(previewStartup).mockReturnValue({ kind: "invalid" });
+  drainage.resolve(undefined);
+  await replacing;
+  expect(port.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+  expect(host.controller.snapshot()).toMatchObject({ pending: false, frameUrl: null });
   host.dispose();
 });
