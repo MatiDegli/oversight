@@ -318,6 +318,124 @@ it("does not consume a persisted owner before bootstrap supplies preview referen
   host.dispose();
 });
 
+function backlogPreviews(mode: "agent" | "revision") {
+  const { state: prefix, port, host, request: earlier } = setup();
+  host.dispose();
+  const agent = prefix.agents["agent-1"];
+  const proposal = prefix.changes["change-agent-1"]?.proposal;
+  if (!agent || !proposal) throw new Error("Missing proposal");
+  prefix.lastSeq++; // The earlier preview status is the next applied backlog event.
+  const agentId = mode === "agent" ? "agent-2" : agent.agent_id;
+  const changeId = `change-${agentId}`;
+  const request: LeadView = {
+    ...earlier,
+    through_seq: 11,
+    view: { kind: "preview", agent_id: agentId },
+  };
+  const arrivals: ServerEvent[] = [
+    {
+      type: "agent.status",
+      seq: 10,
+      ts: "same",
+      payload: { ...agent, agent_id: agentId, change_id: changeId },
+    },
+    {
+      type: "change.proposed",
+      seq: 11,
+      ts: "same",
+      payload: {
+        ...proposal,
+        agent_id: agentId,
+        change_id: changeId,
+        revision: 2,
+        head_commit: "later-head",
+      },
+    },
+    { type: "lead.view", seq: 12, ts: "same", payload: request },
+  ];
+  const complete = arrivals.reduce(applyEvent, prefix);
+  const candidate = resolvePreviewReference(complete, request).candidate;
+  const oldCandidate = resolvePreviewReference(prefix, earlier).candidate;
+  if (!candidate || !oldCandidate) throw new Error("Missing preview candidates");
+  return { prefix, complete, port, candidate, oldCandidate };
+}
+
+it.each(
+  (["agent", "revision"] as const).flatMap((mode) =>
+    (["arrival", "identity"] as const).map((trigger) => ({ mode, trigger })),
+  ),
+)(
+  "retains ownership across an earlier $mode preview and recovers on $trigger",
+  async ({ mode, trigger }) => {
+    vi.useFakeTimers();
+    const { prefix, complete, port, candidate, oldCandidate } = backlogPreviews(mode);
+    const receipt = await port.start(
+      {
+        run_id: candidate.run_id,
+        agent_id: candidate.agent_id,
+        revision: candidate.revision,
+        head_commit: candidate.head_commit,
+      },
+      new AbortController().signal,
+    );
+    const identity = { run: candidate.run_id, source: "live" };
+    let saved: PreviewOwnership | null = { identity, candidate, ...receipt };
+    const store: PreviewOwnershipStore = {
+      load: () => saved,
+      save: vi.fn(),
+      clear: vi.fn(() => {
+        saved = null;
+      }),
+    };
+    let replay = prefix;
+    const recovered = createPreviewHost(
+      port,
+      previewClock,
+      identity,
+      () => replay,
+      () => true,
+      undefined,
+      store,
+    );
+    const earlierStatus: PreviewStatusEvent = {
+      type: "preview.status",
+      seq: prefix.lastSeq,
+      ts: "same",
+      payload: {
+        ...oldCandidate,
+        change_id: oldCandidate.change_id,
+        preview_id: `preview-${"a".repeat(32)}`,
+        state: "stopped",
+        reason: "closed",
+      },
+    };
+    recovered.accept(earlierStatus);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(store.clear).not.toHaveBeenCalled();
+    expect(store.load(identity)?.preview_id).toBe(receipt.preview_id);
+    expect(port.calls.map((call) => call.kind)).toEqual(["start"]);
+
+    replay = complete;
+    const status = port.publicStatus();
+    if (!status) throw new Error("Missing owned preview");
+    if (trigger === "arrival")
+      recovered.accept({ ...earlierStatus, seq: replay.lastSeq, payload: status });
+    else await recovered.setIdentity(identity);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(recovered.controller.snapshot()).toMatchObject({
+      owned: true,
+      visible: false,
+      frameUrl: null,
+      status,
+    });
+    expect(recovered.snapshot()).toBe(false);
+    expect(port.calls.map((call) => call.kind)).toEqual(["start", "details", "renew"]);
+    await recovered.close();
+    expect(saved).toBeNull();
+    recovered.dispose();
+  },
+);
+
 it("retains a public bootstrap arrival for an empty-store observer without start or authority", async () => {
   const { host: owner, state, port, request } = setup();
   await owner.activate(request);

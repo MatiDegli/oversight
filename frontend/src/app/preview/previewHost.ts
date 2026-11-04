@@ -4,7 +4,11 @@ import { createPreviewController } from "./previewController";
 import type { PreviewClock, PreviewIdentity, PreviewPort } from "./previewPort";
 import { previewStartup } from "./previewStartup";
 import { parsePreviewStatus } from "./previewTypes";
-import { tabPreviewOwnership, type PreviewOwnershipStore } from "./previewOwnership";
+import {
+  sameOwnershipCandidate,
+  tabPreviewOwnership,
+  type PreviewOwnershipStore,
+} from "./previewOwnership";
 
 export const previewClock: PreviewClock = {
   schedule(callback, delay) {
@@ -61,15 +65,15 @@ export function createPreviewHost(
       )
     )
       return Promise.resolve(); // Do not consume recovery during an incomplete bootstrap prefix.
-    return controller.recover(() => {
+    let record;
+    try {
+      record = ownership?.load(currentIdentity);
+    } catch {
+      return Promise.resolve();
+    }
+    if (!record) return Promise.resolve();
+    const getCandidate = () => {
       if (disposed || !canOpen() || previewStartup().kind === "invalid") return null;
-      let record;
-      try {
-        record = ownership?.load(currentIdentity);
-      } catch {
-        return null;
-      }
-      if (!record) return null;
       for (const events of Object.values(read().leadViews)) {
         for (const event of events) {
           const request = event.payload;
@@ -83,7 +87,11 @@ export function createPreviewHost(
         }
       }
       return null;
-    });
+    };
+    // An earlier preview can arrive before this record's suggestion or revision.
+    // Leave recovery unchecked until its candidate is present in the applied prefix.
+    if (!sameOwnershipCandidate(record.candidate, getCandidate())) return Promise.resolve();
+    return controller.recover(getCandidate);
   };
   const publish = (next: boolean) => {
     if (open === next || disposed) return;
