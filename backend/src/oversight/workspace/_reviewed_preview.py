@@ -376,6 +376,7 @@ class ReviewedExecution:
         self.build_command = False
         self.phase = "build"
         self.reason = "launch_failed"
+        self.diagnostic = ""
         self.exit_code: int | None = None
         self.preparation_s = 0.0
         self.execution_reported = False
@@ -514,7 +515,7 @@ class ReviewedExecution:
             self.handle
             and not self.handle.verified_dead
             and set(self.handle.pidfds) == {"outer", "setup", "init"}
-            and set(self.handle.namespace_fds) == {"u0", "n0", "u1", "pid", "mount"}
+            and set(self.handle.namespace_fds) == {"u0", "n0", "p0", "u1", "pid", "mount"}
             and not any(select.select([fd], [], [], 0)[0] for fd in self.handle.pidfds.values())
         )
 
@@ -710,9 +711,17 @@ class ReviewedExecution:
                 await asyncio.wait({stop, controls, monitor}, return_when=asyncio.FIRST_COMPLETED)
             elif not done:
                 self.reason = "readiness_timeout" if self.phase == "readiness" else "launch_failed"
+                self.diagnostic = "launch deadline expired"
         except asyncio.CancelledError:
             self.reason = "shutdown"
         except Exception as error:
+            from oversight.workspace.preview_supervisor import launcher_diagnostic
+            from oversight.workspace.runner import ProcessCollector
+
+            collector = ProcessCollector(2048)
+            if self.handle is not None:
+                collector.stderr.feed(self.handle.stderr.encode())
+            self.diagnostic = launcher_diagnostic(collector, error)
             if not self.stopped.is_set():
                 self.reason = (
                     "readiness_timeout"
@@ -750,7 +759,12 @@ class ReviewedExecution:
             self.listener.close()
             self.reservation.close()
             await offload(lambda: self.registry.update(phase="dead", boundary_pending=False))
-            self.send(kind="dead", reason=self.reason, exit_code=self.exit_code, diagnostic="")
+            self.send(
+                kind="dead",
+                reason=self.reason,
+                exit_code=self.exit_code,
+                diagnostic=self.diagnostic,
+            )
         except BaseException:
             # Keep the listener, identities and registry on uncertain death. Recovery must
             # retain quarantine; no unknown PID or listener authorizes reclamation.

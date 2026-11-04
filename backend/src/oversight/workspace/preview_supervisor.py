@@ -256,7 +256,7 @@ async def supervise(runtime: Path, control: int, output: int, listener: int) -> 
             os.close(output)
 
 
-def launcher_diagnostic(collector: ProcessCollector) -> str:
+def launcher_diagnostic(collector: ProcessCollector, error: Exception | None = None) -> str:
     """Bounded allowlisted diagnostic facts, never arbitrary stdout/stderr fragments."""
     text = collector.stderr.text()
     for signature in (
@@ -268,6 +268,33 @@ def launcher_diagnostic(collector: ProcessCollector) -> str:
     ):
         if signature in text:
             return signature
+    if error is not None:
+        # Exception messages may contain host paths, environment values or child output.
+        # Only fixed facts cross the private report channel, just as for launcher stderr.
+        prefix = ""
+        if str(error).startswith("boundary entry refused:") and isinstance(
+            error.__cause__, Exception
+        ):
+            prefix, error = "boundary entry refused: ", error.__cause__
+        if isinstance(error, TimeoutError):
+            return prefix + "launch deadline expired"
+        if isinstance(error, OSError) and type(error.errno) is int and 0 < error.errno < 4096:
+            return prefix + f"launch OS error (errno {error.errno})"
+        for signature in (
+            "reviewed build failed",
+            "reviewed readiness expired",
+            "private backend is unavailable",
+            "boundary entry refused",
+            "boundary exit is unknown",
+            "boundary did not enter",
+            "namespace evidence mismatch",
+            "incorrect namespace parent",
+            "incorrect namespace owner",
+            "invalid boundary topology",
+        ):
+            if str(error) == signature or str(error).startswith(signature + ":"):
+                return prefix + signature
+        return prefix + "launch exception"
     return "launcher exited" if text else ""
 
 

@@ -123,7 +123,10 @@ def assert_verify_policy(verify: str, ci: str) -> None:
     for actual, source in zip(check[:6], ci_check[:6], strict=True):
         assert_named_copy(actual, source)
     assert [step.get("uses") for step in check[:6]] == [*ACTIONS.values(), None, GITLEAKS]
-    assert mapping(check[2]["with"]) == {"package_json_file": "frontend/package.json"}
+    assert mapping(check[2]["with"]) == {
+        "package_json_file": "frontend/package.json",
+        "standalone": "true",
+    }
     assert mapping(check[3]["with"]) == {"node-version": "24"}
     assert check[4]["run"] == "make install"
     assert check[6:10] == ci_check[6:10]
@@ -175,6 +178,8 @@ def test_verify_has_only_the_manual_backend_jobs_and_required_gates() -> None:
         ("persist-credentials: false", "persist-credentials: true"),
         ("fetch-depth: 0", "fetch-depth: 1"),
         ("package_json_file: frontend/package.json", "package_json_file: package.json"),
+        ("          standalone: true\n", ""),
+        ("standalone: true", "standalone: false"),
         ("node-version: 24", "node-version: 22"),
         ("      - name: Set up uv\n", "      - name: Set up uv\n        if: false\n"),
         (
@@ -321,7 +326,14 @@ def assert_windows_policy(text: str) -> None:
 
 def assert_windows_steps(items: list[dict[str, str]]) -> None:
     ci = mapping(mapping((WORKFLOWS / "ci.yml").read_text())["jobs"])
-    assert items[:4] == steps(mapping(ci["check"])["steps"])[:4]
+    setup = steps(mapping(ci["check"])["steps"])[:4]
+    assert mapping(setup[2]["with"]) == {
+        "package_json_file": "frontend/package.json",
+        "standalone": "true",
+    }
+    # Standalone is required only by the Linux check job's real-boundary fixture.
+    setup[2] = setup[2] | {"with": "package_json_file: frontend/package.json"}
+    assert items[:4] == setup
     assert items[-1] == {
         "name": "Upload Windows evidence",
         "if": "always()",

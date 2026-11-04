@@ -257,6 +257,34 @@ async def test_launcher_diagnostics_survive_but_fake_application_output_never_do
 
 
 @pytest.mark.parametrize(
+    "error, expected",
+    [
+        (TimeoutError("private value"), "launch deadline expired"),
+        (OSError(13, "private value", "/host/private"), "launch OS error (errno 13)"),
+        (ValueError("private backend is unavailable"), "private backend is unavailable"),
+        (ValueError("reviewed build failed"), "reviewed build failed"),
+        (OSError("boundary entry refused: /host/private"), "boundary entry refused"),
+        (ValueError("private value" * 10000), "launch exception"),
+    ],
+)
+async def test_launch_exception_diagnostic_is_bounded_and_allowlisted(error, expected):
+    collector = ProcessCollector(2048)
+    collector.stderr.feed(b"untrusted /host/private environment=private-value\x1b[31m")
+    diagnostic = supervisor.launcher_diagnostic(collector, error)
+    assert diagnostic == expected
+    assert len(diagnostic.encode()) < 128
+    assert all(value not in diagnostic for value in ("/host", "private value", "\x1b"))
+
+
+async def test_boundary_entry_diagnostic_retains_safe_cause():
+    error = OSError("boundary entry refused: private value /host/private")
+    error.__cause__ = TimeoutError("private value")
+    assert supervisor.launcher_diagnostic(ProcessCollector(0), error) == (
+        "boundary entry refused: launch deadline expired"
+    )
+
+
+@pytest.mark.parametrize(
     "code,reason",
     [
         (70, "launch_failed"),
