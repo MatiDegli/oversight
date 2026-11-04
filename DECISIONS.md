@@ -5054,3 +5054,25 @@ slot intent. Storage refusal leaves memory ownership and best-effort Stop usable
 Reason: sessionStorage can be copied by Duplicate tab, so possession of the token alone cannot
 establish that the previous owning page departed. No token enters localStorage, URLs, events
 or logs, and recovery still requires the current applied candidate and a valid server lease.
+
+## 2026-11-04 — The person sets the spending brake's share
+
+The maintainer decided that Oversight is configurable: the person sets
+`OVERSIGHT_SPEND_BRAKE_PERCENT` to a whole number from 1 to 100, default 90.
+Absent or empty uses 90. Parsing accepts only ASCII digits, ignores leading zeros
+for the three-digit length bound, and rejects values outside the range. Invalid
+values become an unconfigured brake without preventing the desktop app from starting;
+metered starts fail closed rather than silently falling back to 90. Spending past
+the budget requires raising the budget.
+
+Invalid shares refuse metered starts and revisions through `brake_reason` with
+`spend_brake` and "OVERSIGHT_SPEND_BRAKE_PERCENT must be a whole number from 1 to 100",
+before checking the spend share. `missing_settings` does not list this variable:
+`MissingSetting.name` is a closed contract literal and stays unchanged.
+
+One share applies to Meta credits and the separate Baseten decision allowance.
+Decision admission retains its existing `budget_unconfigured` reason for an invalid
+share. The brake still refuses only above the share, so equality remains admitted.
+Published warning marks at 50% and 80% are dropped when at or above the brake;
+the ledger's warning states stay unchanged. `Budget.block_at` already carries
+the share to the UI. There is no contract change.

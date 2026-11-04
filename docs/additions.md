@@ -242,8 +242,8 @@ new candidate work waits for the maintainer’s order.
   and the remaining candidates are not queued. The cut line, drawn once the checkpoint list is on main,
   comes before considering the remainder.
   - Resource admission: the person's cap on running agents stays the limit. Memory can only hold
-    a new start below that cap; the spending brake refuses new runs above 90% of credits. Both are built.
-    `OVERSIGHT_MAX_AGENTS` defaults to four (1–6); `OVERSIGHT_MEMORY_HOLD_PERCENT` defaults to 90 (1–100).
+    a new start below that cap; the spending brake refuses new runs above the person's configured share of the credits, 90% by default. Both are built.
+    `OVERSIGHT_MAX_AGENTS` defaults to four; `OVERSIGHT_MEMORY_HOLD_PERCENT` and `OVERSIGHT_SPEND_BRAKE_PERCENT` default to 90 (1–100).
     A memory hold names the configured threshold; queued work rechecks every five seconds after a hold.
     Thresholds are deterministic; no model decides. Still a candidate: an already-running agent
     waiting on a shared resource would show the reason in words on its card, built from the
