@@ -94,3 +94,24 @@ One line per day, in Argentina time (ART).
   Reviewed self-profile front (2026-11-03): added filtered pinned input and frozen launch authority,
   nonexecuting admission scaffold and bounded console/live-index startup carrier; consumer rendering,
   builds, boundary/gateway/nesting and native launch remain unavailable. No model API calls.
+
+  Added reviewed preview translation, effective-manifest/root adaptation, persistence before execution,
+  fresh-root build/start orchestration and supervisor-owned connector/publication/gateway lifecycle.
+  Retained quarantine, the self-application refusal and separate tests/shop filesystem residual.
+  Folded authenticated namespace/filter/teardown, static preparation/import/log, HTTP/readiness,
+  connector and explicit no-key nested configuration rationales into the preview documentation.
+  Readiness/lease defaults are 30/600 seconds; controlled wiring does not certify final self-app,
+  scripted-story or Windows-browser acceptance. No provider calls or contract changes.
+  Qualified the actual prepared offline production build and imports in the Linux root, and the
+  real supervisor/guardian death ordering. Vite now names only the opposite loopback frame host per
+  request and refuses foreign names/ports. Custom HTML embeddings retain their explicit policy
+  after the same Host check. The shop authority adapter is an unowned prerequisite;
+  shop `127.0.0.1` parents are refused before reservation, while localhost remains supported.
+  Direct launches without a request parent preserve configured origins; the default host selects
+  only the URL. Real-route acceptance and the three-start driver remain blocked prerequisites.
+  Frontend transport integration remains a separately owned prerequisite. Bounded admission-lock
+  waits by lease/lifetime
+  and fixed stop/EOF/cancellation before execute; added wiring-level probing-death and invalid-evidence
+  coverage. Polling/renewal now preserve supervisor-owned build transitions; provider values reach
+  only the private redaction channel, and failure/log and boundary-input regressions cover the
+  wiring. Retained the absence of final self-app/story/Windows-browser acceptance.
