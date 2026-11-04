@@ -162,6 +162,9 @@ class BasetenDecisionAccounting:
         self._lost = False
         settings = live._settings
         self.budget = positive_amount(str(settings.baseten_budget_usd))
+        self.block_at = (
+            settings.spend_brake_percent / 100 if settings.spend_brake_percent is not None else None
+        )
         input_price = positive_amount(str(settings.baseten_input_usd_per_m))
         output_price = positive_amount(str(settings.baseten_output_usd_per_m))
         self.pricing = (
@@ -185,7 +188,7 @@ class BasetenDecisionAccounting:
         """No suspension between checking the current ledger and returning transport admission."""
         if self.live._closing:
             raise DecisionUnavailable("closed")
-        if self.budget is None:
+        if self.budget is None or self.block_at is None:
             raise DecisionUnavailable("budget_unconfigured")
         if self.pricing is None:
             raise DecisionUnavailable("pricing_unconfigured")
@@ -194,14 +197,14 @@ class BasetenDecisionAccounting:
             raise DecisionUnavailable("ledger_unreliable")
         if state.unknown:
             raise DecisionUnavailable("ledger_unknown")
-        if UsageLedger(self.budget, state.spent_usd).brake == "blocked":
+        if UsageLedger(self.budget, state.spent_usd, block_at=self.block_at).brake == "blocked":
             raise DecisionUnavailable("budget_blocked")
 
     async def record(self, input: DecisionInput, reply: ModelReply) -> None:
         await durable(self._record(input, reply))
 
     async def _record(self, input: DecisionInput, reply: ModelReply) -> None:
-        assert self.budget is not None and self.pricing is not None
+        assert self.budget is not None and self.pricing is not None and self.block_at is not None
         cost = self.pricing.cost(reply.usage)
         entry = UnknownUsage(
             self.live.run_id, input.agent_id, reply.model, format_ts(datetime.now(UTC))
@@ -221,7 +224,7 @@ class BasetenDecisionAccounting:
                 budget_usd=self.budget,
                 brake="blocked"
                 if state.unknown
-                else UsageLedger(self.budget, state.spent_usd).brake,
+                else UsageLedger(self.budget, state.spent_usd, block_at=self.block_at).brake,
             )
             validate_usage_tick(tick)
             # Publish directly: LiveRun._publish meters according to the author's provider.

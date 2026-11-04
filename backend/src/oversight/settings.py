@@ -158,7 +158,9 @@ class Settings:
     """OVERSIGHT_REVIEWER_FAKE_SCRIPT: reviewer fake, reviewing author fake-b."""
     reviewer_fake_b_script: Path | None = None
     """OVERSIGHT_REVIEWER_FAKE_B_SCRIPT: reviewer fake-b, reviewing author fake."""
-    # The spending brake: no defaults. A value that is missing, not a number or not positive is
+    spend_brake_percent: int | None = 90
+    """OVERSIGHT_SPEND_BRAKE_PERCENT: whole percentage from 1 to 100; None refuses spending."""
+    # Budget and prices have no defaults. A value missing, not a number or not positive is
     # `None`, and every start on a Meta profile is then refused (not_configured).
     budget_usd: float | None = None
     """The credits, in US dollars. OVERSIGHT_BUDGET_USD."""
@@ -173,7 +175,7 @@ class Settings:
     setting_problems: dict[ParsedSettingName, Literal["missing", "invalid"]] = field(
         default_factory=dict[ParsedSettingName, Literal["missing", "invalid"]]
     )
-    """Invalid amounts and overrides outside the capacity, by variable name; no raw values."""
+    """Invalid amounts, spending shares and capacity overrides, by variable name; no raw values."""
     demo_python: Path | None = None
     """Explicit prepared interpreter with pytest; required for oversight-self, never built there.
     No environment variable: supplied by the person-owned composition or a test fixture."""
@@ -251,6 +253,9 @@ class Settings:
         port, vite_port = resolve_ports(merged)
         max_agents = resolve_max_agents(merged)
         models, scripts, slot_problems = resolve_slot_overrides(merged, max_agents)
+        spend_brake_percent = resolve_spend_brake_percent(merged)
+        if spend_brake_percent is None:
+            slot_problems["OVERSIGHT_SPEND_BRAKE_PERCENT"] = "invalid"
         for name in (
             "OVERSIGHT_BUDGET_USD",
             "MUSE_SPARK_INPUT_USD_PER_M",
@@ -315,6 +320,7 @@ class Settings:
             history_prune_tokens=_history_threshold(merged.get("OVERSIGHT_HISTORY_PRUNE_TOKENS")),
             reviewer_fake_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_SCRIPT")),
             reviewer_fake_b_script=_repo_path(merged.get("OVERSIGHT_REVIEWER_FAKE_B_SCRIPT")),
+            spend_brake_percent=spend_brake_percent,
             budget_usd=positive_amount(merged.get("OVERSIGHT_BUDGET_USD")),
             input_usd_per_m=positive_amount(merged.get("MUSE_SPARK_INPUT_USD_PER_M")),
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
@@ -458,6 +464,14 @@ def resolve_slot_overrides(
         elif path := _repo_path(values[name]):
             scripts[seat] = path
     return models, scripts, problems
+
+
+def resolve_spend_brake_percent(values: Mapping[str, str]) -> int | None:
+    """Absent or empty means 90; malformed or out-of-range values fail closed without raising."""
+    raw = (values.get("OVERSIGHT_SPEND_BRAKE_PERCENT") or "90").lstrip("0")
+    if not raw.isascii() or not raw.isdecimal() or len(raw) > 3 or not 1 <= int(raw) <= 100:
+        return None
+    return int(raw)
 
 
 def resolve_memory_hold_percent(values: Mapping[str, str]) -> int:
