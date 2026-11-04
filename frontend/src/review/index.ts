@@ -7,6 +7,7 @@ export type { ReviewPanelProps } from "./ReviewPanel";
 export { decisionView, failureMessage, sendDecision, startAttempt } from "./decisions";
 export type { DecisionAction, DecisionAttempt, DecisionClient, DecisionView } from "./decisions";
 export { ChangeFactsRow } from "./ChangeFactsRow";
+export { ChangeTiming } from "./StageTimes";
 
 export { DecisionContext } from "./DecisionContext";
 export { useAnswers } from "./answers";

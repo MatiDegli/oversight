@@ -1,0 +1,23 @@
+.change-timing,
+.stage-times {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--caption-size);
+  line-height: 20px;
+}
+.stage-times {
+  display: inline-flex;
+}
+.stage-times > span {
+  overflow-wrap: anywhere;
+}
+.review-header > .change-timing {
+  margin-top: 6px;
+}
+.chat-change-card .change-timing {
+  flex-basis: 100%;
+}
