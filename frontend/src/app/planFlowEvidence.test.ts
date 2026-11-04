@@ -21,7 +21,15 @@ beforeEach(async () => {
         width: Number(width),
         documentWidth: Number(width),
         provenance: "Synthetic scripted event scene, rendered by production components",
-        selectors: { ".plan-flow": [{ clientWidth: 336, scrollWidth: 336 }] },
+        layout: scene === "inbox" ? "Oversight" : "Chat",
+        selectors: {
+          ".plan-flow": [{ clientWidth: 336, scrollWidth: 336 }],
+          ...(scene === "inbox"
+            ? {
+                '.plan-group[aria-label="Running plans"]': [{ clientWidth: 336, scrollWidth: 336 }],
+              }
+            : {}),
+        },
       }),
     );
   }
@@ -55,6 +63,25 @@ it.each(["proposed-1280-dark.png", "phone-390-day-end.png", "phone-390-day.json"
 it("refuses a non-PNG capture", async () => {
   await writeFile(new URL("proposed-1280-dark.png", root), "missing screenshot");
   await expect(writeCaptureMatrix(root)).rejects.toThrow("Invalid PNG");
+});
+
+it.each([
+  { layout: "Chat" },
+  { layout: undefined },
+  { selectors: { ".plan-flow": [{ clientWidth: 336, scrollWidth: 336 }] } },
+  {
+    selectors: {
+      ".plan-flow": [{ clientWidth: 336, scrollWidth: 336 }],
+      '.plan-group[aria-label="Running plans"]': [],
+    },
+  },
+])("refuses phone inbox evidence without Oversight Running plans: %j", async (patch) => {
+  await writeCaptureMatrix(root);
+  const path = new URL("inbox-390-dark.json", root);
+  const data = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+  await writeFile(path, JSON.stringify({ ...data, ...patch }));
+  await expect(writeCaptureMatrix(root)).rejects.toThrow("Invalid scene measurements");
+  await expect(readFile(new URL("matrix.json", root))).rejects.toThrow("ENOENT");
 });
 
 it.each([
