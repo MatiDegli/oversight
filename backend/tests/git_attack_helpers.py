@@ -4,21 +4,14 @@ import asyncio
 import shlex
 from pathlib import Path
 
+from backend.tests.workspace.workspace_helpers import fixture_git
+
 from oversight.workspace import run_process
 
 
 async def raw_git(root: Path, *args: str) -> str:
     result = await run_process(
-        [
-            "git",
-            "-c",
-            "maintenance.autoDetach=false",
-            "-c",
-            "gc.autoDetach=false",
-            "-c",
-            "core.hooksPath=/dev/null",
-            *args,
-        ],
+        fixture_git("-c", "core.hooksPath=/dev/null", *args),
         cwd=root,
         timeout_s=5,
         env={
@@ -56,6 +49,14 @@ async def malicious_sub(root: Path, sentinel: Path, *, parent_gitlink: bool = Fa
 
 def suite_attack(sentinel: Path) -> str:
     """A real demo test leaves the nested repository behind when pytest exits."""
+    command = fixture_git(
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.invalid",
+    )
     return f"""from pathlib import Path
 import subprocess
 
@@ -64,9 +65,7 @@ def test_leave_nested_repo():
     sub.mkdir()
     def git(*args):
         subprocess.run(
-            ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false",
-             "-c", "core.hooksPath=/dev/null", "-c", "user.name=Test",
-             "-c", "user.email=test@example.invalid", *args], cwd=sub, check=True,
+            {command!r} + list(args), cwd=sub, check=True,
             timeout=5, capture_output=True,
         )
     git("init", "-q", "--template=")

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from backend.tests.workspace.workspace_helpers import fixture_git
 
 from oversight.graph import WorkspaceGraph
 from oversight.workspace import Workspace, run_process
@@ -31,18 +32,14 @@ GIT_TIMEOUT_S = signature(Workspace.git).parameters["timeout_s"].default
 
 async def git(root: Path, *args: str) -> str:
     result = await run_process(
-        [
-            executable("git"),
-            "-c",
-            "maintenance.autoDetach=false",
-            "-c",
-            "gc.autoDetach=false",
+        fixture_git(
             "-c",
             "user.name=Fixture",
             "-c",
             "user.email=f@example.invalid",
             *args,
-        ],
+            executable=executable("git"),
+        ),
         cwd=root,
         timeout_s=10,
     )

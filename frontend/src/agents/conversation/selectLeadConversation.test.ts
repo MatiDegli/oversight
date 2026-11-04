@@ -381,3 +381,33 @@ it("folds 50 realistic turns, ends reply 50 with halted, and measures the existi
       .map((event) => event.seq),
   ]);
 });
+
+it("carries fake-provider provenance into the lead header without changing its identity", () => {
+  const events = thread(1);
+  const first = events[0];
+  if (first?.type !== "run.started") throw new Error("Missing run");
+  const before = project(events);
+  events[0] = {
+    ...first,
+    payload: {
+      ...first.payload,
+      models: first.payload.models.map((profile) => ({ ...profile, provider: "fake" })),
+    },
+  };
+  const after = project(events);
+  expect(before.header.scripted).toBe(false);
+  expect(after.header.scripted).toBe(true);
+  expect(after.header.letter).toBe(before.header.letter);
+  expect(after.header.modelLabel).toBe(before.header.modelLabel);
+  const html = renderToStaticMarkup(
+    createElement(ConversationPanelHeader, { header: after.header }),
+  );
+  expect(html).toContain("Scripted demo agents");
+  expect(html).toContain("Entered text does not determine scripted actions.");
+  const modelLine = html.indexOf(`Lead ${after.header.letter} · ${after.header.modelLabel}`);
+  expect(modelLine).toBeGreaterThan(-1);
+  expect(html.indexOf('class="scripted-agent-provenance"')).toBeGreaterThan(modelLine);
+  expect(html.indexOf("Entered text does not determine scripted actions.")).toBeGreaterThan(
+    html.indexOf("Scripted demo agents"),
+  );
+});

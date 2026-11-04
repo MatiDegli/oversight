@@ -796,6 +796,7 @@ async def test_normalizing_only_system_copy_breaks_recorded_mount_digest(
     inputs, tmp_path, monkeypatch
 ):
     from oversight.workspace import _reviewed_preview as wiring
+    from oversight.workspace import preview_boundary_entry as entry
     from oversight.workspace.preview_boundary_entry import manifest_digest
     from oversight.workspace.preview_preparation import RootMapping
 
@@ -825,8 +826,8 @@ async def test_normalizing_only_system_copy_breaks_recorded_mount_digest(
         ),
         manifests=(*prepared.manifests, record(copy, "system-copy", owned=True)),
     )
-    monkeypatch.setattr(wiring, "SYSTEM_FILES", (str(original),))
-    monkeypatch.setattr(wiring, "SYSTEM_DIRECTORIES", ())
+    monkeypatch.setattr(entry, "SYSTEM_FILES", (str(original),))
+    monkeypatch.setattr(entry, "SYSTEM_DIRECTORIES", ())
     with pytest.raises(ValueError, match="recorded system mount changed"):
         wiring.boundary_roots(prepared, inputs.excluded_roots)
 

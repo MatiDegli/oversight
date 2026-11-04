@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from backend.tests.workspace.workspace_helpers import fixture_git
 
 from oversight.settings import Settings
 from oversight.workspace import Workspace, run_process
@@ -47,7 +48,7 @@ def outside_tree(root: Path) -> Path:
 
 async def git(root: Path, *args: str) -> str:
     result = await run_process(
-        ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", *args],
+        fixture_git(*args),
         cwd=root,
         timeout_s=10,
     )

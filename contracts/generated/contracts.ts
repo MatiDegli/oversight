@@ -4,7 +4,7 @@
 export type NonEmptyText = string;
 export type AgentId = string;
 export type ChangeId = string;
-export type Slot = "A" | "B" | "C" | "D" | "E" | "F";
+export type Slot = string;
 export type WorkspacePath = string;
 export type NodeId = string;
 export type Timestamp = string;
@@ -2875,4 +2875,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.19.0";
+export const CONTRACT_VERSION = "1.21.0";

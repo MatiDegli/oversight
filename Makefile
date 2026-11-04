@@ -121,7 +121,7 @@ smoke: ## start the backend and check /health and /graph
 
 # test-browser: isolated real dev/replay proxy fixtures, then Chromium tests for Monaco/graph.
 # The timeout and memory scope cover both stages, including each CI shard.
-# BROWSER_SHARD=1/2 or 2/2 selects a half; unset runs every test with the same 1200 s bound.
+# BROWSER_SHARD=1/4, 2/4, 3/4 or 4/4 selects a quarter; unset runs every test with the same 1200 s bound.
 # Exceeding the cap on a fast runner is a test defect, not a reason to raise it.
 test-browser: ## fake-only launcher/proxy integration and Chromium tests; 1200 s, 6G where supported
 	@$(NO_KEYS) timeout --kill-after=10 1200 bash tools/capped.sh 6G bash tools/test-browser.sh

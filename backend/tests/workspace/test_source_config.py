@@ -10,6 +10,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from backend.tests.workspace.workspace_helpers import fixture_git
 
 from oversight.workspace.locks import offload
 from oversight.workspace.runner import NtCleanupError, ProcessResult, run_process
@@ -452,7 +453,7 @@ async def test_pinned_fsmonitor_is_disabled_and_checkout_stays_clean(tmp_path: P
 
     async def git(*args: str) -> str:
         result = await run_process(
-            ["git", "-c", "maintenance.autoDetach=false", "-c", "gc.autoDetach=false", *args],
+            fixture_git(*args),
             cwd=root,
             timeout_s=10,
             env=SOURCE_GIT_ENV,

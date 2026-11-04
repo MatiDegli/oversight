@@ -13,6 +13,9 @@ from oversight.changes._summary_capture import capture_summary
 from oversight_contracts.events import CaseResult, ChangeProposed, SuiteExecution
 from oversight_contracts.review import ChangeFacts, ChangeTarget, FinishDeclaration
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 
 def test_retention_keeps_added_then_failures_then_other_cases() -> None:
     full = tuple(
@@ -29,8 +32,10 @@ def test_retention_keeps_added_then_failures_then_other_cases() -> None:
 def test_ungrouped_detector_preserves_individual_observations() -> None:
     before = "def test_a():\n    assert value() == 1\n\ndef test_b():\n    assert value() == 2\n"
     after = before.replace("== 1", ">= 1").replace("== 2", ">= 2")
-    grouped = detect_shortcuts([("tests/test_x.py", before, after)])
-    raw = detect_shortcuts([("tests/test_x.py", before, after)], grouped=False)
+    grouped = detect_shortcuts([("tests/test_x.py", before, after)], timeout=DETECTION_TIMEOUT_S)
+    raw = detect_shortcuts(
+        [("tests/test_x.py", before, after)], grouped=False, timeout=DETECTION_TIMEOUT_S
+    )
     assert len(grouped) == 1 and len(raw) == 2
     assert {f.line for f in raw} == {2, 5}
     assert all("Lines:" not in f.message for f in raw)

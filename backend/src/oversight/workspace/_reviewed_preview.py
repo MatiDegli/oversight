@@ -1,21 +1,16 @@
 """Trusted reviewed-preview translation. The reviewed self app remains refused by admission."""
 
+from __future__ import annotations
+
 import asyncio
 import socket
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from oversight.workspace.locks import offload
-from oversight.workspace.preview_boundary import BoundaryHandle, ReadOnlyMount
-from oversight.workspace.preview_boundary_entry import (
-    SYSTEM_DIRECTORIES,
-    SYSTEM_FILES,
-    TOOL_TARGETS,
-    manifest_digest,
-)
 from oversight.workspace.preview_gateway import PreviewGateway
 from oversight.workspace.preview_launch_spec import PreviewLaunchSpec
 from oversight.workspace.preview_preparation import (
@@ -27,6 +22,9 @@ from oversight.workspace.preview_preparation import (
 from oversight.workspace.preview_profile import PreviewProfile
 from oversight.workspace.preview_publication import PublishedBuild
 from oversight.workspace.preview_registry import PreviewRegistry
+
+if TYPE_CHECKING:
+    from oversight.workspace.preview_boundary import BoundaryHandle, ReadOnlyMount
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
@@ -68,6 +66,14 @@ class ReviewedRoots:
 
 
 def boundary_roots(prepared: PreparedPreview, exclusions: tuple[Path, ...]) -> ReviewedRoots:
+    from oversight.workspace.preview_boundary import ReadOnlyMount
+    from oversight.workspace.preview_boundary_entry import (
+        SYSTEM_DIRECTORIES,
+        SYSTEM_FILES,
+        TOOL_TARGETS,
+        manifest_digest,
+    )
+
     excluded = canonical_exclusions(exclusions)
     scratch = prepared.root
     writable = (prepared.tree, prepared.state, scratch)
