@@ -21,9 +21,11 @@ from oversight.agents import (
     ScriptedModel,
     ToolCall,
     Usage,
+    load_script,
     review_candidate,
 )
 from oversight.agents._crossreview import Decision, build_correction_message, build_prompt, parse
+from oversight.settings import REPO_ROOT
 from oversight_contracts.events import ModelProfile
 from oversight_contracts.review import ChangeTarget
 
@@ -49,6 +51,21 @@ INPUTS = ReviewInputs(
 
 def model(reply: ModelReply) -> ScriptedModel:
     return ScriptedModel(Script("review", [reply]), FAKE_MODEL_B)
+
+
+async def test_rules_unavailable_script_keeps_invalid_verdict_after_correction() -> None:
+    script = load_script(
+        REPO_ROOT / "fixtures/fake-model/rules-unavailable-reviewer.json", FAKE_MODEL_B
+    )
+    client = ScriptedModel(script, FAKE_MODEL_B)
+    result = await review_candidate(client, TARGET, INPUTS, author=FAKE_MODEL)
+    assert len(client.requests) == 2
+    assert result.review.verdict == "unknown"
+    assert result.decision.action == "needs_you"
+    assert result.review.problems[0] == "review_invalid: invalid reviewer output"
+    assert "verdict" in " ".join(result.review.problems).lower()
+    assert result.reply is not None and result.reply.usage == Usage(100, 20, 0)
+    assert len(script.turns) == 2 and all(turn.usage == Usage(100, 20, 0) for turn in script.turns)
 
 
 async def test_task_null_summary_and_separate_history() -> None:

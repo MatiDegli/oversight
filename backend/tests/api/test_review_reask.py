@@ -133,6 +133,39 @@ def assert_final_events(
         assert all(t.payload.cost_usd is None for t in ticks)
 
 
+@pytest.mark.parametrize("invalidation", ["delivery_rejected", "review_ready"])
+async def test_ineligible_target_drops_reask_without_cancelling_first_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalidation: str
+) -> None:
+    requests = 0
+
+    async def create(**params: Any) -> ChatCompletion:
+        nonlocal requests
+        requests += 1
+        if requests == 1:
+            manager = live._manager
+            assert manager is not None
+            rec = manager._agents["agent-1"]
+            setattr(rec, invalidation, invalidation == "delivery_rejected")
+            task = asyncio.current_task()
+            assert task is not None and not task.cancelling()
+            return response("bad")
+        return response("VERDICT: accept")
+
+    async with production(tmp_path, monkeypatch, create) as live:
+        await start(live)
+        await until(live, "usage.tick", role="review")
+        await asyncio.gather(*list(live._reviews.values()))
+        es = events(live)
+        ticks = [e for e in es if e.type == "usage.tick" and e.payload.role == "review"]
+        assert requests == len(ticks) == 1
+        assert live.ledger.read().spent_usd == pytest.approx(0.00009)
+        assert not live.ledger.read().unknown
+        assert not any(e.type in {"change.reviewed", "change.resolved", "error"} for e in es)
+        assert live._manager is not None
+        assert not live._manager._agents["agent-1"].review_consumed
+
+
 @pytest.mark.parametrize("brake", ["unknown", "spent"])
 async def test_first_receipt_can_refuse_reask_through_existing_spend_invalid_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, brake: str
