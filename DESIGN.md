@@ -987,6 +987,8 @@ replaces Close and returns to the retained Chat view, its reading position and l
 Escape does the same. The full-screen panel keeps background controls inert and keyboard
 traversal inside it. The fixed header and 44px controls remain available above scrolling evidence,
 with 16px side gutters and no sideways scroll. Oversight retains its widen-window notice.
+The Open workflow launcher appears from 1280 px and in Chat's phone layout; from 768 to
+1279 px, the shared plan card is the entry point.
 
 ### Settings tab
 
