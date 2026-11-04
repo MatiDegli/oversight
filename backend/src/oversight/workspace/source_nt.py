@@ -75,6 +75,8 @@ class HardlinkedEnvironmentError(OSError):
 
 
 def refuse(reason: str, category: str = "other") -> OSError:
+    if category == "other":
+        return OSError("Windows source refused: " + reason)
     return StartupRefusal("Windows source refused: " + reason, category)
 
 

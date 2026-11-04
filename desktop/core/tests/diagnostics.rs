@@ -56,7 +56,7 @@ fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     let tail = OutputTail::new(PathBuf::from("/install/app"), data.clone());
     log.failure(&io::Error::other("secret /private/home"), Some(1), &tail)
         .unwrap();
-    let path = data.join(".runtime/desktop-session.log");
+    let path = data.join(".runtime").join("desktop-session.log");
     let text = fs::read_to_string(&path).unwrap();
     assert!(text.contains("Stage: Payload") && text.contains("Backend exit: Some(1)"));
     assert!(!text.contains("secret") && !text.contains("/private"));

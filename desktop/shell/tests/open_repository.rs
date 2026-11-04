@@ -34,8 +34,10 @@ struct Session {
 }
 
 fn fixture(app: &Path, operation: &str, root: &Path) {
-    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixture.py");
-    let mut process = Command::new(app.join("python/python.exe"))
+    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixture.py");
+    let mut process = Command::new(app.join("python").join("python.exe"))
         .args([script.as_os_str(), operation.as_ref(), root.as_os_str()])
         .stdin(Stdio::null())
         .spawn()
@@ -118,16 +120,16 @@ fn provenance(session: &Session, source: &SelectedSource, name: &str) {
         expected
     );
     assert_eq!(
-        fs::read_to_string(session.runtime.join("workspace/fixture_value.py")).unwrap(),
+        fs::read_to_string(session.runtime.join("workspace").join("fixture_value.py")).unwrap(),
         expected
     );
 }
 
 fn prepared_fixtures() -> (PathBuf, PathBuf, PathBuf, SelectedSource, SelectedSource) {
     let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap());
-    let app = local.join("Programs/Oversight/app");
+    let app = local.join("Programs").join("Oversight").join("app");
     let data = local.join("Oversight");
-    assert!(app.join("python/python.exe").is_file());
+    assert!(app.join("python").join("python.exe").is_file());
     let root = local.join(format!("or-{}", std::process::id()));
     assert!(
         !root.starts_with(
@@ -157,7 +159,7 @@ fn installed_open_repository() {
     provenance(&current, &one, "one");
     switch(&app, &data, None, &mut current, &mut state, &quit);
     assert!(current.ready);
-    assert!(current.runtime.join("workspace/shop").is_dir());
+    assert!(current.runtime.join("workspace").join("shop").is_dir());
     switch(
         &app,
         &data,

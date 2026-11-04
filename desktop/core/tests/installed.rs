@@ -4,6 +4,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use oversight_desktop_core::installed::{ASSETS, app_directory, initialize_data};
 use oversight_desktop_core::launch::Launch;
+#[cfg(windows)]
+use oversight_desktop_core::launch::native_drive_path;
 
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 struct Layout(PathBuf);
@@ -45,7 +47,23 @@ fn installed_arguments_and_paths_are_separate_and_preserve_unicode() {
     initialize_data(&layout.app(), &layout.data()).unwrap();
     let launch = Launch::installed(&layout.app(), &layout.data(), true).unwrap();
     assert_eq!(launch.cwd, layout.app());
-    assert_eq!(launch.program, layout.app().join("python/python.exe"));
+    assert_eq!(
+        launch.program,
+        layout.app().join("python").join("python.exe")
+    );
+    #[cfg(windows)]
+    {
+        assert!(launch.cwd.to_str().is_some_and(native_drive_path));
+        assert!(launch.program.to_str().is_some_and(native_drive_path));
+        assert!(
+            launch
+                .args
+                .last()
+                .unwrap()
+                .to_str()
+                .is_some_and(native_drive_path)
+        );
+    }
     assert_eq!(
         launch.args,
         [
@@ -53,7 +71,11 @@ fn installed_arguments_and_paths_are_separate_and_preserve_unicode() {
             "oversight".into(),
             "serve".into(),
             "--demo-python".into(),
-            layout.app().join("demo-python/python.exe").into_os_string()
+            layout
+                .app()
+                .join("demo-python")
+                .join("python.exe")
+                .into_os_string()
         ]
     );
     for (name, path) in [
@@ -107,9 +129,9 @@ fn links_in_payload_or_existing_configuration_are_refused() {
     fs::remove_file(&config).unwrap();
     symlink(layout.app().join("config.env.example"), &config).unwrap();
     assert!(initialize_data(&layout.app(), &layout.data()).is_err());
-    let python = layout.app().join("python/python.exe");
+    let python = layout.app().join("python").join("python.exe");
     fs::remove_file(&python).unwrap();
-    symlink(layout.app().join("demo-python/python.exe"), &python).unwrap();
+    symlink(layout.app().join("demo-python").join("python.exe"), &python).unwrap();
     assert!(Launch::installed(&layout.app(), &layout.data(), false).is_err());
 }
 

@@ -94,7 +94,7 @@ impl Launch {
         if data.starts_with(app) || app.starts_with(data) {
             return Err(invalid("data and payload must be separate directories"));
         }
-        let mut launch = Self::for_program(app, app.join("python/python.exe"), smoke, "");
+        let mut launch = Self::for_program(app, app.join("python").join("python.exe"), smoke, "");
         launch.env.extend([
             ("OVERSIGHT_APP_ROOT", display(app)?),
             ("OVERSIGHT_ENV_FILE", display(&data.join(".env"))?),
@@ -117,7 +117,7 @@ impl Launch {
         ]);
         launch.args.extend([
             "--demo-python".into(),
-            app.join("demo-python/python.exe").into_os_string(),
+            app.join("demo-python").join("python.exe").into_os_string(),
         ]);
         Ok(launch)
     }
