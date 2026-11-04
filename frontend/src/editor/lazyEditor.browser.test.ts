@@ -1,7 +1,7 @@
 import { launchBrowser } from "../browserLaunch.support";
 import { fileURLToPath } from "node:url";
 import { expect as browserExpect } from "@playwright/test";
-import type { Browser } from "@playwright/test";
+import type { Browser, Page } from "@playwright/test";
 import { createServer } from "vite";
 import type { ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -40,11 +40,35 @@ beforeAll(async () => {
   await server.listen();
   url = server.resolvedUrls?.local[0] ?? "";
   browser = await launchBrowser();
-}, 60_000);
+  // Pay Vite's cold transforms and dependency pass before the diagnostic assertions.
+  const page = await browser.newPage();
+  try {
+    await routeFixture(page);
+    await page.goto(url, { waitUntil: "commit", timeout: 60_000 });
+    await page.waitForFunction(() => Boolean(document.querySelector('[role="alert"]')), undefined, {
+      timeout: 60_000,
+    });
+  } finally {
+    await page.close();
+  }
+}, 150_000);
 afterAll(async () => {
   await browser.close();
   await server.close();
 });
+
+async function routeFixture(page: Page) {
+  await page.route("**/src/editor/loader.ts", (route) =>
+    route.fulfill({
+      contentType: "application/javascript",
+      body: "export const loadedEditor = () => ({}); export const loadEditor = async () => ({});",
+    }),
+  );
+  await page.route(
+    (target) => target.pathname === "/",
+    (route) => route.fulfill({ contentType: "text/html", body: html }),
+  );
+}
 
 it.each([false, true])(
   "reports the error and component stack once (file panel: %s)",
@@ -53,16 +77,7 @@ it.each([false, true])(
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     try {
-      await page.route("**/src/editor/loader.ts", (route) =>
-        route.fulfill({
-          contentType: "application/javascript",
-          body: "export const loadedEditor = () => ({}); export const loadEditor = async () => ({});",
-        }),
-      );
-      await page.route(
-        (target) => target.pathname === "/",
-        (route) => route.fulfill({ contentType: "text/html", body: html }),
-      );
+      await routeFixture(page);
       await page.goto(`${url}${file ? "?file" : ""}`);
       await browserExpect(page.getByRole("alert")).toHaveText(
         "The editor could not load. Reload the page to try again.",
