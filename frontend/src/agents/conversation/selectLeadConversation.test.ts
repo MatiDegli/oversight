@@ -404,4 +404,10 @@ it("carries fake-provider provenance into the lead header without changing its i
   );
   expect(html).toContain("Scripted demo agents");
   expect(html).toContain("Entered text does not determine scripted actions.");
+  const modelLine = html.indexOf(`Lead ${after.header.letter} · ${after.header.modelLabel}`);
+  expect(modelLine).toBeGreaterThan(-1);
+  expect(html.indexOf('class="scripted-agent-provenance"')).toBeGreaterThan(modelLine);
+  expect(html.indexOf("Entered text does not determine scripted actions.")).toBeGreaterThan(
+    html.indexOf("Scripted demo agents"),
+  );
 });

@@ -33,11 +33,11 @@ export function LeadHeaderView({ header }: { header: LeadHeader }) {
           {leadLabels[header.state]}
         </span>
       </div>
-      {header.scripted && <ScriptedAgentLabel explain />}
       <p className="mt-2 text-[14px] text-muted wrap-anywhere">
         Lead {header.letter} · {header.modelLabel}
         {header.reasoning !== null ? ` · reasoning ${header.reasoning}` : ""}
       </p>
+      {header.scripted && <ScriptedAgentLabel explain />}
       <div className="lead-header-facts mt-[10px] flex flex-wrap gap-2 text-[14px] text-muted">
         <span>
           Turn {leadNumber(header.turn)}

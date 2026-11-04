@@ -277,10 +277,7 @@ button.chat-agent-row:hover {
   }
 }
 
-.chat-agent-model-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px 8px;
-  min-width: 0;
+.chat-agent-row:not(.chat-lead-row) .scripted-agent-label {
+  display: block;
+  margin-top: 6px;
 }

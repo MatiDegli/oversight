@@ -37,6 +37,24 @@ it.each(matrix)(
       const header = session.page.locator(".conversation-header");
       await check(header.getByText(label, { exact: true })).toBeVisible();
       await check(header.getByText(explanation, { exact: true })).toBeVisible();
+      if (scene === "coder") {
+        const model = await row.locator(".chat-agent-model").boundingBox();
+        const provenance = await row.getByText(label, { exact: true }).boundingBox();
+        if (!model || !provenance) throw new Error("Missing coder model or provenance");
+        expect(provenance.y - (model.y + model.height)).toBe(6);
+      } else {
+        const model = await header
+          .getByText("Lead B · Scripted fake model", { exact: true })
+          .boundingBox();
+        const provenance = await header.getByText(label, { exact: true }).boundingBox();
+        if (!model || !provenance) throw new Error("Missing lead model or provenance");
+        expect(provenance.y).toBeGreaterThanOrEqual(model.y + model.height);
+      }
+      expect(
+        await header
+          .locator(".scripted-agent-provenance")
+          .evaluate((node) => getComputedStyle(node).gap),
+      ).toBe("6px");
       expect(session.pageErrors).toEqual([]);
     } finally {
       await session.close();

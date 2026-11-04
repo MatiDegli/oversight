@@ -182,6 +182,9 @@ it("retains scripted member labels when a team is folded", () => {
     expect(html).toMatch(/class="chat-team-members"[^>]*hidden=""/);
     expect(html).toContain('aria-expanded="false"');
     expect(html).toMatch(/hidden=""[\s\S]*Scripted demo agents/);
+    expect(html).toMatch(
+      /class="chat-agent-model">[^<]*<\/span><span class="scripted-agent-label">Scripted demo agents<\/span>/,
+    );
     expect(html).toContain('data-agent-origin="a1" data-selected="true"');
     expect(html).toContain("A·1");
   } finally {

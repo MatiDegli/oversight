@@ -94,3 +94,5 @@ One line per day, in Argentina time (ART).
   Reviewed self-profile front (2026-11-03): added filtered pinned input and frozen launch authority,
   nonexecuting admission scaffold and bounded console/live-index startup carrier; consumer rendering,
   builds, boundary/gateway/nesting and native launch remain unavailable. No model API calls.
+
+- 2026-11-04 — Hardened scripted Chat captures to require the selected thread, Proposed change card and composer; separated coder provenance from the model line, aligned lead header reading order and restored the design spacing rhythm, with regression and responsive browser evidence.

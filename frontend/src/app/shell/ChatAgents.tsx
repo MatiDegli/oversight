@@ -85,10 +85,8 @@ function MemberRow({
           </span>
           <span className="chat-agent-pill">{row.label}</span>
         </span>
-        <span className="chat-agent-model-line">
-          <span className="chat-agent-model">{row.model}</span>
-          {scripted && <ScriptedAgentLabel />}
-        </span>
+        <span className="chat-agent-model">{row.model}</span>
+        {scripted && <ScriptedAgentLabel />}
         <span className="chat-agent-task">{row.task}</span>
         <span className="chat-agent-activity" title={row.activity}>
           {row.activity}
