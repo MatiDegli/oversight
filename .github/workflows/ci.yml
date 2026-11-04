@@ -27,6 +27,8 @@ jobs:
     # The preview boundary refuses Ubuntu 26.04's hardlinked coreutils.
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      UV_PYTHON_PREFERENCE: only-managed
     permissions:
       contents: read
     steps:

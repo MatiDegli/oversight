@@ -100,7 +100,9 @@ def assert_verify_policy(verify: str, ci: str) -> None:
     parsed_steps: dict[str, list[dict[str, str]]] = {}
     for job_id, timeout in (("check", "20"), ("secrets", "10")):
         job = mapping(jobs[job_id])
-        assert set(job) == {"name", "runs-on", "timeout-minutes", "permissions", "steps"}
+        assert set(job) == {"name", "runs-on", "timeout-minutes", "permissions", "steps"} | (
+            {"env"} if job_id == "check" else set()
+        )
         assert job["name"] == job_id
         assert job["runs-on"] == ("ubuntu-24.04" if job_id == "check" else "ubuntu-latest")
         assert job["timeout-minutes"] == timeout
@@ -110,6 +112,9 @@ def assert_verify_policy(verify: str, ci: str) -> None:
         assert job_steps[-1] == TRACKED
         assert mapping(job_steps[0]["with"])["persist-credentials"] == "false"
         parsed_steps[job_id] = job_steps
+
+    for job in (mapping(jobs["check"]), mapping(ci_jobs["check"])):
+        assert mapping(job["env"]) == {"UV_PYTHON_PREFERENCE": "only-managed"}
 
     check = parsed_steps["check"]
     ci_check = steps(mapping(ci_jobs["check"])["steps"])
@@ -164,6 +169,8 @@ def test_verify_has_only_the_manual_backend_jobs_and_required_gates() -> None:
         ("    name: secrets", "    name: gitleaks"),
         ("    runs-on: ubuntu-latest", "    runs-on: windows-latest"),
         ("    timeout-minutes: 20", "    timeout-minutes: 21"),
+        ("    env:\n      UV_PYTHON_PREFERENCE: only-managed\n", ""),
+        ("UV_PYTHON_PREFERENCE: only-managed", "UV_PYTHON_PREFERENCE: prefer-managed"),
         ("    timeout-minutes: 10", "    timeout-minutes: 11"),
         ("persist-credentials: false", "persist-credentials: true"),
         ("fetch-depth: 0", "fetch-depth: 1"),
@@ -214,6 +221,17 @@ def test_tracked_files_is_required_in_each_job(job: str) -> None:
     end = end if end != -1 else len(verify)
     with pytest.raises(AssertionError):
         assert_verify_policy(verify[:tracked] + verify[end:], (WORKFLOWS / "ci.yml").read_text())
+
+
+@pytest.mark.parametrize("filename", ["ci.yml", "verify.yml"])
+@pytest.mark.parametrize("preference", ["prefer-managed", "only-system"])
+def test_check_jobs_require_managed_python(filename: str, preference: str) -> None:
+    workflows = {name: (WORKFLOWS / name).read_text() for name in ("ci.yml", "verify.yml")}
+    workflows[filename] = workflows[filename].replace(
+        "UV_PYTHON_PREFERENCE: only-managed", f"UV_PYTHON_PREFERENCE: {preference}", 1
+    )
+    with pytest.raises(AssertionError):
+        assert_verify_policy(workflows["verify.yml"], workflows["ci.yml"])
 
 
 def test_ci_rejects_a_restored_pull_request_trigger() -> None:
