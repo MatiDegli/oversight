@@ -29,7 +29,7 @@ from oversight.workspace._platform import (
     stream_names,
     verify_sentinel,
 )
-from oversight.workspace.errors import InvalidPath
+from oversight.workspace.errors import InvalidPath, StartupRefusal
 from oversight.workspace.files import (
     CACHE_DIRS,
     nt_plain_parents,
@@ -74,19 +74,22 @@ class HardlinkedEnvironmentError(OSError):
     """The original environment contains a file with more than one hard link."""
 
 
-def refuse(reason: str) -> OSError:
-    return OSError("Windows source refused: " + reason)
+def refuse(reason: str, category: str = "other") -> OSError:
+    return StartupRefusal("Windows source refused: " + reason, category)
 
 
 def absolute_drive(raw: str) -> str:
     drive, tail = ntpath.splitdrive(raw)
     if not re.fullmatch(r"[A-Za-z]:", drive) or not tail.startswith(("/", "\\")):
-        raise refuse("an absolute drive path is required. " + REMEDY)
+        raise refuse("an absolute drive path is required. " + REMEDY, "unsupported-location")
     relative = tail[1:].replace("\\", "/")
     if relative:
-        split_relative(relative, nt=True)
+        try:
+            split_relative(relative, nt=True)
+        except InvalidPath as error:
+            raise StartupRefusal(str(error), "unsupported-location") from error
     if any(ord(c) < 32 or c in '<>"|?*' for c in raw):
-        raise refuse("unsafe placement component. " + REMEDY)
+        raise refuse("unsafe placement component. " + REMEDY, "unsupported-location")
     short_path(raw)
     return ntpath.normpath(raw)
 
@@ -102,7 +105,7 @@ def overlaps(source: str, runtime: str, *, profile: SourceProfile | None = None)
         else None
     )
     if common in {source, runtime} and source != expected:
-        raise refuse("source/runtime ancestor overlap. " + REMEDY)
+        raise refuse("source/runtime ancestor overlap. " + REMEDY, "unsupported-location")
 
 
 @dataclass(frozen=True)
@@ -129,9 +132,12 @@ def prepare_source(
     for path in (*projections(NtSource(Path(), Path(), source, runtime)), ide, venv):
         short_path(path)
     for path in (ide, runtime, source, venv):
-        preflight(path)
-        if inspect is not None or sys.platform == "win32":
-            (inspect or existing_parents)(bind(path))
+        try:
+            preflight(path)
+            if inspect is not None or sys.platform == "win32":
+                (inspect or existing_parents)(bind(path))
+        except (OSError, InvalidPath) as error:
+            raise StartupRefusal(str(error), "unsupported-location") from error
     return NtSource(bind(source), bind(runtime), source, runtime)
 
 
@@ -215,12 +221,15 @@ def selected(path: str) -> bool:
 
 
 def repository(root: Path, ancestors: tuple[Path, ...]) -> None:
-    nt_plain_parents(root / ".git")  # A gitdir file, linked worktree or junction cannot pass.
+    try:
+        nt_plain_parents(root / ".git")  # Gitdir files, linked worktrees and bare roots refuse.
+    except (OSError, InvalidPath) as error:
+        raise StartupRefusal(str(error), "not-standalone-repo") from error
     if os.path.lexists(root / ".git/commondir"):
-        raise refuse("linked worktree/common directory")
+        raise refuse("linked worktree/common directory", "not-standalone-repo")
     for parent in ancestors:
         if any(p.name.casefold() == ".git" or p.name.upper() == ".GIT" for p in parent.iterdir()):
-            raise refuse("source is nested inside another repository")
+            raise refuse("source is nested inside another repository", "not-standalone-repo")
 
 
 def nested_markers(root: Path, paths: set[str]) -> None:
@@ -366,7 +375,7 @@ MAX_TOTAL = 128 * 1024 * 1024
 
 def short_path(path: str) -> None:
     if len(path.encode("utf-16-le")) // 2 >= 240:
-        raise refuse("path reaches 240 UTF-16 units. " + REMEDY)
+        raise refuse("path reaches 240 UTF-16 units. " + REMEDY, "path-too-long")
 
 
 def projections(source: NtSource, paths: tuple[str, ...] = ()) -> tuple[str, ...]:
@@ -956,7 +965,9 @@ def guard_previous(runtime: Path, *, recover: bool = False) -> bool:
                     current != baseline[0]
                     and os.environ.get("OVERSIGHT_DISCARD_OWN_RUNTIME") != current
                 ):
-                    raise refuse(recovery(runtime, baseline, current or ""))
+                    raise refuse(
+                        recovery(runtime, baseline, current or ""), "previous-session-changed"
+                    )
                 verified_main = current
         elif journal is None:
             raise refuse("baseline workspace identity changed")

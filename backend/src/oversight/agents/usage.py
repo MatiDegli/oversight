@@ -241,6 +241,11 @@ class LedgerFile:
                     os.unlink(temp)
             raise
 
+    async def drain(self) -> None:
+        """Wait for queued and in-flight writes before releasing the server's file lock."""
+        async with self._lock:
+            pass
+
     async def load(self) -> LedgerState:
         """`read` in a thread, kept as `state`; `LedgerError` leaves `state` as `None`."""
         self.state = None

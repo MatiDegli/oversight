@@ -15,6 +15,7 @@ import sys
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from typing import Any, Literal
 
@@ -79,7 +80,7 @@ from oversight.nested_clients import NestedPolicy
 from oversight.preview_startup import ENABLE_HINT, reviewed_startup_report
 from oversight.redaction import Redactor
 from oversight.resources import hold_reason, memory_used
-from oversight.runtime_accounting import write_tick
+from oversight.runtime_accounting import durable, write_tick
 from oversight.runtime_decisions import RuntimeDecisions
 from oversight.runtime_leads import LeadCreated, LeadService, StartLead, StopLead
 from oversight.runtime_plans import PlanService
@@ -90,6 +91,7 @@ from oversight.settings import REPO_ROOT, Settings, build_lead_limits, run_time_
 from oversight.setup import missing_settings, offered_profiles
 from oversight.slots import PROFILES as PROFILES
 from oversight.slots import SlotDefault, resolve_slots
+from oversight.startup_refusals import startup_refusals
 from oversight.workspace import (
     OPEN_NOTICE,
     OVERSIGHT_SELF,
@@ -101,12 +103,15 @@ from oversight.workspace import (
     PreviewProfile,
     Workspace,
     WorkspaceError,
+    acquire_lock,
     authorize_reviewed_app,
     configure_suite,
     list_tree,
     load_preview_app,
+    offload,
     outside_profile,
     preflight_placement,
+    release_lock,
     select_source,
     self_inventory,
     valid_agent_id,
@@ -335,7 +340,8 @@ class LiveRun:
                 for slot, profile in self._slot_profiles.items()
             ),
         )
-        self.ledger = LedgerFile(settings.runtime_dir / "ledger.json")
+        self._ledger_lock_fd: int | None = None
+        self.ledger = LedgerFile(settings.ledger_root / "ledger.json")
         # Difference-decision composition: F2 calls explicitly; owns only Baseten decision spend.
         self.difference_decisions = RuntimeDecisions(self)
         self._usage = UsageLedger(0.0)
@@ -513,7 +519,13 @@ class LiveRun:
             self.preview_startup_serialized = serialized
             self.previews.startup_report = serialized
 
+    def _acquire_ledger(self) -> None:
+        directory = self._settings.ledger_root
+        directory.mkdir(parents=True, exist_ok=True)
+        self._ledger_lock_fd = acquire_lock(directory / "ledger.lock")
+
     async def startup(self) -> None:
+        await offload(self._acquire_ledger)
         settings = self._settings
         lead = self._lead_limits
         _log.warning(
@@ -664,6 +676,7 @@ class LiveRun:
             self._client_factory.aclose,
             *([self._lead_factory.aclose] if self._lead_factory is not None else []),
             self._check_main,
+            self._drain_ledgers,
             self.store.close,
         )
         for step in steps:
@@ -672,9 +685,17 @@ class LiveRun:
             except BaseException as error:
                 _log.error("shutdown: %s failed: %s", step.__name__, _describe(error))
                 failure = failure or error
+        # Every task that can write either ledger has drained before releasing this lock.
+        if self._ledger_lock_fd is not None:
+            release_lock(self._ledger_lock_fd)
+            self._ledger_lock_fd = None
         self.workspace.release_runtime()
         if failure is not None:
             raise failure
+
+    async def _drain_ledgers(self) -> None:
+        await durable(self.ledger.drain())
+        await durable(self.difference_decisions.accounting.ledger.drain())
 
     def facts_ready(
         self,
@@ -872,7 +893,7 @@ class LiveRun:
         await self._finish(
             self._report(
                 "server",
-                f"The ledger (.runtime/ledger.json) could not record a model call: "
+                f"The ledger ({self.ledger.path}) could not record a model call: "
                 f"{_describe(error)}. This run is stopped; {SETTLE} ({SETTLE_HOW}).",
                 agent_id=tick.agent_id,
                 change_id=agent.change_id if agent is not None else None,
@@ -941,7 +962,7 @@ class LiveRun:
             return f"a model call could not be recorded in the ledger: {SETTLE} ({SETTLE_HOW})"
         state = self.ledger.state
         if state is None:
-            return "the ledger (.runtime/ledger.json) cannot be read or written; settle it"
+            return f"the ledger ({self.ledger.path}) cannot be read or written; settle it"
         if state.unknown:
             return (
                 f"{len(state.unknown)} model calls of unknown cost are in the ledger; check "
@@ -1383,30 +1404,31 @@ def create_app(
     profile and slot; tests pass one, and without it each provider gets its own endpoint and key
     and the fake model its slot's script. `reviewer` supplies the separate review call transport;
     PR3a does not install a production transport before PR3b accounting is available."""
-    settings = settings or Settings.load()
-    selection = select_source(settings.workspace_source) if replay is None else None
-    if not isinstance(selection, OwnSource) and sys.platform == "win32":
-        preflight_placement(REPO_ROOT)
-        preflight_placement(settings.runtime_dir)
-    app = (
-        _live_app(
-            settings,
-            client_factory,
-            reviewer,
-            tree=tree,
-            policy=policy,
-            lead_factory=lead_factory,
-            preview_factory=preview_factory,
+    with startup_refusals():
+        settings = settings or Settings.load()
+        selection = select_source(settings.workspace_source) if replay is None else None
+        if not isinstance(selection, OwnSource) and sys.platform == "win32":
+            preflight_placement(REPO_ROOT)
+            preflight_placement(settings.runtime_dir)
+        app = (
+            _live_app(
+                settings,
+                client_factory,
+                reviewer,
+                tree=tree,
+                policy=policy,
+                lead_factory=lead_factory,
+                preview_factory=preview_factory,
+            )
+            if replay is None
+            else _replay_app(settings, replay)
         )
-        if replay is None
-        else _replay_app(settings, replay)
-    )
-    # Last added runs first: guard -> bounded body -> routing (live and replay).
-    app.add_middleware(BodyLimit)
-    app.add_middleware(ApiGuard, policy=AuthorityPolicy(settings.port, settings.vite_port))
-    app.state.settings = settings
-    install_error_handlers(app)
-    return app
+        # Last added runs first: guard -> bounded body -> routing (live and replay).
+        app.add_middleware(BodyLimit)
+        app.add_middleware(ApiGuard, policy=AuthorityPolicy(settings.port, settings.vite_port))
+        app.state.settings = settings
+        install_error_handlers(app)
+        return app
 
 
 def _live_app(
@@ -1432,7 +1454,8 @@ def _live_app(
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncGenerator[None]:
         try:
-            await live.startup()
+            with startup_refusals():
+                await live.startup()
             yield
         finally:
             await live.shutdown()
@@ -1461,7 +1484,7 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
     """`python -m oversight ledger [settle --spent-usd X]`: the ledger file, or, with `settle_usd`,
     set `spent_usd` to Meta's console total and clear `unknown`. Settling takes the runtime lock,
     so it refuses while a server runs (`WorkspaceBusy`)."""
-    ledger = LedgerFile(settings.runtime_dir / "ledger.json")
+    ledger = LedgerFile(settings.ledger_root / "ledger.json")
     if settle_usd is None:
         try:
             return bounded_text(ledger.path).rstrip()
@@ -1473,9 +1496,19 @@ def ledger_command(settings: Settings, settle_usd: float | None) -> str:
 
     async def settle() -> None:
         await workspace.acquire_runtime()
+        ledger_fd: int | None = None
+
+        def lock_ledger() -> None:
+            nonlocal ledger_fd
+            settings.ledger_root.mkdir(parents=True, exist_ok=True)
+            ledger_fd = acquire_lock(settings.ledger_root / "ledger.lock")
+
         try:
-            await asyncio.to_thread(ledger.write, LedgerState(settle_usd, ()))
+            await offload(lock_ledger)
+            await offload(partial(ledger.write, LedgerState(settle_usd, ())))
         finally:
+            if ledger_fd is not None:
+                release_lock(ledger_fd)
             workspace.release_runtime()
 
     asyncio.run(settle())

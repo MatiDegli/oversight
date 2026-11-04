@@ -84,6 +84,8 @@ class Settings:
     """Optional development origin. Unset on backend-only/demo runs. OVERSIGHT_VITE_PORT."""
     runtime_dir: Path = REPO_ROOT / ".runtime"
     """Run-time state, gitignored: `runs/{run_id}.sqlite`, `replays/{run_id}.sqlite`, and so on."""
+    ledger_dir: Path | None = None
+    """OVERSIGHT_LEDGER_DIR: shared spend state; defaults to this run's runtime directory."""
     workspace_source: str = ""
     """OVERSIGHT_WORKSPACE_SOURCE: empty demo, pinned profile, or a native Windows drive path.
     Own repositories require validated preparation and staged disposable COPY startup."""
@@ -194,6 +196,10 @@ class Settings:
     """The built frontend the live app serves, or `None` for none. No variable: `load` sets
     frontend/dist, and a test that builds `Settings` itself gets no UI unless it passes one."""
 
+    @property
+    def ledger_root(self) -> Path:
+        return self.runtime_dir if self.ledger_dir is None else self.ledger_dir
+
     def __post_init__(self) -> None:
         validate_ports(self.port, self.vite_port)
         if self.preview_app is not None and self.workspace_source != "oversight-self":
@@ -262,6 +268,9 @@ class Settings:
             port=port,
             vite_port=vite_port,
             runtime_dir=Path(merged.get("OVERSIGHT_RUNTIME_DIR", cls.runtime_dir)),
+            ledger_dir=Path(merged["OVERSIGHT_LEDGER_DIR"])
+            if merged.get("OVERSIGHT_LEDGER_DIR")
+            else None,
             workspace_source=merged.get("OVERSIGHT_WORKSPACE_SOURCE", ""),
             # Joining an absolute path onto REPO_ROOT gives that path, so only a relative one moves.
             layout=REPO_ROOT / (merged.get("OVERSIGHT_LAYOUT") or cls.layout),

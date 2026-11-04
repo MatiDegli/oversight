@@ -156,7 +156,7 @@ class BasetenDecisionAccounting:
 
     def __init__(self, live: LiveRun) -> None:
         self.live = live
-        self.ledger = LedgerFile(live._settings.runtime_dir / "baseten-decisions-ledger.json")
+        self.ledger = LedgerFile(live._settings.ledger_root / "baseten-decisions-ledger.json")
         self._recovery = self.ledger.path.with_suffix(".unreliable")
         self._loaded = False
         self._lost = False

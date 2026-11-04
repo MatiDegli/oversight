@@ -27,3 +27,11 @@ class WorkspaceBusy(WorkspaceError):
 
 class LockOrderError(WorkspaceError):
     """A lock was taken out of order, or git ran without the lock of its tree."""
+
+
+class StartupRefusal(OSError):
+    """An existing startup refusal with a fixed native recovery category."""
+
+    def __init__(self, message: str, category: str = "other") -> None:
+        super().__init__(message)
+        self.refusal_category = category

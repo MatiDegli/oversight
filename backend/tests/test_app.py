@@ -284,6 +284,9 @@ def test_windows_ledger_settlement_does_not_require_placement_or_git(tmp_path, m
     root = tmp_path / ".runtime"
     root.mkdir()
     fd = acquire_lock(root / "server.lock")
+    ledger_fd = acquire_lock(root / "ledger.lock")
+    monkeypatch.setattr(composition, "acquire_lock", lambda path: ledger_fd)
+    monkeypatch.setattr(composition, "release_lock", os.close)
     monkeypatch.setattr(core, "acquire_lock", lambda path: fd)
     release = Mock(side_effect=os.close)
     lifetime, probe = Mock(), AsyncMock()

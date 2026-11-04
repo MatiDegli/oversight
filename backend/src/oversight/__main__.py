@@ -10,10 +10,19 @@ import uvicorn
 
 from oversight.app import ReplayConfig, create_app, ledger_command, pytest_pin
 from oversight.settings import REPO_ROOT, Settings
+from oversight.startup_refusals import startup_refusals
 from oversight.workspace import print_isolation_probe
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["serve"]:
+        with startup_refusals():
+            _main()
+    else:
+        _main()
+
+
+def _main() -> None:
     parser = argparse.ArgumentParser(prog="oversight")
     commands = parser.add_subparsers(dest="command", required=True)
     serve = commands.add_parser("serve", help="serve the API")
@@ -53,7 +62,8 @@ def main() -> None:
             parser.error("--demo-python cannot be combined with --reload")
         if not args.demo_python.is_absolute() or not args.demo_python.is_file():
             parser.error("--demo-python must name an existing absolute interpreter")
-    settings = Settings.load()
+    with startup_refusals():
+        settings = Settings.load()
 
     if args.command == "isolation-probe":
         print_isolation_probe(args.runtime, REPO_ROOT / "demo-repo", pytest_pin=pytest_pin())

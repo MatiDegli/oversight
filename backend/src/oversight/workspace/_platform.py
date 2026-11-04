@@ -14,7 +14,7 @@ from collections.abc import Callable, Generator, Sequence
 from pathlib import Path
 from typing import Protocol, cast
 
-from oversight.workspace.errors import WorkspaceBusy
+from oversight.workspace.errors import StartupRefusal, WorkspaceBusy
 
 if sys.platform != "win32":
     import fcntl
@@ -482,8 +482,9 @@ def preflight_placement(
         or any(":" in p or "~" in p or p.endswith((".", " ")) for p in parts if p)
         or any(any(ord(c) < 32 or c in '<>"|?*' for c in p) for p in parts)
     ):
-        raise OSError(
-            "Windows placement requires a short absolute local path without aliases or ADS"
+        raise StartupRefusal(
+            "Windows placement requires a short absolute local path without aliases or ADS",
+            "unsupported-location",
         )
     canonical = ntpath.normpath(raw)
     known = synced_roots() if synced is None else synced
@@ -494,15 +495,19 @@ def preflight_placement(
         for root in known
         if ntpath.splitdrive(root)[0].casefold() == drive.casefold()
     ):
-        raise OSError("Windows placement must be in nonsynced folders, outside cloud sync roots")
+        raise StartupRefusal(
+            "Windows placement must be in nonsynced folders, outside cloud sync roots",
+            "unsupported-location",
+        )
     kind, filesystem, device = query(drive)
     if (
         kind != 3
         or filesystem.upper() != "NTFS"
         or re.fullmatch(r"\\Device\\HarddiskVolume[0-9]+", device) is None
     ):
-        raise OSError(
-            "Windows placement requires a fixed local NTFS drive, without SUBST or mappings"
+        raise StartupRefusal(
+            "Windows placement requires a fixed local NTFS drive, without SUBST or mappings",
+            "unsupported-location",
         )
     current = drive + "\\"
     for part in ["", *(p for p in parts if p)]:
@@ -514,9 +519,14 @@ def preflight_placement(
         if is_link_like(info, nt=True) or getattr(info, "st_file_attributes", 0) & (
             0x1000 | 0x40000 | 0x400000
         ):
-            raise OSError("Windows placement has a reparse, offline or recall ancestor")
+            raise StartupRefusal(
+                "Windows placement has a reparse, offline or recall ancestor",
+                "unsupported-location",
+            )
         if not stat.S_ISDIR(info.st_mode):
-            raise OSError("Windows placement ancestors must be plain directories")
+            raise StartupRefusal(
+                "Windows placement ancestors must be plain directories", "unsupported-location"
+            )
     profile = userprofile if userprofile is not None else os.environ.get("USERPROFILE", "")
     if (
         not profile
