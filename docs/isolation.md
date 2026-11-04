@@ -261,10 +261,22 @@ allows trusted-demo eligibility. No inferred enablement or unisolated fallback e
 | `OVERSIGHT_PREVIEW_PORTS` | `()` | Comma-separated integers; empty/unset gives `()` |
 | `OVERSIGHT_PREVIEW_ORIGINS` | `()` | Comma-separated strings without trimming; empty/unset gives `()` |
 | `OVERSIGHT_PREVIEW_HEARTBEAT_S` | `10` | Float seconds; watcher interval |
-| `OVERSIGHT_PREVIEW_LEASE_S` | `30` | Float seconds |
+| `OVERSIGHT_PREVIEW_LEASE_S` | `600` | Float seconds |
 | `OVERSIGHT_PREVIEW_LIFETIME_S` | `900` | Float seconds |
-| `OVERSIGHT_PREVIEW_READINESS_S` | `10` | Float seconds |
+| `OVERSIGHT_PREVIEW_READINESS_S` | `30` | Float seconds |
 | `OVERSIGHT_PREVIEW_MEMORY_LIMIT_BYTES` | `536870912` | Integer bytes; per-process `RLIMIT_AS` |
+
+Reviewed configuration also freezes `OVERSIGHT_PREVIEW_BUILD_MEMORY_BYTES=2147483648`,
+`OVERSIGHT_PREVIEW_BUILD_CORES=2`, `OVERSIGHT_PREVIEW_NESTED_MEMORY_BYTES=1073741824`,
+`OVERSIGHT_PREVIEW_NESTED_CORES=1`, `OVERSIGHT_PREVIEW_NODE_HEAP_MIB=1536`,
+`OVERSIGHT_PREVIEW_OUTPUT_FILE_BYTES=16777216`, `OVERSIGHT_PREVIEW_OUTPUT_TOTAL_BYTES=268435456`,
+`OVERSIGHT_PREVIEW_OUTPUT_FILES=10000`, `OVERSIGHT_PREVIEW_CACHE_BYTES=2147483648`,
+`OVERSIGHT_PREVIEW_DIAGNOSTICS_BYTES=1048576` and `OVERSIGHT_PREVIEW_QUEUE_CAP=8`.
+These are positive person-owned integers. There is one owner and at most one pending startup/build;
+competing starts refuse before queuing, so the queue cannot exceed its configured cap. Waiting for
+admission locks and static preparation have separate timings. Execution gets the frozen sum of build
+timeouts plus readiness, starting at dequeue. Absolute lifetime starts at reservation and includes
+waiting. The ten-minute lease is owner-loss grace; authenticated Close still drains immediately.
 
 Whitespace, mixed case and numbers are invalid enable values. Malformed numeric settings raise.
 The adapter must be the exact absolute `backend/src/oversight/preview_adapter.py`, without symlink
@@ -461,6 +473,20 @@ Acceptance and missing-proof inventory follows in the hand-back. Claims are tied
 [isolated browser proof](../frontend/src/app/preview/PreviewAcceptance.browser.test.ts).
 A skip, injected namespace or capture implementation is never collected trust evidence.
 
+These links include historical qualification, not a current passing acceptance claim. The
+real-route cases in `backend/tests/workspace/test_preview_acceptance.py` and the three-start
+driver send a `127.0.0.1` parent; the shop admission refusal currently blocks them. The driver
+also requires that backend name in `tools/preview_scenario.py`. Restoring these HTTP/browser
+harnesses requires the unowned shop authority adapter and the frontend transport integration;
+they remain explicit acceptance prerequisites. Direct manager launches without a request parent
+retain the person's configured `profile.origins`, including `http://127.0.0.1:8710`, while the
+default localhost parent still selects the frame URL. This preserves the direct socket/death
+and mutation checks' required origins without certifying the blocked route or three-start
+scenarios. The direct kernel fixtures in `backend/tests/workspace/preview_acceptance_support.py`
+and `backend/tests/changes/test_preview_acceptance.py` also omit the required `enabled=True`
+profile opt-in, as does `tools/preview_acceptance_checks.py`. Updating those fixtures is a
+separate prerequisite before claiming current kernel acceptance.
+
 The November 3 clone acceptance collected 12 Linux Chromium before/after frames and six
 comparisons under `.shots/preview-acceptance/`, with UTC/viewport/theme/error/overflow metadata.
 It did not collect WSL-to-Windows browser proof: the bounded Windows attempt exposed no CDP
@@ -504,3 +530,64 @@ it is not a preview finding. Windows browser proof remains missing; C's earlier 
 The new browser cases cover rapid admission, a refused request, offline quarantine and mixed-script
 observer text at 200% size. Viewports and forced colors are Chromium emulation, not a physical
 touch/Windows test. There is no custom drag gesture on this surface. Trust remains withheld.
+
+### Reviewed execution qualification
+
+The private reviewed supervisor translates frozen, verified command and source authority separately
+from demo trust. Static inventory verification and fresh import copies run outside its event loop;
+all executable build/typecheck/start steps run inside fresh roots. The adapter verifies effective
+manifests, canonical exclusions and writable overlap, selects the fixed system manifest, and mounts
+prepared tools and dependency directories read-only. Only T and child state are writable host inputs;
+private tmp/proc/dev and detached old root prevent host traversal. U0 owns N0; U1 uses UID/GID 1000,
+separate PID/mount namespaces, locked mounts, no capabilities and inherited syscall filtering.
+Authenticated births and namespace witnesses are persisted before the sole execution acknowledgement.
+An ambiguous entry or failed cleanup retains ownership and quarantine rather than using another
+command's death as evidence. The leaf's root-directory cleanup failure remains a refusal.
+
+The connector borrows live authenticated U0/N0 pidfds, enters U0 then N0 outside U1/PID/mount,
+and returns only a connected private API socket. No host listener or control channel reaches edited
+code. There is no unproved connector fallback. Verified publication stays outside T and pins copied
+regular files. The supervisor's HTTP gateway keeps fixed bounded routes, exact Host/Origin,
+replacement CSP, forwarding-header stripping, redirect restrictions and WebSocket refusal. Fresh
+health, index/assets/workers, proxied API and this run's SSE precede its readiness nonce. A duplicate
+public listener retains the reservation until verified descendant death even if the gateway closes. A separately registered trusted listener guardian survives supervisor death, pins the authenticated
+namespace processes and releases its duplicate only after their pidfds report death. Fresh import
+copy identities are persisted too; recovery retires only matching owned copies after verified death,
+retaining quarantine on replacement or ambiguous cleanup.
+EOF, cancellation, deadlines and either service's failure drain the owned boundary.
+
+Delegated cgroup memory/CPU controls are probed and attached outside the root. Without delegation,
+**per-process limits only; aggregate usage is not enforced**. Python gets its address-space limit;
+Node gets its heap limit without a small RLIMIT_AS. Children run at lower priority with bounded CPU
+affinity, host-memory admission and sampled RSS/cache monitoring. Sampling is not an aggregate fork
+limit. Output publication enforces per-file, total-byte and file-count budgets. Build/typecheck and
+build timeout use `failed/launch_failed`; readiness expiry uses `failed/readiness_timeout`.
+Diagnostics are sanitized, bounded and separate from lifecycle events.
+
+The request's accepted Host selects one frame name: localhost parents use 127.0.0.1 frames;
+127.0.0.1 parents use localhost frames. The gateway uses that exact frame Host/browser Origin and
+only the actual parent as frame-ancestors. Production and Vite parent responses resolve frame-src
+from that same accepted request, naming only the opposite loopback host for the configured pool;
+Vite also refuses every other Host or listening-port mismatch. IPv6 and other parent names cannot
+start this preview. Custom HTML embedders retain their explicit CSP after the same Host check;
+Vite-owned HTML keeps the request-aware pool policy.
+The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents
+are refused before reservation with `not_configured`, without a listener, process or lifecycle event.
+Shop localhost parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin.
+The frontend transport's opposite-name integration remains a separately owned prerequisite.
+Waiting for admission locks is bounded by the earlier lease or absolute deadline and retains the
+corresponding expiry reason. Stop, EOF and cancellation before execute withhold acknowledgement
+and settle verified boundary death within the backend stop bound.
+
+Controlled Python backend fixtures exercise actual namespaces, connector and gateway wiring. They
+do not enable the reviewed self app, prove its scripted stories or certify final browser acceptance.
+The current self declaration still starts ordinary Settings and uses the same private/public port;
+it remains `not_configured` with “Reviewed-app preview execution is not available.” Both the explicit
+no-key application entry and a distinct-port declaration/re-pin are required before enabling it.
+The separate tests/shop filesystem residual and native Windows warning above remain unchanged.
+
+The startup disclosure names the exact sanitized `<runtime>/previews/<id>/logs/build.log`. Read it
+on the backend host. In WSL, `wslpath -w <exact-log-path>` provides the Windows UNC path for the
+person's editor; the preview cannot invoke Windows interop. The desktop code currently supplies only
+portable launch/health/lifecycle policy, with no delivered log viewer or packaged integration. The
+HTML startup carrier remains the 4,096-byte fallback; no Health contract field is added here.

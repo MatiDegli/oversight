@@ -46,6 +46,8 @@ class PreviewOwnership:
     launched: bool = False
     draining: bool = False
     restoration_refusal: bool = False
+    queue_s: float = 0.0
+    execution_deadline: float = 0.0
 
 
 class PreviewBarrier:
