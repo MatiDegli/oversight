@@ -46,6 +46,7 @@ const settings: EditableSetting[] = [
       "BASETEN_INPUT_USD_PER_M",
       "BASETEN_OUTPUT_USD_PER_M",
       "OVERSIGHT_MAX_AGENTS",
+      "OVERSIGHT_SPEND_BRAKE_PERCENT",
     ] as const
   ).map((name): EditableSetting => ({
     name,
@@ -67,11 +68,17 @@ it.each([1280, 390])(
     await page.route("**/settings", async (route) => {
       if (route.request().method() === "PUT") {
         patches.push(route.request().postDataJSON());
-        if (patches.length === 1)
+        if (patches.length === 1 || patches.length === 3)
           return route.fulfill({
             status: 422,
             json: {
-              error: { code: "invalid_request", message: "Invalid settings: META_API_KEY." },
+              error: {
+                code: "invalid_request",
+                message:
+                  patches.length === 1
+                    ? "Invalid settings: META_API_KEY."
+                    : "Invalid settings: OVERSIGHT_MAX_AGENTS.",
+              },
             },
           });
         return route.fulfill({ json: { ...view, restart_required: true } });
@@ -84,6 +91,10 @@ it.each([1280, 390])(
       const opener = page.getByRole("button", { name: "Settings", exact: true });
       const bounds = await opener.boundingBox();
       expect(bounds && bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      await check(page.getByRole("status", { name: "Review queue" })).toHaveText(
+        width < 768 ? "1" : "Decisions · 1",
+        { useInnerText: true },
+      );
       await opener.click();
       const models = page.getByRole("region", { name: "Models and keys" });
       const key = models.getByLabel("Meta API key", { exact: true });
@@ -91,10 +102,14 @@ it.each([1280, 390])(
       await check(key).toHaveValue("");
       await key.fill("synthetic-replacement");
       await models.getByRole("button", { name: "Save", exact: true }).click();
-      await check(page.getByRole("alert")).toHaveText("Invalid settings: META_API_KEY.");
+      await check(models.getByRole("alert")).toHaveText("Invalid settings: META_API_KEY.");
+      await check(models.getByRole("alert")).toBeInViewport();
       await check(key).toHaveValue("synthetic-replacement");
       await models.getByRole("button", { name: "Save", exact: true }).click();
-      await check(models.getByRole("status")).toHaveText("Saved.");
+      await check(models.getByRole("status")).toContainText("Saved.");
+      await check(
+        models.getByText("Restart the server to apply.", { exact: true }),
+      ).toBeInViewport();
       await check(key).toHaveValue("");
       expect(patches).toEqual(
         Array.from({ length: 2 }, () => ({ values: { META_API_KEY: "synthetic-replacement" } })),
@@ -103,7 +118,13 @@ it.each([1280, 390])(
       const cap = limits.getByLabel("Agent cap (agents)");
       await cap.fill("8");
       await limits.getByRole("button", { name: "Save", exact: true }).click();
-      await check(page.getByText("Restart the server to apply.", { exact: true })).toBeVisible();
+      await check(limits.getByRole("alert")).toHaveText("Invalid settings: OVERSIGHT_MAX_AGENTS.");
+      await check(limits.getByRole("alert")).toBeInViewport();
+      await check(cap).toHaveValue("8");
+      await limits.getByRole("button", { name: "Save", exact: true }).click();
+      await check(
+        limits.getByText("Restart the server to apply.", { exact: true }),
+      ).toBeInViewport();
       expect(patches[2]).toEqual({ values: { OVERSIGHT_MAX_AGENTS: "8" } });
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
       const overflow = await page

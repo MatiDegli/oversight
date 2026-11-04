@@ -18,8 +18,11 @@ interface Editor {
   pending: SettingsSection | null;
   saved: Partial<Record<SettingsSection, boolean>>;
   failure: string | null;
+  feedbackSection: SettingsSection | null;
   load: () => Promise<void>;
   edit: (name: EditableSettingName, value: string) => void;
+  clearKey: (name: EditableSettingName) => void;
+  undo: (name: EditableSettingName) => void;
   save: (section: SettingsSection) => Promise<void>;
 }
 
@@ -31,6 +34,7 @@ export function createSettingsEditor(api: SettingsApi = createCommandClient()) {
     pending: null,
     saved: {},
     failure: null,
+    feedbackSection: null,
     load: async () => {
       if (get().loading || get().view) return;
       set({ loading: true, failure: null });
@@ -47,8 +51,20 @@ export function createSettingsEditor(api: SettingsApi = createCommandClient()) {
       const next: Drafts = Object.fromEntries(
         Object.entries(drafts).filter(([key]) => key !== name),
       );
-      if (row.kind === "secret" || value !== (row.value ?? "")) next[name] = value;
+      if (row.kind === "secret" ? value !== "" : value !== (row.value ?? "")) next[name] = value;
       set({ drafts: next, saved: { ...saved, [sectionFor(name)]: false } });
+    },
+    clearKey: (name) => {
+      const { view, drafts, pending, saved } = get();
+      const row = view?.settings.find((entry) => entry.name === name);
+      if (!row || row.kind !== "secret" || row.overridden || pending) return;
+      set({ drafts: { ...drafts, [name]: "" }, saved: { ...saved, models: false } });
+    },
+    undo: (name) => {
+      if (get().pending) return;
+      set({
+        drafts: Object.fromEntries(Object.entries(get().drafts).filter(([key]) => key !== name)),
+      });
     },
     save: async (section) => {
       const { drafts, pending, view } = get();
@@ -60,7 +76,7 @@ export function createSettingsEditor(api: SettingsApi = createCommandClient()) {
           values[row.name] = draft;
       }
       if (Object.keys(values).length === 0) return;
-      set({ pending: section, failure: null });
+      set({ pending: section, failure: null, feedbackSection: section });
       try {
         const result = await api.updateSettings({ values });
         const remaining: Drafts = Object.fromEntries(

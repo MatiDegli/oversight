@@ -30,4 +30,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .shell-frame:has(.chat-shell) .decisions-chip-label {
+    display: none;
+  }
+  .shell-frame:has(.chat-shell)
+    [aria-label="Review queue"]
+    button
+    > span:has(.decisions-chip-count) {
+    overflow: visible;
+    text-overflow: clip;
+  }
 }

@@ -40,7 +40,7 @@ export function EditableSettings({
     <div className="mt-8 min-w-0 space-y-8">
       {!live && <p className="text-sm text-muted">Settings are read-only in a replay.</p>}
       {live && editor.loading && <p role="status">Loading settings…</p>}
-      {editor.failure && (
+      {editor.failure && editor.feedbackSection === null && (
         <div role="alert" className="space-y-2 text-sm wrap-anywhere text-text">
           <p>{editor.failure}</p>
           {!editor.view && (
@@ -65,13 +65,6 @@ export function EditableSettings({
           live={live}
         />
       ))}
-      {editor.view?.restart_required && (
-        <p role="status" className="text-sm text-text">
-          {editor.view.apply === "desktop_reload"
-            ? "Restart to apply: File > Reload settings."
-            : "Restart the server to apply."}
-        </p>
-      )}
     </div>
   );
 }
@@ -116,6 +109,13 @@ function SettingsSectionForm({
                   label={label}
                   kind={kind}
                   row={row}
+                  clearing={kind === "secret" && editor.drafts[name] === ""}
+                  onClear={() => {
+                    editor.clearKey(name);
+                  }}
+                  onUndo={() => {
+                    editor.undo(name);
+                  }}
                   value={editor.drafts[name] ?? (kind === "secret" ? "" : (row?.value ?? ""))}
                   readOnly={readOnly || row?.overridden === true}
                   live={live}
@@ -126,20 +126,47 @@ function SettingsSectionForm({
               );
             })}
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex items-end gap-3">
+          <SectionFeedback section={section} editor={editor} />
           <button
             type="submit"
-            className={buttonClass}
+            className={`${buttonClass} shrink-0`}
             aria-disabled={readOnly || !hasChanges(editor.drafts, section)}
           >
             {editor.pending === section ? "Saving…" : "Save"}
           </button>
-          <span role="status" className="text-sm text-muted">
-            {editor.saved[section] && "Saved."}
-          </span>
         </div>
       </form>
     </section>
+  );
+}
+
+function SectionFeedback({
+  section,
+  editor,
+}: {
+  section: SettingsSection;
+  editor: ReturnType<EditorStore["getState"]>;
+}) {
+  const active = editor.feedbackSection === section;
+  return (
+    <div className="min-w-0 flex-1 space-y-2 text-sm wrap-anywhere">
+      {active && editor.failure && (
+        <p role="alert" className="text-text">
+          {editor.failure}
+        </p>
+      )}
+      <div role="status" className="text-muted">
+        {editor.saved[section] && <p>Saved.</p>}
+        {editor.view?.restart_required && (active || editor.feedbackSection === null) && (
+          <p className="text-text">
+            {editor.view.apply === "desktop_reload"
+              ? "Restart to apply: File > Reload settings."
+              : "Restart the server to apply."}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -161,7 +188,13 @@ function SettingField({
   readOnly,
   live,
   onEdit,
+  clearing,
+  onClear,
+  onUndo,
 }: {
+  clearing: boolean;
+  onClear: () => void;
+  onUndo: () => void;
   name: EditableSettingName;
   label: string;
   kind: EditableSetting["kind"];
@@ -199,16 +232,7 @@ function SettingField({
         onEdit={onEdit}
       />
       {kind === "secret" && row && row.state !== "missing" && live && (
-        <button
-          type="button"
-          aria-disabled={readOnly}
-          className={`mt-2 min-h-10 text-sm text-muted underline underline-offset-4 ${focusRing}`}
-          onClick={() => {
-            if (!readOnly) onEdit("");
-          }}
-        >
-          Clear key
-        </button>
+        <KeyClearAction clearing={clearing} readOnly={readOnly} onClear={onClear} onUndo={onUndo} />
       )}
       {name === "OVERSIGHT_MAX_AGENTS" && (
         <p id={`${id}-default`} className="mt-1 text-sm text-muted">
@@ -229,6 +253,41 @@ function SettingField({
               : "Invalid value. Enter a positive amount."}
         </p>
       )}
+    </div>
+  );
+}
+
+function KeyClearAction({
+  clearing,
+  readOnly,
+  onClear,
+  onUndo,
+}: {
+  clearing: boolean;
+  readOnly: boolean;
+  onClear: () => void;
+  onUndo: () => void;
+}) {
+  return (
+    <div className="mt-2">
+      {clearing && (
+        <p role="status" className="text-sm text-text">
+          Key will be cleared when you save
+        </p>
+      )}
+      <button
+        type="button"
+        aria-disabled={readOnly}
+        className={`min-h-10 text-sm text-muted underline underline-offset-4 ${focusRing}`}
+        onClick={() => {
+          if (!readOnly) {
+            if (clearing) onUndo();
+            else onClear();
+          }
+        }}
+      >
+        {clearing ? "Undo" : "Clear key"}
+      </button>
     </div>
   );
 }

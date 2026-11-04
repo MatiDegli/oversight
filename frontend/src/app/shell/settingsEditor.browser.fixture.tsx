@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-import { createInitialState } from "../../state";
+import fixture from "../../../../fixtures/events/handwritten-level1.jsonl?raw";
+import { parseEvent } from "../../transport";
+import { applyEvent, createInitialState } from "../../state";
 import { Frame } from "../Frame";
 import { surfaceTab, tabbedView, viewReducer } from "../view";
 
@@ -9,7 +11,15 @@ if (!host) throw new Error("Missing root");
 const root = createRoot(host);
 function Harness({ live }: { live: boolean }) {
   const [view, setView] = useState(tabbedView);
-  const state = { ...createInitialState(), mergeMode: { mode: "ask_me", revision: 0 } as const };
+  const state = {
+    ...fixture
+      .trim()
+      .split("\n")
+      .map(parseEvent)
+      .filter((event) => event.seq <= 20)
+      .reduce(applyEvent, createInitialState()),
+    mergeMode: { mode: "ask_me", revision: 0 } as const,
+  };
   return (
     <Frame
       state={state}
@@ -17,6 +27,7 @@ function Harness({ live }: { live: boolean }) {
       onNodeTap={() => {}}
       canOpenChange={() => false}
       onOpenChange={() => {}}
+      onOpenQueue={() => {}}
       onClosePanel={() => {
         setView(tabbedView);
       }}

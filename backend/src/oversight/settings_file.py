@@ -151,19 +151,17 @@ class SettingsFile:
             for name, value in values.items()
             if not (name in DEFAULTED and value == "") and _invalid(name, value)
         }
-        candidate = read_env_file(path) | values
-        for name in DEFAULTED:
-            if values.get(name) == "":
-                candidate.pop(name, None)
-        # Parse all editable candidates with the startup parser, without environment overrides.
-        # Unrelated startup declarations cannot be changed by this endpoint.
-        editable = {name: value for name, value in candidate.items() if name in NAMES}
-        try:
-            parsed = Settings.from_values(editable)
-        except ValueError:
-            bad.add("OVERSIGHT_MAX_AGENTS")
-        else:
-            bad.update(name for name in NAMES if name in parsed.setting_problems)
+        # Each editable parser is independent. Unsent file values and process overrides
+        # cannot block this patch or be blamed for it.
+        for name, value in values.items():
+            candidate = {} if name in DEFAULTED and value == "" else {name: value}
+            try:
+                parsed = Settings.from_values(candidate)
+            except ValueError:
+                bad.add(name)
+            else:
+                if name in parsed.setting_problems:
+                    bad.add(name)
         if bad:
             raise ValueError("Invalid settings: " + ", ".join(sorted(bad)) + ".")
         # Raw file reads retain line endings, comments, ordering and unrelated declarations.

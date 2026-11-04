@@ -326,3 +326,41 @@ async def test_clear_defaulted_settings_removes_all_declarations(settings_file: 
     )
     loaded = await asyncio.to_thread(Settings.load, settings_file)
     assert loaded.max_agents == 4 and loaded.spend_brake_percent == 90
+
+
+@pytest.mark.parametrize("overridden", [False, True])
+@pytest.mark.parametrize(
+    "unsent", ["OVERSIGHT_BUDGET_USD", "OVERSIGHT_MAX_AGENTS", "OVERSIGHT_SPEND_BRAKE_PERCENT"]
+)
+async def test_invalid_unsent_setting_does_not_block_key_save(
+    settings_file: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    overridden: bool,
+    unsent: str,
+) -> None:
+    if overridden:
+        monkeypatch.setenv(unsent, "4")
+    async with client_for(settings_file) as client:
+        await asyncio.to_thread(settings_file.write_text, f"{unsent}=invalid-unsent\n")
+        response = await client.put(
+            "/settings", json={"values": {"META_API_KEY": "replacement-key"}}
+        )
+        assert response.status_code == 200, response.text
+        row = next(row for row in response.json()["settings"] if row["name"] == unsent)
+        assert row["state"] == "invalid" and row["overridden"] == overridden
+        assert "replacement-key" not in response.text
+    assert f"{unsent}=invalid-unsent" in await asyncio.to_thread(settings_file.read_text)
+
+
+async def test_rejection_names_only_invalid_sent_settings(settings_file: Path) -> None:
+    async with client_for(settings_file) as client:
+        await asyncio.to_thread(settings_file.write_text, "OVERSIGHT_MAX_AGENTS=bad-unsent\n")
+        before = await asyncio.to_thread(settings_file.read_bytes)
+        response = await client.put(
+            "/settings", json={"values": {"OVERSIGHT_BUDGET_USD": "bad-sent"}}
+        )
+        assert response.status_code == 422
+        assert "OVERSIGHT_BUDGET_USD" in response.json()["error"]["message"]
+        assert "OVERSIGHT_MAX_AGENTS" not in response.text
+        assert "bad-sent" not in response.text and "bad-unsent" not in response.text
+        assert await asyncio.to_thread(settings_file.read_bytes) == before
