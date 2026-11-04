@@ -175,6 +175,7 @@ const Inbox = lazy(() => loadDecisionInbox().then((module) => ({ default: module
 const PlanActions = lazy(loadPlanActions);
 let root: Root | undefined;
 let current = createInitialState();
+let chatState: State | undefined;
 let options = { scene: "proposed" as FlowScene, layout: "Chat" as FlowLayout, readonly: false };
 export const sent: { action: string; revision: number; comment?: string }[] = [];
 function Harness({ state }: { state: State }) {
@@ -230,6 +231,7 @@ function Harness({ state }: { state: State }) {
         <InitialShellLayout value={options.layout}>
           <Frame
             state={state}
+            chatState={chatState}
             view={view}
             onReview={review}
             onOpenChange={review}
@@ -264,6 +266,7 @@ export function mountPlanFlow(
   readonly = false,
 ) {
   options = { scene, layout, readonly };
+  chatState = undefined;
   const events = flowEvents(scene).map((item, i) => ({
     ...item,
     seq: i + 1,
@@ -276,6 +279,11 @@ export function mountPlanFlow(
   host.style.height = "100vh";
   document.body.replaceChildren(host);
   root = createRoot(host);
+  render();
+}
+export function holdPlanFlowPrefix() {
+  chatState = current;
+  options.readonly = true;
   render();
 }
 export function emitPlanFlow(events: ServerEvent[]) {

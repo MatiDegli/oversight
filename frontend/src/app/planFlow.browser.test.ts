@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import type { ServerEvent } from "@contracts";
 import { expect as check, type Browser, type Page } from "@playwright/test";
 import { createServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, expect, it } from "vitest";
@@ -179,6 +180,52 @@ it.each(["Chat", "Oversight"] as const)(
       await check(page.locator(".thread-plan-card")).toContainText(
         "Replay of a synthetic history prefix",
       );
+      expect(await page.evaluate(() => window.planFlowTest.sent)).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it.each(["Chat", "Oversight"] as const)(
+  "resolves the winning plan and queue from a lagging Chat prefix in %s",
+  async (layout) => {
+    const page = await open("proposed", 1280, "dark", layout);
+    try {
+      await page.evaluate(() => {
+        window.planFlowTest.queuePlanFlow();
+        window.planFlowTest.holdPlanFlowPrefix();
+        const later = window.planFlowTest.flowEvents("running").flatMap<ServerEvent>((item) => {
+          if (item.type === "plan.updated")
+            return [
+              {
+                ...item,
+                payload: {
+                  ...item.payload,
+                  revision: item.payload.revision + 10,
+                  task: "Later checkout revision",
+                },
+              },
+            ];
+          if (item.type === "queue.updated")
+            return [{ ...item, payload: { ...item.payload, revision: 10 } }];
+          return [];
+        });
+        window.planFlowTest.emitPlanFlow(later);
+      });
+      const card = page.locator(".thread-plan-card");
+      await check(
+        card.getByRole("heading", {
+          name: "Input checks across the checkout flow",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await check(card).not.toContainText("Later checkout revision");
+      await check(card.locator(".plan-status")).toHaveText("Queued");
+      await check(card.locator(".plan-count")).toHaveText("4 subtasks");
+      await check(card.getByRole("button", { name: "Queue plan", exact: true })).toHaveCount(0);
+      await check(card.getByRole("button", { name: "Reject plan", exact: true })).toHaveCount(0);
+      await check(card.getByRole("button", { name: "Take out of the queue" })).toHaveCount(0);
       expect(await page.evaluate(() => window.planFlowTest.sent)).toEqual([]);
     } finally {
       await page.close();
