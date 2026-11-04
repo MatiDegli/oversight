@@ -30,11 +30,7 @@ use crate::{
 
 enum Context {
     Clone(PathBuf),
-    Installed {
-        app: PathBuf,
-        data: PathBuf,
-        created: bool,
-    },
+    Installed { app: PathBuf, data: PathBuf },
 }
 
 impl Context {
@@ -50,8 +46,8 @@ impl Context {
             .ok_or_else(|| io::Error::other("LOCALAPPDATA is required"))?;
         let data = PathBuf::from(local).join("Oversight");
         diagnostic.stage(Stage::Configuration)?;
-        let created = oversight_desktop_core::installed::initialize_data(&app, &data)?;
-        Ok(Self::Installed { app, data, created })
+        oversight_desktop_core::installed::initialize_data(&app, &data)?;
+        Ok(Self::Installed { app, data })
     }
 
     fn launch(&self, smoke: bool, source: Option<&SelectedSource>) -> io::Result<Launch> {
@@ -136,9 +132,6 @@ pub fn session(
     console::install(quit.clone())?;
     let context = Context::prepare(root, diagnostic)?;
     let ui = Ui::new(app, quit.clone(), smoke, &context)?;
-    if matches!(context, Context::Installed { created: true, .. }) && !quit.load(Ordering::SeqCst) {
-        ui.message("Add your Meta API key and budget: File > Edit settings…, save, then File > Reload settings. Starting Oversight spends nothing.", "")?;
-    }
     let mut child = None;
     let result = supervise_loop(&context, &ui, smoke, &quit, diagnostic, &mut child);
     diagnostic.backend_exit(child.as_ref().and_then(Child::exit_code));
