@@ -26,7 +26,12 @@ export interface PreviewPort {
   start(input: PreviewCandidate, signal: AbortSignal): Promise<PreviewCreated>;
   details(id: string, signal: AbortSignal): Promise<PreviewDetails>;
   renew(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus>;
-  stop(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus>;
+  stop(
+    id: string,
+    body: PreviewTokenRequest,
+    signal: AbortSignal,
+    delivery?: { keepalive: true },
+  ): Promise<PreviewStatus>;
 }
 export interface PreviewClock {
   schedule(callback: () => void, delay: number): () => void;

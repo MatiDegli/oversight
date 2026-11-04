@@ -76,9 +76,12 @@ class Controller implements PreviewController {
     this.#view = Object.freeze({ ...this.#view, ...patch, owned: this.#token !== null });
     for (const listener of this.#listeners) listener();
   }
-  async #bounded<T>(request: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  async #bounded<T>(
+    request: (signal: AbortSignal) => Promise<T>,
+    abortOnDispose = true,
+  ): Promise<T> {
     const abort = new AbortController();
-    this.#requests.add(abort);
+    if (abortOnDispose) this.#requests.add(abort);
     let cancel: () => void = () => undefined;
     const deadline = new Promise<never>((_, reject) => {
       cancel = this.#clock.schedule(() => {
@@ -323,8 +326,12 @@ class Controller implements PreviewController {
   async #abandon(receipt: { preview_id: string; lease_token: string }) {
     if (!previewId(receipt.preview_id) || !receipt.lease_token) return;
     try {
-      await this.#bounded((signal) =>
-        this.#port.stop(receipt.preview_id, { lease_token: receipt.lease_token }, signal),
+      await this.#bounded(
+        (signal) =>
+          this.#port.stop(receipt.preview_id, { lease_token: receipt.lease_token }, signal, {
+            keepalive: true,
+          }),
+        false,
       );
     } catch {
       /* Expiry remains the fallback. */
@@ -351,7 +358,10 @@ class Controller implements PreviewController {
     });
     try {
       const status = parsePreviewStatus(
-        await this.#bounded((signal) => this.#port.stop(id, { lease_token: token }, signal)),
+        await this.#bounded(
+          (signal) => this.#port.stop(id, { lease_token: token }, signal, { keepalive: true }),
+          false,
+        ),
       );
       if (!this.#current(epoch)) return !this.#token && !this.#quarantined;
       if (!this.#matches(status) || !confirmed(status)) throw new Error("Unverified drainage");
@@ -415,6 +425,6 @@ class Controller implements PreviewController {
       token = this.#token;
     this.#token = null;
     this.#listeners.clear();
-    if (id && token) void this.#abandon({ preview_id: id, lease_token: token });
+    if (id && token && !this.#closing) void this.#abandon({ preview_id: id, lease_token: token });
   };
 }

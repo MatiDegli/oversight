@@ -127,3 +127,23 @@ it("refuses missing no-store, extra receipt keys and validator failures", async 
     "Invalid preview input",
   );
 });
+
+it("keeps authenticated stop deliverable through unload with exact private policies", async () => {
+  const { port, request } = setup({ ...status, state: "stopped", reason: "closed" });
+  const abort = new AbortController();
+  const stopping = port.stop(id, { lease_token: lease }, abort.signal, { keepalive: true });
+  abort.abort();
+  await stopping;
+  const [url, init] = request.mock.calls[0] ?? [];
+  expect(url instanceof URL ? url.href : null).toBe(`http://127.0.0.1:8710/previews/${id}/stop`);
+  expect(init).toEqual({
+    method: "POST",
+    keepalive: true,
+    body: JSON.stringify({ lease_token: lease }),
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+    credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+  });
+});

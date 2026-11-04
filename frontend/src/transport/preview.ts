@@ -68,12 +68,15 @@ class LivePreviewPort {
     path: string,
     signal: AbortSignal,
     body?: StartPreview | PreviewTokenRequest,
+    keepalive = false,
   ): Promise<unknown> {
     try {
       const request = this.request;
       const response = await request(new URL(path, this.origin), {
         method: body ? "POST" : "GET",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
+        ...(keepalive
+          ? { keepalive: true }
+          : { signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]) }),
         ...(body && {
           body: JSON.stringify(body),
           headers: { "Content-Type": "application/json" },
@@ -112,8 +115,15 @@ class LivePreviewPort {
   async renew(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus> {
     return this.validators.status(await this.call(path(id, "/lease"), signal, token(body)));
   }
-  async stop(id: string, body: PreviewTokenRequest, signal: AbortSignal): Promise<PreviewStatus> {
-    const result = this.validators.status(await this.call(path(id, "/stop"), signal, token(body)));
+  async stop(
+    id: string,
+    body: PreviewTokenRequest,
+    signal: AbortSignal,
+    delivery?: { keepalive: true },
+  ): Promise<PreviewStatus> {
+    const result = this.validators.status(
+      await this.call(path(id, "/stop"), signal, token(body), delivery?.keepalive),
+    );
     if (
       (result.state !== "stopped" && result.state !== "failed") ||
       result.reason === "cleanup_unverified"
