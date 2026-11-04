@@ -14,7 +14,7 @@ use oversight_desktop_core::launch::{Launch, require_free_port};
 use oversight_desktop_core::lifecycle::Listener;
 use oversight_desktop_core::refusal::Refusal;
 use oversight_desktop_core::source::SelectedSource;
-use oversight_desktop_core::switch::{Action, PAGE_LIMIT, Phase, Switch};
+use oversight_desktop_core::switch::{Action, PAGE_LIMIT, Phase, Request, Switch};
 use tauri::AppHandle;
 
 use crate::{
@@ -29,7 +29,11 @@ use crate::{
 
 enum Context {
     Clone(PathBuf),
-    Installed { app: PathBuf, data: PathBuf },
+    Installed {
+        app: PathBuf,
+        data: PathBuf,
+        created: bool,
+    },
 }
 
 impl Context {
@@ -45,15 +49,24 @@ impl Context {
             .ok_or_else(|| io::Error::other("LOCALAPPDATA is required"))?;
         let data = PathBuf::from(local).join("Oversight");
         diagnostic.stage(Stage::Configuration)?;
-        oversight_desktop_core::installed::initialize_data(&app, &data)?;
-        Ok(Self::Installed { app, data })
+        let created = oversight_desktop_core::installed::initialize_data(&app, &data)?;
+        Ok(Self::Installed { app, data, created })
     }
 
     fn launch(&self, smoke: bool, source: Option<&SelectedSource>) -> io::Result<Launch> {
         match self {
             Self::Clone(root) if source.is_none() => Launch::new(root, smoke),
             Self::Clone(_) => Err(io::Error::other("own sources require installed mode")),
-            Self::Installed { app, data } => Launch::installed_source(app, data, smoke, source),
+            Self::Installed { app, data, .. } => Launch::installed_source(app, data, smoke, source),
+        }
+    }
+
+    fn runtime(&self, source: Option<&SelectedSource>) -> PathBuf {
+        match self {
+            Self::Clone(root) => root.join(".runtime"),
+            Self::Installed { data, .. } => {
+                oversight_desktop_core::source::runtime_dir(data, source)
+            }
         }
     }
 }
@@ -61,7 +74,7 @@ impl Context {
 struct Ui {
     window: Option<Window>,
     menu: Option<OpenMenu>,
-    requests: Receiver<Option<SelectedSource>>,
+    requests: Receiver<Request>,
 }
 
 impl Ui {
@@ -69,12 +82,23 @@ impl Ui {
         app: &AppHandle,
         quit: Arc<AtomicBool>,
         smoke: bool,
-        installed: bool,
+        context: &Context,
     ) -> io::Result<Self> {
         let (tx, requests) = mpsc::channel();
         let window = if smoke { None } else { Some(Window::new(app)?) };
-        let menu = if installed && let Some(window) = &window {
-            Some(OpenMenu::install(app, &window.native, quit, tx)?)
+        let menu = if let Context::Installed {
+            app: payload, data, ..
+        } = context
+            && let Some(window) = &window
+        {
+            Some(OpenMenu::install(
+                app,
+                &window.native,
+                quit,
+                tx,
+                payload,
+                data,
+            )?)
         } else {
             None
         };
@@ -107,17 +131,13 @@ pub fn session(
     quit: Arc<AtomicBool>,
     diagnostic: &mut Diagnostics,
 ) -> io::Result<()> {
-    diagnostic.stage(Stage::Git)?;
-    require_git()?;
     diagnostic.stage(Stage::Console)?;
     console::install(quit.clone())?;
     let context = Context::prepare(root, diagnostic)?;
-    let ui = Ui::new(
-        app,
-        quit.clone(),
-        smoke,
-        matches!(context, Context::Installed { .. }),
-    )?;
+    let ui = Ui::new(app, quit.clone(), smoke, &context)?;
+    if matches!(context, Context::Installed { created: true, .. }) && !quit.load(Ordering::SeqCst) {
+        ui.message("Add your Meta API key and budget: File > Edit settings…, save, then File > Reload settings. Starting Oversight spends nothing.", "")?;
+    }
     let mut child = None;
     let result = supervise_loop(&context, &ui, smoke, &quit, diagnostic, &mut child);
     diagnostic.backend_exit(child.as_ref().and_then(Child::exit_code));
@@ -140,9 +160,7 @@ fn supervise_loop(
         if quit.load(Ordering::SeqCst) {
             break;
         }
-        let launch = context.launch(smoke, source.as_ref())?;
-        start(&launch, diagnostic, child)?;
-        let ready = supervise::ready(child.as_ref().unwrap(), quit);
+        let ready = attempt(context, smoke, source.as_ref(), quit, diagnostic, child);
         diagnostic.backend_exit(child.as_ref().and_then(Child::exit_code));
         if quit.load(Ordering::SeqCst) || smoke {
             state.quit();
@@ -158,7 +176,7 @@ fn supervise_loop(
             if ui.menu.is_none() {
                 return Err(error);
             }
-            // Refusals have no live backend; keep the inert window and allow another selection.
+            // Failed starts retain the installed window, including its settings menu.
             if let Err(cleanup) = stop(child, Ok(()), ui) {
                 return Err(io::Error::other(format!(
                     "startup: {error:?}; cleanup: {cleanup:?}"
@@ -171,7 +189,7 @@ fn supervise_loop(
                 .unwrap()
                 .refusal()
                 .unwrap_or(Refusal::Other);
-            let runtime = PathBuf::from(&launch.env["OVERSIGHT_RUNTIME_DIR"]);
+            let runtime = context.runtime(source.as_ref());
             ui.message(
                 "This session could not be opened",
                 &refusal.remedy(&runtime),
@@ -185,7 +203,7 @@ fn supervise_loop(
             state.startup(true);
         }
         ui.enable(true)?;
-        if !wait_for_switch(ui, quit, &mut state, child)? {
+        if !wait_for_switch(ui, quit, &mut state, child, source.as_ref())? {
             break;
         }
         source = state
@@ -195,12 +213,28 @@ fn supervise_loop(
     Ok(())
 }
 
+fn attempt(
+    context: &Context,
+    smoke: bool,
+    source: Option<&SelectedSource>,
+    quit: &AtomicBool,
+    diagnostic: &mut Diagnostics,
+    child: &mut Option<Child>,
+) -> io::Result<()> {
+    diagnostic.begin_child();
+    diagnostic.stage(Stage::Git)?;
+    require_git()?;
+    diagnostic.stage(Stage::Launch)?;
+    let launch = context.launch(smoke, source)?;
+    start(&launch, diagnostic, child)?;
+    supervise::ready(child.as_ref().unwrap(), quit)
+}
+
 fn start(
     launch: &Launch,
     diagnostic: &mut Diagnostics,
     child: &mut Option<Child>,
 ) -> io::Result<()> {
-    diagnostic.begin_child();
     diagnostic.stage(Stage::Listener)?;
     listener::require_unoccupied()?;
     diagnostic.stage(Stage::Port)?;
@@ -225,6 +259,7 @@ fn wait_for_switch(
     quit: &AtomicBool,
     state: &mut Switch,
     child: &mut Option<Child>,
+    source: Option<&SelectedSource>,
 ) -> io::Result<bool> {
     let began = Instant::now();
     loop {
@@ -239,8 +274,8 @@ fn wait_for_switch(
         {
             stop(child, Err(error), ui)?;
         }
-        if let Ok(source) = ui.requests.try_recv()
-            && state.confirm(source, began.elapsed()) == Action::LoadPage
+        if let Ok(request) = ui.requests.try_recv()
+            && state.confirm(request.source(source), began.elapsed()) == Action::LoadPage
         {
             ui.enable(false)?;
             if load_inert(ui, quit, state, began)? {

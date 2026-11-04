@@ -2,7 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use oversight_desktop_core::installed::{ASSETS, app_directory, initialize_data};
+use oversight_desktop_core::installed::{
+    ASSETS, app_directory, initialize_data, notepad_path, settings_file,
+};
 use oversight_desktop_core::launch::Launch;
 #[cfg(windows)]
 use oversight_desktop_core::launch::native_drive_path;
@@ -137,13 +139,41 @@ fn installed_arguments_and_paths_are_separate_and_preserve_unicode() {
 #[test]
 fn configuration_is_created_once_and_never_read_or_overwritten() {
     let layout = Layout::new();
-    initialize_data(&layout.app(), &layout.data()).unwrap();
+    assert!(initialize_data(&layout.app(), &layout.data()).unwrap());
     let config = layout.data().join(".env");
     assert_eq!(fs::read(&config).unwrap(), b"blank template");
     fs::write(&config, [0xff, 0xfe]).unwrap();
-    initialize_data(&layout.app(), &layout.data()).unwrap();
+    assert!(!initialize_data(&layout.app(), &layout.data()).unwrap());
     assert_eq!(fs::read(config).unwrap(), [0xff, 0xfe]);
     assert!(initialize_data(&layout.app(), &layout.app().join("data")).is_err());
+}
+
+#[test]
+fn missing_settings_are_recreated_without_overwriting_saved_settings() {
+    let layout = Layout::new();
+    assert!(initialize_data(&layout.app(), &layout.data()).unwrap());
+    let config = settings_file(&layout.data());
+    fs::remove_file(&config).unwrap();
+    assert!(initialize_data(&layout.app(), &layout.data()).unwrap());
+    assert_eq!(fs::read(&config).unwrap(), b"blank template");
+    fs::write(&config, b"saved settings").unwrap();
+    assert!(!initialize_data(&layout.app(), &layout.data()).unwrap());
+    assert_eq!(fs::read(&config).unwrap(), b"saved settings");
+    let launch = Launch::installed(&layout.app(), &layout.data(), false).unwrap();
+    assert_eq!(launch.env["OVERSIGHT_ENV_FILE"], config.to_str().unwrap());
+}
+
+#[test]
+fn notepad_is_built_only_from_the_supplied_absolute_system_directory() {
+    let system = if cfg!(windows) {
+        Path::new(r"C:\Windows folder\System32")
+    } else {
+        Path::new("/Windows folder/System32")
+    };
+    assert_eq!(notepad_path(system).unwrap(), system.join("notepad.exe"));
+    for invalid in [Path::new(""), Path::new("notepad.exe"), &system.join("..")] {
+        assert!(notepad_path(invalid).is_err());
+    }
 }
 
 #[test]

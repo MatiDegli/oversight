@@ -5,6 +5,22 @@ use crate::source::SelectedSource;
 
 pub const PAGE_LIMIT: Duration = Duration::from_secs(5);
 
+/// Menu requests share one channel; only the supervisor owns the current source.
+#[derive(Clone, Debug)]
+pub enum Request {
+    Open(Option<SelectedSource>),
+    Reload,
+}
+
+impl Request {
+    pub fn source(self, current: Option<&SelectedSource>) -> Option<SelectedSource> {
+        match self {
+            Self::Open(source) => source,
+            Self::Reload => current.cloned(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Phase {
     Readiness,

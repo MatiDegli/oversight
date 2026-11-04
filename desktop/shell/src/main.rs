@@ -17,6 +17,8 @@ mod output;
 #[cfg(windows)]
 mod session;
 #[cfg(windows)]
+mod settings;
+#[cfg(windows)]
 mod supervise;
 #[cfg(windows)]
 mod window;

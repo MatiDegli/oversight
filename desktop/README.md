@@ -23,10 +23,15 @@ installed Windows menu can open a repository; there is no WSL bridge.
 
 Writable configuration is `%LOCALAPPDATA%\Oversight\.env`. First launch copies a committed
 blank-key template only when this file is absent. The shell never reads its values and never
-overwrites it. Close Oversight, edit this file in a text editor, add `META_API_KEY` and the
-existing budget/pricing settings, save, and restart. Starting the server spends no model credits;
-starting an agent is a deliberate action. Both `.env` and `%LOCALAPPDATA%\Oversight\.runtime`
-survive upgrades and uninstall.
+overwrites it. On that first launch, a native message explains how to configure it. Choose
+**File > Edit settings…** to open it in Windows Notepad, add `META_API_KEY` and the existing
+budget/pricing settings, and save. Then choose **File > Reload settings** and confirm the restart.
+The current session stops, including working agents, and the same repository or demo restarts
+with the saved settings. Cancel leaves the session running. Editing remains available during
+startup, switching and after a failed start; Reload follows the same busy gate as Open demo.
+If the file is missing, Edit settings recreates the blank template before opening it.
+Starting the server spends no model credits; starting an agent is a deliberate action.
+Both `.env` and `%LOCALAPPDATA%\Oversight\.runtime` survive upgrades and uninstall.
 
 ## Open a repository
 
@@ -34,8 +39,8 @@ In the installed Windows app, choose **File > Open repository…**, select a sta
 repository in a short private local NTFS folder, read the trust disclosure, then choose **Open**.
 **Cancel** (the default, including Enter) or Escape leaves the current session unchanged.
 **File > Open demo** returns to the bundled demo through the same confirmation. Opening stops
-the current session after the inert switching page has finished loading. The menu is unavailable
-until the next session is ready or refused. A page-load timeout leaves the backend running.
+the current session after the inert switching page has finished loading. Open and Reload are
+unavailable until the next session is ready or refused. A page-load timeout leaves the backend running.
 
 Prepare the repository's own `.venv` before opening it: Python 3.10+, pytest 8.2+ and pluggy 1.5+.
 Oversight installs nothing. An unavailable or invalid environment still permits graph access,

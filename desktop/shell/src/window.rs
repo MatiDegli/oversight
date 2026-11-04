@@ -38,6 +38,7 @@ impl Window {
                 })
                 .build()
                 .map_err(io::Error::other)?;
+        native.show().map_err(io::Error::other)?;
         Ok(Self { native, finished })
     }
 

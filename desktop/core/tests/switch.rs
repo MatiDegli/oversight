@@ -2,7 +2,26 @@ use std::path::Path;
 use std::time::Duration;
 
 use oversight_desktop_core::source::SelectedSource;
-use oversight_desktop_core::switch::{Action, PAGE_LIMIT, Phase, Switch};
+use oversight_desktop_core::switch::{Action, PAGE_LIMIT, Phase, Request, Switch};
+
+#[test]
+fn reload_keeps_the_current_source_and_uses_the_same_verified_switch() {
+    let own = SelectedSource::validate(Path::new(r"C:\private\repo")).unwrap();
+    for current in [None, Some(&own)] {
+        for ready in [true, false] {
+            let mut state = Switch::default();
+            state.startup(ready);
+            let source = Request::Reload.source(current);
+            assert_eq!(source.as_ref(), current);
+            assert_eq!(state.confirm(source, Duration::ZERO), Action::LoadPage);
+            assert_eq!(state.confirm(None, Duration::ZERO), Action::None);
+            assert_eq!(state.page(Duration::from_secs(1), true), Action::Close);
+            assert_eq!(state.closed(true, true), Action::Launch);
+            assert_eq!(state.take_source(), Some(current.cloned()));
+        }
+    }
+    assert_eq!(Request::Open(None).source(Some(&own)), None);
+}
 
 #[test]
 fn one_switch_until_ready_or_refused_and_no_selection_on_cancel() {

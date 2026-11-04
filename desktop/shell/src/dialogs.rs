@@ -13,21 +13,36 @@ pub const TRUST: &str = "Oversight copies this repository into a disposable work
 const OPEN: i32 = 100;
 
 pub fn confirm(window: &WebviewWindow) -> bool {
-    task(window, "Open this repository in Oversight?", TRUST, true)
+    task(
+        window,
+        "Open this repository in Oversight?",
+        TRUST,
+        Some("Open"),
+    )
+}
+
+pub fn confirm_reload(window: &WebviewWindow) -> bool {
+    task(
+        window,
+        "Restart Oversight with the saved settings? The current session stops, including any working agents.",
+        "",
+        Some("Restart"),
+    )
 }
 
 pub fn message(window: &WebviewWindow, instruction: &str, content: &str) {
-    task(window, instruction, content, false);
+    task(window, instruction, content, None);
 }
 
-fn task(window: &WebviewWindow, instruction: &str, content: &str, confirm: bool) -> bool {
+fn task(window: &WebviewWindow, instruction: &str, content: &str, confirm: Option<&str>) -> bool {
     let Ok(parent) = window.hwnd() else {
         return false;
     };
     let title = wide("Oversight".as_ref());
     let instruction = wide(instruction.as_ref());
     let content = wide(content.as_ref());
-    let open = wide("Open".as_ref());
+    let open = wide(confirm.unwrap_or("").as_ref());
+    let confirm = confirm.is_some();
     let button = TASKDIALOG_BUTTON {
         nButtonID: OPEN,
         pszButtonText: open.as_ptr(),

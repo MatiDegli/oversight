@@ -5108,3 +5108,14 @@ slot intent. Storage refusal leaves memory ownership and best-effort Stop usable
 Reason: sessionStorage can be copied by Duplicate tab, so possession of the token alone cannot
 establish that the previous owning page departed. No token enters localStorage, URLs, events
 or logs, and recovery still requires the current applied candidate and a valid server lease.
+
+## Installed settings menu (2026-11-04)
+
+File > Edit settings… starts Notepad by its absolute path in the Windows system directory,
+with only the installed settings file path as its argument. The shell never reads, logs or
+forwards that file's contents. A missing file is recreated from the blank installed template
+using create-new, preserving existing settings. Editing stays available during startup and
+switching and after a failed start. The first launch that creates the file shows configuration
+instructions after the window appears. File > Reload settings confirms stopping the current
+session and its agents, then restarts the same source through the existing inert-page,
+verified-close and startup path under the Open menu's busy gate.

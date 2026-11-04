@@ -19,7 +19,9 @@ approved `OR` alternative suffices. No third-party crate source is modified.
 The repository-opening addition reuses the locked `sha2 0.10.9` (MIT OR Apache-2.0)
 for portable source hashes and adds only `rfd 0.15.4` (MIT). Complete Windows and
 all-platform metadata reconciliation passes for all 444 external entries; no new exception
-is required. `windows-sys 0.59.0` also enables `Win32_UI_Controls`.
+is required. `windows-sys 0.59.0` also enables `Win32_UI_Controls` and
+`Win32_System_SystemInformation` for native dialogs and the system Notepad path;
+the settings menu adds no crates or license exceptions.
 
 ## Locked configuration and verification
 
@@ -33,7 +35,9 @@ are under `target.'cfg(windows)'`:
 - `tauri-plugin-single-instance = "=2.5.5"`, defaults off.
 - `windows-sys = "=0.59.0"`, features `Win32_Foundation`,
   `Win32_NetworkManagement_IpHelper`, `Win32_Networking_WinSock`, `Win32_Security`,
-  `Win32_System_Console`, `Win32_System_JobObjects`, `Win32_System_Threading`.
+  `Win32_System_Console`, `Win32_System_JobObjects`, `Win32_System_Pipes`,
+  `Win32_System_SystemInformation`, `Win32_System_Threading`, `Win32_UI_Controls`,
+  `Win32_UI_WindowsAndMessaging`.
 - Build dependency `tauri-build = "=2.7.0"`, defaults off, feature `config-json`.
 
 The shell defaults to `custom-protocol = ["tauri/custom-protocol"]`.
