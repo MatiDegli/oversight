@@ -21,8 +21,11 @@ from oversight.agents import (
     ScriptedModel,
     ToolCall,
     Usage,
+    load_script,
     review_candidate,
 )
+from oversight.agents._crossreview import Decision, build_correction_message, build_prompt, parse
+from oversight.settings import REPO_ROOT
 from oversight_contracts.events import ModelProfile
 from oversight_contracts.review import ChangeTarget
 
@@ -48,6 +51,21 @@ INPUTS = ReviewInputs(
 
 def model(reply: ModelReply) -> ScriptedModel:
     return ScriptedModel(Script("review", [reply]), FAKE_MODEL_B)
+
+
+async def test_rules_unavailable_script_keeps_invalid_verdict_after_correction() -> None:
+    script = load_script(
+        REPO_ROOT / "fixtures/fake-model/rules-unavailable-reviewer.json", FAKE_MODEL_B
+    )
+    client = ScriptedModel(script, FAKE_MODEL_B)
+    result = await review_candidate(client, TARGET, INPUTS, author=FAKE_MODEL)
+    assert len(client.requests) == 2
+    assert result.review.verdict == "unknown"
+    assert result.decision.action == "needs_you"
+    assert result.review.problems[0] == "review_invalid: invalid reviewer output"
+    assert "verdict" in " ".join(result.review.problems).lower()
+    assert result.reply is not None and result.reply.usage == Usage(100, 20, 0)
+    assert len(script.turns) == 2 and all(turn.usage == Usage(100, 20, 0) for turn in script.turns)
 
 
 async def test_task_null_summary_and_separate_history() -> None:
@@ -96,7 +114,9 @@ async def test_diff_limit_prevents_call_instead_of_reviewing_a_prefix(size: int)
         (ModelReply("VERDICT: accept", [], finish_reason="length"), "review_truncated"),
         (ModelReply(None, []), "review_empty"),
         (ModelReply(" \n", []), "review_empty"),
-        (ModelReply("Invalid prose", []), "review_invalid"),
+        (ModelReply("Invalid prose", [], finish_reason="length"), "review_truncated"),
+        (ModelReply("Invalid prose", [], model="unexpected-model"), "reviewer model"),
+        (ModelReply("Invalid prose", [ToolCall("x", "finish", "{}")]), "tool calls"),
         (ModelReply("VERDICT: accept", [ToolCall("x", "finish", "{}")]), "tool calls"),
         (ModelReply("VERDICT: accept", [], model="unexpected-model"), "reviewer model"),
     ],
@@ -131,14 +151,18 @@ async def test_full_findings_survive_comment_cut_with_blocking_first() -> None:
     assert lines[2] in result.decision.comment and "omitted" in result.decision.comment
 
 
-async def test_cut_finding_keeps_diagnostics_and_cannot_certify_complete() -> None:
+@pytest.mark.parametrize("severity,verdict", [("BLOCKING", "request changes"), ("NIT", "accept")])
+async def test_cut_finding_keeps_diagnostics_and_cannot_certify_complete(
+    severity: str, verdict: str
+) -> None:
     client = model(
-        ModelReply("BLOCKING pricing.py:1: " + "x" * 1_000 + "\nVERDICT: request changes", [])
+        ModelReply(f"{severity} pricing.py:1: " + "x" * 1_000 + f"\nVERDICT: {verdict}", [])
     )
     result = await review_candidate(client, TARGET, INPUTS, author=FAKE_MODEL)
     assert result.review.verdict == "unknown" and not result.review.complete
     assert len(result.review.findings[0].text) == 1_000
     assert any("cut to 1,000" in problem for problem in result.review.problems)
+    assert len(client.requests) == 1
 
 
 async def test_incomplete_material_makes_no_call() -> None:
@@ -247,8 +271,81 @@ async def test_http_budget_reasoning_and_unusable_choices(
 @pytest.mark.parametrize("count", [20, 21])
 async def test_findings_limit_maps_complete_review_or_diagnosed_unknown(count: int) -> None:
     lines = [f"BLOCKING pricing.py:{i + 1}: Broken; fix it." for i in range(count)]
-    client = model(ModelReply("\n".join([*lines, "VERDICT: request changes"]), []))
+    reply = ModelReply("\n".join([*lines, "VERDICT: request changes"]), [])
+    client = ScriptedModel(Script("review", [reply, reply]), FAKE_MODEL_B)
     result = await review_candidate(client, TARGET, INPUTS, author=FAKE_MODEL)
     assert len(result.review.findings) == 20
     assert result.review.complete == (count == 20)
     assert result.review.verdict == ("changes_requested" if count == 20 else "unknown")
+    assert len(client.requests) == (1 if count == 20 else 2)
+
+
+@pytest.mark.parametrize(
+    "text,verdict,action",
+    [
+        ("VERDICT: accept", "clean", "none"),
+        (
+            "SHOULD-FIX pricing.py:2: Fix zero.\nVERDICT: request changes",
+            "changes_requested",
+            "request_changes",
+        ),
+    ],
+)
+async def test_one_correction_continues_only_reviewer_history(
+    text: str, verdict: str, action: str
+) -> None:
+    invalid = "NIT pricing.py:1: Rename.\nBad verdict"
+    last = ModelReply(text, [], model=FAKE_MODEL_B.model)
+    client = ScriptedModel(Script("review", [ModelReply(invalid, []), last]), FAKE_MODEL_B)
+    checks: list[int] = []
+    result = await review_candidate(
+        client,
+        TARGET,
+        INPUTS,
+        author=FAKE_MODEL,
+        check_spending=lambda: checks.append(len(client.requests)),
+    )
+    assert result.review.verdict == verdict and result.decision.action == action
+    assert result.review.complete and not result.review.problems and result.reply is last
+    assert len(client.requests) == 2 and client.tool_requests == [[], []] and checks == [1]
+    prompt = {"role": "user", "content": build_prompt(INPUTS)}
+    problems = parse(invalid, INPUTS.files, reviewer_model=FAKE_MODEL_B.model).problems
+    assert client.requests == [
+        [prompt],
+        [
+            prompt,
+            {"role": "assistant", "content": invalid},
+            {"role": "user", "content": build_correction_message(invalid, problems)},
+        ],
+    ]
+    assert all(f.line == 2 for f in result.review.findings)
+
+
+async def test_invalid_twice_uses_only_last_problems_and_never_calls_third_time() -> None:
+    first = ModelReply("first malformed reply", [])
+    last = ModelReply("BLOCKING elsewhere.py:0: Fix.\nVERDICT: accept", [])
+    client = ScriptedModel(
+        Script("review", [first, last, ModelReply("VERDICT: accept", [])]), FAKE_MODEL_B
+    )
+    result = await review_candidate(client, TARGET, INPUTS, author=FAKE_MODEL)
+    parsed = parse(last.text or "", INPUTS.files, reviewer_model=FAKE_MODEL_B.model)
+    expected = ("review_invalid: invalid reviewer output", *parsed.problems)
+    assert result.decision == Decision("needs_you", "", ("Invalid model review.", *expected))
+    assert result.review.problems == list(expected) and result.reply is last
+    assert len(client.requests) == 2
+
+
+@pytest.mark.parametrize(
+    "last",
+    [
+        ModelReply("bad", [], finish_reason="length"),
+        ModelReply("bad", [], model="other"),
+        ModelReply("bad", [ToolCall("x", "finish", "{}")]),
+        ModelReply(None, []),
+    ],
+)
+async def test_second_reply_keeps_all_adapter_validation(last: ModelReply) -> None:
+    client = ScriptedModel(Script("review", [ModelReply("bad", []), last]), FAKE_MODEL_B)
+    result = await review_candidate(client, TARGET, INPUTS, author=FAKE_MODEL)
+    assert result.review.verdict == "unknown" and not result.review.complete
+    assert result.reply is last and len(client.requests) == 2

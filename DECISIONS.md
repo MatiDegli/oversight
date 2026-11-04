@@ -4797,6 +4797,39 @@ admission/execution refuses with `Reviewed-app startup disclosure is unavailable
 startup. Real prepared resources at the default runtime can now pass disclosure admission;
 reviewed-app execution remains unavailable pending its separately required boundary and supervisor.
 
+## Re-ask once when a model review does not parse (2026-11-04)
+
+The maintainer approved one formatting correction per captured cross-review. This supersedes
+only the parser-invalid no-recovery rule in the 2026-10-27 reviewer entry, "Cross-review core
+and provisional reviewer budget". Empty and length-truncated output retain that rule. Valid
+accept/request-changes replies, including parser-valid diagnostic output, receive no correction;
+identity, tool-call, preflight and transport failures keep their existing fail-closed paths.
+
+The same independent reviewer conversation continues with the original user prompt, invalid
+assistant reply and one correction user turn. The pure correction builder quotes only the first
+8,000 reply characters as escaped untrusted data, states the omitted-character count and lists
+parse problems in order. It repeats the existing format and exact final verdict protocol.
+Only the last reply's findings and problems construct the final advisory result; a second invalid
+reply needs the person, without another call or an intermediate review publication.
+
+Both completions share the accounted client, reviewer identity and durable callback. After the
+first receipt, runtime spending admission checks the reviewer profile immediately before the
+correction call; refusal visibly follows spend_brake to spend_invalid. Unknown usage remains
+unknown, ledger failures keep their existing handling and cancellation drains accounting.
+Accounting ticks and failed-attempt diagnostics publish as they occur; only the final eligible
+outcome publishes change.reviewed, forwards its committed receipt and applies the existing rules.
+
+The original ready + 90-second deadline includes both calls and transport waits. At least
+20 seconds must remain before re-asking; less time returns the existing invalid decision with
+"There was not enough time left to ask the reviewer again." The existing human preemption,
+eligibility, reservation and single automatic revision round remain in force: formatting
+correction neither consumes nor grants a revision round.
+
+Contracts, initial review prompt, provisional output budget, reasoning, prompt_version and
+historical recordings remain unchanged. Scripted fakes and injected failures cover the new
+behavior; historical recordings do not prove it. No paid validation is performed in this front;
+any review-prompt edit requires separate paid re-validation.
+
 ## 2026-11-03 — Scripted agent provenance in Chat
 
 Chat rail rows and conversation headers label agents “Scripted demo agents” only when their

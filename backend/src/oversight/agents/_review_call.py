@@ -47,11 +47,12 @@ async def run_review_call(
     author: ModelProfile,
     ready_time: float,
     record: Callable[[ModelReply], Awaitable[None]],
+    check_spending: Callable[[], None],
     author_reply_models: Sequence[str | None] = (),
     agent_id: str | None = None,
     publish: Callable[[EventPayload], Awaitable[object]] | None = None,
 ) -> ReviewOutcome:
-    """One logical call, bounded by ready + 90 seconds, including all retry waits.
+    """One review conversation, bounded by ready + 90 seconds, including all retry waits.
 
     The caller drains its durable accounting callback even after invalidation or cancellation.
     No author scope, callback or history is reused, including when called under an author scope.
@@ -76,6 +77,8 @@ async def run_review_call(
                 inputs,
                 author=author,
                 author_reply_models=author_reply_models,
+                deadline=deadline,
+                check_spending=check_spending,
             )
     finally:
         CALL_SCOPE.reset(token)

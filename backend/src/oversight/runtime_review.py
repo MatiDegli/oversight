@@ -194,6 +194,12 @@ async def review(
         models = tuple(live._author_models.get(proposal.agent_id, ()))
         if live._reviewer is None:
             accounting = ReviewAccounting(live, capture.target, client.profile, proposal.agent_id)
+
+            def check_reask() -> None:
+                if not eligible(live, capture, proposal.agent_id):
+                    raise WrongState("Cross-review target is no longer ready or eligible")
+                live._check_spending(agent.slot, client.profile)
+
             outcome = await run_review_call(
                 client,
                 capture.target,
@@ -202,6 +208,7 @@ async def review(
                 author_reply_models=models,
                 ready_time=ready_time,
                 record=accounting.record,
+                check_spending=check_reask,
                 agent_id=proposal.agent_id,
                 publish=live._publish,
             )

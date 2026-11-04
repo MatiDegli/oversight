@@ -111,7 +111,7 @@ amend [the approved proposal](proposal.md) or authorize edits to `contracts/`.
 | 4 | Measured impact cone | On main — caller evidence `1c50382`, GET /impact `920e930`, review rows `09865ec`/`d3f64fd`, review rework `cf1e536`; graph caller words `5ba8584` | Yes |
 | 5 | Live overlap between agents | Partial — shared edits and change-lifetime reads `1e51e51`, graph overlap `e4cec56`; review's **Other pending changes** shows bounded current-graph cone membership with explicit limits; deeper edit facts remain | No |
 | 6 | Fails before, passes after (package 4) | On main — base setup/import errors are unknown `b786f6c`; isolated probes `19443e8` | No — conservative classification uses existing fields; exception type declined |
-| 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; manual review route still 501 | No |
+| 7 | Cross-review and automatic Request changes (package 2) | On main — one-round revision `7da6fa9`, independent reviewer selection `045f589`; built — one parser correction with durable accounting, spending admission and the original deadline; manual review route still 501 | No |
 | 8 | Merge by rules, follow main and Revert (package 1) | Partial — start capability `1824a46`, Revert route `69aaee8`, person preemption `a2aaa6a`, idle follow-main F5a `769d0c7`, protected-path authority `1b1ed44`; F5b, Settings and Revert UI delivered; F10 opens activation with fake-only HTTP/SSE evidence, recorded replay and three clean starts; every fresh run starts in Ask me | Yes — protected_paths rule in a new policy profile version; merge/Revert shapes reserved |
 | 9 | A change card with three states | Partial — producer `3786310`, witnesses `3068b81`, answer guards `2efd586`, projection `f4ab346`, mounted inbox/answers/grants `7c25429`, lead-plan display `bf9fb04`; rules-resolution rendering built, activation open; mode state folded, assessment/Revert retained in decisionEvents for selectors | Yes |
 | 10 | Cost and rounds per accepted change | Partial — usage fold `43f3bb8`, archived totals `bf36052`, agent-hours `95e40e5`, dated prices `56b5f18`, GET /usage, team grouping and desktop aggregate Usage built; live period grouping remains | Yes — stored aggregates; event-derived totals need none |
@@ -543,14 +543,23 @@ Oct 28 proposal. Do not rebuild the functioning probes or claim assertion eviden
 An adverse independent review can send one revision back without the person relaying it. This is
 on main through `7da6fa9`, following `95e4723`, `9b81d0b` and `13f955c`
 (`backend/src/oversight/runtime_review.py`, `backend/src/oversight/changes/_cross_review.py`).
-Drop it as a front. Reuse target validation, durable accounting, human preemption and the one-round
+Reuse target validation, durable accounting, human preemption and the one-round
 limit in item 8. It is opt-in. Since `045f589`, reviewer selection uses `OVERSIGHT_REVIEW_MODEL`,
 independent of slots (`backend/src/oversight/review_config.py`), with `muse-spark-open` as the
 default (`backend/src/oversight/settings.py`). The reviewer's model must differ from the
 author's (`backend/src/oversight/review_config.py`); another call to the author's model is not
 a fallback.
 Both authors, A and B, write code with hosted Muse Spark. Muse Spark Open is the cross-reviewer
-and item 9's deciding model; the cross-review mechanism stays unchanged.
+and item 9's deciding model.
+One formatting correction is built for parser-invalid replies only (approved 2026-11-04).
+It continues the same reviewer history, quotes at most 8,000 escaped reply characters with an
+omitted count and ordered parse problems, and retains the original ready + 90-second deadline.
+At least 20 seconds must remain; otherwise the invalid result visibly explains the time limit.
+The runtime rechecks spending after the first durable receipt and before the second call.
+Only the final reply produces review evidence; correction grants no extra automatic revision.
+Empty, length-truncated, identity-invalid and tool-calling replies receive no correction.
+Initial review prompt, output budget, prompt version and historical recordings are unchanged;
+scripted tests establish this behavior, with no paid validation.
 The manual review route remains 501, which does not mean automatic review is missing. No new
 contract is needed for this item.
 
