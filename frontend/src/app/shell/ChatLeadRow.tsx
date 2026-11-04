@@ -1,3 +1,4 @@
+import { ScriptedAgentLabel } from "../../teams/ScriptedAgentLabel";
 import { Check, CircleStop, OctagonX } from "lucide-react";
 // eslint-disable-next-line no-restricted-imports -- K2a owns this Chat-only projection, without extending the shared barrel.
 import type { ChatLead } from "../../agents/chatLeadSelectors";
@@ -8,9 +9,10 @@ import "./chatLeads.css";
 export function ChatLeadRow({
   row,
   showTeamLine = true,
+  scripted = false,
   selectedAgentId,
   onOpenConversation,
-}: ChatAgentSelection & { row: ChatLead; showTeamLine?: boolean }) {
+}: ChatAgentSelection & { row: ChatLead; showTeamLine?: boolean; scripted?: boolean }) {
   const Row = onOpenConversation ? "button" : "div";
   const Icon =
     row.status.state === "done" ? Check : row.status.state === "halted" ? OctagonX : CircleStop;
@@ -22,7 +24,9 @@ export function ChatLeadRow({
       data-selected={selectedAgentId === row.id}
       data-ended={row.done}
       title={[row.status.task, row.teamLine, row.activity].filter(Boolean).join(" · ")}
-      aria-description={[row.teamLine, row.activity].filter(Boolean).join(" · ")}
+      aria-description={[row.teamLine, row.activity, scripted ? "Scripted demo agents" : null]
+        .filter(Boolean)
+        .join(" · ")}
       aria-label={`Lead ${row.letter}: ${row.status.task}. ${row.label}. ${row.id}`}
       {...(onOpenConversation
         ? {
@@ -49,6 +53,7 @@ export function ChatLeadRow({
             {row.label}
           </span>
         </span>
+        {scripted && <ScriptedAgentLabel />}
         <span className="chat-agent-task">{row.status.task}</span>
         {showTeamLine && row.teamLine && (
           <span className="chat-lead-team">

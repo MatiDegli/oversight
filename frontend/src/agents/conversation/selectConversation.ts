@@ -1,3 +1,5 @@
+// eslint-disable-next-line no-restricted-imports -- Share the scoped event-profile provenance selector without extending the state facade.
+import { isScriptedAgent } from "../../state/scriptedAgents";
 import { presentationFor, type AgentPresentation } from "../../teams/presentation";
 import type {
   AgentStatus,
@@ -43,6 +45,7 @@ export interface ConversationHeader {
   changeId: string;
   presentation?: AgentPresentation;
   state: AgentStatus["state"];
+  scripted?: boolean;
   modelLabel: string;
   reasoning: string | null;
   step: number;
@@ -58,6 +61,7 @@ export interface LeadHeader extends LeadStatus {
   hue: AgentStatus["slot"];
   kind: "lead";
   agentId: string;
+  scripted?: boolean;
   modelLabel: string;
   reasoning: string | null;
   turn: number;
@@ -196,6 +200,7 @@ export function selectConversation(
       changeId: agent.change_id,
       presentation: presentationFor(state, agentId),
       state: agent.state,
+      scripted: isScriptedAgent(state, agentId),
       modelLabel: profile?.label ?? agent.model,
       reasoning: profile?.reasoning ?? null,
       step: Math.max(agent.step, ...(state.steps[agentId] ?? []).map((step) => step.step)),

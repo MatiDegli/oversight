@@ -4,6 +4,9 @@ import pytest
 
 from oversight.changes import ShortcutKind, detect_shortcuts
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 
 @pytest.mark.parametrize("removed_first", [False, True])
 def test_numeric_rewording_keeps_independent_removed_check(removed_first: bool) -> None:
@@ -15,7 +18,7 @@ def test_numeric_rewording_keeps_independent_removed_check(removed_first: bool) 
         checks.reverse()
     old = "def test_status():\n" + "".join(checks)
     new = "def test_status():\n    assert 'limit: 3' in result.text\n"
-    findings = detect_shortcuts([("test_app.py", old, new)])
+    findings = detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
     assert [(f.kind, f.line) for f in findings] == [
         (ShortcutKind.ASSERTION_LOOSENED, 2 if removed_first else 3)
     ]
@@ -25,9 +28,9 @@ def test_numeric_rewording_keeps_independent_removed_check(removed_first: bool) 
 def test_local_rename_cannot_capture_existing_name(signature: str) -> None:
     old = f"def test_status({signature}):\n    first = run()\n    assert second == 73\n"
     new = old.replace("first =", "second =")
-    assert [f.kind for f in detect_shortcuts([("test_app.py", old, new)])] == [
-        ShortcutKind.ASSERTION_LOOSENED
-    ]
+    assert [
+        f.kind for f in detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.ASSERTION_LOOSENED]
 
 
 @pytest.mark.parametrize("prefix", ["def", "async def"])
@@ -37,9 +40,10 @@ def test_existing_helper_assertions_are_compared(prefix: str, method: bool) -> N
     if method:
         old = "class Checks:\n" + "".join("    " + line for line in old.splitlines(True))
     new = old.replace("assert run() == 73", "run()")
-    assert [f.kind for f in detect_shortcuts([("tests/helpers.py", old, new)])] == [
-        ShortcutKind.ASSERTION_LOOSENED
-    ]
+    assert [
+        f.kind
+        for f in detect_shortcuts([("tests/helpers.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.ASSERTION_LOOSENED]
 
 
 @pytest.mark.parametrize("move", [False, True])
@@ -55,7 +59,7 @@ def test_matched_test_parameter_tables_are_compared(move: bool, changed: bool) -
     changes = [("test_old.py", old, new)]
     if move:
         changes = [("test_old.py", old, None), ("test_new.py", None, new)]
-    findings = detect_shortcuts(changes)
+    findings = detect_shortcuts(changes, timeout=DETECTION_TIMEOUT_S)
     assert [f.kind for f in findings] == ([ShortcutKind.EXPECTED_VALUE_CHANGED] if changed else [])
     if changed:
         assert findings[0].path == ("test_new.py" if move else "test_old.py")
@@ -79,6 +83,6 @@ def test_abs_only_approx_disables_default_relative_tolerance(
 ) -> None:
     old = f"import pytest\ndef test_result():\n    assert run() == pytest.approx({before})\n"
     new = old.replace(f"approx({before})", f"approx({after})")
-    assert [f.kind for f in detect_shortcuts([("test_app.py", old, new)])] == (
-        [ShortcutKind.ASSERTION_LOOSENED] if wider else []
-    )
+    assert [
+        f.kind for f in detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == ([ShortcutKind.ASSERTION_LOOSENED] if wider else [])

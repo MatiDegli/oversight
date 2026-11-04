@@ -275,7 +275,7 @@ async def test_shutdown_restored_metadata_finalizes_before_store_close(tmp_path,
                 await finalizer
 
 
-async def test_reviewed_self_authorization_is_separate_and_nonexecuting(tmp_path, monkeypatch):
+async def test_reviewed_self_app_stays_refused(tmp_path, monkeypatch):
     import sys
     from dataclasses import replace
     from pathlib import Path

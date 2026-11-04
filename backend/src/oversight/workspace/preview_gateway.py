@@ -460,7 +460,9 @@ class PreviewGateway:
         if path == "_oversight_ready":
             if method != "GET" or body or not self.alive() or self._nonce is None:
                 raise _Refused(403)
-            await self._send(writer, 200, json.dumps({"nonce": self._nonce}).encode())
+            await self._send(
+                writer, 200, json.dumps({"nonce": self._nonce}).encode(), "application/json"
+            )
         elif path == "events" or path.split("/", 1)[0] in _API:
             if path == "events" and method != "GET":
                 raise _Refused(405)

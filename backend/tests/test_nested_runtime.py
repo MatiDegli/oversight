@@ -12,7 +12,7 @@ import pytest
 
 from oversight.settings import REPO_ROOT, Settings
 from oversight.slots import resolve_slots
-from oversight.workspace import UnsafeDeletion, Workspace, run_process
+from oversight.workspace import Workspace, run_process
 
 FILES = REPO_ROOT / "fixtures/fake-model"
 
@@ -35,7 +35,7 @@ def prepared(tmp_path: Path):
         frontend_dist=dist,
         layout=layout,
         api_port=18101,
-        public_port=18102,
+        public_port=18101,
     )
 
 
@@ -52,7 +52,7 @@ def test_nested_factory_requires_explicit_inputs(tmp_path: Path) -> None:
     assert set(inputs) == {"settings", "tree", "policy", "coder_factory", "lead_factory"}
     assert inputs["tree"] == config.tree
     assert isinstance(inputs["settings"], Settings)
-    assert inputs["settings"].runtime_dir == config.preview_dir / "state"
+    assert inputs["settings"].runtime_dir == config.preview_dir / "state" / ".runtime"
     assert inputs["policy"].supported_roles == ("coder", "lead")
     assert inputs["coder_factory"] is not inputs["lead_factory"]
     assert list(inspect.signature(AppFactory.__call__).parameters) == [
@@ -78,7 +78,7 @@ def test_nested_factory_requires_explicit_inputs(tmp_path: Path) -> None:
         is inspect.Parameter.empty
     )
     assert_import_has_no_side_effects(config)
-    assert not (config.preview_dir / "state").exists()
+    assert not (config.preview_dir / "state" / ".runtime").exists()
 
 
 def assert_import_has_no_side_effects(config) -> None:
@@ -155,9 +155,9 @@ def test_nested_settings_are_explicit_and_private(
     }.items():
         monkeypatch.setenv(key, value)
     settings = build_nested_settings(config)
-    assert settings.runtime_dir == config.preview_dir / "state"
+    assert settings.runtime_dir == config.preview_dir / "state" / ".runtime"
     assert not settings.runtime_dir.is_relative_to(config.tree)
-    assert (settings.port, settings.vite_port) == (18101, 18102)
+    assert (settings.port, settings.vite_port) == (18101, None)
     assert settings.demo_python == config.demo_python  # Preserve the venv path, not its target.
     assert settings.layout == config.layout and settings.frontend_dist == config.frontend_dist
     assert settings.meta_api_key is settings.baseten_api_key is None
@@ -166,10 +166,8 @@ def test_nested_settings_are_explicit_and_private(
     assert settings.review_card_classifications == 0
     assert settings.review_model == settings.decision_model == "fake"
     assert settings.budget_usd is settings.baseten_budget_usd is None
-    # Existing Workspace only accepts a .runtime basename. Reuse is proved on that supported
-    # path; acceptance of preview/state is an explicitly open integration dependency below.
     workspace = Workspace(
-        config.preview_dir / ".runtime",
+        settings.runtime_dir,
         config.tree,
         pytest_pin="9.1.1",
         demo_python=settings.demo_python,
@@ -182,17 +180,15 @@ def test_nested_settings_are_explicit_and_private(
         cast(Any, config).api_port = 1
 
 
-def test_existing_workspace_requires_state_root_wiring(tmp_path: Path) -> None:
+def test_nested_workspace_opens_state_runtime(tmp_path: Path) -> None:
     from oversight.nested_runtime import build_nested_settings
 
     config = prepared(tmp_path)
     settings = build_nested_settings(config)
-    with pytest.raises(
-        UnsafeDeletion, match=r"^the runtime root must be an absolute path named \.runtime$"
-    ):
-        Workspace(
-            settings.runtime_dir, config.tree, pytest_pin="9.1.1", demo_python=settings.demo_python
-        )
+    workspace = Workspace(
+        settings.runtime_dir, config.tree, pytest_pin="9.1.1", demo_python=settings.demo_python
+    )
+    assert workspace.runtime_root == config.preview_dir / "state" / ".runtime"
 
 
 @pytest.mark.parametrize("field", ["api_port", "public_port"])
@@ -204,12 +200,12 @@ def test_ports_are_explicit_assignments(tmp_path: Path, field: str, value) -> No
         build_nested_settings(dataclasses.replace(prepared(tmp_path), **{field: value}))
 
 
-def test_private_state_alias_and_shared_ports_refuse(tmp_path: Path) -> None:
+def test_private_state_alias_and_split_ports_refuse(tmp_path: Path) -> None:
     from oversight.nested_runtime import build_nested_settings
 
     config = prepared(tmp_path)
-    with pytest.raises(ValueError, match="must differ"):
-        build_nested_settings(dataclasses.replace(config, public_port=config.api_port))
+    with pytest.raises(ValueError, match="one listener"):
+        build_nested_settings(dataclasses.replace(config, public_port=config.api_port + 1))
     (config.preview_dir / "state").symlink_to(config.tree, target_is_directory=True)
     with pytest.raises(ValueError, match="private"):
         build_nested_settings(config)

@@ -24,12 +24,14 @@ def _inert(text: str) -> str:
     return "".join(c for c in text if c == "\n" or not unicodedata.category(c).startswith("C"))
 
 
-def _bounded(text: str) -> bytes:
+def _bounded(text: str, limit: int = MAX_BYTES) -> bytes:
     data = text.encode("utf-8")
-    if len(data) <= MAX_BYTES:
+    if len(data) <= limit:
         return data
     # Reserve a fixed bound for the marker; slicing must never split a UTF-8 code point.
-    room = MAX_BYTES - 96
+    if limit <= 96:
+        return data[:limit].decode("utf-8", errors="ignore").encode()
+    room = limit - 96
     head = data[: room // 2].decode("utf-8", errors="ignore").encode()
     tail = data[-(room // 2) :].decode("utf-8", errors="ignore").encode()
     marker = f"\n[... {len(data) - len(head) - len(tail)} bytes omitted ...]\n".encode()
@@ -86,9 +88,12 @@ class SanitizedBuildLog:
 
     path: Path
     secrets: tuple[str, ...] = ()
+    max_bytes: int = MAX_BYTES
     _identities: tuple[tuple[int, int], ...] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        if type(self.max_bytes) is not int or self.max_bytes <= 0:
+            raise ValueError("invalid build diagnostic budget")
         path = Path(self.path)
         if (
             not path.is_absolute()
@@ -111,7 +116,7 @@ class SanitizedBuildLog:
         object.__setattr__(self, "_identities", identities)
 
     def write(self, output: str) -> None:
-        """Sanitize before truncation and atomically replace at most one MiB of valid UTF-8."""
+        """Sanitize before truncation; atomically replace within the frozen UTF-8 budget."""
         secrets = tuple(sorted({s for s in self.secrets if s}, key=len, reverse=True))
         output = _inert(_redact(output, secrets))
         normalized = tuple(
@@ -119,7 +124,7 @@ class SanitizedBuildLog:
         )
         output = _redact(output, normalized)
         # The generated omission marker must also obey redaction.
-        data = _redact(_bounded(output).decode(), normalized).encode()
+        data = _redact(_bounded(output, self.max_bytes).decode(), normalized).encode()
         fd, identities = _directories(self.path.parent)
         temporary = ".build-" + uuid4().hex
         try:

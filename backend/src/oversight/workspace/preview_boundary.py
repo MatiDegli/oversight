@@ -18,7 +18,7 @@ import signal
 import sys
 import tempfile
 import time
-from collections.abc import Mapping
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol, cast
@@ -152,7 +152,8 @@ def _validate(config: BoundaryConfig, roots: RootInputs) -> None:
             not math.isfinite(t) or t <= 0
             for t in (config.launch_timeout_s, config.lifetime_s, config.cleanup_timeout_s)
         )
-        or not 0 <= config.output_cap <= 1024 * 1024
+        or type(config.output_cap) is not int
+        or config.output_cap < 0
     ):
         raise BoundaryUnavailable("invalid boundary limits")
     _environment(config)
@@ -194,7 +195,17 @@ def _validate(config: BoundaryConfig, roots: RootInputs) -> None:
             if source != Path(item.target).resolve(strict=True):
                 raise BoundaryUnavailable("system manifest source mismatch")
         else:
-            if TOOL_TARGETS.get(item.role) != item.target or item.role in roles:
+            dependency = item.role == "dependencies" and (
+                item.target == "/opt/deps"
+                or (
+                    str(PurePosixPath(item.target)) == item.target
+                    and ".." not in PurePosixPath(item.target).parts
+                    and PurePosixPath(item.target).is_relative_to("/opt/deps")
+                )
+            )
+            if not dependency and (
+                TOOL_TARGETS.get(item.role) != item.target or item.role in roles
+            ):
                 raise BoundaryUnavailable("unapproved tool manifest")
             roles.add(item.role)
             if not source.is_dir():
@@ -205,9 +216,17 @@ def _validate(config: BoundaryConfig, roots: RootInputs) -> None:
             raise BoundaryUnavailable("excluded manifest source")
         if len(item.digest) != 64 or manifest_digest(source) != item.digest:
             raise BoundaryUnavailable("boundary manifest mismatch")
-    if roles != set(TOOL_TARGETS) or targets != set(
-        (*SYSTEM_FILES, *SYSTEM_DIRECTORIES, *TOOL_TARGETS.values())
-    ):
+    required = set(
+        (
+            *SYSTEM_FILES,
+            *SYSTEM_DIRECTORIES,
+            *(v for k, v in TOOL_TARGETS.items() if k != "dependencies"),
+        )
+    )
+    if roles != set(TOOL_TARGETS) or not required <= targets:
+        raise BoundaryUnavailable("incomplete boundary manifest")
+    ordered = sorted(targets)
+    if any(PurePosixPath(b).is_relative_to(a) for a in ordered for b in ordered if a != b):
         raise BoundaryUnavailable("incomplete boundary manifest")
 
 
@@ -571,12 +590,20 @@ def _configuration(
     return fd
 
 
-async def _launch(config: BoundaryConfig, roots: RootInputs, abort: asyncio.Event) -> _Handle:
+async def _launch(
+    config: BoundaryConfig,
+    roots: RootInputs,
+    abort: asyncio.Event,
+    before_exec: Callable[[BoundaryHandle], Awaitable[None]] | None,
+    on_ownership: Callable[[BoundaryHandle], None] | None,
+) -> _Handle:
     owner = _Handle(config)
     fds: list[int] = []
     report = ack = -1
     reader: asyncio.Task[bytes] | None = None
     try:
+        if on_ownership is not None:
+            on_ownership(owner)
         async with asyncio.timeout(config.launch_timeout_s):
             await asyncio.to_thread(_validate, config, roots)
             config_fd = _configuration(config, roots, owner, fds)
@@ -610,6 +637,8 @@ async def _launch(config: BoundaryConfig, roots: RootInputs, abort: asyncio.Even
             report = -1
             raw = await reader
             owner.authenticate(raw, owner.nonce)
+            if before_exec is not None:
+                await before_exec(owner)
             if abort.is_set():
                 raise asyncio.CancelledError
             if time.monotonic() >= owner.deadline:
@@ -651,15 +680,24 @@ async def _spawn(owner: _Handle, command: list[str], cwd: Path, fds: tuple[int, 
     owner.processes["outer"] = _identity(pid)
 
 
-async def launch_boundary(config: BoundaryConfig, roots: RootInputs) -> BoundaryHandle:
+async def launch_boundary(
+    config: BoundaryConfig,
+    roots: RootInputs,
+    *,
+    before_exec: Callable[[BoundaryHandle], Awaitable[None]] | None = None,
+    on_ownership: Callable[[BoundaryHandle], None] | None = None,
+) -> BoundaryHandle:
     """Authenticate and acknowledge entry; cancellation retains ownership until cleanup.
 
+    on_ownership retains the cleanup handle before any spawn; it grants no execution authority.
+    before_exec runs after authentication and before the sole execution acknowledgement.
+    A persistence/authorization failure never opens execution.
     All deadlines are seconds. A failed gate raises BoundaryUnavailable; there is no
     host fallback. FD mappings are borrowed until stop_verified()/automatic exit closes
     them. The caller must not close, transfer to T, or use them after verified death.
     """
     abort = asyncio.Event()
-    pending = asyncio.create_task(_launch(config, roots, abort))
+    pending = asyncio.create_task(_launch(config, roots, abort, before_exec, on_ownership))
     try:
         return await asyncio.shield(pending)
     except asyncio.CancelledError:

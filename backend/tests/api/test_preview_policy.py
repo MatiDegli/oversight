@@ -79,6 +79,9 @@ async def test_static_html_and_spa_receive_pool_policy_without_changing_assets(t
         preview_profile=PreviewProfile(ports=(19681, 19682), origins=("http://127.0.0.1:8710",))
     )
     install_error_handlers(app)
+    from oversight.api.security import ApiGuard, AuthorityPolicy
+
+    app.add_middleware(ApiGuard, policy=AuthorityPolicy(8710))
     assert add_static(app, tmp_path)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:8710"
@@ -87,7 +90,7 @@ async def test_static_html_and_spa_receive_pool_policy_without_changing_assets(t
             response = await client.get(path)
             assert (
                 response.headers["content-security-policy"]
-                == "frame-src http://127.0.0.1:19681 http://127.0.0.1:19682"
+                == "frame-src http://localhost:19681 http://localhost:19682"
             )
             assert response.headers["cache-control"] == "no-cache"
             assert "8710" not in response.headers["content-security-policy"]
@@ -107,9 +110,9 @@ def test_documented_configuration_and_reason_inventory_are_exact():
         "PORTS": (),
         "ORIGINS": (),
         "HEARTBEAT_S": 10,
-        "LEASE_S": 30,
+        "LEASE_S": 600,
         "LIFETIME_S": 900,
-        "READINESS_S": 10,
+        "READINESS_S": 30,
         "MEMORY_LIMIT_BYTES": 536870912,
     }
     assert all(f"`OVERSIGHT_PREVIEW_{name}`" in docs for name in defaults)
@@ -128,7 +131,7 @@ def test_documented_configuration_and_reason_inventory_are_exact():
         profile.lifetime_s,
         profile.readiness_s,
         profile.memory_limit_bytes,
-    ) == (10, 30, 900, 10, 536870912)
+    ) == (10, 600, 900, 30, 536870912)
     assert not profile.production_open
     assert resolve_preview_profile(
         {"OVERSIGHT_PREVIEW_ORIGINS": " http://127.0.0.1:8710"}, 8710, None
@@ -180,6 +183,14 @@ def test_preview_example_and_decision_document_the_default_closed_switch():
     assert "OVERSIGHT_PREVIEW_ENABLED" in decisions and "default false" in decisions
 
 
+@pytest.mark.parametrize("document", ["DECISIONS.md", "DEVLOG.md", "docs/isolation.md"])
+def test_shop_authority_prerequisite_and_admission_refusal_are_explicit(document):
+    prose = " ".join((ROOT / document).read_text().split())
+    assert "The shop authority adapter is an unowned prerequisite" in prose
+    assert "shop `127.0.0.1` parents are refused before reservation" in prose
+    assert "Vite" in prose and "opposite loopback" in prose
+
+
 def test_capture_inventory_distinguishes_uninspected_matrix_from_missing_windows_proof():
     docs = (ROOT / "docs/isolation.md").read_text()
     audit = docs.split("### Hardening and technical audit recheck", 1)[1]
@@ -219,17 +230,40 @@ async def test_actual_vite_html_responses_carry_exact_pool_header(tmp_path):
     await vite_script(
         """
         import { createServer } from 'vite';
+        import { request } from 'node:http';
         import { writeFile } from 'node:fs/promises';
         const server = await createServer({server: {port: 0, strictPort: false}});
         try {
           await server.listen();
           const origin = server.resolvedUrls.local[0];
+          const port = new URL(origin).port;
           const headers = [];
-          for (const path of ['', 'nested/spa']) {
-            const response = await fetch(origin + path, {signal: AbortSignal.timeout(5000)});
-            if (response.status !== 200) throw new Error('Vite HTML unavailable');
-            headers.push(response.headers.get('content-security-policy'));
-            await response.text();
+          const get = (path, host) => new Promise((resolve, reject) => {
+            const req = request(new URL(path, origin), {headers: {Host: host}}, (response) => {
+              response.resume();
+              response.on('end', () => resolve({
+                status: response.statusCode,
+                policy: response.headers['content-security-policy']
+              }));
+            });
+            req.setTimeout(5000, () => req.destroy(new Error('request timed out')));
+            req.on('error', reject);
+            req.end();
+          });
+          for (const parent of ['localhost', '127.0.0.1']) {
+            for (const path of ['', 'nested/spa']) {
+              const response = await get(path || '/', `${parent}:${port}`);
+              if (response.status !== 200) throw new Error('Vite HTML unavailable');
+              headers.push(response.policy);
+            }
+          }
+          for (const host of [`evil.invalid:${port}`, `127.0.0.1:8710`,
+                              `localhost:${port}.evil`, `[::1]:${port}`]) {
+            const response = await get('/', host);
+            if (response.status !== 403) {
+              throw new Error(`Vite admitted ${host}: ${response.status}`);
+            }
+            headers.push(response.policy);
           }
           await writeFile(process.argv[1], JSON.stringify(headers));
         } finally { await server.close(); }
@@ -239,7 +273,56 @@ async def test_actual_vite_html_responses_carry_exact_pool_header(tmp_path):
     assert (
         json.loads(evidence.read_text())
         == ["frame-src http://127.0.0.1:19681 http://127.0.0.1:19682"] * 2
+        + ["frame-src http://localhost:19681 http://localhost:19682"] * 2
+        # Vite's built-in foreign-host guard runs before plugin middleware.
+        + [None]
+        + ["frame-src 'none'"] * 3
     )
+
+
+@pytest.mark.anyio
+async def test_custom_vite_html_retains_explicit_policy_without_widening_host(tmp_path):
+    evidence = tmp_path / "custom-policy.json"
+    await vite_script(
+        """
+        import { createServer } from 'vite';
+        import { request } from 'node:http';
+        import { writeFile } from 'node:fs/promises';
+        const policy = 'frame-src http://127.0.0.1:19800';
+        const server = await createServer({appType: 'custom', server: {
+          port: 0, strictPort: false, headers: {'Content-Security-Policy': policy}
+        }});
+        server.middlewares.use((_request, response) => {
+          response.setHeader('Content-Type', 'text/html');
+          response.end('<!doctype html><title>Custom HTML owner</title>');
+        });
+        try {
+          await server.listen();
+          const origin = server.resolvedUrls.local[0];
+          const port = new URL(origin).port;
+          const responses = [];
+          for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, 'localhost:8710']) {
+            responses.push(await new Promise((resolve, reject) => {
+              const req = request(origin, {headers: {Host: host}}, (response) => {
+                response.resume();
+                response.on('end', () => resolve({status: response.statusCode,
+                  policy: response.headers['content-security-policy']}));
+              });
+              req.setTimeout(5000, () => req.destroy(new Error('request timed out')));
+              req.on('error', reject);
+              req.end();
+            }));
+          }
+          await writeFile(process.argv[1], JSON.stringify(responses));
+        } finally { await server.close(); }
+        """,
+        evidence,
+    )
+    assert json.loads(evidence.read_text()) == [
+        {"status": 200, "policy": "frame-src http://127.0.0.1:19800"},
+        {"status": 200, "policy": "frame-src http://127.0.0.1:19800"},
+        {"status": 403, "policy": "frame-src 'none'"},
+    ]
 
 
 @pytest.mark.anyio
@@ -274,3 +357,19 @@ async def test_disabled_invalid_pool_never_permits_framing_backend_or_vite(tmp_p
         transport=httpx.ASGITransport(app), base_url="http://127.0.0.1:8710"
     ) as client:
         assert (await client.get("/")).headers["content-security-policy"] == "frame-src 'none'"
+
+
+@pytest.mark.parametrize("parent,frame", [("localhost", "127.0.0.1"), ("127.0.0.1", "localhost")])
+def test_reviewed_opposite_loopback_authorities(parent, frame):
+    from oversight.api.preview_policy import request_frame_policy
+
+    policy = frame_policy((19681, 19682), reserved=(8710, 5710))
+    scope = {"headers": [(b"host", f"{parent}:8710".encode())]}
+    result = request_frame_policy(policy, scope)
+    assert result == f"frame-src http://{frame}:19681 http://{frame}:19682"
+    assert f"http://{parent}:" not in result and "8710" not in result
+    for host in ("evil.test:8710", "[::1]:8710", "localhost.evil:8710"):
+        assert (
+            request_frame_policy(policy, {"headers": [(b"host", host.encode())]})
+            == "frame-src 'none'"
+        )

@@ -4,6 +4,9 @@ import pytest
 
 from oversight.changes import ShortcutKind, detect_shortcuts
 
+# Finding assertions must not depend on runner load.
+DETECTION_TIMEOUT_S = 30.0
+
 
 @pytest.mark.parametrize("removed", ["access denied", "access denied 4"])
 @pytest.mark.parametrize("removed_first", [False, True])
@@ -18,7 +21,7 @@ def test_rewording_cannot_cancel_a_check_through_a_shared_word(
         checks.reverse()
     old = "def test_status():\n" + "".join(checks)
     new = "def test_status():\n    assert 'access limit: 3' in result.text\n"
-    findings = detect_shortcuts([("test_app.py", old, new)])
+    findings = detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
     assert [(f.kind, f.line) for f in findings] == [
         (ShortcutKind.ASSERTION_LOOSENED, 2 if removed_first else 3)
     ]
@@ -43,19 +46,24 @@ def test_nonplain_assignment_rename_cannot_capture_a_checked_binding(
 ) -> None:
     old = f"async def test_status({signature}):\n    {setup}    assert second == 73\n"
     new = old.replace("first", "second")
-    findings = detect_shortcuts([("test_app.py", old, new)])
+    findings = detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
     assert [(f.kind, f.line) for f in findings] == [
         (ShortcutKind.ASSERTION_LOOSENED, len(old.splitlines()))
     ]
-    assert detect_shortcuts([("test_app.py", old, old.replace("first", "renamed"))]) == []
+    assert (
+        detect_shortcuts(
+            [("test_app.py", old, old.replace("first", "renamed"))], timeout=DETECTION_TIMEOUT_S
+        )
+        == []
+    )
 
 
 def test_capture_is_detected_when_assignment_gains_an_annotation() -> None:
     old = "def test_status():\n    first = run()\n    assert second == 73\n"
     new = old.replace("first =", "second: int =")
-    assert [f.kind for f in detect_shortcuts([("test_app.py", old, new)])] == [
-        ShortcutKind.ASSERTION_LOOSENED
-    ]
+    assert [
+        f.kind for f in detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.ASSERTION_LOOSENED]
 
 
 @pytest.mark.parametrize(
@@ -70,9 +78,9 @@ def test_capture_is_detected_when_assignment_gains_an_annotation() -> None:
 def test_capture_cannot_overwrite_another_checked_local(replacement: str) -> None:
     old = "def test_status():\n    second = cached()\n    first = run()\n    assert second == 73\n"
     new = old.replace("first = run()\n", replacement)
-    assert [f.kind for f in detect_shortcuts([("test_app.py", old, new)])] == [
-        ShortcutKind.ASSERTION_LOOSENED
-    ]
+    assert [
+        f.kind for f in detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == [ShortcutKind.ASSERTION_LOOSENED]
 
 
 @pytest.mark.parametrize("move", [False, True])
@@ -94,7 +102,7 @@ def test_matched_method_compares_its_class_parameter_table(
     changes = [("test_old.py", old, new)]
     if move:
         changes = [("test_old.py", old, None), ("test_new.py", None, new)]
-    findings = detect_shortcuts(changes)
+    findings = detect_shortcuts(changes, timeout=DETECTION_TIMEOUT_S)
     assert [f.kind for f in findings] == ([ShortcutKind.EXPECTED_VALUE_CHANGED] if changed else [])
     if changed:
         assert findings[0].path == ("test_new.py" if move else "test_old.py")
@@ -113,7 +121,9 @@ def test_matched_method_compares_all_enclosing_class_tables() -> None:
     )
     new = old.replace("test_result", "test_renamed").replace("TestOuter", "TestRenamed")
     new = new.replace("(1, 73)", "(1, 74)").replace("(2, 99)", "(2, 100)")
-    findings = detect_shortcuts([("test_old.py", old, None), ("test_new.py", None, new)])
+    findings = detect_shortcuts(
+        [("test_old.py", old, None), ("test_new.py", None, new)], timeout=DETECTION_TIMEOUT_S
+    )
     assert [f.kind for f in findings] == [ShortcutKind.EXPECTED_VALUE_CHANGED]
     assert "(74)" in findings[0].message
     assert "(100)" in findings[0].message
@@ -140,9 +150,9 @@ def test_matched_method_compares_all_enclosing_class_tables() -> None:
 def test_none_approx_options_use_pytest_defaults(before: str, after: str, wider: bool) -> None:
     old = f"import pytest\ndef test_result():\n    assert run() == pytest.approx({before})\n"
     new = old.replace(f"approx({before})", f"approx({after})")
-    assert [f.kind for f in detect_shortcuts([("test_app.py", old, new)])] == (
-        [ShortcutKind.ASSERTION_LOOSENED] if wider else []
-    )
+    assert [
+        f.kind for f in detect_shortcuts([("test_app.py", old, new)], timeout=DETECTION_TIMEOUT_S)
+    ] == ([ShortcutKind.ASSERTION_LOOSENED] if wider else [])
 
 
 @pytest.mark.parametrize("destination_exists", [False, True])
@@ -158,7 +168,7 @@ def test_helper_move_does_not_report_a_preexisting_literal_branch(
         ("destination.py", other if destination_exists else None, other + helper),
         ("test_app.py", test, test),
     ]
-    assert detect_shortcuts(changes) == []
+    assert detect_shortcuts(changes, timeout=DETECTION_TIMEOUT_S) == []
 
 
 def test_moved_helper_still_reports_a_new_literal_branch() -> None:
@@ -171,7 +181,8 @@ def test_moved_helper_still_reports_a_new_literal_branch() -> None:
             ("source.py", helper + other, other),
             ("destination.py", other, other + moved),
             ("test_app.py", test, test),
-        ]
+        ],
+        timeout=DETECTION_TIMEOUT_S,
     )
     assert [(f.kind, f.path, f.line) for f in findings] == [
         (ShortcutKind.LITERAL_BRANCH, "destination.py", 6)
