@@ -51,3 +51,40 @@ pub fn ready(child: &Child, stop: &AtomicBool) -> io::Result<()> {
         }
     }
 }
+
+/// Preserve both the triggering failure and cleanup outcome; never relaunch after either fails.
+#[derive(Debug)]
+struct StopFailure {
+    primary: io::Result<()>,
+    cleanup: io::Result<bool>,
+    reaped: bool,
+}
+
+impl std::fmt::Display for StopFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "session: {:?}; cleanup: {:?}; reaped: {}",
+            self.primary, self.cleanup, self.reaped
+        )
+    }
+}
+impl std::error::Error for StopFailure {}
+
+pub fn close(child: Option<Child>, primary: io::Result<()>) -> io::Result<()> {
+    let Some(child) = child else {
+        return primary;
+    };
+    let cleanup = child.close();
+    child.drain_output();
+    let reaped = child.exit_code().is_some();
+    if primary.is_ok() && matches!(cleanup, Ok(true)) && reaped {
+        Ok(())
+    } else {
+        Err(io::Error::other(StopFailure {
+            primary,
+            cleanup,
+            reaped,
+        }))
+    }
+}

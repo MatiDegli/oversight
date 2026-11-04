@@ -5,13 +5,21 @@ mod console;
 #[cfg(windows)]
 mod diagnostics;
 #[cfg(windows)]
+mod dialogs;
+#[cfg(windows)]
 mod listener;
+#[cfg(windows)]
+mod menu;
 #[cfg(windows)]
 mod native;
 #[cfg(windows)]
 mod output;
 #[cfg(windows)]
+mod session;
+#[cfg(windows)]
 mod supervise;
+#[cfg(windows)]
+mod window;
 
 #[cfg(not(windows))]
 fn main() {
