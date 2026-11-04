@@ -715,6 +715,98 @@ def test_real_prepared_tools_reject_scripts_before_copy(tmp_path, monkeypatch, t
     assert not (tmp_path / "unprepared").exists()
 
 
+def assert_copied_executable_headers(root: Path, name: str) -> None:
+    """Identify malformed executable fixture entries before product preparation."""
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or not path.is_file() or not path.stat().st_mode & 0o111:
+            continue
+        with path.open("rb") as stream:
+            header = stream.read(16)
+        assert header.startswith((b"#!", b"\x7fELF")), (
+            f"unsupported executable in copied {name}: {path.relative_to(root).as_posix()!r}; "
+            f"first bytes {header!r}"
+        )
+
+
+def copy_system_input(source: Path, destination: Path, target: str) -> None:
+    """System data keeps its bytes, without inherited executable permissions."""
+    import shutil
+
+    if source.is_dir():
+        shutil.copytree(source, destination, symlinks=True)
+    else:
+        shutil.copy2(source, destination)
+    if target.startswith(("/etc/", "/usr/share/zoneinfo/", "/usr/lib/locale/")):
+        paths = destination.rglob("*") if destination.is_dir() else (destination,)
+        for path in paths:
+            if not path.is_symlink() and path.is_file():
+                path.chmod(path.stat().st_mode & ~0o111)
+
+
+@pytest.mark.parametrize(
+    "header", [b"TZif2\0\nprivate", b"MZ\0\xff", b"plain text\n", b"TZif2" + b"\0" * 100]
+)
+def test_copied_executable_header_failure_identifies_relative_entry(tmp_path, header):
+    root = tmp_path / "copy"
+    entry = root / "nested/localtime"
+    entry.parent.mkdir(parents=True)
+    entry.write_bytes(header)
+    entry.chmod(0o755)
+    with pytest.raises(AssertionError) as error:
+        assert_copied_executable_headers(root, "system-3")
+    assert str(error.value).splitlines()[0] == (
+        "unsupported executable in copied system-3: 'nested/localtime'; "
+        f"first bytes {header[:16]!r}"
+    )
+    assert str(tmp_path) not in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "target", ["/etc/localtime", "/usr/share/zoneinfo/Etc/UTC", "/usr/lib/locale/C.utf8"]
+)
+def test_copied_system_data_removes_executable_bits_before_inventory(tmp_path, target):
+    import shutil
+
+    source = tmp_path / "source"
+    source.write_bytes(b"TZif2\0\n")
+    source.chmod(0o755)
+    before, after = tmp_path / "before", tmp_path / "after"
+    before.mkdir()
+    after.mkdir()
+    shutil.copy2(source, before / "localtime")
+    with pytest.raises(AssertionError, match="'localtime'; first bytes b'TZif2"):
+        assert_copied_executable_headers(before, "system-3")
+    # Locale inputs are directories; directory execute bits still permit traversal.
+    if target == "/usr/lib/locale/C.utf8":
+        locale = tmp_path / "locale"
+        locale.mkdir()
+        shutil.copy2(source, locale / "LC_TIME")
+        copy_system_input(locale, after / "C.utf8", target)
+        copied = after / "C.utf8/LC_TIME"
+        assert (after / "C.utf8").stat().st_mode & 0o111
+    else:
+        copied = after / "localtime"
+        copy_system_input(source, copied, target)
+    assert copied.read_bytes() == source.read_bytes()
+    assert not copied.stat().st_mode & 0o111
+    assert source.stat().st_mode & 0o111
+    assert_copied_executable_headers(after, "system-3")
+
+
+@pytest.mark.parametrize("header", [b"\x7fELFfixture", b"#!/bin/sh\nexit 0\n"])
+def test_copied_system_executables_keep_their_format_and_permissions(tmp_path, header):
+    source = tmp_path / "source"
+    source.write_bytes(header)
+    source.chmod(0o755)
+    root = tmp_path / "copy"
+    root.mkdir()
+    destination = root / "tool"
+    copy_system_input(source, destination, "/usr/bin/tool")
+    assert destination.read_bytes() == header
+    assert destination.stat().st_mode & 0o111
+    assert_copied_executable_headers(root, "system-0")
+
+
 def real_prepared_inputs(directory, tracked):
     """External static fixture preparer: record private tool/dependency copies before reuse."""
     import hashlib
@@ -743,9 +835,11 @@ def real_prepared_inputs(directory, tracked):
             destination = tree / name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+    assert_copied_executable_headers(tree, "tree")
     mappings, inventories = [], []
 
     def add(name, role, source, target):
+        assert_copied_executable_headers(source, name)
         mappings.append(RootMapping(source, Path(target)))
         inventories.append(replace(record(source, name, owned=True), role=role))
 
@@ -817,10 +911,7 @@ def real_prepared_inputs(directory, tracked):
         root = groups.setdefault(parent, storage / ("system-" + str(len(groups))))
         root.mkdir(exist_ok=True)
         source, destination = Path(target).resolve(strict=True), root / Path(target).name
-        if source.is_dir():
-            shutil.copytree(source, destination, symlinks=True)
-        else:
-            shutil.copy2(source, destination)
+        copy_system_input(source, destination, target)
     # The static inventory also validates dormant Git template shebangs. These extra
     # validation inputs are not mounted: the adapter still selects the fixed system list.
     shutil.copy2("/usr/bin/perl", groups["/usr/bin"] / "perl")
