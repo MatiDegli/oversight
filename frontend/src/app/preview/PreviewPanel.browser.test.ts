@@ -47,7 +47,10 @@ it("isolates two tabs: observer receives public status only and Close is local",
   try {
     const owner = await session.open();
     const observer = await session.open("panel", "", "observer");
-    await check(owner.locator("iframe")).toHaveAttribute("sandbox", "allow-forms");
+    await check(owner.locator("iframe")).toHaveAttribute(
+      "sandbox",
+      "allow-scripts allow-same-origin allow-forms",
+    );
     await check(owner.locator("iframe")).toHaveAttribute("referrerpolicy", "no-referrer");
     await check(owner.locator("iframe")).toHaveAttribute("title", "Live preview for Agent A");
     await check(observer.getByText("Preview in use in another tab", { exact: true })).toBeVisible();

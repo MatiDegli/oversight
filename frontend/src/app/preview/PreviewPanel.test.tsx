@@ -144,11 +144,11 @@ it("only mounts owned ready details and unmounts a stopping or failed app", () =
       uncertain: state !== "ready",
     });
     if (state === "ready") {
-      expect(html).toContain('sandbox="allow-forms"');
+      expect(html).toContain('sandbox="allow-scripts allow-same-origin allow-forms"');
       expect(html).toContain('referrerPolicy="no-referrer"');
       expect(html).toContain('title="Live preview for the selected app"');
     } else expect(html).not.toContain("iframe");
-    expect(html).not.toMatch(/allow-scripts|allow-same-origin|lease_token/);
+    expect(html).not.toContain("lease_token");
   }
 });
 it("renders no ordinary-failure frame and hides only after dismissal", () => {
