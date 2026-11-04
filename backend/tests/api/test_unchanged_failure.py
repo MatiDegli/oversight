@@ -89,6 +89,7 @@ async def running(tmp_path: Path, *, reachable: bool) -> AsyncIterator[LiveRun]:
     review_script.write_text(json.dumps({"task": "review", "turns": [{"text": "VERDICT: accept"}]}))
     settings = two_fakes(
         tmp_path,
+        harness_pack=False,
         agent_model_b="fake",
         cross_review=True,
         review_model="fake-b",

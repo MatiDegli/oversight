@@ -19,7 +19,7 @@ async def test_setup_times_out_before_start_when_replay_stalls(pings, tmp_path, 
     monkeypatch.setattr(session, "SETUP_TIMEOUT_S", 3, raising=False)
     factory = Scripts()
     out = tmp_path / "results" / "r.jsonl"
-    async with live_server(live_settings(tmp_path), factory) as server:
+    async with live_server(live_settings(tmp_path, harness_pack=False), factory) as server:
         initial = list(server.store._events)
         original = server.app.middleware_stack
         ping_count = 0
