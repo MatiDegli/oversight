@@ -4,6 +4,7 @@ import { stateStore } from "../state";
 import { leadCapacity } from "./chatLeadSelectors";
 import { CommandError } from "../transport";
 import { taskBoxStore } from "./taskBoxModel";
+import { setupFailure } from "./setupFailure";
 
 /** Kept outside the form so Cancel, navigation and pending answers preserve the draft. */
 export function createLeadDraftStore() {
@@ -41,9 +42,11 @@ export function createLeadDraftStore() {
           pending: false,
           failure:
             error instanceof CommandError
-              ? error.status >= 500
-                ? `The server failed to start the lead: ${error.message}`
-                : error.message
+              ? error.code === "not_configured"
+                ? setupFailure(error)
+                : error.status >= 500
+                  ? `The server failed to start the lead: ${error.message}`
+                  : error.message
               : "The request did not reach the server. Check the connection and try again.",
         });
         return false;

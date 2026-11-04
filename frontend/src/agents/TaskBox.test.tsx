@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { applyEvent, createInitialState } from "../state";
-import { CommandError } from "../transport";
+import { CommandError, createCommandClient } from "../transport";
 import { twoSlotState } from "../taskBox.fixture";
 
 import { createTaskBoxStore } from "./taskBoxModel";
@@ -272,11 +272,27 @@ describe("the new-agent box in a replay", () => {
 it("offers the existing Settings opener only after a not_configured refusal", async () => {
   const store = createTaskBoxStore();
   store.getState().setDraft("Keep this task");
-  await store
-    .getState()
-    .start(() =>
-      Promise.reject(new CommandError(503, "not_configured", "Server setup is incomplete.")),
-    );
+  const client = createCommandClient(
+    vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "not_configured",
+              message: "Server setup is incomplete.",
+              missing: [
+                { name: "OVERSIGHT_BUDGET_USD", problem: "missing", slots: ["A"] },
+                { name: "MUSE_SPARK_INPUT_USD_PER_M", problem: "missing", slots: ["A"] },
+                { name: "MUSE_SPARK_OUTPUT_USD_PER_M", problem: "missing", slots: ["A"] },
+              ],
+            },
+          }),
+          { status: 503 },
+        ),
+      ),
+    ),
+  );
+  await store.getState().start(client.startAgent);
   const render = () =>
     renderToStaticMarkup(
       <TaskBox
@@ -287,6 +303,10 @@ it("offers the existing Settings opener only after a not_configured refusal", as
       />,
     );
   expect(render()).toContain("Open settings");
+  expect(render()).toContain(
+    "Setup is incomplete: Meta budget (USD), Muse Spark input (USD / 1M tokens), and Muse Spark output (USD / 1M tokens) are missing.",
+  );
+  expect(render()).not.toContain("The server failed to start");
   expect(render()).toContain("Keep this task");
   store.getState().setDraft("Edited task");
   expect(render()).not.toContain("Open settings");

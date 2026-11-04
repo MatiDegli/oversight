@@ -269,6 +269,54 @@ function setup(answer: () => Promise<Response>) {
 }
 
 describe("starting an agent from the box", () => {
+  it.each([
+    [
+      [
+        { name: "OVERSIGHT_BUDGET_USD", problem: "missing", slots: ["A"] },
+        { name: "MUSE_SPARK_INPUT_USD_PER_M", problem: "missing", slots: ["A"] },
+        { name: "MUSE_SPARK_OUTPUT_USD_PER_M", problem: "missing", slots: ["A"] },
+      ],
+      "Setup is incomplete: Meta budget (USD), Muse Spark input (USD / 1M tokens), and Muse Spark output (USD / 1M tokens) are missing.",
+    ],
+    [
+      [{ name: "OVERSIGHT_BUDGET_USD", problem: "invalid", value: "never display this" }],
+      "Setup is incomplete: Meta budget (USD) is invalid.",
+    ],
+    [
+      [
+        { name: "META_API_KEY", problem: "missing" },
+        { name: "BASETEN_API_KEY", problem: "missing" },
+        { name: "MUSE_SPARK_INPUT_USD_PER_M", problem: "invalid" },
+        { name: "MUSE_SPARK_OUTPUT_USD_PER_M", problem: "invalid" },
+      ],
+      "Setup is incomplete: Meta API key and Baseten API key are missing; Muse Spark input (USD / 1M tokens) and Muse Spark output (USD / 1M tokens) are invalid.",
+    ],
+    [
+      [{ name: "FUTURE_SETTING", problem: "missing" }],
+      "Setup is incomplete: FUTURE_SETTING is missing.",
+    ],
+    [[{ name: "toString", problem: "invalid" }], "Setup is incomplete: toString is invalid."],
+    [undefined, "Server setup is incomplete."],
+    [[], "Server setup is incomplete."],
+    [[{ name: "META_API_KEY", problem: "other" }], "Server setup is incomplete."],
+  ])("explains setup problems from the response: %j", async (missing, message) => {
+    const { store, start } = setup(() =>
+      Promise.resolve(
+        reply(503, {
+          error: { code: "not_configured", message: "Server setup is incomplete.", missing },
+        }),
+      ),
+    );
+    store.getState().setDraft("Keep this task");
+    await start();
+    expect(store.getState()).toMatchObject({
+      draft: "Keep this task",
+      pending: false,
+      failure: message,
+      failureCode: "not_configured",
+    });
+  });
+
   it("sends the person's chosen slot without a model override, and preserves the choice across a refusal", async () => {
     const { request, store } = setup(() =>
       Promise.resolve(refusal(403, "spend_brake", "Meta credits are blocked.")),
