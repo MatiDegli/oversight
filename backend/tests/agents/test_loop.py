@@ -189,19 +189,35 @@ async def test_parallel_calls_after_a_halt_get_a_result(small_tree: Opened) -> N
     assert end.steps == 2 and len(steps(recorder)) == 2
 
 
-async def test_model_api_failure_reports_an_error_and_halts(small_tree: Opened) -> None:
+@pytest.mark.parametrize("full_context", [False, True])
+async def test_model_api_failure_reports_an_error_and_halts(
+    small_tree: Opened, full_context: bool
+) -> None:
+    from oversight.agents.client import ContextLengthError
+
+    failure = (
+        ContextLengthError()
+        if full_context
+        else ModelAPIError("model API error after 5 attempts: HTTP 503")
+    )
+
     class Failing(ScriptedModel):
         async def complete(self, messages: object, tools: object) -> ModelReply:  # type: ignore[override]
-            raise ModelAPIError("model API error after 5 attempts: HTTP 503")
+            raise failure
 
     recorder = Recorder()
     end = await make_run(
         small_tree, Failing(parse_script('{"task": "t", "turns": []}')), recorder
     ).run()
     assert end.state == "halted"
-    assert end.detail == "The model API failed: model API error after 5 attempts: HTTP 503."
+    assert end.detail == (
+        str(failure)
+        if full_context
+        else "The model API failed: model API error after 5 attempts: HTTP 503."
+    )
     (error,) = cast(list[ErrorReport], recorder.of("ErrorReport"))
     assert error.source == "model_api" and error.fatal and error.agent_id == "agent-1"
+    assert error.message == str(failure)
 
 
 async def test_retry_after_past_deadline_reaches_the_halted_status(small_tree: Opened) -> None:
