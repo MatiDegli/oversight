@@ -48,10 +48,16 @@ describe("live diff inputs over the level 1 fixture", () => {
       } as unknown as editor.ITextModel;
     };
     const diffEditor = {
-      setModel: (models: editor.IDiffEditorModel | null) => {
+      createViewModel: (model: editor.IDiffEditorModel) => ({
+        model,
+        dispose: vi.fn(),
+        waitForDiff: () => Promise.resolve(),
+      }),
+      setModel: (viewModel: editor.IDiffEditorViewModel | null) => {
+        const models = viewModel?.model;
         log.push(`attach ${models ? models.original.getValue() : "none"}`);
       },
-    } as Pick<editor.IStandaloneDiffEditor, "setModel">;
+    } as Pick<editor.IStandaloneDiffEditor, "setModel" | "createViewModel">;
 
     const first = showDiff(diffEditor, undefined, data, createModel);
     expect(first.models.original.getValue()).toBe(update.payload.file.original);
