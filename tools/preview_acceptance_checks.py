@@ -43,6 +43,7 @@ def settings(
         demo_python=Path(sys.executable),
         memory_hold_percent=100,
         preview_profile=PreviewProfile(
+            enabled=True,
             adapter=REPO_ROOT / "backend/src/oversight/preview_adapter.py",
             interpreter=Path(sys.executable),
             ports=pool or tuple({free_port() for _ in range(8)} - {port, vite})[:4],

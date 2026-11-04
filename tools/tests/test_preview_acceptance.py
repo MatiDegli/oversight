@@ -12,6 +12,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools import preview_acceptance as driver
 from tools import preview_browser
+from tools.preview_acceptance_checks import settings
 
 from oversight.workspace import IsolationUnavailable
 
@@ -85,3 +86,14 @@ async def test_browser_driver_selects_explicit_real_c_project(tmp_path, monkeypa
     monkeypatch.setattr(preview_browser, "bounded", bounded)
     with pytest.raises(BrowserInvocation):
         await preview_browser.execute(tmp_path)
+
+
+async def test_acceptance_settings_explicitly_enable_trusted_profile(tmp_path):
+    from oversight.workspace import PreviewProfile
+
+    config = settings(tmp_path / ".runtime", 18710, vite=15710, pool=(19901, 19902))
+    assert config.preview_profile.enabled is True
+    assert config.preview_profile.production_open is True
+    assert config.preview_profile.trusted_demo is True
+    config.preview_profile.validate()
+    assert PreviewProfile().enabled is False
