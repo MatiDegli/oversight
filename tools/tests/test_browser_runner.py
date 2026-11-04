@@ -57,15 +57,17 @@ def run_browser(
     return done, calls
 
 
-@pytest.mark.parametrize("shard", [None, "1/2", "2/2"])
+@pytest.mark.parametrize("shard", [None, "1/4", "2/4", "3/4", "4/4"])
 def test_shards_forward_to_vitest_and_only_the_first_runs_launchers(
     browser_env: dict[str, str], shard: str | None
 ) -> None:
     done, calls = run_browser(browser_env, shard)
     assert done.returncode == 0, done.stderr
     stages = calls[1:]
-    assert [call["name"] for call in stages] == (["pnpm"] if shard == "2/2" else ["uv", "pnpm"])
-    if shard != "2/2":
+    assert [call["name"] for call in stages] == (
+        ["pnpm"] if shard not in (None, "1/4") else ["uv", "pnpm"]
+    )
+    if shard in (None, "1/4"):
         assert stages[0]["args"] == ["run", "--frozen", "pytest", "tools/browser/test_launchers.py"]
     assert stages[-1]["args"] == ["-C", "frontend", "test:browser"] + (
         ["--shard", shard] if shard else []
@@ -87,13 +89,33 @@ def test_shards_forward_to_vitest_and_only_the_first_runs_launchers(
     assert all(call["bound"] == "--kill-after=10 1200" for call in stages)
 
 
-@pytest.mark.parametrize("shard", ["", "1", "0/2", "3/2", "1/3", "-1/2", "1/2 2/2", "1/2; exit 0"])
+@pytest.mark.parametrize(
+    "shard",
+    [
+        "",
+        "1",
+        "0/2",
+        "0/4",
+        "5/4",
+        "1/2",
+        "2/2",
+        "3/2",
+        "1/3",
+        "-1/2",
+        "-1/4",
+        "1/2 2/2",
+        "1/4 2/4",
+        "1/2; exit 0",
+        "1/4; exit 0",
+    ],
+)
 def test_invalid_shard_is_rejected_before_any_tests_run(
     browser_env: dict[str, str], shard: str
 ) -> None:
     done, calls = run_browser(browser_env, shard)
     assert done.returncode != 0
-    assert "BROWSER_SHARD must be 1/2 or 2/2" in done.stderr
+    assert "Error 64" in done.stderr
+    assert "BROWSER_SHARD must be 1/4, 2/4, 3/4 or 4/4" in done.stderr
     assert [call["name"] for call in calls] == ["timeout"]
 
 
