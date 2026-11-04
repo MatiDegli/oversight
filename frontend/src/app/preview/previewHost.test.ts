@@ -236,6 +236,7 @@ it("recovers after bootstrap without granting slot intent and activation reuses 
     candidate,
     preview_id: port.publicStatus()?.preview_id ?? "",
     lease_token: "fake-private-1",
+    unloaded: true,
   };
   const store: PreviewOwnershipStore = {
     load: () => saved,
@@ -379,7 +380,7 @@ it.each(
       new AbortController().signal,
     );
     const identity = { run: candidate.run_id, source: "live" };
-    let saved: PreviewOwnership | null = { identity, candidate, ...receipt };
+    let saved: PreviewOwnership | null = { identity, candidate, ...receipt, unloaded: true };
     const store: PreviewOwnershipStore = {
       load: () => saved,
       save: vi.fn(),
@@ -500,6 +501,7 @@ it("bootstrap and Chat selection navigation leave a hidden recovered owner renew
     candidate,
     preview_id: port.publicStatus()?.preview_id ?? "",
     lease_token: "fake-private-1",
+    unloaded: true,
   };
   const store: PreviewOwnershipStore = {
     load: () => saved,
@@ -552,6 +554,7 @@ it.each(["revision", "change", "head", "absent", "older"] as const)(
       candidate: mode === "older" ? candidate : stored,
       preview_id: `preview-${"a".repeat(32)}`,
       lease_token: "private-token",
+      unloaded: true,
     };
     let saved: PreviewOwnership | null = record;
     const store: PreviewOwnershipStore = {
@@ -592,5 +595,49 @@ it.each(["revision", "change", "head", "absent", "older"] as const)(
     recovered.dispose();
     expect(port.calls).toEqual([]);
     expect(store.save).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["same", "superseded"])(
+  "leaves an unmarked %s record untouched and observes without recovery or unload writes",
+  async (mode) => {
+    const { host: owner, port, state, request } = setup();
+    await owner.activate(request);
+    const candidate = resolvePreviewReference(state, request).candidate;
+    const status = port.publicStatus();
+    if (!candidate || !status) throw new Error("Missing preview");
+    const record: PreviewOwnership = {
+      identity: { run: candidate.run_id, source: "live" },
+      candidate: { ...candidate, ...(mode === "superseded" && { head_commit: "old-head" }) },
+      preview_id: status.preview_id,
+      lease_token: "fake-private-1",
+    };
+    const store: PreviewOwnershipStore = {
+      load: () => record,
+      save: vi.fn(),
+      clear: vi.fn(),
+    };
+    const observer = createPreviewHost(
+      port,
+      previewClock,
+      record.identity,
+      () => state,
+      () => true,
+      undefined,
+      store,
+    );
+    const before = port.calls.length;
+    observer.accept({ type: "preview.status", seq: state.lastSeq, ts: "same", payload: status });
+    await observer.setIdentity(record.identity);
+    expect(observer.snapshot()).toBe(false);
+    await observer.activate(request);
+    expect(observer.controller.snapshot()).toMatchObject({ owned: false, frameUrl: null, status });
+    await observer.close();
+    observer.dispose();
+    expect(port.calls).toHaveLength(before);
+    expect(store.save).not.toHaveBeenCalled();
+    expect(store.clear).not.toHaveBeenCalled();
+    await owner.close();
+    owner.dispose();
   },
 );

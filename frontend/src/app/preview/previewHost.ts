@@ -72,6 +72,7 @@ export function createPreviewHost(
       return Promise.resolve();
     }
     if (!record) return Promise.resolve();
+    if (!record.unloaded) return controller.recover(() => null);
     const getCandidate = () => {
       if (disposed || !canOpen() || previewStartup().kind === "invalid") return null;
       for (const events of Object.values(read().leadViews)) {

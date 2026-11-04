@@ -131,7 +131,7 @@ it("recovers a lost unload using the same ID, renews hidden and reveals only on 
   await first.see(() => candidate);
   fake.stopMode = "lost";
   first.dispose();
-  expect(store.load(identity)).toEqual(record);
+  expect(store.load(identity)).toEqual({ ...record, unloaded: true });
   const recovered = controller();
   const renew = vi.spyOn(port, "renew");
   await recovered.recover(() => candidate);
@@ -160,6 +160,7 @@ it("recovers a lost unload using the same ID, renews hidden and reveals only on 
 it("can stop hidden recovered ownership without ever obtaining a frame", async () => {
   const { controller, fake, store } = setup();
   await controller().see(() => candidate);
+  store.save({ ...record, unloaded: true });
   const recovered = controller();
   await recovered.recover(() => candidate);
   await recovered.close();
@@ -176,6 +177,7 @@ it.each([
 ] as const)("clears terminal recovery %s and never renews or retries", async (reason) => {
   const { controller, fake, port, store } = setup();
   await controller().see(() => candidate);
+  store.save({ ...record, unloaded: true });
   fake.publish(
     reason === "launch_failed" || reason === "cleanup_unverified" ? "failed" : "stopped",
     reason,
@@ -228,6 +230,7 @@ it.each(["dispose", "identity", "candidate"])(
   async (action) => {
     const { controller, port, store } = setup();
     await controller().see(() => candidate);
+    store.save({ ...record, unloaded: true });
     const pending = deferred<PreviewDetails>();
     vi.spyOn(port, "details").mockReturnValue(pending.promise);
     const renew = vi.spyOn(port, "renew"),
@@ -395,8 +398,9 @@ it.each(["closed", "lease_expired", "lifetime_expired", "launch_failed"] as cons
   },
 );
 it("terminal recovery and stale ready arrivals start nothing until explicit activation", async () => {
-  const { controller, port, fake, clock } = setup();
+  const { controller, port, fake, clock, store } = setup();
   await controller().see(() => candidate);
+  store.save({ ...record, unloaded: true });
   fake.expire();
   const recovered = controller();
   await recovered.recover(() => candidate);
@@ -564,3 +568,151 @@ it("clears a late verified stop receipt after the local Close deadline without d
   await Promise.resolve();
   expect(store.load(identity)).toBeNull();
 });
+
+it("marks pagehide disposal, preserves keepalive Stop and consumes the mark on reload recovery", async () => {
+  const { controller, fake, port, store } = setup();
+  const owner = controller();
+  await owner.see(() => candidate);
+  expect(store.load(identity)).toEqual(record);
+  const stop = vi.spyOn(port, "stop");
+  fake.stopMode = "lost";
+  owner.dispose();
+  expect(store.load(identity)).toEqual({ ...record, unloaded: true });
+  expect(stop).toHaveBeenCalledExactlyOnceWith(
+    record.preview_id,
+    { lease_token: token },
+    expect.any(AbortSignal),
+    { keepalive: true },
+  );
+  expect(stop.mock.calls[0]?.[2].aborted).toBe(false);
+  const next = controller();
+  await next.recover(() => candidate);
+  expect(next.snapshot()).toMatchObject({ owned: true, visible: false, frameUrl: null });
+  expect(store.load(identity)).toEqual(record);
+  fake.stopMode = "verified";
+  await next.close();
+});
+
+it("a duplicate of an unmarked owner is read-only and leaves its copied record untouched", async () => {
+  const { controller, disk, port, clock, fake } = setup();
+  const owner = controller();
+  await owner.see(() => candidate);
+  const copy = storage();
+  for (const [key, value] of disk.data) copy.data.set(key, value);
+  const before = [...copy.data];
+  const duplicateStore = createPreviewOwnershipStore(origin, () => copy);
+  const duplicate = createPreviewController(port, clock, identity, duplicateStore);
+  const calls = fake.calls.length;
+  const start = vi.spyOn(port, "start");
+  await duplicate.recover(() => candidate);
+  await duplicate.see(() => candidate);
+  expect(start).not.toHaveBeenCalled();
+  duplicate.observe(fakeStatus("ready"));
+  await duplicate.see(() => candidate);
+  await duplicate.refresh();
+  expect(duplicate.snapshot()).toMatchObject({ owned: false, visible: true, frameUrl: null });
+  await duplicate.close();
+  await duplicate.setIdentity({ run: "other", source: "live" });
+  duplicate.dispose();
+  expect(fake.calls).toHaveLength(calls);
+  expect([...copy.data]).toEqual(before);
+  expect(owner.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+  await owner.close();
+});
+
+it("a crash without pagehide cannot recover and waits for public lease expiry", async () => {
+  const { controller, port, clock, fake, store } = setup();
+  await controller().see(() => candidate); // The lost document never calls dispose.
+  const next = createPreviewController(port, clock, identity, store);
+  const before = fake.calls.length;
+  next.observe(fakeStatus("ready"));
+  await next.recover(() => candidate);
+  await next.see(() => candidate);
+  await next.close();
+  expect(next.snapshot()).toMatchObject({ owned: false, frameUrl: null });
+  expect(store.load(identity)).toEqual(record);
+  expect(fake.calls).toHaveLength(before);
+  fake.expire();
+  next.observe(fakeStatus("stopped", "lease_expired"));
+  await next.recover(() => candidate);
+  expect(fake.calls).toHaveLength(before);
+  next.dispose();
+  expect(fake.calls).toHaveLength(before);
+  expect(store.load(identity)).toEqual(record);
+});
+
+it("round-trips a departure mark and compare-and-clear distinguishes it from an active owner", () => {
+  const disk = storage(),
+    store = createPreviewOwnershipStore(origin, () => disk);
+  const marked = { ...record, unloaded: true as const };
+  store.save(marked);
+  expect(store.load(identity)).toEqual(marked);
+  store.clear(record);
+  expect(store.load(identity)).toEqual(marked);
+  store.save(record);
+  store.clear(marked);
+  expect(store.load(identity)).toEqual(record);
+});
+it.each([false, "true", 1, null])("rejects an invalid departure mark %j", (unloaded) => {
+  const disk = storage(),
+    store = createPreviewOwnershipStore(origin, () => disk);
+  store.save(record);
+  const key = [...disk.data.keys()][0];
+  if (!key) throw new Error("Missing fixture key");
+  disk.data.set(key, JSON.stringify({ ...record, unloaded }));
+  expect(store.load(identity)).toBeNull();
+  expect(disk.data.size).toBe(0);
+});
+it.each(["access", "getItem", "setItem", "removeItem"])(
+  "throwing %s storage preserves memory ownership and unload Stop",
+  async (operation) => {
+    const { port, clock, fake } = setup();
+    const disk = storage();
+    const store = createPreviewOwnershipStore(origin, () => {
+      if (operation === "access") throw new Error("Unavailable");
+      return {
+        ...disk,
+        [operation]: () => {
+          throw new Error("Unavailable");
+        },
+      };
+    });
+    const owner = createPreviewController(port, clock, identity, store);
+    await owner.see(() => candidate);
+    expect(owner.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+    const stop = vi.spyOn(port, "stop");
+    expect(() => {
+      owner.dispose();
+    }).not.toThrow();
+    expect(stop).toHaveBeenCalledExactlyOnceWith(
+      record.preview_id,
+      { lease_token: token },
+      expect.any(AbortSignal),
+      { keepalive: true },
+    );
+    await Promise.resolve();
+    const next = createPreviewController(port, clock, identity, store);
+    await expect(next.recover(() => candidate)).resolves.toBeUndefined();
+    expect(next.snapshot().owned).toBe(false);
+    next.dispose();
+    expect(stop).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each(["before", "after"])(
+  "a duplicate can explicitly start after public expiry arriving %s its recovery check",
+  async (arrival) => {
+    const { controller, port, clock, fake, store } = setup();
+    await controller().see(() => candidate);
+    const duplicate = createPreviewController(port, clock, identity, store);
+    fake.expire();
+    if (arrival === "before") duplicate.observe(fakeStatus("stopped", "lease_expired"));
+    await duplicate.recover(() => candidate);
+    if (arrival === "after") duplicate.observe(fakeStatus("stopped", "lease_expired"));
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(1);
+    await duplicate.see(() => candidate);
+    expect(duplicate.snapshot()).toMatchObject({ owned: true, frameUrl: fake.frameUrl });
+    expect(fake.calls.filter((call) => call.kind === "start")).toHaveLength(2);
+    await duplicate.close();
+  },
+);

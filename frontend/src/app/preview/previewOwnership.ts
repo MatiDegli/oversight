@@ -7,6 +7,7 @@ export interface PreviewOwnership {
   candidate: PreviewCandidate;
   preview_id: string;
   lease_token: string;
+  unloaded?: true;
 }
 export interface PreviewOwnershipStore {
   load: (identity: PreviewIdentity) => PreviewOwnership | null;
@@ -21,7 +22,9 @@ const keys = (value: unknown, expected: string[]): value is Record<string, unkno
   Object.keys(value).sort().join() === expected.sort().join();
 const text = (value: unknown): value is string => typeof value === "string" && !!value.trim();
 function parse(value: unknown): PreviewOwnership | null {
-  if (!keys(value, ["identity", "candidate", "preview_id", "lease_token"])) return null;
+  const fields = ["identity", "candidate", "preview_id", "lease_token"];
+  if (value && typeof value === "object" && "unloaded" in value) fields.push("unloaded");
+  if (!keys(value, fields) || ("unloaded" in value && value.unloaded !== true)) return null;
   const { identity, candidate } = value;
   if (
     !keys(identity, ["run", "source"]) ||
@@ -61,6 +64,7 @@ function encoded(record: PreviewOwnership) {
     },
     preview_id: record.preview_id,
     lease_token: record.lease_token,
+    ...(record.unloaded && { unloaded: true }),
   });
 }
 /** One origin's record in this tab only. Storage refusal leaves memory ownership usable. */
