@@ -246,8 +246,24 @@ def test_ambiguous_python_classifier_is_not_guessed() -> None:
     ],
 )
 def test_desktop_exception_is_exact(ecosystem, name, version, expression, expected):
-    package = notices.Package(ecosystem, name, version, expression, "https://example.org")
+    package = notices.Package(
+        ecosystem, name, version, expression, "https://example.org", lockfile="desktop/Cargo.lock"
+    )
     assert (
-        notices.allowed_license(expression, name, version=version, ecosystem=ecosystem) is expected
+        notices.allowed_license(
+            expression, name, version=version, ecosystem=ecosystem, lockfile="desktop/Cargo.lock"
+        )
+        is expected
     )
     assert bool(notices.policy_errors([package])) is not expected
+
+
+def test_desktop_exception_needs_its_lockfile_scope():
+    for lockfile in ("", "Cargo.lock", "another/Cargo.lock"):
+        assert not notices.allowed_license(
+            "Apache-2.0 WITH LLVM-exception",
+            "target-lexicon",
+            version="0.12.16",
+            ecosystem="Rust",
+            lockfile=lockfile,
+        )
