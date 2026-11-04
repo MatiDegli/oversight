@@ -248,11 +248,13 @@ it("edits invalidate the suggestion and arrivals cannot open the slot or steal f
   }
 });
 it("resize and explicit navigation retain one cold-to-warm graph and cancel the live frame", async () => {
-  const session = await support.session();
+  const session = await support.session(chatSizes[0], "dark", "lateInitialDetails=true");
   const { page } = session;
   try {
     await check(page.getByRole("img", { name: "Repository graph" })).toHaveCount(0);
     await page.getByRole("button", { name: "Preview app", exact: true }).click();
+    // Deliver the first starting details after ready to exercise stale response ordering.
+    await check.poll(() => session.calls.details).toBe(1);
     session.publish("ready");
     await check(page.locator("iframe")).toBeVisible();
     const close = page.locator(".preview-panel button");

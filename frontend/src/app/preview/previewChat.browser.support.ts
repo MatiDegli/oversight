@@ -14,6 +14,7 @@ import type { PreviewStatus, ServerEvent, StartPreview } from "@contracts";
 import references from "../../../../fixtures/views/reference-cases.json";
 import { launchBrowser } from "../../browserLaunch.support";
 import { captureCheckpoint } from "./previewPanel.browser.support";
+import { deferred } from "./previewFake";
 
 export const chatDirectory = fileURLToPath(
   new URL("../../../../.shots/preview-chat/", import.meta.url),
@@ -357,6 +358,8 @@ class ChatSupport {
       loadedAt: number | null = null;
     let expectedError = false;
     const requests: StartPreview[] = [];
+    const initialDetails = deferred<undefined>();
+    const initialDetailsObserved = deferred<undefined>();
     const base = this.candidate ?? {
       run_id: "run-20261027-140312",
       agent_id: "agent-1",
@@ -391,7 +394,11 @@ class ChatSupport {
           body = status;
         } else {
           calls.details++;
+          if (extra.includes("lateInitialDetails") && calls.details > 1)
+            await initialDetailsObserved.promise;
           body = { status, url: status?.state === "ready" ? "http://127.0.0.1:19800/" : null };
+          if (extra.includes("lateInitialDetails") && calls.details === 1)
+            await initialDetails.promise;
         }
         await route.fulfill({
           status: path === "/previews" ? 202 : 200,
@@ -430,7 +437,9 @@ class ChatSupport {
         void response
           .json()
           .then((value: { status?: PreviewStatus }) => {
-            if (value.status) status = value.status;
+            // Fixture handlers own fake status; a delayed HTTP read can describe an older state.
+            if (this.real && value.status) status = value.status;
+            if (value.status?.state === "starting") initialDetailsObserved.resolve(undefined);
             if (value.status?.state === "ready" && readyAt === null) readyAt = Date.now();
           })
           .catch(() => {});
@@ -454,6 +463,7 @@ class ChatSupport {
       status = { ...status, state, reason };
       if (state === "ready") readyAt = Date.now();
       this.send(status);
+      initialDetails.resolve(undefined);
     };
     return {
       page,
@@ -482,6 +492,8 @@ class ChatSupport {
         timeToInteractiveMs: loadedAt === null ? null : loadedAt - started,
       }),
       close: async () => {
+        initialDetails.resolve(undefined);
+        initialDetailsObserved.resolve(undefined);
         if (await page.locator(".preview-panel button").count())
           await page.locator(".preview-panel button").click({ timeout: 1000 });
         await context.close();
