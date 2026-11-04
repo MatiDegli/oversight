@@ -6,8 +6,8 @@
   },
   {
     "file": "expat.txt",
-    "url": "https://raw.githubusercontent.com/astral-sh/python-build-standalone/20251014/LICENSE.expat.txt",
-    "sha256": "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534"
+    "url": "https://raw.githubusercontent.com/libexpat/libexpat/R_2_7_3/expat/COPYING",
+    "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
   },
   {
     "file": "libffi.txt",

@@ -1,0 +1,104 @@
+"""Offline refusal tests for runtime integrity, extraction and exact crate grants."""
+
+import importlib.util
+import io
+import json
+import sys
+import tarfile
+import tomllib
+from pathlib import Path
+
+import pytest
+
+HERE = Path(__file__).resolve().parents[1]
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(name, HERE / f"{name}.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+stage = load("stage")
+licenses = load("licenses")
+
+
+def test_pinned_manifest_and_archive_integrity(tmp_path):
+    manifest = json.loads((HERE / "python-runtime.json").read_text())
+    assert manifest["version"].startswith("3.12.")
+    assert "x86_64-pc-windows-msvc-install_only.tar.gz" in manifest["url"]
+    archive = tmp_path / "wrong.tar.gz"
+    archive.write_bytes(b"untrusted")
+    with pytest.raises(ValueError, match="SHA-256 mismatch"):
+        stage.verify_archive(archive, manifest)
+
+
+@pytest.mark.parametrize(
+    "name,kind",
+    [
+        ("python/../escape", tarfile.REGTYPE),
+        ("python/link", tarfile.SYMTYPE),
+        ("python/hard", tarfile.LNKTYPE),
+        ("outside/file", tarfile.REGTYPE),
+    ],
+)
+def test_archive_refuses_traversal_links_and_wrong_prefix(tmp_path, name, kind):
+    archive = tmp_path / "archive.tar.gz"
+    with tarfile.open(archive, "w:gz") as output:
+        info = tarfile.TarInfo(name)
+        info.type = kind
+        info.linkname = "outside"
+        output.addfile(info, io.BytesIO(b""))
+    with pytest.raises(ValueError):
+        stage.extract_python(archive, tmp_path / "output")
+    assert not (tmp_path / "escape").exists()
+
+
+def test_demo_requirements_are_hashed_and_only_the_pytest_closure():
+    lock = tomllib.loads((HERE.parents[1] / "uv.lock").read_text())
+    result = stage.demo_requirements(lock, "9.1.1")
+    assert "pytest==9.1.1 --hash=sha256:" in result
+    assert "openai" not in result and "pytest-xdist" not in result and "uv-build" not in result
+    assert all("--hash=sha256:" in line for line in result.splitlines())
+    with pytest.raises(ValueError, match="pin differs"):
+        stage.demo_requirements(lock, "0.0.0")
+
+
+def test_desktop_crate_grants_are_exact_and_linux_exception_never_ships():
+    assert licenses.crate_allowed(
+        "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception", False
+    )
+    assert not licenses.crate_allowed(
+        "target-lexicon", "0.12.16", "Apache-2.0 WITH LLVM-exception", True
+    )
+    assert not licenses.crate_allowed(
+        "target-lexicon", "0.12.17", "Apache-2.0 WITH LLVM-exception", False
+    )
+    assert not licenses.crate_allowed("other", "1", "MPL-2.0", False)
+    assert licenses.crate_allowed("unicode-ident", "1", "(MIT OR Apache-2.0) AND Unicode-3.0", True)
+
+
+def test_complete_staging_refuses_a_non_windows_host(tmp_path):
+    if sys.platform == "win32":
+        pytest.skip("non-Windows refusal")
+    import asyncio
+
+    with pytest.raises(ValueError, match="native Windows"):
+        asyncio.run(stage.stage(tmp_path, None))
+
+
+def test_pinned_third_party_texts_are_complete_and_unchanged():
+    import hashlib
+
+    entries = json.loads((HERE / "licenses/sources.json").read_text())
+    for entry in entries:
+        file = HERE / "licenses" / entry["file"]
+        assert hashlib.sha256(file.read_bytes()).hexdigest() == entry["sha256"]
+    assert {
+        "nsis.txt",
+        "cpython-windows.txt",
+        "cpython-incorporated.txt",
+        "webview2-sdk-0.txt",
+    } <= {entry["file"] for entry in entries}
