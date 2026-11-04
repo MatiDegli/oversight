@@ -9,7 +9,6 @@ from typing import Literal
 
 from oversight.limits import bounded_text
 from oversight.workspace import PreviewProfile
-from oversight_contracts.commands import SettingName
 from oversight_contracts.events import LeadLimits
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -28,9 +27,7 @@ LEAD_SETTING_DEFAULTS = {
     "lead_history_chars": 24000,
 }
 
-type ParsedSettingName = (
-    SettingName | Literal["BASETEN_INPUT_USD_PER_M", "BASETEN_OUTPUT_USD_PER_M"]
-)
+type ParsedSettingName = str
 
 
 def read_env_file(path: Path) -> dict[str, str]:
@@ -45,7 +42,11 @@ def read_env_file(path: Path) -> dict[str, str]:
         key, _, value = raw.partition("=")
         key = key.strip()
         # Validate after environment precedence, without normalizing this literal-only flag.
-        values[key] = value if key == "OVERSIGHT_PREVIEW_ENABLED" else value.strip().strip("\"'")
+        values[key] = (
+            value
+            if key in {"OVERSIGHT_PREVIEW_ENABLED", "OVERSIGHT_MAX_AGENTS"}
+            else value.strip().strip("\"'")
+        )
     return values
 
 
@@ -68,7 +69,8 @@ class Settings:
     meta_api_key: str | None = field(default=None, repr=False)
     baseten_api_key: str | None = field(default=None, repr=False)
     max_agents: int = 4
-    """OVERSIGHT_MAX_AGENTS: offer the first N letters from A, from 1 through 6."""
+    """OVERSIGHT_MAX_AGENTS: positive whole number of seats A..Z, AA, AB, ...; default 4.
+    No product maximum; startup requires a recordable run.started event."""
     max_leads: int = 6
     lead_max_turns: int = 50
     lead_max_tool_calls: int = 12
@@ -89,28 +91,21 @@ class Settings:
     fake_script: Path | None = None
     """The fake model's script, for `fake`; a relative path starts at the repository root.
     OVERSIGHT_FAKE_SCRIPT."""
+    agent_models: dict[str, str] = field(default_factory=dict[str, str])
+    """OVERSIGHT_AGENT_MODEL_<SEAT>: unset means A's model; A uses the unsuffixed setting."""
+    fake_scripts: dict[str, Path] = field(default_factory=dict[str, Path])
+    """OVERSIGHT_FAKE_SCRIPT_<SEAT>: a fake seat other than A requires its own script."""
+    # Compatibility for existing direct constructors; environment loading uses the maps above.
     agent_model_b: str | None = None
-    """The profile agent B runs on, one of the same ids; unset, agent A's model.
-    OVERSIGHT_AGENT_MODEL_B."""
     fake_script_b: Path | None = None
-    """Agent B's own script when it runs `fake`: reusing A's would propose the same edit twice, so a
-    fake B without one is not offered. Relative as `fake_script` is. OVERSIGHT_FAKE_SCRIPT_B."""
     agent_model_c: str | None = None
-    """OVERSIGHT_AGENT_MODEL_C: unset means A's model, as for B."""
     fake_script_c: Path | None = None
-    """OVERSIGHT_FAKE_SCRIPT_C: own script required to offer a fake C, as for B."""
     agent_model_d: str | None = None
-    """OVERSIGHT_AGENT_MODEL_D: unset means A's model, as for B."""
     fake_script_d: Path | None = None
-    """OVERSIGHT_FAKE_SCRIPT_D: own script required to offer a fake D, as for B."""
     agent_model_e: str | None = None
-    """OVERSIGHT_AGENT_MODEL_E: unset means A's model, as for B."""
     fake_script_e: Path | None = None
-    """OVERSIGHT_FAKE_SCRIPT_E: own script required to offer a fake E, as for B."""
     agent_model_f: str | None = None
-    """OVERSIGHT_AGENT_MODEL_F: unset means A's model, as for B."""
     fake_script_f: Path | None = None
-    """OVERSIGHT_FAKE_SCRIPT_F: own script required to offer a fake F, as for B."""
     cross_review: bool = False
     """Opt-in only. Runtime review additionally requires an injected call transport."""
     review_model: str = "muse-spark-open"
@@ -151,7 +146,7 @@ class Settings:
     setting_problems: dict[ParsedSettingName, Literal["missing", "invalid"]] = field(
         default_factory=dict[ParsedSettingName, Literal["missing", "invalid"]]
     )
-    """Only the problem kind survives parsing an unusable amount; no raw values are retained."""
+    """Invalid amounts and overrides outside the capacity, by variable name; no raw values."""
     demo_python: Path | None = None
     """Explicit prepared interpreter with pytest; required for oversight-self, never built there.
     No environment variable: supplied by the person-owned composition or a test fixture."""
@@ -168,6 +163,14 @@ class Settings:
     frontend/dist, and a test that builds `Settings` itself gets no UI unless it passes one."""
 
     def __post_init__(self) -> None:
+        for seat in "BCDEF":
+            for prefix, overrides in (
+                ("agent_model", self.agent_models),
+                ("fake_script", self.fake_scripts),
+            ):
+                name = f"{prefix}_{seat.lower()}"
+                if getattr(self, name) is None and seat in overrides:
+                    object.__setattr__(self, name, overrides[seat])
         validate_ports(self.port, self.vite_port)
         if self.preview_app is not None and self.workspace_source != "oversight-self":
             # An explicit reviewed-app selection must never fall through to the shop adapter.
@@ -198,8 +201,8 @@ class Settings:
             type(self.history_prune_tokens) is not int or self.history_prune_tokens < 8000
         ):
             raise ValueError("OVERSIGHT_HISTORY_PRUNE_TOKENS must be an integer of at least 8000")
-        if type(self.max_agents) is not int or not 1 <= self.max_agents <= 6:
-            raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
+        if type(self.max_agents) is not int or self.max_agents < 1:
+            raise ValueError("OVERSIGHT_MAX_AGENTS must be a positive whole number")
         if type(self.memory_hold_percent) is not int or not 1 <= self.memory_hold_percent <= 100:
             raise ValueError("OVERSIGHT_MEMORY_HOLD_PERCENT must be an integer from 1 to 100")
         if (
@@ -216,6 +219,17 @@ class Settings:
         """The process environment wins over the .env file."""
         merged = read_env_file(env_file) | dict(os.environ)
         port, vite_port = resolve_ports(merged)
+        max_agents = resolve_max_agents(merged)
+        models, scripts, slot_problems = resolve_slot_overrides(merged, max_agents)
+        for name in (
+            "OVERSIGHT_BUDGET_USD",
+            "MUSE_SPARK_INPUT_USD_PER_M",
+            "MUSE_SPARK_OUTPUT_USD_PER_M",
+            "BASETEN_INPUT_USD_PER_M",
+            "BASETEN_OUTPUT_USD_PER_M",
+        ):
+            if merged.get(name) and positive_amount(merged[name]) is None:
+                slot_problems[name] = "invalid"
         return cls(
             preview_profile=resolve_preview_profile(merged, port, vite_port),
             preview_app=merged.get("OVERSIGHT_PREVIEW_APP"),
@@ -238,7 +252,7 @@ class Settings:
             # An empty value, as in .env.example, means the key is not set.
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
-            max_agents=resolve_max_agents(merged),
+            max_agents=max_agents,
             max_leads=resolve_lead_setting(merged, "max_leads"),
             lead_max_turns=resolve_lead_setting(merged, "lead_max_turns"),
             lead_max_tool_calls=resolve_lead_setting(merged, "lead_max_tool_calls"),
@@ -253,16 +267,8 @@ class Settings:
             test_timeout_s=resolve_test_timeout(merged),
             agent_model=merged.get("OVERSIGHT_AGENT_MODEL") or cls.agent_model,
             fake_script=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT")),
-            agent_model_b=merged.get("OVERSIGHT_AGENT_MODEL_B") or None,
-            fake_script_b=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_B")),
-            agent_model_c=merged.get("OVERSIGHT_AGENT_MODEL_C") or None,
-            fake_script_c=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_C")),
-            agent_model_d=merged.get("OVERSIGHT_AGENT_MODEL_D") or None,
-            fake_script_d=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_D")),
-            agent_model_e=merged.get("OVERSIGHT_AGENT_MODEL_E") or None,
-            fake_script_e=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_E")),
-            agent_model_f=merged.get("OVERSIGHT_AGENT_MODEL_F") or None,
-            fake_script_f=_repo_path(merged.get("OVERSIGHT_FAKE_SCRIPT_F")),
+            agent_models=models,
+            fake_scripts=scripts,
             cross_review=merged.get("OVERSIGHT_CROSS_REVIEW", "false").lower() == "true",
             review_model=merged.get("OVERSIGHT_REVIEW_MODEL") or cls.review_model,
             # Difference decisions have no default allowance and never share Meta's balance.
@@ -288,17 +294,7 @@ class Settings:
             output_usd_per_m=positive_amount(merged.get("MUSE_SPARK_OUTPUT_USD_PER_M")),
             baseten_input_usd_per_m=positive_amount(merged.get("BASETEN_INPUT_USD_PER_M")),
             baseten_output_usd_per_m=positive_amount(merged.get("BASETEN_OUTPUT_USD_PER_M")),
-            setting_problems={
-                name: "invalid"
-                for name in (
-                    "OVERSIGHT_BUDGET_USD",
-                    "MUSE_SPARK_INPUT_USD_PER_M",
-                    "MUSE_SPARK_OUTPUT_USD_PER_M",
-                    "BASETEN_INPUT_USD_PER_M",
-                    "BASETEN_OUTPUT_USD_PER_M",
-                )
-                if merged.get(name) and positive_amount(merged[name]) is None
-            },
+            setting_problems=slot_problems,
             frontend_dist=REPO_ROOT / "frontend" / "dist",
         )
 
@@ -380,13 +376,51 @@ def resolve_ports(
     return port, vite_port
 
 
-def resolve_max_agents(values: Mapping[str, str]) -> int:
+def resolve_max_agents(values: Mapping[str, object]) -> int:
     """An absent capacity defaults to four; an explicitly empty value is invalid."""
-    raw = values.get("OVERSIGHT_MAX_AGENTS", "4").lstrip("0")
-    # Check the bounded value before int(): oversized input must name this variable too.
-    if raw not in ("1", "2", "3", "4", "5", "6"):
-        raise ValueError("OVERSIGHT_MAX_AGENTS must be an integer from 1 to 6")
-    return int(raw)
+    raw = values.get("OVERSIGHT_MAX_AGENTS", "4")
+    if not isinstance(raw, str) or not raw.isascii() or not raw.isdecimal():
+        raise ValueError("OVERSIGHT_MAX_AGENTS must be a positive whole number")
+    result = 0
+    for offset in range(0, len(raw), 9):
+        chunk = raw[offset : offset + 9]
+        result = result * 10 ** len(chunk) + int(chunk)
+    if result < 1:
+        raise ValueError("OVERSIGHT_MAX_AGENTS must be a positive whole number")
+    return result
+
+
+def resolve_slot_overrides(
+    values: Mapping[str, str], capacity: int
+) -> tuple[dict[str, str], dict[str, Path], dict[str, Literal["missing", "invalid"]]]:
+    """Inspect suffixes first; never resolve values or paths for seats outside the capacity."""
+    from oversight.slots import slot_position
+
+    models: dict[str, str] = {}
+    scripts: dict[str, Path] = {}
+    problems: dict[str, Literal["missing", "invalid"]] = {}
+    for name in values:
+        prefix = next(
+            (p for p in ("OVERSIGHT_AGENT_MODEL_", "OVERSIGHT_FAKE_SCRIPT_") if name.startswith(p)),
+            None,
+        )
+        if prefix is None:
+            continue
+        seat = name[len(prefix) :]
+        try:
+            position = slot_position(seat)
+        except ValueError:
+            problems[name] = "invalid"
+            continue
+        if position == 0 or position >= capacity:
+            problems[name] = "invalid"
+            continue
+        if prefix == "OVERSIGHT_AGENT_MODEL_":
+            if value := values[name]:
+                models[seat] = value
+        elif path := _repo_path(values[name]):
+            scripts[seat] = path
+    return models, scripts, problems
 
 
 def resolve_memory_hold_percent(values: Mapping[str, str]) -> int:

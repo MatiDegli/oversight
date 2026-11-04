@@ -52,6 +52,11 @@ def test_nested_factory_requires_explicit_inputs(tmp_path: Path) -> None:
     assert set(inputs) == {"settings", "tree", "policy", "coder_factory", "lead_factory"}
     assert inputs["tree"] == config.tree
     assert isinstance(inputs["settings"], Settings)
+    from oversight.slots import resolve_slots
+
+    assert inputs["settings"].max_agents == 1
+    assert list(resolve_slots(inputs["settings"])) == ["A"]
+    assert inputs["settings"].agent_models == inputs["settings"].fake_scripts == {}
     assert inputs["settings"].runtime_dir == config.preview_dir / "state" / ".runtime"
     assert inputs["policy"].supported_roles == ("coder", "lead")
     assert inputs["coder_factory"] is not inputs["lead_factory"]

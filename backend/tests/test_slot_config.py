@@ -15,7 +15,9 @@ from oversight.slots import resolve_slots
 from oversight_contracts.common import Slot
 
 
-@pytest.mark.parametrize("value,expected", [(None, 4), ("1", 1), ("6", 6)])
+@pytest.mark.parametrize(
+    "value,expected", [(None, 4), ("1", 1), ("6", 6), ("7", 7), ("11", 11), ("28", 28)]
+)
 def test_capacity_loads_from_file_and_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str | None, expected: int
 ) -> None:
@@ -28,9 +30,7 @@ def test_capacity_loads_from_file_and_environment(
     assert Settings.load(env).max_agents == 2
 
 
-@pytest.mark.parametrize(
-    "value", ["0", "7", "four", "", "1.5", pytest.param("9" * 5000, id="oversized-integer")]
-)
+@pytest.mark.parametrize("value", ["0", "-1", "four", "", "1.5", " 4", "true", "abc"])
 @pytest.mark.parametrize("source", ["file", "environment"])
 def test_invalid_capacity_names_the_variable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str, source: str
@@ -44,7 +44,7 @@ def test_invalid_capacity_names_the_variable(
         Settings.load(env)
 
 
-@pytest.mark.parametrize("value", [0, 7, True, 1.5])
+@pytest.mark.parametrize("value", [0, -1, True, 1.5])
 def test_direct_settings_validate_capacity(value: Any) -> None:
     with pytest.raises(ValueError, match="OVERSIGHT_MAX_AGENTS"):
         Settings(max_agents=value)
@@ -55,24 +55,23 @@ def test_slot_overrides_load_with_b_semantics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, letter: str
 ) -> None:
     env = tmp_path / "config"
+    monkeypatch.setenv("OVERSIGHT_MAX_AGENTS", "6")
     model, script = f"OVERSIGHT_AGENT_MODEL_{letter}", f"OVERSIGHT_FAKE_SCRIPT_{letter}"
     monkeypatch.delenv(model, raising=False)
     monkeypatch.delenv(script, raising=False)
     env.write_text(f"{model}=\n{script}=\n")
     unset = Settings.load(env)
-    assert getattr(unset, f"agent_model_{letter.lower()}") is None
-    assert getattr(unset, f"fake_script_{letter.lower()}") is None
+    assert unset.agent_models.get(letter) is None
+    assert unset.fake_scripts.get(letter) is None
     env.write_text(f"{model}=fake-b\n{script}=scripts/{letter}.json\n")
     settings = Settings.load(env)
-    assert getattr(settings, f"agent_model_{letter.lower()}") == "fake-b"
-    assert (
-        getattr(settings, f"fake_script_{letter.lower()}") == REPO_ROOT / f"scripts/{letter}.json"
-    )
+    assert settings.agent_models.get(letter) == "fake-b"
+    assert settings.fake_scripts.get(letter) == REPO_ROOT / f"scripts/{letter}.json"
     monkeypatch.setenv(model, "muse-spark-open")
     monkeypatch.setenv(script, str(tmp_path / "absolute.json"))
     settings = Settings.load(env)
-    assert getattr(settings, f"agent_model_{letter.lower()}") == "muse-spark-open"
-    assert getattr(settings, f"fake_script_{letter.lower()}") == tmp_path / "absolute.json"
+    assert settings.agent_models.get(letter) == "muse-spark-open"
+    assert settings.fake_scripts.get(letter) == tmp_path / "absolute.json"
 
 
 @pytest.mark.parametrize("maximum", [1, 2, 4, 6])

@@ -16,6 +16,7 @@ from oversight.agents import (
     parse_script,
 )
 from oversight.limits import bounded_text
+from oversight.slots import slot_position
 from oversight_contracts.common import Slot
 from oversight_contracts.events import ModelProfile
 
@@ -121,8 +122,7 @@ def _make_factory(script: Script, role: str, policy: NestedPolicy) -> ScriptedFa
 
     def factory(profile: ModelProfile, slot: Slot) -> ModelClient:
         selected = policy.admit(role, profile)
-        if slot not in ("A", "B", "C", "D", "E", "F"):
-            raise ValueError("Unknown scripted slot")
+        slot_position(slot)
         playback = deepcopy(snapshot)
         playback = replace(
             playback, turns=[replace(turn, model=selected.model) for turn in playback.turns]
