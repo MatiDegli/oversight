@@ -12,7 +12,7 @@ import {
 import type { State } from "../../state";
 import { costText } from "../../state";
 import { presentationFor, presentationStyle } from "../../teams/presentation";
-import { ChangeFactsRow } from "../../review";
+import { ChangeFactsRow, ChangeTiming } from "../../review";
 // eslint-disable-next-line no-restricted-imports -- Reuse the built timeline timestamp without another projection.
 import { EventTime } from "../../agents/conversation/rows";
 import { selectChatChange } from "../chatReviewSelectors";
@@ -66,6 +66,8 @@ export function ChatChangeCard({
   const { proposal, callers } = card;
   const identity = presentationFor(state, proposal.agent_id);
   const label = identity?.label ?? "unknown";
+  const change = state.changes[changeId];
+  const timing = change && <ChangeTiming stages={change.stages} rounds={change.revisionRounds} />;
   return (
     <div className="chat-proposal" style={presentationStyle(identity)}>
       <div className="chat-proposal-note">
@@ -88,6 +90,7 @@ export function ChatChangeCard({
               <Eye aria-hidden="true" size={14} />
               Reviewing
             </span>
+            {timing}
           </div>
         ) : (
           <>
@@ -95,6 +98,7 @@ export function ChatChangeCard({
               <strong>Proposed change</strong>
               <span>Checked by Oversight</span>
               <span className="chat-change-cost">Cost {costText(card.cost)}</span>
+              {timing}
             </header>
             <div className="chat-change-chips">
               <ChangeFactsRow state={state} changeId={changeId} />

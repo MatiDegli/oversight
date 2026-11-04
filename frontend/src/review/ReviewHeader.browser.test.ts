@@ -38,6 +38,7 @@ function measure(header: Locator) {
     const badge = row.firstElementChild as HTMLElement;
     const title = header.querySelector("h2") as HTMLElement;
     const caption = header.querySelector("p") as HTMLElement;
+    const metadata = header.querySelector(".change-timing") ?? caption;
     const chips = header.lastElementChild as HTMLElement;
     const chip = chips.querySelector("li, .rvchip") as HTMLElement;
     const style = getComputedStyle(header),
@@ -55,7 +56,7 @@ function measure(header: Locator) {
       firstRowGap: number(getComputedStyle(row).gap),
       captionSize: number(getComputedStyle(caption).fontSize),
       captionOffset: caption.getBoundingClientRect().top - row.getBoundingClientRect().bottom,
-      chipsOffset: chips.getBoundingClientRect().top - caption.getBoundingClientRect().bottom,
+      chipsOffset: chips.getBoundingClientRect().top - metadata.getBoundingClientRect().bottom,
       chipHeight: chip.getBoundingClientRect().height,
       chipSize: number(getComputedStyle(chip).fontSize),
       chipWeight: number(getComputedStyle(chip).fontWeight),
