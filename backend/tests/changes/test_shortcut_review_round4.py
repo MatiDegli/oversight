@@ -140,11 +140,22 @@ def test_method_decorator_respects_its_enclosing_table_binding(shadowed: bool) -
         + "    @pytest.mark.parametrize('x,expected', CASES)\n"
         "    def test_f(self,x,expected):\n        assert f(x) == expected\n"
     )
-    result = detect_shortcuts([("test_calc.py", old, old.replace("(2, 4)", "(2, 5)"))])
+    result = detect_shortcuts(
+        [("test_calc.py", old, old.replace("(2, 4)", "(2, 5)"))], timeout=DETECTION_TIMEOUT_S
+    )
     if shadowed:
         assert result.status == "unknown" and "shadowed" in " ".join(result.reasons)
     else:
         assert {f.kind for f in result} == {ShortcutKind.EXPECTED_VALUE_CHANGED}
+
+
+def test_method_table_finding_survives_runner_delay(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Model a scheduling delay beyond the default 2 s, within the explicit 30 s budget.
+    ticks = iter([0.0])
+    monkeypatch.setattr(
+        "oversight.changes._shortcuts_common.time.monotonic", lambda: next(ticks, 3.0)
+    )
+    test_method_decorator_respects_its_enclosing_table_binding(shadowed=False)
 
 
 @pytest.mark.parametrize("table", ["list(CASES)", "range(len(CASES))", "load_cases()", "range(5)"])
