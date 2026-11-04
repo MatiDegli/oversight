@@ -3,18 +3,62 @@
 import asyncio
 import dataclasses
 import errno
+import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from oversight.workspace import preview_boundary as boundary
+from oversight.workspace import preview_boundary_entry as entry
 from oversight.workspace.runner import child_env
 
 from .preview_boundary_support import Inputs, config, prepared, result
 
 pytestmark = pytest.mark.anyio
+
+
+@pytest.mark.parametrize("readonly,device", [(False, False), (True, False), (True, True)])
+@pytest.mark.parametrize(
+    "source_flags,mount_flags",
+    [
+        (0, 1 << 24),
+        (os.ST_RDONLY, 1 | (1 << 24)),
+        (os.ST_NOSUID, 2 | (1 << 24)),
+        (os.ST_NODEV, 4 | (1 << 24)),
+        (os.ST_NOEXEC, 8 | (1 << 24)),
+        (os.ST_NOATIME, 1024),
+        (os.ST_NODIRATIME, 2048 | (1 << 24)),
+        (os.ST_RELATIME, 1 << 21),
+        (os.ST_NOATIME | os.ST_NODIRATIME, 1024 | 2048),
+        (os.ST_NODIRATIME | os.ST_RELATIME, 2048 | (1 << 21)),
+        (os.ST_NOSUID | os.ST_NOEXEC | os.ST_RELATIME, 2 | 8 | (1 << 21)),
+    ],
+)
+async def test_bind_preserves_source_mount_flags(
+    tmp_path, monkeypatch, readonly, device, source_flags, mount_flags
+):
+    source, destination = tmp_path / "source", tmp_path / "destination"
+    source.touch()
+    calls = []
+    monkeypatch.setattr(entry, "mount", lambda *args: calls.append(args))
+
+    def statvfs(path):
+        assert path == destination
+        assert calls == [(str(source), str(destination), None, entry.BIND | entry.REC)]
+        return SimpleNamespace(f_flag=source_flags)
+
+    monkeypatch.setattr(os, "statvfs", statvfs)
+    entry.bind(str(source), destination, readonly=readonly, device=device)
+    added = entry.NOSUID | (entry.RDONLY if readonly else 0) | (0 if device else entry.NODEV)
+    assert calls[-1] == (
+        None,
+        str(destination),
+        None,
+        entry.BIND | entry.REMOUNT | added | mount_flags,
+    )
 
 
 @pytest.fixture(scope="module")
