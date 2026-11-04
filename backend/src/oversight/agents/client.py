@@ -9,6 +9,7 @@ Usage the API does not report stays `None`, never 0.
 import asyncio
 import math
 import random
+import re
 from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -151,6 +152,45 @@ class ModelClient(Protocol):
 
 class ModelAPIError(Exception):
     """The model call failed for good: a refused request, or retries used up."""
+
+
+class ContextLengthError(ModelAPIError):
+    """The provider refused a conversation that exceeds its input context."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "This agent's conversation is longer than the model accepts; "
+            "start a new agent to continue."
+        )
+
+
+def _context_length_error(error: openai.APIError) -> bool:
+    if not isinstance(error, openai.APIStatusError) or error.status_code not in {400, 413}:
+        return False
+    if error.code == "context_length_exceeded":
+        return True
+    body: object = error.body
+    if isinstance(body, dict):
+        payload = cast(dict[str, object], body)
+        body = payload.get("error", payload)
+    message = (
+        str(cast(dict[str, object], body).get("message", error.message))
+        if isinstance(body, dict)
+        else error.message
+    )
+    message = " ".join(message.lower().split())
+    return bool(
+        re.search(
+            r"\b(?:input|request|messages?|conversation|prompt)\b"
+            r".*(?:exceed|too (?:long|large|many))"
+            r".*(?:maximum context length|context (?:length|limit)|token limit)",
+            message,
+        )
+        or re.search(
+            r"maximum context length.*(?:requested|resulted in|exceed)",
+            message,
+        )
+    )
 
 
 class EmptyChoicesError(ModelAPIError):
@@ -364,6 +404,8 @@ class OpenAIClient:
                         if attempt >= self._retry.max_attempts
                         else "not_retryable",
                     )
+                    if _context_length_error(error):
+                        raise ContextLengthError() from error
                     raise ModelAPIError(_describe(error, attempt)) from error
                 delay = self._retry.delay(attempt - 1, self._jitter(), retry_after_s)
                 scope = CALL_SCOPE.get()

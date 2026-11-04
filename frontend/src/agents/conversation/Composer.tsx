@@ -23,6 +23,7 @@ import { selectLeadConversation } from "./selectLeadConversation";
 export interface ConversationControls {
   onStopLead?: (id: string, body: StopLead) => Promise<unknown>;
   actionAccessory?: ReactNode;
+  composerDisclosure?: ReactNode;
   onSend?: (text: string) => Promise<unknown>;
   onPause?: () => Promise<unknown>;
   onResume?: () => Promise<unknown>;
@@ -39,6 +40,7 @@ export function Composer({
   onStop,
   onStopLead,
   actionAccessory,
+  composerDisclosure,
 }: { header: ConversationHeader | LeadHeader } & ConversationControls) {
   const runId = useStore(stateStore, ({ state }) => state.run?.run_id ?? null);
   const key = draftKey(runId, header.agentId);
@@ -49,6 +51,16 @@ export function Composer({
   const failedControl = useRef(false);
   const [controlKey, setControlKey] = useState(0);
   const captionId = useId();
+  const disclosure = composerDisclosure ? (
+    <div
+      role="group"
+      aria-label="Conversation details"
+      tabIndex={0}
+      className={`max-h-[45dvh] min-w-0 overflow-y-auto overscroll-contain pb-[14px] [container-type:inline-size] [&_.preview-startup]:mt-0 ${focusRing}`}
+    >
+      {composerDisclosure}
+    </div>
+  ) : null;
   const lead = header.kind === "lead";
   const active = lead
     ? header.state === "idle"
@@ -99,6 +111,7 @@ export function Composer({
   if (lead && leadEnded(header.state))
     return (
       <div className="conversation-composer shrink-0 border-t border-divider p-[14px] text-[14px] text-muted">
+        {disclosure}
         <p>
           {header.detail ??
             (header.state === "stopped"
@@ -114,8 +127,9 @@ export function Composer({
     const caption = "Recorded run: messages, pause and stop are off.";
     const replayClass =
       "conversation-composer shrink-0 border-t border-divider px-[22px] py-[14px] text-[14px] text-muted";
-    return actionAccessory ? (
+    return actionAccessory || composerDisclosure ? (
       <div className={replayClass}>
+        {disclosure}
         <p>{caption}</p>
         <div className="composer-actions flex">{actionAccessory}</div>
       </div>
@@ -126,6 +140,7 @@ export function Composer({
   const paused = header.state === "paused";
   return (
     <div className="conversation-composer shrink-0 border-t border-divider p-[14px]">
+      {disclosure}
       {(onSend || lead) && (
         <textarea
           aria-label={
