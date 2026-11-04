@@ -4,6 +4,8 @@ import asyncio
 import os
 import tempfile
 import unicodedata
+from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal, get_args
 
@@ -20,6 +22,15 @@ from oversight_contracts.commands import EditableSetting, EditableSettingName, S
 
 NAMES: tuple[EditableSettingName, ...] = get_args(EditableSettingName.__value__)
 DEFAULTED: set[EditableSettingName] = {"OVERSIGHT_MAX_AGENTS", "OVERSIGHT_SPEND_BRAKE_PERCENT"}
+LIVE_FIELDS: dict[EditableSettingName, str] = {
+    "OVERSIGHT_BUDGET_USD": "budget_usd",
+    "OVERSIGHT_SPEND_BRAKE_PERCENT": "spend_brake_percent",
+    "MUSE_SPARK_INPUT_USD_PER_M": "input_usd_per_m",
+    "MUSE_SPARK_OUTPUT_USD_PER_M": "output_usd_per_m",
+    "OVERSIGHT_BASETEN_BUDGET_USD": "baseten_budget_usd",
+    "BASETEN_INPUT_USD_PER_M": "baseten_input_usd_per_m",
+    "BASETEN_OUTPUT_USD_PER_M": "baseten_output_usd_per_m",
+}
 SECRETS = {"META_API_KEY", "BASETEN_API_KEY"}
 
 
@@ -109,8 +120,28 @@ def _atomic_write(path: Path, content: str) -> None:
         Path(temporary).unlink(missing_ok=True)
 
 
+def live_settings_snapshot(current: Settings, parsed: Settings) -> Settings:
+    """Keep restart-only dependencies and problems, replacing only the live allowlist."""
+    problems = {
+        name: problem
+        for name, problem in current.setting_problems.items()
+        if name not in LIVE_FIELDS
+    }
+    problems.update(
+        {name: problem for name, problem in parsed.setting_problems.items() if name in LIVE_FIELDS}
+    )
+    return replace(
+        current,
+        setting_problems=problems,
+        **{field: getattr(parsed, field) for field in LIVE_FIELDS.values()},
+    )
+
+
 class SettingsFile:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, on_saved: Callable[[Settings], None] | None = None
+    ) -> None:
+        self.on_saved = on_saved
         self.path = settings.env_file
         self.launch_env_file = os.environ.get("OVERSIGHT_ENV_FILE")
         self.initial = _editable(settings.loaded_file_values)
@@ -122,16 +153,35 @@ class SettingsFile:
 
     async def save(self, values: dict[EditableSettingName, str]) -> SettingsView:
         async with self.lock:
-            return await offload(lambda: self._save(values))
+
+            async def persist() -> SettingsView:
+                view, parsed = await offload(lambda: self._save(values))
+                # Loop-owned callback: no yield between the snapshot and its readers.
+                if self.on_saved is not None:
+                    self.on_saved(parsed)
+                return view
+
+            # A disconnected save must still install its successfully persisted snapshot.
+            task = asyncio.create_task(persist())
+            try:
+                return await asyncio.shield(task)
+            except asyncio.CancelledError:
+                while not task.done():
+                    try:
+                        await asyncio.shield(task)
+                    except asyncio.CancelledError:
+                        continue
+                task.result()
+                raise
 
     def _path(self) -> Path:
         if self.path is None:
             raise ValueError("Settings file is unavailable for this launch.")
         return self.path.resolve()
 
-    def _read(self) -> SettingsView:
+    def _read(self, values: dict[str, str] | None = None) -> SettingsView:
         path = self._path()
-        values = read_env_file(path)
+        values = read_env_file(path) if values is None else values
         rows: list[EditableSetting] = []
         for name in NAMES:
             value = values.get(name, "")
@@ -159,7 +209,11 @@ class SettingsFile:
             )
         return SettingsView(
             settings=rows,
-            restart_required=_editable(values) != self.initial,
+            restart_required=any(
+                values.get(name, "") != self.initial[name]
+                for name in NAMES
+                if name not in LIVE_FIELDS
+            ),
             apply="desktop_reload"
             if self.launch_env_file is not None
             and Path(self.launch_env_file).resolve() == path.resolve()
@@ -167,7 +221,7 @@ class SettingsFile:
             else "server_restart",
         )
 
-    def _save(self, values: dict[EditableSettingName, str]) -> SettingsView:
+    def _save(self, values: dict[EditableSettingName, str]) -> tuple[SettingsView, Settings]:
         path = self._path()
         # Shared startup parsers validate each sent name independently. Unsent file
         # values and process overrides cannot block this patch or be blamed for it.
@@ -185,4 +239,12 @@ class SettingsFile:
         text = path.read_bytes().decode("utf-8") if path.exists() else ""
         if values:
             _atomic_write(path, _updated(text, values))
-        return self._read()
+        saved = read_env_file(path)
+        view = self._read(saved)
+        # Parse only live names: an invalid restart-only value cannot block a safe save.
+        # The same startup parser resolves amounts/share after process precedence.
+        merged = saved | dict(os.environ)
+        parsed = Settings.from_values(
+            {name: merged[name] for name in LIVE_FIELDS if name in merged}
+        )
+        return view, parsed

@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 from oversight.agents import AgentRun, AgentTask, ModelClient, RunControl
 from oversight.api import ApiError
 from oversight.changes import WrongState
+from oversight.runtime_accounting import SnapshotUsage
+from oversight.settings import Settings
 from oversight.workspace import Tree
 from oversight_contracts.events import AgentMessageSent, ModelProfile
 
@@ -19,7 +21,12 @@ if TYPE_CHECKING:
 
 
 def prepare(
-    live: LiveRun, task: AgentTask, client: ModelClient, tree: Tree, profile: ModelProfile
+    live: LiveRun,
+    task: AgentTask,
+    client: ModelClient,
+    tree: Tree,
+    profile: ModelProfile,
+    settings: Settings,
 ) -> AgentRun:
     """Register before returning the start response, including a task not yet scheduled."""
     assert live._manager is not None
@@ -30,8 +37,8 @@ def prepare(
         tree=tree,
         sink=live._manager,
         publish=live._publish,
-        ledger=live._usage,
-        pricing=live._price_for(profile),
+        ledger=SnapshotUsage(live, settings),
+        pricing=live._price_for(profile, settings),
         harness_pack=live._settings.harness_pack,
         history_prune_tokens=live._settings.history_prune_tokens,
         lead_limits=live._lead_limits,

@@ -60,7 +60,7 @@ async def test_save_preserves_other_lines_and_mixed_line_endings(config_file: Pa
     assert await asyncio.to_thread(config_file.read_bytes) == CONTENT.replace(
         b"OVERSIGHT_BUDGET_USD=5\r\n", b"OVERSIGHT_BUDGET_USD=20\r\n"
     )
-    assert view.restart_required and view.apply == "desktop_reload"
+    assert not view.restart_required and view.apply == "desktop_reload"
     assert next(row for row in view.settings if row.name == "META_API_KEY").state == "set"
 
 
@@ -96,5 +96,5 @@ async def test_unresolved_installed_env_path_keeps_desktop_reload(
     assert settings.workspace_source == r"C:\private\repository"
     assert settings.runtime_dir == runtime and settings.ledger_root == ledger
     view = await SettingsFile(settings).save({"OVERSIGHT_BUDGET_USD": "20"})
-    assert view.apply == "desktop_reload" and view.restart_required
+    assert view.apply == "desktop_reload" and not view.restart_required
     assert b"OVERSIGHT_BUDGET_USD=20\r\n" in await asyncio.to_thread(config_file.read_bytes)

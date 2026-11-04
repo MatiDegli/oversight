@@ -58,7 +58,7 @@ def create_router(
     mode: Literal["live", "replay"],
     commands: Commands | None = None,
     *,
-    missing_settings: list[MissingSetting] | None = None,
+    missing_settings: list[MissingSetting] | Callable[[], list[MissingSetting]] | None = None,
     change_graph: Callable[[str], GraphSnapshot] | None = None,
 ) -> APIRouter:
     """Live mode passes `commands`; without it, as in a replay, every command answers 501."""
@@ -113,7 +113,7 @@ def _add_observation_routes(
     router: APIRouter,
     store: EventStore,
     mode: Literal["live", "replay"],
-    missing_settings: list[MissingSetting] | None,
+    missing_settings: list[MissingSetting] | Callable[[], list[MissingSetting]] | None,
 ) -> None:
     @router.get("/history")
     async def history(  # pyright: ignore[reportUnusedFunction]
@@ -143,7 +143,10 @@ def _add_observation_routes(
             run_id=store.run_id,
             contract_version=CONTRACT_VERSION,
             mode=mode,
-            missing_settings=missing_settings or [],
+            missing_settings=(
+                missing_settings() if callable(missing_settings) else missing_settings
+            )
+            or [],
         )
 
 

@@ -17,6 +17,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
+from threading import RLock
 from typing import Any, Literal
 
 from fastapi import FastAPI
@@ -81,7 +82,7 @@ from oversight.nested_clients import NestedPolicy
 from oversight.preview_startup import ENABLE_HINT, reviewed_startup_report
 from oversight.redaction import Redactor
 from oversight.resources import hold_reason, memory_used
-from oversight.runtime_accounting import durable, write_tick
+from oversight.runtime_accounting import SnapshotUsage, durable, write_tick
 from oversight.runtime_decisions import RuntimeDecisions
 from oversight.runtime_leads import LeadCreated, LeadService, StartLead, StopLead
 from oversight.runtime_plans import PlanService
@@ -89,6 +90,7 @@ from oversight.runtime_queue import Admission, Dispatcher
 from oversight.runtime_review import ReviewerCall
 from oversight.runtime_revisions import request_revision
 from oversight.settings import REPO_ROOT, Settings, build_lead_limits, run_time_limits
+from oversight.settings_file import live_settings_snapshot
 from oversight.setup import missing_settings, offered_profiles
 from oversight.slots import CAPACITY_SIZE_ERROR, SlotDefault, resolve_slots
 from oversight.slots import PROFILES as PROFILES
@@ -127,6 +129,7 @@ from oversight_contracts.commands import (
     EnqueueTask,
     FileContent,
     FileSaved,
+    MissingSetting,
     PlanCreated,
     PlanRevision,
     QueueRevision,
@@ -258,6 +261,7 @@ class LiveRun:
         preview_factory: Callable[[Workspace], PreviewManager] | None = None,
     ) -> None:
         self.nested_policy = policy
+        self._settings_lock = RLock()
         self._settings = settings
         self._lead_limits = build_lead_limits(settings)
         self._max_leads = settings.max_leads
@@ -282,22 +286,6 @@ class LiveRun:
             self._offer(slot, default)
         self._client_factory = TaskClients(client_factory or self._default_client)
         self._lead_factory = TaskClients(lead_factory) if lead_factory is not None else None
-        self._pricing: Pricing | None = None
-        if settings.input_usd_per_m is not None and settings.output_usd_per_m is not None:
-            # Cached input is priced as fresh input: an upper bound, never an undercount.
-            self._pricing = Pricing(
-                settings.input_usd_per_m, settings.output_usd_per_m, settings.input_usd_per_m
-            )
-        self._baseten_pricing: Pricing | None = None
-        if (
-            settings.baseten_input_usd_per_m is not None
-            and settings.baseten_output_usd_per_m is not None
-        ):
-            self._baseten_pricing = Pricing(
-                settings.baseten_input_usd_per_m,
-                settings.baseten_output_usd_per_m,
-                settings.baseten_input_usd_per_m,
-            )
         self.layout = read_layout(settings.layout)
         own_source = self._own_source()
         timeout, wall_clock = run_time_limits(own_source, settings.test_timeout_s)
@@ -365,6 +353,7 @@ class LiveRun:
         self._slots: dict[Slot, str | None] = {slot: None for slot in self._slot_profiles}
         """Who holds each slot: "starting" during a start, then the agent's id until its change is
         rejected or merged."""
+        self._start_settings: dict[str, Settings] = {}
         self._count = 0
         self.dispatcher = Dispatcher(self)
         self.plans = PlanService(self)
@@ -1106,28 +1095,33 @@ class LiveRun:
     def _admit(
         self, request: StartAgent, *, queued_task_id: str | None = None, plan_id: str | None = None
     ) -> Admission:
-        manager = self._manager
-        if manager is None or self._closing:
-            raise ApiError("wrong_state", "the run is not accepting starts")
-        request = request.model_copy(deep=True)
-        runtime_answering.admit(request.answering, self.store, policy=self.nested_policy)
-        slot, profile = self._check(request, manager)
-        self._slots[slot] = "starting"  # check, reservation and allocation never yield
-        self._count += 1
-        task = AgentTask(
-            agent_id=f"agent-{self._count}",
-            change_id=f"change-{self._count}",
-            slot=slot,
-            task=request.task,
-            limits=self._limits,
-            answering=request.answering,
-        )
-        return Admission(task, profile, queued_task_id, plan_id, request.zone if plan_id else None)
+        with self._settings_lock:
+            manager = self._manager
+            if manager is None or self._closing:
+                raise ApiError("wrong_state", "the run is not accepting starts")
+            request = request.model_copy(deep=True)
+            runtime_answering.admit(request.answering, self.store, policy=self.nested_policy)
+            slot, profile = self._check(request, manager)
+            self._slots[slot] = "starting"  # check, reservation and allocation never yield
+            self._count += 1
+            task = AgentTask(
+                agent_id=f"agent-{self._count}",
+                change_id=f"change-{self._count}",
+                slot=slot,
+                task=request.task,
+                limits=self._limits,
+                answering=request.answering,
+            )
+            self._start_settings[task.agent_id] = self._settings
+            return Admission(
+                task, profile, queued_task_id, plan_id, request.zone if plan_id else None
+            )
 
     async def _launch(self, admission: Admission) -> AgentCreated:
         manager = self._manager
         assert manager is not None
         task, profile = admission.task, admission.profile
+        settings = self._start_settings.pop(task.agent_id)
         slot = task.slot
         opened = False
         try:
@@ -1145,7 +1139,7 @@ class LiveRun:
             tree = await manager.open(task, profile.id, before_create=before_create)
             opened = True
             assert client is not None
-            run = _run_controls.prepare(self, task, client, tree, profile)
+            run = _run_controls.prepare(self, task, client, tree, profile, settings)
         except BaseException as error:
             self._slots[slot] = None
             self.dispatcher.wake.set()
@@ -1176,11 +1170,37 @@ class LiveRun:
         )
         return AgentCreated(agent_id=task.agent_id, change_id=task.change_id, slot=slot)
 
-    def _price_for(self, profile: ModelProfile) -> Pricing | None:
-        """Price receipts by provider; only Meta calls debit the credits ledger."""
+    def setup_problems(self) -> list[MissingSetting]:
+        settings = self._settings
+        return missing_settings(settings, offered_profiles(settings))
+
+    def apply_settings(self, app: FastAPI, parsed: Settings) -> None:
+        """Swap all live readers together with synchronous start/revision admission."""
+        with self._settings_lock:
+            snapshot = live_settings_snapshot(self._settings, parsed)
+            self._settings = snapshot
+            app.state.settings = snapshot
+            self.dispatcher.wake.set()
+
+    @property
+    def _pricing(self) -> Pricing | None:
+        return self._price_for(PROFILES["muse-spark"])
+
+    def _price_for(self, profile: ModelProfile, settings: Settings | None = None) -> Pricing | None:
+        """Read one snapshot; active work retains the resulting immutable price."""
+        settings = settings or self._settings
         if profile.provider == "meta":
-            return self._pricing
-        return self._baseten_pricing if profile.provider == "baseten" else None
+            input_price, output_price = settings.input_usd_per_m, settings.output_usd_per_m
+        elif profile.provider == "baseten":
+            input_price = settings.baseten_input_usd_per_m
+            output_price = settings.baseten_output_usd_per_m
+        else:
+            return None
+        return (
+            Pricing(input_price, output_price, input_price)
+            if input_price is not None and output_price is not None
+            else None
+        )
 
     async def _run(
         self,
@@ -1209,6 +1229,7 @@ class LiveRun:
         agent: _Agent,
         run: AgentRun,
         decision: asyncio.Task[Revision | None],
+        settings: Settings | None = None,
     ) -> None:
         """The run after Request changes: wait for the manager's decision, then resume the kept run
         with the comment. This task is the agent's run in `_runs` from the request on, so Stop and
@@ -1222,6 +1243,8 @@ class LiveRun:
             finally:
                 self._forget(self._decisions, task.agent_id, decision)
             if revision is not None:
+                run._ledger = SnapshotUsage(self, settings or self._settings)  # pyright: ignore[reportPrivateUsage]
+                run._pricing = self._price_for(agent.profile, settings)  # pyright: ignore[reportPrivateUsage]
                 self._controls[task.agent_id] = run
                 end = await run.revise(revision.comment, revision.note)
         except asyncio.CancelledError:
@@ -1480,11 +1503,11 @@ def _live_app(
             live.store,
             "live",
             live,
-            missing_settings=missing_settings(settings, offered_profiles(settings)),
+            missing_settings=live.setup_problems,
             change_graph=live.change_graph,
         )
     )
-    add_settings_routes(app, settings)
+    add_settings_routes(app, settings, lambda parsed: live.apply_settings(app, parsed))
     if settings.frontend_dist is not None:
         add_static(
             app, settings.frontend_dist, startup_report=lambda: live.preview_startup_serialized
