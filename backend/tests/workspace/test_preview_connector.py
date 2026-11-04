@@ -4,6 +4,7 @@ import asyncio
 import dataclasses
 import os
 import socket
+from collections import Counter
 from typing import Any, cast
 
 import pytest
@@ -11,7 +12,12 @@ import pytest
 from oversight.workspace.isolation import open_pidfd
 from oversight.workspace.preview_connector import ConnectorTarget, connect_api
 
-from .preview_connector_support import helper_launch
+from .preview_connector_support import (
+    assert_no_new_descriptors,
+    fd_baseline,
+    helper_launch,
+    new_descriptors,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -194,10 +200,6 @@ async def fake_target(monkeypatch):
         os.close(fd)
 
 
-def fd_count() -> int:
-    return len(os.listdir("/proc/self/fd"))
-
-
 @pytest.mark.parametrize(
     "mode",
     [
@@ -215,7 +217,7 @@ def fd_count() -> int:
     ],
 )
 async def test_connector_cleanup_on_every_exit(monkeypatch, fake_target, mode: str) -> None:
-    before = fd_count()
+    before = await fd_baseline()
     delay = mode in ("timeout-spawn", "cancel-spawn")
     hold = mode in ("cancel-spawn-after", "timeout-spawn-after")
     transports, spawning, release, started = helper_launch(
@@ -251,14 +253,14 @@ async def test_connector_cleanup_on_every_exit(monkeypatch, fake_target, mode: s
         with pytest.raises((OSError, ValueError, TimeoutError)):
             await task
     assert all(transport.get_returncode() is not None for transport in transports)
-    assert fd_count() == before
+    assert_no_new_descriptors(before)
     os.fstat(fake_target.u0_pidfd)
 
 
 @pytest.mark.parametrize("cancel", [False, True])
 @pytest.mark.parametrize("after_spawn", [False, True])
 async def test_stalled_spawn_observes_abort(monkeypatch, fake_target, cancel, after_spawn) -> None:
-    before = fd_count()
+    before = await fd_baseline()
     transports, spawning, release, started = helper_launch(
         monkeypatch, "hang", delay_spawn=not after_spawn, hold_spawn=after_spawn
     )
@@ -278,7 +280,7 @@ async def test_stalled_spawn_observes_abort(monkeypatch, fake_target, cancel, af
             assert transport.get_returncode() is not None
             with pytest.raises(ChildProcessError):
                 await asyncio.to_thread(os.waitpid, transport.get_pid(), os.WNOHANG)
-        assert fd_count() == before
+        assert_no_new_descriptors(before)
         os.fstat(fake_target.u0_pidfd)
         os.fstat(fake_target.n0_pidfd)
     finally:
@@ -316,12 +318,12 @@ async def test_connector_fallback_boundary_and_socket_handoff(
         target = ConnectorTarget(
             fake_target.u0_pidfd, fake_target.n0_pidfd, listener.getsockname()[1]
         )
-        before = fd_count()
+        before = await fd_baseline()
         transports, _, _, _ = helper_launch(monkeypatch, mode)
         with pytest.raises((ValueError, OSError)):
             await connect_api(target, timeout_s=3)
         assert all(transport.get_returncode() is not None for transport in transports)
-        assert fd_count() == before
+        assert_no_new_descriptors(before)
 
 
 async def test_reused_pidfd_number_is_refused(harness) -> None:
@@ -349,7 +351,7 @@ async def test_success_reaps_helpers_and_transfers_only_client(monkeypatch, harn
 
     monkeypatch.setattr(loop, "subprocess_exec", spawn)
     target = ConnectorTarget(harness.pidfd, harness.pidfd, harness.witness["port"])
-    before = fd_count()
+    before = await fd_baseline()
     client = await connect_api(target, timeout_s=5)
     try:
         assert len(transports) == 1
@@ -357,10 +359,12 @@ async def test_success_reaps_helpers_and_transfers_only_client(monkeypatch, harn
         with pytest.raises(ChildProcessError):
             await asyncio.to_thread(os.waitpid, transports[0].get_pid(), os.WNOHANG)
         assert not os.get_inheritable(client.fileno())
-        assert fd_count() == before + 1
+        assert new_descriptors(before) == Counter(
+            {os.readlink(f"/proc/self/fd/{client.fileno()}"): 1}
+        )
     finally:
         client.close()
-    assert fd_count() == before
+    assert_no_new_descriptors(before)
     os.fstat(harness.pidfd)
 
 
@@ -378,11 +382,11 @@ async def test_exited_namespace_owner_is_refused(harness) -> None:
 async def test_changed_namespace_identity_is_refused(monkeypatch, fake_target) -> None:
     from oversight.workspace import preview_connector as connector
 
-    before = fd_count()
+    before = await fd_baseline()
     monkeypatch.setattr(connector, "target_identity", lambda *_: ("changed-user", "changed-net"))
     with pytest.raises(ValueError, match="namespace identity changed"):
         await connect_api(fake_target, timeout_s=1)
-    assert fd_count() == before
+    assert_no_new_descriptors(before)
 
 
 async def test_socket_handoff_cannot_redirect_fixed_destination(monkeypatch, fake_target) -> None:
@@ -392,11 +396,11 @@ async def test_socket_handoff_cannot_redirect_fixed_destination(monkeypatch, fak
         actual = listener.getsockname()[1]
         expected = actual + 1 if actual < 65535 else actual - 1
         target = ConnectorTarget(fake_target.u0_pidfd, fake_target.n0_pidfd, expected)
-        before = fd_count()
+        before = await fd_baseline()
         helper_launch(monkeypatch, "wrong-port", connect_port=actual)
         with pytest.raises(ValueError, match="fixed private API"):
             await connect_api(target, timeout_s=3)
-        assert fd_count() == before
+        assert_no_new_descriptors(before)
 
 
 @pytest.mark.parametrize("port", [True, False, 0, -1, 65536, "80", 1.5, None])
@@ -416,10 +420,10 @@ async def test_cleanup_failure_refuses_socket_evidence(monkeypatch, harness) -> 
 
     monkeypatch.setattr(connector, "_reap", unverified)
     target = ConnectorTarget(harness.pidfd, harness.pidfd, harness.witness["port"])
-    before = fd_count()
+    before = await fd_baseline()
     with pytest.raises(OSError, match="unverified cleanup"):
         await connect_api(target, timeout_s=5)
-    assert fd_count() == before
+    assert_no_new_descriptors(before)
 
 
 async def test_cancellation_after_socket_handoff(monkeypatch, fake_target) -> None:
@@ -441,7 +445,7 @@ async def test_cancellation_after_socket_handoff(monkeypatch, fake_target) -> No
             return result
 
         monkeypatch.setattr(connector, "_namespace_witness", witness)
-        before = fd_count()
+        before = await fd_baseline()
         task = asyncio.create_task(connect_api(target, timeout_s=5))
         try:
             async with asyncio.timeout(3):
@@ -453,7 +457,7 @@ async def test_cancellation_after_socket_handoff(monkeypatch, fake_target) -> No
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
         assert transports and all(t.get_returncode() is not None for t in transports)
-        assert fd_count() == before
+        assert_no_new_descriptors(before)
 
 
 @pytest.mark.parametrize("kind", ["partial-rights", "unknown-control"])
