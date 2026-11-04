@@ -80,10 +80,7 @@ and `OVERSIGHT_LEDGER_DIR` to `%LOCALAPPDATA%\Oversight\.runtime` in that proces
 provider's total first; settlement replaces the Meta total and clears unknown entries.
 
 Remembering the last repository, own sources in `--clone-root` mode, Linux and macOS,
-non-Python repositories and in-app discard are later work. This addition lands only with a green
-Windows package run, two independent reviews and headed acceptance before 18:00 ART
-(21:00 UTC) on November 4. If that cut is missed, this front stays unmerged and opening a
-repository remains the next step.
+non-Python repositories and in-app discard are later work.
 
 ## Ownership and shutdown
 
