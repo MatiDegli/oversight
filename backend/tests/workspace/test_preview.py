@@ -16,6 +16,40 @@ from .preview_fakes import FakeProcess, harness, profile
 pytestmark = pytest.mark.anyio
 
 
+async def test_shop_without_request_parent_retains_configured_origins(workspace):
+    h = await harness(workspace)
+    h.manager.profile = replace(
+        h.manager.profile,
+        vite_port=5710,
+        origins=("http://127.0.0.1:8710", "http://127.0.0.1:5710"),
+    )
+    try:
+        for parent in (None, "localhost:5710", None):
+            created = await h.manager.start(
+                run_id="run-20261103-000000",
+                agent_id="agent-1",
+                revision=1,
+                head_commit=h.head,
+                parent_authority=parent,
+            )
+            await h.sink.wait("ready", created.preview_id)
+            data = h.manager.registry.read()
+            assert data is not None
+            argv = data["launch"]["argv"]
+            origins = tuple(
+                argv[index + 1]
+                for index, option in enumerate(argv)
+                if option == "--oversight-origin"
+            )
+            assert origins == ((f"http://{parent}",) if parent else h.manager.profile.origins)
+            assert (await h.manager.get(created.preview_id)).url == (
+                f"http://127.0.0.1:{data['port']}/"
+            )
+            await h.manager.stop(created.preview_id, created.lease_token)
+    finally:
+        await h.close()
+
+
 @pytest.mark.parametrize("port", [8710, 5710])
 async def test_shop_refuses_unsupported_parent_before_reservation(workspace, monkeypatch, port):
     from unittest.mock import AsyncMock

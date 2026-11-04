@@ -470,6 +470,20 @@ Acceptance and missing-proof inventory follows in the hand-back. Claims are tied
 [isolated browser proof](../frontend/src/app/preview/PreviewAcceptance.browser.test.ts).
 A skip, injected namespace or capture implementation is never collected trust evidence.
 
+These links include historical qualification, not a current passing acceptance claim. The
+real-route cases in `backend/tests/workspace/test_preview_acceptance.py` and the three-start
+driver send a `127.0.0.1` parent; the shop admission refusal currently blocks them. The driver
+also requires that backend name in `tools/preview_scenario.py`. Restoring these HTTP/browser
+harnesses requires the unowned shop authority adapter and the frontend transport integration;
+they remain explicit acceptance prerequisites. Direct manager launches without a request parent
+retain the person's configured `profile.origins`, including `http://127.0.0.1:8710`, while the
+default localhost parent still selects the frame URL. This preserves the direct socket/death
+and mutation checks' required origins without certifying the blocked route or three-start
+scenarios. The direct kernel fixtures in `backend/tests/workspace/preview_acceptance_support.py`
+and `backend/tests/changes/test_preview_acceptance.py` also omit the required `enabled=True`
+profile opt-in, as does `tools/preview_acceptance_checks.py`. Updating those fixtures is a
+separate prerequisite before claiming current kernel acceptance.
+
 The November 3 clone acceptance collected 12 Linux Chromium before/after frames and six
 comparisons under `.shots/preview-acceptance/`, with UTC/viewport/theme/error/overflow metadata.
 It did not collect WSL-to-Windows browser proof: the bounded Windows attempt exposed no CDP

@@ -74,6 +74,7 @@ class PreviewManager:
         self.reviewed_inputs = reviewed_inputs
         self._parent_host = "localhost"
         self._parent_authority = f"localhost:{self.profile.backend_port}"
+        self._requested_parent_authority: str | None = None
         self.registry = PreviewRegistry(workspace.runtime_root)
         self.barrier = PreviewBarrier(workspace, self._transition, self._terminal)
         workspace.previews = self
@@ -167,6 +168,7 @@ class PreviewManager:
         if self._reserved:
             raise PreviewError("Live preview already has an owner; stop it first.")
         self._reserved = True
+        self._requested_parent_authority = parent_authority
         self._parent_authority = parent_authority or f"localhost:{self.profile.backend_port}"
         self._parent_host = self._parent_authority.split(":")[0]
         created_at = self.clock()
@@ -259,7 +261,7 @@ class PreviewManager:
                 listener,
                 refusal,
                 self.clock(),
-                parent_authority=self._parent_authority,
+                parent_authority=self._requested_parent_authority,
             )
             if reviewed is not None:
                 if self.reviewed_inputs is None:

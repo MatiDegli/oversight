@@ -107,6 +107,8 @@ One line per day, in Argentina time (ART).
   request and refuses foreign names/ports. Custom HTML embeddings retain their explicit policy
   after the same Host check. The shop authority adapter is an unowned prerequisite;
   shop `127.0.0.1` parents are refused before reservation, while localhost remains supported.
+  Direct launches without a request parent preserve configured origins; the default host selects
+  only the URL. Real-route acceptance and the three-start driver remain blocked prerequisites.
   Frontend transport integration remains a separately owned prerequisite. Bounded admission-lock
   waits by lease/lifetime
   and fixed stop/EOF/cancellation before execute; added wiring-level probing-death and invalid-evidence

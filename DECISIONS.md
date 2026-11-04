@@ -4822,10 +4822,14 @@ frame-ancestors. Production and Vite frame-src use that same request, naming onl
 loopback host for the configured pool; Vite refuses every other Host or listening-port mismatch.
 Custom HTML embedders retain their explicit CSP after the same Host check; Vite-owned HTML keeps
 the request-aware pool policy.
+Direct shop launches without a request parent keep the person's configured origins; the localhost
+default selects only the frame URL. An explicit request parent still selects exactly its own Origin.
 The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents are refused before
 reservation with `not_configured`, without a listener, process or lifecycle event. Shop localhost
-parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin. The frontend
-transport's opposite-name integration remains a separately owned prerequisite.
+parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin. Real-route
+acceptance and the three-start driver use 127.0.0.1 parents and remain blocked prerequisites, not
+current qualification evidence. The frontend transport's opposite-name integration remains a
+separately owned prerequisite. Kernel acceptance fixtures also still require explicit profile opt-in.
 Admission-lock waits expire at the earlier lease or absolute deadline, retaining the corresponding
 expiry reason. Stop, EOF or cancellation
 before execution opens no acknowledgement and settles verified boundary death before releasing
