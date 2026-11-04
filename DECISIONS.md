@@ -4806,6 +4806,8 @@ and renewal valid while the supervisor and listener guardian own the next comman
 The accepted request Host owns the opposite loopback frame name and its exact Host/Origin and parent
 frame-ancestors. Production and Vite frame-src use that same request, naming only the opposite
 loopback host for the configured pool; Vite refuses every other Host or listening-port mismatch.
+Custom HTML embedders retain their explicit CSP after the same Host check; Vite-owned HTML keeps
+the request-aware pool policy.
 The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents are refused before
 reservation with `not_configured`, without a listener, process or lifecycle event. Shop localhost
 parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin. The frontend

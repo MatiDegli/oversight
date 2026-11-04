@@ -69,6 +69,13 @@ function previewFrames(
   return {
     name: "preview-frame-authorities",
     configureServer(server) {
+      // Custom HTML belongs to its embedding server, including its explicit response policy.
+      const customPolicy =
+        server.config.appType === "custom" && mode !== "replay"
+          ? Object.entries(server.config.server.headers).find(
+              ([name]) => name.toLowerCase() === "content-security-policy",
+            )?.[1]
+          : undefined;
       server.middlewares.use((request, response, next) => {
         const address = server.httpServer?.address();
         const listeningPort = address && typeof address !== "string" ? address.port : vite;
@@ -88,7 +95,9 @@ function previewFrames(
           response.end("Forbidden preview parent");
           return;
         }
-        if (mode !== "replay" && pool.length > 0) {
+        if (customPolicy !== undefined) {
+          response.setHeader("Content-Security-Policy", customPolicy);
+        } else if (mode !== "replay" && pool.length > 0) {
           const frame = parent === "localhost" ? "127.0.0.1" : "localhost";
           response.setHeader(
             "Content-Security-Policy",

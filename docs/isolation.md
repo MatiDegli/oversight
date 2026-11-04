@@ -552,7 +552,9 @@ The request's accepted Host selects one frame name: localhost parents use 127.0.
 only the actual parent as frame-ancestors. Production and Vite parent responses resolve frame-src
 from that same accepted request, naming only the opposite loopback host for the configured pool;
 Vite also refuses every other Host or listening-port mismatch. IPv6 and other parent names cannot
-start this preview. The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents
+start this preview. Custom HTML embedders retain their explicit CSP after the same Host check;
+Vite-owned HTML keeps the request-aware pool policy.
+The shop authority adapter is an unowned prerequisite; shop `127.0.0.1` parents
 are refused before reservation with `not_configured`, without a listener, process or lifecycle event.
 Shop localhost parents retain the adapter's supported 127.0.0.1 frame Host and exact parent Origin.
 The frontend transport's opposite-name integration remains a separately owned prerequisite.

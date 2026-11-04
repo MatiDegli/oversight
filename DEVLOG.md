@@ -104,7 +104,8 @@ One line per day, in Argentina time (ART).
   scripted-story or Windows-browser acceptance. No provider calls or contract changes.
   Qualified the actual prepared offline production build and imports in the Linux root, and the
   real supervisor/guardian death ordering. Vite now names only the opposite loopback frame host per
-  request and refuses foreign names/ports. The shop authority adapter is an unowned prerequisite;
+  request and refuses foreign names/ports. Custom HTML embeddings retain their explicit policy
+  after the same Host check. The shop authority adapter is an unowned prerequisite;
   shop `127.0.0.1` parents are refused before reservation, while localhost remains supported.
   Frontend transport integration remains a separately owned prerequisite. Bounded admission-lock
   waits by lease/lifetime

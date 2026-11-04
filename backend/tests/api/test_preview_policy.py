@@ -281,6 +281,51 @@ async def test_actual_vite_html_responses_carry_exact_pool_header(tmp_path):
 
 
 @pytest.mark.anyio
+async def test_custom_vite_html_retains_explicit_policy_without_widening_host(tmp_path):
+    evidence = tmp_path / "custom-policy.json"
+    await vite_script(
+        """
+        import { createServer } from 'vite';
+        import { request } from 'node:http';
+        import { writeFile } from 'node:fs/promises';
+        const policy = 'frame-src http://127.0.0.1:19800';
+        const server = await createServer({appType: 'custom', server: {
+          port: 0, strictPort: false, headers: {'Content-Security-Policy': policy}
+        }});
+        server.middlewares.use((_request, response) => {
+          response.setHeader('Content-Type', 'text/html');
+          response.end('<!doctype html><title>Custom HTML owner</title>');
+        });
+        try {
+          await server.listen();
+          const origin = server.resolvedUrls.local[0];
+          const port = new URL(origin).port;
+          const responses = [];
+          for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, 'localhost:8710']) {
+            responses.push(await new Promise((resolve, reject) => {
+              const req = request(origin, {headers: {Host: host}}, (response) => {
+                response.resume();
+                response.on('end', () => resolve({status: response.statusCode,
+                  policy: response.headers['content-security-policy']}));
+              });
+              req.setTimeout(5000, () => req.destroy(new Error('request timed out')));
+              req.on('error', reject);
+              req.end();
+            }));
+          }
+          await writeFile(process.argv[1], JSON.stringify(responses));
+        } finally { await server.close(); }
+        """,
+        evidence,
+    )
+    assert json.loads(evidence.read_text()) == [
+        {"status": 200, "policy": "frame-src http://127.0.0.1:19800"},
+        {"status": 200, "policy": "frame-src http://127.0.0.1:19800"},
+        {"status": 403, "policy": "frame-src 'none'"},
+    ]
+
+
+@pytest.mark.anyio
 async def test_general_browser_project_keeps_real_c_suite_in_explicit_project():
     for project in ("browser", "preview-acceptance"):
         result = await run_process(
