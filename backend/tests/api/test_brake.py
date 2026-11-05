@@ -72,17 +72,18 @@ async def start_code(settings: Settings, scripts: Scripts) -> tuple[int, str | N
         return response.status_code, ErrorResponse.model_validate(response.json()).error.code
 
 
+# No budget means no brake (test_optional_budget.py starts an uncapped Meta run); an invalid
+# price or an uncertain ledger still refuses.
 @pytest.mark.parametrize(
     ("overrides", "ledger"),
     [
-        ({"budget_usd": None}, None),
         ({"output_usd_per_m": None}, None),
         ({}, "not json"),
         ({}, {"spent_usd": "12", "unknown": []}),
         ({}, {"spent_usd": 1.0, "unknown": [{"run_id": "r", "agent_id": "agent-1", "ts": "t"}]}),
         ({}, {"spent_usd": 135.01, "unknown": []}),
     ],
-    ids=["no-budget", "no-price", "not-json", "malformed", "unknown-entry", "above-90"],
+    ids=["no-price", "not-json", "malformed", "unknown-entry", "above-90"],
 )
 async def test_a_closed_brake_refuses_before_any_client(
     tmp_path: Path, overrides: dict[str, Any], ledger: object
@@ -201,7 +202,8 @@ def test_settling_sets_the_spend_and_clears_unknown_calls(tmp_path: Path) -> Non
 
 
 async def test_the_fake_model_ticks_say_ok_without_a_budget(tmp_path: Path) -> None:
-    # The server refuses nothing on the fake profile, so a tick must not report a block.
+    # The server refuses nothing on the fake profile, so a tick must not report a block, and
+    # without a budget its share is unknown, never zero.
     settings = live_settings(tmp_path)
     assert settings.budget_usd is None
     async with (
@@ -210,7 +212,7 @@ async def test_the_fake_model_ticks_say_ok_without_a_budget(tmp_path: Path) -> N
     ):
         assert (await s.client.post("/agents", json={"task": "t"})).status_code == 201
         [tick] = [e for e in await s.until(is_type("usage.tick")) if e.type == "usage.tick"]
-    assert (tick.payload.brake, tick.payload.budget_usd) == ("ok", 0.0)
+    assert (tick.payload.brake, tick.payload.budget_usd) == ("ok", None)
 
 
 @dataclass

@@ -295,9 +295,15 @@ async def test_finalizing_closed_control_refuses_until_stop(
 
     monkeypatch.setattr(ChangeManager, "proposed", held)
     if halt:
-        from oversight.app import LIMITS
+        # Settings keep the step limit between 5 and 100; the run's resolved limits take one step
+        # here, so the first tool call halts the agent.
+        built = LiveRun.__init__
 
-        monkeypatch.setattr("oversight.app.LIMITS", LIMITS.model_copy(update={"max_steps": 1}))
+        def one_step(self: LiveRun, *args: Any, **kwargs: Any) -> None:
+            built(self, *args, **kwargs)
+            self._limits = self._limits.model_copy(update={"max_steps": 1})
+
+        monkeypatch.setattr(LiveRun, "__init__", one_step)
     model = HeldScript()
     async with (
         asyncio.timeout(DEADLINE_S),
