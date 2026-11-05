@@ -30,8 +30,10 @@ export function GraphHeading({ state, groups = 0 }: { state: State; groups?: num
         {groups > 0 && <span>{count(groups, "group", "groups")}</span>}
         <span>{count(modules, "module", "modules")}</span>
         <span>{count(functions, "function", "functions")}</span>
-        <span>{activity.text}</span>
       </p>
+      {/* Its own row: the controls beside the heading change width between the map and the cards,
+          and a wrapping count would change the heading's height under the camera's group framing. */}
+      <p className="basis-full text-sm text-muted">{activity.text}</p>
     </div>
   );
 }
