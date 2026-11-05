@@ -5285,6 +5285,7 @@ style block permits styling. Recompute that hash whenever the style changes.
 The font stack is "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif. No font file
 is added: this page appears for seconds, so the installed Windows fallback avoids extra payload
 and keeps font notices unchanged.
+
 ## 2026-11-04 — A dark title bar and menu bar for the Windows app
 
 The maintainer found the white native title and File menu bar foreign next to Oversight's night
@@ -5333,3 +5334,134 @@ says agents edit a disposable copy, never the folder itself. When the desktop sh
 (the settings view's `apply` is `desktop_reload`) it points to File > Open repository… in the menu bar;
 a server started otherwise says the repository is chosen at startup; a replay says the Windows app is
 where to open one's own. No route or contract changes, and the native picker stays the only way in.
+
+## 2026-11-04 — Enter starts an agent; Ctrl+Enter queues it
+
+He asked for Enter to send, as in other chat composers, and Ctrl+Enter to queue. In the start box,
+Enter starts the agent, Shift+Enter adds a line, and Ctrl+Enter (Cmd+Enter on macOS) sends the task to
+the standalone queue the server already runs (`POST /queue`, at most 32 active items), so no backend
+or contract change was needed. Nothing acts while an input method is composing, and a held key does
+not repeat. A queued task keeps the selected slot, otherwise the server takes the first free slot. The
+box confirms “Queued. It starts when a slot is free.” and lists the person's waiting tasks from
+`queue.updated`, each with its state and a Cancel while it still waits; a lead's queued tasks stay in
+its plan. When every slot is busy, the line under the box says Ctrl+Enter queues the task. At his
+answer, the agent and lead conversations and the new lead's first task also send with Enter, with
+Shift+Enter for a new line; Ctrl+Enter does nothing there, as they have no queue. The same guards
+as their buttons apply. Approve still has no key.
+
+## 2026-11-04 — Text fields keep the focus ring without the glow
+
+Clicking the start box lit its text: a text field matches `:focus-visible` on any click, so the
+keyboard glow's drop-shadow blurred the typed letters. Text fields, inputs other than checkboxes,
+radios and ranges, and editable content are now excluded from the glow, as Monaco and the graph host
+already were; their field still draws the focus ring.
+
+## 2026-11-04 — The model and step chips become controls; a step limit setting
+
+He asked for the start box's two chips to be configurable, so a person can choose another model and
+more or fewer steps. The model chip opens a menu, “Model for the next agent”, listing each model the
+run's slots offer, the current one checked, and “Models and keys in Settings”, since a key is what
+adds a model. A pick goes with the next start (`StartAgent.model`) and the next queued task
+(`QueuedAgentTask.model`); without one, each slot keeps its default. Only the person's opening moves
+focus into the menu. When the box already shows two slot cards with different models, the cards are
+the choice and the chip stays a label. The step chip opens Settings, where a new “Step limit” row
+edits `OVERSIGHT_MAX_STEPS`: a whole number from 5 to 100, empty meaning 30, applied at the next
+start of the server like the agent cap. It becomes `limits.max_steps` in run.started and every agent
+task, so the agent loop's budget follows it. An invalid value stops startup with its reason, as
+`OVERSIGHT_MAX_AGENTS` does. Adding the name to `EditableSettingName` is the additive contract change
+he approved: contracts 1.24.0, with JSON Schema and TypeScript regenerated.
+
+## 2026-11-04 — Example tasks for a first start in the demo shop
+
+A first-time person faced an empty start box with no hint of what a good task looks like. When the
+run's workspace is `demo-repo`, no agent exists yet, the box is empty and starts are allowed, a
+“Try:” row under the box offers three tasks, each a real gap in `demo-repo/shop`: rejecting negative
+prices in `compute_price` (the recorded run's task), validating `Inventory.reserve` quantities as
+`restock` and `release` already do, and leaving cancelled orders out of `revenue_by_category`. A
+click puts the full task in the box and moves focus there, since the person asked for it; nothing
+starts until they press Enter or Start agent. The row disappears once the first agent exists and
+never shows for other repositories, in replay or in history. A unit test reads the shop's code so
+the three tasks stay true.
+
+## 2026-11-04 — Agent counts say who works and who waits; plainer first-screen copy
+
+A final review of the built screens found the Agents header saying “2 running” beside the graph's
+“0 agents working” while both cards read “Ready for review”, because the header counted held slots.
+At his answer, the panel header, the Chat header and the graph heading now share one count, “N
+working”, followed by “ · M waiting for you” when an agent waits for review: starting, working,
+revising and paused agents work; ready-for-review agents wait; halted, done and stopped agents count
+in neither. This replaces “The header count stays the slots held” (packet a-1102c, 2026-11-02) and
+“pending agents in the running count” (the approved departures, 2026-11-02); slot capacity is
+unchanged. The graph legend's labels become “Read by an agent”, “Changed, not merged yet”, “New, not
+merged yet” and “Possible call (matched by name)”, and the map legend's ring reads “A dashed ring:
+changed, not merged yet”, since a dashed border marks any pending change, also while the agent edits
+or merges. The same pass made four copy fixes. The merge mode chip is
+hidden when the run recorded no mode (the recorded replay), instead of “Merge mode: not recorded”.
+The start copy promises approval only in Ask me; in Merge alone when safe it says a change that
+passes every merge rule merges by itself and the rest waits for approval. Both views' empty Agents
+panel say “No agents yet. Start a task and its agent appears here with its own color and letter.”
+Disabled controls say why: New task and New lead while viewing a past event, Approve and Request
+changes while the file loads, and Request changes without a comment. A failed file load says “try
+again” once.
+
+## 2026-11-04 — A lighter dark palette (proposal B)
+
+At his choice of proposal B, the dark surfaces rise a step so cards, nodes and panels separate from
+the canvas: the ground goes from #070707 to #121214, page from #101012 to #1c1c20, card from #151518
+to #242428 and raised from #1b1b1f to #2c2c31, with shell, panel, field, inset, the mattes, the
+replay control, borders and outlines moved with them. Three text tokens rise to keep 4.5:1 on the
+lighter surfaces (faint #94948e, code-dim #84847f, agent-f-text #b982ae), the edge and control
+tokens rise to keep 3:1, and each agent's node fill gains 15 on every channel, which keeps its hue,
+so no node sits darker than the ground. The contrast tests forced three more steps: the overlay
+panel's alpha goes to 0.88, and the C and F tints go to 0.12 and 0.09, so the F tint reads weaker.
+A node now stands ΔL* 8.8 from the ground, against 5.0 before. Team and state hues, the day theme
+and the contour lines' level above the ground are unchanged. This replaces the #070707 ground of the
+v4 field decision (item 1) and the dark surface values of the v4 tokens; DESIGN.md's tables carry
+the new values and ratios.
+
+## 2026-11-04 — A lens mark for the app
+
+He found the old mark ugly. The new one is a lens drawn as two graph edges between two nodes, around
+one central node: the product's graph and its oversight in one shape. It paints in `currentColor`,
+so it follows the text token in both themes, sits at 20 px before the “Oversight” wordmark in the
+top bar, is decorative (the wordmark carries the name) and is the browser favicon and the Windows
+app's icon at six sizes.
+
+## 2026-11-04 — The live diff leads to its review; long tasks fold to two lines
+
+The same final review found the live diff of a ready change gave no way forward and a long task
+filled the review header. When the agent is ready for review, the live diff says “Agent A proposed
+this change. Review it to approve, request changes or reject.” with a Review change button that
+opens the review, only on the person's click. The review header's task folds to two lines with a
+“Show full task” / “Show less” toggle that appears only when the text overflows. The review and the
+Chat change card label the agent's summary “What Agent A did”. Four small fixes ride along: the Stop
+icon is a filled square, the merge chip's icon never shrinks, the Steps fact uses a numbered-list
+icon, and a missing base reads “Base unknown”.
+
+## 2026-11-04 — A calm motion pass
+
+He asked for modern motion wherever it fits. One stylesheet, `motion.css`, adds it under
+`prefers-reduced-motion: no-preference` only, with the `--transition-easing` token and DESIGN.md's
+160 to 320 ms range for event-driven changes: tabs, menu items, options and tree rows ease their
+colors in 160 ms; an agent card's status pill eases to its new tint; the model menu, the command
+palette and the shortcuts sheet fade in with a 6 px rise; the replay tooltip, status and alert
+lines, queued tasks, conversation entries, agent cards and tiles, step rows and lead cards fade in
+where they stand. Only opacity, translate and colors move, each animation ends on the element's
+static style, and the repository graph, Monaco and the life effects are never targeted. Left out on
+purpose: general button hovers, which would break the 70 ms press; opening motion for the focus panel
+and dock, which carry the edge light and Monaco; the Chat and Oversight switch, which shares the
+stage with the graph camera; and rises inside scrolling lists, which would stretch their scroll
+height.
+
+## 2026-11-04 — Dark, Day or System appearance, dark by default
+
+He asked whether the app could follow the computer's day or night setting, and chose a selector
+with dark as the default. Settings ends with an Appearance section of three radios, Dark, Day and
+System; the choice is stored in the browser (`oversight.appearance`) and applied before the app
+mounts, and a missing or invalid value reads as dark, so the product, the video and the demo stay
+dark unless the person picks otherwise. System follows `prefers-color-scheme` live while selected.
+The CSS repaints at once; the graph, the dot field and open code views keep the colors they were
+built with until Oversight reloads, and a note under the control says so instead of forcing a
+reload. This replaces “Day mode is for the submission gallery only” and “the switch repaints
+everything” (2026-10-26) and the missing switcher of the v4 tokens entry; full day-mode polish is
+still a later front. The Windows window is forced dark, so System there may always resolve to dark.
