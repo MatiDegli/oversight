@@ -1,11 +1,11 @@
 import type { ComponentProps } from "react";
 
 import type { FileViewProps } from "./FileView";
-import type { LiveDiffProps } from "./LiveDiff";
+import type { LiveDiffPanelProps, LiveDiffProps } from "./LiveDiff";
 import { deferEditor } from "./lazyEditor";
 
 export const EditorDiff = deferEditor<LiveDiffProps>((module) => module.EditorDiff);
-export const LiveDiff = deferEditor<LiveDiffProps>((module) => module.LiveDiff);
+export const LiveDiff = deferEditor<LiveDiffPanelProps>((module) => module.LiveDiff);
 export const FileView = deferEditor<FileViewProps>((module) => module.FileView, true);
 export const ReviewEditor = deferEditor<
   ComponentProps<typeof import("./ReviewEditor").ReviewEditor>
@@ -13,7 +13,7 @@ export const ReviewEditor = deferEditor<
 
 export { prefetchEditorWhenIdle } from "./prefetch";
 
-export type { LiveDiffProps } from "./LiveDiff";
+export type { LiveDiffPanelProps, LiveDiffProps } from "./LiveDiff";
 export { createEditorTheme } from "./theme";
 export type { EditorColors } from "./theme";
 export type { FileViewProps } from "./FileView";

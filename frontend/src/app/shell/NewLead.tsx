@@ -67,6 +67,15 @@ export function NewLead({
   const { draft, pending, failure } = useStore(leadDraftStore);
   const { active, max, atCap } = leadCapacity(state);
   const canStart = Boolean(onStart && draft.trim() && !pending && !atCap);
+  const start = () => {
+    if (canStart && onStart)
+      void leadDraftStore
+        .getState()
+        .start(onStart)
+        .then((started) => {
+          if (started) onClose();
+        });
+  };
   return (
     <div className="chat-empty new-lead">
       <div>
@@ -93,6 +102,13 @@ export function NewLead({
             onChange={(event) => {
               leadDraftStore.getState().setDraft(event.target.value);
             }}
+            // Enter starts the lead and Shift+Enter adds a line; an input method's Enter only composes.
+            onKeyDown={(event) => {
+              if (event.key !== "Enter" || event.shiftKey || event.altKey) return;
+              if (event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
+              event.preventDefault();
+              if (!event.repeat) start();
+            }}
           />
           <div className="new-lead-actions">
             <ChatMergeChip state={state} onOpenSettings={onOpenSettings} />
@@ -103,15 +119,7 @@ export function NewLead({
               type="button"
               className="new-lead-start"
               aria-disabled={!canStart}
-              onClick={() => {
-                if (canStart && onStart)
-                  void leadDraftStore
-                    .getState()
-                    .start(onStart)
-                    .then((started) => {
-                      if (started) onClose();
-                    });
-              }}
+              onClick={start}
             >
               Start lead
             </button>

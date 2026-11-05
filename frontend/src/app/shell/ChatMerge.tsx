@@ -11,7 +11,10 @@ import type { State } from "../../state";
 import { selectMergeModeLine } from "./statusSelectors";
 import "./chatMerge.css";
 
-/** Navigation only: command capability remains owned by the shared Settings panel. */
+/**
+ * Navigation only: command capability remains owned by the shared Settings panel. A run without a
+ * recorded mode (only a recorded replay; live runs always record one) shows no chip.
+ */
 export function ChatMergeChip({
   state,
   onOpenSettings,
@@ -19,10 +22,12 @@ export function ChatMergeChip({
   state: State;
   onOpenSettings?: () => void;
 }) {
+  const line = selectMergeModeLine(state);
+  if (line === null) return null;
   const content = (
     <>
       <GitMerge aria-hidden="true" size={15} />
-      <span>{selectMergeModeLine(state) ?? "Merge mode: unknown"}</span>
+      <span>{line}</span>
       {onOpenSettings && <ChevronDown aria-hidden="true" size={14} />}
     </>
   );

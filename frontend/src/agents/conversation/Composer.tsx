@@ -160,6 +160,13 @@ export function Composer({
           onChange={(event) => {
             setDraft(key, event.target.value);
           }}
+          // Enter sends and Shift+Enter adds a line; an input method's Enter only composes.
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.shiftKey || event.altKey) return;
+            if (event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) return;
+            event.preventDefault();
+            if (!event.repeat) void send();
+          }}
           className={`block h-16 w-full resize-none rounded-[10px] border border-control-edge bg-field px-3 py-[10px] text-[15px] text-text placeholder:text-faint aria-disabled:text-faint ${focusRing}`}
         />
       )}

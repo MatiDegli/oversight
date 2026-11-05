@@ -43,12 +43,16 @@ button:not(:disabled, [aria-disabled="true"]):not(
   transform: translateY(1.5px);
 }
 
+/* Text fields match on any click and their field draws the ring; a shadow would blur their text. */
 :focus-visible:not(
   :is(
     .monaco-editor,
     .monaco-editor *,
     [aria-label="Repository graph"],
-    [aria-label="Repository graph"] *
+    [aria-label="Repository graph"] *,
+    textarea,
+    input:not([type="checkbox"], [type="radio"], [type="range"]),
+    [contenteditable]
   )
 ) {
   filter: drop-shadow(0 0 6px var(--focus-glow));

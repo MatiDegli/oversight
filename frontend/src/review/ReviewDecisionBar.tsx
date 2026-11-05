@@ -79,6 +79,8 @@ export function ReviewDecisionBar({
   unavailable?: boolean;
 }) {
   const approvalReason = useId();
+  const requestReason = useId();
+  const editsReason = useId();
   const [keyboardTried, setKeyboardTried] = useState(false);
   const values = cards.map((card) => cardAnswer(card, answers));
   const no = cards.find((_card, i) => values[i] === "no");
@@ -111,10 +113,14 @@ export function ReviewDecisionBar({
   const revising = view.kind === "revising";
   const approvable = view.kind === "open" && onDecide !== undefined && !blocked && !locked;
   const pointerCaption = keyboardTried && approvable;
+  const loading = blocked === "loading";
   const hasCaption =
-    pointerCaption || locked || unavailable || (!recorded && view.kind !== "conflict");
+    pointerCaption || locked || loading || unavailable || (!recorded && view.kind !== "conflict");
   const requestable =
     (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined && !blocked;
+  // A disabled control always says why: pending, revising, edits and conflicts have their own lines.
+  const needsComment = requestable && comment.trim() === "";
+  const describedBy = (...ids: (string | false)[]) => ids.filter(Boolean).join(" ") || undefined;
   const rejectable = (view.kind === "open" || view.kind === "conflict") && onDecide !== undefined;
   const failure = view.kind === "open" || view.kind === "conflict" ? view.failure : null;
   // No key in this section makes a decision. Approve answers only a pointer click: Enter and Space
@@ -152,7 +158,10 @@ export function ReviewDecisionBar({
         <button
           type="button"
           disabled={!approvable}
-          aria-describedby={hasCaption ? approvalReason : undefined}
+          aria-describedby={describedBy(
+            hasCaption && approvalReason,
+            blocked === "edits" && editsReason,
+          )}
           onClick={(event) => {
             // Keyboard and scripted clicks have detail 0; only a pointer can merge.
             if (event.detail === 0) {
@@ -178,6 +187,11 @@ export function ReviewDecisionBar({
             if (requestable) onDecide(changeId, "request-changes", comment);
           }}
           aria-description="Request changes keeps the worktree and sends your comment back."
+          aria-describedby={describedBy(
+            needsComment && requestReason,
+            loading && approvalReason,
+            blocked === "edits" && editsReason,
+          )}
           className={`${button} border border-control-edge`}
         >
           <MessageSquare aria-hidden="true" className="size-4" /> Request changes
@@ -202,9 +216,19 @@ export function ReviewDecisionBar({
             ? "Approve with a click: it merges into main"
             : locked
               ? approvalLockedCaption
-              : unavailable
-                ? "The check is still unavailable. You decide whether to continue without it."
-                : "If main moved since the agent started, the tests run again on the combined result before the merge."}
+              : loading
+                ? "Approve and Request changes open when the file finishes loading."
+                : unavailable
+                  ? "The check is still unavailable. You decide whether to continue without it."
+                  : "If main moved since the agent started, the tests run again on the combined result before the merge."}
+        </p>
+      )}
+      {needsComment && (
+        <p
+          id={requestReason}
+          className="review-decision-hint text-[13px] leading-[18px] text-muted"
+        >
+          Request changes needs a comment for the agent.
         </p>
       )}
       {revising &&
@@ -214,7 +238,7 @@ export function ReviewDecisionBar({
           <p role="status">The agent is revising. Decisions reopen when it proposes again.</p>
         ))}
       {blocked === "edits" && (
-        <p role="status" className="text-sm text-muted">
+        <p id={editsReason} role="status" className="text-sm text-muted">
           Save or discard your review edits before approving or requesting changes.
         </p>
       )}

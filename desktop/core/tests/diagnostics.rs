@@ -1,4 +1,4 @@
-use oversight_desktop_core::diagnostics::{OutputTail, SessionLog, Stage, finish};
+use oversight_desktop_core::diagnostics::{OutputTail, SessionLog, Stage};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -25,25 +25,6 @@ fn backend_tail_discards_free_text_secrets_paths_and_unbounded_lines() {
 }
 
 #[test]
-fn cleanup_never_masks_the_startup_error_or_accepts_forced_shutdown() {
-    let error = finish(
-        Err(io::Error::from(io::ErrorKind::InvalidInput)),
-        Err(io::Error::from(io::ErrorKind::PermissionDenied)),
-    )
-    .unwrap_err();
-    assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
-    assert!(finish(Ok(()), Ok(false)).is_err());
-    assert!(
-        finish(
-            Ok(()),
-            Err(io::Error::from(io::ErrorKind::PermissionDenied))
-        )
-        .is_err()
-    );
-    assert!(finish(Ok(()), Ok(true)).is_ok());
-}
-
-#[test]
 fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -53,14 +34,30 @@ fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
     let data = parent.join(format!("diagnostics-{}", std::process::id()));
     let mut log = SessionLog::open(&data).unwrap();
     log.advance(Stage::Payload).unwrap();
-    let tail = OutputTail::new(PathBuf::from("/install/app"), data.clone());
+    let mut tail = OutputTail::new(PathBuf::from("/install/app"), data.clone());
     log.failure(&io::Error::other("secret /private/home"), Some(1), &tail)
         .unwrap();
-    let path = data.join(".runtime/desktop-session.log");
+    let path = data.join(".runtime").join("desktop-session.log");
     let text = fs::read_to_string(&path).unwrap();
     assert!(text.contains("Stage: Payload") && text.contains("Backend exit: Some(1)"));
     assert!(!text.contains("secret") && !text.contains("/private"));
     assert!(text.len() < 4096);
+    // Installed refusals keep the UI alive, but retain the same sanitized readiness evidence.
+    tail.feed(b"OVERSIGHT_REFUSAL=other\nValueError: secret /private/home\n");
+    for (kind, exit) in [
+        (io::ErrorKind::BrokenPipe, Some(3)),
+        (io::ErrorKind::TimedOut, None),
+    ] {
+        log.advance(Stage::Readiness).unwrap();
+        log.failure(&io::Error::from(kind), exit, &tail).unwrap();
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.contains("Stage: Readiness"));
+        assert!(text.contains(&format!("Kind: {kind:?}")));
+        assert!(text.contains(&format!("Backend exit: {exit:?}")));
+        assert!(text.contains("backend: ValueError"));
+        assert!(!text.contains("secret") && !text.contains("/private"));
+        assert!(!text.contains("OVERSIGHT_REFUSAL"));
+    }
     log.advance(Stage::Git).unwrap();
     log.failure(&io::Error::other("PATH=secret /private/home"), None, &tail)
         .unwrap();
@@ -80,4 +77,84 @@ fn session_log_is_bounded_overwritten_and_never_contains_error_messages() {
         assert_eq!(fs::read(outside).unwrap(), b"retained");
     }
     fs::remove_dir_all(data).unwrap();
+}
+
+#[test]
+fn refusal_output_is_fragmented_bounded_and_closed_without_retaining_raw_text() {
+    use oversight_desktop_core::refusal::Refusal;
+    let mut tail = OutputTail::new("app".into(), "data".into());
+    tail.feed(b"OVERSIGHT_REF");
+    assert_eq!(tail.refusal(), None);
+    tail.feed(b"USAL=previous-session-changed\r\n");
+    assert_eq!(tail.refusal(), Some(Refusal::PreviousSessionChanged));
+    tail.feed(b"OVERSIGHT_REFUSAL=garbage\n OVERSIGHT_REFUSAL=other\n");
+    tail.feed(&vec![b'x'; 2048]);
+    tail.feed(b"OVERSIGHT_REFUSAL=other\n");
+    assert_eq!(tail.refusal(), Some(Refusal::PreviousSessionChanged));
+    assert_eq!(tail.text(), "");
+}
+
+#[test]
+fn no_child_never_shows_a_shutdown_warning_for_launch_or_port_errors() {
+    use oversight_desktop_core::diagnostics::CloseOutcome;
+    for kind in [io::ErrorKind::InvalidInput, io::ErrorKind::AddrInUse] {
+        let outcome = CloseOutcome {
+            primary: Err(io::Error::from(kind)),
+            cleanup: None,
+            reaped: false,
+        };
+        assert!(!outcome.unverified());
+        assert_eq!(outcome.finish().unwrap_err().kind(), kind);
+    }
+}
+
+#[test]
+fn verified_shutdown_preserves_backend_failure_without_a_shutdown_warning() {
+    use oversight_desktop_core::diagnostics::CloseOutcome;
+    let outcome = CloseOutcome {
+        primary: Err(io::Error::from(io::ErrorKind::BrokenPipe)),
+        cleanup: Some(Ok(true)),
+        reaped: true,
+    };
+    assert!(!outcome.unverified());
+    assert_eq!(
+        outcome.finish().unwrap_err().kind(),
+        io::ErrorKind::BrokenPipe
+    );
+    let clean = CloseOutcome {
+        primary: Ok(()),
+        cleanup: Some(Ok(true)),
+        reaped: true,
+    };
+    assert!(!clean.unverified());
+    assert!(clean.finish().is_ok());
+}
+
+#[test]
+fn forced_failed_or_unreaped_shutdown_warns_and_keeps_both_outcomes() {
+    use oversight_desktop_core::diagnostics::CloseOutcome;
+    for (cleanup, reaped) in [
+        (Ok(false), true),
+        (Err(io::Error::from(io::ErrorKind::PermissionDenied)), true),
+        (Ok(true), false),
+    ] {
+        let outcome = CloseOutcome {
+            primary: Err(io::Error::from(io::ErrorKind::BrokenPipe)),
+            cleanup: Some(cleanup),
+            reaped,
+        };
+        assert!(outcome.unverified());
+        let error = outcome.finish().unwrap_err();
+        let retained = error
+            .get_ref()
+            .unwrap()
+            .downcast_ref::<CloseOutcome>()
+            .unwrap();
+        assert_eq!(
+            retained.primary.as_ref().unwrap_err().kind(),
+            io::ErrorKind::BrokenPipe
+        );
+        assert!(retained.cleanup.is_some());
+        assert_eq!(retained.reaped, reaped);
+    }
 }

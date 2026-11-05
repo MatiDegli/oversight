@@ -31,9 +31,7 @@ it.each([
         replayOf={replayOf}
       />,
     );
-    expect(html).toContain(
-      `<span>${replayOf ? "Replay · real recorded run · Real recorded run" : "Live"}</span>`,
-    );
+    expect(html).toContain(`<span>${replayOf ? "Replay · Real recorded run" : "Live"}</span>`);
     const budget = '<span role="status" class="text-muted">Budget 0% · brake at 90%</span>';
     expect(html).toContain(budget);
     if (line) {

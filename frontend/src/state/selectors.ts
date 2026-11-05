@@ -111,9 +111,24 @@ export function selectGraphSummary(state: State) {
     modules: nodes.filter((node) => node.kind === "module").length,
     // Methods count as functions: the graph draws both the same way.
     functions: nodes.filter((node) => node.kind === "function" || node.kind === "method").length,
-    working: Object.values(state.agents).filter(
-      (agent) =>
-        agent.state === "starting" || agent.state === "working" || agent.state === "revising",
-    ).length,
+    activity: selectAgentActivity(state),
   };
+}
+
+/**
+ * Who is at work and who waits for the person, said the same way in the Agents panel and the graph's
+ * heading. Slots held is a capacity matter and stays with the slot logic.
+ */
+export function selectAgentActivity(state: State) {
+  const agents = Object.values(state.agents);
+  const working = agents.filter(
+    (agent) =>
+      agent.state === "starting" ||
+      agent.state === "working" ||
+      agent.state === "revising" ||
+      agent.state === "paused",
+  ).length;
+  const waiting = agents.filter((agent) => agent.state === "ready_for_review").length;
+  const text = `${String(working)} working${waiting > 0 ? ` · ${String(waiting)} waiting for you` : ""}`;
+  return { working, waiting, text };
 }

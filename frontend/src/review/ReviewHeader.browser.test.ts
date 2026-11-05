@@ -248,3 +248,104 @@ it.each([1920, 1280, 960])("wraps long task and provenance at %i CSS px", async 
     await page.close();
   }
 });
+
+// Mounts fixture b with its task replaced. A string expression keeps the page's own import out of
+// the test transform, which rewrites import() inside evaluated functions.
+async function mountTask(page: Page, task: string, width?: number) {
+  await page.evaluate(
+    'import("/src/review/ReviewHeader.fixture.tsx").then((m) => { window.headerState = m.headerState; })',
+  );
+  await page.evaluate(
+    ({ task, width }) => {
+      const page = window as unknown as {
+        headerState: (name: string) => {
+          changes: Record<string, { proposal: { task: string } | null }>;
+        };
+        mountHeader: (name: string, state: unknown) => void;
+      };
+      const state = page.headerState("b");
+      const proposal = state.changes["change-1"]?.proposal;
+      if (!proposal) throw new Error("Missing fixture proposal");
+      proposal.task = task;
+      page.mountHeader("b", state);
+      if (width === undefined) return;
+      const host = document.body.firstElementChild as HTMLElement;
+      host.style.width = `${String(Math.min(width - 32, 880))}px`;
+      host.style.margin = "0 16px";
+      // The panel takes the whole column, as on the phone, instead of its desktop 46vw.
+      const panel = host.firstElementChild as HTMLElement;
+      panel.style.width = "100%";
+    },
+    { task, width },
+  );
+}
+
+// A long task clamps to two lines; the toggle reveals all of it and clamps it again. 390 is the phone.
+it.each([390, 1920])(
+  "clamps a long task to two lines with a toggle at %i CSS px",
+  async (width) => {
+    const page = await browser.newPage({ viewport: { width, height: 844 } });
+    try {
+      await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+      await page.goto(url);
+      await page.waitForFunction(() => "mountHeader" in window);
+      const task = `Fix the discount rounding in compute_price ${"so every order total matches the receipt to the cent, ".repeat(6)}and keep the callers unchanged.`;
+      await mountTask(page, task, width);
+      await page.evaluate(() => document.fonts.ready);
+      const header = page.locator(".review-header");
+      const heading = header.locator("h2");
+      const toggle = header.getByRole("button", { name: "Show full task" });
+      await expect.poll(() => toggle.count()).toBe(1);
+      const read = () =>
+        header.evaluate((element) => {
+          const title = element.querySelector("h2") as HTMLElement;
+          return {
+            overflow: element.scrollWidth > element.clientWidth,
+            height: title.getBoundingClientRect().height,
+            text: title.textContent,
+          };
+        });
+      const clamped = await read();
+      expect(clamped.overflow).toBe(false);
+      expect(clamped.height).toBeLessThanOrEqual(2 * 28 + 1);
+      expect(clamped.text).toBe(task);
+      expect(await toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+      await toggle.click();
+      const less = header.getByRole("button", { name: "Show less" });
+      expect(await less.getAttribute("aria-expanded")).toBe("true");
+      const open = await read();
+      expect(open.height).toBeGreaterThan(2 * 28 + 1);
+      expect(open.overflow).toBe(false);
+      await less.click();
+      expect(await heading.evaluate((element) => element.getBoundingClientRect().height)).toBe(
+        clamped.height,
+      );
+      expect(await header.getByRole("button", { name: "Show full task" }).count()).toBe(1);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+it("measures instead of counting: a task under 140 characters that overflows at 390 has a toggle", async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  try {
+    await page.route("**/", (route) => route.fulfill({ contentType: "text/html", body: html }));
+    await page.goto(url);
+    await page.waitForFunction(() => "mountHeader" in window);
+    const task = "Fix the discount rounding in compute_price so order totals match the receipts.";
+    expect(task.length).toBeLessThan(140);
+    await mountTask(page, task, 390);
+    await page.evaluate(() => document.fonts.ready);
+    const header = page.locator(".review-header");
+    await expect.poll(() => header.getByRole("button", { name: "Show full task" }).count()).toBe(1);
+    const fits = await header.evaluate((element) => {
+      const title = element.querySelector("h2") as HTMLElement;
+      return title.scrollHeight <= title.clientHeight + 1;
+    });
+    expect(fits).toBe(false);
+  } finally {
+    await page.close();
+  }
+});

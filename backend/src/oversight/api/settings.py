@@ -1,5 +1,7 @@
 """Live-only file settings routes, installed before the static frontend mount."""
 
+from collections.abc import Callable
+
 from fastapi import FastAPI
 
 from oversight.api.errors import ApiError
@@ -8,8 +10,10 @@ from oversight.settings_file import SettingsFile, SettingsRejected
 from oversight_contracts.commands import SettingsView, UpdateSettings
 
 
-def add_settings_routes(app: FastAPI, settings: Settings) -> None:
-    file = SettingsFile(settings)
+def add_settings_routes(
+    app: FastAPI, settings: Settings, on_saved: Callable[[Settings], None] | None = None
+) -> None:
+    file = SettingsFile(settings, on_saved)
 
     @app.get("/settings")
     async def read_settings() -> SettingsView:  # pyright: ignore[reportUnusedFunction]

@@ -42,6 +42,10 @@ describe("the agents panel's new-agent section", () => {
     const markup = render(2, live);
     expect(markup.indexOf(">Agents</h2>")).toBeLessThan(markup.indexOf("No agents yet"));
     expect(markup.indexOf("No agents yet")).toBeLessThan(markup.indexOf(">New agent</h3>"));
+    // The same words as Chat's empty Agents panel.
+    expect(markup).toContain(
+      ">No agents yet. Start a task and its agent appears here with its own color and letter.<",
+    );
     expect(markup).not.toContain("<article");
     expect(markup).toContain("<textarea");
   });
@@ -62,13 +66,14 @@ describe("the agents panel's new-agent section", () => {
     }
   });
 
-  it("counts running agents beside the heading, including those waiting for review", () => {
-    expect(render(2, live)).toContain("0 running");
-    // Agent A holds its slot while it works and while it waits for review.
-    expect(render(4, live)).toContain("1 running");
-    expect(render(20, live)).toContain("1 running");
+  it("counts working agents beside the heading, and those waiting for the person apart", () => {
+    const panel = (markup: string) => markup.slice(markup.indexOf('<aside aria-label="Agents"'));
+    expect(panel(render(2, live))).toContain(">0 working<");
+    expect(panel(render(4, live))).toContain(">1 working<");
+    // Waiting for review is not work: it waits for the person.
+    expect(panel(render(20, live))).toContain(">0 working · 1 waiting for you<");
     // A level 1 server offers one slot.
-    expect(render(4, live, ["A"])).toContain("1 running");
+    expect(panel(render(4, live, ["A"]))).toContain(">1 working<");
     // Nothing to count before the run has started.
     const before = renderToStaticMarkup(
       <Frame

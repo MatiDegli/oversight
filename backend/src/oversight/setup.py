@@ -54,6 +54,12 @@ def missing_settings(
         ]
         if not slots:
             continue
+        if (
+            name == "OVERSIGHT_BUDGET_USD"
+            and value is None
+            and name not in settings.setting_problems
+        ):
+            continue
         if value is None or value == "":
             problem = settings.setting_problems.get(name, "missing")
         elif isinstance(value, str):

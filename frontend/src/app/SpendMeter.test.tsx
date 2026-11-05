@@ -50,6 +50,19 @@ const words = (markup: string) =>
     .trim();
 
 describe("the top bar spend meter", () => {
+  it("shows spent dollars without a cap or a share when no budget is set", () => {
+    const state = metered({ budget_usd: null });
+    if (!state.run) throw new Error("Missing run fixture");
+    const uncapped = {
+      ...state,
+      run: { ...state.run, budget: { ...state.run.budget, budget_usd: null, warn_at: [] } },
+    };
+    const text = words(render(uncapped));
+    expect(text).toContain("Spent US$12.40 · No budget: spending is not capped");
+    expect(text).not.toContain(" of ");
+    expect(text).not.toContain("%");
+  });
+
   it.each([
     ["ok", null],
     ["warn_50", "50% of the budget used"],

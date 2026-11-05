@@ -91,7 +91,8 @@ it.each(["Chat", "Oversight"] as const)(
         expect(html.match(/>Preview startup<\/h2>/gu)).toHaveLength(1);
         expect(composer).toContain(startupFixture.reason);
         expect(composer.match(/<dt>/gu)).toHaveLength(10);
-        expect(composer).toContain("Merge mode:");
+        // Without a recorded merge mode the chip stays hidden.
+        expect(composer).not.toContain("Merge mode:");
         expect(composer).toContain("<textarea");
         expect(composer).toContain("Send");
         expect(composer).not.toMatch(/<details|autofocus|Dismiss/iu);
@@ -127,7 +128,7 @@ it("adds no missing disclosure, wrapper, text or spacing to either selected comp
     expect(html).not.toMatch(
       /preview-startup|max-h-\[45dvh\]|id="[^"]*-description"|Not enabled on this server/gu,
     );
-    expect(html).toContain("Merge mode:");
+    expect(html).not.toContain("Merge mode:");
     expect(html).toContain("<textarea");
   }
 });

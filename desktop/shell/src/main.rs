@@ -1,3 +1,5 @@
+// A windowed program: Windows gives it no console window to close by mistake.
+#![cfg_attr(windows, windows_subsystem = "windows")]
 #[cfg(windows)]
 mod child;
 #[cfg(windows)]
@@ -5,13 +7,23 @@ mod console;
 #[cfg(windows)]
 mod diagnostics;
 #[cfg(windows)]
+mod dialogs;
+#[cfg(windows)]
 mod listener;
+#[cfg(windows)]
+mod menu;
 #[cfg(windows)]
 mod native;
 #[cfg(windows)]
 mod output;
 #[cfg(windows)]
+mod session;
+#[cfg(windows)]
+mod settings;
+#[cfg(windows)]
 mod supervise;
+#[cfg(windows)]
+mod window;
 
 #[cfg(not(windows))]
 fn main() {

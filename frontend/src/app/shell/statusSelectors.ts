@@ -5,6 +5,7 @@ import type { State } from "../../state";
 export function selectBudgetLine(state: State): string | null {
   const spend = selectSpend(state);
   if (!spend || !state.run) return null;
+  if (spend.budgetUsd === null) return "Budget · no spending cap";
   const percentage =
     spend.spentUsd === null
       ? "unknown"

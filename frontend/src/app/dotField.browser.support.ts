@@ -242,7 +242,9 @@ async function fieldPixels(page: Page) {
         if (r === before[0] && g === before[1] && bl === before[2]) continue;
         count.changed += 1;
         count.sum += Math.abs(r - (before[0] ?? 0)) + Math.abs(g - (before[1] ?? 0));
-        if (Math.max(r, g, bl) - Math.min(r, g, bl) > 6) count.colored += 1;
+        // Colored means the field added a hue: a warm-grey pixel that the ink only darkens is not.
+        const spread = Math.max(r, g, bl) - Math.min(r, g, bl);
+        if (spread > 6 && spread > Math.max(...before) - Math.min(...before)) count.colored += 1;
         if (r > bl + 20) count.warm += 1;
         const x = (at / 4) % a.width;
         const y = Math.floor(at / 4 / a.width);

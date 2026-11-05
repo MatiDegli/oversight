@@ -56,7 +56,7 @@ async def test_get_withholds_secrets_and_reports_file_state(settings_file: Path)
     assert SECRET not in response.text and "bad key" not in response.text
     view = SettingsView.model_validate(response.json())
     rows = {entry.name: entry for entry in view.settings}
-    assert len(rows) == 11
+    assert len(rows) == 12
     assert rows["META_API_KEY"].state == "set" and rows["META_API_KEY"].value is None
     assert rows["BASETEN_API_KEY"].state == "invalid"
     assert rows["OVERSIGHT_BUDGET_USD"].state == "invalid"

@@ -78,8 +78,8 @@ the agents' lights, the diff) is where this happens, not the pitch.
 
 - Name: Oversight.
 - Language: English, in sentence case.
-- Dark by default: the product, the video and the demo are dark. A day mode is for the submission
-  gallery only.
+- Dark by default: the product, the video and the demo are dark. Settings offers Dark, Day or
+  System; day mode is less polished than dark.
 - The visual system is recorded in DESIGN.md; AGENTS.md wins over both files.
 
 ## Evidence on Hand

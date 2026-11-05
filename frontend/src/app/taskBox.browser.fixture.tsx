@@ -1,5 +1,5 @@
 // Browser-only test harness; never imported by the application.
-import type { ServerEvent, StartAgent } from "@contracts";
+import type { EnqueueTask, ServerEvent, StartAgent } from "@contracts";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
@@ -30,7 +30,18 @@ const root = createRoot(host);
 
 let view: View = initialView;
 let replay = false;
+let queueing = false;
+let settings = false;
+let settingsOpened = 0;
 const calls: StartAgent[] = [];
+const queued: EnqueueTask[] = [];
+const enqueue = (body: EnqueueTask) => {
+  queued.push(body);
+  return Promise.resolve(undefined);
+};
+const openSettings = () => {
+  settingsOpened += 1;
+};
 let answer: { resolve: () => void; reject: (error: unknown) => void } | undefined;
 const start = (body: StartAgent) =>
   new Promise<undefined>((resolve, reject) => {
@@ -55,6 +66,8 @@ function render() {
         onOpenChange={() => undefined}
         onClosePanel={() => undefined}
         onStartAgent={replay ? undefined : start}
+        onQueueAgent={queueing ? enqueue : undefined}
+        onOpenSettings={settings ? openSettings : undefined}
         replayOf={replay ? "hand-written demo fixture" : undefined}
       />,
     );
@@ -69,6 +82,18 @@ export const taskBoxTest = {
     render();
   },
   calls: () => structuredClone(calls),
+  queued: () => structuredClone(queued),
+  settingsOpened: () => settingsOpened,
+  /** Offer the server's queue, as a live run does: Ctrl+Enter queues. */
+  enableQueue() {
+    queueing = true;
+    render();
+  },
+  /** Offer Settings, as the app does: the model menu and the step chip open it. */
+  enableSettings() {
+    settings = true;
+    render();
+  },
   /** Actual empty Frame composition: the replay accessory and caption, with no start callback. */
   emptyReplay() {
     replay = true;

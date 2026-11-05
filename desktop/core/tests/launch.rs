@@ -117,6 +117,10 @@ fn native_path_refuses_wsl_unc_device_relative_and_ambiguous_components() {
         assert!(!native_drive_path(path), "accepted {path:?}");
     }
     assert!(native_drive_path("C:\\private\\oversight"));
+    assert!(native_drive_path(r"C:\a~1\repo"));
+    assert!(native_drive_path(
+        r"C:\Users\ana~dev\AppData\Local\Oversight"
+    ));
     assert!(native_drive_path("d:\\space español 日本\\oversight"));
 }
 
@@ -130,7 +134,7 @@ fn argv_preserves_spaces_and_unicode_without_shell_interpolation_or_reload() {
         root.0.join(".venv").join("Scripts").join("python.exe")
     );
     assert_eq!(launch.args, ["-m", "oversight", "serve"]);
-    assert_eq!(launch.env.len(), 4);
+    assert_eq!(launch.env.len(), 7);
     assert_eq!(launch.env["OVERSIGHT_HOST"], "127.0.0.1");
     assert_eq!(launch.env["OVERSIGHT_PORT"], "8710");
     assert_eq!(launch.env["OVERSIGHT_VITE_PORT"], "");

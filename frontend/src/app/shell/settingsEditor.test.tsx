@@ -163,7 +163,9 @@ it.each(["models", "limits"] as const)(
     );
     await store.getState().save(section);
     const sections = () =>
-      [...markup(store).matchAll(/<section\b.*?<\/section>/gs)].map((match) => match[0]);
+      [...markup(store).matchAll(/<section\b.*?<\/section>/gs)]
+        .map((match) => match[0])
+        .filter((html) => !html.includes(">Repository</h2>"));
     const index = section === "models" ? 0 : 1;
     expect(sections()[index]).toContain("Synthetic refusal.");
     expect(sections()[1 - index]).not.toContain("Synthetic refusal.");
@@ -189,9 +191,9 @@ it.each(["models", "limits"] as const)(
       new CommandError(422, "invalid_request", "Other section refused."),
     );
     await store.getState().save(other);
-    const sections = [...markup(store).matchAll(/<section\b.*?<\/section>/gs)].map(
-      (match) => match[0],
-    );
+    const sections = [...markup(store).matchAll(/<section\b.*?<\/section>/gs)]
+      .map((match) => match[0])
+      .filter((html) => !html.includes(">Repository</h2>"));
     const index = section === "models" ? 0 : 1;
     expect(sections[index]).toContain("Restart the server to apply.");
     expect(sections[index]).not.toContain("Other section refused.");
@@ -204,4 +206,138 @@ it("does not attach a restart reminder to unsaved sections on load", async () =>
   const { store } = setup({ ...view, restart_required: true });
   await store.getState().load();
   expect(markup(store)).not.toContain("Restart the server to apply.");
+});
+
+it.each([
+  "OVERSIGHT_BUDGET_USD",
+  "OVERSIGHT_SPEND_BRAKE_PERCENT",
+  "MUSE_SPARK_INPUT_USD_PER_M",
+  "MUSE_SPARK_OUTPUT_USD_PER_M",
+  "OVERSIGHT_BASETEN_BUDGET_USD",
+  "BASETEN_INPUT_USD_PER_M",
+  "BASETEN_OUTPUT_USD_PER_M",
+] as const)("says saved %s applies to the next run in one status line", async (name) => {
+  const result: SettingsView = {
+    ...view,
+    settings: [{ name, kind: "number", state: "set", value: "10", overridden: false }],
+  };
+  const { api, store } = setup(result);
+  api.updateSettings.mockResolvedValue(result);
+  await store.getState().load();
+  store.getState().edit(name, "20");
+  await store.getState().save("limits");
+  const html = markup(store);
+  expect(html).toContain(
+    '<div role="status" class="text-muted"><p>Saved. Applies to the next run.</p></div>',
+  );
+  expect(html).not.toContain("Restart");
+  expect(html).not.toContain("<p>Saved.</p>");
+});
+
+it("keeps restart feedback when live and restart-only fields were saved together", async () => {
+  const { store } = setup({
+    ...view,
+    settings: [
+      ...view.settings,
+      { name: "OVERSIGHT_MAX_AGENTS", kind: "number", state: "set", value: "4", overridden: false },
+    ],
+  });
+  await store.getState().load();
+  store.getState().edit("OVERSIGHT_BUDGET_USD", "20");
+  store.getState().edit("OVERSIGHT_MAX_AGENTS", "8");
+  await store.getState().save("limits");
+  expect(markup(store)).toContain("Restart the server to apply.");
+  expect(markup(store)).not.toContain("Applies to the next run.");
+});
+
+it("shows plain Saved for a restart-only value restored to its startup value", async () => {
+  const { api, store } = setup();
+  api.updateSettings.mockResolvedValue(view);
+  await store.getState().load();
+  store.getState().edit("META_API_KEY", "restored-synthetic-key");
+  await store.getState().save("models");
+  expect(markup(store)).toContain("<p>Saved.</p>");
+  expect(markup(store)).not.toContain("Applies to the next run.");
+});
+
+it("explains the optional Meta budget and both default token prices beside their fields", () => {
+  const { store } = setup();
+  const html = markup(store);
+  for (const [name, helper] of [
+    ["OVERSIGHT_BUDGET_USD", "Leave empty for no spending cap."],
+    ["MUSE_SPARK_INPUT_USD_PER_M", "Leave empty to use 0.10"],
+    ["MUSE_SPARK_OUTPUT_USD_PER_M", "Leave empty to use 0.20"],
+  ] as const) {
+    const input = new RegExp(`<input[^>]*name="${name}"[^>]*>`).exec(html)?.[0];
+    const descriptionId = /aria-describedby="([^"]+)"/.exec(input ?? "")?.[1] ?? "";
+    expect(descriptionId).not.toBe("");
+    expect(html).toContain(`id="${descriptionId}"`);
+    expect(html.slice(html.indexOf(`id="${descriptionId}"`))).toContain(helper);
+  }
+});
+it.each([
+  [
+    "desktop_reload",
+    "To review another repository, choose File &gt; Open repository… in the menu bar.",
+  ],
+  ["server_restart", "The repository is chosen when the server starts."],
+] as const)(
+  "says how to review another repository when settings apply by %s",
+  async (apply, line) => {
+    const { store } = setup({ ...view, apply });
+    await store.getState().load();
+    const html = renderToStaticMarkup(
+      <EditableSettings
+        live
+        workspace="demo-repo"
+        store={{ ...store, getInitialState: store.getState }}
+      />,
+    );
+    expect(html).toContain(">Repository</h2>");
+    expect(html).toContain("demo-repo</span>, never your folder.");
+    expect(html).toContain(line);
+    expect(html.indexOf(">Repository</h2>")).toBeLessThan(html.indexOf("Models and keys"));
+  },
+);
+it("points a replay to the Windows app's folder picker without a desktop claim", () => {
+  const { store } = setup();
+  const html = markup(store, false);
+  expect(html).toContain(
+    "In the Windows app, choose File &gt; Open repository… to review your own repository.",
+  );
+  expect(html).toContain("Agents edit a disposable copy, never your folder.");
+  expect(html).not.toContain("in the menu bar.");
+});
+
+it("edits the agent step limit as a bounded whole number with its default explained", async () => {
+  const row: EditableSetting = {
+    name: "OVERSIGHT_MAX_STEPS",
+    kind: "number",
+    state: "invalid",
+    value: "3",
+    overridden: false,
+  };
+  const { api, store } = setup({ ...view, settings: [...view.settings, row] });
+  await store.getState().load();
+  const html = markup(store);
+  const input = /<input[^>]*name="OVERSIGHT_MAX_STEPS"[^>]*>/.exec(html)?.[0] ?? "";
+  const inputId = /id="([^"]+)"/.exec(input)?.[1] ?? "";
+  expect(html).toContain(`for="${inputId}"`);
+  expect(html.slice(html.indexOf(`for="${inputId}"`))).toMatch(/^[^<]*>Step limit \(steps\)</);
+  expect(input).toContain('min="5"');
+  expect(input).toContain('max="100"');
+  expect(input).toContain('step="1"');
+  expect(input).toContain('placeholder="30 (default)"');
+  const descriptionId = /aria-describedby="([^"]+)"/.exec(input)?.[1] ?? "";
+  expect(descriptionId).not.toBe("");
+  expect(html.slice(html.indexOf(`id="${descriptionId}"`))).toContain(
+    "Each agent stops after this many tool steps. 5 to 100; empty means 30.",
+  );
+  expect(html).toContain("Invalid value. Enter a whole number from 5 to 100.");
+  store.getState().edit("OVERSIGHT_MAX_STEPS", "50");
+  await store.getState().save("limits");
+  expect(api.updateSettings).toHaveBeenCalledExactlyOnceWith({
+    values: { OVERSIGHT_MAX_STEPS: "50" },
+  });
+  expect(markup(store)).toContain("Restart the server to apply.");
 });

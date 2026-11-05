@@ -246,15 +246,16 @@ export function FileFeedback({
             </p>
             {!fontError && (
               <>
-                <p>
-                  {state.phase === "stale"
-                    ? "Reload to use the server version and discard these edits."
-                    : state.retryLoad
-                      ? state.dirty
-                        ? "Try Reload again. Reloading discards these edits."
-                        : "Try loading the file again."
-                      : "Your edits are still here. Try Save again."}
-                </p>
+                {/* The failure already says to try again; this line adds only what is at stake. */}
+                {(state.phase === "stale" || !state.retryLoad || state.dirty) && (
+                  <p>
+                    {state.phase === "stale"
+                      ? "Reload to use the server version and discard these edits."
+                      : state.retryLoad
+                        ? "Reloading discards these edits."
+                        : "Your edits are still here."}
+                  </p>
+                )}
                 {(state.phase === "stale" || state.retryLoad) && (
                   <button
                     type="button"

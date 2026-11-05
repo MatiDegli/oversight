@@ -53,7 +53,7 @@ class UsageLedger:
 
     def __init__(
         self,
-        budget_usd: float,
+        budget_usd: float | None,
         spent_usd: float = 0.0,
         *,
         warn_at: tuple[float, float] = (0.5, 0.8),
@@ -75,7 +75,7 @@ class UsageLedger:
 
     @property
     def brake(self) -> Brake:
-        if not self._braked:
+        if not self._braked or self.budget_usd is None:
             return "ok"
         if self.budget_usd <= 0:
             return "blocked"
@@ -240,6 +240,11 @@ class LedgerFile:
                 with contextlib.suppress(OSError):
                     os.unlink(temp)
             raise
+
+    async def drain(self) -> None:
+        """Wait for queued and in-flight writes before releasing the server's file lock."""
+        async with self._lock:
+            pass
 
     async def load(self) -> LedgerState:
         """`read` in a thread, kept as `state`; `LedgerError` leaves `state` as `None`."""

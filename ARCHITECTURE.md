@@ -335,6 +335,8 @@ Cytoscape/fcose; only editor imports Monaco. State cannot import React or React 
 - [Theme](frontend/src/theme/index.ts) and [theme CSS](frontend/src/theme/index.css) supply
   fonts, Tailwind and tokens selected through root `data-theme`. Graph, editor and dot field
   receive their colors through the shared theme interface.
+  [Appearance](frontend/src/appearance.ts) stores the Dark, Day or System choice in the browser
+  and sets `data-theme` before the app mounts; dark is the default.
 
 ### Graph folding and camera
 
@@ -609,7 +611,7 @@ replays, practice, Files, editor startup/prefetch, subpath serving and third-par
 
 ## Level 3 wiring and remaining private cores
 
-Contracts are at 1.22.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
+Contracts are at 1.24.0 (`contracts/src/oversight_contracts/__init__.py`). Policy assessments,
 run-rule findings, before/after test evidence and optional cross-review are wired into the live
 flow. Behavior diff and measured caller evidence are built and opt-in, off by default.
 Merge-mode controls, standing grants, follow-main for idle rules waits and Revert are wired,

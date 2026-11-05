@@ -10,10 +10,19 @@ import uvicorn
 
 from oversight.app import ReplayConfig, create_app, ledger_command, pytest_pin
 from oversight.settings import REPO_ROOT, Settings
+from oversight.startup_refusals import startup_refusals
 from oversight.workspace import print_isolation_probe
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["serve"]:
+        with startup_refusals():
+            _main()
+    else:
+        _main()
+
+
+def _main() -> None:
     parser = argparse.ArgumentParser(prog="oversight")
     commands = parser.add_subparsers(dest="command", required=True)
     serve = commands.add_parser("serve", help="serve the API")
@@ -66,6 +75,9 @@ def main() -> None:
             host=settings.host,
             port=settings.port,
             reload=args.reload,
+            # Reload watches only this package: agent worktrees and previews under .runtime/ and
+            # demo-repo/ hold Python files too, and every agent write there restarted the server.
+            reload_dirs=[str(Path(__file__).resolve().parent)] if args.reload else None,
             proxy_headers=False,
             # Open streams never end by themselves: shutdown gives them a second, then closes them.
             timeout_graceful_shutdown=1,

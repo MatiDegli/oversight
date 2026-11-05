@@ -12,10 +12,10 @@ describe("the graph heading", () => {
     expect(watching).toContain(">demo-repo<");
     expect(watching).toContain(">6 modules<");
     expect(watching).toContain(">36 functions<");
-    expect(watching).toContain(">1 agent working<");
-    // Ready for review is not work in progress.
+    expect(watching).toContain(">1 working<");
+    // Ready for review is not work in progress: it waits for the person.
     expect(renderToStaticMarkup(<GraphHeading state={through(20)} />)).toContain(
-      ">0 agents working<",
+      ">0 working · 1 waiting for you<",
     );
   });
 
@@ -29,10 +29,10 @@ describe("the legend", () => {
     const markup = renderToStaticMarkup(<Legend state={through(4)} />);
     const words = [
       "Team A",
-      "Read",
-      "Dashed: a change waits for review.",
-      "Pending addition",
-      "Possible call",
+      "Read by an agent",
+      "Changed, not merged yet",
+      "New, not merged yet",
+      "Possible call (matched by name)",
     ];
     for (const word of words) expect(markup).toContain(word);
     // The sketch's order: the agents, then reading, editing, what main lacks, and a possible call.
@@ -47,13 +47,14 @@ describe("the legend", () => {
     const glyph = (words: string) =>
       new RegExp(`<span aria-hidden="true" class="([^"]*)"></span>${words}`).exec(markup)?.[1] ??
       "";
-    expect(glyph("Dashed: a change waits for review.")).toContain("border-dashed");
-    expect(glyph("Dashed: a change waits for review.")).toContain("bg-raised");
-    expect(glyph("Pending addition")).toContain("border-dashed");
-    expect(glyph("Pending addition")).not.toContain("bg-raised");
+    expect(glyph("Changed, not merged yet")).toContain("border-dashed");
+    expect(glyph("Changed, not merged yet")).toContain("bg-raised");
+    expect(glyph("New, not merged yet")).toContain("border-dashed");
+    expect(glyph("New, not merged yet")).not.toContain("bg-raised");
     // Read is the only solid one: a dashed border means a pending change and nothing else.
-    expect(glyph("Read")).not.toContain("border-dashed");
-    expect(glyph("Possible call")).not.toContain("border-dashed");
+    expect(glyph("Read by an agent")).not.toContain("border-dashed");
+    expect(glyph("Possible call \\(matched by name\\)")).not.toContain("border-dashed");
+    expect(markup).not.toContain("waits for review");
   });
 
   it("is absent before a run has started", () => {
@@ -104,6 +105,8 @@ it("uses the approved map count, readout and legend copy", () => {
   const legend = renderToStaticMarkup(<Legend state={through(4)} map />);
   expect(legend).toContain("A module, with its function count");
   expect(legend).toContain("A ring: an agent works inside");
+  expect(legend).toContain("A dashed ring: changed, not merged yet");
+  expect(legend).not.toContain("waits for review");
   expect(legend).not.toContain("Possible call");
   expect(legend).not.toContain("Agent A");
   const readout = renderToStaticMarkup(

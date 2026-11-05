@@ -1,4 +1,4 @@
-//! Console close and Ctrl+C request the same cleanup as a window close.
+//! When a console exists, its close and Ctrl+C request the same cleanup as a window close.
 use std::io;
 use std::sync::{
     Arc, OnceLock,
@@ -32,13 +32,19 @@ unsafe extern "system" fn control(event: u32) -> i32 {
     1
 }
 
+/// Whether this process has a console. The windowed app has none; a test harness does.
+pub fn attached() -> bool {
+    unsafe { GetConsoleCP() != 0 }
+}
+
 pub fn install(stop: Arc<AtomicBool>) -> io::Result<()> {
     STOP.set(stop)
         .map_err(|_| io::Error::other("console handler already installed"))?;
+    // Never allocate one: it would show the console window this program exists to avoid.
+    if !attached() {
+        return Ok(());
+    }
     unsafe {
-        if GetConsoleCP() == 0 && AllocConsole() == 0 {
-            return Err(io::Error::last_os_error());
-        }
         if SetConsoleCtrlHandler(Some(control), 1) == 0 {
             return Err(io::Error::last_os_error());
         }

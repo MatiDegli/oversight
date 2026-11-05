@@ -1,4 +1,4 @@
-import type { EditableSetting, EditableSettingName } from "@contracts";
+import type { EditableSetting, EditableSettingName, SettingsView } from "@contracts";
 import { useEffect, useId, useState } from "react";
 import { useStore } from "zustand";
 import { focusRing } from "./shared";
@@ -16,7 +16,14 @@ const fields: readonly [EditableSettingName, string, EditableSetting["kind"]][] 
   ["BASETEN_OUTPUT_USD_PER_M", "Baseten output (USD / 1M tokens)", "number"],
   ["OVERSIGHT_SPEND_BRAKE_PERCENT", "Brake at (% of budget)", "number"],
   ["OVERSIGHT_MAX_AGENTS", "Agent cap (agents)", "number"],
+  ["OVERSIGHT_MAX_STEPS", "Step limit (steps)", "number"],
 ];
+const helpers: Partial<Record<EditableSettingName, string>> = {
+  OVERSIGHT_BUDGET_USD: "Leave empty for no spending cap.",
+  MUSE_SPARK_INPUT_USD_PER_M: "Leave empty to use 0.10",
+  MUSE_SPARK_OUTPUT_USD_PER_M: "Leave empty to use 0.20",
+  OVERSIGHT_MAX_STEPS: "Each agent stops after this many tool steps. 5 to 100; empty means 30.",
+};
 const states = { set: "Configured", missing: "Missing", invalid: "Invalid" };
 const fieldClass = `mt-2 block min-h-10 w-full min-w-0 rounded-card border border-control-edge bg-field px-3 py-2 text-base text-text placeholder:text-faint read-only:text-muted ${focusRing}`;
 const buttonClass = `min-h-10 rounded-control border border-control-edge px-4 py-2 text-sm font-semibold text-text aria-disabled:cursor-default aria-disabled:text-faint not-aria-disabled:hover:bg-page-raised ${focusRing}`;
@@ -24,9 +31,11 @@ const buttonClass = `min-h-10 rounded-control border border-control-edge px-4 py
 type EditorStore = ReturnType<typeof createSettingsEditor>;
 export function EditableSettings({
   live,
+  workspace,
   store: supplied,
 }: {
   live: boolean;
+  workspace?: string;
   store?: EditorStore;
 }) {
   const [local] = useState(createSettingsEditor);
@@ -38,6 +47,7 @@ export function EditableSettings({
   const readOnly = !live || !editor.view || editor.pending !== null;
   return (
     <div className="mt-8 min-w-0 space-y-8">
+      <RepositorySection workspace={workspace} live={live} apply={editor.view?.apply} />
       {!live && <p className="text-sm text-muted">Settings are read-only in a replay.</p>}
       {live && editor.loading && <p role="status">Loading settings…</p>}
       {editor.failure && editor.feedbackSection === null && (
@@ -66,6 +76,44 @@ export function EditableSettings({
         />
       ))}
     </div>
+  );
+}
+
+/** The frontend cannot open the native picker; it points to the menu that does. */
+function RepositorySection({
+  workspace,
+  live,
+  apply,
+}: {
+  workspace?: string;
+  live: boolean;
+  apply?: SettingsView["apply"];
+}) {
+  const id = useId();
+  const another = !live
+    ? "In the Windows app, choose File > Open repository… to review your own repository."
+    : apply === "desktop_reload"
+      ? "To review another repository, choose File > Open repository… in the menu bar."
+      : apply === "server_restart"
+        ? "The repository is chosen when the server starts."
+        : null;
+  return (
+    <section aria-labelledby={`${id}-repository`}>
+      <h2 id={`${id}-repository`} className="text-(length:--title-size) font-bold">
+        Repository
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        {workspace ? (
+          <>
+            Agents edit a disposable copy of{" "}
+            <span className="font-semibold text-text">{workspace}</span>, never your folder.
+          </>
+        ) : (
+          "Agents edit a disposable copy, never your folder."
+        )}
+      </p>
+      {another && <p className="mt-3 text-sm text-text">{another}</p>}
+    </section>
   );
 }
 
@@ -157,7 +205,13 @@ function SectionFeedback({
         </p>
       )}
       <div role="status" className="text-muted">
-        {editor.saved[section] && <p>Saved.</p>}
+        {editor.saved[section] && (
+          <p>
+            {section === "limits" && !editor.view?.restart_required
+              ? "Saved. Applies to the next run."
+              : "Saved."}
+          </p>
+        )}
         {editor.view?.restart_required && editor.restartSection === section && (
           <p className="text-text">
             {editor.view.apply === "desktop_reload"
@@ -234,6 +288,11 @@ function SettingField({
       {kind === "secret" && row && row.state !== "missing" && live && (
         <KeyClearAction clearing={clearing} readOnly={readOnly} onClear={onClear} onUndo={onUndo} />
       )}
+      {helpers[name] && (
+        <p id={`${id}-default`} className="mt-1 text-sm text-muted">
+          {helpers[name]}
+        </p>
+      )}
       {name === "OVERSIGHT_MAX_AGENTS" && (
         <p id={`${id}-default`} className="mt-1 text-sm text-muted">
           Leave empty to use 4 agents.
@@ -250,7 +309,9 @@ function SettingField({
             ? "Invalid value. Enter a whole number from 1 to 100."
             : name === "OVERSIGHT_MAX_AGENTS"
               ? "Invalid value. Enter a positive whole number."
-              : "Invalid value. Enter a positive amount."}
+              : name === "OVERSIGHT_MAX_STEPS"
+                ? "Invalid value. Enter a whole number from 5 to 100."
+                : "Invalid value. Enter a positive amount."}
         </p>
       )}
     </div>
@@ -335,23 +396,35 @@ function SettingControl({
       aria-describedby={
         [
           row?.overridden ? `${id}-environment` : "",
-          name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+          helpers[name] ||
+          name === "OVERSIGHT_MAX_AGENTS" ||
+          name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
             ? `${id}-default`
             : "",
         ]
           .filter(Boolean)
           .join(" ") || undefined
       }
-      max={name === "OVERSIGHT_SPEND_BRAKE_PERCENT" ? "100" : undefined}
+      max={
+        name === "OVERSIGHT_SPEND_BRAKE_PERCENT" || name === "OVERSIGHT_MAX_STEPS"
+          ? "100"
+          : undefined
+      }
       min={
         kind === "number"
-          ? name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
-            ? "1"
-            : "0"
+          ? name === "OVERSIGHT_MAX_STEPS"
+            ? "5"
+            : name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+              ? "1"
+              : "0"
           : undefined
       }
       step={
-        name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT" ? "1" : "any"
+        name === "OVERSIGHT_MAX_AGENTS" ||
+        name === "OVERSIGHT_MAX_STEPS" ||
+        name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+          ? "1"
+          : "any"
       }
       maxLength={512}
       placeholder={
@@ -359,9 +432,11 @@ function SettingControl({
           ? "Replace key"
           : name === "OVERSIGHT_MAX_AGENTS"
             ? "4 (default)"
-            : name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
-              ? "90 (default)"
-              : "Not set"
+            : name === "OVERSIGHT_MAX_STEPS"
+              ? "30 (default)"
+              : name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+                ? "90 (default)"
+                : "Not set"
       }
       onChange={(event) => {
         if (!readOnly) onEdit(event.target.value);

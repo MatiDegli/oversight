@@ -19,6 +19,7 @@
   white-space: nowrap;
 }
 .chat-merge-chip > svg:first-child {
+  flex-shrink: 0;
   color: var(--muted);
 }
 .chat-merge-chip > svg:last-child {

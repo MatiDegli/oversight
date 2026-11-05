@@ -2,7 +2,44 @@ import { expect, it, vi } from "vitest";
 
 import { createLeadDraftStore } from "./leadDraftModel";
 import { taskBoxStore } from "./taskBoxModel";
-import { CommandError } from "../transport";
+import { CommandError, createCommandClient } from "../transport";
+
+it.each([
+  [
+    [
+      { name: "OVERSIGHT_BUDGET_USD", problem: "missing", slots: ["A"] },
+      { name: "MUSE_SPARK_INPUT_USD_PER_M", problem: "missing", slots: ["A"] },
+      { name: "MUSE_SPARK_OUTPUT_USD_PER_M", problem: "missing", slots: ["A"] },
+    ],
+    "Setup is incomplete: Meta budget (USD), Muse Spark input (USD / 1M tokens), and Muse Spark output (USD / 1M tokens) are missing.",
+  ],
+  [
+    [{ name: "OVERSIGHT_BUDGET_USD", problem: "invalid", value: "never display this" }],
+    "Setup is incomplete: Meta budget (USD) is invalid.",
+  ],
+  [undefined, "Server setup is incomplete."],
+])("explains a lead's setup refusal from the response: %j", async (missing, message) => {
+  const store = createLeadDraftStore();
+  const client = createCommandClient(
+    vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: { code: "not_configured", message: "Server setup is incomplete.", missing },
+          }),
+          { status: 503 },
+        ),
+      ),
+    ),
+  );
+  store.getState().setDraft("Keep this task");
+  expect(await store.getState().start(client.startLead)).toBe(false);
+  expect(store.getState()).toMatchObject({
+    draft: "Keep this task",
+    pending: false,
+    failure: message,
+  });
+});
 
 it("uses the backend default profile, guards duplicate starts and clears only on success", async () => {
   const store = createLeadDraftStore();

@@ -36,7 +36,8 @@ fn payload(app: &Path) -> io::Result<()> {
 
 /// The shell calls this only after resolving the executable's own installation.
 /// Existing .env values are never opened; create_new also closes the first-launch race.
-pub fn initialize_data(app: &Path, data: &Path) -> io::Result<()> {
+/// Returns true only when this call created the settings file.
+pub fn initialize_data(app: &Path, data: &Path) -> io::Result<bool> {
     payload(app)?;
     if data.starts_with(app) || app.starts_with(data) || !data.is_absolute() {
         return Err(invalid(
@@ -54,7 +55,7 @@ pub fn initialize_data(app: &Path, data: &Path) -> io::Result<()> {
     }
     validate_directory(data)?;
     let template = fs::read(app.join("config.env.example"))?;
-    let config = data.join(".env");
+    let config = settings_file(data);
     match OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -63,35 +64,85 @@ pub fn initialize_data(app: &Path, data: &Path) -> io::Result<()> {
         Ok(mut file) => {
             file.write_all(&template)?;
             file.sync_all()?;
+            Ok(true)
         }
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
             if !plain(&config)?.is_file() {
                 return Err(invalid("existing configuration must be a plain file"));
             }
+            Ok(false)
         }
-        Err(error) => return Err(error),
+        Err(error) => Err(error),
     }
-    Ok(())
+}
+
+pub fn settings_file(data: &Path) -> PathBuf {
+    data.join(".env")
+}
+
+/// Only the native system-directory lookup supplies this directory, never PATH.
+pub fn notepad_path(system_directory: &Path) -> io::Result<PathBuf> {
+    if !system_directory.is_absolute()
+        || system_directory
+            .components()
+            .any(|part| part == std::path::Component::ParentDir)
+    {
+        return Err(invalid("Notepad requires an absolute system directory"));
+    }
+    #[cfg(windows)]
+    if !system_directory
+        .to_str()
+        .is_some_and(crate::launch::native_drive_path)
+    {
+        return Err(invalid("Notepad requires a native system directory"));
+    }
+    Ok(system_directory.join("notepad.exe"))
 }
 
 impl Launch {
     pub fn installed(app: &Path, data: &Path, smoke: bool) -> io::Result<Self> {
+        Self::installed_source(app, data, smoke, None)
+    }
+
+    pub fn installed_source(
+        app: &Path,
+        data: &Path,
+        smoke: bool,
+        source: Option<&crate::source::SelectedSource>,
+    ) -> io::Result<Self> {
+        let selected = if smoke { None } else { source };
+        let selected = selected
+            .map(|s| crate::source::SelectedSource::validate(s.path()))
+            .transpose()?;
         payload(app)?;
         validate_directory(data)?;
         if data.starts_with(app) || app.starts_with(data) {
             return Err(invalid("data and payload must be separate directories"));
         }
-        let mut launch = Self::for_program(app, app.join("python/python.exe"), smoke, "");
+        let mut launch = Self::for_program(app, app.join("python").join("python.exe"), smoke, "");
         launch.env.extend([
             ("OVERSIGHT_APP_ROOT", display(app)?),
-            ("OVERSIGHT_ENV_FILE", display(&data.join(".env"))?),
-            ("OVERSIGHT_RUNTIME_DIR", display(&data.join(".runtime"))?),
+            ("OVERSIGHT_ENV_FILE", display(&settings_file(data))?),
+            (
+                "OVERSIGHT_RUNTIME_DIR",
+                display(&crate::source::runtime_dir(data, selected.as_ref()))?,
+            ),
+            ("OVERSIGHT_LEDGER_DIR", display(&data.join(".runtime"))?),
+            (
+                "OVERSIGHT_WORKSPACE_SOURCE",
+                selected
+                    .as_ref()
+                    .map(|s| display(s.path()))
+                    .transpose()?
+                    .unwrap_or_default(),
+            ),
+            ("OVERSIGHT_DISCARD_OWN_RUNTIME", String::new()),
             ("PYTHONNOUSERSITE", "1".into()),
             ("PYTHONDONTWRITEBYTECODE", "1".into()),
         ]);
         launch.args.extend([
             "--demo-python".into(),
-            app.join("demo-python/python.exe").into_os_string(),
+            app.join("demo-python").join("python.exe").into_os_string(),
         ]);
         Ok(launch)
     }

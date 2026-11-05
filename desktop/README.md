@@ -1,8 +1,9 @@
 # Windows desktop package
 
-The Tauri 2 shell, installed launch mode, runtime staging and current-user NSIS packaging job
-are implemented. The native runner's build/install/smoke results and headed acceptance are still
-required before delivery; no installer artifact is claimed from a Linux check.
+The Tauri 2 shell, installed launch mode, runtime staging, the current-user NSIS
+packaging job and native repository switching are implemented. The native runner's
+build/install/smoke results and headed acceptance are still required before delivery; no
+installer artifact is claimed from a Linux check.
 
 ## Install and configure
 
@@ -13,18 +14,75 @@ on an absolute PATH entry. Git is never bundled. WebView2 is required; when abse
 installer downloads Microsoft's bootstrapper, which requires network access.
 No separately installed Python, uv or Node is needed by the installed application.
 
-The executable is `oversight-desktop.exe`. Its read-only payload lives in `app` beside it:
-`app\python` runs the backend; `app\demo-python` is the separate prepared pytest interpreter.
-The backend serves the existing UI at `http://127.0.0.1:8710/`; the window opens only after
-live health, process liveness and listener ownership pass. An occupied port refuses startup.
-The installed launch selects the prepared demo source; it adds no picker or WSL bridge.
+The executable is `oversight-desktop.exe`. Its read-only payload lives in `app` beside
+it: `app\python` runs the backend; `app\demo-python` is the separate prepared pytest
+interpreter. The backend serves the existing UI at `http://127.0.0.1:8710/`; the window
+displays the backend only after live health, process liveness and listener ownership
+pass. An occupied port refuses startup. Each app launch starts on the prepared demo. The
+installed Windows menu can open a repository; there is no WSL bridge.
 
 Writable configuration is `%LOCALAPPDATA%\Oversight\.env`. First launch copies a committed
 blank-key template only when this file is absent. The shell never reads its values and never
-overwrites it. Close Oversight, edit this file in a text editor, add `META_API_KEY` and the
-existing budget/pricing settings, save, and restart. Starting the server spends no model credits;
-starting an agent is a deliberate action. Both `.env` and `%LOCALAPPDATA%\Oversight\.runtime`
-survive upgrades and uninstall.
+overwrites it. The app starts on the demo; starting an agent without a key is refused with a way to open Settings. Choose
+**File > Edit settings…** to open it in Windows Notepad, add `META_API_KEY` and the existing
+budget/pricing settings, and save. Then choose **File > Reload settings** and confirm the restart.
+The current session stops, including working agents. The same repository or demo starts again
+with the saved settings, subject to the repository reopen guard. Pending changes are discarded.
+If an opened repository's session approved changes, the restart is refused even if you already
+exported them, and the folder holding them is named. Follow the recovery steps below to open it
+fresh. Cancel leaves the session running. Editing remains available during
+startup, switching and after a failed start; Reload follows the same busy gate as Open demo.
+If the file is missing, Edit settings recreates the blank template before opening it.
+Starting the server spends no model credits; starting an agent is a deliberate action.
+Both `.env` and `%LOCALAPPDATA%\Oversight\.runtime` survive upgrades and uninstall.
+
+## Open a repository
+
+In the installed Windows app, choose **File > Open repository…**, select a standalone Git
+repository in a short private local NTFS folder, read the trust disclosure, then choose **Open**.
+**Cancel** (the default, including Enter) or Escape leaves the current session unchanged.
+**File > Open demo** returns to the bundled demo through the same confirmation. Opening stops
+the current session after the inert switching page has finished loading. Open and Reload are
+unavailable until the next session is ready or refused. A page-load timeout leaves the backend running.
+In the app, the repository name in the top bar opens Settings, whose Repository section points to
+this menu item; the page cannot open the picker itself.
+
+Prepare the repository's own `.venv` before opening it: Python 3.10+, pytest 8.2+ and pluggy 1.5+.
+Oversight installs nothing. An unavailable or invalid environment still permits graph access,
+but tests remain unavailable. Tests and plugins run as your Windows user, have network access,
+and can write outside the copy. Code agents read goes to the configured model providers.
+Use trusted repositories only. Agents edit disposable copies; approval changes the copy, and
+only an export you apply yourself changes the original folder.
+
+Configuration stays shared at `%LOCALAPPDATA%\Oversight\.env`. State is placed separately:
+
+- Demo: `%LOCALAPPDATA%\Oversight\.runtime`.
+- Each repository: `%LOCALAPPDATA%\Oversight\sources\<path-hash>\.runtime`, using the first
+  16 hexadecimal SHA-256 characters of its case-normalized Windows path.
+- Both spending ledgers, unknown costs and the decision ledger's `.unreliable` marker remain
+  shared in `%LOCALAPPDATA%\Oversight\.runtime`. Opening another source never resets spending.
+  `ledger.lock` prevents concurrent writers, including manual settlement.
+
+Opening a repository again discards its earlier pending/unapproved changes. If its disposable
+`main` moved, reopening refuses instead: the native message names its per-source folder. Its
+`.runtime\workspace` is a Git repository whose `main` holds the approved changes. Copy them
+out with Git, then delete that per-source folder to open fresh. Preserve anything uncommitted
+separately. There is no in-app discard.
+
+A refusal keeps the inert page and lets you choose another repository or the demo. Its native
+message has fixed recovery instructions and can be copied with Ctrl+C. A standalone-repository
+refusal requires an ordinary clone rather than a linked worktree or bare repository; a location
+refusal requires a private local nonsynced folder without links or reserved names; a path-length
+refusal requires a shorter location. For other refusals, check access and close other sessions
+before retrying. Raw backend output is filtered; no backend log is promised by this message.
+
+For manual spending settlement, close the app, use its installed `app\python\python.exe`
+with `-m oversight ledger settle --spent-usd X`, and explicitly set both `OVERSIGHT_RUNTIME_DIR`
+and `OVERSIGHT_LEDGER_DIR` to `%LOCALAPPDATA%\Oversight\.runtime` in that process. Check the
+provider's total first; settlement replaces the Meta total and clears unknown entries.
+
+Remembering the last repository, own sources in `--clone-root` mode, Linux and macOS,
+non-Python repositories and in-app discard are later work.
 
 ## Ownership and shutdown
 
@@ -36,9 +94,12 @@ on 8710 are checked before launch. Ownership is checked again after spawn and af
 One 120-second monotonic deadline covers readiness. The backend's own lifetime Job nests
 inside the shell's Job; no breakaway flag is enabled.
 
-Window close, console controls, startup failure and backend death request the same cleanup:
-signal the living owned child's console group, wait up to five seconds, terminate any remaining
-owned Job processes, reap, and close handles. Shell death closes its Job. Forced cleanup is a
+The shell is a windowed program with no console window. The backend and its descendants
+share one console with no window; a shell started with a console, such as a test harness,
+shares its own instead and handles its close and Ctrl+C. Window close, those console controls,
+startup failure and backend death request the same cleanup: signal the living owned child's
+console group (joining its hidden console only to send CTRL_BREAK), wait up to five seconds,
+terminate any remaining owned Job processes, reap, and close handles. Shell death closes its Job. Forced cleanup is a
 failure, including in smoke; it never supplies graceful acceptance. The live window continues
 to monitor backend death and listener ownership. Native Windows keeps OPEN_NOTICE and its
 existing capability restrictions; packaging adds no isolation guarantee.
@@ -47,7 +108,12 @@ existing capability restrictions; packaging adds no isolation guarantee.
 scripts, blank provider keys, two agent slots and cross-review off through child overrides;
 then it waits for live health and exits 0 only after verified graceful cleanup. The runner
 installs silently, performs this twice with Python/uv/Node removed from PATH, checks for owned
-survivors and a listener on 8710, uninstalls, and checks retained configuration/state.
+survivors and a listener on 8710, restores PATH, then explicitly runs the ignored Windows
+`installed_open_repository` harness before uninstall and retained-state checks. The harness opens
+two disposable fixtures outside the checkout with prepared environments, verifies own-source
+readiness/provenance, switches to demo and back, and verifies repeated moved-main refusal.
+It exercises the installed backend with the shell's Job/readiness/cleanup adapters and pure switch
+policy; it supplies page completion headlessly and does not certify dialogs or rendering.
 
 Failed launches show an error dialog outside smoke. The current session diagnostic is
 `%LOCALAPPDATA%\Oversight\.runtime\desktop-session.log`; it is replaced on each admitted
@@ -101,8 +167,8 @@ always resolves its payload beside the executable, independently of the caller's
 
 ## Licenses and acceptance still required
 
-The [complete crate audit](packaging/crate-license-audit.md) reconciles all 443 external lock
-entries, including inactive ones; 243 are selected for Windows. Named unmodified MPL-2.0,
+The [complete crate audit](packaging/crate-license-audit.md) reconciles all 444 external lock
+entries, including inactive ones; 244 are selected for Windows. Named unmodified MPL-2.0,
 Unicode-3.0 and Zlib grants remain scoped. Exactly `target-lexicon 0.12.16` with
 `Apache-2.0 WITH LLVM-exception` is approved in this desktop lock only, on the inactive Linux
 branch; it is not shipped. General WITH acceptance remains disabled.

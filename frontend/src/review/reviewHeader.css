@@ -48,7 +48,7 @@
   font-size: var(--caption-size);
   font-weight: 600;
 }
-.review-header > div > h2 {
+.review-header-task > h2 {
   font-size: var(--headline-size);
   font-weight: 700;
   line-height: 28px;

@@ -53,6 +53,7 @@ export type EditableSettingName =
   | "BASETEN_OUTPUT_USD_PER_M"
   | "OVERSIGHT_CROSS_REVIEW"
   | "OVERSIGHT_MAX_AGENTS"
+  | "OVERSIGHT_MAX_STEPS"
   | "OVERSIGHT_SPEND_BRAKE_PERCENT";
 export type ErrorCode =
   | "not_found"
@@ -532,7 +533,10 @@ export interface BehaviorView {
   change_id: ChangeId;
 }
 export interface Budget {
-  budget_usd: number;
+  /**
+   * None: no budget, so no brake
+   */
+  budget_usd: number | null;
   /**
    * From the ledger, before this run.
    */
@@ -1977,7 +1981,10 @@ export interface UsageTick {
    * The ledger's total, this call included.
    */
   spent_usd: number;
-  budget_usd: number;
+  /**
+   * None: no budget, so no brake
+   */
+  budget_usd: number | null;
   brake: "ok" | "warn_50" | "warn_80" | "blocked";
   /**
    * The purpose of this model call.
@@ -2913,4 +2920,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.22.0";
+export const CONTRACT_VERSION = "1.24.0";

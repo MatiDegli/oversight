@@ -8,6 +8,7 @@ import { selectAgentCard, StepHistory } from "../agents";
 import { ChangeFactsRow } from "../review";
 import { stateStore } from "../state";
 import type { LiveDiffData } from "../state";
+import { presentationFor } from "../teams/presentation";
 import { getActiveTheme } from "../theme";
 import { loadEditorFonts } from "./fonts";
 import { languageForPath } from "./language";
@@ -17,6 +18,10 @@ import { createEditorTheme } from "./theme";
 import type { EditorColors } from "./theme";
 
 const themeName = "oversight-live-diff";
+
+/** The agents' secondary button (agents/PauseControl), which that folder does not export. */
+const secondaryButtonClass =
+  "inline-flex h-(--button-secondary-height) items-center gap-2 rounded-control border border-control-edge px-3 text-(length:--label-size) font-semibold text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
 
 /** The live diff is read-only, inline, and drops every feature that brings its own palette. */
 export function diffEditorOptions(
@@ -257,9 +262,17 @@ export function EditorDiff({
   );
 }
 
-export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
+export interface LiveDiffPanelProps extends LiveDiffProps {
+  /** Opens the proposed change's review, the same action as the agent card's Review change. */
+  onReview?: (changeId: string) => void;
+}
+
+export function LiveDiff({ data, palette, onMount, onReview }: LiveDiffPanelProps) {
   const state = useStore(stateStore, (store) => store.state);
   const card = data ? selectAgentCard(state, data.agentId) : undefined;
+  // What the header labels Ready for review, with the proposal that review opens on.
+  const proposed = data !== undefined && card?.readyForReview === true && card.proposal !== null;
+  const label = data ? (presentationFor(state, data.agentId)?.label ?? "unknown") : undefined;
   return (
     <section
       aria-label="Live diff"
@@ -285,11 +298,30 @@ export function LiveDiff({ data, palette, onMount }: LiveDiffProps) {
           <ChangeFactsRow state={state} changeId={data.changeId} live />
         </div>
       )}
-      <p className="shrink-0 border-b border-page-border p-4 text-sm text-muted">
-        {data
-          ? "This diff updates with each edit. Decisions open when the agent proposes the change."
-          : "Select a changed file to see its live diff."}
-      </p>
+      {proposed ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-page-border p-4">
+          <p className="min-w-0 text-sm text-muted">
+            Agent {label} proposed this change. Review it to approve, request changes or reject.
+          </p>
+          {onReview && (
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              onClick={() => {
+                onReview(data.changeId);
+              }}
+            >
+              Review change
+            </button>
+          )}
+        </div>
+      ) : (
+        <p className="shrink-0 border-b border-page-border p-4 text-sm text-muted">
+          {data
+            ? "This diff updates with each edit. Decisions open when the agent proposes the change."
+            : "Select a changed file to see its live diff."}
+        </p>
+      )}
       <div className="min-h-0 flex-1" hidden={!data}>
         <EditorDiff data={data} palette={palette} onMount={onMount} follow />
       </div>

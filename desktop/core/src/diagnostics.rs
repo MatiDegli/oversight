@@ -28,6 +28,7 @@ pub enum Stage {
 
 /// At most sixteen sanitized lines; even a backend's unterminated line is bounded.
 pub struct OutputTail {
+    refusal: Option<crate::refusal::Refusal>,
     pending: Vec<u8>,
     overflow: bool,
     lines: VecDeque<String>,
@@ -38,6 +39,7 @@ pub struct OutputTail {
 impl OutputTail {
     pub fn new(app: PathBuf, data: PathBuf) -> Self {
         Self {
+            refusal: None,
             pending: Vec::new(),
             overflow: false,
             lines: VecDeque::new(),
@@ -51,6 +53,9 @@ impl OutputTail {
             if *byte == b'\n' {
                 if !self.overflow {
                     let line = String::from_utf8_lossy(&self.pending);
+                    if let Some(refusal) = crate::refusal::Refusal::parse(&line) {
+                        self.refusal = Some(refusal);
+                    }
                     if let Some(safe) = self.sanitize(line.trim()) {
                         if self.lines.len() == 16 {
                             self.lines.pop_front();
@@ -119,6 +124,10 @@ impl OutputTail {
             }
         }
         None
+    }
+
+    pub fn refusal(&self) -> Option<crate::refusal::Refusal> {
+        self.refusal
     }
 
     pub fn text(&self) -> String {
@@ -190,11 +199,39 @@ impl SessionLog {
     }
 }
 
-/// Attempt cleanup even on startup failure, while retaining the original cause.
-pub fn finish(primary: io::Result<()>, cleanup: io::Result<bool>) -> io::Result<()> {
-    primary?;
-    if !cleanup? {
-        return Err(io::Error::other("backend required forced cleanup"));
-    }
-    Ok(())
+/// Keep cleanup evidence separate from the error that requested shutdown.
+#[derive(Debug)]
+pub struct CloseOutcome {
+    pub primary: io::Result<()>,
+    /// None means no child existed, so no shutdown failure message is warranted.
+    pub cleanup: Option<io::Result<bool>>,
+    pub reaped: bool,
 }
+
+impl CloseOutcome {
+    pub fn unverified(&self) -> bool {
+        self.cleanup
+            .as_ref()
+            .is_some_and(|result| !matches!(result, Ok(true)) || !self.reaped)
+    }
+
+    pub fn finish(self) -> io::Result<()> {
+        if self.unverified() {
+            // Preserve both the triggering error and cleanup outcome on failed shutdown.
+            Err(io::Error::other(self))
+        } else {
+            self.primary
+        }
+    }
+}
+
+impl std::fmt::Display for CloseOutcome {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "session: {:?}; cleanup: {:?}; reaped: {}",
+            self.primary, self.cleanup, self.reaped
+        )
+    }
+}
+impl std::error::Error for CloseOutcome {}

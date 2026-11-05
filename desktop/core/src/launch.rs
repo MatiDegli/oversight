@@ -45,6 +45,15 @@ impl Launch {
             ("OVERSIGHT_PORT", PORT.to_string()),
             ("OVERSIGHT_VITE_PORT", String::new()),
             ("OVERSIGHT_WORKSPACE_SOURCE", source.to_owned()),
+            (
+                "OVERSIGHT_RUNTIME_DIR",
+                root.join(".runtime").to_string_lossy().into_owned(),
+            ),
+            (
+                "OVERSIGHT_LEDGER_DIR",
+                root.join(".runtime").to_string_lossy().into_owned(),
+            ),
+            ("OVERSIGHT_DISCARD_OWN_RUNTIME", String::new()),
         ]);
         if smoke {
             env.extend([
@@ -100,22 +109,32 @@ pub fn native_drive_path(value: &str) -> bool {
                 || part == "."
                 || part == ".."
                 || part.ends_with([' ', '.'])
+                || part.eq_ignore_ascii_case(".git")
                 || reserved_name(part)
-                || part.chars().any(|ch| ch < ' ' || "<>:\"/|?*".contains(ch))
+                || part
+                    .chars()
+                    .any(|ch| ch < ' ' || ch == '\u{7f}' || "<>:\"/|?*".contains(ch))
         })
 }
 
 fn reserved_name(part: &str) -> bool {
-    let name = part.split('.').next().unwrap_or("").to_ascii_uppercase();
-    matches!(name.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || ["COM", "LPT"].iter().any(|prefix| {
-            name.strip_prefix(prefix).is_some_and(|suffix| {
-                matches!(
-                    suffix,
-                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
-                )
-            })
+    let name = part
+        .split('.')
+        .next()
+        .unwrap_or("")
+        .trim_end_matches(' ')
+        .to_ascii_uppercase();
+    matches!(
+        name.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) || ["COM", "LPT"].iter().any(|prefix| {
+        name.strip_prefix(prefix).is_some_and(|suffix| {
+            matches!(
+                suffix,
+                "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+            )
         })
+    })
 }
 
 pub(crate) fn invalid(message: &'static str) -> io::Error {

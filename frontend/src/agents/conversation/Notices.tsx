@@ -62,12 +62,15 @@ export function BudgetNotice({
         </strong>{" "}
         · <Numbers text={words.detail} />
       </p>
-      {!progress.spendUnknown && mark.budget_usd > 0 && (
-        <Meter
-          value={mark.spent_usd / mark.budget_usd}
-          ticks={[...progress.budget.warn_at, progress.budget.block_at]}
-        />
-      )}
+      {!progress.spendUnknown &&
+        progress.budget.budget_usd !== null &&
+        mark.budget_usd !== null &&
+        mark.budget_usd > 0 && (
+          <Meter
+            value={mark.spent_usd / mark.budget_usd}
+            ticks={[...progress.budget.warn_at, progress.budget.block_at]}
+          />
+        )}
     </Notice>
   );
 }

@@ -455,8 +455,8 @@ it("pins the untouched real recording and the no-comparison body without attribu
   ]).toMatchInlineSnapshot(`
     [
       "d90283ecf74510c19a8600caeccefb8cfa7a52e9e3ef576996ec3487ca951f2f",
-      "efa85e5370363344cff12e5451f1a1b60601fa56efdb92c5a3b97f3019ab3c3f",
-      "efa85e5370363344cff12e5451f1a1b60601fa56efdb92c5a3b97f3019ab3c3f",
+      "f5963b9e638bb052f680ebec23c0d5b0458ca9396448c3f8969c243955ab1fe6",
+      "f5963b9e638bb052f680ebec23c0d5b0458ca9396448c3f8969c243955ab1fe6",
     ]
   `);
 });

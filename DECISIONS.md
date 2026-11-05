@@ -5027,6 +5027,60 @@ policy exception. Upstream license bytes are preserved across Windows/Linux chec
 Native runner success, remaining failure-path evidence, headed UI acceptance and independent
 review remain necessary; local cross-target compilation is not native execution evidence.
 
+## Open a repository from the Windows app (2026-11-04)
+
+The maintainer approved native repository opening as one conditional Windows front. File >
+Open repository… uses a pinned native folder picker and a parented TaskDialog on the UI thread.
+Its main instruction is “Open this repository in Oversight?”; Open/Cancel defaults to Cancel.
+The disclosure states disposable-copy/manual-export behavior, same-user test/plugin execution
+with network and unrestricted writes, provider disclosure, the prepared `.venv` prerequisite,
+current-session shutdown and the distinction between discarded pending work and protected
+approved changes. Cancel leaves the current session unchanged. File > Open demo uses the same
+confirmation. No source-selection CLI, environment, forwarded argument, HTTP route or IPC is
+added; smoke remains demo-only and capabilities remain empty.
+
+A single session initializes the native shell once and repeats backend supervision. Each switch
+first waits at most five seconds for Finished on exactly the bundled inert switching.html URL;
+only that extra URL and the backend origin pass navigation. A timeout stops nothing. Relaunch
+requires graceful owned-Job close and reap; failure retains both outcomes and exits. Quit is
+sticky during selection, navigation and readiness. Only one selection can remain pending.
+
+Demo state stays in the existing data/.runtime; own state uses data/sources/<16-hex SHA-256 of
+case-normalized path>/.runtime. Configuration remains shared. OVERSIGHT_LEDGER_DIR defaults to
+the runtime directory for existing callers; native launches set it to data/.runtime for every
+source. Both ledgers, unknowns, the decision recovery marker and manual settlement use it.
+Every server holds ledger.lock there until pending writes drain; settlement also takes that lock
+in addition to server.lock, including when ledger and runtime directories coincide. Native
+launches explicitly overwrite source, runtime and ledger directories and clear discard authority.
+
+Startup emits one closed-category refusal line. The native message uses fixed recovery text
+rather than raw output. A moved disposable main refuses reopening and names the per-source
+folder: workspace/main holds approved changes; copy them out with Git before deleting that
+source's state to open fresh. Pending/unapproved changes are discarded on reopen. The backend
+retains admission authority, and an invalid environment leaves tests unavailable rather than
+installing anything or preventing graph access.
+
+The only new crate is unmodified rfd 0.15.4, MIT, Windows-only with defaults disabled.
+Portable hashing reuses locked sha2 0.10.9 (MIT OR Apache-2.0). All 444 external lock entries,
+244 active for Windows, reconcile under existing scoped grants; no new license exception.
+Win32_UI_Controls supplies TaskDialogIndirect. An ignored installed Windows harness runs
+explicitly in the package job after PATH restoration and before uninstall; headless page
+completion does not certify native dialogs or rendering.
+
+Out of scope: remembering the last repository, --clone-root own sources, Linux and macOS,
+non-Python repositories and in-app discard. Landing requires green Windows CI, two independent
+reviews and the maintainer's headed Windows acceptance before November 4, 18:00 ART (21:00 UTC).
+Without that acceptance this front stays unmerged; repository opening remains the next step.
+
+Selected repositories refuse `~` in every component, including 8.3 spellings, at menu admission
+and launch revalidation, as required by plan item 4 and the backend's own-source checks. The
+message asks the person to choose the repository by its full folder name. Paths derived by the
+shell for its installed app, data and per-source runtimes admit literal tildes, including ordinary
+Windows profile names; the other lexical refusals remain unchanged.
+
+Open demo deliberately reuses the repository disclosure: it warns that the current session
+stops and preserves the same default-Cancel confirmation. Its prepared-environment requirement
+is already satisfied by the bundled demo interpreter.
 
 ## Harness pack on by default, with static diagnostics and a symbol tool (2026-11-04)
 
@@ -5088,6 +5142,16 @@ Reason: sessionStorage can be copied by Duplicate tab, so possession of the toke
 establish that the previous owning page departed. No token enters localStorage, URLs, events
 or logs, and recovery still requires the current applied candidate and a valid server lease.
 
+## Installed settings menu (2026-11-04)
+
+File > Edit settings… starts Notepad by its absolute path in the Windows system directory,
+with only the installed settings file path as its argument. The shell never reads, logs or
+forwards that file's contents. A missing file is recreated from the blank installed template
+using create-new, preserving existing settings. Editing stays available during startup and
+switching and after a failed start. The first launch that creates the file shows configuration
+instructions after the window appears. File > Reload settings confirms stopping the current
+session and its agents, then restarts the same source through the existing inert-page,
+verified-close and startup path under the Open menu's busy gate.
 
 ## 2026-11-04 — Edit startup settings from the Settings tab
 
@@ -5174,3 +5238,230 @@ Refusals and the persistent restart instruction sit beside the affected section'
 visible after either section's save at 1280×800. On phones the decisions chip retains its number
 beside the Settings gear, omitting the word Decisions visually while retaining its accessible
 label. Scripted API, state and browser regressions cover these cases; no paid call is needed.
+
+
+## 2026-11-04 — Apply spending settings without a restart
+
+The maintainer decided that saving budgets, brake share and token prices applies to the next
+run without restarting Oversight or stopping active agents. This supersedes the restart-only
+behavior for these seven editable names: OVERSIGHT_BUDGET_USD, OVERSIGHT_SPEND_BRAKE_PERCENT,
+MUSE_SPARK_INPUT_USD_PER_M, MUSE_SPARK_OUTPUT_USD_PER_M, OVERSIGHT_BASETEN_BUDGET_USD,
+BASETEN_INPUT_USD_PER_M and BASETEN_OUTPUT_USD_PER_M. Keys, the agent cap and cross-review
+remain restart-only; clients, redaction and slot capacity retain their startup dependencies.
+
+After an atomic save, the saved live values use the same Settings parser as startup, with
+process-environment precedence. Only the seven live fields and their setting_problems entries
+replace the current snapshot. Unsent invalid file values fail closed as at startup: an invalid
+share refuses metered starts and revisions, decision admission reports budget_unconfigured,
+and invalid required amounts or prices make setup not_configured. Invalid submitted values
+still reject the patch without writing. Invalid restart-only values cannot block a live update.
+
+One copied Settings snapshot is swapped into LiveRun and app.state.settings under the shared
+synchronous start/revision admission lock, without yielding between readers. Health, setup,
+rules spending evidence, new accounting and each Baseten decision allowance check read the
+current snapshot. An admitted run or revision retains its budget, share and prices across a
+save, including while awaiting its worktree or revision resolution; overlapping work shares
+the spending total. Historical run.started events remain unchanged.
+
+restart_required compares only restart-only editable values against the startup file snapshot;
+apply retains its existing desktop_reload or server_restart meaning. Replay remains read-only.
+The success line for a live-only limits save says “Saved. Applies to the next run.” Contracts
+remain unchanged: SettingsView.restart_required and apply already express this distinction.
+## 2026-11-04 — A quiet first launch for the Windows app
+
+The maintainer decided to remove the blocking first-launch configuration dialog. The app
+still creates the blank settings file from its template when absent, then starts on the demo
+without waiting for OK. Starting an agent without a key is refused with a way to open Settings.
+This supersedes the first-launch instruction sentence in "Installed settings menu (2026-11-04)";
+the other dialogs and settings-file behavior stay unchanged.
+
+The inert page says "Starting Oversight…" for startup, Open repository…, Open demo and Reload
+settings, each of which starts a backend. It centers Oversight's 700/20px/1.3 headline and muted
+status on the night ground, using the corresponding day tokens under prefers-color-scheme: light.
+There is no animation, script or external resource. Its CSP retains default-src 'none',
+base-uri 'none' and form-action 'none'; only style-src with the SHA-256 hash of the exact inline
+style block permits styling. Recompute that hash whenever the style changes.
+
+The font stack is "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif. No font file
+is added: this page appears for seconds, so the installed Windows fallback avoids extra payload
+and keeps font notices unchanged.
+
+## 2026-11-04 — A dark title bar and menu bar for the Windows app
+
+The maintainer found the white native title and File menu bar foreign next to Oversight's night
+ground. The desktop window is created with the dark window theme, which Tauri 2.12 also applies
+to the native menu bar on Windows. The webview then reports a dark preferred color scheme, so
+the startup page shows its night tokens; the in-app day palette stays a separate front.
+
+## 2026-11-04 — Optional Meta budget and default Muse Spark prices
+
+The maintainer decided that Oversight is configurable rather than restrictive: an absent or
+empty `OVERSIGHT_BUDGET_USD` means no budget, so no spending brake. Spend still reaches the durable
+ledger; an unreadable ledger or unknown-cost calls still refuse Meta starts and revisions.
+Absent or empty `MUSE_SPARK_INPUT_USD_PER_M` and `MUSE_SPARK_OUTPUT_USD_PER_M` default to 0.10 and
+0.20 US dollars per million tokens for `muse-spark-1.3-contributor`. Explicitly invalid budgets or
+prices still refuse starts. A configured budget retains the existing warning marks, brake share
+and refusal messages. Baseten's opt-in decision budget and prices remain required and unchanged.
+
+The approved contract change makes `Budget.budget_usd` and `UsageTick.budget_usd` nullable in
+version 1.23.0 (UsageTick added by his answer at 22:33Z); `null` means no budget, with no warning
+marks, brake `ok` and the configured `block_at` preserved. Each start's budget snapshot, shared by
+plans, leads and reviews, carries the absent budget instead of zero, so an uncapped run is never
+braked by a zero denominator. A paid eval bench run still requires a budget. JSON Schema and
+TypeScript are regenerated from Pydantic; older recorded runs remain valid. The UI shows spent
+dollars and “No budget: spending is not capped”, omits percentages and ticks, and reports
+“no spending cap” in the status line. Settings explains empty budgets and the default prices.
+
+## 2026-11-04 — No console window for the Windows app
+
+The installed app opened a terminal window titled Oversight, and closing it stopped the app: the shell
+was a console program, so Windows gave it a console, and the console close became a quit. The shell
+is now a windowed program (`windows_subsystem = "windows"`) and never allocates a console. When it has
+none, the backend starts with `CREATE_NO_WINDOW`, so the backend and its git, test and preview
+descendants share one console with no window, and cleanup joins that console only to send
+`CTRL_BREAK` to the backend's group, then leaves it. The five-second wait, Job termination and reap are
+unchanged, and forced cleanup still fails the smoke. A process that already has a console, such as the
+repository-switching test harness, keeps sharing it and keeps its close and Ctrl+C handler, so both
+paths stay covered: the installed smoke runs the windowed path and the switching test the console one.
+
+## 2026-11-04 — Point to File > Open repository… from inside the app
+
+Opening another repository was reachable only from the native File menu, which a person may never open.
+The frontend is served by the local backend inside the webview and has no Tauri API, so it cannot open
+the native picker, and the person must still choose the folder there. The repository name in the top
+bar now opens Settings, and Settings starts with a Repository section: it names the reviewed folder and
+says agents edit a disposable copy, never the folder itself. When the desktop shell started the server
+(the settings view's `apply` is `desktop_reload`) it points to File > Open repository… in the menu bar;
+a server started otherwise says the repository is chosen at startup; a replay says the Windows app is
+where to open one's own. No route or contract changes, and the native picker stays the only way in.
+
+## 2026-11-04 — Enter starts an agent; Ctrl+Enter queues it
+
+He asked for Enter to send, as in other chat composers, and Ctrl+Enter to queue. In the start box,
+Enter starts the agent, Shift+Enter adds a line, and Ctrl+Enter (Cmd+Enter on macOS) sends the task to
+the standalone queue the server already runs (`POST /queue`, at most 32 active items), so no backend
+or contract change was needed. Nothing acts while an input method is composing, and a held key does
+not repeat. A queued task keeps the selected slot, otherwise the server takes the first free slot. The
+box confirms “Queued. It starts when a slot is free.” and lists the person's waiting tasks from
+`queue.updated`, each with its state and a Cancel while it still waits; a lead's queued tasks stay in
+its plan. When every slot is busy, the line under the box says Ctrl+Enter queues the task. At his
+answer, the agent and lead conversations and the new lead's first task also send with Enter, with
+Shift+Enter for a new line; Ctrl+Enter does nothing there, as they have no queue. The same guards
+as their buttons apply. Approve still has no key.
+
+## 2026-11-04 — Text fields keep the focus ring without the glow
+
+Clicking the start box lit its text: a text field matches `:focus-visible` on any click, so the
+keyboard glow's drop-shadow blurred the typed letters. Text fields, inputs other than checkboxes,
+radios and ranges, and editable content are now excluded from the glow, as Monaco and the graph host
+already were; their field still draws the focus ring.
+
+## 2026-11-04 — The model and step chips become controls; a step limit setting
+
+He asked for the start box's two chips to be configurable, so a person can choose another model and
+more or fewer steps. The model chip opens a menu, “Model for the next agent”, listing each model the
+run's slots offer, the current one checked, and “Models and keys in Settings”, since a key is what
+adds a model. A pick goes with the next start (`StartAgent.model`) and the next queued task
+(`QueuedAgentTask.model`); without one, each slot keeps its default. Only the person's opening moves
+focus into the menu. When the box already shows two slot cards with different models, the cards are
+the choice and the chip stays a label. The step chip opens Settings, where a new “Step limit” row
+edits `OVERSIGHT_MAX_STEPS`: a whole number from 5 to 100, empty meaning 30, applied at the next
+start of the server like the agent cap. It becomes `limits.max_steps` in run.started and every agent
+task, so the agent loop's budget follows it. An invalid value stops startup with its reason, as
+`OVERSIGHT_MAX_AGENTS` does. Adding the name to `EditableSettingName` is the additive contract change
+he approved: contracts 1.24.0, with JSON Schema and TypeScript regenerated.
+
+## 2026-11-04 — Example tasks for a first start in the demo shop
+
+A first-time person faced an empty start box with no hint of what a good task looks like. When the
+run's workspace is `demo-repo`, no agent exists yet, the box is empty and starts are allowed, a
+“Try:” row under the box offers three tasks, each a real gap in `demo-repo/shop`: rejecting negative
+prices in `compute_price` (the recorded run's task), validating `Inventory.reserve` quantities as
+`restock` and `release` already do, and leaving cancelled orders out of `revenue_by_category`. A
+click puts the full task in the box and moves focus there, since the person asked for it; nothing
+starts until they press Enter or Start agent. The row disappears once the first agent exists and
+never shows for other repositories, in replay or in history. A unit test reads the shop's code so
+the three tasks stay true.
+
+## 2026-11-04 — Agent counts say who works and who waits; plainer first-screen copy
+
+A final review of the built screens found the Agents header saying “2 running” beside the graph's
+“0 agents working” while both cards read “Ready for review”, because the header counted held slots.
+At his answer, the panel header, the Chat header and the graph heading now share one count, “N
+working”, followed by “ · M waiting for you” when an agent waits for review: starting, working,
+revising and paused agents work; ready-for-review agents wait; halted, done and stopped agents count
+in neither. This replaces “The header count stays the slots held” (packet a-1102c, 2026-11-02) and
+“pending agents in the running count” (the approved departures, 2026-11-02); slot capacity is
+unchanged. The graph legend's labels become “Read by an agent”, “Changed, not merged yet”, “New, not
+merged yet” and “Possible call (matched by name)”, and the map legend's ring reads “A dashed ring:
+changed, not merged yet”, since a dashed border marks any pending change, also while the agent edits
+or merges. The same pass made four copy fixes. The merge mode chip is
+hidden when the run recorded no mode (the recorded replay), instead of “Merge mode: not recorded”.
+The start copy promises approval only in Ask me; in Merge alone when safe it says a change that
+passes every merge rule merges by itself and the rest waits for approval. Both views' empty Agents
+panel say “No agents yet. Start a task and its agent appears here with its own color and letter.”
+Disabled controls say why: New task and New lead while viewing a past event, Approve and Request
+changes while the file loads, and Request changes without a comment. A failed file load says “try
+again” once.
+
+## 2026-11-04 — A lighter dark palette (proposal B)
+
+At his choice of proposal B, the dark surfaces rise a step so cards, nodes and panels separate from
+the canvas: the ground goes from #070707 to #121214, page from #101012 to #1c1c20, card from #151518
+to #242428 and raised from #1b1b1f to #2c2c31, with shell, panel, field, inset, the mattes, the
+replay control, borders and outlines moved with them. Three text tokens rise to keep 4.5:1 on the
+lighter surfaces (faint #94948e, code-dim #84847f, agent-f-text #b982ae), the edge and control
+tokens rise to keep 3:1, and each agent's node fill gains 15 on every channel, which keeps its hue,
+so no node sits darker than the ground. The contrast tests forced three more steps: the overlay
+panel's alpha goes to 0.88, and the C and F tints go to 0.12 and 0.09, so the F tint reads weaker.
+A node now stands ΔL* 8.8 from the ground, against 5.0 before. Team and state hues, the day theme
+and the contour lines' level above the ground are unchanged. This replaces the #070707 ground of the
+v4 field decision (item 1) and the dark surface values of the v4 tokens; DESIGN.md's tables carry
+the new values and ratios.
+
+## 2026-11-04 — A lens mark for the app
+
+He found the old mark ugly. The new one is a lens drawn as two graph edges between two nodes, around
+one central node: the product's graph and its oversight in one shape. It paints in `currentColor`,
+so it follows the text token in both themes, sits at 20 px before the “Oversight” wordmark in the
+top bar, is decorative (the wordmark carries the name) and is the browser favicon and the Windows
+app's icon at six sizes.
+
+## 2026-11-04 — The live diff leads to its review; long tasks fold to two lines
+
+The same final review found the live diff of a ready change gave no way forward and a long task
+filled the review header. When the agent is ready for review, the live diff says “Agent A proposed
+this change. Review it to approve, request changes or reject.” with a Review change button that
+opens the review, only on the person's click. The review header's task folds to two lines with a
+“Show full task” / “Show less” toggle that appears only when the text overflows. The review and the
+Chat change card label the agent's summary “What Agent A did”. Four small fixes ride along: the Stop
+icon is a filled square, the merge chip's icon never shrinks, the Steps fact uses a numbered-list
+icon, and a missing base reads “Base unknown”.
+
+## 2026-11-04 — A calm motion pass
+
+He asked for modern motion wherever it fits. One stylesheet, `motion.css`, adds it under
+`prefers-reduced-motion: no-preference` only, with the `--transition-easing` token and DESIGN.md's
+160 to 320 ms range for event-driven changes: tabs, menu items, options and tree rows ease their
+colors in 160 ms; an agent card's status pill eases to its new tint; the model menu, the command
+palette and the shortcuts sheet fade in with a 6 px rise; the replay tooltip, status and alert
+lines, queued tasks, conversation entries, agent cards and tiles, step rows and lead cards fade in
+where they stand. Only opacity, translate and colors move, each animation ends on the element's
+static style, and the repository graph, Monaco and the life effects are never targeted. Left out on
+purpose: general button hovers, which would break the 70 ms press; opening motion for the focus panel
+and dock, which carry the edge light and Monaco; the Chat and Oversight switch, which shares the
+stage with the graph camera; and rises inside scrolling lists, which would stretch their scroll
+height.
+
+## 2026-11-04 — Dark, Day or System appearance, dark by default
+
+He asked whether the app could follow the computer's day or night setting, and chose a selector
+with dark as the default. Settings ends with an Appearance section of three radios, Dark, Day and
+System; the choice is stored in the browser (`oversight.appearance`) and applied before the app
+mounts, and a missing or invalid value reads as dark, so the product, the video and the demo stay
+dark unless the person picks otherwise. System follows `prefers-color-scheme` live while selected.
+The CSS repaints at once; the graph, the dot field and open code views keep the colors they were
+built with until Oversight reloads, and a note under the control says so instead of forcing a
+reload. This replaces “Day mode is for the submission gallery only” and “the switch repaints
+everything” (2026-10-26) and the missing switcher of the v4 tokens entry; full day-mode polish is
+still a later front. The Windows window is forced dark, so System there may always resolve to dark.

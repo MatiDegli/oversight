@@ -8,6 +8,7 @@ import { ChatLeadRow } from "./ChatLeadRow";
 import { presentationFor, presentationStyle } from "../../teams/presentation";
 import { AgentBadge } from "../../teams/badge";
 import { chatTeamGroups, type ChatMember } from "./chatTeamGroups";
+import { noAgentsYet } from "./shared";
 import type { ChatAgentSelection } from "./ChatShell";
 import "./chatAgents.css";
 
@@ -128,12 +129,7 @@ export function ChatAgents({
   };
   const groups = chatTeamGroups(state);
   const selection = { selectedAgentId, onOpenConversation };
-  if (!groups.length && !leadDraft)
-    return (
-      <p className="chat-agents-empty">
-        No agents yet. Team hue and agent labels follow each task.
-      </p>
-    );
+  if (!groups.length && !leadDraft) return <p className="chat-agents-empty">{noAgentsYet}</p>;
   return (
     <ul className="chat-agent-list" aria-label="Agents" onKeyDown={navigate}>
       {groups.map((group) => (

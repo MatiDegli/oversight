@@ -1,7 +1,7 @@
 # Locked Windows shell dependency audit — 2026-11-04
 
-Status: **reconciled, including the 2026-11-04 exact exception**. The locked graph has 443
-external lock entries; 243 are active in Windows-target metadata. Every manifest was inspected,
+Status: **reconciled, including the 2026-11-04 exact exception**. The locked graph has 444
+external lock entries; 244 are active in Windows-target metadata. Every manifest was inspected,
 including inactive platform and optional entries. All entries now have an approved license choice.
 
 The maintainer approved exactly `target-lexicon 0.12.16`, `Apache-2.0 WITH LLVM-exception`,
@@ -16,6 +16,13 @@ published in the [versioned manifest](https://docs.rs/crate/target-lexicon/0.12.
 Legacy Cargo `/` separators mean `OR`; every `AND` obligation must pass. An independent
 approved `OR` alternative suffices. No third-party crate source is modified.
 
+The repository-opening addition reuses the locked `sha2 0.10.9` (MIT OR Apache-2.0)
+for portable source hashes and adds only `rfd 0.15.4` (MIT). Complete Windows and
+all-platform metadata reconciliation passes for all 444 external entries; no new exception
+is required. `windows-sys 0.59.0` also enables `Win32_UI_Controls` and
+`Win32_System_SystemInformation` for native dialogs and the system Notepad path;
+the settings menu adds no crates or license exceptions.
+
 ## Locked configuration and verification
 
 Rust/cargo 1.98.0, edition 2024, resolver 2. Workspace members: the existing
@@ -23,11 +30,14 @@ Rust/cargo 1.98.0, edition 2024, resolver 2. Workspace members: the existing
 dependency is the path dependency `../core`. All following external dependencies
 are under `target.'cfg(windows)'`:
 
+- `rfd = "=0.15.4"`, defaults off; native Windows folder picker, MIT.
 - `tauri = "=2.12.0"`, defaults off, features `wry`, `common-controls-v6`.
 - `tauri-plugin-single-instance = "=2.5.5"`, defaults off.
 - `windows-sys = "=0.59.0"`, features `Win32_Foundation`,
   `Win32_NetworkManagement_IpHelper`, `Win32_Networking_WinSock`, `Win32_Security`,
-  `Win32_System_Console`, `Win32_System_JobObjects`, `Win32_System_Threading`.
+  `Win32_System_Console`, `Win32_System_JobObjects`, `Win32_System_Pipes`,
+  `Win32_System_SystemInformation`, `Win32_System_Threading`, `Win32_UI_Controls`,
+  `Win32_UI_WindowsAndMessaging`.
 - Build dependency `tauri-build = "=2.7.0"`, defaults off, feature `config-json`.
 
 The shell defaults to `custom-protocol = ["tauri/custom-protocol"]`.
@@ -308,6 +318,7 @@ Native build/install/smoke evidence is supplied by the Windows runner, separatel
 | regex-automata | 0.4.18 | MIT OR Apache-2.0 | Windows | Pass | ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2 |
 | regex-syntax | 0.8.11 | MIT OR Apache-2.0 | Windows | Pass | d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4 |
 | reqwest | 0.13.5 | MIT OR Apache-2.0 | Other | Pass | 16a1cfa75cc186dd73d5818e510e042e40927bccc9c236b061cea97e1eb08029 |
+| rfd | 0.15.4 | MIT | Windows | Pass | ef2bee61e6cffa4635c72d7d81a84294e28f0930db0ddcb0f66d10244674ebed |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | Windows | Pass | 6b1e7f9a428571be2dc5bc0505c13fb6bf936822b894ec87abf8a08a4e51742d |
 | rustc_version | 0.4.1 | MIT OR Apache-2.0 | Windows | Pass | cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92 |
 | rustix | 1.1.6 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | Other | Pass | e5e76742e5294153d4dde1207dbec5bdd81eef6fabdc0d2118babadabfd858aa |

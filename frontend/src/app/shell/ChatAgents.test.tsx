@@ -8,7 +8,7 @@ import { ChatAgents } from "./ChatAgents";
 import { ChatLeadRow } from "./ChatLeadRow";
 import { railState } from "../teamRail.fixture";
 import { chatTeamGroups } from "./chatTeamGroups";
-import { ChatAgentsFrame } from "./ChatShell";
+import { ChatAgentsFrame, ChatEmpty } from "./ChatShell";
 import { required, fold, scenario } from "../chatAgents.fixture";
 import { createInitialState } from "../../state";
 
@@ -25,25 +25,25 @@ vi.mock("react", async (original) => {
 });
 
 it.each([
-  ["empty", 0],
-  ["working", 2],
-  ["proposed", 2],
-  ["review", 2],
-  ["merged", 1],
-] as const)("renders the running header for %s without capture flags", (name, count) => {
+  ["empty", "0 working"],
+  ["working", "2 working"],
+  ["proposed", "1 working · 1 waiting for you"],
+  ["review", "1 working · 1 waiting for you"],
+  ["merged", "0 working · 1 waiting for you"],
+] as const)("renders the activity header for %s without capture flags", (name, count) => {
   const html = renderToStaticMarkup(<ChatAgentsFrame state={fold(scenario(name))} />);
   expect(html).toContain(
-    `<header><h2>Agents</h2><span>${String(count)} running</span><div class="chat-start-actions">`,
+    `<header><h2>Agents</h2><span>${count}</span><div class="chat-start-actions">`,
   );
   const header = html.split("</header>")[0] ?? "";
   expect(header.match(/<button/g)).toHaveLength(2);
   expect(header).toContain("New task</button>");
   expect(header).toContain("New lead</button></div>");
 });
-it("omits the numeric header before metadata and derives the denominator from the run", () => {
+it("omits the numeric header before metadata and counts agents, not slots", () => {
   const initial = renderToStaticMarkup(<ChatAgentsFrame state={createInitialState()} />);
   expect(initial).toContain('<header><h2>Agents</h2><div class="chat-start-actions">');
-  expect(initial).not.toMatch(/of \d+ running/);
+  expect(initial).not.toMatch(/\d+ working/);
   const state = fold(scenario("working"));
   if (!state.run) throw new Error("Missing fixture run");
   const html = renderToStaticMarkup(
@@ -51,7 +51,7 @@ it("omits the numeric header before metadata and derives the denominator from th
       state={{ ...state, run: { ...state.run, slots: state.run.slots.slice(0, 1) } }}
     />,
   );
-  expect(html).toContain("<span>1 running</span>");
+  expect(html).toContain("<span>2 working</span>");
 });
 
 it("exposes full identities, selected state and facts in a native button list", () => {
@@ -190,4 +190,30 @@ it("retains scripted member labels when a team is folded", () => {
   } finally {
     disclosure.closed.clear();
   }
+});
+it("keeps the start actions in place on a past event and says why they are off", () => {
+  const live = renderToStaticMarkup(<ChatAgentsFrame state={fold(scenario("empty"))} />);
+  expect(live).not.toContain("past event");
+  expect(live).not.toContain("aria-describedby");
+  const html = renderToStaticMarkup(<ChatAgentsFrame state={fold(scenario("empty"))} readOnly />);
+  const header = html.split("</header>")[0] ?? "";
+  const id =
+    /<p id="([^"]+)" class="chat-start-reason">Not available while viewing a past event.<\/p>/.exec(
+      header,
+    )?.[1];
+  expect(id).toBeTruthy();
+  const buttons = header.match(/<button[^>]*>/g) ?? [];
+  expect(buttons).toHaveLength(2);
+  for (const button of buttons) {
+    expect(button).toContain('aria-disabled="true"');
+    expect(button).toContain(`aria-describedby="${id ?? ""}"`);
+    expect(button).toContain('title="Not available while viewing a past event."');
+    expect(button).not.toContain(" disabled");
+  }
+  const empty = renderToStaticMarkup(<ChatEmpty state={fold(scenario("empty"))} readOnly />);
+  const reason = /<p id="([^"]+)" class="chat-start-reason">/.exec(empty)?.[1];
+  expect(reason).toBeTruthy();
+  expect(empty).toMatch(
+    new RegExp(`<button[^>]*aria-disabled="true"[^>]*aria-describedby="${reason ?? ""}"`),
+  );
 });

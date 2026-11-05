@@ -394,7 +394,7 @@ it.each(agentSlots)(
     for (const [name, palette] of Object.entries(themes)) {
       const backgrounds =
         name === "dark"
-          ? ["#101012", "#151518", "#131313"]
+          ? ["#1c1c20", "#242428", "#202023"]
           : ["#f8f7f3", "#fcfbf8", "#fbfaf7", "#f4f3ef", "#eeede8"];
       for (const background of backgrounds) {
         expect(

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'; style-src 'sha256-Eu/Zc6d0aoMjhu8E0ySLVIhpvVcDsKBhFtU7nsbbk+M='">
+    <title>Oversight</title>
+    <style>
+      :root {
+        --ground: #070707;
+        --text: #ededea;
+        --muted: #a3a39e;
+        color-scheme: dark;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --ground: #f4f3ef;
+          --text: #1c1c1a;
+          --muted: #56554f;
+          color-scheme: light;
+        }
+      }
+
+      body {
+        box-sizing: border-box;
+        display: grid;
+        min-height: 100vh;
+        margin: 0;
+        padding: 24px;
+        place-items: center;
+        background: var(--ground);
+        color: var(--text);
+        font: 400 15px/1.5 "Atkinson Hyperlegible Next", "Segoe UI", system-ui, sans-serif;
+        text-align: center;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        font-weight: 700;
+        line-height: 1.3;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      ::selection {
+        background: var(--text);
+        color: var(--ground);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Oversight</h1>
+      <p role="status">Starting Oversight…</p>
+    </main>
+  </body>
+</html>

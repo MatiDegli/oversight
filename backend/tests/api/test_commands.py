@@ -155,9 +155,9 @@ async def test_a_meta_start_without_a_key_lists_setup_problems_before_the_brake(
     async with asyncio.timeout(DEADLINE_S), live_server(settings, calls.append) as s:  # pyright: ignore[reportArgumentType]
         response = await s.client.post("/agents", json={"task": "t"})
         assert error_code(response) == (503, "not_configured")
+        # No budget means no brake, so only the key is missing.
         assert response.json()["error"]["missing"] == [
             {"name": "META_API_KEY", "problem": "missing", "slots": ["A"]},
-            {"name": "OVERSIGHT_BUDGET_USD", "problem": "missing", "slots": ["A"]},
         ]
     assert calls == []
 

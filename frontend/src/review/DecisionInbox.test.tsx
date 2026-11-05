@@ -76,7 +76,7 @@ const kindsState = kinds
 it("uses singular labels for 1 agent and 1 step", () => {
   const firstStep = leadEvents.slice(0, 4).reduce(applyEvent, createInitialState());
   const html = renderToStaticMarkup(<DecisionInbox state={firstStep} />);
-  expect(html).toContain("1 agent took 1 step in 0 min.");
+  expect(html).toContain("1 agent took 1 step in under a minute.");
   expect(html).not.toContain("1 agents");
   expect(html).not.toContain("1 steps");
 });
@@ -90,7 +90,7 @@ it("keeps the exact inbox header after a highest-revision lead resend", () => {
     seq: before.lastSeq + 1,
     payload: { ...current.payload, step: 99 },
   });
-  const sentence = "1 agent took 4 steps in 0 min. These 1 need a person.";
+  const sentence = "1 agent took 4 steps in under a minute. This one needs a person.";
   for (const value of [before, after]) {
     const html = renderToStaticMarkup(<DecisionInbox state={value} />);
     const header = html.match(/<header class="inbox-heading">.*?<\/header>/s)?.[0];

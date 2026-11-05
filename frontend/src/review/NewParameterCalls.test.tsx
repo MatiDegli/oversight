@@ -104,8 +104,8 @@ it.each([false, true])(
     // ReviewBody render hashes with the null-analysis explanation in existing Details.
     expect(createHash("sha256").update(html).digest("hex")).toBe(
       phone
-        ? "058703cce4e500f4e1fdcaf6c1253d68ef86023d9ded6af729792e5b181a3da1"
-        : "d16182d7a814fc37c5979e6f3243c33de723a32f4eec25b499d0da18089a1616",
+        ? "4548623298ae2389450d6b726637a4e3506ea38981cf4e646419263a0b4a966c"
+        : "f1fe581519f638738d999cc98f3a299683a4b0e4cd18449d5300af2e1bfcccb9",
     );
   },
 );

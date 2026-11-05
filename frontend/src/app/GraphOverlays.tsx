@@ -17,7 +17,7 @@ const plural = (count: number, one: string, many: string) => (count === 1 ? one 
 
 /** The repository's name, what is drawn of it and how many agents are at work. */
 export function GraphHeading({ state, groups = 0 }: { state: State; groups?: number }) {
-  const { repo, modules, functions, working } = selectGraphSummary(state);
+  const { repo, modules, functions, activity } = selectGraphSummary(state);
   if (repo === null) return null;
   const count = (value: number, one: string, many: string) =>
     `${String(value)} ${plural(value, one, many)}`;
@@ -30,8 +30,10 @@ export function GraphHeading({ state, groups = 0 }: { state: State; groups?: num
         {groups > 0 && <span>{count(groups, "group", "groups")}</span>}
         <span>{count(modules, "module", "modules")}</span>
         <span>{count(functions, "function", "functions")}</span>
-        <span>{count(working, "agent working", "agents working")}</span>
       </p>
+      {/* Its own row: the controls beside the heading change width between the map and the cards,
+          and a wrapping count would change the heading's height under the camera's group framing. */}
+      <p className="basis-full text-sm text-muted">{activity.text}</p>
     </div>
   );
 }
@@ -71,7 +73,7 @@ export function Legend({ state, map = false }: { state: State; map?: boolean }) 
             aria-hidden="true"
             className="size-3.5 rounded-full border-2 border-dashed border-muted"
           />
-          Dashed: a change waits for review.
+          A dashed ring: changed, not merged yet
         </li>
         <li className="map-legend-hint">Click a group to frame it, a module to open it at 100%</li>
       </ul>
@@ -92,25 +94,25 @@ export function Legend({ state, map = false }: { state: State; map?: boolean }) 
           aria-hidden="true"
           className="h-3.5 w-6 rounded-node border-(length:--agent-border-width) border-muted"
         />
-        Read
+        Read by an agent
       </li>
       <li className="flex items-center gap-2">
         <span
           aria-hidden="true"
           className="h-3.5 w-6 rounded-node border-(length:--agent-border-width) border-dashed border-muted bg-raised"
         />
-        Dashed: a change waits for review.
+        Changed, not merged yet
       </li>
       <li className="flex items-center gap-2">
         <span
           aria-hidden="true"
           className="h-3.5 w-6 rounded-node border-(length:--agent-border-width) border-dashed border-muted"
         />
-        Pending addition
+        New, not merged yet
       </li>
       <li className="flex items-center gap-2">
         <span aria-hidden="true" className="w-6 border-t border-edge-faint" />
-        Possible call, matched by name
+        Possible call (matched by name)
       </li>
     </ul>
   );

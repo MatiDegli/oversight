@@ -250,6 +250,7 @@ def test_schema_changes_only_approved_attachments() -> None:
         _check_lead_status_definition,
         _check_agent_step_definition,
         _check_behavior_definition,
+        _check_optional_budget_definition,
     )
     for name, definition in baseline.items():
         if any(check(name, current, definition) for check in checks):
@@ -367,6 +368,22 @@ def _check_limits_definition(
                 "description"
             ]
         assert updated == definition
+        return True
+    return False
+
+
+def _check_optional_budget_definition(
+    name: str, current: dict[str, Any], definition: dict[str, Any]
+) -> bool:
+    """1.23.0: no Meta budget is null, so no brake (the maintainer's decision, 2026-11-04)."""
+    if name in {"Budget", "UsageTick"}:
+        updated = deepcopy(current[name])
+        assert updated["properties"]["budget_usd"] == {
+            "anyOf": [{"type": "number"}, {"type": "null"}],
+            "description": "None: no budget, so no brake",
+        }
+        updated["properties"]["budget_usd"] = definition["properties"]["budget_usd"]
+        assert updated == definition, name
         return True
     return False
 

@@ -79,3 +79,11 @@ it("shows live or the supplied named replay once, the neutral budget and connect
   );
   expect(html.split(label)).toHaveLength(2);
 });
+
+it("reports no spending cap without computing a percentage", () => {
+  const state = through(1);
+  if (!state.run) throw new Error("Missing run");
+  state.run = { ...state.run, budget: { ...state.run.budget, budget_usd: null, warn_at: [] } };
+  expect(selectBudgetLine(state)).toBe("Budget · no spending cap");
+  expect(selectBudgetLine({ ...state, spendUnknown: true })).toBe("Budget · no spending cap");
+});

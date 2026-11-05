@@ -334,7 +334,7 @@ async function phoneCapture(page: Page, width: number, state: string) {
 
 async function firstPhoneDecision(page: Page, width: number) {
   await practice(page).getByRole("button", { name: "Start practice" }).tap();
-  await phoneDecision(page, 1, "Agent B says");
+  await phoneDecision(page, 1, "What Agent B did");
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
     "New exact call",
   );
@@ -355,7 +355,7 @@ async function firstPhoneDecision(page: Page, width: number) {
 
 async function finishPhoneDecisions(page: Page, width: number) {
   await practice(page).getByRole("button", { name: "Next", exact: true }).tap();
-  await phoneDecision(page, 2, "Agent A says");
+  await phoneDecision(page, 2, "What Agent A did");
   await expect(page.getByLabel("Decision-time graph", { exact: true })).toContainText(
     "7 direct callers",
   );

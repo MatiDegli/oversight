@@ -126,3 +126,35 @@ it("shows only known agent work from the bundled recording, omitting unknown wai
     expect(html).not.toMatch(/Automatic checks|Waiting for your decision|Test runs/);
   }
 });
+
+const longTask = `Fix the discount rounding in compute_price ${"so every order total matches the receipt to the cent, ".repeat(4)}and keep the callers unchanged.`;
+
+function withTask(task: string) {
+  const state = structuredClone(headerState("b"));
+  const change = state.changes["change-1"];
+  if (!change?.proposal) throw new Error("Missing fixture proposal");
+  change.proposal.task = task;
+  return state;
+}
+
+it("clamps the task headline to two lines and offers no toggle for a short task", () => {
+  const html = renderToStaticMarkup(<ReviewHeader state={headerState("b")} changeId="change-1" />);
+  const heading = /<h2 [^>]*>/.exec(html)?.[0] ?? "";
+  expect(heading).toContain("line-clamp-2");
+  expect(html).not.toContain("Show full task");
+  expect(html).not.toContain("Show less");
+});
+
+it("keeps a long task whole in the DOM behind the clamp, with a collapsed Show full task toggle", () => {
+  expect(longTask.length).toBeGreaterThan(140);
+  const html = renderToStaticMarkup(
+    <ReviewHeader state={withTask(longTask)} changeId="change-1" />,
+  );
+  const heading = /<h2 [^>]*>(.*?)<\/h2>/.exec(html);
+  expect(heading?.[0]).toContain("line-clamp-2");
+  expect(heading?.[1]).toBe(longTask);
+  const toggle = /<button [^>]*>Show full task<\/button>/.exec(html)?.[0] ?? "";
+  expect(toggle).toContain('type="button"');
+  expect(toggle).toContain('aria-expanded="false"');
+  expect(toggle).not.toMatch(/autofocus|tabindex/i);
+});

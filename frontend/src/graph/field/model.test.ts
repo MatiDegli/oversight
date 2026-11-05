@@ -74,7 +74,7 @@ describe("the field's numbers", () => {
       nearShare: 0.72,
       farShare: 0.28,
       limit: 8,
-      lampOff: [7, 7, 7],
+      lampOff: [18, 18, 20],
     });
   });
 
@@ -118,7 +118,7 @@ describe("the lamps", () => {
     const grid = lamps(config, 1920, 1080, [], null);
     expect([grid.cols, grid.rows]).toEqual([275, 155]);
     expect(levels(grid).every((value) => value === 0)).toBe(true);
-    expect(color(grid, 10, 10)).toEqual([7, 7, 7]);
+    expect(color(grid, 10, 10)).toEqual([18, 18, 20]);
     expect(grid.data[3]).toBe(0);
   });
 
@@ -249,14 +249,14 @@ describe("the lamps", () => {
       return [...data];
     };
     // Off under the first level; then a third, two thirds, and the whole light.
-    expect(shade(ORANGE, 0.2)).toEqual([7, 7, 7, 0]);
+    expect(shade(ORANGE, 0.2)).toEqual([18, 18, 20, 0]);
     const dim = shade(ORANGE, 0.34);
     const mid = shade(ORANGE, 0.67);
     const whole = shade(ORANGE, 1);
     expect([dim[3], mid[3], whole[3]]).toEqual([85, 170, 255]);
     // Dim: the weaker channels fall faster than the strong one, so the lamp leans to deep red.
-    const dimRatio = ((dim[1] ?? 0) - 7) / ((dim[0] ?? 1) - 7);
-    // Without the ramp this ratio is (92 - 7) / (255 - 7) = 0.34; with it, well under a quarter.
+    const dimRatio = ((dim[1] ?? 0) - 18) / ((dim[0] ?? 1) - 18);
+    // Without the ramp this ratio is (92 - 18) / (255 - 18) = 0.31; with it, well under a quarter.
     expect(dimRatio).toBeLessThan(0.25);
     expect(dim[0]).toBeLessThan(mid[0] ?? 0);
     // Whole: brighter and lighter than the agent's color, a fifth of the way to white.
@@ -264,7 +264,7 @@ describe("the lamps", () => {
     // The same ramp in the agent's blue: its strong channel stays, the whole level is lighter.
     const blueDim = shade(BLUE, 0.34);
     expect(shade(BLUE, 1)).toEqual([114, 151, 255, 255]);
-    expect(((blueDim[0] ?? 0) - 7) / ((blueDim[2] ?? 1) - 7)).toBeLessThan(0.2);
+    expect(((blueDim[0] ?? 0) - 18) / ((blueDim[2] ?? 1) - 20)).toBeLessThan(0.2);
     // On the day ground the whole level goes the other way, toward ink.
     const dayConfig = fieldConfig(themes.day, "watch");
     expect(shade([178, 60, 10], 1, dayConfig)).toEqual([142, 48, 8, 255]);

@@ -19,6 +19,16 @@ describe("the top bar", () => {
     expect(markup).toContain("lucide-git-branch");
   });
 
+  it("opens Settings from the repository name, and keeps it plain without Settings", () => {
+    const open = vi.fn();
+    const markup = renderToStaticMarkup(<TopBar state={through(14)} onOpenSettings={open} />);
+    const button = /<button type="button" title="Repository settings"[^>]*>/.exec(markup)?.[0];
+    expect(button).toContain('aria-label="Repository demo-repo. Open repository settings"');
+    expect(button).toContain("rounded-control");
+    expect(render(14)).not.toContain("Repository settings");
+    expect(render(14)).toContain(">demo-repo<");
+  });
+
   it("puts the decisions chip on the control radius with its count in the label's type", () => {
     const markup = render(20, vi.fn());
     const button = /<button type="button" title="Open decisions inbox[^>]*>/.exec(markup)?.[0];

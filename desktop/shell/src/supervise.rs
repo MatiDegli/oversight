@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use oversight_desktop_core::diagnostics::CloseOutcome;
 use oversight_desktop_core::health;
 use oversight_desktop_core::lifecycle::{Failure, Readiness, Startup};
 
@@ -49,5 +50,23 @@ pub fn ready(child: &Child, stop: &AtomicBool) -> io::Result<()> {
             }
             Readiness::Waiting => sleep(Duration::from_millis(100)),
         }
+    }
+}
+
+/// Return observed shutdown evidence even when the triggering error was unrelated to cleanup.
+pub fn close(child: Option<Child>, primary: io::Result<()>) -> CloseOutcome {
+    let Some(child) = child else {
+        return CloseOutcome {
+            primary,
+            cleanup: None,
+            reaped: false,
+        };
+    };
+    let cleanup = child.close();
+    child.drain_output();
+    CloseOutcome {
+        primary,
+        cleanup: Some(cleanup),
+        reaped: child.exit_code().is_some(),
     }
 }

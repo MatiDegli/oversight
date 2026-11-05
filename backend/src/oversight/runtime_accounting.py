@@ -26,12 +26,34 @@ from oversight.agents import (
     validate_usage_tick,
 )
 from oversight.events import format_needs_you, format_ts
-from oversight.settings import positive_amount
+from oversight.settings import Settings, positive_amount
 from oversight_contracts.events import ModelProfile, UsageTick
 from oversight_contracts.review import ChangeTarget
 
 if TYPE_CHECKING:
     from oversight.app import LiveRun
+
+
+class SnapshotUsage(UsageLedger):
+    """A start's fixed budget/share with one shared total across overlapping starts."""
+
+    def __init__(self, live: LiveRun, settings: Settings) -> None:
+        self._total = live._usage
+        super().__init__(
+            settings.budget_usd,
+            self._total.spent_usd,
+            warn_at=(0.5, 0.8),
+            block_at=settings.spend_brake_percent / 100 if settings.spend_brake_percent else 0.0,
+            braked=any(p.provider == "meta" for p in live._slot_profiles.values()),
+        )
+
+    @property
+    def spent_usd(self) -> float:
+        return self._total.spent_usd
+
+    @spent_usd.setter
+    def spent_usd(self, value: float) -> None:
+        self._total.spent_usd = value
 
 
 async def durable[T](
@@ -84,6 +106,8 @@ class PlanAccounting:
         self.live, self.plan_id, self.profile, self.agent_id = live, plan_id, profile, agent_id
         self.role: Literal["plan", "lead"] = role
         self.label = f"Plan {plan_id}" if role == "plan" else f"Lead {agent_id}"
+        self.usage = SnapshotUsage(live, live._settings)
+        self.price = live._price_for(profile)
         self.failure: str | None = None
 
     async def record(self, reply: ModelReply) -> None:
@@ -92,9 +116,9 @@ class PlanAccounting:
     async def _record(self, reply: ModelReply) -> None:
         live = self.live
         metered = self.profile.provider == "meta"
-        price = live._price_for(self.profile)
+        price = self.price
         cost = price.cost(reply.usage) if price is not None else None
-        spent = live._usage.record(cost) if metered else live._usage.spent_usd
+        spent = self.usage.record(cost) if metered else self.usage.spent_usd
         tick = UsageTick(
             agent_id=self.agent_id,
             plan_id=self.plan_id,
@@ -106,8 +130,8 @@ class PlanAccounting:
             cached_tokens=reply.usage.cached_tokens,
             cost_usd=cost,
             spent_usd=spent,
-            budget_usd=live._usage.budget_usd,
-            brake=live._usage.brake if metered else "ok",
+            budget_usd=self.usage.budget_usd,
+            brake=self.usage.brake if metered else "ok",
         )
         validate_usage_tick(tick)
         state = live.ledger.state
@@ -156,11 +180,14 @@ class BasetenDecisionAccounting:
 
     def __init__(self, live: LiveRun) -> None:
         self.live = live
-        self.ledger = LedgerFile(live._settings.runtime_dir / "baseten-decisions-ledger.json")
+        self.ledger = LedgerFile(live._settings.ledger_root / "baseten-decisions-ledger.json")
         self._recovery = self.ledger.path.with_suffix(".unreliable")
         self._loaded = False
         self._lost = False
-        settings = live._settings
+        self._configure()
+
+    def _configure(self) -> None:
+        settings = self.live._settings
         self.budget = positive_amount(str(settings.baseten_budget_usd))
         self.block_at = (
             settings.spend_brake_percent / 100 if settings.spend_brake_percent is not None else None
@@ -186,6 +213,7 @@ class BasetenDecisionAccounting:
 
     async def admit(self) -> None:
         """No suspension between checking the current ledger and returning transport admission."""
+        self._configure()
         if self.live._closing:
             raise DecisionUnavailable("closed")
         if self.budget is None or self.block_at is None:
@@ -270,6 +298,8 @@ class ReviewAccounting:
         self, live: LiveRun, target: ChangeTarget, profile: ModelProfile, agent_id: str
     ) -> None:
         self.live, self.target, self.profile, self.agent_id = live, target, profile, agent_id
+        self.usage = SnapshotUsage(live, live._settings)
+        self.price = live._price_for(profile)
         self.failure: ReviewLedgerFailure | None = None
 
     async def record(self, reply: ModelReply) -> None:
@@ -279,9 +309,9 @@ class ReviewAccounting:
     async def _record(self, reply: ModelReply) -> None:
         live = self.live
         metered = self.profile.provider == "meta"
-        price = live._price_for(self.profile)
+        price = self.price
         cost = price.cost(reply.usage) if price is not None else None
-        spent = live._usage.record(cost) if metered else live._usage.spent_usd
+        spent = self.usage.record(cost) if metered else self.usage.spent_usd
         tick = UsageTick(
             agent_id=self.agent_id,
             change_id=self.target.change_id,
@@ -292,8 +322,8 @@ class ReviewAccounting:
             cached_tokens=reply.usage.cached_tokens,
             cost_usd=cost,
             spent_usd=spent,
-            budget_usd=live._usage.budget_usd,
-            brake=live._usage.brake if metered else "ok",
+            budget_usd=self.usage.budget_usd,
+            brake=self.usage.brake if metered else "ok",
         )
         validate_usage_tick(tick)
         state = live.ledger.state

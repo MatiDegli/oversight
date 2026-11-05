@@ -8,6 +8,8 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBo
 use crate::child::wide;
 
 pub struct Diagnostics {
+    app: PathBuf,
+    data: PathBuf,
     log: Mutex<SessionLog>,
     pub tail: Arc<Mutex<OutputTail>>,
     exit: Mutex<Option<u32>>,
@@ -25,9 +27,20 @@ impl Diagnostics {
             .join("app");
         Ok(Self {
             log: Mutex::new(SessionLog::open(&data)?),
-            tail: Arc::new(Mutex::new(OutputTail::new(app, data))),
+            tail: Arc::new(Mutex::new(OutputTail::new(app.clone(), data.clone()))),
+            app,
+            data,
             exit: Mutex::new(None),
         })
+    }
+
+    pub fn begin_child(&mut self) {
+        // A fresh pipe target prevents late output from a previous child crossing sessions.
+        self.tail = Arc::new(Mutex::new(OutputTail::new(
+            self.app.clone(),
+            self.data.clone(),
+        )));
+        *self.exit.lock().unwrap() = None;
     }
 
     pub fn stage(&self, stage: Stage) -> io::Result<()> {
@@ -38,9 +51,8 @@ impl Diagnostics {
         *self.exit.lock().unwrap() = exit;
     }
 
-    pub fn failure(&self, error: &io::Error, smoke: bool) {
-        let saved = self
-            .log
+    pub fn record_failure(&self, error: &io::Error) -> bool {
+        self.log
             .lock()
             .unwrap()
             .failure(
@@ -48,7 +60,11 @@ impl Diagnostics {
                 *self.exit.lock().unwrap(),
                 &self.tail.lock().unwrap(),
             )
-            .is_ok();
+            .is_ok()
+    }
+
+    pub fn failure(&self, error: &io::Error, smoke: bool) {
+        let saved = self.record_failure(error);
         if !smoke {
             show_failure(saved);
         }

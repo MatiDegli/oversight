@@ -31,7 +31,7 @@ def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.parametrize(
     ("profile", "names"),
     [
-        (MUSE_SPARK, ["META_API_KEY", *AMOUNTS]),
+        (MUSE_SPARK, ["META_API_KEY"]),
         (MUSE_SPARK_OPEN, ["BASETEN_API_KEY"]),
         (FAKE_MODEL, []),
     ],
@@ -50,7 +50,7 @@ def test_slots_are_grouped_deterministically_and_unoffered_slots_are_absent() ->
     found = missing_settings(settings, {"B": MUSE_SPARK, "A": MUSE_SPARK})
     assert all(entry.slots == ["A", "B"] for entry in found)
     mixed = missing_settings(settings, {"B": MUSE_SPARK_OPEN, "A": MUSE_SPARK})
-    assert [entry.slots for entry in mixed] == [["A"], ["B"], ["A"], ["A"], ["A"]]
+    assert [entry.slots for entry in mixed] == [["A"], ["B"]]
     assert missing_settings(settings, {}) == []
     assert missing_settings(settings, {"A": FAKE_MODEL, "B": FAKE_MODEL}) == []
 
@@ -89,8 +89,8 @@ def test_readiness_uses_selected_reviewer_provider_and_deduplicates_slots() -> N
     assert missing_settings(settings, {"A": FAKE_MODEL}) == []
     settings = replace(settings, review_model="muse-spark")
     found = missing_settings(settings, {"B": MUSE_SPARK_OPEN, "A": MUSE_SPARK})
-    assert [entry.name for entry in found] == ["META_API_KEY", "BASETEN_API_KEY", *AMOUNTS]
-    assert [entry.slots for entry in found] == [["A", "B"], ["B"], *[["A", "B"]] * 3]
+    assert [entry.name for entry in found] == ["META_API_KEY", "BASETEN_API_KEY"]
+    assert [entry.slots for entry in found] == [["A", "B"], ["B"]]
 
 
 @pytest.mark.usefixtures("clean_env")
@@ -107,6 +107,15 @@ def test_amount_missing_and_invalid_survive_settings_parsing(
         values[name] = value
     env_file.write_text("\n".join(f"{key}='{raw}'" for key, raw in values.items()))
     settings = Settings.load(env_file)
+    if value in (None, ""):
+        expected = {
+            "OVERSIGHT_BUDGET_USD": None,
+            "MUSE_SPARK_INPUT_USD_PER_M": 0.10,
+            "MUSE_SPARK_OUTPUT_USD_PER_M": 0.20,
+        }[name]
+        assert getattr(settings, AMOUNTS[name]) == expected
+        assert missing_settings(settings, {"A": MUSE_SPARK}) == []
+        return
     assert getattr(settings, AMOUNTS[name]) is None
     assert missing_settings(settings, {"A": MUSE_SPARK}) == [
         MissingSetting(
@@ -162,9 +171,7 @@ def test_configured_profiles_and_environment_precedence(
     assert settings.setting_problems == {}
     assert missing_settings(settings, {"A": MUSE_SPARK, "B": MUSE_SPARK_OPEN}) == []
     monkeypatch.setenv("OVERSIGHT_BUDGET_USD", "")
-    assert missing_settings(Settings.load(env_file), {"A": MUSE_SPARK}) == [
-        MissingSetting(name="OVERSIGHT_BUDGET_USD", problem="missing", slots=["A"])
-    ]
+    assert missing_settings(Settings.load(env_file), {"A": MUSE_SPARK}) == []
 
 
 def test_offered_profiles_match_live_defaults_without_starting_a_runtime() -> None:

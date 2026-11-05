@@ -74,7 +74,8 @@ async function disclosure(session: Session) {
       expect(await commands.nth(index).locator("code").allTextContents()).toEqual(command);
     expect(await panel.locator("ul > li").allTextContents()).toEqual(report.dependencies);
   }
-  await check(composer.locator("button").filter({ hasText: "Merge mode:" })).toBeVisible();
+  // Without a recorded merge mode the chip stays hidden.
+  await check(composer.locator("button").filter({ hasText: "Merge mode:" })).toHaveCount(0);
   await check(composer.getByRole("button", { name: /^Send/ })).toBeVisible();
   await check(panel.locator("button, a, details, [autofocus]")).toHaveCount(0);
 }

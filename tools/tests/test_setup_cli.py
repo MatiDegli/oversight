@@ -58,20 +58,18 @@ def test_check_exit_code_and_output_never_contain_values(tmp_path: Path, mode: s
         ):
             assert value not in output
     if mode in ("missing", "invalid"):
-        names = (
-            list(values)
-            if mode == "invalid"
-            else [name for name in values if name != "BASETEN_API_KEY"]
-        )
+        # An empty budget means no brake and empty prices take the defaults, so only the Meta key
+        # is missing; invalid amounts still refuse and are named.
+        names = list(values) if mode == "invalid" else ["META_API_KEY"]
         for name in names:
             if name.startswith("OVERSIGHT_AGENT"):
                 continue
             assert name in output
         assert ".env" in output
         assert "authenticate Meta" in output
-        assert "spending limit" in output
-        assert "input tokens" in output and "output tokens" in output
         if mode == "invalid":
+            assert "spending limit" in output
+            assert "input tokens" in output and "output tokens" in output
             assert "authenticate Baseten" in output
     assert not (tmp_path / ".runtime").exists()
 

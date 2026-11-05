@@ -1,5 +1,13 @@
 import type { MergeMode } from "@contracts";
 import { X } from "lucide-react";
+import { useId, useState, useSyncExternalStore } from "react";
+import {
+  chooseAppearance,
+  readAppearance,
+  subscribeAppearance,
+  themeAtLoad,
+  type Appearance,
+} from "../../appearance";
 import { selectMergeMode, type State } from "../../state";
 import { PreviewStartupPanel } from "../preview/PreviewStartupPanel";
 import { previewStartup } from "../preview/previewStartup";
@@ -78,8 +86,77 @@ export function SettingsPanel({
           Setting the merge mode is not available in a replay.
         </p>
       )}
-      <EditableSettings live={Boolean(onSetMergeMode)} />
+      <EditableSettings live={Boolean(onSetMergeMode)} workspace={state.run?.workspace} />
       <PreviewStartupPanel result={previewStartup()} headingId="settings-preview-startup-heading" />
+      <AppearanceSettings />
     </SettingsFrame>
+  );
+}
+
+const looks: readonly [Appearance, string][] = [
+  ["dark", "Dark"],
+  ["day", "Day"],
+  ["system", "System"],
+];
+
+// The theme on the page now; on the server and in node tests there is none.
+const shownTheme = () =>
+  typeof document === "undefined" ? undefined : document.documentElement.dataset.theme;
+
+/** A client-side choice kept in this browser: it calls no server and applies at once. */
+export function AppearanceSettings() {
+  const id = useId();
+  const [chosen, setChosen] = useState(() => readAppearance());
+  const shown = useSyncExternalStore(subscribeAppearance, shownTheme, () => undefined);
+  const loaded = themeAtLoad();
+  const stale = loaded !== undefined && shown !== undefined && shown !== loaded;
+  return (
+    <section aria-labelledby={`${id}-appearance`} className="mt-8 min-w-0">
+      <h2 id={`${id}-appearance`} className="text-(length:--title-size) font-bold">
+        Appearance
+      </h2>
+      <p className="mt-1 text-sm text-muted">
+        Dark matches the recorded demo. System follows your computer&apos;s setting.
+      </p>
+      <div
+        role="radiogroup"
+        aria-labelledby={`${id}-appearance`}
+        className="mt-4 flex flex-wrap gap-3"
+      >
+        {looks.map(([look, label]) => {
+          const marked = chosen === look;
+          return (
+            <label
+              key={look}
+              className={`relative flex cursor-pointer items-center gap-2.5 rounded-card border px-4 py-2.5 text-sm font-bold ${marked ? "border-muted bg-page-raised" : "border-border bg-page"} hover:border-muted has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-text`}
+            >
+              <input
+                type="radio"
+                name={`${id}-appearance`}
+                value={look}
+                checked={marked}
+                onChange={() => {
+                  setChosen(look);
+                  chooseAppearance(look);
+                }}
+                className="sr-only"
+              />
+              <span
+                aria-hidden="true"
+                className="flex size-4 shrink-0 items-center justify-center rounded-full border border-muted"
+              >
+                {marked && <span className="size-2 rounded-full bg-text" />}
+              </span>
+              {label}
+            </label>
+          );
+        })}
+      </div>
+      {stale && (
+        <p className="mt-3 text-sm text-muted">
+          The graph and open code views pick up the new colors when Oversight reloads.
+        </p>
+      )}
+    </section>
   );
 }

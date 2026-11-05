@@ -230,7 +230,7 @@ it("derives the live cone before a proposal without borrowing the run's initial 
   const value = through(12);
   const html = render("live diff", value);
   expect(fact(html, "Tests")).toContain("Tests unknown");
-  expect(fact(html, "Base commit")).toContain("Unknown");
+  expect(fact(html, "Base commit")).toContain("Base unknown");
   expect(words(fact(html, "Impact cone"))).toContain("9 functions possibly affected");
 });
 it("uses the last recorded agent test execution before proposing", () => {
@@ -251,8 +251,8 @@ it("uses the last recorded agent test execution before proposing", () => {
   });
   expect(words(fact(html, "Tests"))).toContain("28 passed");
 });
-it("keeps the live update and proposal banner", () => {
-  expect(render("live diff")).toContain(
+it("keeps the live update and proposal banner while the agent works", () => {
+  expect(render("live diff", through(12))).toContain(
     "This diff updates with each edit. Decisions open when the agent proposes the change.",
   );
 });

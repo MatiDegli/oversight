@@ -67,6 +67,7 @@ export function ChatChangeCard({
   const identity = presentationFor(state, proposal.agent_id);
   const label = identity?.label ?? "unknown";
   const change = state.changes[changeId];
+  const cardCost = card.cost === null ? "Cost unknown" : `Cost ${costText(card.cost)}`;
   const timing = change && (
     <ChangeTiming stages={state.changeStages[changeId] ?? null} rounds={change.revisionRounds} />
   );
@@ -74,7 +75,7 @@ export function ChatChangeCard({
     <div className="chat-proposal" style={presentationStyle(identity)}>
       <div className="chat-proposal-note">
         <div>
-          <MessageSquare aria-hidden="true" size={14} /> Agent {label} says{" "}
+          <MessageSquare aria-hidden="true" size={14} /> What Agent {label} did{" "}
           <EventTime ts={card.ts} />
         </div>
         <p>{proposal.summary ?? "No finish summary was recorded."}</p>
@@ -86,7 +87,7 @@ export function ChatChangeCard({
         {reviewing ? (
           <div className="chat-change-echo">
             <strong>Proposed change</strong>
-            <span>Cost {costText(card.cost)}</span>
+            <span>{cardCost}</span>
             <span className="chat-echo-caption">Reviewing in the panel</span>
             <span className="chat-reviewing">
               <Eye aria-hidden="true" size={14} />
@@ -99,7 +100,7 @@ export function ChatChangeCard({
             <header>
               <strong>Proposed change</strong>
               <span>Checked by Oversight</span>
-              <span className="chat-change-cost">Cost {costText(card.cost)}</span>
+              <span className="chat-change-cost">{cardCost}</span>
               {timing}
             </header>
             <div className="chat-change-chips">
@@ -166,7 +167,7 @@ export function ChatChangeCard({
             <div className="chat-change-evidence">
               <ListChecks aria-hidden="true" size={16} />
               <span>
-                Evidence {card.passes} of 6
+                {card.assessed ? `Evidence ${String(card.passes)} of 6` : "Evidence not assessed"}
                 {card.waiting ? " · decision waiting" : " · decision recorded"}
               </span>
               <ul aria-label="Six recorded rule results">

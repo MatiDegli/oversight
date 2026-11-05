@@ -40,10 +40,48 @@ it("unlocks for all Yes and disables Request changes on an empty comment", () =>
   expect(html).toContain("If main moved since the agent started");
   expect(html).not.toMatch(/aria-keyshortcuts|Ctrl|Enter|Approve with a click/);
 });
+it("says why each decision button is disabled and points the buttons at the reason", () => {
+  const html = render("yes");
+  const request = button(html, "Request changes");
+  expect(html).toContain("Request changes needs a comment for the agent.");
+  const hint = /<p id="([^"]+)"[^>]*>Request changes needs a comment for the agent\.<\/p>/.exec(
+    html,
+  );
+  expect(request).toContain(`aria-describedby="${hint?.[1] ?? "missing"}"`);
+  const loading = renderToStaticMarkup(
+    <ReviewDecisionBar
+      changeId="change-3"
+      view={{ kind: "open", failure: null }}
+      onDecide={vi.fn()}
+      blocked="loading"
+    />,
+  );
+  expect(button(loading, "Approve and merge")).toContain('disabled=""');
+  expect(loading).toContain("Approve and Request changes open when the file finishes loading.");
+  const caption = /<p id="([^"]+)"[^>]*>Approve and Request changes open/.exec(loading)?.[1];
+  expect(caption).toBeTruthy();
+  expect(button(loading, "Approve and merge")).toContain(`aria-describedby="${caption ?? ""}"`);
+  expect(button(loading, "Request changes")).toContain(`aria-describedby="${caption ?? ""}"`);
+  // A blocked Request changes waits for the file, not for a comment.
+  expect(loading).not.toContain("needs a comment");
+  const edits = renderToStaticMarkup(
+    <ReviewDecisionBar
+      changeId="change-3"
+      view={{ kind: "open", failure: null }}
+      onDecide={vi.fn()}
+      blocked="edits"
+    />,
+  );
+  const saved = /<p id="([^"]+)" role="status"[^>]*>Save or discard/.exec(edits)?.[1];
+  expect(saved).toBeTruthy();
+  expect(button(edits, "Approve and merge")).toContain(` ${saved ?? ""}"`);
+  expect(button(edits, "Request changes")).toContain(`aria-describedby="${saved ?? ""}"`);
+});
 it("prefills the comment from No and enables Request changes", () => {
   const html = render("no");
   expect(html).toContain(cards[0]?.question);
   expect(button(html, "Request changes")).not.toContain('disabled=""');
+  expect(html).not.toContain("needs a comment");
 });
 it("keeps the unavailable caption separate from status feedback", () => {
   const html = renderToStaticMarkup(

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Oversight: a lens drawn as two graph edges between two nodes, around one approved node. -->
+  <rect x="0.25" y="0.25" width="31.5" height="31.5" rx="7.5" fill="#161619" stroke="#323237" stroke-width="0.5" />
+  <path d="M5.5 16A11.73 11.73 0 0 1 26.5 16A11.73 11.73 0 0 1 5.5 16Z" fill="none" stroke="#ededea" stroke-width="2.5" />
+  <g fill="#ededea">
+    <circle cx="5.5" cy="16" r="3" />
+    <circle cx="26.5" cy="16" r="3" />
+    <circle cx="16" cy="16" r="4" />
+  </g>
+</svg>

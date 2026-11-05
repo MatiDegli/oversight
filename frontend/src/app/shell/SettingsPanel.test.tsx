@@ -124,11 +124,14 @@ it.each<PreviewStartupResult>([
   expect(previewStartup).toHaveBeenCalledExactlyOnceWith();
   expect(html).toContain('aria-labelledby="settings-preview-startup-heading"');
   expect(html.match(/id="settings-preview-startup-heading"/gu)).toHaveLength(1);
-  expect(html.match(/<h2\b/gu)).toHaveLength(4);
+  // Merge mode, Repository, Models, Limits, Preview startup and the client-side Appearance.
+  expect(html.match(/<h2\b/gu)).toHaveLength(6);
   expect(html).not.toContain(">Settings</h2>");
   expect(html.indexOf("Preview startup")).toBeGreaterThan(
     html.indexOf("Setting the merge mode is not available in a replay."),
   );
+  expect(html.indexOf(">Appearance</h2>")).toBeGreaterThan(html.indexOf("Preview startup"));
+  expect(html.match(/type="radio"/gu)).toHaveLength(3);
   const message =
     result.kind === "valid"
       ? "Settings fixture"

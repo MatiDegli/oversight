@@ -380,10 +380,10 @@ it.skipIf(process.env.FIELD_BENCH !== "1")(
 );
 
 it.each([
-  ["glow", 73, [90, 27, 12, 85], [90, 26, 12, 85]],
-  ["ring", 84, [133, 69, 71, 170], [172, 62, 22, 170]],
-  ["overlap", 81, [87, 27, 14, 85], [90, 26, 12, 85]],
-  ["still", 73, [90, 27, 12, 85], [90, 26, 12, 85]],
+  ["glow", 73, [97, 34, 21, 85], [97, 34, 21, 85]],
+  ["ring", 84, [137, 73, 75, 170], [176, 66, 27, 170]],
+  ["overlap", 81, [95, 34, 23, 85], [97, 34, 21, 85]],
+  ["still", 73, [97, 34, 21, 85], [97, 34, 21, 85]],
 ] as const)("pins the old and rule (a) %s RGBA at row 36", (kind, col, old, next) => {
   const config = fieldConfig(themes.dark, "watch");
   const lights = fixedLights.map((light) =>

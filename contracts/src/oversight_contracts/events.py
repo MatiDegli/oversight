@@ -80,7 +80,8 @@ class Limits(ContractModel):
 
 
 class Budget(ContractModel):
-    budget_usd: float
+    budget_usd: float | None
+    """None: no budget, so no brake"""
     spent_usd: float
     """From the ledger, before this run."""
     warn_at: list[float]
@@ -422,7 +423,8 @@ class UsageTick(ContractModel):
     """Null: unknown."""
     spent_usd: float
     """The ledger's total, this call included."""
-    budget_usd: float
+    budget_usd: float | None
+    """None: no budget, so no brake"""
     brake: Literal["ok", "warn_50", "warn_80", "blocked"]
 
     role: Literal["agent", "review", "plan", "lead"] | None = None

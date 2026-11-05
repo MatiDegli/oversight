@@ -28,7 +28,7 @@ export function StopControl({
           if (!pending) setConfirming(!confirming);
         }}
       >
-        <Square aria-hidden="true" className="size-4" /> Stop and discard
+        <Square aria-hidden="true" className="size-3.5 fill-current" /> Stop and discard
       </button>
       {confirming && (
         <div className="flex flex-col gap-2 text-sm text-muted">
