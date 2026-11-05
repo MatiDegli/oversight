@@ -1,4 +1,4 @@
-import type { AgentStatus, ErrorCode, Slot, StartAgent } from "@contracts";
+import type { AgentStatus, EnqueueTask, ErrorCode, QueuedTask, Slot, StartAgent } from "@contracts";
 import { createStore } from "zustand/vanilla";
 
 import { selectSpend } from "../state";
@@ -71,6 +71,26 @@ export function slotChoice(state: State, slot: Slot): SlotChoice {
   return { slot, runId: state.run?.run_id, agents: Object.keys(state.agents) };
 }
 
+/** The models a start may name: each slot's profile, once, with its label. */
+export function offeredModels(state: State): { id: string; label: string }[] {
+  const ids = [...new Set(state.run?.slots.map((info) => info.default_model))];
+  return ids.map((id) => ({
+    id,
+    label: state.run?.models.find((model) => model.id === id)?.label ?? id,
+  }));
+}
+
+export interface ModelPick {
+  model: string;
+  runId: string | undefined;
+}
+
+/** The person's model for the next start, while this run still offers it; null means the slot's. */
+export function pickedModel(state: State, pick: ModelPick | null): string | null {
+  if (!pick || pick.runId !== state.run?.run_id) return null;
+  return offeredModels(state).some((model) => model.id === pick.model) ? pick.model : null;
+}
+
 export function selectedSlot(state: State, choice: SlotChoice | null): Slot | null {
   const taken =
     choice &&
@@ -108,14 +128,54 @@ export function startBlock(state: State, slot?: Slot | null): string | null {
   return held.map((agent) => holderReason(state, agent)).join(" ");
 }
 
+/**
+ * Tasks an agent can finish in the demo shop as it ships, each named by a short label. The first is
+ * the recorded run's task; each fixes a gap the shop's code and tests still have.
+ */
+const demoExamples = [
+  {
+    label: "Reject negative prices",
+    task: "compute_price in shop/pricing.py accepts a negative unit_price or quantity and returns a negative price. Make it raise ValueError for a negative unit_price, a negative quantity, or an extra_percent outside 0 to 100, with a short message naming the argument. Add tests for each case next to the existing compute_price tests, and keep the existing tests passing.",
+  },
+  {
+    label: "Validate reserve quantities",
+    task: "Inventory.reserve in shop/inventory.py accepts a zero or negative quantity, and a negative one increases what is available. Make it raise ValueError for a quantity that is not positive, as restock and release already do, and add tests next to the existing reserve tests; keep the existing tests passing.",
+  },
+  {
+    label: "Leave cancelled orders out of revenue",
+    task: "revenue_by_category in shop/orders.py still counts cancelled orders. Make it skip orders whose cancelled flag is set, add a test next to the existing revenue_by_category test, and keep the existing tests passing.",
+  },
+];
+
+/** Example tasks for a first start: only for the demo shop, and only before any agent exists. */
+export function exampleTasks(state: State): { label: string; task: string }[] {
+  if (state.run?.workspace !== "demo-repo" || Object.keys(state.agents).length > 0) return [];
+  return demoExamples;
+}
+
+/** The person's own tasks still waiting for a slot, in queue order; a lead's are its own. */
+export function selectQueuedTasks(state: State): QueuedTask[] {
+  const latest = new Map<string, QueuedTask>();
+  for (const event of state.decisionEvents) {
+    if (event.type !== "queue.updated") continue;
+    const item = event.payload;
+    const id = item.queued_task_id;
+    if ((latest.get(id)?.revision ?? 0) < item.revision) latest.set(id, item);
+  }
+  return [...latest.values()].filter(
+    (item) =>
+      item.agent &&
+      !item.started_by &&
+      (item.state === "queued" || item.state === "blocked" || item.state === "starting"),
+  );
+}
+
 /** What the person reads under the box when a start fails. */
-export function startFailure(error: unknown): string {
+export function startFailure(error: unknown, action = "start the agent"): string {
   if (error instanceof CommandError) {
     if (error.code === "not_configured") return setupFailure(error);
     // A 4xx names its own cause (spend_brake, slot_busy, invalid_request); so does a 500.
-    return error.status >= 500
-      ? `The server failed to start the agent: ${error.message}`
-      : error.message;
+    return error.status >= 500 ? `The server failed to ${action}: ${error.message}` : error.message;
   }
   return "The request did not reach the server. Check the connection and try again.";
 }
@@ -126,16 +186,33 @@ export interface TaskBoxModel {
   prefilled: { nodeId: string; text: string } | null;
   /** From the request's departure until the server's answer. */
   pending: boolean;
+  /** Whether the pending request queues the task rather than starting it. */
+  queueing: boolean;
+  /** The last queueing's confirmation; the next edit or request clears it. */
+  notice: string | null;
   /** The last start's failure; the next edit or start clears it. */
   failure: string | null;
   failureCode: ErrorCode | null;
   choice: SlotChoice | null;
   choose: (choice: SlotChoice) => void;
+  /** The model the person picked from the chip; null keeps each slot's own. */
+  model: ModelPick | null;
+  pickModel: (pick: ModelPick) => void;
   setDraft: (text: string) => void;
   /** Fill only an empty, idle box; even whitespace belongs to the person. */
   prefill: (text: string, nodeId: string) => boolean;
-  /** Sends the trimmed task and the selected slot when the box offers a choice. */
-  start: (send: (body: StartAgent) => Promise<unknown>, slot?: Slot | null) => Promise<void>;
+  /** Sends the trimmed task, the selected slot when the box offers a choice, and a picked model. */
+  start: (
+    send: (body: StartAgent) => Promise<unknown>,
+    slot?: Slot | null,
+    model?: string | null,
+  ) => Promise<void>;
+  /** Queues the trimmed task for the next free slot, or the selected one when the box offers a choice. */
+  queue: (
+    send: (body: EnqueueTask) => Promise<unknown>,
+    slot?: Slot | null,
+    model?: string | null,
+  ) => Promise<void>;
 }
 
 /**
@@ -147,32 +224,61 @@ export function createTaskBoxStore() {
     draft: "",
     prefilled: null,
     pending: false,
+    queueing: false,
+    notice: null,
     failure: null,
     failureCode: null,
     choice: null,
     choose: (choice) => {
       if (!get().pending) set({ choice, failure: null, failureCode: null });
     },
+    model: null,
+    pickModel: (model) => {
+      if (!get().pending) set({ model, failure: null, failureCode: null });
+    },
     setDraft: (draft) => {
-      set({ draft, prefilled: null, failure: null, failureCode: null });
+      set({ draft, prefilled: null, failure: null, failureCode: null, notice: null });
     },
     prefill: (draft, nodeId) => {
       if (get().pending || get().draft !== "") return false;
       set({ draft, prefilled: { nodeId, text: draft }, failure: null, failureCode: null });
       return true;
     },
-    start: async (send, slot) => {
+    start: async (send, slot, model) => {
       const task = get().draft.trim();
       if (get().pending || task === "") return;
-      set({ pending: true, failure: null, failureCode: null });
+      set({ pending: true, failure: null, failureCode: null, notice: null });
       try {
-        await send(slot ? { task, slot } : { task });
+        await send({ task, ...(slot ? { slot } : {}), ...(model ? { model } : {}) });
         // The agent's card arrives as events; the box only empties.
         set({ draft: "", prefilled: null, pending: false });
       } catch (error) {
         set({
           pending: false,
           failure: startFailure(error),
+          failureCode: error instanceof CommandError ? (error.code ?? null) : null,
+        });
+      }
+    },
+    queue: async (send, slot, model) => {
+      const task = get().draft.trim();
+      if (get().pending || task === "") return;
+      set({ pending: true, queueing: true, failure: null, failureCode: null, notice: null });
+      try {
+        await send({ agent: { task, slot: slot ?? null, model: model ?? null, zone: null } });
+        // The server starts it when a slot frees; queue.updated events list it meanwhile.
+        set({
+          draft: "",
+          prefilled: null,
+          pending: false,
+          queueing: false,
+          notice: "Queued. It starts when a slot is free.",
+        });
+      } catch (error) {
+        set({
+          pending: false,
+          queueing: false,
+          failure: startFailure(error, "queue the task"),
           failureCode: error instanceof CommandError ? (error.code ?? null) : null,
         });
       }

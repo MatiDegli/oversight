@@ -476,6 +476,8 @@ export function App() {
             setView((current) => viewReducer(current, action));
           }}
           onStartAgent={commands?.startAgent}
+          onQueueAgent={commands?.enqueue}
+          onCancelQueued={commands?.cancelQueue}
           onStartLead={commands?.startLead}
           onStopLead={commands?.stopLead}
           onStopAgent={commands?.stopAgent}

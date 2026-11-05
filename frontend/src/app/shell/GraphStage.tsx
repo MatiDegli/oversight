@@ -129,8 +129,10 @@ export function GraphStage({
             ) : (
               // The narrower graph beside the editor panel is framed on its own nodes, so a
               // heading there would sit on top of them: it is a watch-mode overlay.
+              // The heading is text only: it masks the field but lets clicks reach a map group
+              // header that the fitted graph tucks under it.
               !open && (
-                <div className="pointer-events-auto">
+                <div data-field-mask>
                   <GraphHeading
                     state={state}
                     groups={groups.length >= 2 ? groups.filter((g) => g.panel).length : 0}

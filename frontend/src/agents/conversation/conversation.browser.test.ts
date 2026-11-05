@@ -115,18 +115,20 @@ it.each([
   }
 });
 
-it("sends only by button, guards pending, retains failed text and clears on success", async () => {
+it("sends with Enter, keeps Shift+Enter lines, guards pending, retains failed text and clears on success", async () => {
   const page = await pageFor();
   try {
     await box(page).fill("Point to _COUPONS.");
-    await box(page).press("Enter");
+    await box(page).press("Shift+Enter");
     await box(page).press("Control+Enter");
     expect(await page.evaluate(() => window.conversationTest.requests())).toEqual([]);
     const text = await box(page).inputValue();
     expect(text).toContain("\n");
-    await send(page).click();
+    await box(page).press("Enter");
     await check(send(page)).toBeDisabled();
-    await check(send(page)).toBeFocused();
+    await check(box(page)).toBeFocused();
+    // A second Enter while the first send is pending sends nothing.
+    await box(page).press("Enter");
     expect(await page.evaluate(() => window.conversationTest.requests())).toEqual([text]);
     await page.evaluate(() => {
       window.conversationTest.answer(false);

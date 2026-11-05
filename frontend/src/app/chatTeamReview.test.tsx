@@ -20,7 +20,7 @@ it("uses A·3 and team orange for the Chat proposal whose runtime seat is C", ()
   const output = html(
     <ChatChangeCard state={state} changeId="change-3" seq={19} reviewing={false} />,
   );
-  expect(output).toContain("Agent A·3 says");
+  expect(output).toContain("What Agent A·3 did");
   expect(output).toContain('class="chat-proposal" style="--slot-graphic:var(--agent-a)');
 });
 

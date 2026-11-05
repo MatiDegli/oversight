@@ -110,7 +110,7 @@ it.each(["known", "retained", "unknown"])(
       <ChatChangeCard state={state} changeId="change-1" seq={62} reviewing={false} />,
     );
     const author = evidence === "unknown" ? "unknown" : "A";
-    expect(output).toContain(`Agent ${author} says`);
+    expect(output).toContain(`What Agent ${author} did`);
     expect(output).toContain(`After · Agent ${author}</span>`);
     expect(output).toContain(
       evidence === "unknown"
@@ -426,7 +426,7 @@ it("replaces only the current entry, keeping ordinary rows, note attribution and
   );
   expect(output.match(/aria-label="Proposed change"/g)).toHaveLength(1);
   expect(output).toContain("Historical finish note");
-  expect(output).toContain("Agent A says");
+  expect(output).toContain("What Agent A did");
   expect(output).toContain("Review is unavailable for this candidate.");
   expect(output).toContain("Six recorded rule results");
   expect(output.indexOf("Finished the change")).toBeLessThan(output.indexOf("Evidence 5 of 6"));

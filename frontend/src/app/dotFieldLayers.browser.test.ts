@@ -233,8 +233,8 @@ it("keeps the graph on plain ground where there is no WebGL", async () => {
     }, png.toString("base64"));
     const [r, g, b] = ground.pixel;
     expect(ground.ground).toBe(`rgb(${String(r)}, ${String(g)}, ${String(b)})`);
-    // Without WebGL the ground is the dark ground token, #070707: near black, not pure black.
-    expect([r, g, b]).toEqual([7, 7, 7]);
+    // Without WebGL the ground is the dark ground token, #121214: near black, not pure black.
+    expect([r, g, b]).toEqual([18, 18, 20]);
   });
 }, 30_000);
 

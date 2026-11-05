@@ -1,4 +1,5 @@
 import { X } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { selectAgentCard } from "../agents";
 import { costText } from "../state";
 import type { ChangeState, State } from "../state";
@@ -15,6 +16,56 @@ const statusWords: Record<ChangeState["status"], string> = {
   approved: "Approved",
   rejected: "Rejected",
 };
+
+/** Past this many characters a task likely needs more than two lines; measuring then decides. */
+export const longTask = 140;
+
+/**
+ * The task as headline, clamped to two lines so the diff keeps its room. The clamp is CSS only:
+ * the whole text stays in the DOM for screen readers. The toggle appears only when the text overflows.
+ */
+export function TaskHeading({ task }: { task: string }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(task.length > longTask);
+  useLayoutEffect(() => {
+    const element = heading.current;
+    // Expanded text has no clamp to overflow; the toggle stays so the person can clamp it again.
+    if (!element || expanded || typeof ResizeObserver === "undefined") return;
+    const measure = () => {
+      setOverflows(element.scrollHeight > element.clientHeight + 1);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [task, expanded]);
+  return (
+    <div className="review-header-task min-w-0">
+      <h2
+        ref={heading}
+        title={task}
+        className={`min-w-0 wrap-anywhere text-xl leading-7 font-bold ${expanded ? "" : "line-clamp-2"}`}
+      >
+        {task}
+      </h2>
+      {overflows && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => {
+            setExpanded((value) => !value);
+          }}
+          className="text-[13px] leading-5 font-semibold text-muted underline hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text"
+        >
+          {expanded ? "Show less" : "Show full task"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 /** Shared anatomy for ordinary review, choices and recorded resolutions. */
 export function ReviewHeader({
@@ -44,9 +95,7 @@ export function ReviewHeader({
             {identity.label}
           </span>
         )}
-        <h2 title={task} className="min-w-0 wrap-anywhere text-xl leading-7 font-bold">
-          {task}
-        </h2>
+        <TaskHeading key={changeId} task={task} />
         {change && (
           <span className="review-header-status">{status ?? statusWords[change.status]}</span>
         )}

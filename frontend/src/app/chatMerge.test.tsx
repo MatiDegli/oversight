@@ -17,12 +17,9 @@ it("uses current events, run fallback and unknown without inventing a mode or ac
       <ChatMergeChip state={applyEvent(state, modeEvent(state.lastSeq + 1, "merge_when_safe"))} />,
     ),
   ).toContain("Merge mode: Merge alone when safe");
-  const unknown = html(<ChatMergeChip state={createInitialState()} />);
-  expect(unknown).toContain("Merge mode: not recorded");
-  expect(unknown).not.toContain("<button");
-  const settings = html(<ChatMergeChip state={createInitialState()} onOpenSettings={() => {}} />);
-  expect(settings).toContain("Merge mode: not recorded");
-  expect(settings).not.toContain("lucide-chevron-down");
+  // No recorded mode (a recorded replay) shows nothing rather than a line that reads like an error.
+  expect(html(<ChatMergeChip state={createInitialState()} />)).toBe("");
+  expect(html(<ChatMergeChip state={createInitialState()} onOpenSettings={() => {}} />)).toBe("");
 });
 function evidence() {
   const state = chatMergeState();

@@ -3,6 +3,7 @@ import { Folder, GitBranch, MessagesSquare, Network, Search, Settings, Timer } f
 import { selectDecisionInboxCount } from "../state";
 import type { State } from "../state";
 import { SpendMeter } from "./SpendMeter";
+import { LogoMark } from "./shell/LogoMark";
 import type { ShellLayout } from "./shell/useShell";
 import "./shell/chatShell.css";
 import "./palette/palette.css";
@@ -45,7 +46,10 @@ export function TopBar({
   );
   return (
     <header className="shell-top-bar flex h-(--top-bar-height) shrink-0 items-center gap-3.5 border-b border-divider bg-shell px-4.5">
-      <span className="text-(length:--brand-size) font-bold">Oversight</span>
+      <span className="inline-flex items-center gap-2 text-(length:--brand-size) font-bold">
+        <LogoMark className="size-5 shrink-0" />
+        Oversight
+      </span>
       {state.run && (
         <>
           <span aria-hidden="true" className="h-5 w-px shrink-0 bg-card-border" />

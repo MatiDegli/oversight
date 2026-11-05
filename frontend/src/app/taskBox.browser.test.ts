@@ -203,7 +203,7 @@ it(
       await browserExpect(b).toHaveAttribute("aria-pressed", "true");
       await browserExpect(box(page)).toHaveValue("Second task");
       await box(page).focus();
-      await page.keyboard.press("Control+Enter");
+      await page.keyboard.press("Enter");
       await sent(page, 1);
       expect(await calls(page)).toEqual([{ task: "Second task", slot: "B" }]);
       await answer(page, "created");
@@ -212,14 +212,14 @@ it(
 );
 
 it(
-  "starts with Ctrl+Enter, sends the trimmed task, and keeps focus and the box through the answer and the new card",
+  "starts with Enter, sends the trimmed task, and keeps focus and the box through the answer and the new card",
   { timeout: 40_000 },
   async () => {
     await withPage(async (page) => {
       await box(page).click();
       await page.keyboard.type("  Cap the discount");
-      // Enter alone is a newline, not a start.
-      await page.keyboard.press("Enter");
+      // Shift+Enter is a newline, not a start.
+      await page.keyboard.press("Shift+Enter");
       await page.keyboard.type("at 30%  ");
       expect(await box(page).inputValue()).toBe("  Cap the discount\nat 30%  ");
       expect(await calls(page)).toEqual([]);
@@ -227,14 +227,14 @@ it(
         window.boxNode = document.querySelector("textarea");
       });
 
-      await page.keyboard.press("Control+Enter");
+      await page.keyboard.press("Enter");
       await sent(page, 1);
       expect(await calls(page)).toEqual([{ task: "Cap the discount\nat 30%" }]);
-      // Pending: read-only, the button refuses, and a second Ctrl+Enter sends nothing.
+      // Pending: read-only, the button refuses, and a second Enter sends nothing.
       await browserExpect(box(page)).toHaveJSProperty("readOnly", true);
       await browserExpect(start(page)).toHaveAttribute("aria-disabled", "true");
       await browserExpect(page.getByText("Starting the agent.")).toBeVisible();
-      await page.keyboard.press("Control+Enter");
+      await page.keyboard.press("Enter");
       expect(await calls(page)).toHaveLength(1);
 
       await answer(page, "created");
@@ -261,7 +261,7 @@ it(
       await browserExpect(box(page)).toHaveValue("next task");
       await browserExpect(start(page)).toHaveAttribute("aria-disabled", "true");
       await browserExpect(page.getByText("Agent A is working.")).toBeVisible();
-      await page.keyboard.press("Control+Enter");
+      await page.keyboard.press("Enter");
       // Playwright waits for an enabled button; a forced click is the person's click on the refusal.
       await start(page).click({ force: true });
       expect(await calls(page)).toHaveLength(1);
@@ -313,7 +313,7 @@ it(
       await page.keyboard.type("Cap the discount");
       let count = 0;
       for (const [result, line] of refusals) {
-        await page.keyboard.press("Control+Enter");
+        await page.keyboard.press("Enter");
         await sent(page, ++count);
         await answer(page, result);
         await browserExpect(page.getByRole("alert")).toHaveText(line);
@@ -378,7 +378,7 @@ it(
 
 for (const width of [1920, 1280])
   for (const theme of ["dark", "day"])
-    it(`aligns empty replay accessory at ${String(width)} in ${theme}`, async () => {
+    it(`shows no merge chip in the empty replay at ${String(width)} in ${theme}`, async () => {
       await withPage(
         async (page) => {
           const chat = page
@@ -404,18 +404,16 @@ for (const width of [1920, 1280])
           });
           const measurements = await page.evaluate(() => {
             const caption = document.querySelector('.chat-empty [aria-label="New agent"] p');
+            // The fixture records no merge mode, so the accessory shows no chip at all.
             const chip = document.querySelector(".chat-empty .chat-merge-chip");
-            if (!caption || !chip) throw new Error("Missing actual replay composition");
+            if (!caption) throw new Error("Missing actual replay composition");
             const rect = (el: Element) => {
               const { x, y, width, height, top, right, bottom, left } = el.getBoundingClientRect();
               return { x, y, width, height, top, right, bottom, left };
             };
-            const a = rect(caption),
-              b = rect(chip);
             return {
-              caption: a,
-              chip: b,
-              alignment: Math.abs(a.left - b.left),
+              caption: rect(caption),
+              chip: chip ? rect(chip) : null,
               focus: document.activeElement?.textContent,
               captionText: caption.textContent,
               startButtons: [...document.querySelectorAll("button")].filter(
@@ -452,7 +450,7 @@ for (const width of [1920, 1280])
                   checkpoint: process.env.MAP_SWEEP_CHECKPOINT ?? "working tree",
                   uncommittedEdit: process.env.MAP_SWEEP_EDIT ?? "capture support only",
                   provenance:
-                    "empty Frame replay of a hand-written demo fixture; actual ChatMergeChip accessory; no start callback",
+                    "empty Frame replay of a hand-written demo fixture; no merge mode recorded, so no ChatMergeChip; no start callback",
                   snapshot: "fixtures/events/handwritten-level1.jsonl through seq 2",
                   layout: "Frame empty replay Chat",
                   viewport: page.viewportSize(),
@@ -471,7 +469,7 @@ for (const width of [1920, 1280])
             );
           }
           expect(replayErrors.get(page)).toEqual({ pageErrors: [], consoleErrors: [] });
-          expect(measurements.alignment).toBeLessThanOrEqual(1);
+          expect(measurements.chip).toBeNull();
           for (const item of measurements.overflow) expect(item.positive).toBe(0);
           await browserExpect(chat).toBeFocused();
           await browserExpect(start(page)).toHaveCount(0);
@@ -481,3 +479,125 @@ for (const width of [1920, 1280])
         { width, theme, chat: true, reducedMotion: "reduce" },
       );
     });
+
+it(
+  "queues the task with Ctrl+Enter instead of starting it, and confirms under the box",
+  { timeout: 40_000 },
+  async () => {
+    await withPage(async (page) => {
+      await page.evaluate(() => {
+        window.taskBoxTest.enableQueue();
+      });
+      await box(page).click();
+      await page.keyboard.type("  Cap the discount  ");
+      await page.keyboard.press("Control+Enter");
+      await page.waitForFunction(() => window.taskBoxTest.queued().length === 1);
+      expect(await page.evaluate(() => window.taskBoxTest.queued())).toEqual([
+        { agent: { task: "Cap the discount", slot: null, model: null, zone: null } },
+      ]);
+      expect(await calls(page)).toEqual([]);
+      await browserExpect(page.getByText("Queued. It starts when a slot is free.")).toBeVisible();
+      await browserExpect(box(page)).toHaveValue("");
+      expect(await focused(page)).toBe("textarea");
+    });
+  },
+);
+
+it(
+  "opens the model menu only on the person's click, closes it with Escape or a click elsewhere, and reaches Settings",
+  { timeout: 40_000 },
+  async () => {
+    await withPage(async (page) => {
+      await page.evaluate(() => {
+        window.taskBoxTest.enableSettings();
+      });
+      const chip = page.getByRole("button", { name: "Model: Muse Spark" });
+      const menu = page.getByRole("menu", { name: "Model for the next agent" });
+      await browserExpect(chip).toHaveAttribute("aria-haspopup", "menu");
+      await browserExpect(chip).toHaveAttribute("aria-expanded", "false");
+      await browserExpect(menu).toHaveCount(0);
+
+      await chip.click();
+      await browserExpect(chip).toHaveAttribute("aria-expanded", "true");
+      const spark = menu.getByRole("menuitemradio", { name: "Muse Spark" });
+      await browserExpect(spark).toHaveAttribute("aria-checked", "true");
+      await browserExpect(spark).toBeFocused();
+      await page.keyboard.press("ArrowDown");
+      await browserExpect(
+        menu.getByRole("menuitem", { name: "Models and keys in Settings" }),
+      ).toBeFocused();
+      await page.keyboard.press("Escape");
+      await browserExpect(menu).toHaveCount(0);
+      await browserExpect(chip).toBeFocused();
+
+      // A click on another control closes the menu and leaves that control its focus.
+      await chip.click();
+      await browserExpect(menu).toBeVisible();
+      await box(page).click();
+      await browserExpect(menu).toHaveCount(0);
+      await browserExpect(box(page)).toBeFocused();
+
+      await chip.click();
+      await menu.getByRole("menuitem", { name: "Models and keys in Settings" }).click();
+      await browserExpect(menu).toHaveCount(0);
+      expect(await page.evaluate(() => window.taskBoxTest.settingsOpened())).toBe(1);
+      await page
+        .getByRole("button", { name: "Up to 30 steps. Change the step limit in Settings" })
+        .click();
+      expect(await page.evaluate(() => window.taskBoxTest.settingsOpened())).toBe(2);
+
+      // A picked model goes with the next start.
+      await chip.click();
+      await menu.getByRole("menuitemradio", { name: "Muse Spark" }).click();
+      await browserExpect(chip).toBeFocused();
+      await box(page).fill("Cap the discount");
+      await box(page).press("Enter");
+      await sent(page, 1);
+      expect(await calls(page)).toEqual([{ task: "Cap the discount", model: "muse-spark" }]);
+      await answer(page, "created");
+    });
+  },
+);
+
+it(
+  "fills the empty box with a demo example on the person's click, starts nothing, and hides examples once an agent exists",
+  { timeout: 40_000 },
+  async () => {
+    await withPage(async (page) => {
+      const examples = page.getByRole("group", { name: "Example tasks" });
+      await browserExpect(examples).toBeVisible();
+      await browserExpect(examples.getByRole("button")).toHaveCount(3);
+      await examples.getByRole("button", { name: "Reject negative prices" }).click();
+      await browserExpect(box(page)).toHaveValue(/^compute_price in shop\/pricing\.py accepts/);
+      await browserExpect(box(page)).toBeFocused();
+      await browserExpect(examples).toHaveCount(0);
+      expect(await calls(page)).toEqual([]);
+
+      // An emptied box offers them again, until the first agent exists.
+      await box(page).fill("");
+      await browserExpect(examples).toBeVisible();
+      await apply(page, 4);
+      await page.getByRole("article", { name: "Agent A" }).waitFor();
+      await browserExpect(examples).toHaveCount(0);
+    });
+  },
+);
+
+it("keeps the examples calm at 390 px in the chat start", { timeout: 40_000 }, async () => {
+  await withPage(
+    async (page) => {
+      const examples = page.getByRole("group", { name: "Example tasks" });
+      await browserExpect(examples).toBeVisible();
+      const fit = await page.evaluate(() => {
+        const group = document.querySelector(".task-box-examples")?.getBoundingClientRect();
+        const field = document.querySelector(".task-box-field")?.getBoundingClientRect();
+        return {
+          scroll: document.documentElement.scrollWidth,
+          inside: group && field ? group.left >= field.left && group.right <= field.right : false,
+        };
+      });
+      expect(fit).toEqual({ scroll: 390, inside: true });
+    },
+    { width: 390, chat: true },
+  );
+});

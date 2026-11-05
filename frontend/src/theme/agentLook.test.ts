@@ -25,8 +25,8 @@ it("preserves every approved A/B family value", () => {
     "#ff5c1f",
     "#ff7a45",
     { color: "#ff5c1f", alpha: 0.14 },
-    { color: "#1e0c04", alpha: 0.95 },
-    { color: "#140a04", alpha: 0.95 },
+    { color: "#2d1b13", alpha: 0.95 },
+    { color: "#231913", alpha: 0.95 },
   ]);
   expect([
     themes.dark["agent-b"],
@@ -38,8 +38,8 @@ it("preserves every approved A/B family value", () => {
     "#4f7dff",
     "#86a3ff",
     { color: "#4f7dff", alpha: 0.16 },
-    { color: "#060c1e", alpha: 0.95 },
-    { color: "#040814", alpha: 0.95 },
+    { color: "#151b2d", alpha: 0.95 },
+    { color: "#131723", alpha: 0.95 },
   ]);
   expect([
     themes.day["agent-a"],
@@ -73,7 +73,7 @@ it.each([
   ["C", "#a392d6", "#a392d6", "#4f3189", "#4f3189"],
   ["D", "#dba4c8", "#dba4c8", "#a2568a", "#894674"],
   ["E", "#a1c7f8", "#a1c7f8", "#3475c4", "#255ea1"],
-  ["F", "#ab6e9e", "#b27ba7", "#623659", "#623659"],
+  ["F", "#ab6e9e", "#b982ae", "#623659", "#623659"],
 ] as const)(
   "keeps %s's approved graphic and text exactly",
   (slot, dark, darkText, day, dayText) => {

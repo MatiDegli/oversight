@@ -163,6 +163,79 @@ describe("the new-agent box", () => {
     expect(button(markup)).toContain("ml-auto");
   });
 
+  it("makes the model chip a menu button and the step chip a way to Settings when both can act", () => {
+    const markup = view({
+      draft: "x",
+      model: "Muse Spark",
+      models: [{ id: "muse-spark", label: "Muse Spark" }],
+      modelId: "muse-spark",
+      onModel: vi.fn(),
+      maxSteps: 30,
+      onSettings: vi.fn(),
+    });
+    const chip = /<button [^>]*aria-label="Model: Muse Spark"[^>]*>/.exec(markup)?.[0] ?? "";
+    expect(chip).toContain('aria-haspopup="menu"');
+    expect(chip).toContain('aria-expanded="false"');
+    expect(chip).toContain('aria-disabled="false"');
+    expect(chip).toContain("border-page-border");
+    // Closed until the person opens it; nothing takes focus on its own.
+    expect(markup).not.toContain('role="menu"');
+    expect(markup).toMatch(
+      /<button [^>]*aria-label="Up to 30 steps. Change the step limit in Settings"[^>]*>Up to 30 steps<\/button>/,
+    );
+    expect(markup.indexOf("Up to 30 steps")).toBeLessThan(markup.indexOf(">Start agent<"));
+    // A pending start keeps the model it was sent with.
+    expect(
+      view({
+        draft: "x",
+        pending: true,
+        model: "Muse Spark",
+        models: [{ id: "muse-spark", label: "Muse Spark" }],
+        onModel: vi.fn(),
+      }),
+    ).toMatch(
+      /<button [^>]*aria-disabled="true"[^>]*aria-label="Model: Muse Spark"|aria-label="Model: Muse Spark"[^>]*aria-disabled="true"/,
+    );
+    // Without Settings the step limit stays a plain fact.
+    expect(view({ draft: "x", maxSteps: 30 })).toMatch(/<span [^>]*>Up to 30 steps<\/span>/);
+  });
+
+  it("offers example tasks under an empty, idle box, as buttons that only fill it", () => {
+    const examples = [
+      { label: "Reject negative prices", task: "compute_price in shop/pricing.py" },
+    ];
+    const markup = view({ examples });
+    expect(markup).toContain('role="group" aria-label="Example tasks"');
+    expect(markup).toContain(">Try:<");
+    expect(markup).toMatch(
+      /<button type="button" title="compute_price in shop\/pricing.py"[^>]*>Reject negative prices<\/button>/,
+    );
+    expect(markup.indexOf("Example tasks")).toBeGreaterThan(markup.indexOf("<textarea"));
+    // Text in the box, or a start on its way, hides them.
+    expect(view({ examples, draft: "x" })).not.toContain("Example tasks");
+    expect(view({ examples, draft: "x", pending: true })).not.toContain("Example tasks");
+    expect(view()).not.toContain("Example tasks");
+  });
+
+  it("shows the demo shop's examples only before any agent, and none in a replay or elsewhere", () => {
+    const render = (state: ReturnType<typeof through>, onStart?: () => Promise<unknown>) =>
+      renderToStaticMarkup(
+        <TaskBox state={state} onStart={onStart} store={createTaskBoxStore()} />,
+      );
+    const opening = through(2);
+    const first = render(opening, vi.fn());
+    expect(first).toContain(">Reject negative prices<");
+    expect(first).toContain(">Validate reserve quantities<");
+    expect(first).toContain(">Leave cancelled orders out of revenue<");
+    expect(render(through(4), vi.fn())).not.toContain("Example tasks");
+    expect(render(opening)).not.toContain("Example tasks");
+    const run = opening.run;
+    if (!run) throw new Error("Missing run fixture");
+    expect(render({ ...opening, run: { ...run, workspace: "my-app" } }, vi.fn())).not.toContain(
+      "Example tasks",
+    );
+  });
+
   it("leaves out a chip it has no fact for", () => {
     const markup = view({ draft: "x" });
     expect(markup).not.toContain("bg-page-raised");
@@ -206,8 +279,50 @@ describe("the new-agent box", () => {
     expect(markup).toContain(">Start agent</button>");
     expect(button(markup)).toContain("bg-text");
     expect(button(markup)).toContain("text-page");
-    expect(markup).toContain(">Enter</kbd>");
-    expect(markup).toMatch(/>(Ctrl|Cmd)<\/kbd>/);
+    expect(markup).toContain(">Enter</kbd> to start");
+    expect(markup).toContain(">Shift</kbd>+<kbd");
+    expect(markup).toContain("for a new line");
+    // Without a queue, no key promises one.
+    expect(markup).not.toContain("to queue");
+  });
+
+  it("offers Ctrl+Enter to queue, and says so when no slot is free", () => {
+    const markup = view({ draft: "x", onQueue: vi.fn(), block: "Agent A is working." });
+    expect(markup).toMatch(/>(Ctrl|Cmd)<\/kbd>\+<kbd[^>]*>Enter<\/kbd> to queue/);
+    expect(markup).toMatch(/Agent A is working\. (Ctrl|Cmd)\+Enter queues the task\./);
+  });
+
+  it("lists the person's queued tasks with their state and a cancel while they wait", () => {
+    const item = (id: string, state: "queued" | "starting" | "blocked", detail: string | null) => ({
+      item: {
+        queued_task_id: id,
+        revision: 1,
+        state,
+        agent_ids: [],
+        detail,
+        agent: { task: `Task ${id}`, slot: null, model: null, zone: null },
+        plan_id: null,
+        plan_revision: null,
+        started_by: null,
+      },
+      onCancel: vi.fn(() => Promise.resolve()),
+    });
+    const markup = view({
+      notice: "Queued. It starts when a slot is free.",
+      queued: [
+        item("q1", "queued", null),
+        item("q2", "blocked", "spend brake"),
+        item("q3", "starting", null),
+      ],
+    });
+    expect(markup).toContain("Queued (3)");
+    expect(markup).toContain("Queued. It starts when a slot is free.");
+    expect(markup).toContain("Waiting for a slot");
+    expect(markup).toContain("Blocked: spend brake");
+    expect(markup).toContain('aria-label="Cancel queued task: Task q1"');
+    expect(markup).toContain('aria-label="Cancel queued task: Task q2"');
+    // A task already starting can no longer be cancelled from the queue.
+    expect(markup).not.toContain('aria-label="Cancel queued task: Task q3"');
   });
 
   it("is disabled, with its reason, while no slot is free", () => {

@@ -1,10 +1,10 @@
 // eslint-disable-next-line no-restricted-imports -- Event-backed lead capacity is shared by both entry points.
 import { leadCapacity, newLeadLabel } from "../../agents/chatLeadSelectors";
 import { Plus, GitFork } from "lucide-react";
-import { TaskBox, slotUsage, type TaskBoxProps } from "../../agents";
-import type { State } from "../../state";
+import { TaskBox, type TaskBoxProps } from "../../agents";
+import { selectAgentActivity, selectMergeMode, type State } from "../../state";
 import { ChatAgents } from "./ChatAgents";
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useId, useSyncExternalStore, type ReactNode } from "react";
 import { WhereTheyWork } from "./WhereTheyWork";
 
 export interface ChatAgentSelection {
@@ -16,6 +16,11 @@ export interface ChatStartActions {
   leadDraft?: boolean;
   onNewTask?: () => void;
   onNewLead?: () => void;
+}
+/** Only a past event is read-only; its start actions stay in place and say why they are off. */
+const pastEventReason = "Not available while viewing a past event.";
+function unavailable(readOnly: boolean | undefined, reasonId: string) {
+  return readOnly ? { "aria-describedby": reasonId, title: pastEventReason } : {};
 }
 export interface ChatAgentsFrameProps extends ChatAgentSelection, ChatStartActions {
   state: State;
@@ -31,7 +36,7 @@ export function ChatAgentsFrame({
   readOnly,
   ...selection
 }: ChatAgentsFrameProps) {
-  const count = slotUsage(state);
+  const reasonId = useId();
   return (
     <aside
       aria-label="Agents"
@@ -40,15 +45,24 @@ export function ChatAgentsFrame({
     >
       <header>
         <h2>Agents</h2>
-        {count && <span>{count.held} running</span>}
+        {state.run && <span>{selectAgentActivity(state).text}</span>}
         <div className="chat-start-actions">
-          <button type="button" className="chat-new-task" disabled={readOnly} onClick={onNewTask}>
+          <button
+            type="button"
+            className="chat-new-task"
+            aria-disabled={readOnly}
+            {...unavailable(readOnly, reasonId)}
+            onClick={() => {
+              if (!readOnly) onNewTask?.();
+            }}
+          >
             <Plus size={15} aria-hidden="true" />
             New task
           </button>
           <button
             type="button"
             aria-disabled={readOnly || leadCapacity(state).atCap}
+            {...unavailable(readOnly, reasonId)}
             onClick={() => {
               if (!readOnly && !leadCapacity(state).atCap) onNewLead?.();
             }}
@@ -57,6 +71,11 @@ export function ChatAgentsFrame({
             {newLeadLabel(state)}
           </button>
         </div>
+        {readOnly && (
+          <p id={reasonId} className="chat-start-reason">
+            {pastEventReason}
+          </p>
+        )}
       </header>
       <div className="chat-side-body">
         {typeof children === "function" ? children(selection) : children}
@@ -143,12 +162,16 @@ function ChatRightColumn({ slot }: { slot?: ChatPreviewSlot }) {
 
 export function ChatEmpty({ onNewLead, readOnly, ...props }: TaskBoxProps & ChatStartActions) {
   const { state } = props;
+  const reasonId = useId();
   return (
     <div className="chat-empty">
       <div>
         <h1>What should change{props.state.run ? ` in ${props.state.run.workspace}` : ""}?</h1>
         <p className="chat-start-explanation">
-          One agent does the task itself; you approve its change.
+          One agent does the task itself;{" "}
+          {selectMergeMode(state)?.mode === "merge_when_safe"
+            ? "a change that passes every merge rule merges by itself; the rest waits for your approval."
+            : "you approve its change."}
         </p>
         <TaskBox {...props} />
         <div className="chat-lead-option">
@@ -158,6 +181,7 @@ export function ChatEmpty({ onNewLead, readOnly, ...props }: TaskBoxProps & Chat
           <button
             type="button"
             aria-disabled={readOnly || leadCapacity(state).atCap}
+            {...unavailable(readOnly, reasonId)}
             onClick={() => {
               if (!readOnly && !leadCapacity(state).atCap) onNewLead?.();
             }}
@@ -166,6 +190,11 @@ export function ChatEmpty({ onNewLead, readOnly, ...props }: TaskBoxProps & Chat
             {newLeadLabel(state)}
           </button>
         </div>
+        {readOnly && (
+          <p id={reasonId} className="chat-start-reason">
+            {pastEventReason}
+          </p>
+        )}
       </div>
     </div>
   );

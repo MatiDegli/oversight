@@ -10,10 +10,12 @@ export function LivePanel({
   state,
   view,
   onClose,
+  onReview,
 }: {
   state: State;
   view: View;
   onClose: () => void;
+  onReview?: (changeId: string) => void;
 }) {
   const target = view.diff;
   const data = target ? selectLiveDiff(state, target.changeId, target.path) : undefined;
@@ -53,7 +55,7 @@ export function LivePanel({
         </button>
       </div>
       <div className="min-h-0 flex-1">
-        <LiveDiff data={data} />
+        <LiveDiff data={data} onReview={onReview} />
       </div>
     </aside>
   );

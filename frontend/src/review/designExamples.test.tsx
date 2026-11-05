@@ -39,7 +39,7 @@ it("documents the built lone-agent review copy and retains plan-label examples",
   );
   for (const [built, copy] of [
     [header, "Agent B · Muse Spark Open"],
-    [body, "Agent B says"],
+    [body, "What Agent B did"],
     [example, "After · Agent B"],
   ] as const) {
     expect(built).toContain(copy);

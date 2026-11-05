@@ -8,7 +8,11 @@ import type { State } from "../state";
 import { createCommandClient } from "../transport";
 import {
   createTaskBoxStore,
+  exampleTasks,
   nextSlot,
+  offeredModels,
+  pickedModel,
+  selectQueuedTasks,
   selectedSlot,
   slotChoice,
   slotUsage,
@@ -431,5 +435,145 @@ describe("starting an agent from the box", () => {
     expect(store.getState().failure).toBe("Busy.");
     store.getState().setDraft("Cap the discount at 30%");
     expect(store.getState().failure).toBeNull();
+  });
+});
+
+describe("queueing a task from the box", () => {
+  it("sends the trimmed task to the queue, empties the box and confirms", async () => {
+    const { request, store } = setup(() =>
+      Promise.resolve(
+        reply(201, {
+          queued_task_id: "q1",
+          revision: 1,
+          state: "queued",
+          agent_ids: [],
+          detail: null,
+          agent: { task: "Keep this task", slot: null, model: null, zone: null },
+        }),
+      ),
+    );
+    store.getState().setDraft("  Keep this task  ");
+    await store.getState().queue(createCommandClient(request).enqueue);
+    expect(request.mock.calls[0]?.[0]).toContain("/queue");
+    expect(JSON.parse(request.mock.calls[0]?.[1]?.body as string)).toEqual({
+      agent: { task: "Keep this task", slot: null, model: null, zone: null },
+    });
+    expect(store.getState()).toMatchObject({
+      draft: "",
+      pending: false,
+      queueing: false,
+      notice: "Queued. It starts when a slot is free.",
+    });
+    store.getState().setDraft("Next");
+    expect(store.getState().notice).toBeNull();
+  });
+
+  it("keeps the task and names the refusal when the queue is full", async () => {
+    const { request, store } = setup(() =>
+      Promise.resolve(refusal(409, "wrong_state", "the queue holds at most 32 active items")),
+    );
+    store.getState().setDraft("Keep this task");
+    await store.getState().queue(createCommandClient(request).enqueue);
+    expect(store.getState()).toMatchObject({
+      draft: "Keep this task",
+      pending: false,
+      failure: "the queue holds at most 32 active items",
+    });
+  });
+});
+
+describe("the person's queued tasks", () => {
+  const last = log.at(-1)?.seq ?? 0;
+  const queued = (step: number, id: string, revision: number, state: string, extra = {}) =>
+    ({
+      seq: last + step,
+      ts,
+      type: "queue.updated",
+      payload: {
+        queued_task_id: id,
+        revision,
+        state,
+        agent_ids: state === "running" ? ["agent-9"] : [],
+        detail: null,
+        agent: { task: `Task ${id}`, slot: null, model: null, zone: null },
+        ...extra,
+      },
+    }) as unknown as ServerEvent;
+
+  it("keeps each item's latest revision, in queue order, without a lead's or finished ones", () => {
+    const state = [
+      queued(1, "q1", 1, "queued"),
+      queued(2, "q2", 1, "queued"),
+      queued(3, "q3", 1, "queued", { started_by: "lead-1" }),
+      queued(4, "q1", 2, "running"),
+      queued(5, "q4", 1, "blocked"),
+    ].reduce(applyEvent, through(last));
+    expect(selectQueuedTasks(state).map((item) => item.queued_task_id)).toEqual(["q2", "q4"]);
+  });
+});
+
+describe("the model the person picks from the chip", () => {
+  it("offers each slot's profile once, and keeps a pick only for this run and an offered model", () => {
+    const state = through(2);
+    expect(offeredModels(state)).toEqual([
+      { id: "muse-spark", label: "Muse Spark" },
+      { id: "muse-spark-open", label: "Muse Spark Open" },
+    ]);
+    const runId = state.run?.run_id;
+    expect(pickedModel(state, null)).toBeNull();
+    expect(pickedModel(state, { model: "muse-spark-open", runId })).toBe("muse-spark-open");
+    expect(pickedModel(state, { model: "muse-spark-open", runId: "another-run" })).toBeNull();
+    expect(pickedModel(state, { model: "not-offered", runId })).toBeNull();
+  });
+
+  it("sends a picked model with the start and the queue, and nothing when none was picked", async () => {
+    const { request, store } = setup(() => Promise.resolve(reply(201, {})));
+    const commands = createCommandClient(request);
+    store.getState().setDraft("First");
+    await store.getState().start(commands.startAgent);
+    store.getState().setDraft("Second");
+    await store.getState().start(commands.startAgent, undefined, "muse-spark-open");
+    store.getState().setDraft("Third");
+    await store.getState().queue(commands.enqueue, null, "muse-spark-open");
+    const bodies = request.mock.calls.map((call) => JSON.parse(call[1]?.body as string) as unknown);
+    expect(bodies).toEqual([
+      { task: "First" },
+      { task: "Second", model: "muse-spark-open" },
+      { agent: { task: "Third", slot: null, model: "muse-spark-open", zone: null } },
+    ]);
+  });
+
+  it("keeps the pick of a pending start", () => {
+    const store = createTaskBoxStore();
+    store.getState().pickModel({ model: "muse-spark", runId: "run-1" });
+    store.setState({ pending: true });
+    store.getState().pickModel({ model: "muse-spark-open", runId: "run-1" });
+    expect(store.getState().model).toEqual({ model: "muse-spark", runId: "run-1" });
+  });
+});
+
+describe("example tasks for a first start", () => {
+  it("names the demo shop's real gaps, the recorded task first, until an agent exists", () => {
+    const opening = through(2);
+    const examples = exampleTasks(opening);
+    expect(examples.map((example) => example.label)).toEqual([
+      "Reject negative prices",
+      "Validate reserve quantities",
+      "Leave cancelled orders out of revenue",
+    ]);
+    expect(examples[0]?.task).toMatch(/^compute_price in shop\/pricing.py/);
+    expect(exampleTasks(through(3))).toEqual([]);
+    const run = opening.run;
+    if (!run) throw new Error("Missing run fixture");
+    expect(exampleTasks({ ...opening, run: { ...run, workspace: "my-app" } })).toEqual([]);
+    expect(exampleTasks(createInitialState())).toEqual([]);
+  });
+
+  it("only names functions the demo shop has", () => {
+    const shop = (file: string) =>
+      readFileSync(new URL(`../../../demo-repo/shop/${file}`, import.meta.url), "utf8");
+    expect(shop("pricing.py")).toContain("def compute_price(");
+    expect(shop("inventory.py")).toContain("    def reserve(");
+    expect(shop("orders.py")).toContain("def revenue_by_category(");
   });
 });

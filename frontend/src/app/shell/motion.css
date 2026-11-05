@@ -1,0 +1,72 @@
+/*
+ * Short, calm motion for changes the person or an event causes. Every effect lives inside
+ * no-preference, so reduced motion gets none. Only opacity, translate and colors move; each
+ * animation ends on the element's static style, so nothing is hidden and nothing moves focus.
+ * The repository graph, Monaco and the life effects are never targeted. Rows inside scrolling
+ * lists only fade: a translated row would grow the list's scroll extent while it rises.
+ */
+@keyframes motion-rise {
+  from {
+    opacity: 0;
+    translate: 0 6px;
+  }
+}
+
+@keyframes motion-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Hover and selection feedback. Buttons among them keep life.css's 70ms press. */
+  :is(
+    [role="tab"],
+    [role="menuitem"],
+    [role="menuitemradio"],
+    [role="option"],
+    [role="treeitem"]
+  ):not(:is(.monaco-editor *, [aria-label="Repository graph"] *)) {
+    transition:
+      transform 70ms ease-out,
+      background-color 160ms var(--transition-easing),
+      border-color 160ms var(--transition-easing),
+      color 160ms var(--transition-easing);
+  }
+
+  /* An agent card's status pill eases to its new state's tint. */
+  article[aria-label^="Agent "] header > span.ml-auto.rounded-full {
+    transition:
+      background-color 200ms var(--transition-easing),
+      color 200ms var(--transition-easing);
+  }
+
+  /* Overlays the person opens rise into place. */
+  :is([role="menu"], .palette, .shortcuts-sheet):not(
+    :is(.monaco-editor *, [aria-label="Repository graph"] *)
+  ) {
+    animation: motion-rise 200ms var(--transition-easing);
+  }
+
+  :is(.palette, .shortcuts-sheet)::backdrop {
+    animation: motion-fade 200ms var(--transition-easing);
+  }
+
+  .replay-tooltip {
+    animation: motion-fade 160ms var(--transition-easing);
+  }
+
+  /* Lines that report a result, and rows that arrive, fade in where they stand. */
+  :is(
+    [role="status"],
+    [role="alert"],
+    .task-box-queue li,
+    .conversation-entries > [role="listitem"],
+    .agents-expanded article[aria-label^="Agent "],
+    .agents-rail-tile,
+    ol[aria-label$="steps, newest first"] > li,
+    .lead-view-card
+  ):not(:is(.monaco-editor *, [aria-label="Repository graph"] *)) {
+    animation: motion-fade 200ms var(--transition-easing);
+  }
+}

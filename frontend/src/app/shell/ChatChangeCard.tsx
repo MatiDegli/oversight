@@ -75,7 +75,7 @@ export function ChatChangeCard({
     <div className="chat-proposal" style={presentationStyle(identity)}>
       <div className="chat-proposal-note">
         <div>
-          <MessageSquare aria-hidden="true" size={14} /> Agent {label} says{" "}
+          <MessageSquare aria-hidden="true" size={14} /> What Agent {label} did{" "}
           <EventTime ts={card.ts} />
         </div>
         <p>{proposal.summary ?? "No finish summary was recorded."}</p>

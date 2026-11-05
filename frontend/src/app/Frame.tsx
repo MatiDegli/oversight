@@ -7,7 +7,14 @@ import "./preview/previewChatLayout.css";
 import { PreviewActionsContext, type PreviewActions } from "../agents";
 // eslint-disable-next-line no-restricted-imports -- Shared event-backed admission projection.
 import { leadCapacity } from "../agents/chatLeadSelectors";
-import type { MergeMode, StartAgent, StartLead, StopLead } from "@contracts";
+import type {
+  EnqueueTask,
+  MergeMode,
+  QueueRevision,
+  StartAgent,
+  StartLead,
+  StopLead,
+} from "@contracts";
 import { lazy, Suspense, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReplayPlayer } from "../transport";
 import type { FileAccess } from "../editor";
@@ -36,6 +43,7 @@ import "./shell/shell.css";
 import "./shell/chatShell.css";
 import "./shell/settings.css";
 import "./shell/life.css";
+import "./shell/motion.css";
 import "./challenge/phone.css";
 import { useMergeArrival } from "./useMergeArrival";
 import { usePhonePractice } from "./challenge/usePhonePractice";
@@ -73,6 +81,8 @@ export interface FrameProps {
   onStopLead?: (id: string, body: StopLead) => Promise<unknown>;
   onStartLead?: (body: StartLead) => Promise<unknown>;
   onStartAgent?: (body: StartAgent) => Promise<unknown>;
+  onQueueAgent?: (body: EnqueueTask) => Promise<unknown>;
+  onCancelQueued?: (id: string, body: QueueRevision) => Promise<unknown>;
   onStopAgent?: (agentId: string) => Promise<unknown>;
   onOpenConversation?: (agentId: string) => void;
   onMessageLead?: (agentId: string, text: string) => Promise<unknown>;
@@ -115,6 +125,8 @@ export function Frame(input: FrameProps) {
     ? {
         ...input,
         onStartAgent: undefined,
+        onQueueAgent: undefined,
+        onCancelQueued: undefined,
         onStartLead: undefined,
         onStopLead: undefined,
         onStopAgent: undefined,
@@ -380,6 +392,8 @@ export function Frame(input: FrameProps) {
                   state={state}
                   onOpenSettings={props.onOpenSettings}
                   onStart={props.onStartAgent}
+                  onQueue={props.onQueueAgent}
+                  onCancelQueued={props.onCancelQueued}
                   replayOf={props.replayOf}
                   inputRef={task.inputRef}
                 />

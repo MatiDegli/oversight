@@ -16,3 +16,7 @@ export const stateWords: Record<AgentState, [label: string, caption: string]> = 
 
 export const focusRing =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text";
+
+/** The empty Agents panel says the same thing in Oversight and in Chat. */
+export const noAgentsYet =
+  "No agents yet. Start a task and its agent appears here with its own color and letter.";

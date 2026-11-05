@@ -281,3 +281,25 @@ button.chat-agent-row:hover {
   display: block;
   margin-top: 6px;
 }
+/* A past event keeps the start actions in place; the line under them says why they are off. */
+.chat-shell .chat-agents > header:has(.chat-start-reason) {
+  height: auto;
+  padding-block: 10px;
+}
+.chat-start-reason {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+.chat-empty .chat-start-reason {
+  margin-top: 8px;
+}
+.chat-start-actions .chat-new-task[aria-disabled="true"] {
+  border-color: var(--control-edge);
+  background: transparent;
+}
+.chat-start-actions .chat-new-task[aria-disabled="true"]:hover {
+  background: var(--raised);
+}

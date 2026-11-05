@@ -157,7 +157,7 @@ it("keeps direct work first and focuses only after New task or New lead", async 
       "Lead B",
       "Agent C",
     ]);
-    await check(page.locator(".chat-agents > header")).toContainText("2 running");
+    await check(page.locator(".chat-agents > header")).toContainText("1 working · 1 waiting");
     await check(page.getByRole("heading", { name: /^Lead A ·/ })).toContainText(
       "2 agents · 1 working, 1 needs you",
     );
@@ -253,7 +253,7 @@ it("selects and messages the right lead in Chat and Oversight, with idle admissi
     await page.close();
   }
 });
-it("uses the backend default through App, retains refusals and never starts from Ctrl+Enter", async () => {
+it("uses the backend default through App, retains refusals and starts from Enter, never Ctrl+Enter", async () => {
   const page = await open("chat-start", 1280, "day", true, true);
   const calls: unknown[] = [];
   let refuse = true;
@@ -287,7 +287,8 @@ it("uses the backend default through App, retains refusals and never starts from
     await check(page.locator(".new-lead").getByRole("alert")).toHaveText("No lead can start now.");
     await check(task).toHaveValue("Coordinate validation");
     refuse = false;
-    await page.getByRole("button", { name: "Start lead", exact: true }).click();
+    // Enter starts the lead as the button does; Ctrl+Enter above started nothing.
+    await task.press("Enter");
     await check(task).toHaveCount(0);
     expect(calls).toEqual(
       Array.from({ length: 2 }, () => ({
@@ -477,7 +478,7 @@ it.each([1920, 1280])(
         "Lead B",
         "Agent C",
       ]);
-      await check(page.locator(".chat-agents > header")).toContainText("3 running");
+      await check(page.locator(".chat-agents > header")).toContainText("2 working · 1 waiting");
       await check(page.getByRole("heading", { name: /^Lead A ·/ })).toContainText(
         "3 agents · 1 working, 1 needs you",
       );
@@ -799,7 +800,7 @@ async function assertLifecycleScene(page: Page, name: string) {
     );
     await check(page.getByRole("heading", { name: /^Lead F ·/ })).toBeVisible();
   }
-  await check(page.locator(".chat-agents > header")).toContainText("3 running");
+  await check(page.locator(".chat-agents > header")).toContainText("1 working · 2 waiting for you");
 }
 
 it.each(["lead-stopped", "leads-six"])(

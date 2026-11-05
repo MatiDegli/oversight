@@ -182,7 +182,7 @@ export function ReviewBody({
         </section>
       )}
       <section aria-label="Agent note" className="review-agent-note">
-        <p>Agent {identity?.label ?? "unknown"} says</p>
+        <p>What Agent {identity?.label ?? "unknown"} did</p>
         <p>{change?.proposal?.summary ?? "The agent left no note."}</p>
         {change && showCrossReview && (
           <CrossReviewNote

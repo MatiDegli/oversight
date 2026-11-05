@@ -68,7 +68,7 @@ it("draws the rest ground: gray lines, no colored light, and nothing under an ov
   });
 }, 60_000);
 
-it("draws the lines at the approved sketch's level on the #070707 ground", async () => {
+it("draws the lines at the approved sketch's level on the #121214 ground", async () => {
   await withPage(
     { scene: "rest", reducedMotion: "reduce", viewport: { width: 1920, height: 1080 } },
     async (page) => {
@@ -87,20 +87,22 @@ it("draws the lines at the approved sketch's level on the #070707 ground", async
         for (let at = 0; at < data.length; at += 4)
           values.push(Math.max(data[at] ?? 0, data[at + 1] ?? 0, data[at + 2] ?? 0));
         values.sort((a, b) => a - b);
-        const lines = values.filter((value) => value > 12);
+        const ground = values[Math.floor(values.length / 4)] ?? 0;
+        const lines = values.filter((value) => value > ground + 5);
         return {
-          ground: values[Math.floor(values.length / 4)],
-          brightest: values[Math.floor(values.length * 0.99)],
-          median: lines[Math.floor(lines.length / 2)],
+          ground,
+          brightest: (values[Math.floor(values.length * 0.99)] ?? 0) - ground,
+          median: (lines[Math.floor(lines.length / 2)] ?? 0) - ground,
           coverage: lines.length / values.length,
         };
       }, png.toString("base64"));
-      // The ground is #070707; the sketch's brightest lines are 25 to 28 on it, its median line about
-      // 23, and its lines cover 6 to 7% of a clear area (it was 11, 9 and 2.7% on black).
-      expect(seen.ground).toBe(7);
-      expect(seen.brightest).toBeGreaterThanOrEqual(22);
-      expect(seen.brightest).toBeLessThanOrEqual(32);
-      expect(seen.median).toBeGreaterThanOrEqual(18);
+      // The ground is #121214, brightest channel 20; lines are measured above it. On the sketch's
+      // #070707 ground its brightest lines stood 18 to 21 above it, its median line about 16, and its
+      // lines covered 6 to 7% of a clear area (it was 11, 9 and 2.7% on black).
+      expect(seen.ground).toBe(20);
+      expect(seen.brightest).toBeGreaterThanOrEqual(15);
+      expect(seen.brightest).toBeLessThanOrEqual(25);
+      expect(seen.median).toBeGreaterThanOrEqual(11);
       expect(seen.coverage).toBeGreaterThan(0.035);
       // Old bound 0.09 → 0.105: new-start coverage 0.09675 + 0.00825 margin.
       expect(seen.coverage).toBeLessThan(0.105);

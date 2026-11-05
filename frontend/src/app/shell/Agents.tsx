@@ -4,17 +4,19 @@ import {
   selectPresentation,
 } from "../../teams/presentation";
 import { presentationLook } from "../../teams/badge";
-import { AgentCard, selectAgentCard, slotUsage, TaskBox } from "../../agents";
+import { AgentCard, selectAgentCard, TaskBox } from "../../agents";
 import type { TaskBoxProps } from "../../agents";
-import { selectAgents } from "../../state";
+import { selectAgentActivity, selectAgents } from "../../state";
 import type { State } from "../../state";
 import type { FrameProps } from "../Frame";
-import { stateWords } from "./shared";
+import { noAgentsYet, stateWords } from "./shared";
 export function AgentsPanel({
   state,
   canOpenChange,
   onOpenChange,
   onStartAgent,
+  onQueueAgent,
+  onCancelQueued,
   onOpenSettings,
   onStopAgent,
   onOpenConversation,
@@ -35,6 +37,8 @@ export function AgentsPanel({
   | "onPauseAgent"
   | "onResumeAgent"
   | "onStartAgent"
+  | "onQueueAgent"
+  | "onCancelQueued"
   | "onOpenSettings"
   | "canReview"
   | "onReview"
@@ -47,7 +51,6 @@ export function AgentsPanel({
       return data ? [data] : [];
     })
     .sort((a, b) => compareAgentPresentation(a.presentation, b.presentation));
-  const slots = slotUsage(state);
   return (
     <aside
       aria-label="Agents"
@@ -55,7 +58,7 @@ export function AgentsPanel({
     >
       <div className="flex items-baseline gap-2.5 px-3.5 pt-3.5 pb-2.5">
         <h2 className="group-label font-bold">Agents</h2>
-        {slots && <span className="text-sm text-muted">{slots.held} running</span>}
+        {state.run && <span className="text-sm text-muted">{selectAgentActivity(state).text}</span>}
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 pb-3.5">
         {cards.map((data) => {
@@ -74,11 +77,7 @@ export function AgentsPanel({
             />
           );
         })}
-        {cards.length === 0 && (
-          <p className="text-sm text-muted">
-            No agents yet. Each agent gets a card here when it starts.
-          </p>
-        )}
+        {cards.length === 0 && <p className="text-sm text-muted">{noAgentsYet}</p>}
       </div>
       {/* Pinned to the bottom, as in the sketch: a card appearing above never moves it, or the
           person's focus in it. */}
@@ -87,6 +86,8 @@ export function AgentsPanel({
           onOpenSettings={onOpenSettings}
           state={state}
           onStart={onStartAgent}
+          onQueue={onQueueAgent}
+          onCancelQueued={onCancelQueued}
           replayOf={replayOf}
           inputRef={inputRef}
         />

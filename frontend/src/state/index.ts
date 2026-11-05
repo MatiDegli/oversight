@@ -4,6 +4,7 @@ export {
   selectAgentCard,
   selectLiveDiff,
   selectAgents,
+  selectAgentActivity,
   selectChangeForAgent,
   selectGraphSummary,
   selectHasReadyForReview,

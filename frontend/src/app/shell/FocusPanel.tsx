@@ -301,7 +301,7 @@ export function FocusPanel(
             conversation={owner ? <ConversationFocus {...props} agentId={owner} /> : null}
           />
         ) : view.diff ? (
-          <LivePanel state={state} view={view} onClose={onClosePanel} />
+          <LivePanel state={state} view={view} onClose={onClosePanel} onReview={props.onReview} />
         ) : view.file && props.files ? (
           <FileView
             loadingFallback={

@@ -78,3 +78,14 @@ it.each([
     doc.dispose();
   },
 );
+
+it("says to try again once when a load fails, and names the edits only when some are at stake", async () => {
+  const { doc, getFile, render } = setup();
+  getFile.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  await doc.load();
+  const failed = render();
+  expect(failed.match(/again/gi)).toHaveLength(1);
+  expect(failed).not.toContain("Reloading discards these edits.");
+  expect(failed).toContain(">Reload</button>");
+  doc.dispose();
+});

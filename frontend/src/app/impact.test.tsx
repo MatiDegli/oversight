@@ -66,7 +66,7 @@ it("passes the recorded cone to the same graph, with a card and a panel summary 
   expect(html.indexOf("Real recorded run")).toBeGreaterThan(
     html.indexOf('aria-label="Possibly affected"'),
   );
-  expect(html).not.toContain("agents working");
+  expect(html).not.toContain("6 modules");
   expect(graph.render).toHaveBeenCalledWith(
     expect.objectContaining({
       cone: proposal.impact,

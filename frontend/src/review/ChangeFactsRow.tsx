@@ -9,6 +9,7 @@ import {
   GitBranch,
   GitCommitHorizontal,
   ListChecks,
+  ListOrdered,
   ScanEye,
   ScanLine,
   TestTube,
@@ -150,7 +151,7 @@ export function ChangeFactsRow({
             {base.slice(0, 7)}
           </code>
         ) : (
-          "Unknown"
+          "unknown"
         )}
       </Fact>
       <Fact label="Impact cone" symbol={<ScanEye aria-hidden="true" className={icon} />}>
@@ -165,7 +166,7 @@ export function ChangeFactsRow({
           {change.agent_id}
         </code>
       </Fact>
-      <Fact label="Steps" symbol={<ListChecks aria-hidden="true" className={icon} />}>
+      <Fact label="Steps" symbol={<ListOrdered aria-hidden="true" className={icon} />}>
         {card ? (
           <DataWords text={`Step ${String(card.step)} of ${String(card.maxSteps)}`} />
         ) : (

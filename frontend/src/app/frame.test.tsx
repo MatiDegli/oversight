@@ -119,14 +119,14 @@ describe("the frame over the level 1 fixture", () => {
 
   it("overlays the graph with the heading, the legend and the zoom controls", () => {
     const markup = render(14);
-    for (const text of ["6 modules", "36 functions", "1 agent working", "Possible call", "Zoom in"])
+    for (const text of ["6 modules", "36 functions", ">1 working<", "Possible call", "Zoom in"])
       expect(markup).toContain(text);
     // In review the cone card takes the heading's place; the legend and the zoom stay.
     const state = through(20);
     const review = openReview(state, initialView, "change-1");
     if (!review) throw new Error("Missing recorded review");
     const reviewing = render(20, review);
-    expect(reviewing).not.toContain("agents working");
+    expect(reviewing).not.toContain("6 modules");
     for (const text of ["Possible call", "Zoom in"]) expect(reviewing).toContain(text);
   });
 
@@ -163,7 +163,6 @@ describe("the frame over the level 1 fixture", () => {
     });
     expect(tag(markup, "Live diff panel")).toContain("w-[min(var(--review-panel-width),46vw)]");
     // The heading is a watch overlay: beside the panel it would sit on the graph's own nodes.
-    expect(markup).not.toContain("agent working");
     expect(markup).not.toContain("6 modules");
     expect(markup).toContain('aria-label="Live diff panel"');
     expect(markup).toContain("Loading editor…");

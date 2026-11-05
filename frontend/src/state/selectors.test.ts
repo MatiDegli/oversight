@@ -2,7 +2,13 @@ import type { AgentStatus, ChangeUpdated, ServerEvent } from "@contracts";
 import { describe, expect, it } from "vitest";
 
 import { appendEvent, panelEvents, through } from "./panels.fixture";
-import { selectAgentCard, selectGraphSummary, selectLiveDiff, selectNodeMarks } from "./selectors";
+import {
+  selectAgentActivity,
+  selectAgentCard,
+  selectGraphSummary,
+  selectLiveDiff,
+  selectNodeMarks,
+} from "./selectors";
 import { createChange, createInitialState } from "./types";
 
 describe("panel selectors over the level 1 fixture", () => {
@@ -204,17 +210,18 @@ describe("selectGraphSummary", () => {
       repo: null,
       modules: 0,
       functions: 0,
-      working: 0,
+      activity: { working: 0, waiting: 0, text: "0 working" },
     });
     // The fixture's snapshot: 6 modules, 14 functions and 22 methods, 8 classes not counted.
     expect(selectGraphSummary(through(2))).toEqual({
       repo: "demo-repo",
       modules: 6,
       functions: 36,
-      working: 0,
+      activity: { working: 0, waiting: 0, text: "0 working" },
     });
-    expect(selectGraphSummary(through(4)).working).toBe(1);
-    expect(selectGraphSummary(through(20)).working).toBe(0);
+    expect(selectGraphSummary(through(4)).activity.text).toBe("1 working");
+    // Ready for review waits for the person: it is not work in progress.
+    expect(selectGraphSummary(through(20)).activity.text).toBe("0 working · 1 waiting for you");
   });
 
   it("leaves a test module and its functions out", () => {
@@ -229,5 +236,25 @@ describe("selectGraphSummary", () => {
       ],
     } as NonNullable<typeof state.graph>;
     expect(selectGraphSummary({ ...state, graph })).toEqual(selectGraphSummary(state));
+  });
+});
+
+describe("selectAgentActivity", () => {
+  it("counts paused and revising agents as working, and only review as waiting for the person", () => {
+    const state = through(4);
+    const agent = Object.values(state.agents)[0];
+    if (!agent) throw new Error("Missing fixture agent");
+    const as = (...states: (typeof agent.state)[]) =>
+      selectAgentActivity({
+        ...state,
+        agents: Object.fromEntries(
+          states.map((value, index) => [`a${String(index)}`, { ...agent, state: value }]),
+        ),
+      }).text;
+    expect(as("working", "revising", "paused")).toBe("3 working");
+    expect(as("paused", "ready_for_review", "ready_for_review")).toBe(
+      "1 working · 2 waiting for you",
+    );
+    expect(as("halted", "stopped", "done")).toBe("0 working");
   });
 });
