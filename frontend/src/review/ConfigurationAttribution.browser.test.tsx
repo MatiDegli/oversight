@@ -136,11 +136,12 @@ it.each([1440, 390])("pins the unmodified real recording HTML at %i", async (wid
     await check(page.getByText("Recorded run · Oct 27, 2026", { exact: true })).toBeVisible();
     expect(html).not.toContain("Configuration attribution:");
     const body = await page.locator(".review-body").innerHTML();
-    // Captured with ReviewFacts and reviewFindings restored from b378936e.
+    // Re-captured after the final UI pass: its only change here labels the agent's summary
+    // "What Agent B did" instead of "Agent B says".
     expect(createHash("sha256").update(body).digest("hex")).toBe(
       width === 1440
-        ? "7649aa22901cb763606e8492ab24efd635998315f1c5be80c0e2e6cb80d387d7"
-        : "96134db4f4fb1659742eba537279ad4f3fb799289431ab18784bf84be46e7fff",
+        ? "b9ab2fd3e032a5e4116ea09916e4a71906974733b1ce72b78bc60f17f536ef07"
+        : "746313ec5abb03fabf76314b2d9a23075fc933ad2fb1ecef8dc0ddb3c1b838bf",
     );
   });
 });
