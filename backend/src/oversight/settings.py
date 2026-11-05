@@ -28,6 +28,7 @@ MUSE_SPARK_DEFAULT_PRICES = (0.10, 0.20)
 TEST_TIMEOUT_ERROR = (
     "OVERSIGHT_TEST_TIMEOUT_S must be a whole number of seconds from 1 to 999999999"
 )
+MAX_STEPS_ERROR = "OVERSIGHT_MAX_STEPS must be a whole number from 5 to 100"
 LEAD_SETTING_DEFAULTS = {
     "max_leads": 6,
     "lead_max_turns": 50,
@@ -106,6 +107,8 @@ class Settings:
     max_agents: int = 4
     """OVERSIGHT_MAX_AGENTS: positive whole number of seats A..Z, AA, AB, ...; default 4.
     No product maximum; startup requires a recordable run.started event."""
+    max_steps: int = 30
+    """OVERSIGHT_MAX_STEPS: tool steps per agent round, a whole number from 5 to 100; default 30."""
     max_leads: int = 6
     lead_max_turns: int = 50
     lead_max_tool_calls: int = 12
@@ -244,6 +247,8 @@ class Settings:
             raise ValueError("OVERSIGHT_HISTORY_PRUNE_TOKENS must be an integer of at least 8000")
         if type(self.max_agents) is not int or self.max_agents < 1:
             raise ValueError("OVERSIGHT_MAX_AGENTS must be a positive whole number")
+        if type(self.max_steps) is not int or not 5 <= self.max_steps <= 100:
+            raise ValueError(MAX_STEPS_ERROR)
         if type(self.memory_hold_percent) is not int or not 1 <= self.memory_hold_percent <= 100:
             raise ValueError("OVERSIGHT_MEMORY_HOLD_PERCENT must be an integer from 1 to 100")
         if (
@@ -318,6 +323,7 @@ class Settings:
             meta_api_key=merged.get("META_API_KEY") or None,
             baseten_api_key=merged.get("BASETEN_API_KEY") or None,
             max_agents=max_agents,
+            max_steps=resolve_max_steps(merged),
             max_leads=resolve_lead_setting(merged, "max_leads"),
             lead_max_turns=resolve_lead_setting(merged, "lead_max_turns"),
             lead_max_tool_calls=resolve_lead_setting(merged, "lead_max_tool_calls"),
@@ -465,6 +471,17 @@ def resolve_max_agents(values: Mapping[str, object]) -> int:
     if result < 1:
         raise ValueError("OVERSIGHT_MAX_AGENTS must be a positive whole number")
     return result
+
+
+def resolve_max_steps(values: Mapping[str, object]) -> int:
+    """Absent or empty means 30; anything else must be ASCII digits naming 5 to 100."""
+    raw = values.get("OVERSIGHT_MAX_STEPS") or "30"
+    if not isinstance(raw, str) or not raw.isascii() or not raw.isdecimal():
+        raise ValueError(MAX_STEPS_ERROR)
+    digits = raw.lstrip("0")
+    if len(digits) > 3 or not 5 <= int(digits or "0") <= 100:
+        raise ValueError(MAX_STEPS_ERROR)
+    return int(digits)
 
 
 def resolve_slot_overrides(

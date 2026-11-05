@@ -17,6 +17,8 @@ import type {
   PlanRevision,
   RejectPlan,
   QueueRevision,
+  EnqueueTask,
+  QueuedTask,
   RevertChange,
   RequestChanges,
   SaveFile,
@@ -133,6 +135,7 @@ export function createCommandClient(request: typeof fetch = fetch) {
       send<undefined>(`/plans/${encodeURIComponent(id)}/start`, "POST", body),
     rejectPlan: (id: string, body: RejectPlan) =>
       send<undefined>(`/plans/${encodeURIComponent(id)}/reject`, "POST", body),
+    enqueue: (body: EnqueueTask) => send<QueuedTask>("/queue", "POST", body),
     cancelQueue: (id: string, body: QueueRevision) =>
       send<undefined>(`/queue/${encodeURIComponent(id)}/cancel`, "POST", body),
     getSettings: () => send<SettingsView>("/settings"),

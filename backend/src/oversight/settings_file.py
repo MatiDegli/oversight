@@ -15,13 +15,18 @@ from oversight.settings import (
     positive_amount,
     read_env_file,
     resolve_max_agents,
+    resolve_max_steps,
     resolve_spend_brake_percent,
 )
 from oversight.workspace import offload
 from oversight_contracts.commands import EditableSetting, EditableSettingName, SettingsView
 
 NAMES: tuple[EditableSettingName, ...] = get_args(EditableSettingName.__value__)
-DEFAULTED: set[EditableSettingName] = {"OVERSIGHT_MAX_AGENTS", "OVERSIGHT_SPEND_BRAKE_PERCENT"}
+DEFAULTED: set[EditableSettingName] = {
+    "OVERSIGHT_MAX_AGENTS",
+    "OVERSIGHT_MAX_STEPS",
+    "OVERSIGHT_SPEND_BRAKE_PERCENT",
+}
 LIVE_FIELDS: dict[EditableSettingName, str] = {
     "OVERSIGHT_BUDGET_USD": "budget_usd",
     "OVERSIGHT_SPEND_BRAKE_PERCENT": "spend_brake_percent",
@@ -39,6 +44,7 @@ type SettingProblem = Literal[
     "contains spaces",
     "must be a positive whole number",
     "must be a whole number from 1 to 100",
+    "must be a whole number from 5 to 100",
     "must be a positive amount",
 ]
 
@@ -70,6 +76,12 @@ def _problem(name: EditableSettingName, value: str) -> SettingProblem | None:
             resolve_max_agents({name: value})
         except ValueError:
             return "must be a positive whole number"
+        return None
+    if name == "OVERSIGHT_MAX_STEPS":
+        try:
+            resolve_max_steps({name: value})
+        except ValueError:
+            return "must be a whole number from 5 to 100"
         return None
     # Startup treats every string other than case-insensitive true as false.
     if not value or name == "OVERSIGHT_CROSS_REVIEW":

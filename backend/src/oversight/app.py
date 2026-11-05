@@ -290,7 +290,11 @@ class LiveRun:
         own_source = self._own_source()
         timeout, wall_clock = run_time_limits(own_source, settings.test_timeout_s)
         self._limits = LIMITS.model_copy(
-            update={"test_timeout_s": timeout, "max_wall_clock_s": wall_clock}
+            update={
+                "max_steps": settings.max_steps,
+                "test_timeout_s": timeout,
+                "max_wall_clock_s": wall_clock,
+            }
         )
         self._test_timeout_ignored = not own_source and settings.test_timeout_s != 60
         self.workspace = Workspace(

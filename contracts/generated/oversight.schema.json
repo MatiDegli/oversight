@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Oversight contracts 1.23.0, generated: run `make contracts`.",
+  "$comment": "Oversight contracts 1.24.0, generated: run `make contracts`.",
   "title": "OversightContracts",
   "$defs": {
     "AddedTestProbe": {
@@ -2238,6 +2238,7 @@
         "BASETEN_OUTPUT_USD_PER_M",
         "OVERSIGHT_CROSS_REVIEW",
         "OVERSIGHT_MAX_AGENTS",
+        "OVERSIGHT_MAX_STEPS",
         "OVERSIGHT_SPEND_BRAKE_PERCENT"
       ],
       "type": "string"

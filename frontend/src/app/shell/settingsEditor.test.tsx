@@ -308,3 +308,36 @@ it("points a replay to the Windows app's folder picker without a desktop claim",
   expect(html).toContain("Agents edit a disposable copy, never your folder.");
   expect(html).not.toContain("in the menu bar.");
 });
+
+it("edits the agent step limit as a bounded whole number with its default explained", async () => {
+  const row: EditableSetting = {
+    name: "OVERSIGHT_MAX_STEPS",
+    kind: "number",
+    state: "invalid",
+    value: "3",
+    overridden: false,
+  };
+  const { api, store } = setup({ ...view, settings: [...view.settings, row] });
+  await store.getState().load();
+  const html = markup(store);
+  const input = /<input[^>]*name="OVERSIGHT_MAX_STEPS"[^>]*>/.exec(html)?.[0] ?? "";
+  const inputId = /id="([^"]+)"/.exec(input)?.[1] ?? "";
+  expect(html).toContain(`for="${inputId}"`);
+  expect(html.slice(html.indexOf(`for="${inputId}"`))).toMatch(/^[^<]*>Step limit \(steps\)</);
+  expect(input).toContain('min="5"');
+  expect(input).toContain('max="100"');
+  expect(input).toContain('step="1"');
+  expect(input).toContain('placeholder="30 (default)"');
+  const descriptionId = /aria-describedby="([^"]+)"/.exec(input)?.[1] ?? "";
+  expect(descriptionId).not.toBe("");
+  expect(html.slice(html.indexOf(`id="${descriptionId}"`))).toContain(
+    "Each agent stops after this many tool steps. 5 to 100; empty means 30.",
+  );
+  expect(html).toContain("Invalid value. Enter a whole number from 5 to 100.");
+  store.getState().edit("OVERSIGHT_MAX_STEPS", "50");
+  await store.getState().save("limits");
+  expect(api.updateSettings).toHaveBeenCalledExactlyOnceWith({
+    values: { OVERSIGHT_MAX_STEPS: "50" },
+  });
+  expect(markup(store)).toContain("Restart the server to apply.");
+});

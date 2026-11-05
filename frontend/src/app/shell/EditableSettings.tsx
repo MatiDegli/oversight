@@ -16,11 +16,13 @@ const fields: readonly [EditableSettingName, string, EditableSetting["kind"]][] 
   ["BASETEN_OUTPUT_USD_PER_M", "Baseten output (USD / 1M tokens)", "number"],
   ["OVERSIGHT_SPEND_BRAKE_PERCENT", "Brake at (% of budget)", "number"],
   ["OVERSIGHT_MAX_AGENTS", "Agent cap (agents)", "number"],
+  ["OVERSIGHT_MAX_STEPS", "Step limit (steps)", "number"],
 ];
 const helpers: Partial<Record<EditableSettingName, string>> = {
   OVERSIGHT_BUDGET_USD: "Leave empty for no spending cap.",
   MUSE_SPARK_INPUT_USD_PER_M: "Leave empty to use 0.10",
   MUSE_SPARK_OUTPUT_USD_PER_M: "Leave empty to use 0.20",
+  OVERSIGHT_MAX_STEPS: "Each agent stops after this many tool steps. 5 to 100; empty means 30.",
 };
 const states = { set: "Configured", missing: "Missing", invalid: "Invalid" };
 const fieldClass = `mt-2 block min-h-10 w-full min-w-0 rounded-card border border-control-edge bg-field px-3 py-2 text-base text-text placeholder:text-faint read-only:text-muted ${focusRing}`;
@@ -307,7 +309,9 @@ function SettingField({
             ? "Invalid value. Enter a whole number from 1 to 100."
             : name === "OVERSIGHT_MAX_AGENTS"
               ? "Invalid value. Enter a positive whole number."
-              : "Invalid value. Enter a positive amount."}
+              : name === "OVERSIGHT_MAX_STEPS"
+                ? "Invalid value. Enter a whole number from 5 to 100."
+                : "Invalid value. Enter a positive amount."}
         </p>
       )}
     </div>
@@ -401,16 +405,26 @@ function SettingControl({
           .filter(Boolean)
           .join(" ") || undefined
       }
-      max={name === "OVERSIGHT_SPEND_BRAKE_PERCENT" ? "100" : undefined}
+      max={
+        name === "OVERSIGHT_SPEND_BRAKE_PERCENT" || name === "OVERSIGHT_MAX_STEPS"
+          ? "100"
+          : undefined
+      }
       min={
         kind === "number"
-          ? name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
-            ? "1"
-            : "0"
+          ? name === "OVERSIGHT_MAX_STEPS"
+            ? "5"
+            : name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+              ? "1"
+              : "0"
           : undefined
       }
       step={
-        name === "OVERSIGHT_MAX_AGENTS" || name === "OVERSIGHT_SPEND_BRAKE_PERCENT" ? "1" : "any"
+        name === "OVERSIGHT_MAX_AGENTS" ||
+        name === "OVERSIGHT_MAX_STEPS" ||
+        name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+          ? "1"
+          : "any"
       }
       maxLength={512}
       placeholder={
@@ -418,9 +432,11 @@ function SettingControl({
           ? "Replace key"
           : name === "OVERSIGHT_MAX_AGENTS"
             ? "4 (default)"
-            : name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
-              ? "90 (default)"
-              : "Not set"
+            : name === "OVERSIGHT_MAX_STEPS"
+              ? "30 (default)"
+              : name === "OVERSIGHT_SPEND_BRAKE_PERCENT"
+                ? "90 (default)"
+                : "Not set"
       }
       onChange={(event) => {
         if (!readOnly) onEdit(event.target.value);

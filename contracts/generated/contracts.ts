@@ -53,6 +53,7 @@ export type EditableSettingName =
   | "BASETEN_OUTPUT_USD_PER_M"
   | "OVERSIGHT_CROSS_REVIEW"
   | "OVERSIGHT_MAX_AGENTS"
+  | "OVERSIGHT_MAX_STEPS"
   | "OVERSIGHT_SPEND_BRAKE_PERCENT";
 export type ErrorCode =
   | "not_found"
@@ -2919,4 +2920,4 @@ export interface UsageView {
   revision_rounds: number | null;
 }
 
-export const CONTRACT_VERSION = "1.23.0";
+export const CONTRACT_VERSION = "1.24.0";
