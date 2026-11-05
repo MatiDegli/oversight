@@ -75,6 +75,9 @@ def _main() -> None:
             host=settings.host,
             port=settings.port,
             reload=args.reload,
+            # Reload watches only this package: agent worktrees and previews under .runtime/ and
+            # demo-repo/ hold Python files too, and every agent write there restarted the server.
+            reload_dirs=[str(Path(__file__).resolve().parent)] if args.reload else None,
             proxy_headers=False,
             # Open streams never end by themselves: shutdown gives them a second, then closes them.
             timeout_graceful_shutdown=1,
